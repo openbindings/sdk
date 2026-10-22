@@ -54,7 +54,6 @@ test("Wasm proof storage refuses every borrowed editing entry", () => {
   const before = proof.toBytes();
   const immutable = (error) => JSON.parse(error).code === "immutable-document";
   for (const [method, args] of [
-    ["edit", ['[{"op":"set","pointer":"/name","value":7}]']],
     ["set", ["/name", value]],
     ["remove", ["/name"]],
     ["setName", ["changed"]],

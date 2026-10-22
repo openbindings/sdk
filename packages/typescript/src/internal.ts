@@ -450,7 +450,7 @@ function encodedLimits(limits: Partial<EvaluatorLimits> = {}): string {
   }
   return JSON.stringify(encoded);
 }
-/** Admission limits for exact JSON and documents, Rust's `JsonLimits`; each a nonnegative integer no greater than 4294967295. Validation memory grows with the document, so raise them only where the process has the memory. */
+/** Admission limits for exact JSON and documents, Rust's `JsonLimits`; each a nonnegative integer no greater than 4294967295, passed as `limits` to validateDocument, Document.parse and parseJson in a plain options object, where anything else throws SdkError invalid-json-limits. A document keeps them (its `limits` getter). Validation memory grows with the document, so raise them only where the process has the memory. */
 export interface JsonLimits {
   /** Maximum admitted UTF-8 bytes; default 33,554,432 (32 MiB). */
   maxBytes: number;
@@ -464,15 +464,34 @@ let defaultLimits: Uint32Array | undefined;
 function jsonDefaults(): Uint32Array {
   return (defaultLimits ??= wasm.jsonLimits());
 }
+function invalidLimits(message: string): never {
+  throw new SdkError("invalid-json-limits", message);
+}
+// A plain object of enumerable data properties, or invalid-json-limits.
+function plainEntries(value: unknown, what: string): [string, unknown][] {
+  if (
+    !value ||
+    typeof value !== "object" ||
+    Array.isArray(value) ||
+    ![null, Object.prototype].includes(Object.getPrototypeOf(value))
+  )
+    invalidLimits(`${what} must be a plain object.`);
+  const entries: [string, unknown][] = [];
+  for (const key of Reflect.ownKeys(value as object)) {
+    const d = Object.getOwnPropertyDescriptor(value, key)!;
+    if (typeof key === "symbol" || !d.enumerable || !("value" in d))
+      invalidLimits(`${what} must hold enumerable data properties.`);
+    entries.push([key as string, d.value]);
+  }
+  return entries;
+}
 // Complete admission limits for the bridge, unspecified entries from Rust's
 // JsonLimits::default(); undefined when the caller passed none.
-function admissionLimits(
-  limits: Partial<JsonLimits> | undefined,
-): Uint32Array | undefined {
+function admissionLimits(limits: unknown): Uint32Array | undefined {
   if (limits === undefined) return undefined;
   const [maxBytes, maxNodes, maxDepth] = jsonDefaults();
   const complete: Record<string, number> = { maxBytes, maxNodes, maxDepth };
-  for (const [key, value] of ownEntries(limits)) {
+  for (const [key, value] of plainEntries(limits, "JSON limits")) {
     if (
       !Object.hasOwn(complete, key) ||
       typeof value !== "number" ||
@@ -480,8 +499,7 @@ function admissionLimits(
       value < 0 ||
       value > 0xffffffff
     )
-      throw new SdkError(
-        "invalid-json-limits",
+      invalidLimits(
         "JSON limits must be maxBytes, maxNodes or maxDepth, each a nonnegative integer no greater than 4294967295.",
       );
     complete[key] = value;
@@ -492,11 +510,15 @@ function admissionLimits(
     complete.maxDepth!,
   ]);
 }
-// The limits option of an entry that admits exact JSON.
-function limitsOption(options: { limits?: Partial<JsonLimits> }) {
-  if (!options || typeof options !== "object" || Array.isArray(options))
-    throw new SdkError("invalid-json-limits", "Options must be an object.");
-  return admissionLimits(options.limits);
+// The options of an entry that admits exact JSON: only `limits`, refusing
+// other keys as prepare's options do.
+function limitsOption(options: unknown): Uint32Array | undefined {
+  let limits: unknown;
+  for (const [key, value] of plainEntries(options, "Options")) {
+    if (key !== "limits") invalidLimits("Unknown option; expected limits.");
+    limits = value;
+  }
+  return admissionLimits(limits);
 }
 /** Frozen metadata snapshot in lexical primary-key order. It contains no disposable owners and is not evidence of conformance, schema support or binding priority. */
 export interface OperationMetadata {
@@ -755,7 +777,7 @@ function contractRaw(owner: ValueContract): wasm.WasmValueContract {
 }
 /** Ordinary JSON scalar types; runtime admission additionally requires finite numbers. JavaScript number precision already lost before admission cannot be reconstructed. */
 export type JsonPrimitive = null | boolean | number | string;
-/** Checked ordinary JSON input, including nested borrowed ExactJson owners for precise subtrees. Arrays must be dense; objects plain with enumerable data properties; cycles, accessors, symbols, bigint and undefined are refused. Admission never invokes toJSON or getters. Ordinary encoding admits at most 33,554,432 UTF-16 code units of serialized text, 1,000,000 visited values and depth 10,000; subsequent exact parsing also enforces 32 MiB UTF-8 and 1,000,000 total nodes, including member-name tokens. A document's edits and typed setters use the limits the document was admitted with instead. Check a larger value as exact JSON from parseJson with larger limits. */
+/** Checked ordinary JSON input, including nested borrowed ExactJson owners for precise subtrees. Arrays must be dense; objects plain with enumerable data properties; cycles, accessors, symbols, bigint and undefined are refused. Admission never invokes toJSON or getters. Ordinary encoding admits at most 33,554,432 UTF-16 code units of serialized text, 1,000,000 visited values and depth 10,000; subsequent exact parsing also enforces 32 MiB UTF-8 and 1,000,000 total nodes, including member-name tokens. A document's edits and typed setters apply the limits the document was admitted with to the values they write, not to the edit's own structure. Check a larger value as exact JSON from parseJson with larger limits. */
 export type JsonInput =
   | JsonPrimitive
   | ExactJson
@@ -864,7 +886,14 @@ export class ExactJson extends Managed {
   /** Admit checked ordinary JSON into a new disposable exact owner. Nested ExactJson inputs are borrowed. Ordinary encoding failures throw TypeError/RangeError; exact parser admission failures also throw. Use parseJson for structured exact-input failures. Handle misuse throws SdkError; precision already lost in JavaScript numbers cannot be recovered. */
   static from(value: JsonInput): ExactJson {
     requireReady();
-    return new ExactJson(wasm.WasmJson.parseText(encodeOrdinary(value)));
+    const text = encodeOrdinary(value);
+    try {
+      return new ExactJson(wasm.WasmJson.parseText(text));
+    } catch (error) {
+      // The checked encoder leaves only a JSON admission limit to refuse it.
+      if (inputErrorKind(error) !== "Limit") throw error;
+      throw new RangeError(ORDINARY_LIMITS);
+    }
   }
   /** Return a new independently disposable owner sharing this exact snapshot; no reparse. */
   retain(): ExactJson {
@@ -992,7 +1021,7 @@ export class ExactJson extends Managed {
     return { status: "converted", value: value as JsonOutput };
   }
 }
-/** Parse exact JSON under admission limits, by default 32 MiB UTF-8, 1,000,000 nodes and 10,000 container levels; `limits` overrides them, unspecified entries keeping those defaults, as Rust's `JsonValue::parse_with_limits` does. Returns a caller-owned ExactJson or input-error. Check a value larger than the defaults this way and pass the ExactJson to a prepared contract. Initialization, wrong input or option types and literal unpaired UTF-16 text throw; JSON escapes preserve such units. */
+/** Parse exact JSON under admission limits, by default 32 MiB UTF-8, 1,000,000 nodes and 10,000 container levels; `limits` overrides them, unspecified entries keeping those defaults, as Rust's `JsonValue::parse_with_limits` does. Returns a caller-owned ExactJson or input-error. Check a value larger than the defaults this way and pass the ExactJson to a prepared contract. Malformed limits or options throw SdkError invalid-json-limits; initialization, wrong input types and literal unpaired UTF-16 text throw; JSON escapes preserve such units. */
 export function parseJson(
   input: ExactInput,
   options: {
@@ -1012,7 +1041,7 @@ export function parseJson(
     return failure(e);
   }
 }
-/** Assess all normative document rules directly from exact source, including invalid JSON. Unsupported declared versions return version-refused; parse/limit failures become truthful evidence. Without `limits`, admits 32 MiB UTF-8 and 1,000,000 nodes at any nesting, as Rust's `validate_document` does; with them, as `validate_document_with_limits` does, unspecified entries keeping the JsonLimits defaults, including the 10,000-level nesting cap. A document past a limit leaves every rule inconclusive with input-limit findings naming the limit. Returns plain data with no handle to dispose. Initialization, wrong input or option types and literal unpaired UTF-16 text throw; represent unpaired units with JSON escapes or exact UTF-8 bytes. */
+/** Assess all normative document rules directly from exact source, including invalid JSON. Unsupported declared versions return version-refused; parse/limit failures become truthful evidence. Without `limits`, admits 32 MiB UTF-8 and 1,000,000 nodes at any nesting, as Rust's `validate_document` does; with them, as `validate_document_with_limits` does, unspecified entries keeping the JsonLimits defaults, including the 10,000-level nesting cap. A document past a limit leaves every rule inconclusive with input-limit findings naming the limit. Returns plain data with no handle to dispose. Malformed limits or options throw SdkError invalid-json-limits; initialization, wrong input types and literal unpaired UTF-16 text throw; represent unpaired units with JSON escapes or exact UTF-8 bytes. */
 export function validateDocument(
   input: ExactInput,
   options: {
@@ -1066,6 +1095,15 @@ abstract class DocumentReads extends Managed {
   /** Return a NEW independently disposable ExactJson owner on every call. Cache it locally and dispose it; disposing this document does not release that separate owner. */
   value(): ExactJson {
     return new ExactJson(handle<wasm.WasmDocument>(this).value());
+  }
+  /** The admission limits this revision was admitted under, which its edits and typed setters apply, as Rust's `Document::limits` reports them: the defaults for `Document.parse` without limits and `Document.create()`, the caller's otherwise, no nesting cap (maxDepth 4294967295) for a document from `validateDocument` without limits, and at least the default bytes for a discovered one. */
+  get limits(): Readonly<JsonLimits> {
+    const [maxBytes, maxNodes, maxDepth] = documentRaw(this).limits();
+    return Object.freeze({
+      maxBytes: maxBytes!,
+      maxNodes: maxNodes!,
+      maxDepth: maxDepth!,
+    });
   }
   /** Read the declaration as exact JavaScript UTF-16 text. Invalid typed fields throw. */
   get openbindings(): string | undefined {
@@ -1252,7 +1290,7 @@ export class Document extends DocumentReads {
   static {
     adoptDocument = (raw) => new Document(raw, documentToken);
   }
-  /** Admit exact JSON, including broken documents, without conformance proof, under admission limits: by default 32 MiB UTF-8, 1,000,000 nodes and 10,000 container levels, and `limits` overrides them, unspecified entries keeping those defaults, as Rust's `Document::parse_with_limits` does. The document keeps its limits: edits, typed setters and value-contract preparation parse what they write under them. Expected input refusal uses input-error; initialization and API misuse throw. */
+  /** Admit exact JSON, including broken documents, without conformance proof, under admission limits: by default 32 MiB UTF-8, 1,000,000 nodes and 10,000 container levels, and `limits` overrides them, unspecified entries keeping those defaults, as Rust's `Document::parse_with_limits` does. The document keeps its limits (`limits`): its edits and typed setters apply them to what they write, as Rust's do. Value-contract preparation keeps its own fixed bounds. Expected input refusal uses input-error; initialization and API misuse throw. */
   static parse(
     input: ExactInput,
     options: {
@@ -1329,8 +1367,6 @@ export class Document extends DocumentReads {
     value: unknown,
     context?: AuthorContext,
     destination?: { namespace: string; key: string },
-    prefix = "",
-    suffix = "",
   ): void {
     handle(this);
     const exact: EditEncoding = {
@@ -1338,14 +1374,24 @@ export class Document extends DocumentReads {
       owners: [],
       indices: [],
       seen: new Map(),
+      envelopeBytes: 0,
+      envelopeNodes: 0,
     };
-    const tail = encodeOrdinary(value, context, exact, {
-      limits: handle<wasm.WasmDocument>(this).limits(),
-      raise: "parse the document with a larger",
-    });
-    exact.chunks.push(tail + suffix);
-    exact.chunks[0] = prefix + exact.chunks[0];
+    // What the edit writes is bounded by the limits this document keeps.
+    exact.chunks.push(
+      encodeOrdinary(value, context, exact, {
+        limits: handle<wasm.WasmDocument>(this).limits(),
+        document: true,
+      }),
+    );
     const values = exact.owners.map(jsonRaw);
+    // A batch carries its envelope's measure; a typed part has none.
+    const envelope = destination
+      ? undefined
+      : new Uint32Array([
+          Math.min(exact.envelopeBytes, 0xffffffff),
+          Math.min(exact.envelopeNodes, 0xffffffff),
+        ]);
     this.#commit((raw) => {
       const result = raw.editEncoded(
         exact.chunks,
@@ -1353,6 +1399,7 @@ export class Document extends DocumentReads {
         values,
         destination?.namespace,
         destination?.key,
+        envelope,
       );
       // The native call returns every temporarily transferred owner on failure too.
       // Reattach them before reporting the error; aliases and finalizers stay valid.
@@ -2106,22 +2153,13 @@ function checkValue(
       temporary = new ExactJson(wasm.WasmJson.parseText(text));
     } catch (error) {
       // Only known JSON admission limits can refuse text produced by the checked encoder.
-      let info: { kind?: string } | undefined;
-      if (typeof error === "string") {
-        try {
-          info = JSON.parse(error);
-        } catch {
-          /* unexpected engine exception */
-        }
-      }
-      if (info?.kind !== "Limit") throw error;
+      if (inputErrorKind(error) !== "Limit") throw error;
       return {
         outcome: "input-error",
         error: {
           code: "input-limit",
           instancePointer: null,
-          message:
-            "The ordinary value exceeds the admitted JSON limits; check a larger value as exact JSON from parseJson with larger limits.",
+          message: ORDINARY_LIMITS,
         },
       };
     }
@@ -2714,19 +2752,52 @@ interface EditEncoding {
   owners: ExactJson[];
   indices: number[];
   seen: Map<ExactJson, number>;
+  // An edit batch's own structure, beside its values: its array, rows,
+  // operations and pointers, in UTF-8 bytes and nodes as Rust counts them.
+  envelopeBytes: number;
+  envelopeNodes: number;
 }
-// The admission limits encoded text is parsed under, bytes, nodes and nesting,
-// with what a caller raises them through: a document's edits are parsed under
-// the limits it was admitted with, any other value under the defaults.
+// The admission limits encoded text is parsed under, bytes, nodes and nesting.
+// A document's edits apply the limits it was admitted with to what they write,
+// any other value the defaults to all of it.
 interface EncodingLimits {
   limits: ArrayLike<number>;
-  raise: string;
+  document: boolean;
+}
+// An ordinary value the encoder admitted but JSON admission refused.
+const ORDINARY_LIMITS =
+  "The ordinary value exceeds the admitted JSON limits; parse it with parseJson and larger limits.";
+// The kind of an engine input error, or undefined for any other exception.
+function inputErrorKind(error: unknown): string | undefined {
+  if (typeof error !== "string") return undefined;
+  try {
+    return (JSON.parse(error) as { kind?: string }).kind;
+  } catch {
+    return undefined;
+  }
 }
 function valueEncoding(): EncodingLimits {
-  return {
-    limits: jsonDefaults(),
-    raise: "check a larger value as exact JSON from parseJson with larger",
-  };
+  return { limits: jsonDefaults(), document: false };
+}
+// Rust's EditError refusal for an exceeded limit, which a document's edits give
+// whichever route reaches it.
+const EDIT_LIMITS = {
+  "byte-limit": ["byte", "max_bytes", "maxBytes"],
+  "node-limit": ["node", "max_nodes", "maxNodes"],
+  "depth-limit": ["nesting", "max_depth", "maxDepth"],
+} as const;
+function editLimitMessage(code: keyof typeof EDIT_LIMITS): string {
+  const [limit, rust, typescript] = EDIT_LIMITS[code];
+  return `document edit refused: the edited document exceeds its ${limit} limit; admit the document with a larger JsonLimits::${rust} (limits.${typescript} in TypeScript)`;
+}
+// UTF-8 bytes of well-formed encoder output; a surrogate pair takes four.
+function utf8Length(text: string): number {
+  let bytes = text.length;
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    if (c >= 0x80) bytes += c < 0x800 || (c >= 0xd800 && c <= 0xdfff) ? 1 : 2;
+  }
+  return bytes;
 }
 /** Iterative, checked serialization. No getters, toJSON hooks, omission, or implicit coercion. */
 function encodeOrdinary(
@@ -2735,7 +2806,11 @@ function encodeOrdinary(
   exact?: EditEncoding,
   encoding: EncodingLimits = valueEncoding(),
 ): string {
-  const [maxBytes, maxNodes, maxDepth] = Array.from(encoding.limits);
+  const [maxBytes, maxNodes, maxDepth] = Array.from(encoding.limits) as [
+    number,
+    number,
+    number,
+  ];
   const childPath = (owner: object, name: string, parent: string) =>
     authoring
       ? (authoring.origins.get(owner)?.get(name) ?? pointerChild(parent, name))
@@ -2750,48 +2825,80 @@ function encodeOrdinary(
     if (limit) throw new RangeError(message);
     throw new TypeError(message);
   }
+  // A limit the encoded value already exceeds. A document's edit refuses as
+  // Rust's edit would; another value names parsing it with limits instead.
+  function exceeded(code: keyof typeof EDIT_LIMITS, pointer: string): never {
+    if (encoding.document)
+      throw new EditError(code, editLimitMessage(code), pointer);
+    const setting = EDIT_LIMITS[code][2];
+    const limit = { maxBytes, maxNodes, maxDepth }[setting];
+    const what = {
+      maxBytes: `${limit}-character`,
+      maxNodes: `${limit}-node`,
+      maxDepth: `${limit}-level nesting`,
+    }[setting];
+    reject(
+      "authoring-limit",
+      pointer,
+      `Ordinary value exceeds the ${what} limit; parse it with parseJson and a larger limits.${setting}.`,
+      true,
+    );
+  }
+  // An edit batch is the envelope around its rows' values; only the values
+  // count against the limits, from their own root, as Rust counts the edit.
+  // `base` is the depth of the value root a job belongs to.
   type Job =
-    | { value: unknown; depth: number; pointer: string }
-    | { text: string; pointer: string }
+    | {
+        value: unknown;
+        depth: number;
+        pointer: string;
+        content: boolean;
+        base: number;
+      }
+    | { text: string; pointer: string; content: boolean }
     | { leave: object };
-  const jobs: Job[] = [{ value, depth: 0, pointer: "" }],
+  const batch = authoring?.editBatch === true;
+  const jobs: Job[] = [
+      { value, depth: 0, pointer: "", content: !batch, base: 0 },
+    ],
     active = new Set<object>(),
     parts: string[] = [];
   let size = 0,
     nodes = 0;
-  const add = (s: string, pointer: string) => {
-    size += s.length;
-    if (size > maxBytes!)
-      reject(
-        "authoring-limit",
-        pointer,
-        `Ordinary value exceeds the ${maxBytes}-character limit; ${encoding.raise} limits.maxBytes.`,
-        true,
-      );
+  const envelope = (bytes: number, count: number) => {
+    if (exact) {
+      exact.envelopeBytes += bytes;
+      exact.envelopeNodes += count;
+    }
+  };
+  const add = (s: string, pointer: string, content: boolean) => {
+    if (content) {
+      size += s.length;
+      if (size > maxBytes) exceeded("byte-limit", pointer);
+    } else envelope(utf8Length(s), 0);
     parts.push(s);
+  };
+  const counted = (count: number, pointer: string, content: boolean) => {
+    if (!content) return envelope(0, count);
+    nodes += count;
+    if (nodes > maxNodes) exceeded("node-limit", pointer);
   };
   while (jobs.length) {
     const job = jobs.pop()!;
     if ("text" in job) {
-      add(job.text, job.pointer);
+      add(job.text, job.pointer, job.content);
       continue;
     }
     if ("leave" in job) {
       active.delete(job.leave);
       continue;
     }
-    const { pointer } = job;
+    const { pointer, content } = job;
     const value =
-      authoring?.editBatch && job.depth === 1
-        ? normalizeEdit(job.value, authoring)
+      batch && job.depth === 1
+        ? normalizeEdit(job.value, authoring!)
         : job.value;
-    if (++nodes > maxNodes! || job.depth > maxDepth!)
-      reject(
-        "authoring-limit",
-        pointer,
-        `Ordinary value exceeds the ${maxNodes}-node or ${maxDepth}-level nesting limit; ${encoding.raise} limits.maxNodes or limits.maxDepth.`,
-        true,
-      );
+    counted(1, pointer, content);
     if (isExact(value)) {
       if (exact) {
         jsonRaw(value); // Check lifecycle before any owner crosses the bridge.
@@ -2804,7 +2911,7 @@ function encodeOrdinary(
         exact.chunks.push(parts.join(""));
         parts.length = 0;
         exact.indices.push(index);
-      } else add(value.text, pointer);
+      } else add(value.text, pointer, content);
       continue;
     }
     if (
@@ -2812,13 +2919,13 @@ function encodeOrdinary(
       typeof value === "boolean" ||
       typeof value === "string"
     ) {
-      add(JSON.stringify(value), pointer);
+      add(JSON.stringify(value), pointer, content);
       continue;
     }
     if (typeof value === "number") {
       if (!Number.isFinite(value))
         reject("non-finite-number", pointer, "JSON numbers must be finite.");
-      add(JSON.stringify(value), pointer);
+      add(JSON.stringify(value), pointer, content);
       continue;
     }
     if (typeof value !== "object")
@@ -2827,6 +2934,9 @@ function encodeOrdinary(
         pointer,
         "JSON cannot contain undefined, bigint, functions, or symbols.",
       );
+    // A container nests one level below its value's root, the root included.
+    if (content && job.depth - job.base + 1 > maxDepth)
+      exceeded("depth-limit", pointer);
     if (active.has(value))
       reject("cyclic-value", pointer, "JSON cannot contain cycles.");
     active.add(value);
@@ -2858,7 +2968,7 @@ function encodeOrdinary(
           "JSON arrays must be dense and have no extra properties.",
         );
       }
-      jobs.push({ text: "]", pointer });
+      jobs.push({ text: "]", pointer, content });
       for (let i = value.length - 1; i >= 0; i--) {
         const d = descriptors[String(i)];
         if (!d || !("value" in d))
@@ -2867,17 +2977,21 @@ function encodeOrdinary(
             childPath(value, String(i), pointer),
             "JSON arrays cannot contain accessors or holes.",
           );
-        if (i < value.length - 1) jobs.push({ text: ",", pointer });
+        if (i < value.length - 1) jobs.push({ text: ",", pointer, content });
         jobs.push({
           value: d.value,
           depth: job.depth + 1,
           pointer: childPath(value, String(i), pointer),
+          content,
+          base: job.base,
         });
       }
-      jobs.push({ text: "[", pointer });
+      jobs.push({ text: "[", pointer, content });
     } else {
       const entries = Object.entries(descriptors);
-      jobs.push({ text: "}", pointer });
+      // Member names are nodes, as Rust counts them.
+      counted(entries.length, pointer, content);
+      jobs.push({ text: "}", pointer, content });
       for (let i = entries.length - 1; i >= 0; i--) {
         const [key, d] = entries[i];
         if (!d.enumerable || !("value" in d))
@@ -2886,18 +3000,23 @@ function encodeOrdinary(
             childPath(value, key, pointer),
             "JSON objects must contain enumerable data properties.",
           );
-        if (i < entries.length - 1) jobs.push({ text: ",", pointer });
+        // A batch row's value is what the edit writes.
+        const child = content || (batch && job.depth === 1 && key === "value");
+        if (i < entries.length - 1) jobs.push({ text: ",", pointer, content });
         jobs.push({
           value: d.value,
           depth: job.depth + 1,
           pointer: childPath(value, key, pointer),
+          content: child,
+          base: content ? job.base : job.depth + 1,
         });
         jobs.push({
           text: JSON.stringify(key) + ":",
           pointer: childPath(value, key, pointer),
+          content,
         });
       }
-      jobs.push({ text: "{", pointer });
+      jobs.push({ text: "{", pointer, content });
     }
   }
   return parts.join("");
