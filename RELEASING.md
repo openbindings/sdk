@@ -18,9 +18,12 @@ Before a separately authorized release:
 3. Select component versions independently from specification versions. Before
    1.0, minor releases may break APIs; patch releases contain compatible fixes.
    Document breaking changes under Changed/Removed in CHANGELOG.md.
-4. Update workspace/npm/sibling versions together, locks and dependency notices.
-   Retain upstream source/patch identities. Re-run native, actual browser, Node,
-   workerd, fresh package, no-I/O and performance gates on the final source.
+4. Update workspace/npm/sibling versions together, locks and dependency notices,
+   and the version tag that packaged READMEs and rustdoc name in their links
+   into this repository (`tools/verify-doc-links.py` requires the workspace
+   version's tag). Retain upstream source/patch identities. Re-run native,
+   actual browser, Node, workerd, fresh package, no-I/O and performance gates on
+   the final source.
 5. Only after destination/package ownership is approved, publish internal
    dependencies and companion crates in the `publicationOrder` the candidate
    manifest records, which puts each crate after every local crate it depends
@@ -31,7 +34,8 @@ Before a separately authorized release:
    CI's `wasm-reproducibility` job rebuilds that asset from another checkout path
    and Cargo home and requires identical bytes, so its recorded hashes hold
    wherever it is built.
-6. Use the project's current annotated-tag/release process. Record exact artifact
+6. Use the project's current annotated-tag/release process. Name the tag
+   `v<version>`, the tag the packaged links name. Record exact artifact
    hashes and supported specification identity. Application migration, existing
    SDK retirement and verified-cohort promotion require separate decisions.
 

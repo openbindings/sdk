@@ -41,7 +41,7 @@ editing another owner cannot change them. Positions refer to each revision's
 current bytes, available from `as_bytes()`. Duplicate-member input remains
 inspectable but is refused by typed reads, editing and conformance proof.
 
-The [Rust first-use guide](https://github.com/openbindings/sdk/blob/main/docs/rust-first-use.md)
+The [Rust first-use guide](https://github.com/openbindings/sdk/blob/v0.2.0-alpha.1/docs/rust-first-use.md)
 shows value validation and an exact opaque-member edit.
 
 ## Value contracts and limits
@@ -54,7 +54,7 @@ A conformant operation's `input()` and `output()` return its `ValueContract`s, o
 `None` when it declares none. `prepare(&evaluator)` borrows the evaluator and
 supplies no resources; `prepare_with(&evaluator, &resources)` adds an immutable
 `ResourceSet`. Core does not depend on the companion.
-The [evaluator integration guide](https://github.com/openbindings/sdk/blob/main/docs/schema-evaluators.md)
+The [evaluator integration guide](https://github.com/openbindings/sdk/blob/v0.2.0-alpha.1/docs/schema-evaluators.md)
 explains the no-evaluator behavior and custom implementations.
 
 Prepare a value contract, retain the `PreparedValueContract`, and handle satisfies, fails,
@@ -84,11 +84,11 @@ for program logic. Messages are advisory; locations refer to the assessed revisi
 
 This unpublished package requires Rust 1.88. The 256 KiB document stack regression
 is qualified on the development toolchain, not on every supported compiler.
-See [support](https://github.com/openbindings/sdk/blob/main/docs/support.md) and
-[performance](https://github.com/openbindings/sdk/blob/main/docs/performance-boundaries.md).
+See [support](https://github.com/openbindings/sdk/blob/v0.2.0-alpha.1/docs/support.md) and
+[performance](https://github.com/openbindings/sdk/blob/v0.2.0-alpha.1/docs/performance-boundaries.md).
 
 ## Reference
 
 Use the crate's type and method documentation for ownership, error and limit
-contracts. The [API reference guide](https://github.com/openbindings/sdk/blob/main/docs/api-reference.md)
+contracts. The [API reference guide](https://github.com/openbindings/sdk/blob/v0.2.0-alpha.1/docs/api-reference.md)
 explains how to build the full reference locally.

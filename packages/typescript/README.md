@@ -267,7 +267,7 @@ policy and the SDK checks the final URL. Only 404 means absence;
 copies conformant document bytes and defaults to CORS `*`; application middleware owns
 authentication and credentialed CORS.
 
-See [HTTP policy](https://github.com/openbindings/sdk/blob/main/docs/http-discovery.md),
-[capabilities](https://github.com/openbindings/sdk/blob/main/CAPABILITIES.md),
-[migration](https://github.com/openbindings/sdk/blob/main/docs/migration.md) and
-[the API reference](https://github.com/openbindings/sdk/blob/main/docs/api-reference.md).
+See [HTTP policy](https://github.com/openbindings/sdk/blob/v0.2.0-alpha.1/docs/http-discovery.md),
+[capabilities](https://github.com/openbindings/sdk/blob/v0.2.0-alpha.1/CAPABILITIES.md),
+[migration](https://github.com/openbindings/sdk/blob/v0.2.0-alpha.1/docs/migration.md) and
+[the API reference](https://github.com/openbindings/sdk/blob/v0.2.0-alpha.1/docs/api-reference.md).

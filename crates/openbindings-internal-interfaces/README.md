@@ -9,6 +9,6 @@ an inspected target's binding is the binding an invoker receives.
 
 This package is a delivery dependency, not a supported extension API. It is
 unpublished and requires Rust 1.88. Start with the
-[SDK guide](https://github.com/openbindings/sdk) for a working application example.
+[SDK guide](https://github.com/openbindings/sdk/tree/v0.2.0-alpha.1) for a working application example.
 Implementation and dependency contracts are in the
-[maintainer guide](https://github.com/openbindings/sdk/blob/main/docs/maintainers.md).
+[maintainer guide](https://github.com/openbindings/sdk/blob/v0.2.0-alpha.1/docs/maintainers.md).

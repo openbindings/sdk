@@ -49,7 +49,7 @@ Publication defaults to `Access-Control-Allow-Origin: *`. Authentication,
 credentialed CORS and preflight belong to application middleware. Synchronous
 validation cannot be preempted by a timer; hard CPU deadlines require isolation.
 
-Read the [transport and publication policy](https://github.com/openbindings/sdk/blob/main/docs/http-discovery.md)
+Read the [transport and publication policy](https://github.com/openbindings/sdk/blob/v0.2.0-alpha.1/docs/http-discovery.md)
 before configuring custom transport or delegated policy. This unpublished
 package implements HTTP Discovery 0.1.0 and requires Rust 1.88.
 
@@ -58,4 +58,4 @@ package implements HTTP Discovery 0.1.0 and requires Rust 1.88.
 See `Publication`, `PublicationOptions`, `DiscoveryOutcome`, `ClientOptions`
 and the `native` module. TypeScript callers use
 `@openbindings/sdk/http-discovery` as described in the
-[TypeScript guide](https://github.com/openbindings/sdk/blob/main/packages/typescript/README.md).
+[TypeScript guide](https://github.com/openbindings/sdk/blob/v0.2.0-alpha.1/packages/typescript/README.md).
