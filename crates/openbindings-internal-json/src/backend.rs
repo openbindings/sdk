@@ -598,10 +598,6 @@ pub fn relative_pointer(value: crate::JsonRef<'_>, root: crate::JsonRef<'_>) -> 
 pub fn push_pointer(pointer: &mut crate::Pointer, escaped: &str) {
     pointer.push_escaped(escaped);
 }
-/// A pointer followed by escaped RFC 6901 text, in one exact allocation.
-pub fn joined_pointer(pointer: &crate::Pointer, escaped: &str) -> crate::Pointer {
-    pointer.joined(escaped)
-}
 /// The bytes a pointer retains: its UTF-8 text, or two per UTF-16 unit.
 pub fn pointer_bytes(pointer: &crate::Pointer) -> usize {
     pointer.size()

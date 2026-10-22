@@ -17,9 +17,11 @@ compilers may need larger stacks in debug builds. The independent MSRV lane uses
 `python3 tools/verify-msrv.py --version 1.88.0 --test`: it runs with `--no-fail-fast`
 and excludes only the exact workspace tests in the
 [stack-margin inventory](../tools/stack-margin-tests.json). Development-toolchain
-workspace tests run without exclusions, including cold compilation on 256 KiB.
-The pattern stack test is ignored in Windows debug builds, and `tools/verify.py`
-runs it in release builds on every host.
+workspace runs exclude none of them by name. The document stack test, cold
+compilation on 256 KiB included, runs in every build. The pattern, evaluation
+and walk stack tests are ignored in every debug build, on every host, because
+unoptimized frames exceed the margin; `tools/verify.py` runs those three in
+release builds on every host.
 
 ```sh
 cargo install wasm-bindgen-cli --version 0.2.129 --locked

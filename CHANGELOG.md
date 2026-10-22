@@ -4,6 +4,10 @@
 
 ### Added
 
+- The npm package ships compiled JavaScript and declarations without source maps; each build
+  starts from an empty `dist`.
+- Every package stays unpublished until an authorized release: Cargo `publish = false` and npm
+  `"private": true`, checked by `tools/verify-publication-guards.py`.
 - Value contracts come from the operation. A conformant operation's `input()` and
   `output()` return a `ValueContract`; `prepare(&evaluator)`, `prepare_with(&evaluator,
   &resources)` and `prepare_with_control` borrow the evaluator and return
