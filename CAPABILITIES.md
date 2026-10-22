@@ -56,7 +56,8 @@ string. The admission byte limit is how a caller bounds that time:
 `validate_document_with_limits` with a smaller `max_bytes` admits less. A
 meta-schema check reads its schema's own members and only the type of each
 subschema, so a node is read by at most two checks and their work together stays
-linear in those limits.
+linear in those limits. A failing schema's members are read once more to locate
+OBI-10 findings at the keywords whose values fail.
 
 ## Value validation
 

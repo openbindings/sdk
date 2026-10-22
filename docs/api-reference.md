@@ -386,7 +386,8 @@ meets each of the cut meta-schema's 129 positions at most once; its patterns are
 regular too. Every schema the admission limits admit therefore gets a
 meta-schema verdict. A check reads its schema's own members and only the type of
 each subschema, so a node is read by at most two checks and their work together
-stays linear in the admission limits.
+stays linear in the admission limits. A failing schema's members are read once
+more to locate its findings at the keywords whose values fail.
 
 ### Finding-code catalog
 
@@ -421,7 +422,7 @@ syntax finding's message. An input-limit finding's message is that `Display`.
 | `unicode-escape` | OBI-01 | A Unicode escape lacks four hexadecimal digits. |
 | `duplicate-member` | OBI-01 | An object repeats a decoded member name. |
 | `unpaired-surrogate` | OBI-01 | A member name or string value holds an escape denoting an unpaired surrogate. |
-| `schema-mismatch` | OBI-02, OBI-10 | A constraint in the derived schema or meta-schemas failed. The fixed message is `value violates the fixed normative schema`; locations identify deepest checked document positions or the checked schema node. |
+| `schema-mismatch` | OBI-02, OBI-10 | A constraint in the derived schema or meta-schemas failed. OBI-02's fixed message is `value violates the fixed normative schema`, at the deepest checked document positions. OBI-10 names the keyword, as in `the value of the type keyword does not satisfy the JSON Schema 2020-12 meta-schema`, at that keyword's value, or says `a schema must be a JSON object or boolean` at a schema that is neither. |
 | `fixed-schema-limit-or-failure` | OBI-02, OBI-10 | Fixed-schema checking could not complete. The pinned schemas compile and their checks have no work limit, so a report does not hold it today. |
 | `semver` | OBI-03 | The openbindings value is not a SemVer string. |
 | `missing-version` | OBI-03 | The openbindings member is absent. |

@@ -73,8 +73,12 @@ readiness API.
 Fixed document checks use validity decisions separately from location guidance.
 The location walk follows failing members and elements and retains independently
 failing containers. A findings-allowance or frame-depth stop preserves an
-established violation and marks findings truncated. OBI-10 locates the schema
-node checked. No optional value
+established violation and marks findings truncated. OBI-10 locates each keyword
+of a failing schema whose value fails that keyword's own meta-schema check, or
+the schema itself when it is neither an object nor a boolean. The localized
+meta-schemas constrain a schema only through its type and its keywords' values,
+so those per-keyword checks, built once at the first failure, locate exactly
+the keywords that make it fail. No optional value
 error tree participates in document rule evidence.
 
 [Allocation qualification](../tools/diagnostic-memory-probe/README.md) records
