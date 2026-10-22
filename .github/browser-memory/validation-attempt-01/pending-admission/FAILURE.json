@@ -1,0 +1,5 @@
+{
+  "status": "preparation-failed",
+  "error": "ValueError('explicit root actor login required')",
+  "sdkCampaignAttemptConsumed": false
+}

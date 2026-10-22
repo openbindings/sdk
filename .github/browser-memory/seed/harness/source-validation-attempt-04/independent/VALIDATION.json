@@ -1,0 +1,78 @@
+{
+  "at": "2026-10-10T22:59:41.474322+00:00",
+  "python": "/opt/homebrew/opt/python@3.13/bin/python3.13",
+  "pythonVersion": "3.13.7",
+  "commands": [
+    {
+      "command": [
+        "/opt/homebrew/opt/python@3.13/bin/python3.13",
+        "-B",
+        "replay.py"
+      ],
+      "cwd": "/Users/matt/Code/ob-pj/design/sdk-maturity-loop-2026-10-10/rounds/01/continuation/closing-measurement-review",
+      "exitCode": 0,
+      "scope": "offline hash/archive/receipt/semantic replay",
+      "stdout": {
+        "path": "/Users/matt/Code/ob-pj/design/sdk-maturity-loop-2026-10-10/rounds/01/continuation/closing-measurement-review/replay.stdout",
+        "bytes": 197,
+        "sha256": "31acc33f02574ddd40fe201034d609712c91518c5b5f22eced0d74733233571d"
+      },
+      "stderr": {
+        "path": "/Users/matt/Code/ob-pj/design/sdk-maturity-loop-2026-10-10/rounds/01/continuation/closing-measurement-review/replay.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "command": [
+        "/opt/homebrew/opt/python@3.13/bin/python3.13",
+        "-B",
+        "-m",
+        "unittest",
+        "-v",
+        "test_harness"
+      ],
+      "cwd": "/Users/matt/Code/ob-pj/design/sdk-maturity-loop-2026-10-10/rounds/01/continuation/closing-measurement-review/browser-control-source",
+      "exitCode": 0,
+      "tests": 20,
+      "scope": "existing SDK-free controls including AF_UNIX bind; explicitly sandbox-escalated local run",
+      "stdout": {
+        "path": "/Users/matt/Code/ob-pj/design/sdk-maturity-loop-2026-10-10/rounds/01/continuation/closing-measurement-review/browser-controls.stdout",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stderr": {
+        "path": "/Users/matt/Code/ob-pj/design/sdk-maturity-loop-2026-10-10/rounds/01/continuation/closing-measurement-review/browser-controls.stderr",
+        "bytes": 3001,
+        "sha256": "62a8ee5c75d49b7f5936c2d37a24c4a396a6ba82f0c6c88c11eab8c7ea8fbabc"
+      }
+    },
+    {
+      "command": [
+        "/opt/homebrew/opt/python@3.13/bin/python3.13",
+        "-B",
+        "/Users/matt/Code/ob-pj/design/sdk-maturity-loop-2026-10-10/rounds/01/continuation/runtime-inclusive/test-metadata-v3.py"
+      ],
+      "cwd": "/Users/matt/Code/ob-pj",
+      "exitCode": 0,
+      "tests": 18,
+      "scope": "existing SDK-free verifier/prerequisite controls",
+      "stdout": {
+        "path": "/Users/matt/Code/ob-pj/design/sdk-maturity-loop-2026-10-10/rounds/01/continuation/closing-measurement-review/runtime-controls.stdout",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stderr": {
+        "path": "/Users/matt/Code/ob-pj/design/sdk-maturity-loop-2026-10-10/rounds/01/continuation/closing-measurement-review/runtime-controls.stderr",
+        "bytes": 2775,
+        "sha256": "fa1d24344184d961b411a442209e07d4cf270ceaea1f8703a695aa14ac20e7c4"
+      }
+    }
+  ],
+  "SDKExecuted": false,
+  "timingExecuted": false,
+  "realCgroupsExecuted": false,
+  "sourceFilesModified": false,
+  "activeSealsRefreshed": false,
+  "noFurtherExecutionRequested": true
+}

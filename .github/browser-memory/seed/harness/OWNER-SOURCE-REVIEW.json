@@ -1,0 +1,44 @@
+{
+  "reviewedAt": "2026-10-10T23:01:43.664779+00:00",
+  "reviewer": "Root SDK coherence owner; independent Sol closing-review evidence attached",
+  "sourceFreezeSha256": "5239eb8a20ba7bb0f6265bfb0a8584f2c8f8c7b40cc7ccbcdf249c2af4892885",
+  "status": "source accepted for one next preparation; exact remote bundle review and repaired real controls pending",
+  "sourceFilesVerified": 15,
+  "rootAcceptance": {
+    "path": "source-validation-attempt-04/independent/OWNER-ACCEPTANCE.json",
+    "sha256": "aaca6ecb82477581dfbfcdef15327b6c735ab1fabfe97d018f22d793fd1d5060"
+  },
+  "independentReviewFreeze": {
+    "path": "source-validation-attempt-04/independent/REVIEW-FREEZE.json",
+    "sha256": "b5e24d7b5fa3d87080ffb4517ec45b4156720ceef293f429d96648c189426d85"
+  },
+  "priorSourceAcceptanceSha256": "97f84e0a885a0f2de0e16431c3713a6e911da55afab5411d49708014e8614ab4",
+  "independentTests": {
+    "command": [
+      "/opt/homebrew/opt/python@3.13/bin/python3.13",
+      "-B",
+      "-m",
+      "unittest",
+      "-v",
+      "test_harness"
+    ],
+    "count": 20,
+    "exitCode": 0,
+    "kind": "existing SDK-free controls including AF_UNIX bind; explicitly sandbox-escalated local run",
+    "receipt": {
+      "path": "source-validation-attempt-04/independent/VALIDATION.json",
+      "sha256": "7fac37306f9e453f66e579a6d8bdce5b8c437feeb278b036a90b606a36c1805d"
+    },
+    "commandIndex": 1,
+    "executedDuringSealRefresh": false
+  },
+  "reviewed": [
+    "Root reviewed repair12 campaign.py/test_harness.py full diff and Sol independent report. No SDK source, isolation, schedule or budget change. Short scratch and truthful failure reporting resolve witnessed pre-SDK path failure."
+  ],
+  "limitations": [
+    "This is a materialized source acceptance from the hash-bound actual root receipt, not a new independent review.",
+    "No repaired Linux/browser execution or SDK qualification is claimed.",
+    "Final remote runtime/bundle identities need separate owner acceptance before a new activation.",
+    "Consumed activation176d6ecbd95c44f4affe35287302f872 is not reused."
+  ]
+}
