@@ -843,7 +843,7 @@ impl SchemaSpace {
         let mut definitions: BTreeMap<usize, BTreeMap<String, (String, usize)>> = BTreeMap::new();
         let mut locations = BTreeMap::new();
         let mut byte_count = 0usize;
-        let max_bytes = openbindings_internal_json::JsonLimits::default().max_bytes;
+        let limits = self.document.limits();
         // Separated literals, copied together once every node is admitted, and
         // the literal text the current node separates, counted with its own.
         let separating = literals.is_some();
@@ -949,14 +949,19 @@ impl SchemaSpace {
             byte_count = byte_count
                 .saturating_add(transformed.len())
                 .saturating_add(std::mem::take(&mut separated));
-            // Each projected resource is parsed under the default admission
+            // Each projected resource is parsed under the document's admission
             // limits below; the projection stops once it passes their bytes.
-            if byte_count > max_bytes {
+            if byte_count > limits.max_bytes {
                 return Err(self.failure(
                     id,
                     FailureReason::LimitExceeded,
                     "program-byte-limit",
-                    format!("schema projection exceeds the {max_bytes}-byte default JSON admission limit"),
+                    format!(
+                        "the schema projection exceeds the document's {}-byte admission \
+                         limit; raise JsonLimits::max_bytes (limits.maxBytes in \
+                         TypeScript) when admitting the document",
+                        limits.max_bytes
+                    ),
                 ));
             }
             if mapped {
@@ -994,7 +999,7 @@ impl SchemaSpace {
                 if id == entry_resource {
                     fields.insert("$ref".into(), quoted(&address(entry)));
                 }
-                JsonValue::parse(object(fields))
+                JsonValue::parse_with_limits(object(fields), limits)
                     .map(|document| ProjectedResource { uri, document })
                     .map_err(|e| {
                         Failure::new(

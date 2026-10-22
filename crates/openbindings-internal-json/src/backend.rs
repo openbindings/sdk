@@ -870,6 +870,11 @@ impl LocationPointerSizes {
 pub fn input_error_description(code: &str) -> Option<&'static str> {
     crate::json::input_error_description(code)
 }
+/// The [`crate::JsonLimits`] field that raises a limit code's limit, in Rust and
+/// as TypeScript's `limits` option names it; `None` for any other code.
+pub fn limit_setting(code: &str) -> Option<(&'static str, &'static str)> {
+    crate::json::limit_setting(code)
+}
 /// The location of an admission failure in the bytes it refused: no pointer,
 /// since no value was parsed, at `byte_offset` clamped to the input, with the
 /// line and UTF-8 byte column counted over the bytes before it. The bytes need

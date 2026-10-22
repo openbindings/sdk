@@ -363,6 +363,43 @@ async fn size_is_decoded_bytes_with_one_sentinel_and_no_prefix_assessment() {
     assert_eq!(c.borrow().read, (1 << 20) + 1);
 }
 #[tokio::test(flavor = "current_thread")]
+async fn a_raised_body_limit_validates_bodies_past_the_default_byte_limit() {
+    let default = openbindings::JsonLimits::default();
+    let head = br#"{"openbindings":"0.2.0","operations":{},"x-fill":""#;
+    let mut body = head.to_vec();
+    body.resize(default.max_bytes + 1 - 2, b'a');
+    body.extend_from_slice(br#""}"#);
+    // A body bound past the default byte limit admits a body to it, and the
+    // document keeps limits that admit it, with any nesting.
+    let (r, _) = get(200, &body, default.max_bytes + 1).await;
+    let DiscoveryOutcome::Found { document } = r.outcome else {
+        panic!("expected a conformant document, got {:?}", r.outcome)
+    };
+    assert_eq!(
+        document.as_document().limits(),
+        openbindings::JsonLimits {
+            max_bytes: default.max_bytes + 1,
+            max_depth: usize::MAX,
+            ..default
+        }
+    );
+    // The default bound refuses the body before validation, and a bound within
+    // the default byte limit validates as validate_document does.
+    let (r, _) = get(200, &body, DEFAULT_MAX_DOCUMENT_BYTES).await;
+    assert!(matches!(r.outcome, DiscoveryOutcome::BodyLimit { .. }));
+    let (r, _) = get(200, DOCUMENT, DEFAULT_MAX_DOCUMENT_BYTES).await;
+    let DiscoveryOutcome::Found { document } = r.outcome else {
+        panic!("expected a conformant document, got {:?}", r.outcome)
+    };
+    assert_eq!(
+        document.as_document().limits(),
+        openbindings::JsonLimits {
+            max_depth: usize::MAX,
+            ..default
+        }
+    );
+}
+#[tokio::test(flavor = "current_thread")]
 async fn cancellation_during_pending_io_wakes_without_transport_cooperation() {
     let control = CancellationToken::new();
     control.cancel();

@@ -26,7 +26,7 @@ impl SchemaSpace {
         ASSEMBLED.with(|count| count.set(count.get() + 1));
         Self {
             inner: embedding::SchemaSpace::new(
-                embedding::RawDocument::new(document.value().clone()),
+                embedding::RawDocument::with_limits(document.value().clone(), document.limits()),
                 openbindings_internal_schema::SuppliedSet::supplied(supplied).clone(),
             ),
         }

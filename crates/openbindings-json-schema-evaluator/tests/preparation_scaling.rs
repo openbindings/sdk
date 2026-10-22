@@ -529,3 +529,57 @@ fn generated_walks_reaching_a_dynamic_anchor_compile_once_too() {
         }
     }
 }
+
+// Prepare the input contract of a document admitted under `limits`.
+fn prepare_admitted(text: &str, limits: JsonLimits) -> Result<PreparedValueContract, NoVerdict> {
+    validate_document_with_limits(text, limits)
+        .unwrap()
+        .conformant()
+        .expect("conformant document")
+        .resolve_operation("op")
+        .expect("declared operation")
+        .input()
+        .expect("declared input")
+        .prepare(&DefaultEvaluator::new())
+}
+
+#[test]
+fn a_projection_stops_at_the_limits_its_document_was_admitted_under() {
+    // Each empty `allOf` member projects to a reference and a definition, so
+    // the projection is many times the document.
+    let text = document(
+        &[],
+        &format!(r#"{{"allOf":[{}]}}"#, vec!["{}"; 20_000].join(",")),
+    );
+    let tight = JsonLimits {
+        max_bytes: text.len(),
+        ..JsonLimits::default()
+    };
+    let refused = prepare_admitted(&text, tight).unwrap_err();
+    assert_eq!(
+        (refused.reason, refused.code.as_str()),
+        (NoVerdictReason::LimitExceeded, "program-byte-limit")
+    );
+    assert_eq!(
+        refused.message,
+        format!(
+            "the schema projection exceeds the document's {}-byte admission limit; \
+             raise JsonLimits::max_bytes (limits.maxBytes in TypeScript) when admitting \
+             the document",
+            text.len()
+        )
+    );
+    assert!(prepare_admitted(&text, JsonLimits::default()).is_ok());
+    // A document admitted past the default byte limit prepares a contract whose
+    // projection passes that limit, and decides a value.
+    let default = JsonLimits::default().max_bytes;
+    let literal = format!(r#""{}""#, "a".repeat(default));
+    let large = document(&[], &format!(r#"{{"const":{literal}}}"#));
+    let raised = JsonLimits {
+        max_bytes: 2 * default,
+        ..JsonLimits::default()
+    };
+    let contract = prepare_admitted(&large, raised).unwrap();
+    let value = JsonValue::parse_with_limits(&literal, raised).unwrap();
+    assert!(matches!(contract.validate(&value), ValueOutcome::Satisfies));
+}

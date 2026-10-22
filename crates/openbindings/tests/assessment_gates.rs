@@ -171,16 +171,7 @@ fn assessment_admission_is_caller_selected_and_precedes_version() {
 fn the_default_byte_limit_admits_32_mib_and_names_its_setting_past_it() {
     let limit = JsonLimits::default().max_bytes;
     assert_eq!(limit, 32 * 1024 * 1024);
-    // A conformant document of exactly `bytes`, padded by one string.
-    let document = |bytes: usize| {
-        let head = r#"{"openbindings":"0.2.0","operations":{},"x-fill":""#;
-        let mut text = String::with_capacity(bytes);
-        text.push_str(head);
-        text.extend(std::iter::repeat_n('a', bytes - head.len() - 2));
-        text.push_str(r#""}"#);
-        assert_eq!(text.len(), bytes);
-        text
-    };
+    let document = padded;
     assert_eq!(
         checked(&document(limit)).report().conclusion,
         Conformance::Conformant
@@ -196,8 +187,7 @@ fn the_default_byte_limit_admits_32_mib_and_names_its_setting_past_it() {
         assert_eq!(
             finding.message,
             "the document's 33554433 bytes exceed the 33554432-byte admission limit; \
-             raise JsonLimits::max_bytes through validate_document_with_limits \
-             (TypeScript's validateDocument applies the default limits)"
+             raise JsonLimits::max_bytes (limits.maxBytes in TypeScript)"
         );
     }
     // Raising the named setting admits the same document.
@@ -211,6 +201,95 @@ fn the_default_byte_limit_admits_32_mib_and_names_its_setting_past_it() {
     )
     .unwrap();
     assert_eq!(raised.report().conclusion, Conformance::Conformant);
+}
+
+// A conformant document of exactly `bytes`, padded by one string.
+fn padded(bytes: usize) -> String {
+    let head = r#"{"openbindings":"0.2.0","operations":{},"x-fill":""#;
+    let mut text = String::with_capacity(bytes);
+    text.push_str(head);
+    text.extend(std::iter::repeat_n('a', bytes - head.len() - 2));
+    text.push_str(r#""}"#);
+    assert_eq!(text.len(), bytes);
+    text
+}
+
+#[test]
+fn a_raised_byte_limit_admits_documents_to_it_and_they_keep_it_for_edits() {
+    let default = JsonLimits::default().max_bytes;
+    let raised = JsonLimits {
+        max_bytes: default + 1024,
+        ..JsonLimits::default()
+    };
+    let (at, over) = (padded(raised.max_bytes), padded(raised.max_bytes + 1));
+    // Validation admits a document at the raised limit and refuses one past it,
+    // naming the setting.
+    let validation = validate_document_with_limits(&at, raised).unwrap();
+    assert_eq!(validation.report().conclusion, Conformance::Conformant);
+    let proof = validation.conformant().unwrap();
+    assert_eq!(proof.as_document().limits(), raised);
+    let refused = validate_document_with_limits(&over, raised).unwrap();
+    assert_eq!(refused.report().conclusion, Conformance::Undetermined);
+    assert!(refused.report().findings.iter().all(|f| f.message
+        == format!(
+            "the document's {} bytes exceed the {}-byte admission limit; raise \
+             JsonLimits::max_bytes (limits.maxBytes in TypeScript)",
+            raised.max_bytes + 1,
+            raised.max_bytes
+        )));
+    // Parsing does the same, and the parsed document keeps its limits.
+    let parsed = Document::parse_with_limits(&at, raised).unwrap();
+    assert_eq!(parsed.limits(), raised);
+    let error = Document::parse_with_limits(&over, raised).unwrap_err();
+    assert_eq!(
+        (error.code, error.byte_offset),
+        ("byte-limit", raised.max_bytes)
+    );
+    assert!(
+        error
+            .to_string()
+            .ends_with("; raise JsonLimits::max_bytes (limits.maxBytes in TypeScript)")
+    );
+    // Edits and typed setters parse under the document's limits: a small
+    // document admitted with them grows past the default, one parsed with the
+    // defaults does not.
+    let empty = r#"{"openbindings":"0.2.0","operations":{}}"#;
+    let large =
+        JsonValue::parse_with_limits(format!(r#""{}""#, "a".repeat(default)), raised).unwrap();
+    let mut grown = Document::parse_with_limits(empty, raised).unwrap();
+    grown.set("/x-fill", &large).unwrap();
+    assert!(grown.as_bytes().len() > default);
+    assert_eq!(grown.limits(), raised);
+    grown.set_description(&"d".repeat(512)).unwrap();
+    assert_eq!(
+        grown.validate().unwrap().report().conclusion,
+        Conformance::Conformant
+    );
+    let mut plain = Document::parse(empty).unwrap();
+    let error = plain.set("/x-fill", &large).unwrap_err();
+    assert_eq!(error.code(), "byte-limit");
+    // A proof's document keeps its limits for editing again: at the raised
+    // limit it cannot grow, and once smaller it can.
+    let mut again = proof.into_inner();
+    assert_eq!(again.set_name("raised").unwrap_err().code(), "byte-limit");
+    again.remove("/x-fill").unwrap();
+    again.set_name("raised").unwrap();
+    assert_eq!(again.limits(), raised);
+    // Each entry's default: the JsonLimits defaults for parsing, construction
+    // and from_json, and no nesting cap for validate_document.
+    assert_eq!(
+        Document::parse(empty).unwrap().limits(),
+        JsonLimits::default()
+    );
+    assert_eq!(Document::new().limits(), JsonLimits::default());
+    let validated = validate_document(empty).unwrap();
+    assert_eq!(
+        validated.document().unwrap().limits(),
+        JsonLimits {
+            max_depth: usize::MAX,
+            ..JsonLimits::default()
+        }
+    );
 }
 
 #[test]

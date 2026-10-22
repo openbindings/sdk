@@ -251,6 +251,9 @@ pub struct Document {
 }
 pub(crate) struct DocumentInner {
     pub value: JsonValue,
+    // The limits this revision was admitted under: edits and the core
+    // projection parse what they write under them.
+    limits: JsonLimits,
     pub schemas: OnceLock<SchemaIndex>,
     // Value-contract resolution spaces are assembled only when an evaluator asks
     // for the core projection. The space without supplied resources lives here;
@@ -428,14 +431,32 @@ impl Document {
     /// # Errors
     /// Returns an input error for invalid UTF-8, a byte order mark, invalid JSON syntax, or an exceeded admission limit.
     pub fn parse(input: impl AsRef<[u8]>) -> Result<Self, InputError> {
-        JsonValue::parse(input).map(Self::from_json)
+        Self::parse_with_limits(input, JsonLimits::default())
+    }
+    /// Parse under caller-selected byte, node and nesting admission limits, which
+    /// the document keeps: its edits and value-contract projection parse what they
+    /// write under the same limits.
+    ///
+    /// # Errors
+    /// Returns an input error for invalid UTF-8, a byte order mark, invalid JSON syntax, or an exceeded admission limit.
+    pub fn parse_with_limits(
+        input: impl AsRef<[u8]>,
+        limits: JsonLimits,
+    ) -> Result<Self, InputError> {
+        JsonValue::parse_with_limits(input, limits).map(|value| Self::admitted(value, limits))
     }
     /// Create a document snapshot from an exact value without validation. A subtree is made standalone so subsequent document coordinates refer to its independent source.
+    /// The document keeps [`JsonLimits::default`] for its edits and projection;
+    /// [`Self::parse_with_limits`] admits one under other limits.
     pub fn from_json(value: JsonValue) -> Self {
+        Self::admitted(value, JsonLimits::default())
+    }
+    pub(crate) fn admitted(value: JsonValue, limits: JsonLimits) -> Self {
         let value = backend::standalone(value);
         Self {
             inner: Arc::new(DocumentInner {
                 value,
+                limits,
                 schemas: OnceLock::new(),
                 resolution: OnceLock::new(),
                 spaces_in: Mutex::default(),
@@ -451,6 +472,14 @@ impl Document {
     /// Borrow the exact document value; no new owner or conformance proof is created.
     pub fn value(&self) -> &JsonValue {
         &self.inner.value
+    }
+    /// The admission limits this document was admitted under, which its edits and
+    /// value-contract projection apply: [`JsonLimits::default`] for [`Self::parse`],
+    /// [`Self::new`] and [`Self::from_json`], the caller's for
+    /// [`Self::parse_with_limits`] and [`validate_document_with_limits`], and no
+    /// nesting cap for [`validate_document`].
+    pub fn limits(&self) -> JsonLimits {
+        self.inner.limits
     }
     /// Borrow the current revision's exact bytes, including surrounding whitespace.
     pub fn as_bytes(&self) -> &[u8] {
@@ -894,7 +923,7 @@ pub fn validate_document_with_limits(
 ) -> Result<DocumentValidation, VersionRefusal> {
     let bytes = input.as_ref();
     match JsonValue::parse_with_limits(bytes, limits) {
-        Ok(value) => Document::from_json(value).validate(),
+        Ok(value) => Document::admitted(value, limits).validate(),
         Err(error) => {
             let mut checks = Checks::new();
             let limit = error.kind == InputErrorKind::Limit;
@@ -940,37 +969,26 @@ fn version_refusal(value: &JsonValue) -> Option<VersionRefusal> {
     }
     VersionRefusal::new(declared)
 }
-// Which admission limit stopped parsing, and the setting that raises it.
-// Parsing reports an exceeded limit as `byte-limit`, `node-limit` or
-// `depth-limit`.
+// Which admission limit stopped parsing, and the setting that raises it, in
+// Rust and in TypeScript. Parsing reports an exceeded limit as `byte-limit`,
+// `node-limit` or `depth-limit`.
 fn input_limit_message(code: &str, limits: JsonLimits, bytes: usize) -> String {
-    let (reached, setting) = match code {
-        "byte-limit" => (
-            format!(
-                "the document's {bytes} bytes exceed the {}-byte admission limit",
-                limits.max_bytes
-            ),
-            "max_bytes",
+    let reached = match code {
+        "byte-limit" => format!(
+            "the document's {bytes} bytes exceed the {}-byte admission limit",
+            limits.max_bytes
         ),
-        "node-limit" => (
-            format!(
-                "the document holds more than the {} nodes admitted",
-                limits.max_nodes.min(u32::MAX as usize)
-            ),
-            "max_nodes",
+        "node-limit" => format!(
+            "the document holds more than the {} nodes admitted",
+            limits.max_nodes.min(u32::MAX as usize)
         ),
-        _ => (
-            format!(
-                "the document nests containers deeper than the {} levels admitted",
-                limits.max_depth
-            ),
-            "max_depth",
+        _ => format!(
+            "the document nests containers deeper than the {} levels admitted",
+            limits.max_depth
         ),
     };
-    format!(
-        "{reached}; raise JsonLimits::{setting} through validate_document_with_limits \
-         (TypeScript's validateDocument applies the default limits)"
-    )
+    let (rust, typescript) = backend::limit_setting(code).unwrap_or(("max_depth", "maxDepth"));
+    format!("{reached}; raise JsonLimits::{rust} (limits.{typescript} in TypeScript)")
 }
 const MAX_FINDINGS: usize = 4096;
 const MAX_FINDING_POINTER_BYTES: usize = 8 * 1024 * 1024;

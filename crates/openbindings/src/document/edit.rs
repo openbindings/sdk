@@ -577,7 +577,8 @@ impl Document {
             pointer: pointer.into(),
         }])
     }
-    /// Commit a batch with one splice and one parse, under the default JSON limits.
+    /// Commit a batch with one splice and one parse, under the admission limits the
+    /// document was admitted under ([`Self::limits`]).
     /// All paths refer to the pre-edit revision. Sibling insertions share a boundary
     /// in batch order. Removing adjacent siblings, up to every member of a container,
     /// is not an overlap. Overlapping replacements/removals are refused. Untouched bytes
@@ -589,7 +590,7 @@ impl Document {
     /// unchanged. Known byte extents are preflighted; typed parts serialize once
     /// into a bounded writer that reserves all remaining known bytes before growing.
     pub fn edit(&mut self, edits: &[Edit<'_>]) -> Result<(), EditError> {
-        let limits = JsonLimits::default();
+        let limits = self.limits();
         if edits.len() > limits.max_nodes {
             return Err(backend::input_error(InputErrorKind::Limit, "node-limit", 0).into());
         }
@@ -774,7 +775,7 @@ impl Document {
         if next.has_duplicate_names() {
             return Err(EditError::DuplicateMembers);
         }
-        *self = Self::from_json(next);
+        *self = Self::admitted(next, limits);
         Ok(())
     }
     fn set_typed<T: Serialize + ?Sized>(
@@ -787,7 +788,7 @@ impl Document {
                 pointer: pointer.into(),
                 value: Some(&Typed(value)),
             }],
-            JsonLimits::default(),
+            self.limits(),
         )
     }
     fn set_part<T: Part>(

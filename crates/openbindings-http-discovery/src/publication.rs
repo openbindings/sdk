@@ -105,6 +105,9 @@ impl Publication {
         })
     }
     /// Validate exact source bytes and create publication only on established conformance. Return distinct configuration, version, nonconformant or undetermined refusals.
+    /// The bytes are admitted as [`openbindings::validate_document`] admits them; publish
+    /// a larger document from [`openbindings::validate_document_with_limits`]'s proof
+    /// with [`Self::new`].
     ///
     /// # Errors
     /// Returns a publication error for invalid CORS configuration, an unsupported version, or a document whose conformance is non-conformant or undetermined.
@@ -113,7 +116,11 @@ impl Publication {
         options: PublicationOptions,
     ) -> Result<Self, PublicationError> {
         validate_allow_origin(&options.allow_origin).map_err(PublicationError::Configuration)?;
-        match validate_body(bytes.as_ref()) {
+        // The bytes are admitted as `validate_document` admits them.
+        match validate_body(
+            bytes.as_ref(),
+            openbindings::JsonLimits::default().max_bytes,
+        ) {
             DiscoveryOutcome::Found { document } => {
                 Self::new(&document, options).map_err(PublicationError::Configuration)
             }

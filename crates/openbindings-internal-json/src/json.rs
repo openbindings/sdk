@@ -42,8 +42,9 @@ pub enum InputErrorKind {
 #[derive(Clone, PartialEq, Eq)]
 /// Exact JSON admission failure. It is separate from document conformance and schema-instance outcomes.
 /// `Display` writes what the parser expected or found and the byte where, such as
-/// `expected a colon after the member name at byte 5`; branch on `code` and
-/// `byte_offset`, which do not change with that wording.
+/// `expected a colon after the member name at byte 5`, and for an exceeded limit
+/// the [`JsonLimits`] field that raises it; branch on `code` and `byte_offset`,
+/// which do not change with that wording.
 /// Later versions may add fields: read them by name and match with `..`.
 #[non_exhaustive]
 pub struct InputError {
@@ -110,11 +111,28 @@ pub(crate) fn input_error_description(code: &str) -> Option<&'static str> {
         _ => return None,
     })
 }
+/// The [`JsonLimits`] field that raises a limit code's limit, as Rust names it
+/// and as TypeScript's `limits` option does; `None` for any other code.
+pub(crate) fn limit_setting(code: &str) -> Option<(&'static str, &'static str)> {
+    match code {
+        "byte-limit" => Some(("max_bytes", "maxBytes")),
+        "depth-limit" => Some(("max_depth", "maxDepth")),
+        "node-limit" => Some(("max_nodes", "maxNodes")),
+        _ => None,
+    }
+}
 impl fmt::Display for InputError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match input_error_description(self.code) {
-            Some(description) => write!(f, "{description} at byte {}", self.byte_offset),
-            None => write!(f, "{} at byte {}", self.code, self.byte_offset),
+            Some(description) => write!(f, "{description} at byte {}", self.byte_offset)?,
+            None => write!(f, "{} at byte {}", self.code, self.byte_offset)?,
+        }
+        match limit_setting(self.code) {
+            Some((rust, typescript)) => write!(
+                f,
+                "; raise JsonLimits::{rust} (limits.{typescript} in TypeScript)"
+            ),
+            None => Ok(()),
         }
     }
 }
@@ -796,12 +814,32 @@ mod tests {
         let mut codes = std::collections::BTreeSet::new();
         for error in errors {
             let description = input_error_description(error.code).expect(error.code);
+            // A limit names the field that raises it.
+            let setting = match limit_setting(error.code) {
+                Some((rust, typescript)) => {
+                    format!("; raise JsonLimits::{rust} (limits.{typescript} in TypeScript)")
+                }
+                None => String::new(),
+            };
             assert_eq!(
                 error.to_string(),
-                format!("{description} at byte {}", error.byte_offset)
+                format!("{description} at byte {}{setting}", error.byte_offset)
             );
             codes.insert(error.code);
         }
+        let over = JsonValue::parse_with_limits(
+            "[0]",
+            JsonLimits {
+                max_bytes: 2,
+                ..JsonLimits::default()
+            },
+        )
+        .unwrap_err();
+        assert_eq!(
+            over.to_string(),
+            "the input exceeds the admitted byte limit at byte 2; raise \
+             JsonLimits::max_bytes (limits.maxBytes in TypeScript)"
+        );
         assert_eq!(codes.len(), 18);
         // A code the parser does not emit is written as itself.
         let mut renamed = JsonValue::parse("]").unwrap_err();

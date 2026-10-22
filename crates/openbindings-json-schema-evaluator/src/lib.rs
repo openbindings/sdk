@@ -260,9 +260,11 @@ fn space(
         openbindings_internal_schema::Supplied::new(supplied.iter().cloned().chain(stand_ins))
             .map_err(|_| program_failure())?
     };
+    let document = request.document().as_document();
     let space = SchemaSpace::new(
-        openbindings_internal_schema::RawDocument::new(
-            request.document().as_document().value().clone(),
+        openbindings_internal_schema::RawDocument::with_limits(
+            document.value().clone(),
+            document.limits(),
         ),
         supplied,
     );
