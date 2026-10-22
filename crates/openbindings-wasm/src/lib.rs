@@ -63,6 +63,30 @@ fn input_error(e: InputError) -> JsValue {
         json!({"code":e.code,"kind":format!("{:?}",e.kind),"byte_offset":e.byte_offset,"message":e.to_string()}),
     ))
 }
+// Admission limits as the facade passes them: bytes, nodes and nesting, each a
+// checked 32-bit integer; the facade fills omitted entries from `jsonLimits`.
+fn admission(limits: &[u32]) -> Result<JsonLimits, JsValue> {
+    let invalid = || error("invalid-json-limits", "expected bytes, nodes and depth");
+    let &[max_bytes, max_nodes, max_depth] = limits else {
+        return Err(invalid());
+    };
+    let size = |value: u32| usize::try_from(value).map_err(|_| invalid());
+    Ok(JsonLimits {
+        max_bytes: size(max_bytes)?,
+        max_nodes: size(max_nodes)?,
+        max_depth: size(max_depth)?,
+    })
+}
+fn admission_or_default(limits: Option<Vec<u32>>) -> Result<JsonLimits, JsValue> {
+    limits.map_or(Ok(JsonLimits::default()), |limits| admission(&limits))
+}
+// A document's admission limits for the facade, which bounds ordinary encoding
+// for its edits by them.
+fn limit_values(limits: JsonLimits) -> Vec<u32> {
+    [limits.max_bytes, limits.max_nodes, limits.max_depth]
+        .map(|value| u32::try_from(value).unwrap_or(u32::MAX))
+        .to_vec()
+}
 fn interpretation_error(e: InterpretationError) -> JsValue {
     JsValue::from_str(&object!(
         "code": "interpretation",
@@ -97,14 +121,14 @@ impl std::fmt::Debug for WasmJson {
 #[wasm_bindgen]
 impl WasmJson {
     #[wasm_bindgen(js_name=parseBytes)]
-    pub fn parse_bytes(bytes: &[u8]) -> Result<WasmJson, JsValue> {
-        JsonValue::parse(bytes)
+    pub fn parse_bytes(bytes: &[u8], limits: Option<Vec<u32>>) -> Result<WasmJson, JsValue> {
+        JsonValue::parse_with_limits(bytes, admission_or_default(limits)?)
             .map(|value| Self { value })
             .map_err(input_error)
     }
     #[wasm_bindgen(js_name=parseText)]
     pub fn parse_text(text: &str) -> Result<WasmJson, JsValue> {
-        Self::parse_bytes(text.as_bytes())
+        Self::parse_bytes(text.as_bytes(), None)
     }
     #[must_use]
     pub fn retain(&self) -> WasmJson {
@@ -327,12 +351,16 @@ impl std::fmt::Debug for WasmDocument {
 #[wasm_bindgen]
 impl WasmDocument {
     #[wasm_bindgen(js_name=parseBytes)]
-    pub fn parse_bytes(bytes: &[u8]) -> Result<WasmDocument, JsValue> {
-        Document::parse(bytes)
+    pub fn parse_bytes(bytes: &[u8], limits: Option<Vec<u32>>) -> Result<WasmDocument, JsValue> {
+        Document::parse_with_limits(bytes, admission_or_default(limits)?)
             .map(|document| Self {
                 handle: DocumentHandle::new(document),
             })
             .map_err(input_error)
+    }
+    /// The admission limits this revision keeps: bytes, nodes and nesting.
+    pub fn limits(&self) -> Vec<u32> {
+        limit_values(self.handle.document().limits())
     }
     /// Create an editable empty OBI.
     pub fn create() -> WasmDocument {
@@ -343,6 +371,9 @@ impl WasmDocument {
     /// One bridge call for ordinary fragments interleaved with exact values.
     /// The facade temporarily transfers each distinct exact owner once. Every
     /// outcome returns those owners, including refusals, before exposing errors.
+    /// A batch comes with `envelope`, the UTF-8 bytes and nodes of its own
+    /// structure (its array, rows, operations and pointers) beside the values,
+    /// so the document's limits apply to what the edit writes, as in Rust.
     #[wasm_bindgen(js_name=editEncoded)]
     pub fn edit_encoded(
         &mut self,
@@ -351,13 +382,24 @@ impl WasmDocument {
         values: Vec<WasmJson>,
         namespace: Option<String>,
         key: Option<String>,
+        envelope: Option<Vec<u32>>,
     ) -> Vec<JsValue> {
         let result = (|| {
-            self.handle.editable()?;
+            let limits = self.handle.editable()?.limits();
             if chunks.len() != indices.len() + 1 {
                 return Err(error("invalid-edit", "invalid exact fragment layout"));
             }
-            let limit = JsonLimits::default().max_bytes;
+            let envelope = match (&namespace, envelope.as_deref()) {
+                (None, Some(&[bytes, nodes])) => Envelope {
+                    bytes: bytes as usize,
+                    nodes: nodes as usize,
+                },
+                (Some(_), None) => Envelope::default(),
+                _ => return Err(error("invalid-edit", "invalid batch envelope")),
+            };
+            // What the edit writes must fit the document's byte limit; the
+            // batch's own structure is beside it.
+            let limit = limits.max_bytes.saturating_add(envelope.bytes);
             let mut size = 0usize;
             for length in chunks
                 .iter()
@@ -371,7 +413,15 @@ impl WasmDocument {
                 size = size
                     .checked_add(length)
                     .filter(|size| *size <= limit)
-                    .ok_or_else(|| error("byte-limit", "edit input exceeds the JSON byte limit"))?;
+                    .ok_or_else(|| {
+                        edit_error(EditError::Input(
+                            openbindings_internal_json::backend::input_error(
+                                InputErrorKind::Limit,
+                                "byte-limit",
+                                limits.max_bytes,
+                            ),
+                        ))
+                    })?;
             }
             // Preflight complete UTF-8 extent before allocating the joined input.
             let mut text = String::with_capacity(size);
@@ -381,7 +431,7 @@ impl WasmDocument {
             }
             text.push_str(chunks.last().expect("fragment layout was checked"));
             match (namespace, key) {
-                (None, None) => self.edit(&text),
+                (None, None) => self.edit_batch(&text, envelope),
                 (Some(namespace), Some(key)) => self.set_part_at(&namespace, &key, &text),
                 _ => Err(error("invalid-edit", "incomplete part destination")),
             }
@@ -392,59 +442,6 @@ impl WasmDocument {
             output.push(JsValue::from(value));
         }
         output
-    }
-    /// Apply an atomic array of {op, pointer, value?} edits. Values stay exact JSON.
-    pub fn edit(&mut self, edits: &str) -> Result<(), JsValue> {
-        self.handle.editable()?;
-        let input = JsonValue::parse(edits).map_err(input_error)?;
-        if input.has_duplicate_names() {
-            return Err(edit_error(EditError::DuplicateMembers));
-        }
-        let rows = input
-            .view()
-            .elements()
-            .ok_or_else(|| error("invalid-edits", "expected an edit array"))?;
-        let mut values = Vec::new();
-        let mut paths = Vec::new();
-        for row in rows {
-            let pointer = row
-                .get("pointer")
-                .filter(|v| v.kind() == JsonKind::String)
-                .ok_or_else(|| error("invalid-pointer", "expected a pointer string"))?;
-            // A pointer through a member name with an unpaired unit, as a
-            // finding reports one, arrives as a JSON escape and stays exact.
-            let pointer = match pointer.as_str() {
-                Some(text) => Ok(text),
-                None => Err(openbindings_internal_json::backend::string_pointer(pointer)
-                    .ok_or_else(|| edit_error(EditError::InvalidPointer))?),
-            };
-            let value = match row.get("op").and_then(|v| v.as_str()) {
-                Some("set") => Some(
-                    row.get("value")
-                        .ok_or_else(|| error("missing-value", "set requires a value"))?
-                        .to_owned(),
-                ),
-                Some("remove") => None,
-                _ => return Err(error("invalid-edits", "expected set or remove")),
-            };
-            paths.push(pointer);
-            values.push(value);
-        }
-        let edits: Vec<_> = paths
-            .iter()
-            .zip(&values)
-            .map(|(pointer, value)| {
-                let pointer = match pointer {
-                    Ok(text) => PointerRef::from(*text),
-                    Err(exact) => PointerRef::from(exact),
-                };
-                match value {
-                    Some(value) => Edit::Set { pointer, value },
-                    None => Edit::Remove { pointer },
-                }
-            })
-            .collect();
-        self.handle.editable()?.edit(&edits).map_err(edit_error)
     }
     pub fn set(&mut self, pointer: &str, value: &WasmJson) -> Result<(), JsValue> {
         self.handle
@@ -771,6 +768,10 @@ impl WasmConformantDocument {
     pub fn to_bytes(&self) -> Vec<u8> {
         self.as_document().to_bytes()
     }
+    /// The admission limits this revision keeps: bytes, nodes and nesting.
+    pub fn limits(&self) -> Vec<u32> {
+        limit_values(self.handle.document().limits())
+    }
     pub fn validate(&self) -> WasmDocumentValidation {
         self.as_document().validate()
     }
@@ -868,18 +869,101 @@ impl WasmConformantDocument {
     }
 }
 impl WasmDocument {
+    /// Apply an atomic array of {op, pointer, value?} edits. Values stay exact JSON.
+    /// The batch is admitted under the document's limits widened by exactly its
+    /// own structure: two levels (its array and a row), and the envelope's bytes
+    /// and nodes. The edit itself then applies the document's limits to the
+    /// edited document, as in Rust.
+    fn edit_batch(&mut self, edits: &str, envelope: Envelope) -> Result<(), JsValue> {
+        let limits = self.handle.editable()?.limits();
+        let batch = JsonLimits {
+            max_bytes: limits.max_bytes.saturating_add(envelope.bytes),
+            max_nodes: limits.max_nodes.saturating_add(envelope.nodes),
+            max_depth: limits.max_depth.saturating_add(2),
+        };
+        let input = JsonValue::parse_with_limits(edits, batch).map_err(admission_error)?;
+        if input.has_duplicate_names() {
+            return Err(edit_error(EditError::DuplicateMembers));
+        }
+        let rows = input
+            .view()
+            .elements()
+            .ok_or_else(|| error("invalid-edits", "expected an edit array"))?;
+        let mut values = Vec::new();
+        let mut paths = Vec::new();
+        for row in rows {
+            let pointer = row
+                .get("pointer")
+                .filter(|v| v.kind() == JsonKind::String)
+                .ok_or_else(|| error("invalid-pointer", "expected a pointer string"))?;
+            // A pointer through a member name with an unpaired unit, as a
+            // finding reports one, arrives as a JSON escape and stays exact.
+            let pointer = match pointer.as_str() {
+                Some(text) => Ok(text),
+                None => Err(openbindings_internal_json::backend::string_pointer(pointer)
+                    .ok_or_else(|| edit_error(EditError::InvalidPointer))?),
+            };
+            let value = match row.get("op").and_then(|v| v.as_str()) {
+                Some("set") => Some(
+                    row.get("value")
+                        .ok_or_else(|| error("missing-value", "set requires a value"))?
+                        .to_owned(),
+                ),
+                Some("remove") => None,
+                _ => return Err(error("invalid-edits", "expected set or remove")),
+            };
+            paths.push(pointer);
+            values.push(value);
+        }
+        let edits: Vec<_> = paths
+            .iter()
+            .zip(&values)
+            .map(|(pointer, value)| {
+                let pointer = match pointer {
+                    Ok(text) => PointerRef::from(*text),
+                    Err(exact) => PointerRef::from(exact),
+                };
+                match value {
+                    Some(value) => Edit::Set { pointer, value },
+                    None => Edit::Remove { pointer },
+                }
+            })
+            .collect();
+        self.handle.editable()?.edit(&edits).map_err(edit_error)
+    }
     fn set_part_at(&mut self, namespace: &str, key: &str, text: &str) -> Result<(), JsValue> {
+        let mut limits = self.handle.editable()?.limits();
         let (pointer, text) = if self.handle.document().value().at(namespace).is_some() {
             let key = key.replace('~', "~0").replace('/', "~1");
             (format!("{namespace}/{key}"), text.to_owned())
         } else {
-            (namespace.to_owned(), format!("{{{}:{text}}}", encoded(key)))
+            // A new namespace wraps the part in an object of its key: one more
+            // level, two more nodes and its key's bytes, beside the part.
+            let key = encoded(key);
+            limits.max_bytes = limits.max_bytes.saturating_add(key.len() + 3);
+            limits.max_nodes = limits.max_nodes.saturating_add(2);
+            limits.max_depth = limits.max_depth.saturating_add(1);
+            (namespace.to_owned(), format!("{{{key}:{text}}}"))
         };
-        let value = JsonValue::parse(text).map_err(input_error)?;
+        let value = JsonValue::parse_with_limits(text, limits).map_err(admission_error)?;
         self.handle
             .editable()?
             .set(&pointer, &value)
             .map_err(edit_error)
+    }
+}
+// The bytes and nodes of an edit batch's own structure, beside its values.
+#[derive(Clone, Copy, Default)]
+struct Envelope {
+    bytes: usize,
+    nodes: usize,
+}
+// An exceeded limit while admitting what an edit writes is the document's.
+fn admission_error(error: InputError) -> JsValue {
+    if error.kind == InputErrorKind::Limit {
+        edit_error(EditError::Input(error))
+    } else {
+        input_error(error)
     }
 }
 /// A private transfer wrapper. Dropping it drops an untaken operation owner.
@@ -1545,12 +1629,23 @@ impl WasmPrepared {
         }
     }
 }
+/// Without limits, as `validate_document` admits: the default bytes and nodes, any
+/// nesting. With them, as `validate_document_with_limits` does.
 #[wasm_bindgen(js_name=validateBytes)]
-pub fn validate_bytes(bytes: &[u8]) -> String {
-    match validate_document(bytes) {
+pub fn validate_bytes(bytes: &[u8], limits: Option<Vec<u32>>) -> Result<String, JsValue> {
+    let validation = match limits {
+        None => validate_document(bytes),
+        Some(limits) => validate_document_with_limits(bytes, admission(&limits)?),
+    };
+    Ok(match validation {
         Ok(a) => object!("report": a.report(), "status": "report"),
         Err(e) => encoded(json!({"status":"version-refused","refusal":e})),
-    }
+    })
+}
+/// The default admission limits: bytes, nodes and nesting.
+#[wasm_bindgen(js_name=jsonLimits)]
+pub fn json_limits() -> Vec<u32> {
+    limit_values(JsonLimits::default())
 }
 #[wasm_bindgen(js_name=versionPolicy)]
 pub fn version_policy() -> String {
@@ -1595,10 +1690,18 @@ impl std::fmt::Debug for WasmDiscovery {
 
 #[wasm_bindgen]
 impl WasmDiscovery {
+    /// Judge a complete body as Rust discovery does: under admission limits that
+    /// admit the body bound when it exceeds the default byte limit, any nesting.
     #[wasm_bindgen(constructor)]
-    pub fn new(bytes: &[u8]) -> WasmDiscovery {
+    pub fn new(bytes: &[u8], max_document_bytes: u32) -> WasmDiscovery {
+        let max_bytes = usize::try_from(max_document_bytes).unwrap_or(usize::MAX);
+        let limits = JsonLimits {
+            max_bytes: max_bytes.max(JsonLimits::default().max_bytes),
+            max_depth: usize::MAX,
+            ..JsonLimits::default()
+        };
         Self {
-            validation: openbindings::validate_document(bytes),
+            validation: openbindings::validate_document_with_limits(bytes, limits),
         }
     }
     pub fn result(&self) -> String {
@@ -1713,7 +1816,7 @@ mod location_transfer_tests {
         // A JSON tree cannot hold this finding's pointer; the bridge writes
         // its exact escape, which a JavaScript host parses back exactly.
         let text = r#"{"openbindings":"0.2.0","operations":{},"x":{"\ud800":{"k":0,"k":1}}}"#;
-        let report = validate_bytes(text.as_bytes());
+        let report = validate_bytes(text.as_bytes(), None).unwrap();
         assert!(report.starts_with(r#"{"report":{"#));
         assert!(report.contains(r#""pointer":"/x/\ud800/k""#), "{report}");
         let value = WasmJson::parse_text(text).unwrap();

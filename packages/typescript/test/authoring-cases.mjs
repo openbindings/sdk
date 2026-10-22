@@ -460,12 +460,10 @@ export async function runCases(sdk, ids, http) {
           } catch (error) {
             limited = error;
           }
-          equal("depth limit code", limited.code, "authoring-limit");
-          equal(
-            "depth limit input path",
-            limited.partPointer.startsWith("/sources/s/content/0"),
-            true,
-          );
+          // A document's edit refuses as Rust's edit would: the limit is the
+          // edited document's, with no part pointer.
+          equal("depth limit code", limited.code, "depth-limit");
+          equal("depth limit input path", limited.partPointer, null);
           break;
         }
       }

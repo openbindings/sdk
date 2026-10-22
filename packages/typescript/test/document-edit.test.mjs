@@ -291,7 +291,7 @@ test("exact owners survive failed batches, repeated references and whole-part se
 test("an oversized exact batch returns borrowed owners without changing bytes", () => {
   const baseline = liveStorageOwners(),
     document = sdk.Document.create();
-  const value = exact('"' + "x".repeat(34 * 1024 * 1024) + '"');
+  const value = exact('"' + "x".repeat(17 * 1024 * 1024) + '"');
   const before = document.toBytes();
   assert.throws(
     () =>

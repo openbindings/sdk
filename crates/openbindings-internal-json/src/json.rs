@@ -8,7 +8,7 @@ use std::{collections::HashMap, fmt, sync::Arc};
 /// Finite input limits. Nesting counts arrays and objects, including the root.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct JsonLimits {
-    /// Maximum admitted source bytes; default 64 MiB (67,108,864 bytes).
+    /// Maximum admitted source bytes; default 32 MiB (33,554,432 bytes).
     pub max_bytes: usize,
     /// Maximum nested arrays/objects, including a container root; default 10,000.
     pub max_depth: usize,
@@ -18,7 +18,7 @@ pub struct JsonLimits {
 impl Default for JsonLimits {
     fn default() -> Self {
         Self {
-            max_bytes: 64 * 1024 * 1024,
+            max_bytes: 32 * 1024 * 1024,
             max_depth: 10_000,
             max_nodes: 1_000_000,
         }
@@ -39,11 +39,13 @@ pub enum InputErrorKind {
     Limit,
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone)]
 /// Exact JSON admission failure. It is separate from document conformance and schema-instance outcomes.
 /// `Display` writes what the parser expected or found and the byte where, such as
-/// `expected a colon after the member name at byte 5`; branch on `code` and
-/// `byte_offset`, which do not change with that wording.
+/// `expected a colon after the member name at byte 5`, and for an exceeded limit
+/// how to admit the input with the [`JsonLimits`] field that raises it; branch on
+/// `code` and `byte_offset`, which do not change with that wording. Equality
+/// compares those public fields.
 /// Later versions may add fields: read them by name and match with `..`.
 #[non_exhaustive]
 pub struct InputError {
@@ -53,7 +55,27 @@ pub struct InputError {
     pub byte_offset: usize,
     /// Stable detailed parse/admission code, suitable for branching.
     pub code: &'static str,
+    pub(crate) route: Route,
 }
+/// The call an exceeded limit is raised through, as its refusal names it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum Route {
+    /// A call that takes [`JsonLimits`], or has a variant that does.
+    #[default]
+    Admission,
+    /// A value check that admits under the default limits only: the value is
+    /// parsed with limits first, then checked.
+    Value,
+    /// [`JsonValue::string`], which admits under the default limits only: the
+    /// string's JSON text is parsed with limits instead.
+    String,
+}
+impl PartialEq for InputError {
+    fn eq(&self, other: &Self) -> bool {
+        self.kind == other.kind && self.byte_offset == other.byte_offset && self.code == other.code
+    }
+}
+impl Eq for InputError {}
 impl std::fmt::Debug for InputError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // Only fixed parser/admission reasons are safe; the public code can be reassigned.
@@ -110,11 +132,39 @@ pub(crate) fn input_error_description(code: &str) -> Option<&'static str> {
         _ => return None,
     })
 }
+/// The [`JsonLimits`] field that raises a limit code's limit, as Rust names it
+/// and as TypeScript's `limits` option does; `None` for any other code.
+pub(crate) fn limit_setting(code: &str) -> Option<(&'static str, &'static str)> {
+    match code {
+        "byte-limit" => Some(("max_bytes", "maxBytes")),
+        "depth-limit" => Some(("max_depth", "maxDepth")),
+        "node-limit" => Some(("max_nodes", "maxNodes")),
+        _ => None,
+    }
+}
 impl fmt::Display for InputError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match input_error_description(self.code) {
-            Some(description) => write!(f, "{description} at byte {}", self.byte_offset),
-            None => write!(f, "{} at byte {}", self.code, self.byte_offset),
+            Some(description) => write!(f, "{description} at byte {}", self.byte_offset)?,
+            None => write!(f, "{} at byte {}", self.code, self.byte_offset)?,
+        }
+        match (limit_setting(self.code), self.route) {
+            (Some((rust, typescript)), Route::Admission) => write!(
+                f,
+                "; raise JsonLimits::{rust} (limits.{typescript} in TypeScript)"
+            ),
+            (Some((rust, typescript)), Route::Value) => write!(
+                f,
+                "; parse the value with JsonValue::parse_with_limits and a larger \
+                 JsonLimits::{rust}, then validate it (parseJson with a larger \
+                 limits.{typescript} in TypeScript)"
+            ),
+            (Some((rust, _)), Route::String) => write!(
+                f,
+                "; parse the string's JSON text with JsonValue::parse_with_limits and a \
+                 larger JsonLimits::{rust}"
+            ),
+            (None, _) => Ok(()),
         }
     }
 }
@@ -279,6 +329,7 @@ impl JsonValue {
                 kind: InputErrorKind::Limit,
                 byte_offset: limits.max_bytes,
                 code: "byte-limit",
+                route: Route::Admission,
             });
         }
         let owner = Arena::parse(
@@ -297,6 +348,7 @@ impl JsonValue {
             },
             byte_offset: p.offset,
             code: p.code,
+            route: Route::Admission,
         })?;
         Ok(Self { owner, id: 0 })
     }
@@ -395,6 +447,7 @@ impl JsonValue {
             kind: InputErrorKind::Limit,
             byte_offset: limits.max_bytes,
             code: "byte-limit",
+            route: Route::String,
         })?;
         let mut bytes = Vec::with_capacity(size.bytes);
         serde_json::to_writer(&mut bytes, value).expect("a Rust string serializes as JSON");
@@ -796,12 +849,45 @@ mod tests {
         let mut codes = std::collections::BTreeSet::new();
         for error in errors {
             let description = input_error_description(error.code).expect(error.code);
+            // A limit names the field that raises it.
+            let setting = match limit_setting(error.code) {
+                Some((rust, typescript)) => {
+                    format!("; raise JsonLimits::{rust} (limits.{typescript} in TypeScript)")
+                }
+                None => String::new(),
+            };
             assert_eq!(
                 error.to_string(),
-                format!("{description} at byte {}", error.byte_offset)
+                format!("{description} at byte {}{setting}", error.byte_offset)
             );
             codes.insert(error.code);
         }
+        // A string constructor that takes no limits names parsing its text.
+        let string = JsonValue::string_with_limits(
+            "abc",
+            JsonLimits {
+                max_bytes: 2,
+                ..JsonLimits::default()
+            },
+        )
+        .unwrap_err();
+        assert!(string.to_string().ends_with(
+            "; parse the string's JSON text with JsonValue::parse_with_limits and a larger \
+             JsonLimits::max_bytes"
+        ));
+        let over = JsonValue::parse_with_limits(
+            "[0]",
+            JsonLimits {
+                max_bytes: 2,
+                ..JsonLimits::default()
+            },
+        )
+        .unwrap_err();
+        assert_eq!(
+            over.to_string(),
+            "the input exceeds the admitted byte limit at byte 2; raise \
+             JsonLimits::max_bytes (limits.maxBytes in TypeScript)"
+        );
         assert_eq!(codes.len(), 18);
         // A code the parser does not emit is written as itself.
         let mut renamed = JsonValue::parse("]").unwrap_err();

@@ -960,7 +960,9 @@ impl PreparedValueContract {
     /// Returns [`InputError`] only when JSON admission fails, including invalid
     /// UTF-8, a byte order mark, malformed JSON or an exceeded input limit.
     pub fn validate_json(&self, input: impl AsRef<[u8]>) -> Result<ValueOutcome, InputError> {
-        let value = JsonValue::parse(input)?;
+        // A limit refusal names parsing with limits, which this call does not take.
+        let value = JsonValue::parse(input)
+            .map_err(openbindings_internal_json::backend::value_check_refusal)?;
         Ok(self.validate(&value))
     }
 

@@ -25,9 +25,24 @@ surrogate pairs and noncharacters remain permitted. Draft inspection, caller
 values and supplied schema resources still retain unpaired UTF-16 units exactly,
 and so do the JSON Pointers that locate their nodes.
 
-Default parsing admits 64 MiB, 10,000 container levels and 1,000,000 nodes.
-`validate_document` admits the same bytes and nodes at any nesting. Ordinary
-Rust Serde conversion has a 128-container ceiling. Document reports retain at
+Default parsing admits 32 MiB, 10,000 container levels and 1,000,000 nodes.
+`validate_document` admits the same bytes and nodes at any nesting. These
+admission limits are a setting at `validate_document_with_limits`,
+`Document::parse_with_limits` and `JsonValue::parse_with_limits` (`JsonLimits`),
+and at TypeScript's `validateDocument`, `Document.parse` and `parseJson`
+(`limits`). `Document::new`, `Document::from_json`, `JsonValue::parse`,
+`JsonValue::string`, `Publication::from_bytes` and `validate_json` use the
+defaults, as do TypeScript's `Document.create()`, `ExactJson.from`,
+`validateJson` and a prepared contract's `validate` and `explain` of an ordinary
+value.
+A document keeps the limits it was admitted under, and its edits apply them to
+the edited document. Discovery raises only the byte limit, to its configured
+body bound; a body past the default nodes comes back undetermined and is admitted
+by validating it again with `validate_document_with_limits`. Value-contract
+preparation keeps fixed bounds of its own, which no setting raises. Every
+admission and edit limit refusal names how to admit more, including the route
+for calls that take no limits.
+Ordinary Rust Serde conversion has a 128-container ceiling. Document reports retain at
 most 4,096 findings and 8 MiB of pointers. Truncation leaves rule evidence
 intact. Document validation's memory grows linearly with the document: its copy
 of the text, the decoded text of its escaped strings, its tree, and validation
@@ -36,10 +51,11 @@ identifiers share runs of the `$id` texts, so a long or deeply nested `$id`
 costs memory and time linear in the document. At the default limits the
 diagnostic memory probe validates 34 documents, most filling the byte or node
 limit, with structures that grow these terms, and fails if one allocates more
-than 448 MiB beyond the caller's input, counting every reallocation as holding
+than 300 MiB beyond the caller's input, counting every reallocation as holding
 its old and new blocks at once. The largest, a third of a million escaped
 `$id`s, each with its own authority, a query, a fragment and a dot segment that
-makes its path a copy, allocates 412.2 MiB. See
+makes its path a copy, allocates 272.2 MiB, against 412.2 MiB at the former
+64 MiB default. See
 [performance and allocation boundaries](docs/performance-boundaries.md).
 OBI-02's whole-document check and each embedded schema's OBI-10 meta-schema
 check run on the unmodified jsonschema 0.58.6 library with its default pattern
@@ -49,10 +65,10 @@ RegExp. The derived schema has no recursive reference and the meta-schema check
 cuts its recursive edges, so every document the admission limits admit, default
 or caller-selected, gets OBI-02 and OBI-10 verdicts, with work linear in those
 limits and no work budget of the checks' own. A SemVer near miss, the costliest
-input per byte, took about 0.6 seconds at 60 MB and 0.7 seconds at the default
-64 MiB limit in a release build on an Apple M1 Max; peak memory was the input
-text and the stored document, and the checks' own memory does not grow with the
-string. The admission byte limit is how a caller bounds that time:
+input per byte, took about 0.35 seconds at the default 32 MiB limit, 0.6 seconds
+at 60 MB and 0.7 seconds at 64 MiB in a release build on an Apple M1 Max; peak
+memory was the input text and the stored document, and the checks' own memory
+does not grow with the string. The admission byte limit is how a caller bounds that time:
 `validate_document_with_limits` with a smaller `max_bytes` admits less. A
 meta-schema check reads its schema's own members and only the type of each
 subschema, so a node is read by at most two checks and their work together stays

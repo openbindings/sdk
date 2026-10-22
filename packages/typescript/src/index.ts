@@ -28,6 +28,7 @@ export {
   ReferenceReport,
   WorkOptions,
   EvaluatorLimits,
+  JsonLimits,
   PrepareOptions,
   ReferenceOptions,
   evaluatorLimits,

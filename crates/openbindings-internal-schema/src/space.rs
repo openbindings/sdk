@@ -64,6 +64,17 @@ impl std::fmt::Debug for Source {
 }
 
 const PROGRAM_NAMESPACE: &str = "https://sdk-program.openbindings.invalid/";
+// A projection is not a document: it holds the reached schemas of the document,
+// its supplied resources and the packaged meta-schemas, with its own references
+// and wrappers. It keeps fixed bounds, independent of any admission limits: its
+// text stops at 64 MiB, and each resource it writes is parsed within 64 MiB,
+// 1,000,000 nodes and 10,000 levels.
+const PROJECTION_LIMITS: openbindings_internal_json::JsonLimits =
+    openbindings_internal_json::JsonLimits {
+        max_bytes: 64 * 1024 * 1024,
+        max_depth: 10_000,
+        max_nodes: 1_000_000,
+    };
 /// A projection without its location map, with the node each definition of
 /// each projected resource came from, in `$defs` order.
 pub struct UnmappedProgram {
@@ -948,7 +959,7 @@ impl SchemaSpace {
             byte_count = byte_count
                 .saturating_add(transformed.len())
                 .saturating_add(std::mem::take(&mut separated));
-            if byte_count > 64 * 1024 * 1024 {
+            if byte_count > PROJECTION_LIMITS.max_bytes {
                 return Err(self.failure(
                     id,
                     FailureReason::LimitExceeded,
@@ -991,13 +1002,17 @@ impl SchemaSpace {
                 if id == entry_resource {
                     fields.insert("$ref".into(), quoted(&address(entry)));
                 }
-                JsonValue::parse(object(fields))
+                JsonValue::parse_with_limits(object(fields), PROJECTION_LIMITS)
                     .map(|document| ProjectedResource { uri, document })
                     .map_err(|e| {
+                        // A fixed bound: no admission setting raises it.
+                        let what =
+                            openbindings_internal_json::backend::input_error_description(e.code)
+                                .unwrap_or(e.code);
                         Failure::new(
                             FailureReason::LimitExceeded,
                             "program-json-limit",
-                            e.to_string(),
+                            format!("{what} at byte {}", e.byte_offset),
                         )
                     })
             })

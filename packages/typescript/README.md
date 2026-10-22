@@ -138,8 +138,9 @@ UTF-16 unit, so a finding's pointer addresses the member it reports. A batch cro
 once, including nested exact values, splices once and reads the result once. `parseJson` values
 keep exact decimal spellings. Untouched bytes, formatting and member order remain
 exact; sibling insertions coalesce with compact punctuation. `EditError.code`
-identifies a refusal and the document remains unchanged. Existing JSON limits
-apply. Renaming operations leaves reference updates to the caller.
+identifies a refusal and the document remains unchanged. The admission limits
+the document was parsed with apply. Renaming operations leaves reference updates
+to the caller.
 
 Use `Document.create()` and typed setters such as `setOperation(key, operation)`,
 `setSource`, `setBinding`, `setDependency` and `setExample` for construction.
@@ -175,6 +176,26 @@ checks. Independently retained proofs and views keep their certified revision.
 `toBytes()` copies the current exact bytes. Dispose every acquired owner.
 
 ## Limits and diagnostics
+
+`validateDocument`, `Document.parse` and `parseJson` admit 32 MiB of UTF-8,
+1,000,000 nodes and 10,000 container levels by default; `validateDocument`
+without limits sets no nesting cap. Pass `{ limits: { maxBytes, maxNodes,
+maxDepth } }` to admit larger or smaller input, as Rust's `JsonLimits` does:
+unspecified entries keep those defaults, so `validateDocument` with `limits`
+applies the 10,000-level cap unless `maxDepth` raises it. Validation memory
+grows with the document, so raise them only where the process has the memory.
+Malformed limits or options throw `SdkError` with code `invalid-json-limits`.
+A document keeps the limits it was parsed with (`limits`): its edits and typed
+setters apply them to the edited document, as Rust's do, whatever route writes
+the value. `discover` raises only the byte limit, to `maxDocumentBytes`; a body
+past the default 1,000,000 nodes comes back undetermined, and `validateDocument`
+with a larger `maxNodes` admits it. `Document.create()`, `ExactJson.from`,
+`validateJson` and a prepared contract's `validate` and `explain` of an ordinary
+value use the defaults. Value-contract preparation keeps fixed bounds of its own,
+which no setting raises. Every admission and edit limit refusal names how to
+admit more, including the route for calls that take no limits. To check a value past the
+defaults, parse it with `parseJson` and larger limits and pass the `ExactJson`
+to `validate`.
 
 Schema resources are explicit and immutable. Pass `SchemaResources` to
 `prepare({ resources })`; the SDK never fetches a missing reference. A
@@ -220,7 +241,8 @@ resources prepared in 11.5 s at a 723 MB peak without a cap, and refused in
 
 The evaluator bounds what the SDK itself reads, writes and recurses through, not
 the memory of the JSON Schema library's compiled program. On by default:
-document admission limits; `stackBytes` (256 KiB), the stack the evaluator
+document admission limits (32 MiB and 1,000,000 nodes; see above); `stackBytes`
+(256 KiB), the stack the evaluator
 sizes its bounds from: 256 bytes for each nested schema evaluation (1,024 at
 the default), half of it for a pass of a contract holding
 `unevaluatedProperties` or `unevaluatedItems` as it evaluates, and the

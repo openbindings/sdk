@@ -90,13 +90,15 @@ Document validation itself needs no caller-supplied evaluator. See
 [evaluator integration](schema-evaluators.md).
 
 A prepared value contract's `validate_json(text_or_bytes)` admits exact JSON under the
-default limits: 64 MiB, 10,000 container levels and 1,000,000 nodes. `Err` means
+default limits: 32 MiB, 10,000 container levels and 1,000,000 nodes. `Err` means
 admission failed. `Ok` contains `Satisfies`, `Fails`, `Undefined` or `NoVerdict`.
 Duplicate members are preserved during admission and yield `NoVerdict` during
 validation. Number tokens retain their exact meaning.
 
 Use `JsonValue::parse_with_limits` for custom admission limits and
-`PreparedValueContract::validate` for retained exact values without reparsing. Use
+`PreparedValueContract::validate` for retained exact values without reparsing.
+Documents take the same `JsonLimits` through `validate_document_with_limits` and
+`Document::parse_with_limits`, and keep them for their edits. Use
 `JsonValue::from_serializable` for ordinary Rust data. The converter preserves
 integer digits but cannot recover a value already rounded by application code.
 It refuses exact wrappers; keep those on the parse/retain route.

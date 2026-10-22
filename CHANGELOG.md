@@ -27,13 +27,33 @@
   encoded as supported exact JSON refuses with `EditError::Serialization`
   (`serialization`). Validation with original source locations, bounded
   findings and per-rule evidence.
+- The default document byte limit is 32 MiB (33,554,432 bytes), down from 64 MiB,
+  because validation memory grows with the document and the protective default
+  should fit a typical container, and the admission limits are a setting at the
+  calls that admit documents and values: `JsonLimits` for
+  `validate_document_with_limits`, `Document::parse_with_limits` and
+  `JsonValue::parse_with_limits`, and `limits: { maxBytes, maxNodes, maxDepth }`
+  for TypeScript's `validateDocument`, `Document.parse` and `parseJson`, whose
+  unspecified entries keep the `JsonLimits` defaults (malformed limits throw
+  `invalid-json-limits`). `Document::new`, `Document::from_json`,
+  `JsonValue::parse`, `JsonValue::string`, `Publication::from_bytes` and
+  `validate_json` use the defaults, as do TypeScript's `Document.create()`,
+  `ExactJson.from`, `validateJson` and ordinary-value `validate` and `explain`.
+  A document keeps the limits it was admitted
+  under (`Document::limits`, TypeScript `limits`), and its edits and typed
+  setters apply them to the edited document, the same way in both languages.
+  Value-contract preparation keeps its own fixed bounds, as before. Discovery
+  validates a body with its byte limit raised to the configured body bound and
+  the default 1,000,000 nodes. Every admission and edit limit refusal names how
+  to admit more in both languages, including the route for calls that take no
+  limits; the projection's fixed bounds have no setting.
 - Document validation's memory grows linearly with the document. Compared
   identifiers share runs of the `$id` texts, so long and nested `$id`s take
   memory and time linear in the document, as do repeated findings deep in a
   document, large maps, alias lists and `uniqueItems` arrays, and fixed checks
   read names holding U+E000 in place. Of the diagnostic memory probe's 34
-  documents at the default limits (64 MiB, 1,000,000 nodes, any nesting), the
-  largest allocates 412.2 MiB beyond the caller's input, counting each
+  documents at the default limits (32 MiB, 1,000,000 nodes, any nesting), the
+  largest allocates 272.2 MiB beyond the caller's input, counting each
   reallocation as holding its old and new blocks at once.
 - Exact-input refusals say what the parser expected or found and the byte where:
   `InputError`'s `Display` and TypeScript's `InputFailure.message` read, for

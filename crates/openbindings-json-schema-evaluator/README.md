@@ -204,7 +204,13 @@ resources:
 Core's document admission limits bound the bytes and nodes of every document
 and resource, and its projection refuses a contract reaching more than 100,000
 schema positions (`schema-node-limit`); that bound is core's, shared with its
-own fixed checks. The library compiles an unevaluated keyword's annotation
+own fixed checks. The projection holds the document's reached schemas, its
+supplied resources and packaged meta-schemas, so it keeps fixed bounds of its
+own, whatever limits the document was admitted under: it stops once its text,
+`const` and `enum` literals included, passes 64 MiB (`program-byte-limit`), and
+each resource it writes must fit 64 MiB, 1,000,000 nodes and 10,000 levels
+(`program-json-limit`).
+The library compiles an unevaluated keyword's annotation
 sources by recursion, so preparation weighs the walk and refuses one weighing
 more than `stack_bytes` admits (`unevaluated-walk-limit`, at that keyword): a
 fifth of the stack is left to the caller, 99 KiB to the rest of preparation,

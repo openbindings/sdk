@@ -91,7 +91,7 @@ random bits, must add no more than the pattern memory at their peak.
 ## Default admission limits
 
 The limits phase (`src/limits.rs`) validates 34 documents at the default
-admission limits (64 MiB, 1,000,000 nodes, any nesting), most filling the byte
+admission limits (32 MiB, 1,000,000 nodes, any nesting), most filling the byte
 or node limit, with structures document validation builds: a million nested
 arrays around a long
 string; half a million invalid operation names, alone and beside a string
@@ -110,14 +110,18 @@ character fixed checks escape beside encoded unpaired units, filling the limit,
 and the operation name beside an unpaired unit; 166,000 nested relative `$id`s,
 and 70,000 of them
 each declaring a repeated `$id`; one `$id` of 4 million segments (8 MiB) and of
-33 million (64 MiB), each alone and beside two identifiers declared twice; one
-`$id` interrupted by dot segments throughout; a 60 MiB authority read back by
-150,000 relative `$id`s; 2,399 relative `$id`s, each giving up a different
-number of a long `$id`'s 10 million segments; and a malformed reference at every
+16.8 million (32 MiB), each alone and beside two identifiers declared twice; one
+`$id` interrupted by dot segments throughout; a 28 MiB authority read back by
+150,000 relative `$id`s; 1,749 relative `$id`s, each giving up a different
+number of a long `$id`'s 5 million segments; and a malformed reference at every
 level of a 120,000-level schema chain. Each `validate_document` call must add at
-most **448 MiB** (seven times the byte limit) of live allocation above the
-caller's input, and must reach its expected conclusion. This bounds these
-shapes, not every document. Run the phase alone with `--limits-only`.
+most **300 MiB** of live allocation above the caller's input, and must reach its
+expected conclusion. The largest, a third of a million escaped `$id`s with
+copied paths, a query and a fragment, adds 272.2 MiB, 27.8 MiB below that. The
+ceiling is not a multiple of the byte limit: at the former 64 MiB default the
+same shape added 412.2 MiB, since much of its memory is held for each
+declaration, whatever its length. This bounds these shapes, not every document.
+Run the phase alone with `--limits-only`.
 
 ## Recorded results
 

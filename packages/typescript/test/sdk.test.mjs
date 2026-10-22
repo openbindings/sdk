@@ -584,9 +584,15 @@ test("validateJson admits JSON text as parseJson does, then validates", () => {
   ]) {
     const admitted = sdk.parseJson(input);
     assert.equal(admitted.status, "input-error");
+    // A limit names parseJson with limits, which validateJson does not take;
+    // every other refusal is parseJson's.
+    const message =
+      input === deep
+        ? "the input nests deeper than the admitted depth limit at byte 10000; parse the value with JsonValue::parse_with_limits and a larger JsonLimits::max_depth, then validate it (parseJson with a larger limits.maxDepth in TypeScript)"
+        : admitted.error.message;
     assert.deepEqual(contract.validateJson(input), {
       outcome: "input-error",
-      error: admitted.error,
+      error: { ...admitted.error, message },
     });
   }
   assert.throws(() => contract.validateJson("\ud800"), TypeError);

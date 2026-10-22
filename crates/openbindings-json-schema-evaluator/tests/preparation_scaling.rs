@@ -529,3 +529,89 @@ fn generated_walks_reaching_a_dynamic_anchor_compile_once_too() {
         }
     }
 }
+
+// Prepare the input contract of a document admitted under `limits`.
+fn prepare_admitted(text: &str, limits: JsonLimits) -> Result<PreparedValueContract, NoVerdict> {
+    validate_document_with_limits(text, limits)
+        .unwrap()
+        .conformant()
+        .expect("conformant document")
+        .resolve_operation("op")
+        .expect("declared operation")
+        .input()
+        .expect("declared input")
+        .prepare(&DefaultEvaluator::new())
+}
+
+#[test]
+fn a_projection_keeps_its_own_bounds_whatever_the_document_was_admitted_under() {
+    // Each empty `allOf` member projects to a reference and a definition, so
+    // the projection is many times the document; admitting the document at its
+    // own size or node count does not bound it.
+    let text = document(
+        &[],
+        &format!(r#"{{"allOf":[{}]}}"#, vec!["{}"; 20_000].join(",")),
+    );
+    // The root, three members and their values, `op`, `input`, `allOf` and the
+    // members: 20,013 nodes, the document's own count.
+    let nodes = 20_013;
+    let fewer = JsonLimits {
+        max_nodes: nodes - 1,
+        ..JsonLimits::default()
+    };
+    assert!(JsonValue::parse_with_limits(&text, fewer).is_err());
+    for limits in [
+        JsonLimits {
+            max_bytes: text.len(),
+            ..JsonLimits::default()
+        },
+        JsonLimits {
+            max_nodes: nodes,
+            ..JsonLimits::default()
+        },
+        JsonLimits::default(),
+    ] {
+        assert!(
+            validate_document_with_limits(&text, limits)
+                .unwrap()
+                .conformant()
+                .is_some()
+        );
+        assert!(prepare_admitted(&text, limits).is_ok(), "{limits:?}");
+    }
+    // Supplied resources together past the document's byte limit prepare.
+    let pad = "a".repeat(17 << 20);
+    let resource = |uri: &str, body: &str| SchemaResource {
+        uri: uri.into(),
+        document: JsonValue::parse(format!(
+            r#"{{"$schema":"https://json-schema.org/draft/2020-12/schema",{body},"x-pad":"{pad}"}}"#
+        ))
+        .unwrap(),
+    };
+    let supplied = ResourceSet::new([
+        resource(
+            "https://e.test/a",
+            r#""allOf":[{"$ref":"https://e.test/b"}]"#,
+        ),
+        resource("https://e.test/b", r#""type":"string""#),
+    ])
+    .unwrap();
+    let small = document(&[], r#"{"$ref":"https://e.test/a"}"#);
+    let contract = prepare_with(&small, &supplied).unwrap();
+    assert!(matches!(
+        contract.validate_json(r#""x""#).unwrap(),
+        ValueOutcome::Satisfies
+    ));
+    // A document admitted past the default byte limit prepares a contract whose
+    // projection passes that limit, and decides a value.
+    let default = JsonLimits::default().max_bytes;
+    let literal = format!(r#""{}""#, "a".repeat(default));
+    let large = document(&[], &format!(r#"{{"const":{literal}}}"#));
+    let raised = JsonLimits {
+        max_bytes: 2 * default,
+        ..JsonLimits::default()
+    };
+    let contract = prepare_admitted(&large, raised).unwrap();
+    let value = JsonValue::parse_with_limits(&literal, raised).unwrap();
+    assert!(matches!(contract.validate(&value), ValueOutcome::Satisfies));
+}
