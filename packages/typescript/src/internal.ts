@@ -777,7 +777,7 @@ function contractRaw(owner: ValueContract): wasm.WasmValueContract {
 }
 /** Ordinary JSON scalar types; runtime admission additionally requires finite numbers. JavaScript number precision already lost before admission cannot be reconstructed. */
 export type JsonPrimitive = null | boolean | number | string;
-/** Checked ordinary JSON input, including nested borrowed ExactJson owners for precise subtrees. Arrays must be dense; objects plain with enumerable data properties; cycles, accessors, symbols, bigint and undefined are refused. Admission never invokes toJSON or getters. Ordinary encoding admits at most 33,554,432 UTF-16 code units of serialized text, 1,000,000 visited values and depth 10,000; subsequent exact parsing also enforces 32 MiB UTF-8 and 1,000,000 total nodes, including member-name tokens. A document's edits and typed setters apply the limits the document was admitted with to the values they write, not to the edit's own structure. Check a larger value as exact JSON from parseJson with larger limits. */
+/** Checked ordinary JSON input, including nested borrowed ExactJson owners for precise subtrees. Arrays must be dense; objects plain with enumerable data properties; cycles, accessors, symbols, bigint and undefined are refused. Admission never invokes toJSON or getters. Ordinary encoding admits at most 33,554,432 UTF-16 code units of serialized text, 1,000,000 nodes counting member names as Rust does, and 10,000 container levels; subsequent exact parsing also enforces 32 MiB UTF-8 and 1,000,000 total nodes, including member-name tokens. A document's edits and typed setters apply the limits the document was admitted with to the values they write, not to the edit's own structure. Check a larger value as exact JSON from parseJson with larger limits. */
 export type JsonInput =
   | JsonPrimitive
   | ExactJson
@@ -1096,7 +1096,7 @@ abstract class DocumentReads extends Managed {
   value(): ExactJson {
     return new ExactJson(handle<wasm.WasmDocument>(this).value());
   }
-  /** The admission limits this revision was admitted under, which its edits and typed setters apply, as Rust's `Document::limits` reports them: the defaults for `Document.parse` without limits and `Document.create()`, the caller's otherwise, no nesting cap (maxDepth 4294967295) for a document from `validateDocument` without limits, and at least the default bytes for a discovered one. */
+  /** The admission limits this revision was admitted under, which its edits and typed setters apply, as Rust's `Document::limits` reports them: the defaults for `Document.parse` without limits and `Document.create()`, the caller's for `Document.parse` with limits, and for a discovered document the bytes of `maxDocumentBytes` (at least the default), the default nodes and no nesting cap (maxDepth 4294967295). */
   get limits(): Readonly<JsonLimits> {
     const [maxBytes, maxNodes, maxDepth] = documentRaw(this).limits();
     return Object.freeze({
@@ -2828,8 +2828,8 @@ function encodeOrdinary(
   // A limit the encoded value already exceeds. A document's edit refuses as
   // Rust's edit would; another value names parsing it with limits instead.
   function exceeded(code: keyof typeof EDIT_LIMITS, pointer: string): never {
-    if (encoding.document)
-      throw new EditError(code, editLimitMessage(code), pointer);
+    // As in Rust, a document limit is the edited document's, with no part pointer.
+    if (encoding.document) throw new EditError(code, editLimitMessage(code));
     const setting = EDIT_LIMITS[code][2];
     const limit = { maxBytes, maxNodes, maxDepth }[setting];
     const what = {
@@ -3125,7 +3125,7 @@ type AuthoringErrorCode =
   | "authoring-limit";
 /** An atomic edit was refused. code is stable; partPointer locates a typed part input when available. The document remains unchanged. */
 export class EditError extends SdkError {
-  /** Logical pointer into a typed part input; null when unavailable. */
+  /** Logical pointer into a typed part input; null when unavailable, including for an exceeded document limit, which is the edited document's. */
   readonly partPointer: string | null;
   /** Construct an edit refusal without inventing source byte coordinates. */
   constructor(
@@ -3164,12 +3164,30 @@ function normalizeEdit(value: unknown, context: AuthorContext): unknown {
     typeof fields.op === "string" && Object.hasOwn(namespaces, fields.op)
       ? namespaces[fields.op]
       : undefined;
-  if (!kind) return value;
-  if (entries.some(([key]) => key !== "op" && key !== "value"))
-    throw new EditError(
-      "invalid-edits",
-      "Typed namespace edits accept op and value only.",
-    );
+  // A row holds only the members its op takes, so nothing beside what the
+  // edit writes enters the batch.
+  const only = (members: readonly string[], message: string) => {
+    if (entries.some(([key]) => !members.includes(key)))
+      throw new EditError("invalid-edits", message);
+  };
+  if (!kind) {
+    if (fields.op === "set")
+      only(
+        ["op", "pointer", "value"],
+        "Set edits accept op, pointer and value only.",
+      );
+    else if (fields.op === "remove")
+      only(["op", "pointer"], "Remove edits accept op and pointer only.");
+    else
+      throw new EditError(
+        "invalid-edits",
+        "Expected an edit op of set, remove, set-operations, set-sources, set-bindings or set-dependencies.",
+      );
+    if (typeof fields.pointer !== "string")
+      throw new EditError("invalid-pointer", "Edit pointers must be strings.");
+    return value;
+  }
+  only(["op", "value"], "Typed namespace edits accept op and value only.");
   const pointer = "/" + (fields.op as string).slice(4);
   const parts = Object.fromEntries(
     ownEntries(fields.value, pointer).map(([key, part]) => [

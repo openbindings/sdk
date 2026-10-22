@@ -37,11 +37,16 @@ const undetermined = (report, message) => {
     assert.equal(finding.message, message);
   }
 };
+// A document limit refusal carries Rust's code and message, and no part
+// pointer, on every route.
 const refusedEdit = (call, code, message) =>
   assert.throws(
     call,
     (e) =>
-      e instanceof sdk.EditError && e.code === code && e.message === message,
+      e instanceof sdk.EditError &&
+      e.code === code &&
+      e.message === message &&
+      e.partPointer === null,
   );
 
 test("validateDocument admits 32 MiB and names the byte limit's setting one byte past it", () => {
@@ -198,6 +203,14 @@ test("edit limits apply to what the edit writes, as in Rust, not to the edit's o
   shallow.setOperation("o", { input: { type: "string" } });
   const nesting = editRefusal("nesting", "max_depth", "maxDepth");
   refusedEdit(() => shallow.set("/x-b", [[[[1]]]]), "depth-limit", nesting);
+  // Values deeper than the limit on their own refuse before crossing the
+  // bridge, the same way.
+  refusedEdit(() => shallow.set("/x-b", [[[[[1]]]]]), "depth-limit", nesting);
+  refusedEdit(
+    () => shallow.setOperation("p", { input: [[[[[1]]]]] }),
+    "depth-limit",
+    nesting,
+  );
   refusedEdit(
     () => shallow.set("/x-b", parsed(sdk.parseJson("[[[[1]]]]"))),
     "depth-limit",
@@ -227,6 +240,43 @@ test("edit limits apply to what the edit writes, as in Rust, not to the edit's o
     editRefusal("byte", "max_bytes", "maxBytes"),
   );
   for (const owner of [shallow, three, few, sized]) owner.dispose();
+});
+
+test("edit rows hold only their op's members, before any limit applies", () => {
+  const tight = parsed(
+    sdk.Document.parse(empty, {
+      limits: { maxBytes: 100, maxNodes: 20, maxDepth: 5 },
+    }),
+  );
+  const malformed = (row, code) =>
+    assert.throws(
+      () => tight.edit([row]),
+      (e) => e instanceof sdk.EditError && e.code === code,
+    );
+  malformed(
+    { op: "set", pointer: "/x-a", value: 1, extra: 2 },
+    "invalid-edits",
+  );
+  malformed(
+    { op: "set", pointer: "/x-a", value: 1, extra: "x".repeat(1_000_000) },
+    "invalid-edits",
+  );
+  malformed(
+    { op: "remove", pointer: "/operations", value: "x".repeat(1000) },
+    "invalid-edits",
+  );
+  malformed({ op: "move", pointer: "/x-a" }, "invalid-edits");
+  malformed(
+    { op: "set-operations", value: {}, pointer: "/x" },
+    "invalid-edits",
+  );
+  malformed({ op: "set", pointer: 7, value: 1 }, "invalid-pointer");
+  malformed({ op: "remove" }, "invalid-pointer");
+  assert.equal(new TextDecoder().decode(tight.toBytes()), empty);
+  tight.edit([{ op: "set", pointer: "/x-a", value: 1 }]);
+  tight.edit([{ op: "remove", pointer: "/x-a" }]);
+  assert.equal(new TextDecoder().decode(tight.toBytes()), empty);
+  tight.dispose();
 });
 
 test("a projection keeps its own bounds whatever the document was admitted under", () => {
