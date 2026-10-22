@@ -1,8 +1,10 @@
 """Regression checks for source documentation and generated reference links."""
 import importlib.util
+import os
 from pathlib import Path
 import tempfile
 import unittest
+from unittest import mock
 
 
 def load(name):
@@ -61,6 +63,22 @@ version = "0.3.32"
             reference.repair_inherited_links(output)
             with self.assertRaisesRegex(SystemExit, 'missing local target unknown.html'):
                 reference.verify_local_links(output)
+
+    def test_rust_reference_starts_from_an_empty_documentation_directory(self):
+        # A page an earlier rustdoc run left behind must not reach the bundle.
+        reference = load('build-reference')
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            stale = target / 'doc/openbindings_wasm/index.html'
+            stale.parent.mkdir(parents=True)
+            stale.write_text('stale')
+            cache = target / 'debug/.fingerprint/kept'
+            cache.parent.mkdir(parents=True)
+            cache.write_text('kept')
+            with mock.patch.dict(os.environ, {'CARGO_TARGET_DIR': str(target)}):
+                reference.clear_rust_docs()
+            self.assertFalse((target / 'doc').exists())
+            self.assertTrue(cache.is_file())
 
 
 if __name__ == '__main__':

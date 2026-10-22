@@ -1,5 +1,5 @@
 {
-  "policy": "Fixed stack margins qualify development-toolchain code generation, not the minimum supported language/library API level. Older supported compilers may need larger stacks in debug builds. Only workspace entries are skipped by the MSRV workspace test command; development-toolchain workspace runs use no exclusions.",
+  "policy": "Fixed stack margins qualify development-toolchain code generation, not the minimum supported language/library API level. Older supported compilers may need larger stacks in debug builds. Only workspace entries are skipped by the MSRV workspace test command; development-toolchain workspace runs skip none by name, and the entries whose tests are ignored in debug builds run in release builds through tools/verify.py.",
   "tests": [
     {
       "source": "crates/openbindings/tests/document_stack.rs",

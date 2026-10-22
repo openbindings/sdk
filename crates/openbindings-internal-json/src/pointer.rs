@@ -90,29 +90,15 @@ impl Pointer {
     }
     /// Append escaped RFC 6901 text, such as `/minimum`.
     pub(crate) fn push_escaped(&mut self, escaped: &str) {
-        match &mut self.0 {
-            Repr::Text(text) => {
-                debug_assert!(escaped.is_empty() || valid(escaped.encode_utf16()));
-                text.push_str(escaped);
-            }
-            Repr::Units(_) => *self = self.joined(escaped),
-        }
-    }
-    /// This pointer followed by escaped RFC 6901 text, in one exact allocation.
-    pub(crate) fn joined(&self, escaped: &str) -> Self {
         debug_assert!(escaped.is_empty() || valid(escaped.encode_utf16()));
-        match &self.0 {
-            Repr::Text(text) => {
-                let mut joined = String::with_capacity(text.len() + escaped.len());
-                joined.push_str(text);
-                joined.push_str(escaped);
-                Self(Repr::Text(joined))
-            }
+        match &mut self.0 {
+            Repr::Text(text) => text.push_str(escaped),
             Repr::Units(units) => {
+                // Boxed units cannot grow: join them in one new allocation.
                 let mut joined = Vec::with_capacity(units.len() + escaped.len());
                 joined.extend_from_slice(units);
                 joined.extend(escaped.encode_utf16());
-                Self(Repr::Units(joined.into_boxed_slice()))
+                *units = joined.into_boxed_slice();
             }
         }
     }
