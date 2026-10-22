@@ -150,22 +150,26 @@ APIs:
 - `depth.rs` bounds the schema objects any evaluation path can hold at once,
   from the bundle's reference graph, as the lesser of two linear bounds in
   the value's depth. Before evaluating a value, the evaluator compares that
-  bound with `evaluation_depth` in constant time (from the value's node count
-  when that suffices, otherwise from its depth). The library's unevaluated
-  validators take frames the bound does not model, so a contract holding one
-  is also guarded as it evaluates: `openbindings-internal-json/src/work.rs`
-  checks, at every read of a child instance, the stack the pass has used
-  since it started, and fails every read once it is more than 128 bytes per
-  unit of `evaluation_depth`, so the library stops descending;
-  `tests/evaluation_stack.rs` checks 39 shapes on a 256 KiB thread, and a
-  library upgrade reruns it. A contract that could recurse without consuming
-  the instance refuses (`evaluation-cycle`), and one whose unevaluated
-  keyword's walk weighs more than the walk limit refuses
+  bound with the nesting `stack_bytes` holds at 256 bytes each (`stack.rs`) in
+  constant time (from the value's node count when that suffices, otherwise
+  from its depth). The library's unevaluated validators take frames the bound
+  does not model, so a contract holding one is also guarded as it evaluates:
+  `openbindings-internal-json/src/work.rs` checks, at every read of a child
+  instance, the stack the pass has used since it started, and fails every read
+  once it is more than half of `stack_bytes`, so the library stops descending;
+  `tests/evaluation_stack.rs` checks 39 shapes on threads of 192 KiB, 256 KiB
+  and 1 MiB, and a library upgrade reruns it. A contract that could recurse
+  without consuming the instance refuses (`evaluation-cycle`), and one whose
+  unevaluated keyword's walk weighs more than `stack_bytes` admits refuses
   (`unevaluated-walk-limit`), since the library compiles the walk by
   recursion: `bundle.rs` weighs each reference by the keywords on its path,
-  and `tests/walk_stack.rs` prepares the longest admitted walk of each kind
-  below enclosing schemas on a 256 KiB thread with a fifth of it already in
-  use, so a library whose compiled walk frames grow fails it.
+  `stack.rs` sizes the limit (a fifth of the stack left to the caller, 99 KiB
+  to the rest of preparation, 1 KiB per unit), and `tests/walk_stack.rs`
+  prepares the longest admitted walk of each kind below enclosing schemas on
+  threads of 192 KiB, 256 KiB and 512 KiB with a fifth of each already in use,
+  so a library whose compiled walk frames grow fails it. A library upgrade
+  that changes those frames remeasures the reserve and the unit on every host
+  (the method and per-host tables are in `docs/performance-boundaries.md`).
 - `explain.rs` maps the library's first error back to its keyword's original
   schema location.
 - `openbindings-internal-json/src/work.rs` holds the optional evaluation

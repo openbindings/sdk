@@ -96,12 +96,13 @@ fn explicit_caps_bracket_a_checks_work_and_the_default_sets_none() {
 fn an_evaluator_reports_the_budgets_it_was_given() {
     let limits = Limits {
         evaluation_steps: Some(7),
-        evaluation_depth: 11,
+        stack_bytes: 11,
         compile_json_depth: 17,
         pattern_bytes: 19,
         pattern_depth: 23,
         total_pattern_bytes: 31,
         total_pattern_memory: 37,
+        program_bytes: 41,
         schema_resources: Some(29),
     };
     let evaluator = DefaultEvaluator::with_limits(limits);
@@ -118,9 +119,12 @@ fn an_evaluator_reports_the_budgets_it_was_given() {
         DefaultEvaluator::new().limits().total_pattern_memory,
         64 << 20
     );
+    assert_eq!(reported.program_bytes, 41);
+    assert_eq!(DefaultEvaluator::new().limits().stack_bytes, 256 << 10);
+    assert_eq!(DefaultEvaluator::new().limits().program_bytes, 48 << 20);
     assert_eq!(
         (
-            reported.evaluation_depth,
+            reported.stack_bytes,
             reported.compile_json_depth,
             reported.pattern_bytes,
             reported.pattern_depth
@@ -164,17 +168,67 @@ fn deep_values_report_the_depth_limit() {
     let schema = r##"{"$defs":{"node":{"anyOf":[{"type":"integer"},{"type":"array","items":{"$ref":"#/operations/op/input/$defs/node"}}]}},"$ref":"#/operations/op/input/$defs/node"}"##;
     let deep = JsonValue::parse(format!("{}0{}", "[".repeat(300), "]".repeat(300))).unwrap();
     let defaults = prepared(schema, Limits::default());
-    // Ample work, but each level nests several evaluations.
+    // Ample work, but each level nests several evaluations: 1,024 nested
+    // evaluations fit the default stack, so values up to 203 levels deep are
+    // evaluated, and the refusal says why and what to raise.
+    let refused = defaults.validate(&deep);
+    let ValueOutcome::NoVerdict { detail } = &refused else {
+        panic!("{refused:?}")
+    };
+    assert_eq!(detail.code, "evaluation-depth-limit");
     assert_eq!(
-        code(&defaults.validate(&deep)),
-        Some("evaluation-depth-limit")
+        detail.message,
+        "this value nests more than 203 levels, the deepest this contract evaluates within the \
+         1024 schema evaluations its 256 KiB stack_bytes holds at 256 bytes each; raise \
+         stack_bytes (stackBytes in TypeScript)"
     );
+    // The bound grows with the stack the host gives.
     let deeper = prepared(
         schema,
         Limits {
-            evaluation_depth: 4096,
+            stack_bytes: 1024 * 1024,
             ..Limits::default()
         },
     );
     assert!(matches!(deeper.validate(&deep), ValueOutcome::Satisfies));
+}
+
+#[test]
+fn a_contract_too_deep_for_the_stack_refuses_every_value() {
+    // A chain of 300 references, each nesting one evaluation deeper, holds
+    // more evaluations than a 64 KiB stack does before any value is read.
+    let links: Vec<_> = (0..300)
+        .map(|i| {
+            format!(
+                r##""d{i}":{{"$ref":"#/operations/op/input/$defs/d{}"}}"##,
+                i + 1
+            )
+        })
+        .collect();
+    let schema = format!(
+        r##"{{"$ref":"#/operations/op/input/$defs/d0","$defs":{{{},"d300":{{"type":"integer"}}}}}}"##,
+        links.join(",")
+    );
+    let small = prepared(
+        &schema,
+        Limits {
+            stack_bytes: 64 * 1024,
+            ..Limits::default()
+        },
+    );
+    let ValueOutcome::NoVerdict { detail } = small.validate(&JsonValue::parse("1").unwrap()) else {
+        panic!("a 64 KiB stack evaluates no value through 300 references")
+    };
+    assert_eq!(
+        detail.message,
+        "evaluating any value against this contract could nest more than the 256 schema \
+         evaluations its 64 KiB stack_bytes holds at 256 bytes each; raise stack_bytes \
+         (stackBytes in TypeScript)"
+    );
+    // The default stack holds them.
+    let defaults = prepared(&schema, Limits::default());
+    assert!(matches!(
+        defaults.validate(&JsonValue::parse("1").unwrap()),
+        ValueOutcome::Satisfies
+    ));
 }

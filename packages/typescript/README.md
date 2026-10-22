@@ -186,28 +186,39 @@ before compiling.
 
 The evaluator bounds what the SDK itself reads, writes and recurses through, not
 the memory of the JSON Schema library's compiled program. On by default:
-document admission limits; `evaluationDepth` (1,024), which also guards the
-stack of a contract holding `unevaluatedProperties` or `unevaluatedItems` as it
-evaluates (128 KiB at the default); `patternBytes` (1 MiB), `patternDepth` (32)
-and `totalPatternBytes` (4 MiB of the forms kept for a contract's patterns);
+document admission limits; `stackBytes` (256 KiB), the stack the evaluator
+sizes its bounds from: 256 bytes for each nested schema evaluation (1,024 at
+the default), half of it for a pass of a contract holding
+`unevaluatedProperties` or `unevaluatedItems` as it evaluates, and the
+unevaluated walk limit below. In Wasm the guard measures the module's own
+1 MiB stack, while the JavaScript engine's call stack bounds how deep the
+module's calls go: Node 22 checked and explained the deepest admitted values
+of the shapes probed up to `stackBytes: 524288`, and at 1 MiB a guarded
+contract's deepest admitted value overflowed the engine's stack. Also on by
+default: `patternBytes` (1 MiB), `patternDepth` (32) and `totalPatternBytes`
+(4 MiB of the forms kept for a contract's patterns);
 `totalPatternMemory` (64 MiB) for a contract's compiled patterns, a quarter of
 it for their search caches in equal parts and the rest for their compiled
 forms, each first within 48 KiB while those that need more share what is
 left, so `^.{1,10000}$` (about 13 MiB) compiles beside up to 743 small
 patterns and four such counted repetitions compile together, while 40
 `patternProperties` names of the form `^.{1,10000}N$` refuse with
-`pattern-total-memory-limit`, whose message states the arithmetic; and fixed
-bounds on dynamic specialization and on an unevaluated keyword's walk. Within
+`pattern-total-memory-limit`, whose message states the arithmetic;
+`programBytes` (48 MiB) for the memory dynamic specialization adds to a
+contract's program (`program-specialization-limit`); and an unevaluated
+keyword's walk, refused past what `stackBytes` admits
+(`unevaluated-walk-limit`). Each refusal states its arithmetic and names the
+setting to raise. Within
 them, preparing a schema can still take more memory than a host may want:
 1,000 holders of `unevaluatedProperties` that each inherit 4,000 properties
 peak at 400 MB natively. A host preparing schemas from untrusted parties should
 prepare them in a Worker or process with a memory limit. Values checked against trusted
-schemas stay bounded by depth and, when set, `evaluationSteps`.
+schemas stay bounded by `stackBytes` and, when set, `evaluationSteps`.
 
 `validate` returns an established failure with no problem list and
 `problemsComplete: false`. Call `explain` on the same prepared value contract for the
 library's first error. An explanation allocates in proportion to input and is
-made only for values within half the evaluation depth limit, so keep `validate`
+made only for values within half the nesting `stackBytes` admits, so keep `validate`
 for untrusted input. The problem's `instance` is the failing node's exact
 pointer from the value passed, and its `schema` names the failing keyword by
 `resource` and `pointer`. `value.locate(problem.instance)`,

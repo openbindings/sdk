@@ -1,13 +1,14 @@
-//! The default evaluation depth protects a small thread stack: a value as deep as
-//! the evaluator admits is checked and explained on a 256 KiB thread, and a deeper
-//! one is refused, before evaluation by the static bound or, for a contract
-//! holding an unevaluated keyword, by the stack guard as it evaluates. The
-//! contracts recurse through every applicator family, including both reviews'
-//! unevaluated chains, and are prepared on the same thread; a chain longer than
-//! the walk limit refuses at preparation instead. The only test in this
-//! executable, so nothing else shares its thread.
+//! The evaluation bounds the evaluator sizes from `Limits::stack_bytes` protect a
+//! thread of that size: a value as deep as the evaluator admits is checked and
+//! explained on it, and a deeper one is refused, before evaluation by the static
+//! bound or, for a contract holding an unevaluated keyword, by the stack guard as
+//! it evaluates. The contracts recurse through every applicator family,
+//! including the unevaluated chains, and are prepared on the same thread; a chain
+//! longer than the walk limit refuses at preparation instead. A larger stack
+//! admits deeper values and longer walks, and a smaller one refuses them sooner.
+//! The only test in this executable, so nothing else shares its thread.
 use openbindings::*;
-use openbindings_json_schema_evaluator::DefaultEvaluator;
+use openbindings_json_schema_evaluator::{DefaultEvaluator, Limits};
 
 // Recursive contracts, each with a value `depth` levels deep. Failing values make
 // explanations build the library's error from the deepest level.
@@ -195,7 +196,10 @@ const SHAPES: [(&str, usize); 39] = [
     ("chain-items-30", 0),
     ("chain-ref-80", 0),
 ];
-fn contract(schema: &str) -> Result<PreparedValueContract, NoVerdict> {
+fn contract(
+    schema: &str,
+    evaluator: &DefaultEvaluator,
+) -> Result<PreparedValueContract, NoVerdict> {
     let resources = ResourceSet::new([SchemaResource {
         uri: "https://stack.test/s".into(),
         document: JsonValue::parse(schema).unwrap(),
@@ -214,10 +218,71 @@ fn contract(schema: &str) -> Result<PreparedValueContract, NoVerdict> {
         .unwrap()
         .input()
         .unwrap()
-        .prepare_with(&DefaultEvaluator::new(), &resources)
+        .prepare_with(evaluator, &resources)
 }
 fn refused(outcome: &ValueOutcome) -> bool {
     matches!(outcome, ValueOutcome::NoVerdict { detail } if detail.code == "evaluation-depth-limit")
+}
+// On a thread of `stack` bytes, with the evaluator sized for it: the deepest
+// value of each shape the evaluator admits, checked and explained there, with
+// one level more refused; `None` for a shape whose walk refuses preparation.
+fn admitted(stack: usize) -> Vec<Option<usize>> {
+    let evaluator = if stack == 256 * 1024 {
+        DefaultEvaluator::new()
+    } else {
+        DefaultEvaluator::with_limits(Limits {
+            stack_bytes: stack,
+            ..Limits::default()
+        })
+    };
+    std::thread::Builder::new()
+        .stack_size(stack)
+        .spawn(move || {
+            let mut admitted = Vec::new();
+            for (name, _) in SHAPES {
+                let (schema, _) = shape(name, 0);
+                let contract = match contract(&schema, &evaluator) {
+                    Ok(contract) => contract,
+                    Err(detail) => {
+                        assert_eq!(detail.code, "unevaluated-walk-limit", "{stack}: {name}");
+                        admitted.push(None);
+                        continue;
+                    }
+                };
+                // The deepest value the bound admits; core admits values nested
+                // at most 10,000 levels.
+                let (mut deepest, mut refused_at) = (0, 9_990);
+                while refused_at - deepest > 1 {
+                    let depth = (deepest + refused_at) / 2;
+                    let value = JsonValue::parse(shape(name, depth).1).unwrap();
+                    if refused(&contract.validate(&value)) {
+                        refused_at = depth;
+                    } else {
+                        deepest = depth;
+                    }
+                }
+                let value = JsonValue::parse(shape(name, deepest).1).unwrap();
+                let checked = contract.validate(&value);
+                let explained = contract.explain(&value);
+                assert!(
+                    !refused(&checked) && !refused(&explained),
+                    "{stack}: {name}"
+                );
+                assert_eq!(
+                    matches!(checked, ValueOutcome::Satisfies),
+                    matches!(explained, ValueOutcome::Satisfies),
+                    "{stack}: {name}"
+                );
+                let deeper = JsonValue::parse(shape(name, refused_at).1).unwrap();
+                assert!(refused(&contract.validate(&deeper)), "{stack}: {name}");
+                assert!(refused(&contract.explain(&deeper)), "{stack}: {name}");
+                admitted.push(Some(deepest));
+            }
+            admitted
+        })
+        .unwrap()
+        .join()
+        .unwrap()
 }
 
 #[test]
@@ -225,47 +290,33 @@ fn refused(outcome: &ValueOutcome) -> bool {
     debug_assertions,
     ignore = "unoptimized evaluation frames exceed 256 KiB at the default depth; verified in release"
 )]
-fn the_default_depth_admits_only_values_a_small_stack_evaluates() {
-    std::thread::Builder::new()
-        .stack_size(256 * 1024)
-        .spawn(|| {
-            for (name, least) in SHAPES {
-                let (schema, _) = shape(name, 0);
-                let contract = match contract(&schema) {
-                    Ok(contract) => contract,
-                    Err(detail) if least == 0 => {
-                        assert_eq!(detail.code, "unevaluated-walk-limit", "{name}");
-                        continue;
-                    }
-                    Err(detail) => panic!("{name}: {detail:?}"),
-                };
-                // The deepest value the bound admits.
-                let (mut admitted, mut refused_at) = (0, 4096);
-                while refused_at - admitted > 1 {
-                    let depth = (admitted + refused_at) / 2;
-                    let value = JsonValue::parse(shape(name, depth).1).unwrap();
-                    if refused(&contract.validate(&value)) {
-                        refused_at = depth;
-                    } else {
-                        admitted = depth;
-                    }
-                }
-                assert!(admitted >= least, "{name}: {admitted}");
-                let deepest = JsonValue::parse(shape(name, admitted).1).unwrap();
-                let checked = contract.validate(&deepest);
-                let explained = contract.explain(&deepest);
-                assert!(!refused(&checked) && !refused(&explained), "{name}");
-                assert_eq!(
-                    matches!(checked, ValueOutcome::Satisfies),
-                    matches!(explained, ValueOutcome::Satisfies),
-                    "{name}"
-                );
-                let deeper = JsonValue::parse(shape(name, refused_at).1).unwrap();
-                assert!(refused(&contract.validate(&deeper)), "{name}");
-                assert!(refused(&contract.explain(&deeper)), "{name}");
-            }
-        })
-        .unwrap()
-        .join()
-        .unwrap();
+fn each_stack_admits_only_values_it_evaluates() {
+    let default = admitted(256 * 1024);
+    for ((name, least), deepest) in SHAPES.into_iter().zip(&default) {
+        match deepest {
+            Some(deepest) => assert!(*deepest >= least, "{name}: {deepest}"),
+            None => assert_eq!(least, 0, "{name}"),
+        }
+    }
+    // A smaller stack refuses sooner, and every shape the default admits a
+    // value of admits fewer levels or refuses preparation.
+    for ((name, _), (smaller, default)) in
+        SHAPES.iter().zip(admitted(192 * 1024).iter().zip(&default))
+    {
+        if let Some(default) = default {
+            assert!(smaller.is_none_or(|smaller| smaller < *default), "{name}");
+        }
+    }
+    // A larger stack admits every shape, and deeper values of each the default
+    // admits.
+    for ((name, _), (larger, default)) in SHAPES
+        .iter()
+        .zip(admitted(1024 * 1024).iter().zip(&default))
+    {
+        let larger = larger.unwrap_or_else(|| panic!("{name} refused on 1 MiB"));
+        assert!(larger >= 1, "{name}");
+        if let Some(default) = default {
+            assert!(larger > 2 * default, "{name}: {larger} against {default}");
+        }
+    }
 }

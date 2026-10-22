@@ -15,11 +15,14 @@ replacing an existing dependency.
 The 256 KiB small-stack document regression is qualified on the development
 toolchain. On the same stack, release builds on Linux, macOS and Windows prepare
 value contracts whose patterns nest to the default `pattern_depth` and check
-values against them, and prepare, check and explain values as deep as the
-default `evaluation_depth` admits for the 39 recursive contract shapes
-`evaluation_stack` covers, unevaluated keywords included, and prepare the
-longest unevaluated annotation walk of each kind the walk limit admits with a
-fifth of the thread already in use (`walk_stack`). The static depth bound models
+values against them. The evaluator sizes its evaluation depth, stack guard and
+unevaluated walk limit from `Limits::stack_bytes` (256 KiB by default), and
+release builds on the same hosts prepare, check and explain values as deep as
+it admits for the 39 recursive contract shapes `evaluation_stack` covers,
+unevaluated keywords included, on threads of 192 KiB, 256 KiB and 1 MiB, and
+prepare the longest unevaluated annotation walk of each kind it admits with a
+fifth of a 192 KiB, 256 KiB or 512 KiB thread already in use (`walk_stack`);
+the derivations were measured from 128 KiB to 2 MiB. The static depth bound models
 the library's frames, and a contract holding an unevaluated keyword is also
 guarded by measuring the stack its pass uses. Unoptimized code needs more:
 compiling 32 nested quantified groups takes up to about 1 MiB of stack in debug

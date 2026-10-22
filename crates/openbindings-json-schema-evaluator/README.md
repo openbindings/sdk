@@ -108,19 +108,28 @@ application's to set, and is off unless it does:
   comparison step, and gives `evaluation-work-limit` once a pass spends `n`;
   an application that evaluates untrusted contracts or values within a
   deadline sets one.
-- `evaluation_depth` (1,024) bounds the stack evaluation uses. Preparation
-  bounds the schema objects any evaluation path can hold as a function of the
-  value's depth, and a value whose bound exceeds the limit gives
-  `evaluation-depth-limit` before it is evaluated. The library's
-  `unevaluatedProperties` and `unevaluatedItems` validators recurse in ways
-  that bound does not model, so a contract holding one is also guarded as it
-  evaluates: every read of a child instance compares the stack address it runs
-  at with the pass's start, and a pass that has used more than 128 bytes per
-  unit (128 KiB at the default) stops descending and gives
-  `evaluation-depth-limit`. The bound is static: a deep contract whose paths
-  only some values follow refuses the others too. Release builds prepare,
-  check and explain the 39 recursive shapes `tests/evaluation_stack.rs`
-  covers at the default on a 256 KiB thread.
+- `stack_bytes` (256 KiB) is the stack the thread that prepares and evaluates
+  has. The evaluator sizes three bounds from it, each with a stack cost
+  measured in release builds on Linux, macOS and Windows. A value is evaluated
+  only if the schema evaluations it could nest fit 256 bytes of the stack each
+  (1,024 at the default): preparation bounds the schema objects any evaluation
+  path can hold as a function of the value's depth, and a value whose bound
+  exceeds that gives `evaluation-depth-limit` before it is evaluated. The
+  bound is static: a deep contract whose paths only some values follow refuses
+  the others too. The library's `unevaluatedProperties` and `unevaluatedItems`
+  validators recurse in ways that bound does not model, so a contract holding
+  one is also guarded as it evaluates: every read of a child instance compares
+  the stack address it runs at with the pass's start, and a pass that has used
+  more than half the stack (128 KiB at the default) stops descending and gives
+  `evaluation-depth-limit`. And preparation refuses an unevaluated keyword's
+  annotation walk weighing more than the stack admits (below). Each refusal
+  states its arithmetic and names `stack_bytes`. Release builds prepare, check
+  and explain the 39 recursive shapes `tests/evaluation_stack.rs` covers on
+  threads of 192 KiB, 256 KiB and 1 MiB with the evaluator sized for each: a
+  larger stack admits deeper values of every shape, and a smaller one refuses
+  them sooner. The other recursion preparation does is bounded by the
+  input-shaped limits below and core's admission limits, whose defaults fit
+  the default stack; a host giving a smaller stack lowers those too.
 - `compile_json_depth` (512) bounds the projected JSON nesting compiled.
 - `pattern_bytes` (1 MiB) bounds each pattern, and its form for the
   linear-time engine, which spells each set out (a `\S` takes 191
@@ -160,6 +169,18 @@ application's to set, and is off unless it does:
   that together need more than is left takes building about that much: 40
   names of the form `^.{1,10000}N$` refuse in about 0.2 s, with about 2 MB of
   heap at their peak.
+- `program_bytes` (48 MiB) bounds how much the SDK's program for one contract
+  may grow beyond its projected schemas. Dynamic specialization copies
+  a schema reached through `$dynamicRef` once for each dynamic context it is
+  reached in. Preparation estimates the memory each copy takes as the SDK holds
+  it (160 bytes for the definition, 640 for each object's map, 56 for each
+  member, 32 for each array element and a byte for each byte of its strings and
+  member names; ordinary definitions measure at most a sixth below the estimate)
+  and each context (64 bytes and 8 for each dynamic-scope entry), and refuses a
+  contract whose copies and contexts would pass the projected schemas' own
+  estimate by more than `program_bytes` with `program-specialization-limit`,
+  whose message states the arithmetic. It counts the SDK's own program, not the
+  memory of the library's compiled program.
 - `schema_resources` sets no cap by default; `Some(n)` refuses a contract
   reaching more than `n` schema resources (the document resource holding its
   schema and each embedded `$id`, supplied and packaged meta-schema resource)
@@ -168,32 +189,32 @@ application's to set, and is off unless it does:
   linearly with the resources a contract reaches: 10,000 supplied resources
   take 0.22 s in the reference build.
 
-Fixed bounds apply as well. Core's document admission limits bound the bytes and
-nodes of every document and resource, and its projection refuses a contract
-reaching more than 100,000 schema positions (`schema-node-limit`). Dynamic specialization
-(below) produces at most 100,000 definitions, adds at most 16,777,216 units of
-JSON in specialized copies (one per JSON value and one per byte of its strings
-and member names) and holds at most 4,000,000 dynamic-scope entries across its
-distinct contexts (`program-specialization-limit`). The library compiles an
-unevaluated keyword's annotation sources by recursion, so preparation weighs the
-walk and refuses one weighing more than 105 (`unevaluated-walk-limit`, at that
-keyword): a reference weighs 4, each `allOf`, `anyOf` or `oneOf` on its path 5
-more, each `if`, `then`, `else` or `dependentSchemas` 7 more and reaching
-another holder 1 more. That admits 26 direct `$ref`s (21 with a holder at every
-level), 8 levels of `allOf: [{"$ref": ...}]` inheritance (7), or 7 levels
-through `then`, `else` or `dependentSchemas` (6), each prepared in release
-builds on Linux, macOS and Windows with a fifth of a 256 KiB thread already in
-use.
+Core's document admission limits bound the bytes and nodes of every document
+and resource, and its projection refuses a contract reaching more than 100,000
+schema positions (`schema-node-limit`); that bound is core's, shared with its
+own fixed checks. The library compiles an unevaluated keyword's annotation
+sources by recursion, so preparation weighs the walk and refuses one weighing
+more than `stack_bytes` admits (`unevaluated-walk-limit`, at that keyword): a
+fifth of the stack is left to the caller, 99 KiB to the rest of preparation,
+and each unit takes 1 KiB, so 105 at the default. A reference weighs 4, each
+`allOf`, `anyOf` or `oneOf` on its path 5 more, each `if`, `then`, `else` or
+`dependentSchemas` 7 more and reaching another holder 1 more, so each unit
+takes at most a KiB on every host measured. The default admits 26 direct
+`$ref`s (21 with a holder at every level), 8 levels of `allOf: [{"$ref": ...}]`
+inheritance (7), or 7 levels through `then`, `else` or `dependentSchemas` (6);
+512 KiB admits 77 `$ref`s and 23 levels of inheritance, and 192 KiB 13 and 4.
+Release builds on Linux, macOS and Windows prepare the longest admitted walk of
+each kind with a fifth of a thread of each of those sizes already in use.
 
 Within those bounds, preparing a schema can still take more memory than a
 host may want, since the library's compiled program grows with what it
 compiles, as any JSON Schema library's does: 1,000 holders of
 `unevaluatedProperties` that each inherit a base schema of 4,000 properties
-peak at 400 MB, and a dynamically specialized contract within its bounds can
-reach about 450 MB. A host that prepares schemas from untrusted parties should
+peak at 400 MB, and a dynamically specialized contract whose 4,096 contexts
+take 44.8 MiB of the default `program_bytes` peaks at 158 MB. A host that prepares schemas from untrusted parties should
 prepare them in an isolated worker or process with an operating-system memory
 limit. Values checked against trusted schemas stay bounded by
-`evaluation_depth` and, when the host sets one, by `evaluation_steps`.
+`stack_bytes` and, when the host sets one, by `evaluation_steps`.
 
 Patterns are ECMA-262 patterns with Unicode semantics, matched by a linear-time
 engine, so a match takes time linear in the string. The word boundary `\b`
@@ -217,7 +238,9 @@ class whose ranges meet across the surrogate gap adds a range across it.
 A `$dynamicRef` resolves through the dynamic scope of the path that reaches it,
 also when a `$ref` cycle re-enters a resource that declares a dynamic anchor:
 preparation compiles a schema once for each dynamic context it is reached in,
-within the specialization bounds above. Otherwise preparation compiles each
+within `program_bytes`: the 256 dynamic contexts of 8 levels that each choose
+between two paths take about 6.8 MiB, and the 2,048 of 11 levels about
+70 MiB, more than the default 48 MiB. Otherwise preparation compiles each
 reached schema once, in time and memory that grow with the contract, except
 that the library takes time quadratic in the length of a long same-document
 reference chain. See
@@ -228,8 +251,8 @@ failure has a fixed message, an empty problem list and `problems_complete =
 false`. `explain` returns the library's first error for the same verdict, with
 a fixed message for its kind. Building that error allocates in proportion to
 the schema and value and takes about twice a check's stack per level, so a
-value nested deeper than half the depth limit allows is reported as failing
-without its problem; keep `validate` on paths that check untrusted input. The
+value nested deeper than half the nesting `stack_bytes` admits is reported as
+failing without its problem; keep `validate` on paths that check untrusted input. The
 explained problem names the failing node by its exact pointer from the value
 passed (`instance`) and the failing keyword by resource and exact pointer
 (`schema`). `JsonValue::locate`, `Conformant::locate` and `ResourceSet::locate`

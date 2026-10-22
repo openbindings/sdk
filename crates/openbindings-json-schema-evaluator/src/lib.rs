@@ -13,6 +13,7 @@ mod missing;
 mod operands;
 mod pass;
 mod pattern;
+mod stack;
 mod unevaluated_walk;
 use openbindings::*;
 use openbindings_internal_json::backend::{self, FlatJson};
@@ -36,19 +37,36 @@ pub struct Limits {
     /// comparison step, and gives `evaluation-work-limit` once a pass spends
     /// `n`; preparing with a cap compiles a slightly larger validator.
     pub evaluation_steps: Option<usize>,
-    /// The deepest nesting of schema evaluations a value may need; default
-    /// 1024. Evaluation recurses once for each schema it enters, so this
-    /// bounds its stack use. Before evaluating a value, the evaluator bounds
-    /// that nesting from the contract's schemas and the value's depth; a value
-    /// whose bound exceeds this limit yields `evaluation-depth-limit` without
-    /// being evaluated. A contract holding `unevaluatedProperties` or
-    /// `unevaluatedItems`, whose library validators recurse in ways the bound
-    /// does not model, is also guarded as it evaluates: a pass that uses more
-    /// than 128 bytes of stack per unit of this limit (128 KiB at the default)
-    /// stops with `evaluation-depth-limit`. At the default, release builds
-    /// evaluate the recursive contract shapes the evaluator's stack test covers
-    /// on a 256 KiB thread stack.
-    pub evaluation_depth: usize,
+    /// Bytes of stack the thread that prepares contracts and evaluates values
+    /// has; default 256 KiB (262,144 bytes). Preparation and evaluation
+    /// recurse with the contract and the value, so the evaluator sizes three
+    /// bounds from this stack, each with a stack cost measured in release
+    /// builds on Linux, macOS and Windows:
+    ///
+    /// - A value is evaluated only if the schema evaluations it could nest
+    ///   fit 256 bytes of this stack each (1,024 at the default). Before
+    ///   evaluating a value, the evaluator bounds that nesting from the
+    ///   contract's schemas and the value's depth; a value whose bound is
+    ///   larger yields `evaluation-depth-limit` without being evaluated, and
+    ///   an explanation is built only within half that nesting.
+    /// - A contract holding `unevaluatedProperties` or `unevaluatedItems`,
+    ///   whose library validators recurse in ways the bound does not model, is
+    ///   also guarded as it evaluates: a pass that uses more than half this
+    ///   stack (128 KiB at the default) stops with `evaluation-depth-limit`.
+    /// - The library compiles an unevaluated keyword's annotation walk by
+    ///   recursion, so preparation refuses a walk weighing more than this
+    ///   stack admits with `unevaluated-walk-limit`: a fifth of the stack is
+    ///   left to the caller's frames, 99 KiB to the rest of preparation, and
+    ///   each unit of the walk's weight takes 1 KiB (105 units at the
+    ///   default).
+    ///
+    /// Each refusal states its arithmetic. A thread with more stack admits
+    /// deeper values and longer walks; one with less refuses them sooner.
+    /// These bounds were measured with stacks from 128 KiB to 2 MiB. The
+    /// other recursion preparation does is bounded by `pattern_depth`,
+    /// `compile_json_depth` and core's admission limits, whose defaults fit
+    /// the default stack; a host giving less stack lowers those too.
+    pub stack_bytes: usize,
     /// Maximum projected JSON nesting admitted to evaluator compilation; default 512.
     pub compile_json_depth: usize,
     /// Maximum UTF-8 bytes in each schema regular expression, and in the form
@@ -91,6 +109,21 @@ pub struct Limits {
     /// arithmetic, or `pattern-size-limit` when the form needs more than
     /// 32 MiB.
     pub total_pattern_memory: usize,
+    /// Bytes the SDK's program for one contract may grow by beyond its
+    /// projected schemas; default 48 MiB (50,331,648 bytes). Dynamic
+    /// specialization copies a schema reached through `$dynamicRef` once for
+    /// each dynamic context it is reached in. Preparation estimates the memory
+    /// each copy takes as the SDK holds it (160 bytes for the definition, 640
+    /// for each object's map, 56 for each member, 32 for each array element
+    /// and a byte for each byte of its strings and member names) and each
+    /// context (64 bytes and 8 for each dynamic-scope entry), and refuses a
+    /// contract whose copies and contexts would pass the projected schemas'
+    /// own estimate by more than this with `program-specialization-limit`,
+    /// whose message states the arithmetic. The projected schemas themselves
+    /// are bounded by core's admission limits and its 100,000 schema positions
+    /// per contract. This counts the SDK's own program, not the memory the
+    /// library's compiled program takes.
+    pub program_bytes: usize,
     /// Schema resources one contract may reach, counted as its projection
     /// holds them: the document resource holding the contract's schema and
     /// each embedded `$id` resource, supplied resource and packaged
@@ -105,38 +138,17 @@ impl Default for Limits {
     fn default() -> Self {
         Self {
             evaluation_steps: None,
-            evaluation_depth: 1024,
+            stack_bytes: 256 * 1024,
             compile_json_depth: 512,
             pattern_bytes: 1024 * 1024,
             pattern_depth: 32,
             total_pattern_bytes: 4 * 1024 * 1024,
             total_pattern_memory: 64 * 1024 * 1024,
+            program_bytes: 48 * 1024 * 1024,
             schema_resources: None,
         }
     }
 }
-// The most definitions dynamic specialization may produce for one contract:
-// as many as the projection admits schema nodes.
-const SPECIALIZED_DEFINITIONS: usize = 100_000;
-// The most JSON dynamic specialization may add to the projected program in
-// specialized copies, counted on the SDK's own output as one unit for each
-// JSON value and one for each byte of its strings and member names, and the
-// most dynamic-scope entries its distinct contexts may hold together.
-const SPECIALIZED_OUTPUT: usize = 16 * 1024 * 1024;
-const CONTEXT_ENTRIES: usize = 4_000_000;
-// The stack a guarded pass may use for each unit of `evaluation_depth`:
-// 128 KiB at the default, which leaves a 256 KiB thread room for the frames
-// one level of the value adds before the next check.
-const STACK_PER_DEPTH: usize = 128;
-// The heaviest annotation walk an unevaluated keyword may follow, weighed by
-// what each reference adds (`bundle::REFERENCE_WALK` and the rest): 26 `$ref`s,
-// 8 levels of `allOf: [{"$ref": ...}]` inheritance, or 7 through `then` or
-// `dependentSchemas`. The library compiles the walk by recursion; release
-// builds on Linux, macOS and Windows prepare the longest admitted walk of each
-// kind, below enclosing schemas, with a fifth of a 256 KiB thread already used
-// (`tests/walk_stack.rs`).
-const UNEVALUATED_WALK: u32 = 105;
-
 #[derive(Clone, Debug, Default)]
 /// Optional JSON Schema 2020-12 companion with exact numeric semantics and
 /// explicit resources only, composed over the unmodified `jsonschema` library.
@@ -359,18 +371,13 @@ impl DefaultEvaluator {
             resources,
             &entry,
             &bundle::Options {
-                max_definitions: SPECIALIZED_DEFINITIONS,
-                max_size: SPECIALIZED_OUTPUT,
-                max_context_entries: CONTEXT_ENTRIES,
+                program_bytes: self.limits.program_bytes,
                 markers: self.limits.evaluation_steps.is_some(),
             },
         )
-        .map_err(|_| {
-            no_verdict(
-                NoVerdictReason::LimitExceeded,
-                "program-specialization-limit",
-                "the contract's dynamic references would specialize too many schemas",
-            )
+        .map_err(|refusal| match refusal {
+            bundle::Refusal::Budget(growth) => specialization_limit(growth),
+            bundle::Refusal::Shape => program_failure(),
         })?;
         if let Some(at) = missing::behind_unevaluated(&bundle) {
             let mut detail = no_verdict(
@@ -387,7 +394,10 @@ impl DefaultEvaluator {
             return Err(detail);
         }
         unevaluated_walk::apply(&mut bundle);
-        let stack = guarded.then(|| self.limits.evaluation_depth.saturating_mul(STACK_PER_DEPTH));
+        let host = stack::Stack {
+            bytes: self.limits.stack_bytes,
+        };
+        let guard = guarded.then(|| host.guard());
         let bound =
             depth::bound(&bundle.definitions, bundle.entry, bundle.entry_weight).map_err(|_| {
                 no_verdict(
@@ -407,13 +417,9 @@ impl DefaultEvaluator {
             })
             .collect();
         if let Some((length, holder)) = depth::longest_walk(&bundle.definitions, &holders)
-            && length > UNEVALUATED_WALK
+            && length > host.walk()
         {
-            let mut detail = no_verdict(
-                NoVerdictReason::LimitExceeded,
-                "unevaluated-walk-limit",
-                "an unevaluated keyword's annotation sources nest more deeply than the evaluator admits",
-            );
+            let mut detail = host.walk_too_heavy(length);
             // The holder's keyword whose walk it is, at its original location.
             let schema = &bundle.schemas[holder as usize];
             let keyword = if schema.get("unevaluatedProperties").is_some() {
@@ -457,9 +463,10 @@ impl DefaultEvaluator {
         Ok(Compiled {
             validator,
             locations,
-            deepest: bound.deepest(self.limits.evaluation_depth as u64),
-            deepest_explained: bound.deepest(self.limits.evaluation_depth as u64 / 2),
-            stack,
+            deepest: bound.deepest(host.evaluation_depth()),
+            deepest_explained: bound.deepest(host.evaluation_depth() / 2),
+            host,
+            guard,
             limits: self.limits.clone(),
             missing,
         })
@@ -699,6 +706,26 @@ fn pattern_memory_limit(shortfall: pattern::Shortfall) -> NoVerdict {
         message,
     )
 }
+// The refusal states the arithmetic, so its message says why and what to raise.
+fn specialization_limit(growth: bundle::Growth) -> NoVerdict {
+    no_verdict(
+        NoVerdictReason::LimitExceeded,
+        "program-specialization-limit",
+        format!(
+            "this contract's dynamic references specialize {} schemas, taking {}, and {} \
+             dynamic contexts holding {} entries, taking {}, before preparation stops: together \
+             they pass its projected schemas' {} by more than its {} program_bytes; raise \
+             program_bytes (programBytes in TypeScript)",
+            growth.definitions,
+            bytes(growth.definition_bytes),
+            growth.contexts,
+            growth.entries,
+            bytes(growth.context_bytes),
+            bytes(growth.projected),
+            bytes(growth.budget),
+        ),
+    )
+}
 // A count of bytes as a message states it, rounded down: whole KiB below a
 // MiB, MiB to a tenth above.
 fn bytes(count: usize) -> String {
@@ -843,8 +870,10 @@ struct Compiled {
     // half of it for explanations; `usize::MAX` when every value is.
     deepest: Option<usize>,
     deepest_explained: Option<usize>,
-    // The stack a guarded contract's pass may use, in bytes.
-    stack: Option<usize>,
+    // The stack the host gives, and the stack a guarded contract's pass may
+    // use, in bytes.
+    host: stack::Stack,
+    guard: Option<usize>,
     limits: Limits,
     // The resources the contract reaches but the request did not supply, by
     // the index their stand-ins' keyword holds.
@@ -870,11 +899,7 @@ impl PreparedSchema for Compiled {
         }
         if !self.nests_within(value, self.deepest) {
             return ValueOutcome::NoVerdict {
-                detail: no_verdict(
-                    NoVerdictReason::LimitExceeded,
-                    "evaluation-depth-limit",
-                    "evaluation depth limit reached",
-                ),
+                detail: self.host.too_deep(self.deepest),
             };
         }
         let valid = self.pass(|| Ok(self.validator.is_valid(backend::view(value))));
@@ -913,7 +938,7 @@ impl Compiled {
         };
         // A guarded pass that used more stack than it may stopped descending,
         // so its result answers nothing.
-        let (evaluated, deep) = match self.stack {
+        let (evaluated, deep) = match self.guard {
             None => (backend::string_scope(allowed), false),
             Some(bytes) => {
                 match backend::string_scope(|| {
@@ -932,11 +957,7 @@ impl Compiled {
             )
         })?;
         if deep {
-            return Err(no_verdict(
-                NoVerdictReason::LimitExceeded,
-                "evaluation-depth-limit",
-                "evaluation depth limit reached",
-            ));
+            return Err(self.host.guard_exceeded());
         }
         match evaluated {
             Err(openbindings_internal_json::work::Spent) => Err(no_verdict(
