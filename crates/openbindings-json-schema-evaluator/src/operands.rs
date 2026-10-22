@@ -4,6 +4,7 @@
 use crate::pattern::{Allowance, Given, Memory, Unsupported};
 use crate::{Limits, no_verdict};
 use jsonschema::json::{JsonNumber, Node};
+use jsonschema::paths::Location;
 use jsonschema::{Keyword, ValidationError, ValidationOptions};
 use openbindings::*;
 use openbindings_internal_json::backend::{self, FlatJson, View};
@@ -116,6 +117,9 @@ pub(crate) struct Patterns {
     memory: Memory,
     // Whether the memory has been shared.
     shared: Mutex<bool>,
+    // Each `pattern` keyword's location in the bundle, by the site index the
+    // keyword holds: a pass that stops at a pattern names its keyword by it.
+    sites: Mutex<Vec<Location>>,
 }
 impl Patterns {
     /// Share the pattern memory among the `names`, distinct
@@ -198,20 +202,27 @@ impl Patterns {
         *shared = true;
         given
     }
-    fn is_match(&self, index: usize, text: &str) -> bool {
+    /// The bundle location of the `pattern` keyword at `site`.
+    pub(crate) fn site(&self, site: u32) -> Option<Location> {
+        let sites = self.sites.lock().unwrap_or_else(PoisonError::into_inner);
+        sites.get(site as usize).cloned()
+    }
+    // Whether `text` matches the matcher at `index`; a pattern the evaluator
+    // does not match stops the pass, naming the keyword at `site` that holds it.
+    fn is_match(&self, index: usize, text: &str, site: u32) -> bool {
         match &self.matchers[index] {
             Matcher::Simple(simple) => simple.is_match(text),
             Matcher::Regex { compiled, .. } => {
                 match compiled.get().unwrap_or_else(|| self.compile(index)) {
                     Compiled::Regex(regex) => regex.is_match(text),
                     Compiled::Refused(unsupported) => {
-                        crate::pass::unmatched(*unsupported);
+                        crate::pass::unmatched(*unsupported, site);
                         true
                     }
                 }
             }
             Matcher::Unmatched(unsupported) => {
-                crate::pass::unmatched(*unsupported);
+                crate::pass::unmatched(*unsupported, site);
                 true
             }
         }
@@ -240,13 +251,14 @@ const PROPERTY_ESCAPE: &str = "\u{1}property-escape";
 const NON_WORD_BOUNDARY: &str = "\u{1}non-word-boundary";
 const SIZE: &str = "\u{1}size";
 /// The SDK's `pattern` keyword, which matches with ECMA-262 semantics through
-/// its pattern's reading. A string that reaches a pattern the evaluator does
-/// not match ends the pass with no verdict.
-struct Pattern(Arc<Patterns>, usize);
+/// its pattern's reading: the contract's matchers, its matcher's index, and
+/// its own site. A string that reaches a pattern the evaluator does not match
+/// ends the pass with no verdict naming the keyword's location.
+struct Pattern(Arc<Patterns>, usize, u32);
 impl<'i> Keyword<'i, FlatJson> for Pattern {
     fn is_valid(&self, instance: View<'i>) -> bool {
         match instance.as_string() {
-            Some(text) => self.0.is_match(self.1, &text),
+            Some(text) => self.0.is_match(self.1, &text, self.2),
             None => true,
         }
     }
@@ -474,15 +486,23 @@ impl Operands {
             matchers: self.patterns,
             memory,
             shared: Mutex::new(false),
+            sites: Mutex::new(Vec::new()),
         });
         let keyword = patterns.clone();
-        options = options.with_keyword("pattern", move |_, value, _| {
+        options = options.with_keyword("pattern", move |_, value, at| {
             let index = value
                 .as_str()
                 .and_then(|key| key.parse::<usize>().ok())
                 .filter(|&index| index < keyword.matchers.len())
                 .ok_or_else(|| ValidationError::custom("invalid internal pattern reference"))?;
-            Ok(Box::new(Pattern(keyword.clone(), index)))
+            // The library compiles each keyword as it builds; a contract built
+            // again records its keywords again.
+            let mut sites = keyword.sites.lock().unwrap_or_else(PoisonError::into_inner);
+            let site = u32::try_from(sites.len())
+                .map_err(|_| ValidationError::custom("too many internal pattern sites"))?;
+            sites.push(at);
+            drop(sites);
+            Ok(Box::new(Pattern(keyword.clone(), index, site)))
         });
         let numbers = Arc::new(self.numbers);
         for keyword in numeric::KEYWORDS {

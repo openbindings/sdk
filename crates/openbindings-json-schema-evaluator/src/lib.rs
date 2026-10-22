@@ -465,10 +465,10 @@ impl DefaultEvaluator {
             }
             Err(error) => return Err(preparation_error(&error, &locations)),
         };
-        drop(patterns);
         control.check()?;
         Ok(Compiled {
             validator,
+            patterns,
             locations,
             deepest: bound.deepest(host.evaluation_depth()),
             deepest_explained: bound.deepest(host.evaluation_depth() / 2),
@@ -872,6 +872,9 @@ fn preparation_error(
 
 struct Compiled {
     validator: jsonschema::Validator<FlatJson>,
+    // The `pattern` keywords' matchers, which the validator shares, and their
+    // sites, which name the keyword a pass stopped at.
+    patterns: Arc<operands::Patterns>,
     locations: explain::Locations,
     // The deepest value the depth bound admits within the limit, and within
     // half of it for explanations; `usize::MAX` when every value is.
@@ -977,8 +980,15 @@ impl Compiled {
                 "numeric-arithmetic-limit",
                 "numeric arithmetic exceeds the admitted evaluation limit",
             )),
-            Ok((_, Some(pass::Stop::Unmatched(unsupported)))) => {
-                Err(unsupported_pattern(unsupported))
+            Ok((_, Some(pass::Stop::Unmatched(unsupported, site)))) => {
+                // The `pattern` keyword that holds it, at its original location.
+                let mut detail = unsupported_pattern(unsupported);
+                detail.location = self.patterns.site(site).and_then(|at| {
+                    self.locations
+                        .locate(&format!("{}#{}", bundle::URI, at.as_str()))
+                        .map(|(location, _)| location)
+                });
+                Err(detail)
             }
             Ok((_, Some(pass::Stop::Missing(at)))) => {
                 let mut detail = no_verdict(

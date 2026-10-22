@@ -4,13 +4,15 @@
 use crate::pattern::Unsupported;
 use std::cell::Cell;
 
-/// Why a pass gives no verdict.
+/// Why a pass gives no verdict. It is `Copy`, so the pass's record is a
+/// plain thread-local slot with nothing to drop.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Stop {
     /// A `multipleOf` division the exact arithmetic declined.
     Arithmetic,
-    /// A pattern the evaluator does not match.
-    Unmatched(Unsupported),
+    /// A pattern the evaluator does not match, and the site of the `pattern`
+    /// keyword that holds it, by the index its contract's patterns give it.
+    Unmatched(Unsupported, u32),
     /// The stand-in for a schema resource that was not supplied, by index.
     Missing(u32),
 }
@@ -31,10 +33,11 @@ pub(crate) fn scope<T>(evaluate: impl FnOnce() -> T) -> (T, Option<Stop>) {
     let result = evaluate();
     (result, STOP.get())
 }
-/// Record that the pass reached a pattern it cannot match.
-pub(crate) fn unmatched(unsupported: Unsupported) {
+/// Record that the pass reached a pattern it cannot match, held by the
+/// `pattern` keyword at `site`.
+pub(crate) fn unmatched(unsupported: Unsupported, site: u32) {
     if STOP.get().is_none() {
-        STOP.set(Some(Stop::Unmatched(unsupported)));
+        STOP.set(Some(Stop::Unmatched(unsupported, site)));
     }
 }
 /// Record that the pass reached the stand-in for a resource that was not
@@ -56,20 +59,26 @@ mod tests {
     #[test]
     fn a_pass_reports_what_it_met_and_restores_the_enclosing_pass() {
         let (outer, stop) = scope(|| {
-            unmatched(Unsupported::Backtracking);
+            unmatched(Unsupported::Backtracking, 1);
             let inner = scope(arithmetic);
             assert_eq!(inner.1, Some(Stop::Arithmetic));
-            unmatched(Unsupported::PropertyEscape);
+            unmatched(Unsupported::PropertyEscape, 2);
+            missing(3);
             7
         });
         assert_eq!(outer, 7);
-        assert_eq!(stop, Some(Stop::Unmatched(Unsupported::Backtracking)));
+        assert_eq!(stop, Some(Stop::Unmatched(Unsupported::Backtracking, 1)));
         assert_eq!(scope(|| ()).1, None);
         let (_, stop) = scope(|| {
-            unmatched(Unsupported::Backtracking);
+            unmatched(Unsupported::Backtracking, 1);
             arithmetic();
         });
         assert_eq!(stop, Some(Stop::Arithmetic));
+        let (_, stop) = scope(|| {
+            missing(3);
+            unmatched(Unsupported::Backtracking, 1);
+        });
+        assert_eq!(stop, Some(Stop::Missing(3)));
     }
     #[test]
     fn a_pass_left_by_unwinding_restores_the_enclosing_pass() {

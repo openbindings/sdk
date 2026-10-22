@@ -247,8 +247,9 @@ backtracking engine (lookaround or a backreference), has a Unicode property
 escape, or holds the non-word boundary `\B` (which the engine's `is_match` can
 answer wrongly beside multi-byte characters) is not matched: a string that
 reaches it in `pattern` gives no verdict (`pattern-backtracking`,
-`unicode-property-matching` or `pattern-non-word-boundary`), and as a
-`patternProperties` name it refuses preparation. A pattern whose form needs
+`unicode-property-matching` or `pattern-non-word-boundary`) located at that
+`pattern` keyword's original schema location, and as a `patternProperties` name
+it refuses preparation. A pattern whose form needs
 more of `total_pattern_memory` than it is given gives
 `pattern-total-memory-limit`, or `pattern-size-limit` past 32 MiB. The
 reading is meant to match as
