@@ -82,6 +82,11 @@ def fixtures():
         message='evaluation reached a resource that was not supplied', reason='resource-unavailable')
     rows['work-stop']['expected']['detail'] = dict(code='evaluation-work-limit', location=None,
         message='evaluation work limit reached', reason='limit-exceeded')
+    # The refusal states its arithmetic and the setting to raise.
+    rows['depth-stop']['expected']['detail'] = dict(code='evaluation-depth-limit', location=None,
+        message='this value nests more than 0 levels, the deepest this contract evaluates within the '
+                '8 schema evaluations its 2 KiB stack_bytes holds at 256 bytes each; raise stack_bytes '
+                '(stackBytes in TypeScript)', reason='limit-exceeded')
     rows['source-diagnostics']['expected'].update(problems_complete=False, problems=[dict(
         code='maximum', instance_pointer='',
         message='number exceeds the inclusive upper bound; inspect maximum at the schema location',

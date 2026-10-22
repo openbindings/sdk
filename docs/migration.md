@@ -63,6 +63,15 @@ no-verdict now carries only inability to answer. Legacy
 `PreparedBoundaryContract.complete` and boundary-comparison helpers have no direct
 replacement or decidability equivalent here.
 
+The default evaluator assumes the thread that prepares and evaluates has a
+256 KiB stack, and bounds how deeply values nest and how long an unevaluated
+keyword's annotation walk may be from it. If legacy validation accepted more
+deeply nested values on a larger thread, give the evaluator that thread's stack
+with `Limits::stack_bytes` (TypeScript `limits: { stackBytes }`); dynamic
+references that specialize large programs are bounded by
+`Limits::program_bytes` (`programBytes`). Each refusal names the setting to
+raise.
+
 Rust core requires an explicit operation value evaluator, including for boolean
 schemas. TypeScript supplies the bundled evaluator. See
 [custom evaluator integration](schema-evaluators.md). `validate` reports a failure

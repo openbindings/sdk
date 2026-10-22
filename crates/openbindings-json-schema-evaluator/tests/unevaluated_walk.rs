@@ -7,7 +7,7 @@
 //! changes either fact: the bug reproduces on the program the evaluator bundles,
 //! and the transformed program, whose subschemas sit under `not`, does not panic.
 use openbindings::*;
-use openbindings_json_schema_evaluator::DefaultEvaluator;
+use openbindings_json_schema_evaluator::{DefaultEvaluator, Limits};
 use serde::Deserialize;
 use serde_json::value::RawValue;
 
@@ -191,4 +191,25 @@ fn a_walk_too_deep_refuses_at_its_keyword() {
                 .unwrap(),
         ))
     );
+    // The refusal states the arithmetic and the setting to raise.
+    assert_eq!(
+        detail.message,
+        "this keyword's annotation walk weighs 273, more than the 105 its 256 KiB stack_bytes \
+         admits: a fifth of the stack is left to the caller, 99 KiB to the rest of preparation, \
+         and each unit takes 1 KiB; raise stack_bytes (stackBytes in TypeScript)"
+    );
+    // A host that gives preparation a larger stack admits the walk.
+    let larger = DefaultEvaluator::with_limits(Limits {
+        stack_bytes: 1024 * 1024,
+        ..Limits::default()
+    });
+    let input = operation.input().unwrap();
+    std::thread::scope(|scope| {
+        std::thread::Builder::new()
+            .stack_size(16 * 1024 * 1024)
+            .spawn_scoped(scope, || assert!(input.prepare(&larger).is_ok()))
+            .unwrap()
+            .join()
+            .unwrap()
+    });
 }

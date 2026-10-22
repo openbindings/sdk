@@ -65,10 +65,29 @@ pub(crate) struct Edge {
     pub(crate) walk: u32,
 }
 
-/// The contract's dynamic references would specialize more definitions than
-/// the bound admits.
+/// Why bundling refused.
 #[derive(Debug)]
-pub(crate) struct TooLarge;
+pub(crate) enum Refusal {
+    /// Dynamic specialization would grow the program by more than its budget.
+    Budget(Growth),
+    /// The projected program has an unexpected shape.
+    Shape,
+}
+/// What dynamic specialization held when it passed its budget: every bundled
+/// definition and dynamic context so far, as [`DEFINITION_BYTES`] and the rest
+/// estimate them, against the projected definitions' own estimate.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct Growth {
+    /// The bytes the program may grow by.
+    pub(crate) budget: usize,
+    /// The projected definitions' estimate.
+    pub(crate) projected: usize,
+    pub(crate) definitions: usize,
+    pub(crate) definition_bytes: usize,
+    pub(crate) contexts: usize,
+    pub(crate) entries: usize,
+    pub(crate) context_bytes: usize,
+}
 
 /// One projected resource, converted for the library.
 pub(crate) struct Resource {
@@ -78,15 +97,9 @@ pub(crate) struct Resource {
 
 /// How to bundle.
 pub(crate) struct Options {
-    /// The most bundled definitions dynamic specialization may produce.
-    pub(crate) max_definitions: usize,
-    /// The largest size the definitions dynamic specialization produces may
-    /// have beyond the projected program's own, counting each JSON value and
-    /// each byte of its strings and member names.
-    pub(crate) max_size: usize,
-    /// The most dynamic-scope entries the distinct contexts of dynamic
-    /// specialization may hold together.
-    pub(crate) max_context_entries: usize,
+    /// The bytes dynamic specialization may add to the projected program's
+    /// estimate.
+    pub(crate) program_bytes: usize,
     /// Put the SDK's work marker before every reference, so that each schema
     /// a reference enters charges evaluation work.
     pub(crate) markers: bool,
@@ -181,7 +194,7 @@ pub(crate) fn bundle(
     resources: Vec<Resource>,
     entry: &str,
     options: &Options,
-) -> Result<Bundle, TooLarge> {
+) -> Result<Bundle, Refusal> {
     let dynamic = resources.iter().any(|resource| {
         resource
             .definitions
@@ -271,28 +284,29 @@ struct Bundler {
     markers: bool,
 }
 impl Bundler {
-    fn add(&mut self, name: String, number: u32) -> u32 {
-        let index = u32::try_from(self.names.len()).expect("bounded definitions");
+    // The new definition's index; `None` past the most a `u32` numbers.
+    fn add(&mut self, name: String, number: u32) -> Option<u32> {
+        let index = u32::try_from(self.names.len()).ok()?;
         self.names.push(name);
         self.definitions.push(Definition {
             number,
             edges: Vec::new(),
         });
         self.out.push(Value::Bool(true));
-        index
+        Some(index)
     }
     // Without a dynamic anchor every definition keeps its projected name.
-    fn merge(&mut self, resources: Vec<Resource>, entry: &str) -> Result<u32, TooLarge> {
+    fn merge(&mut self, resources: Vec<Resource>, entry: &str) -> Result<u32, Refusal> {
         for resource in &resources {
             for name in resource.definitions.keys() {
-                let number = number(name).ok_or(TooLarge)?;
-                let index = self.add(name.clone(), number);
+                let number = number(name).ok_or(Refusal::Shape)?;
+                let index = self.add(name.clone(), number).ok_or(Refusal::Shape)?;
                 self.indices.insert(number, index);
             }
         }
         for resource in resources {
             for (name, mut schema) in resource.definitions {
-                let from = self.indices[&number(&name).ok_or(TooLarge)?];
+                let from = self.indices[&number(&name).ok_or(Refusal::Shape)?];
                 let indices = &self.indices;
                 let mut edges = Vec::new();
                 walk(
@@ -302,11 +316,13 @@ impl Bundler {
                     &mut |reference, _| {
                         // Definition names are unique across resources, so the
                         // reference keeps its fragment.
-                        let hash = reference.find('#').ok_or(TooLarge)?;
-                        let target = reference[hash..].strip_prefix("#/$defs/").ok_or(TooLarge)?;
+                        let hash = reference.find('#').ok_or(Refusal::Shape)?;
+                        let target = reference[hash..]
+                            .strip_prefix("#/$defs/")
+                            .ok_or(Refusal::Shape)?;
                         let to = *indices
-                            .get(&number(target).ok_or(TooLarge)?)
-                            .ok_or(TooLarge)?;
+                            .get(&number(target).ok_or(Refusal::Shape)?)
+                            .ok_or(Refusal::Shape)?;
                         reference.replace_range(..hash, "");
                         Ok(to)
                     },
@@ -316,12 +332,12 @@ impl Bundler {
                 self.out[from as usize] = schema;
             }
         }
-        let (_, fragment) = split(entry).ok_or(TooLarge)?;
-        let target = fragment.strip_prefix("/$defs/").ok_or(TooLarge)?;
+        let (_, fragment) = split(entry).ok_or(Refusal::Shape)?;
+        let target = fragment.strip_prefix("/$defs/").ok_or(Refusal::Shape)?;
         self.indices
-            .get(&number(target).ok_or(TooLarge)?)
+            .get(&number(target).ok_or(Refusal::Shape)?)
             .copied()
-            .ok_or(TooLarge)
+            .ok_or(Refusal::Shape)
     }
 }
 
@@ -365,14 +381,14 @@ impl Path {
 // edge. `resolve` writes a projected reference (and whether it is a
 // `$dynamicRef`) as the bundled reference, in place, and gives its target's
 // index.
-type Resolve<'a> = dyn FnMut(&mut String, bool) -> Result<u32, TooLarge> + 'a;
+type Resolve<'a> = dyn FnMut(&mut String, bool) -> Result<u32, Refusal> + 'a;
 fn walk(
     value: &mut Value,
     path: Path,
     markers: bool,
     resolve: &mut Resolve<'_>,
     edges: &mut Vec<Edge>,
-) -> Result<(), TooLarge> {
+) -> Result<(), Refusal> {
     let Value::Object(schema) = value else {
         return Ok(());
     };
@@ -427,7 +443,7 @@ pub(crate) fn edges(schema: &mut Value, resolve: &mut dyn FnMut(&str) -> Option<
         schema,
         Path::ROOT,
         false,
-        &mut |reference, _| resolve(reference).ok_or(TooLarge),
+        &mut |reference, _| resolve(reference).ok_or(Refusal::Shape),
         &mut edges,
     );
     edges
@@ -437,8 +453,9 @@ pub(crate) fn edges(schema: &mut Value, resolve: &mut dyn FnMut(&str) -> Option<
 // resource that declares it outermost on the evaluation path, if any. Only the
 // names some `$dynamicRef` looks up take part, and a context holds only the
 // names it assigns, sorted, so contexts take space in proportion to what they
-// record; their total is bounded, as are the definitions and JSON values
-// specialization produces.
+// record. The definitions and contexts specialization produces are charged
+// what the SDK holds for them, and together may pass the projected
+// definitions' own charge by at most the program budget.
 type Context = std::rc::Rc<[(u32, u32)]>;
 struct Specializer<'a> {
     resources: &'a [Resource],
@@ -449,29 +466,50 @@ struct Specializer<'a> {
     names: HashMap<&'a str, u32>,
     contexts: HashMap<Context, u32>,
     context_list: Vec<Context>,
-    context_entries: usize,
     // Bundled index by (resource, definition name, context).
     output: HashMap<(u32, &'a str, u32), u32>,
     queue: Vec<(u32, u32, &'a str, u32)>,
-    // Each projected definition's size, by (resource, definition name).
-    sizes: HashMap<(u32, &'a str), usize>,
-    size: usize,
-    max: usize,
-    max_size: usize,
-    max_context_entries: usize,
+    // Each projected definition's charge, by (resource, definition name).
+    charges: HashMap<(u32, &'a str), usize>,
+    growth: Growth,
 }
-// The size of `value` as the SDK writes it: one for each JSON value, itself
-// included, and one for each byte of its strings and member names.
-fn size(value: &Value) -> usize {
-    1 + match value {
+
+/// What the SDK holds for each bundled definition besides its schema's
+/// content: the schema's slot, its name, its references and its index entries.
+const DEFINITION_BYTES: usize = 160;
+/// What a JSON object's map takes before its members: serde_json allocates the
+/// first node of its map for eleven members.
+const OBJECT_BYTES: usize = 640;
+/// What each object member takes besides its name's bytes and its value's
+/// content: the name's string and the value's slot.
+const MEMBER_BYTES: usize = 56;
+/// What each array element takes besides its content: its slot.
+const ELEMENT_BYTES: usize = 32;
+/// What each dynamic context takes besides its entries: its shared list and
+/// its index entries.
+const CONTEXT_BYTES: usize = 64;
+/// What each dynamic-scope entry of a context takes.
+const ENTRY_BYTES: usize = 8;
+// The memory the SDK holds for `value`'s content, beyond the slot holding
+// `value`: a counting allocator measures ordinary projected definitions at most
+// a sixth below this estimate.
+fn content(value: &Value) -> usize {
+    match value {
         Value::String(text) => text.len(),
-        Value::Array(items) => items.iter().map(size).sum(),
-        Value::Object(members) => members
-            .iter()
-            .map(|(name, member)| name.len() + size(member))
-            .sum(),
+        Value::Array(items) => items.iter().map(|item| ELEMENT_BYTES + content(item)).sum(),
+        Value::Object(members) => {
+            OBJECT_BYTES
+                + members
+                    .iter()
+                    .map(|(name, member)| MEMBER_BYTES + name.len() + content(member))
+                    .sum::<usize>()
+        }
         _ => 0,
     }
+}
+// What a bundled definition holding `schema` is charged.
+fn definition_charge(schema: &Value) -> usize {
+    DEFINITION_BYTES.saturating_add(content(schema))
 }
 // The anchor names `value` looks up through `$dynamicRef` fragments.
 fn looked_up<'v>(value: &'v Value, out: &mut std::collections::HashSet<&'v str>) {
@@ -500,11 +538,12 @@ impl<'a> Specializer<'a> {
         let mut names = HashMap::new();
         let mut anchors = Vec::with_capacity(resources.len());
         let mut by_uri = HashMap::with_capacity(resources.len());
-        let projected: usize = resources
+        let projected = resources
             .iter()
             .flat_map(|resource| resource.definitions.values())
-            .map(size)
-            .sum();
+            .fold(0usize, |total, schema| {
+                total.saturating_add(definition_charge(schema))
+            });
         for (index, resource) in resources.iter().enumerate() {
             by_uri.insert(resource.uri.as_str(), index as u32);
             let mut declared = Vec::new();
@@ -528,28 +567,46 @@ impl<'a> Specializer<'a> {
             names,
             contexts: HashMap::new(),
             context_list: Vec::new(),
-            context_entries: 0,
             output: HashMap::new(),
             queue: Vec::new(),
-            sizes: HashMap::new(),
-            size: 0,
-            max: options.max_definitions,
-            // The projected program is admitted whatever its size; specialized
-            // copies beyond it are bounded.
-            max_size: options.max_size.saturating_add(projected),
-            max_context_entries: options.max_context_entries,
+            charges: HashMap::new(),
+            growth: Growth {
+                budget: options.program_bytes,
+                projected,
+                definitions: 0,
+                definition_bytes: 0,
+                contexts: 0,
+                entries: 0,
+                context_bytes: 0,
+            },
         }
     }
-    fn intern(&mut self, context: Vec<(u32, u32)>) -> Result<u32, TooLarge> {
+    // Whether what specialization holds passes the projected definitions'
+    // charge by more than the budget. The projected program is admitted
+    // whatever its size; specialized copies and contexts beyond it are bounded.
+    fn within_budget(&self) -> Result<(), Refusal> {
+        let growth = self.growth;
+        let held = growth.definition_bytes.saturating_add(growth.context_bytes);
+        if held > growth.projected.saturating_add(growth.budget) {
+            return Err(Refusal::Budget(growth));
+        }
+        Ok(())
+    }
+    fn intern(&mut self, context: Vec<(u32, u32)>) -> Result<u32, Refusal> {
         if let Some(&id) = self.contexts.get(context.as_slice()) {
             return Ok(id);
         }
-        self.context_entries += context.len().max(1);
-        if self.context_entries > self.max_context_entries {
-            return Err(TooLarge);
-        }
+        let entries = context.len();
+        self.growth.contexts += 1;
+        self.growth.entries = self.growth.entries.saturating_add(entries);
+        self.growth.context_bytes = self
+            .growth
+            .context_bytes
+            .saturating_add(CONTEXT_BYTES.saturating_add(entries.saturating_mul(ENTRY_BYTES)));
+        self.within_budget()?;
         let context: Context = context.into();
-        let id = self.context_list.len() as u32;
+        let id =
+            u32::try_from(self.context_list.len()).map_err(|_| Refusal::Budget(self.growth))?;
         self.context_list.push(context.clone());
         self.contexts.insert(context, id);
         Ok(id)
@@ -564,7 +621,7 @@ impl<'a> Specializer<'a> {
     }
     // The context after entering `resource`: each name it declares that no
     // resource entered earlier declares now resolves to it.
-    fn enter(&mut self, context: u32, resource: u32) -> Result<u32, TooLarge> {
+    fn enter(&mut self, context: u32, resource: u32) -> Result<u32, Refusal> {
         let declared = &self.anchors[resource as usize];
         if declared
             .iter()
@@ -587,27 +644,26 @@ impl<'a> Specializer<'a> {
         resource: u32,
         definition: &'a str,
         context: u32,
-    ) -> Result<u32, TooLarge> {
+    ) -> Result<u32, Refusal> {
         if let Some(&index) = self.output.get(&(resource, definition, context)) {
             return Ok(index);
         }
-        if self.output.len() >= self.max {
-            return Err(TooLarge);
-        }
-        let size = match self.sizes.get(&(resource, definition)) {
-            Some(&size) => size,
+        let charge = match self.charges.get(&(resource, definition)) {
+            Some(&charge) => charge,
             None => {
-                let size = size(&self.resources[resource as usize].definitions[definition]);
-                self.sizes.insert((resource, definition), size);
-                size
+                let charge =
+                    definition_charge(&self.resources[resource as usize].definitions[definition]);
+                self.charges.insert((resource, definition), charge);
+                charge
             }
         };
-        self.size = self.size.saturating_add(size);
-        if self.size > self.max_size {
-            return Err(TooLarge);
-        }
-        let number = number(definition).ok_or(TooLarge)?;
-        let index = bundler.add(format!("n{number}-{context}"), number);
+        self.growth.definitions += 1;
+        self.growth.definition_bytes = self.growth.definition_bytes.saturating_add(charge);
+        self.within_budget()?;
+        let number = number(definition).ok_or(Refusal::Shape)?;
+        let index = bundler
+            .add(format!("n{number}-{context}"), number)
+            .ok_or(Refusal::Budget(self.growth))?;
         self.output.insert((resource, definition, context), index);
         self.queue.push((index, resource, definition, context));
         Ok(index)
@@ -620,23 +676,23 @@ impl<'a> Specializer<'a> {
         from: u32,
         context: u32,
         dynamic: bool,
-    ) -> Result<u32, TooLarge> {
-        let (uri, fragment) = split(reference).ok_or(TooLarge)?;
+    ) -> Result<u32, Refusal> {
+        let (uri, fragment) = split(reference).ok_or(Refusal::Shape)?;
         let mut resource = if uri.is_empty() {
             from
         } else {
-            *self.by_uri.get(uri).ok_or(TooLarge)?
+            *self.by_uri.get(uri).ok_or(Refusal::Shape)?
         };
         let definition: &'a str = if let Some(definition) = fragment.strip_prefix("/$defs/") {
             let (name, _) = self.resources[resource as usize]
                 .definitions
                 .get_key_value(definition)
-                .ok_or(TooLarge)?;
+                .ok_or(Refusal::Shape)?;
             name.as_str()
         } else if dynamic {
             // The projection writes `<resource>#<name>` only where the
             // reference resolves to a dynamic anchor of that name.
-            let name = *self.names.get(fragment).ok_or(TooLarge)?;
+            let name = *self.names.get(fragment).ok_or(Refusal::Shape)?;
             if let Some(outer) = self.assigned(context, name) {
                 resource = outer;
             }
@@ -644,9 +700,9 @@ impl<'a> Specializer<'a> {
                 .iter()
                 .find(|&&(declared, _)| declared == name)
                 .map(|&(_, definition)| definition)
-                .ok_or(TooLarge)?
+                .ok_or(Refusal::Shape)?
         } else {
-            return Err(TooLarge);
+            return Err(Refusal::Shape);
         };
         let entered = if resource == from {
             context
@@ -655,10 +711,10 @@ impl<'a> Specializer<'a> {
         };
         self.index(bundler, resource, definition, entered)
     }
-    fn run(mut self, bundler: &mut Bundler, entry: &str) -> Result<u32, TooLarge> {
+    fn run(mut self, bundler: &mut Bundler, entry: &str) -> Result<u32, Refusal> {
         let start = self.intern(Vec::new())?;
-        let (uri, _) = split(entry).ok_or(TooLarge)?;
-        let entry_resource = *self.by_uri.get(uri).ok_or(TooLarge)?;
+        let (uri, _) = split(entry).ok_or(Refusal::Shape)?;
+        let entry_resource = *self.by_uri.get(uri).ok_or(Refusal::Shape)?;
         let start = self.enter(start, entry_resource)?;
         let entry = self.target(bundler, entry, entry_resource, start, false)?;
         while let Some((index, resource, definition, context)) = self.queue.pop() {

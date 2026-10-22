@@ -100,11 +100,14 @@ step, and stops a pass with `evaluation-work-limit` once it spends the cap; a
 element (`evaluation_budgets`). Preparing with a cap places a marker keyword
 before every reference, so a capped contract's validator is slightly larger.
 
-Evaluation depth is bounded before evaluation. Preparation derives from the
+Evaluation depth is bounded before evaluation, from the stack the host gives
+(`Limits::stack_bytes`, 256 KiB by default). Preparation derives from the
 bundled contract's references a bound on the schema objects an evaluation path
-can hold for a value of a given depth, and a value whose bound exceeds
-`evaluation_depth` (1,024) gets `evaluation-depth-limit` without being
-evaluated. The bound is the lesser of two: one from the reference graph's
+can hold for a value of a given depth, and a value whose bound exceeds the
+nesting the stack holds at 256 bytes for each schema evaluation (1,024 at the
+default) gets `evaluation-depth-limit` without being evaluated, with a message
+giving the deepest level the contract evaluates and the setting to raise. The
+bound is the lesser of two: one from the reference graph's
 strongly connected components, and one from its descents (a path holds at most
 the entry's same-instance run, then for each level of the value one descent
 and one same-instance run), so a long chain of descents admits shallow values.
@@ -123,20 +126,21 @@ model that. So a contract holding one is guarded as it evaluates: every read
 the library makes of a child instance already passes through the SDK's value
 adapter, which compares the stack address it runs at with the address the
 pass started at (each level of the value is such a read). A pass that has
-used more than 128 bytes per unit of `evaluation_depth`, 128 KiB at the
-default, stops with `evaluation-depth-limit`: from then on every read fails,
+used more than half of `stack_bytes`, 128 KiB at the default, stops with
+`evaluation-depth-limit`: from then on every read fails,
 so the library stops descending and its answer is discarded. The guard adds
 no schema keyword, so preparation is unchanged; each read pays an address
 comparison. Checking a 20,000-integer array took 131 µs instead of 100 µs, and
 a 100-level object 9.8 µs instead of 9.5 µs, against a contract holding an
 unevaluated keyword that does not apply to the value, compared with the same
-contract without it. At the default limit, release builds prepare 39
-recursive contract shapes, including both reviews' unevaluated chains, and
-check and explain their deepest admitted values on a 256 KiB thread
-(`evaluation_stack`); the deepest admitted range from 6 levels, for a
-30-reference walk at every level, to 340. Building an explanation takes about
-twice a check's stack per level, so explanations are built only within half
-the limit.
+contract without it. Release builds prepare 39 recursive contract shapes,
+including both reviews' unevaluated chains, and check and explain their deepest
+admitted values on threads of 192 KiB, 256 KiB and 1 MiB with the evaluator
+sized for each (`evaluation_stack`); at the default the deepest admitted range
+from 7 levels, for a 24-reference walk at every level, to 340. Building an
+explanation takes about twice a check's stack per level, so explanations are
+built only within half that nesting. The stack table below gives each host's
+margins.
 
 Evaluation time has no default bound. It grows with the schema and the value,
 and for some schemas exponentially: 30 levels of `anyOf` that each name the
@@ -308,58 +312,133 @@ harness for exact floors, confirmation and calibration policy.
 Preparation projects the contract, bundles its definitions into one resource and
 compiles that resource with the library once, so every reached schema compiles
 once, whatever paths reach it. A schema reached through a `$dynamicRef` compiles
-once for each dynamic context it is reached in; a contract that would specialize
-more than 100,000 schemas, add specialized copies holding more than 16,777,216
-units of JSON beyond the projected program (one for each JSON value and one for
-each byte of its strings and member names, so a 4,096-name `required` copied
-into 8,192 contexts counts as the 470 MB it is), or hold more than 4,000,000
-dynamic-scope entries across its distinct contexts refuses with
-`program-specialization-limit`. These count the SDK's own output; the library's
-compiled program for an admitted contract can be larger. A context holds only
-the anchor names some `$dynamicRef` looks up, and only those it assigns.
+once for each dynamic context it is reached in. Preparation estimates the memory
+the SDK holds for each specialized copy (160 bytes for the definition, 640 for
+each object's map, 56 for each member, 32 for each array element and a byte for
+each byte of its strings and member names) and for each context (64 bytes and 8
+for each dynamic-scope entry), and a contract whose copies and contexts would
+pass its projected schemas' own estimate by more than `Limits::program_bytes`
+(48 MiB by default) refuses with `program-specialization-limit`, whose message
+gives the counts and sizes and names the setting. A counting allocator measures
+cloned projected definitions at most a sixth below the estimate: 649 bytes for
+a lone `$ref` against 713, 650 for `{"type":"integer","minimum":0}` against
+770, and 151,092 for a 4,096-name `required` against 151,212. These count the
+SDK's own output; the library's compiled program for an admitted contract can
+be larger. A context holds only the anchor names some
+`$dynamicRef` looks up, and only those it assigns. The budget replaces three
+separate caps (100,000 specialized definitions, 16,777,216 units of copied
+JSON and 4,000,000 dynamic-scope entries), and its default keeps every outcome
+of the review corpora they were measured on. Those corpora bound it from both
+sides: 12 levels of fan-out whose 4,096 dynamic contexts need 44.8 MiB
+prepare, and a chain of 4,000 resources, each declaring and dynamically
+referencing its own anchor, whose contexts need 61.3 MiB refuses. One budget
+cannot keep every outcome the separate caps gave, since a contract's memory no
+longer depends on which structure holds it: the 2,048 contexts of 11 levels
+below, which the definition cap admitted, take more of the SDK's memory than
+the 4,000-resource chain the entry cap refused, and now refuse too.
+
+| Shape | Least `program_bytes` that prepares it | At the default |
+| --- | --- | --- |
+| 8 levels that each choose between two paths, one declaring that level's dynamic anchor (256 contexts) | 6.8 MiB | prepared |
+| The same with 11 levels (2,048 contexts) | 70.1 MiB | refused; prepared before |
+| The same with 13 levels and a 4,096-name `required` at the leaf | more than 1 GiB | refused |
+| The same with 17 levels | more than 1 GiB | refused |
+| A chain of 2,800 `$id` resources, each declaring and dynamically referencing its own anchor | 30.1 MiB | prepared |
+| The same with 4,000 resources | 61.3 MiB | refused |
+| The same with 8,000 resources | 244.7 MiB | refused |
+| 1,000 resources sharing one with `required` of 100,000 names, with a reachable dynamic anchor | under 1 KiB | prepared |
+
 Preparation has no work charge of its own. Core's projection refuses a contract
 reaching more than 100,000 schema positions (`schema-node-limit`), which bounds
-its time and memory. Within that bound, two library behaviors grow faster than
+its time and memory; that bound is core's, shared with its fixed document
+checks. Within it, two library behaviors grow faster than
 the contract. Each time the library defers a nested `$ref` target it copies
 every in-progress reference placeholder, so a long same-document reference chain
 prepares in time quadratic in its length. An `unevaluatedProperties` keyword
 walks the schemas it can reach once for each schema holding it, and compiles
 that walk by recursion, so preparation weighs each walk and refuses one that
-weighs more than 105 (`unevaluated-walk-limit`, at the keyword). A reference
+weighs more than `stack_bytes` admits (`unevaluated-walk-limit`, at the
+keyword): a fifth of the stack is left to the caller's frames, 99 KiB to the
+rest of preparation, and each unit of weight takes 1 KiB, so 105 at the default
+256 KiB, 54 at 192 KiB and 310 at 512 KiB. A reference
 weighs 4, each `allOf`, `anyOf` or `oneOf` on its path 5 more, each `if`,
 `then`, `else` or `dependentSchemas` 7 more, and reaching another holder 1 more,
 since the library compiles that holder's walk there, so each level of a walk
 weighs at least the KiB of stack it takes on every host measured (a `$ref` takes
 at most 3.8 KiB, an `allOf` level 12.2 KiB and a `then` or `dependentSchemas`
-level 13.3 KiB). That admits 26 direct `$ref`s (21 when every level also holds
-`unevaluatedProperties`), 8 levels of `allOf: [{"$ref": ...}]` inheritance (7),
-and 7 levels through `then`, `else` or `dependentSchemas` (6). The library also
-compiles up to eight `$ref` targets on the stack before it defers the next, and
-those it is compiling when it reaches the holder add up to 48 KiB. `walk_stack`
-prepares the longest walk of each kind below 0 to 40 levels of enclosing
-`properties` on a 256 KiB thread with a fifth of it already in use, so every
-host keeps at least that much headroom. Release builds with Rust 1.99.0 on
+level 13.3 KiB). The default admits 26 direct `$ref`s (21 when every level also
+holds `unevaluatedProperties`), 8 levels of `allOf: [{"$ref": ...}]` inheritance
+(7), and 7 levels through `then`, `else` or `dependentSchemas` (6). The library
+also compiles up to eight `$ref` targets on the stack before it defers the next,
+and those it is compiling when it reaches the holder add up to 48 KiB, which
+the 99 KiB holds together with preparation's other frames and the stack a
+Windows thread keeps for itself.
+
+### Stack
+
+`walk_stack` prepares the longest walk of each kind below 0 to 40 levels of
+enclosing `properties` on threads of 192 KiB, 256 KiB and 512 KiB, with a fifth
+of each already in use and the evaluator sized for it, so every host keeps that
+much headroom; one level more refuses. Release builds with Rust 1.99.0 on
 GitHub's hosted runners, 2026-10-21: the most stack that can already be in use
 on a 256 KiB thread when the longest admitted walk still prepares at its worst
 enclosing depth, giving each row's kind with the least to spare (the thread
-itself leaves 250 KiB usable on Linux, 226 KiB on Windows and 255.5 KiB on
+itself leaves 249.5 KiB usable on Linux, 225.5 KiB on Windows and 255.5 KiB on
 macOS):
 
 | Walk | Levels admitted | Linux x86_64 | Windows x86_64 | macOS arm64 |
 | --- | --- | --- | --- | --- |
-| `$ref` | 26 | 91.5 KiB, 36% | 58.0 KiB, 23% | 107.5 KiB, 42% |
-| `allOf`, `anyOf` or `oneOf` inheritance | 8 | 91.0 KiB, 36% | 57.0 KiB, 22% | 107.0 KiB, 42% |
-| `then` or `else` | 7 | 96.5 KiB, 38% | 62.0 KiB, 24% | 112.5 KiB, 44% |
-| `dependentSchemas` | 7 | 92.5 KiB, 36% | 59.0 KiB, 23% | 109.0 KiB, 43% |
-| A holder at every level | 21, 7 or 6 | 102.5 KiB, 40% | 69.0 KiB, 27% | 119.0 KiB, 46% |
+| `$ref` | 26 | 91.5 KiB, 36% | 57.0 KiB, 22% | 108.0 KiB, 42% |
+| `allOf`, `anyOf` or `oneOf` inheritance | 8 | 91.5 KiB, 36% | 57.0 KiB, 22% | 107.5 KiB, 42% |
+| `then` or `else` | 7 | 97.0 KiB, 38% | 61.5 KiB, 24% | 113.0 KiB, 44% |
+| `dependentSchemas` | 7 | 93.0 KiB, 36% | 58.5 KiB, 23% | 109.0 KiB, 43% |
+| A holder at every level | 21, 7 or 6 | 103.0 KiB, 40% | 69.0 KiB, 27% | 119.5 KiB, 47% |
 
-Subschemas written in place rather than referenced weigh less and keep more:
-11 levels of `allOf` and 9 of `then` or `dependentSchemas` are admitted, and
-keep at least 24% on Windows. `unevaluatedItems` walks take less stack than
-`unevaluatedProperties` walks of the same kind and keep at least 37%. The
-previous weighting, measured on macOS alone, admitted 16 levels of `allOf`
+The same measurement at each stack size, giving the kind with the least to
+spare; the walk limit and the direct `$ref`s it admits follow from the size:
+
+| `stack_bytes` and thread | Walk limit | `$ref`s | Linux x86_64 | Windows x86_64 | macOS arm64 |
+| --- | --- | --- | --- | --- | --- |
+| 128 KiB | 3 | 0 | no walk through a reference | no walk through a reference | no walk through a reference |
+| 192 KiB | 54 | 13 | 74.5 KiB, 39% | 40.5 KiB, 21% | 91.0 KiB, 47% |
+| 256 KiB | 105 | 26 | 91.5 KiB, 36% | 57.0 KiB, 22% | 107.5 KiB, 42% |
+| 384 KiB | 208 | 52 | 125.0 KiB, 33% | 87.5 KiB, 23% | 141.0 KiB, 37% |
+| 512 KiB | 310 | 77 | 163.5 KiB, 32% | 123.5 KiB, 24% | 179.0 KiB, 35% |
+| 1 MiB | 720 | 180 | 304.0 KiB, 30% | 254.5 KiB, 25% | 317.5 KiB, 31% |
+| 2 MiB | 1,539 | 384 | 589.0 KiB, 29% | 518.0 KiB, 25% | 598.5 KiB, 29% |
+
+The share falls toward about a quarter as the stack grows, because each unit's
+measured cost stays below the KiB it is charged and the 99 KiB matters less;
+it is least at small stacks on Windows, whose thread keeps about 30 KiB for
+itself. Evaluation, measured the same way from the top of the thread for the
+39 shapes `evaluation_stack` covers (those whose walk the size admits), gives the
+most stack that can already be in use when each shape's deepest admitted value
+is still checked and explained and one level more refused:
+
+| `stack_bytes` and thread | Nested evaluations | Shapes prepared | Linux x86_64 | Windows x86_64 | macOS arm64 |
+| --- | --- | --- | --- | --- | --- |
+| 128 KiB | 512 | 8 | 53.0 KiB, 41% | 13.5 KiB, 11% | 68.0 KiB, 53% |
+| 192 KiB | 768 | 19 | 87.0 KiB, 45% | 35.0 KiB, 18% | 97.0 KiB, 51% |
+| 256 KiB | 1,024 | 29 | 114.0 KiB, 45% | 58.5 KiB, 23% | 126.5 KiB, 49% |
+| 384 KiB | 1,536 | 32 | 174.0 KiB, 45% | 103.5 KiB, 27% | 185.0 KiB, 48% |
+| 512 KiB | 2,048 | 35 | 228.0 KiB, 45% | 150.0 KiB, 29% | 244.0 KiB, 48% |
+| 1 MiB | 4,096 | 39 | 460.0 KiB, 45% | 329.5 KiB, 32% | 479.0 KiB, 47% |
+| 2 MiB | 8,192 | 39 | 979.0 KiB, 48% | 692.5 KiB, 34% | 948.0 KiB, 46% |
+
+The derivations are qualified from 128 KiB to 2 MiB on these hosts; outside
+that range they follow the same arithmetic but are not measured. Subschemas
+written in place rather than referenced weigh less and keep more:
+11 levels of `allOf` and 9 of `then` or `dependentSchemas` are admitted at the
+default, and keep at least 24% on Windows. `unevaluatedItems` walks take less
+stack than `unevaluatedProperties` walks of the same kind and keep at least 37%.
+The previous weighting, measured on macOS alone, admitted 16 levels of `allOf`
 inheritance, which overflowed a 256 KiB thread on Linux. The stack guard bounds
-validation, not this compilation.
+validation, not this compilation. In the Wasm build, the stack the guard
+measures is the module's own 1 MiB stack, while the JavaScript engine's call
+stack bounds how deep the module's calls go: Node 22 checks and explains the
+deepest admitted values of the shapes probed at up to 512 KiB, and at 1 MiB a
+guarded contract's deepest admitted value overflowed the engine's stack, which
+the guard does not see.
 
 Release measurements on macOS arm64, Rust 1.99.0, 2026-10-20, against `b6ef531`
 (minimum of three preparations in one fresh process per shape; peak resident
@@ -397,10 +476,9 @@ admission limits and its 100,000 schema positions per contract; each pattern's
 bytes and translated form (`pattern_bytes`) and the forms kept for all of a
 contract's patterns together (`total_pattern_bytes`, 4 MiB); the memory the
 regex crate builds for all of a contract's compiled patterns together
-(`total_pattern_memory`, 64 MiB, below); and the definitions (100,000),
-JSON (16,777,216 units) and dynamic-scope entries (4,000,000) dynamic
-specialization produces. It does not estimate the memory of the library's
-compiled program, which grows with what the library compiles.
+(`total_pattern_memory`, 64 MiB, below); and the memory dynamic specialization
+adds to the program (`program_bytes`, 48 MiB). It does not estimate the memory
+of the library's compiled program, which grows with what the library compiles.
 `Limits::schema_resources` is a tighter cap an application can set. Measured by
 the same method:
 
@@ -409,14 +487,18 @@ the same method:
 | 99,990-resource `$id` chain (8 MB) | prepared, 8.0 s, 903 MB |
 | 99,990-link same-document chain (3.7 MB) | prepared, 9.1 s, 457 MB |
 | 100,000-link same-document chain | refused (`schema-node-limit`), 0.12 s, 119 MB |
-| 11 levels of two paths, one declaring that level's dynamic anchor, ending in a schema of 27 subschemas reached in 2,048 dynamic contexts | prepared, 0.71 s, 450 MB |
-| A chain of 2,800 `$id` resources, each declaring and dynamically referencing its own anchor | prepared, 0.26 s, 105 MB |
-| The same with 8,000 resources | refused (`program-specialization-limit`, contexts), 0.8 s, 166 MB |
-| 13 levels of a two-way `anyOf` over dynamic anchors, with a 4,096-name `required` at the leaf | refused (`program-specialization-limit`, JSON), 0.6 s, 150 MB |
+| 11 levels of two paths, one declaring that level's dynamic anchor, ending in a schema of 27 subschemas reached in 2,048 dynamic contexts | refused (`program-specialization-limit`) at the default; with `program_bytes` raised it prepares as before, 0.71 s, 450 MB |
+| A chain of 2,800 `$id` resources, each declaring and dynamically referencing its own anchor | prepared, 0.22 s, 122 MB |
+| The same with 8,000 resources | refused (`program-specialization-limit`), 0.83 s, 236 MB |
+| 13 levels of a two-way `anyOf` over dynamic anchors, with a 4,096-name `required` at the leaf | refused (`program-specialization-limit`), 0.04 s, 94 MB |
 | 1,000 holders of `unevaluatedProperties`, each inheriting a base of 4,000 properties | prepared, 0.34 s, 400 MB |
 
-The last row, and the 2,048-context row, are within every bound: the
-memory is the library's compiled program.
+The last row is within every bound: the memory is the library's compiled
+program, as it was for the 2,048-context row when it prepared. The four
+specialization rows were measured again on 2026-10-21 with `program_bytes` at
+its default, on reconstructions of the shapes: the 8,000-resource chain now
+refuses once its contexts' entries take the budget, about 6 million entries,
+where a cap of 4,000,000 entries stopped it sooner.
 
 `total_pattern_bytes` counts the forms the evaluator keeps, not the patterns.
 A form spells every set out (`\S` takes 191 bytes), so 380 `pattern` values of
@@ -506,7 +588,7 @@ value the run matcher matches it.
 A host that prepares schemas from
 untrusted parties should prepare them in an isolated worker or process with
 an operating-system memory limit, as it would with any JSON Schema library.
-Values checked against trusted schemas stay bounded by `evaluation_depth`
+Values checked against trusted schemas stay bounded by `stack_bytes`
 and, when the host sets one, `evaluation_steps`.
 
 ## Document validation

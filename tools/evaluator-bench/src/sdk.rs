@@ -6,9 +6,32 @@ use serde_json::{Value, json};
 use std::{collections::BTreeMap, sync::Arc};
 
 pub const ROOT: &str = "https://benchmark.invalid/root";
-#[derive(Clone, Default, Deserialize)]
-#[serde(transparent)]
+#[derive(Clone, Default)]
 pub struct Limits(openbindings_json_schema_evaluator::Limits);
+// Requests name the evaluator's limits as they stand, except that a nesting of
+// schema evaluations (`evaluation_depth`) is given as the stack that holds it,
+// at the 256 bytes each the evaluator documents for `stack_bytes`.
+impl<'de> Deserialize<'de> for Limits {
+    fn deserialize<D: serde::Deserializer<'de>>(input: D) -> Result<Self, D::Error> {
+        use serde::de::Error;
+        let mut request = serde_json::Map::<String, Value>::deserialize(input)?;
+        let depth = match request.remove("evaluation_depth") {
+            Some(depth) => Some(
+                depth
+                    .as_u64()
+                    .and_then(|depth| usize::try_from(depth).ok())
+                    .ok_or_else(|| D::Error::custom("evaluation_depth is a count"))?,
+            ),
+            None => None,
+        };
+        let mut limits: openbindings_json_schema_evaluator::Limits =
+            serde_json::from_value(Value::Object(request)).map_err(D::Error::custom)?;
+        if let Some(depth) = depth {
+            limits.stack_bytes = depth.saturating_mul(256);
+        }
+        Ok(Limits(limits))
+    }
+}
 // Reusable preparation inputs: the proof, one resource set and one evaluator.
 pub struct Context {
     document: Conformant<Document>,

@@ -74,11 +74,15 @@ of the path that reaches it, also through `$ref` cycles.
 The evaluator bounds what the SDK itself reads, writes and recurses through; it
 does not estimate the JSON Schema library's compiled memory. On by default:
 core's document admission limits and its 100,000 schema positions per contract;
-evaluation depth (1,024), bounded from the contract before a value is evaluated
-and, for a contract holding `unevaluatedProperties` or `unevaluatedItems`,
-guarded as it evaluates by the stack the pass has used (128 KiB at the default),
-so release builds prepare, check and explain the 39 recursive shapes the stack
-test covers on a 256 KiB thread; each pattern's bytes, form and nesting (1 MiB,
+the stack the host gives (`stack_bytes`, 256 KiB, `stackBytes` in TypeScript),
+from which the evaluator sizes evaluation depth (256 bytes for each nested
+schema evaluation, 1,024 at the default), bounded from the contract before a
+value is evaluated, the stack a pass of a contract holding
+`unevaluatedProperties` or `unevaluatedItems` may use as it evaluates (half,
+128 KiB at the default) and the unevaluated walk limit below, so release
+builds on Linux, macOS and Windows prepare, check and explain the 39 recursive
+shapes the stack test covers on threads of 192 KiB, 256 KiB and 1 MiB with the
+evaluator sized for each; each pattern's bytes, form and nesting (1 MiB,
 32 groups) and the forms kept for all of a contract's patterns together (4 MiB,
 `totalPatternBytes` in TypeScript); the regex crate's memory for all of a
 contract's compiled patterns together (`total_pattern_memory`, 64 MiB,
@@ -90,11 +94,14 @@ the rest, so small patterns beside a large one change its outcome only through
 their 48 KiB each: `^.{1,10000}$` compiles beside up to 743 small patterns and
 four such counted repetitions of about 13 MiB compile together, while 40
 refuse in about 0.2 s; the
-definitions, JSON and dynamic-scope entries dynamic specialization produces
-(`program-specialization-limit`); and an unevaluated keyword's annotation
-walk, which the library compiles by recursion, weighed by the kind of each
-reference (`unevaluated-walk-limit`: 26 `$ref`s, 8 levels of `allOf`
-inheritance, 7 through `then` or `dependentSchemas`). Off unless an
+memory dynamic specialization adds to a contract's program, estimated for the
+SDK's own copies and dynamic contexts (`program_bytes`, 48 MiB, `programBytes`
+in TypeScript, `program-specialization-limit`); and an unevaluated keyword's
+annotation walk, which the library compiles by recursion, weighed by the kind
+of each reference against what `stack_bytes` admits with a fifth of it left to
+the caller (`unevaluated-walk-limit`: at the default 26 `$ref`s, 8 levels of
+`allOf` inheritance, 7 through `then` or `dependentSchemas`). Each of these
+refusals states its arithmetic and names the setting to raise. Off unless an
 application sets them, since they would only bound time: an evaluation work cap
 (`evaluation_steps`), without which time can grow exponentially with some
 schemas, and a cap on the schema resources one contract may reach
@@ -104,7 +111,7 @@ holders of `unevaluatedProperties` that each inherit 4,000 properties peak at
 400 MB), as with any JSON Schema library; a host preparing schemas from
 untrusted parties should do so in an isolated worker or process with an
 operating-system memory limit. Values
-checked against trusted schemas stay bounded by depth and, when set,
+checked against trusted schemas stay bounded by `stack_bytes` and, when set,
 `evaluation_steps`. A prepared value contract can remain undecidable for a
 particular value.
 
@@ -132,7 +139,7 @@ force; these are measured examples, not latency guarantees. See
 Each value check chooses its detail. `validate` reports a failure without
 problems; `explain` reports the library's first error, an explicit choice that
 allocates in proportion to input and is made only for values within half the
-depth limit. The explained problem names the failing node by exact pointer from
+nesting `stack_bytes` admits. The explained problem names the failing node by exact pointer from
 the value and the failing keyword by resource and exact pointer; the value,
 document or resource set finds line and column on demand. A prepared contract
 keeps only the original locations of the schemas it compiled for explanations,

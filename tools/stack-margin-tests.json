@@ -21,17 +21,17 @@
       "source": "crates/openbindings-json-schema-evaluator/tests/evaluation_stack.rs",
       "workspace": true,
       "names": [
-        "the_default_depth_admits_only_values_a_small_stack_evaluates"
+        "each_stack_admits_only_values_it_evaluates"
       ],
-      "reason": "Prepares recursive contracts through every applicator family, unevaluated keywords included, and checks and explains values as deep as the default evaluation depth admits, on a 256 KiB thread stack. Unoptimized evaluation frames exceed this margin, so debug runs ignore it on every host and tools/verify.py runs it in release builds."
+      "reason": "Prepares recursive contracts through every applicator family, unevaluated keywords included, and checks and explains values as deep as the evaluator admits on thread stacks of 192 KiB, 256 KiB and 1 MiB, with stack_bytes set to each. Unoptimized evaluation frames exceed this margin, so debug runs ignore it on every host and tools/verify.py runs it in release builds."
     },
     {
       "source": "crates/openbindings-json-schema-evaluator/tests/walk_stack.rs",
       "workspace": true,
       "names": [
-        "the_longest_admitted_walks_prepare_on_a_small_stack"
+        "the_longest_admitted_walks_prepare_on_a_stack_of_the_size_given"
       ],
-      "reason": "Prepares the longest unevaluated annotation walk of each kind the walk limit admits, below enclosing schemas, on a 256 KiB thread stack with a fifth of it already in use. Release builds still prepare each with up to 57 KiB already in use on Windows, 91 KiB on Linux and 107 KiB on macOS; unoptimized compilation frames exceed this margin, so debug runs ignore it on every host and tools/verify.py runs it in release builds."
+      "reason": "Prepares the longest unevaluated annotation walk of each kind the walk limit admits, below enclosing schemas, on thread stacks of 192 KiB, 256 KiB and 512 KiB with stack_bytes set to each and a fifth of each already in use. Release builds still prepare each at 256 KiB with up to 57 KiB already in use on Windows, 91.5 KiB on Linux and 107.5 KiB on macOS; unoptimized compilation frames exceed this margin, so debug runs ignore it on every host and tools/verify.py runs it in release builds."
     }
   ]
 }
