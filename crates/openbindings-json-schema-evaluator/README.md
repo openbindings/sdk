@@ -228,13 +228,13 @@ prepare them in an isolated worker or process with an operating-system memory
 limit. Values checked against trusted schemas stay bounded by
 `stack_bytes` and, when the host sets one, by `evaluation_steps`.
 
-Two further cases give no verdict whatever `Limits` sets. Exact `multipleOf` divides
-within a fixed arithmetic bound: when the value or the divisor has more than
-4,096 significant digits, or an exponent beyond ±20,000 once the trailing
-zeros of its digits are counted in it, a division the answer needs gives no
-verdict (`LimitExceeded`, `numeric-arithmetic-limit`). Other numeric keywords
-compare exactly at any size. And values keep unpaired UTF-16 units: keywords
-that compare values exactly, such as `const`, `enum`, `required` and
+Two further cases give no verdict whatever `Limits` sets. Exact `multipleOf`
+divides within a fixed arithmetic bound: when the value or the divisor has
+more than 4,096 significant digits, or an exponent beyond ±20,000 once the
+trailing zeros of its digits are counted in it, a division the answer needs
+gives no verdict (`LimitExceeded`, `numeric-arithmetic-limit`). Other numeric
+keywords compare exactly at any size. And values keep unpaired UTF-16 units:
+keywords that compare values exactly, such as `const`, `enum`, `required` and
 `uniqueItems`, decide them, while a keyword that reads a string or member name
 as Unicode text, such as `minLength`, `maxLength`, `pattern`, `properties`,
 `patternProperties` or `propertyNames`, gives no verdict
