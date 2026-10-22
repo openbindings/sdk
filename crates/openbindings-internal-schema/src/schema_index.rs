@@ -59,12 +59,14 @@ impl std::fmt::Debug for SchemaIndex {
     }
 }
 // How the walk assigns bases: none, a supplied resource's resolved strings, or
-// a document's compared identifiers. Each resource's base is listed when the
-// walk meets its `$id`, so by increasing resource number.
+// a document's compared identifiers. A supplied resource's base is listed when
+// the walk meets its `$id`, so by increasing resource number; a document's
+// resource has the handle of its compared identifier, if any, which the walk
+// lists with the declaring schema.
 enum Bases<'a> {
     None,
     Ordinary(Vec<(u32, Option<Arc<str>>)>, Arc<str>),
-    Compared(Vec<(u32, Option<u32>)>, Box<Identifiers<'a>>),
+    Compared(Box<Identifiers<'a>>),
 }
 fn base_of<T>(bases: &[(u32, Option<T>)], resource: u32) -> Option<&T> {
     let at = bases
@@ -173,7 +175,7 @@ impl SchemaIndex {
         Self::build_roots(
             document,
             schemas.chain(operations),
-            Bases::Compared(Vec::new(), Box::new(Identifiers::new())),
+            Bases::Compared(Box::new(Identifiers::new())),
         )
     }
     pub fn supplied(value: &JsonValue, retrieval_uri: &str) -> Self {
@@ -240,17 +242,17 @@ impl SchemaIndex {
                             }
                             of.push((resource, base));
                         }
-                        Bases::Compared(of, ids) => {
+                        Bases::Compared(ids) => {
+                            // Resource `r` begins at schema `r - 1`; the handles
+                            // of compared declarations follow the walk.
                             let parent_base = match parent_resource {
                                 0 => None,
-                                r => base_of(of, r).copied(),
+                                r => compared.binary_search(&(r - 1)).ok().map(|h| h as u32),
                             };
                             // Each compared declaration's handle is the next.
-                            let base = text.and_then(|s| ids.compared(parent_base, s));
-                            if base.is_some() {
+                            if text.and_then(|s| ids.compared(parent_base, s)).is_some() {
                                 compared.push(index);
                             }
-                            of.push((resource, base));
                         }
                     }
                 }
@@ -287,8 +289,7 @@ impl SchemaIndex {
                 .then_with(|| out.anchor_name(a).cmp(out.anchor_name(b)))
         });
         out.anchors = anchors;
-        if let Bases::Compared(of, ids) = bases {
-            drop(of);
+        if let Bases::Compared(ids) = bases {
             out.identifiers = ids
                 .duplicates()
                 .into_iter()

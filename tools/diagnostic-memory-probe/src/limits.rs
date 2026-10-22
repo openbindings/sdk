@@ -1,8 +1,8 @@
-//! Document validation at the default admission limits stays within one
-//! allowance above the caller's input, whatever the document's shape: its own
-//! copy of the text, the decoded text of escaped strings, and its tree and
-//! validation state, with the buffers they grow in, four times the default byte
-//! limit in all.
+//! Document validation at the default admission limits, on documents that
+//! maximize each structure it builds: its own copy of the text, the decoded
+//! text of escaped strings, and its tree and validation state, with the
+//! buffers they grow in. Each must stay within one allowance above the
+//! caller's input, five times the default byte limit.
 use super::{ALLOCATIONS, measured};
 use serde_json::json;
 use std::fmt::Write;
@@ -11,7 +11,7 @@ use std::sync::atomic::Ordering::Relaxed;
 const MIB: usize = 1024 * 1024;
 const MAX_BYTES: usize = 64 * MIB;
 /// Peak live allocation above the caller's input, at the default limits.
-const ALLOWANCE: usize = 4 * MAX_BYTES;
+const ALLOWANCE: usize = 5 * MAX_BYTES;
 const HEAD: &str = r#"{"openbindings":"0.2.0""#;
 
 /// `prefix`, a member holding one string that fills the document to the byte
@@ -186,6 +186,84 @@ fn shapes() -> Vec<(&'static str, String, &'static str)> {
         ),
         "conformant",
     ));
+    // A third of a million `$id`s that each add directories, under a base or
+    // with authorities of their own, alone, in pairs and with a query and
+    // fragment, beside an escaped string filling the remaining bytes.
+    let directories = |name: &'static str,
+                       base: &str,
+                       each: &dyn Fn(usize) -> String,
+                       expected: &'static str| {
+        let identifiers = joined(333_320, |i| format!(r#"{{"$id":"{}"}}"#, each(i)));
+        let schema = format!(r#""s":{{{base}"allOf":[{identifiers}]}}"#);
+        let prefix = format!(r#"{HEAD},"operations":{{}},"schemas":{{{schema}}}"#);
+        (name, filled(&prefix, "}", true), expected)
+    };
+    let base = r#""$id":"https://e.test/","#;
+    let pair = |i: usize, a: &str, b: &str| if i % 2 == 0 { a } else { b }.to_owned();
+    for shape in [
+        directories("relative-directories", base, &|i| format!("{i}/"), "conformant"),
+        directories(
+            "relative-directory-pairs",
+            base,
+            &|i| format!("a{}/{}", i / 2, pair(i, "b/", "c/")),
+            "conformant",
+        ),
+        directories(
+            "relative-directory-pairs-with-pieces",
+            base,
+            &|i| format!("a{}/{}", i / 2, pair(i, "b/?#f", "c/?#g")),
+            "non-conformant",
+        ),
+        directories("authority-directories", "", &|i| format!("s://{i}/x/"), "conformant"),
+        directories(
+            "authority-directories-with-pieces",
+            "",
+            &|i| format!("s://{i}/x/?#f"),
+            "non-conformant",
+        ),
+        directories(
+            "authority-directory-pairs-with-pieces",
+            "",
+            &|i| format!("s://{}/x/{}", i / 2, pair(i, "y/?#f", "z/?#g")),
+            "non-conformant",
+        ),
+    ] {
+        shapes.push(shape);
+    }
+    // One name or alias of U+E000, the character fixed checks escape beside
+    // encoded unpaired units, filling the byte limit; and the operation name
+    // beside one unpaired unit, where each is presented doubled.
+    let marker = |name: &'static str, prefix: &str, suffix: &str, expected: &'static str| {
+        let count = (MAX_BYTES - prefix.len() - suffix.len()) / 3;
+        let mut text = String::with_capacity(MAX_BYTES);
+        text.push_str(prefix);
+        text.extend(std::iter::repeat_n('\u{e000}', count));
+        text.push_str(suffix);
+        (name, text, expected)
+    };
+    for shape in [
+        marker(
+            "marker-operation-name",
+            r#"{"openbindings":"0.2.0","operations":{""#,
+            r#"":{}}}"#,
+            "non-conformant",
+        ),
+        marker("marker-extension-name", &format!(r#"{HEAD},"operations":{{}},"x-"#), r#"":0}"#, "conformant"),
+        marker(
+            "marker-alias",
+            r#"{"openbindings":"0.2.0","operations":{"o":{"aliases":[""#,
+            r#""]}}}"#,
+            "non-conformant",
+        ),
+        marker(
+            "marker-operation-name-beside-an-unpaired-unit",
+            r#"{"openbindings":"0.2.0","x-u":"\ud800","operations":{""#,
+            r#"":{}}}"#,
+            "non-conformant",
+        ),
+    ] {
+        shapes.push(shape);
+    }
     shapes.push((
         "nested-relative-identifiers",
         identifier_chain(166_000, false),

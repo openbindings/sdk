@@ -42,7 +42,11 @@ pub fn member_at(value: crate::JsonRef<'_>, index: usize) -> Option<crate::JsonM
 
 // Fixed schemas only test ASCII patterns, ASCII constants and nonempty strings.
 // Escape the marker itself and encode unpaired units, retaining every UTF-16 unit.
-// This presentation is injective; it is not a Unicode replacement operation.
+// This presentation is injective; it is not a Unicode replacement operation. In a
+// document holding no unpaired unit, no string is encoded, so every string is
+// presented as itself, which is injective already: doubling the marker there
+// changes no fixed schema's verdict, since none tests length beyond nonempty or
+// matches the marker except where any character matches.
 const STRING_MARKER: char = '\u{e000}';
 #[derive(Clone, Copy, Default)]
 struct StringAccess {
@@ -92,15 +96,30 @@ fn interpreted_unpaired() {
 }
 fn present_string(arena: &Arena, id: Id) -> Option<Cow<'_, str>> {
     if let Some(text) = arena.string(id) {
-        if !text.contains(STRING_MARKER) {
+        if arena.unpaired.is_empty() || !text.contains(STRING_MARKER) {
             return Some(Cow::Borrowed(text));
         }
-        return Some(Cow::Owned(
-            text.replace(STRING_MARKER, &STRING_MARKER.to_string().repeat(2)),
-        ));
+        let markers = text.matches(STRING_MARKER).count();
+        let mut doubled = String::with_capacity(text.len() + markers * STRING_MARKER.len_utf8());
+        for (at, piece) in text.split(STRING_MARKER).enumerate() {
+            if at > 0 {
+                doubled.push(STRING_MARKER);
+                doubled.push(STRING_MARKER);
+            }
+            doubled.push_str(piece);
+        }
+        return Some(Cow::Owned(doubled));
     }
-    let units = arena.units(id)?;
-    let mut text = String::new();
+    let units = arena.unpaired_units(id)?;
+    // Sized first, so the presentation is written once.
+    let size = char::decode_utf16(units.clone())
+        .map(|unit| match unit {
+            Ok(STRING_MARKER) => 2 * STRING_MARKER.len_utf8(),
+            Ok(c) => c.len_utf8(),
+            Err(_) => STRING_MARKER.len_utf8() + 5,
+        })
+        .sum();
+    let mut text = String::with_capacity(size);
     for unit in char::decode_utf16(units) {
         match unit {
             Ok(c) => {
@@ -154,15 +173,14 @@ impl std::fmt::Debug for View<'_> {
 impl Json for FlatJson {
     type Node<'a> = View<'a>;
     type PreparedKey = String;
-    type StringBuffer = String;
+    // A property name is a plain string node over the name's own text.
+    type StringBuffer = ();
     const KEYS_PER_LOOKUP: usize = 1;
     fn prepare_key(key: &str) -> String {
         key.to_owned()
     }
-    fn with_string_node<T>(buffer: &mut String, text: &str, f: impl FnOnce(View<'_>) -> T) -> T {
-        buffer.clear();
-        buffer.push_str(text);
-        f(View::Text(buffer))
+    fn with_string_node<T>((): &mut (), text: &str, f: impl FnOnce(View<'_>) -> T) -> T {
+        f(View::Text(text))
     }
 }
 pub struct Number<'a>(&'a str);
@@ -993,14 +1011,23 @@ pub fn equals(left: View<'_>, right: View<'_>) -> bool {
                 let matched = if let Some(key) = items.0.string(name) {
                     other.get(&key.to_owned())
                 } else {
-                    let key = items.0.units(name).unwrap();
+                    let key = items
+                        .0
+                        .unpaired_units(name)
+                        .expect("a name without scalar text");
                     let mut matched = None;
                     for &candidate in other.2 {
                         let candidate = candidate as usize;
                         if !charge(1) {
                             return false;
                         }
-                        if other.0.units(candidate).as_deref() == Some(&key) {
+                        // A scalar name's units are never those of one holding
+                        // an unpaired unit.
+                        if other
+                            .0
+                            .unpaired_units(candidate)
+                            .is_some_and(|units| units.eq(key.clone()))
+                        {
                             matched = Some(View::Stored(other.0, candidate + 1));
                             break;
                         }
@@ -1536,6 +1563,26 @@ mod tests {
                 assert_eq!(pointer_size(value, size - 1), None);
             }
         }
+    }
+
+    #[test]
+    fn fixed_strings_hold_no_copy_unless_unpaired_units_need_the_escape() {
+        // Without an unpaired unit no string is encoded, so the marker needs no
+        // escape and every string is read in place; beside one, the marker is
+        // doubled so that no string reads like an encoded unit.
+        let marker = '\u{e000}';
+        let plain = crate::JsonValue::parse(format!(r#"["{marker}a{marker}","b"]"#)).unwrap();
+        let first = plain.view().element(0).unwrap();
+        assert!(
+            matches!(fixed_string(first), Some(Cow::Borrowed(text)) if text == format!("{marker}a{marker}"))
+        );
+        let unpaired =
+            crate::JsonValue::parse(format!(r#"["{marker}a{marker}","\ud800"]"#)).unwrap();
+        let [first, second] = [0, 1].map(|at| unpaired.view().element(at).unwrap());
+        assert!(
+            matches!(fixed_string(first), Some(Cow::Owned(text)) if text == format!("{marker}{marker}a{marker}{marker}"))
+        );
+        assert_eq!(fixed_string(second).unwrap(), format!("{marker}d800;"));
     }
 
     #[test]

@@ -26,29 +26,39 @@ const ROOT: u32 = 0;
 const SLASH: u32 = 1;
 const AUTH: u32 = 2;
 
-/// Some `$id` text, or text copied out of one.
-#[derive(Debug)]
-enum Source<'a> {
+/// Text of a directory: a span of one `$id`'s text, or of the text copied out
+/// of `$id`s whose removed dot segments separate the segments they write.
+#[derive(Clone, Copy, Debug)]
+enum Label<'a> {
     Borrowed(&'a str),
-    Owned(String),
+    Copied { start: usize, end: usize },
+}
+impl<'a> Label<'a> {
+    fn sub(self, start: usize, end: usize) -> Self {
+        match self {
+            Self::Borrowed(text) => Self::Borrowed(&text[start..end]),
+            Self::Copied { start: at, .. } => Self::Copied {
+                start: at + start,
+                end: at + end,
+            },
+        }
+    }
 }
 #[derive(Clone, Copy, Debug)]
-struct Node {
+struct Node<'a> {
     parent: u32,
     /// The directory a walk up from here stops at: `ROOT` for a path without
     /// a leading `/`, `SLASH` for one without an authority, and otherwise the
     /// authority's directory, `AUTH`'s child.
     top: u32,
-    /// The label: segments after the parent's string, `/` between them and
-    /// implied after the last. A span of `source`.
-    source: u32,
-    start: usize,
-    end: usize,
     /// Segments from the root.
     depth: usize,
-    /// The keyed hash of the label's first segment, which keys this node
-    /// among its parent's children.
+    /// The keyed hash of the parent and the label's first segment, which
+    /// finds this node among its parent's children.
     key: u64,
+    /// The segments after the parent's string, `/` between them and implied
+    /// after the last.
+    label: Label<'a>,
 }
 #[derive(Clone, Copy, Debug)]
 struct Leaf<'a> {
@@ -62,8 +72,8 @@ struct Leaf<'a> {
     /// segment.
     authority: u32,
 }
-/// The children of one parent that share a first-segment hash: one, or a
-/// list in `collisions`.
+/// The children whose parent and first segment share a hash: one, or a list
+/// in `collisions`.
 #[derive(Clone, Copy, Debug)]
 enum Bucket {
     One(u32),
@@ -72,9 +82,10 @@ enum Bucket {
 
 #[derive(Debug)]
 pub(crate) struct Identifiers<'a> {
-    sources: Vec<Source<'a>>,
-    nodes: Vec<Node>,
-    children: HashMap<(u32, u64), Bucket>,
+    nodes: Vec<Node<'a>>,
+    /// The copied labels' text.
+    copied: String,
+    children: HashMap<u64, Bucket>,
     collisions: Vec<Vec<u32>>,
     hasher: RandomState,
     /// Schemes, interned.
@@ -84,7 +95,9 @@ pub(crate) struct Identifiers<'a> {
     /// that base's.
     pieces: Vec<&'a str>,
     leaves: Vec<Leaf<'a>>,
-    authority_valid: HashMap<u32, bool>,
+    /// The authorities' directories whose authority does not parse as one
+    /// when read back.
+    invalid_authorities: HashSet<u32>,
 }
 
 /// Where the next own segment hangs: dot-segment removal's output is this
@@ -114,27 +127,30 @@ struct Walk<'a> {
     /// own segments ends in.
     authority: &'a str,
     count: usize,
-    /// The own segments: a span of `own`, or a copy once removed dot segments
-    /// separate them.
+    /// The own segments: a span of `own`, or, once removed dot segments
+    /// separate them, a copy at the end of the copied labels' text, from
+    /// `base`.
     start: usize,
     end: usize,
-    copy: Option<String>,
+    copy: String,
+    base: usize,
     copied: bool,
     /// The last own segment written, while it is the output's.
     last: Option<&'a str>,
 }
 impl<'a> Walk<'a> {
-    fn new(own: &'a str, x: Pos, limit: usize, rootless: bool, authority: &'a str) -> Self {
+    fn new(own: &'a str, x: Pos, authority: &'a str, copy: String) -> Self {
         Self {
             own,
             x,
-            limit,
-            rootless,
+            limit: 0,
+            rootless: false,
             authority,
             count: 0,
             start: 0,
             end: 0,
-            copy: None,
+            base: copy.len(),
+            copy,
             copied: false,
             last: None,
         }
@@ -148,24 +164,18 @@ impl<'a> Walk<'a> {
         if self.count == 0 {
             let at = self.offset(segment);
             (self.start, self.end, self.copied) = (at, at + segment.len(), false);
+            self.copy.truncate(self.base);
         } else if self.copied {
-            let copy = self.copy.as_mut().expect("a copy");
-            copy.push('/');
-            copy.push_str(segment);
+            self.copy.push('/');
+            self.copy.push_str(segment);
         } else if self.own.as_bytes().get(self.end) == Some(&b'/')
             && (segment.is_empty() || self.offset(segment) == self.end + 1)
         {
             self.end += 1 + segment.len();
         } else {
-            // The output never outgrows the path it came from, which holds a
-            // `/` before every segment pushed.
-            let copy = self
-                .copy
-                .get_or_insert_with(|| String::with_capacity(self.own.len() + 1));
-            copy.clear();
-            copy.push_str(&self.own[self.start..self.end]);
-            copy.push('/');
-            copy.push_str(segment);
+            self.copy.push_str(&self.own[self.start..self.end]);
+            self.copy.push('/');
+            self.copy.push_str(segment);
             self.copied = true;
         }
         self.count += 1;
@@ -203,8 +213,8 @@ impl<'a> Walk<'a> {
             _ => {
                 self.count -= 1;
                 if self.copied {
-                    let copy = self.copy.as_mut().expect("a copy");
-                    copy.truncate(copy.rfind('/').expect("two segments"));
+                    let at = self.copy[self.base..].rfind('/').expect("two segments");
+                    self.copy.truncate(self.base + at);
                 } else {
                     let run = &self.own[self.start..self.end];
                     self.end = self.start + run.rfind('/').expect("two segments");
@@ -212,12 +222,12 @@ impl<'a> Walk<'a> {
             }
         }
     }
-    /// The own segments' text.
-    fn run(&self) -> &str {
+    /// The length of the own segments' text.
+    fn run_len(&self) -> usize {
         if self.copied {
-            self.copy.as_deref().expect("a copy")
+            self.copy.len() - self.base
         } else {
-            &self.own[self.start..self.end]
+            self.end - self.start
         }
     }
 }
@@ -225,16 +235,14 @@ impl<'a> Walk<'a> {
 impl<'a> Identifiers<'a> {
     pub fn new() -> Self {
         let mut ids = Self {
-            sources: vec![Source::Borrowed("")],
             nodes: vec![Node {
                 parent: NONE,
                 top: ROOT,
-                source: 0,
-                start: 0,
-                end: 0,
                 depth: 0,
                 key: 0,
+                label: Label::Borrowed(""),
             }],
+            copied: String::new(),
             children: HashMap::new(),
             collisions: Vec::new(),
             hasher: RandomState::new(),
@@ -242,21 +250,20 @@ impl<'a> Identifiers<'a> {
             scheme_ids: HashMap::new(),
             pieces: Vec::new(),
             leaves: Vec::new(),
-            authority_valid: HashMap::new(),
+            invalid_authorities: HashSet::new(),
         };
-        assert_eq!(ids.add_node(ROOT, 0, 0, 0), SLASH);
-        assert_eq!(ids.add_node(SLASH, 0, 0, 0), AUTH);
+        assert_eq!(ids.add_node(ROOT, Label::Borrowed("")), SLASH);
+        assert_eq!(ids.add_node(SLASH, Label::Borrowed("")), AUTH);
         ids
     }
-    fn source(&self, source: u32) -> &str {
-        match &self.sources[source as usize] {
-            Source::Borrowed(text) => text,
-            Source::Owned(text) => text,
+    fn text(&self, label: Label<'a>) -> &str {
+        match label {
+            Label::Borrowed(text) => text,
+            Label::Copied { start, end } => &self.copied[start..end],
         }
     }
     fn label(&self, node: u32) -> &str {
-        let node = &self.nodes[node as usize];
-        &self.source(node.source)[node.start..node.end]
+        self.text(self.nodes[node as usize].label)
     }
     fn segments(&self, node: u32) -> usize {
         let at = &self.nodes[node as usize];
@@ -277,24 +284,28 @@ impl<'a> Identifiers<'a> {
     fn piece_text(&self, piece: u32) -> Option<&'a str> {
         (piece != NONE).then(|| self.pieces[piece as usize])
     }
-    fn candidates(&self, parent: u32, key: u64) -> &[u32] {
-        match self.children.get(&(parent, key)) {
+    fn candidates(&self, key: u64) -> &[u32] {
+        match self.children.get(&key) {
             None => &[],
             Some(Bucket::One(child)) => std::slice::from_ref(child),
             Some(&Bucket::Many(list)) => &self.collisions[list as usize],
         }
     }
+    fn key(&self, parent: u32, segment: &str) -> u64 {
+        self.hasher.hash_one((parent, segment))
+    }
     /// The child of `parent` whose label begins with the segment `segment`.
     fn child(&self, parent: u32, segment: &str) -> Option<u32> {
-        let key = self.hasher.hash_one(segment);
-        self.candidates(parent, key).iter().copied().find(|&child| {
+        let key = self.key(parent, segment);
+        self.candidates(key).iter().copied().find(|&child| {
             let label = self.label(child).as_bytes();
-            label.starts_with(segment.as_bytes())
+            self.nodes[child as usize].parent == parent
+                && label.starts_with(segment.as_bytes())
                 && label.get(segment.len()).is_none_or(|&c| c == b'/')
         })
     }
-    fn insert_child(&mut self, parent: u32, key: u64, child: u32) {
-        let bucket = match self.children.get(&(parent, key)) {
+    fn insert_child(&mut self, key: u64, child: u32) {
+        let bucket = match self.children.get(&key) {
             None => Bucket::One(child),
             Some(&Bucket::One(first)) => {
                 let list = u32::try_from(self.collisions.len())
@@ -307,16 +318,15 @@ impl<'a> Identifiers<'a> {
                 return;
             }
         };
-        self.children.insert((parent, key), bucket);
+        self.children.insert(key, bucket);
     }
-    /// A new child of `parent` labelled `source[start..end]`.
-    fn add_node(&mut self, parent: u32, source: u32, start: usize, end: usize) -> u32 {
+    /// A new child of `parent` labelled `label`.
+    fn add_node(&mut self, parent: u32, label: Label<'a>) -> u32 {
         let id =
             u32::try_from(self.nodes.len()).expect("directories are bounded by the node count");
-        let label = &self.source(source)[start..end];
-        let first = &label[..label.find('/').unwrap_or(label.len())];
-        let key = self.hasher.hash_one(first);
-        let segments = 1 + label.bytes().filter(|&c| c == b'/').count();
+        let text = self.text(label);
+        let key = self.key(parent, &text[..text.find('/').unwrap_or(text.len())]);
+        let segments = 1 + text.bytes().filter(|&c| c == b'/').count();
         let above = self.nodes[parent as usize];
         let top = match parent {
             AUTH => id,
@@ -327,13 +337,11 @@ impl<'a> Identifiers<'a> {
         self.nodes.push(Node {
             parent,
             top,
-            source,
-            start,
-            end,
             depth,
             key,
+            label,
         });
-        self.insert_child(parent, key, id);
+        self.insert_child(key, id);
         id
     }
     /// Split `node`'s label at the `/` at byte `at`, which ends its first
@@ -344,17 +352,17 @@ impl<'a> Identifiers<'a> {
         let old = self.nodes[node as usize];
         debug_assert!(old.parent != AUTH, "an authority's edge is one segment");
         let above = self.nodes[old.parent as usize];
+        let length = self.text(old.label).len();
         self.nodes.push(Node {
             parent: old.parent,
             top: if old.parent == ROOT { ROOT } else { above.top },
-            source: old.source,
-            start: old.start,
-            end: old.start + at,
             depth: above.depth + keep,
             key: old.key,
+            label: old.label.sub(0, at),
         });
-        // The upper part keeps the first segment, so it takes `node`'s place.
-        match self.children.get_mut(&(old.parent, old.key)) {
+        // The upper part keeps the parent and first segment, so it takes
+        // `node`'s place.
+        match self.children.get_mut(&old.key) {
             Some(Bucket::One(child)) => *child = id,
             Some(&mut Bucket::Many(list)) => {
                 let list = &mut self.collisions[list as usize];
@@ -366,13 +374,12 @@ impl<'a> Identifiers<'a> {
             }
             None => unreachable!("a child is listed"),
         }
-        let label = &self.source(old.source)[old.start + at + 1..old.end];
-        let key = self
-            .hasher
-            .hash_one(&label[..label.find('/').unwrap_or(label.len())]);
+        let label = old.label.sub(at + 1, length);
+        let text = self.text(label);
+        let key = self.key(id, &text[..text.find('/').unwrap_or(text.len())]);
         let lower = &mut self.nodes[node as usize];
-        (lower.parent, lower.start, lower.key) = (id, old.start + at + 1, key);
-        self.insert_child(id, key, node);
+        (lower.parent, lower.key, lower.label) = (id, key, label);
+        self.insert_child(key, node);
         id
     }
     /// The directory `node`'s string is without its last `up` segments.
@@ -390,21 +397,26 @@ impl<'a> Identifiers<'a> {
         }
         node
     }
-    /// The directory `run`, a span of `source` holding whole segments, ends in
+    /// The directory `path`, whole segments the walk over `own` wrote, ends in
     /// below `at`, adding it where the trie lacks it. The trie keeps an
     /// authority's edge to that one segment.
-    fn descend(&mut self, mut at: u32, source: u32, mut start: usize, end: usize) -> u32 {
+    fn descend(&mut self, mut at: u32, path: Label<'a>, own: &'a str) -> u32 {
+        let end = self.text(path).len();
+        let mut start = 0;
         loop {
-            let run = &self.source(source)[start..end];
-            let first = &run[..run.find('/').unwrap_or(run.len())];
-            let Some(child) = self.child(at, first) else {
-                if at == AUTH && first.len() < run.len() {
-                    let first = first.len();
-                    at = self.add_node(AUTH, source, start, start + first);
+            let run = &self.text(path)[start..];
+            let first = run.find('/').unwrap_or(run.len());
+            let Some(child) = self.child(at, &run[..first]) else {
+                if at == AUTH {
+                    let authority = self.add_authority(path.sub(start, start + first), own);
+                    if start + first == end {
+                        return authority;
+                    }
+                    at = authority;
                     start += first + 1;
                     continue;
                 }
-                return self.add_node(at, source, start, end);
+                return self.add_node(at, path.sub(start, end));
             };
             let label = self.label(child).as_bytes();
             let run = run.as_bytes();
@@ -432,57 +444,110 @@ impl<'a> Identifiers<'a> {
                     .expect("the first segment matched");
                 let keep = 1 + label[..shared].iter().filter(|&&c| c == b'/').count();
                 let parent = self.split(child, shared, keep);
-                return self.add_node(parent, source, start + shared + 1, end);
+                return self.add_node(parent, path.sub(start + shared + 1, end));
             }
         }
     }
     /// The directory of `AUTH` and the authority `text`, a span of `own`.
     fn authority(&mut self, own: &'a str, text: &'a str) -> u32 {
-        if let Some(child) = self.child(AUTH, text) {
-            return child;
+        match self.child(AUTH, text) {
+            Some(child) => child,
+            None => self.add_authority(Label::Borrowed(text), own),
         }
-        let start = text.as_ptr() as usize - own.as_ptr() as usize;
-        debug_assert!(start + text.len() <= own.len());
-        self.sources.push(Source::Borrowed(own));
-        let source =
-            u32::try_from(self.sources.len() - 1).expect("sources are bounded by the node count");
-        self.add_node(AUTH, source, start, start + text.len())
+    }
+    /// A new directory of `AUTH` and the authority `label`, which a walk over
+    /// `own` wrote. Read back from an identifier's string, it must parse as an
+    /// authority; whether it does is found now, from `own` when that holds it
+    /// after `//`.
+    fn add_authority(&mut self, label: Label<'a>, own: &'a str) -> u32 {
+        let node = self.add_node(AUTH, label);
+        let text = self.text(label);
+        let parses = |spelled: &str| {
+            UriRef::parse(spelled).is_ok_and(|r| {
+                r.authority().is_some_and(|a| a.as_str() == text) && r.path().is_empty()
+            })
+        };
+        let start = (text.as_ptr() as usize).wrapping_sub(own.as_ptr() as usize);
+        let valid = match own.get(start.wrapping_sub(2)..start.wrapping_add(text.len())) {
+            Some(spelled) if spelled.starts_with("//") => parses(spelled),
+            _ => parses(&format!("//{text}")),
+        };
+        if !valid {
+            self.invalid_authorities.insert(node);
+        }
+        node
     }
     /// The directory and last segment of a finished walk.
     fn place(&mut self, walk: Walk<'a>) -> (u32, &'a str) {
-        if walk.count == 0 {
-            return match walk.x {
+        let run = walk.run_len();
+        let Walk {
+            own,
+            x,
+            authority,
+            count,
+            start,
+            mut copy,
+            base,
+            copied,
+            last,
+            ..
+        } = walk;
+        if !copied || count < 2 {
+            copy.truncate(base);
+        }
+        self.copied = copy;
+        if count == 0 {
+            return match x {
                 Pos::Node { node: SLASH, up: 0 } => (ROOT, ""),
-                Pos::Auth(_) => (AUTH, walk.authority),
+                Pos::Auth(_) => (AUTH, authority),
                 // Every walk from a base's directory ends writing a segment.
                 _ => unreachable!("an output without own segments is an origin"),
             };
         }
-        let last = walk.last.expect("the walk ended writing its last segment");
-        let x = match walk.x {
+        let last = last.expect("the walk ended writing its last segment");
+        let at = match x {
             Pos::Node { node, up } => self.up(node, up),
             Pos::Root => ROOT,
             Pos::Auth(node) => node,
         };
-        if walk.count == 1 {
-            return (x, last);
+        if count == 1 {
+            return (at, last);
         }
-        // The own segments before the last name directories below `x`.
-        let length = walk.run().len() - last.len() - 1;
-        let (source, start) = if walk.copied {
-            let copy = walk.copy.expect("a copy");
-            self.sources.push(Source::Owned(copy));
-            (self.sources.len() - 1, 0)
+        // The own segments before the last name directories below `at`.
+        let length = run - last.len() - 1;
+        let path = if copied {
+            self.copied.truncate(base + length);
+            Label::Copied {
+                start: base,
+                end: base + length,
+            }
         } else {
-            self.sources.push(Source::Borrowed(walk.own));
-            (self.sources.len() - 1, walk.start)
+            Label::Borrowed(&own[start..start + length])
         };
-        let source = u32::try_from(source).expect("sources are bounded by the node count");
         let nodes = self.nodes.len();
-        let dir = self.descend(x, source, start, start + length);
-        // A copy no new label uses is dropped.
-        if self.nodes[nodes..].iter().all(|node| node.source != source) {
-            self.sources.pop();
+        let dir = self.descend(at, path, own);
+        if copied {
+            // Keep only the copied text new labels use.
+            let used = self.nodes[nodes..]
+                .iter()
+                .filter_map(|node| match node.label {
+                    Label::Copied { start, .. } if start >= base => Some(start),
+                    _ => None,
+                })
+                .min();
+            match used {
+                None => self.copied.truncate(base),
+                Some(from) => {
+                    self.copied.replace_range(base..from, "");
+                    for node in &mut self.nodes[nodes..] {
+                        if let Label::Copied { start, end } = &mut node.label
+                            && *start >= base
+                        {
+                            (*start, *end) = (*start - (from - base), *end - (from - base));
+                        }
+                    }
+                }
+            }
         }
         (dir, last)
     }
@@ -537,7 +602,7 @@ impl<'a> Identifiers<'a> {
         } else if !walk.copied && walk.end == at {
             walk.end = at + input.len();
         } else if walk.copied {
-            walk.copy.as_mut().expect("a copy").push_str(input);
+            walk.copy.push_str(input);
         } else {
             return false;
         }
@@ -583,7 +648,7 @@ impl<'a> Identifiers<'a> {
             }
             None => (Pos::Node { node: SLASH, up: 0 }, ""),
         };
-        let mut walk = Walk::new(own, x, 0, false, authority);
+        let mut walk = Walk::new(own, x, authority, std::mem::take(&mut self.copied));
         Self::remove_dots(&mut walk, reference.path().as_str());
         let (dir, last) = self.place(walk);
         Leaf {
@@ -608,26 +673,8 @@ impl<'a> Identifiers<'a> {
         let top = self.nodes[leaf.dir as usize].top;
         (top != ROOT && top != SLASH).then_some(top)
     }
-    fn authority_parses(&mut self, authority: u32) -> bool {
-        if let Some(&valid) = self.authority_valid.get(&authority) {
-            return valid;
-        }
-        let node = self.nodes[authority as usize];
-        let text = self.label(authority);
-        let parses = |spelled: &str| {
-            UriRef::parse(spelled).is_ok_and(|r| {
-                r.authority().is_some_and(|a| a.as_str() == text) && r.path().is_empty()
-            })
-        };
-        // Read back as `//` and the authority, from its source when that holds
-        // them.
-        let source = self.source(node.source);
-        let valid = match source.get(node.start.wrapping_sub(2)..node.end) {
-            Some(spelled) if spelled.starts_with("//") => parses(spelled),
-            _ => parses(&format!("//{text}")),
-        };
-        self.authority_valid.insert(authority, valid);
-        valid
+    fn authority_parses(&self, authority: u32) -> bool {
+        !self.invalid_authorities.contains(&authority)
     }
     /// The compared identifier of an `$id` written `identifier`, resolved
     /// against `parent`, the compared identifier of the nearest enclosing
@@ -665,7 +712,7 @@ impl<'a> Identifiers<'a> {
                     Some(authority) => Pos::Auth(authority),
                     None => Pos::Node { node: SLASH, up: 0 },
                 };
-                let mut walk = Walk::new(identifier, origin, 0, false, "");
+                let mut walk = Walk::new(identifier, origin, "", std::mem::take(&mut self.copied));
                 if path.starts_with('/') {
                     Self::remove_dots(&mut walk, path);
                 } else if base_authority.is_some() && base.dir == AUTH {
@@ -1319,11 +1366,7 @@ mod tests {
         assert!(ids.nodes.len() <= 3 + 1 + 3 * children.len() + 3);
         // The run interrupted by dot segments is copied once and not kept,
         // since its directories exist.
-        assert!(
-            ids.sources
-                .iter()
-                .all(|source| matches!(source, Source::Borrowed(_)))
-        );
+        assert!(ids.copied.is_empty());
         let duplicates = ids.duplicates();
         assert_eq!(
             duplicates.iter().map(|&(_, h)| h).collect::<Vec<_>>(),

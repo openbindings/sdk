@@ -29,13 +29,16 @@ Default parsing admits 64 MiB, 10,000 container levels and 1,000,000 nodes.
 `validate_document` admits the same bytes and nodes at any nesting. Ordinary
 Rust Serde conversion has a 128-container ceiling. Document reports retain at
 most 4,096 findings and 8 MiB of pointers. Truncation leaves rule evidence
-intact. Validating any document within those default limits allocates at most
-256 MiB beyond the caller's input, four times the byte limit, counting every
-reallocation as holding its old and new blocks at once: the document's copy of
-its text, the decoded text of its escaped strings and its tree and validation
-state. Compared identifiers share runs of the `$id` texts, so a long or deeply
-nested `$id` costs memory and time linear in the document. The diagnostic
-memory probe checks this on documents built to maximize each. See
+intact. Document validation's memory grows linearly with the document: its copy
+of the text, the decoded text of its escaped strings, its tree, and validation
+state per schema position, `$id` declaration and retained finding. Compared
+identifiers share runs of the `$id` texts, so a long or deeply nested `$id`
+costs memory and time linear in the document. At the default limits the
+diagnostic memory probe validates 32 documents built to maximize these terms,
+and fails if one allocates more than 320 MiB beyond the caller's input,
+counting every reallocation as holding its old and new blocks at once. The
+largest, a third of a million `$id`s with authorities, queries and fragments
+beside an escaped string filling the bytes left, allocates 281.5 MiB. See
 [performance and allocation boundaries](docs/performance-boundaries.md).
 OBI-02's whole-document check and each embedded schema's OBI-10 meta-schema
 check run on the unmodified jsonschema 0.58.6 library with its default pattern

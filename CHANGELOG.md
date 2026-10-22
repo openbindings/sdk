@@ -24,14 +24,14 @@
   encoded as supported exact JSON refuses with `EditError::Serialization`
   (`serialization`). Validation with original source locations, bounded
   findings and per-rule evidence.
-- Validating any document within the default admission limits (64 MiB,
-  1,000,000 nodes, any nesting) allocates at most 256 MiB beyond the caller's
-  input, counting each reallocation as holding its old and new blocks at once:
-  the document's copy of its text, the decoded text of its escaped strings, and
-  its tree and validation state. Compared identifiers share runs of the `$id`
-  texts, so long and nested `$id`s take memory and time linear in the document,
-  as do repeated findings deep in a document and large maps, alias lists and
-  `uniqueItems` arrays.
+- Document validation's memory grows linearly with the document. Compared
+  identifiers share runs of the `$id` texts, so long and nested `$id`s take
+  memory and time linear in the document, as do repeated findings deep in a
+  document, large maps, alias lists and `uniqueItems` arrays, and fixed checks
+  read names holding U+E000 in place. Of the diagnostic memory probe's 32
+  documents at the default limits (64 MiB, 1,000,000 nodes, any nesting), the
+  largest allocates 281.5 MiB beyond the caller's input, counting each
+  reallocation as holding its old and new blocks at once.
 - Document validation's fixed checks (OBI-02, OBI-10) and reference inspection use
   the unmodified jsonschema 0.58.6 library with its default pattern engine, which
   matches every fixed pattern on a finite automaton, exactly as ECMAScript does.

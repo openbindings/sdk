@@ -99,16 +99,22 @@ string with an unpaired surrogate escape filling the limit; a million-element
 `allOf`, a million aliases, a half-million-member object, half a million
 schemas and a quarter million absolute `$id`s, each beside an escaped string
 filling the remaining bytes; half a million invalid operation names holding
-escapes, filling the limit; 166,000 nested relative `$id`s, and 70,000 of them
+escapes, filling the limit; a third of a million `$id`s that each add
+directories, under a base or with authorities of their own, alone, in pairs and
+with a query and fragment, each beside an escaped string filling the remaining
+bytes; an operation name, an extension name and an alias of U+E000, the
+character fixed checks escape beside encoded unpaired units, filling the limit,
+and the operation name beside an unpaired unit; 166,000 nested relative `$id`s,
+and 70,000 of them
 each declaring a repeated `$id`; one `$id` of 4 million segments (8 MiB) and of
 33 million (64 MiB), each alone and beside two identifiers declared twice; one
 `$id` interrupted by dot segments throughout; a 60 MiB authority read back by
 150,000 relative `$id`s; 2,399 relative `$id`s, each giving up a different
 number of a long `$id`'s 10 million segments; and a malformed reference at every
 level of a 120,000-level schema chain. Each `validate_document` call must add at
-most **256 MiB** (four times the byte limit) of live allocation above the
-caller's input, and must reach its expected conclusion. Run the phase alone
-with `--limits-only`.
+most **320 MiB** (five times the byte limit) of live allocation above the
+caller's input, and must reach its expected conclusion. This bounds these
+shapes, not every document. Run the phase alone with `--limits-only`.
 
 ## Recorded results
 
