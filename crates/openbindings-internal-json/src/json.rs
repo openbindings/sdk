@@ -66,6 +66,9 @@ pub(crate) enum Route {
     /// A value check that admits under the default limits only: the value is
     /// parsed with limits first, then checked.
     Value,
+    /// [`JsonValue::string`], which admits under the default limits only: the
+    /// string's JSON text is parsed with limits instead.
+    String,
 }
 impl PartialEq for InputError {
     fn eq(&self, other: &Self) -> bool {
@@ -155,6 +158,11 @@ impl fmt::Display for InputError {
                 "; parse the value with JsonValue::parse_with_limits and a larger \
                  JsonLimits::{rust}, then validate it (parseJson with a larger \
                  limits.{typescript} in TypeScript)"
+            ),
+            (Some((rust, _)), Route::String) => write!(
+                f,
+                "; parse the string's JSON text with JsonValue::parse_with_limits and a \
+                 larger JsonLimits::{rust}"
             ),
             (None, _) => Ok(()),
         }
@@ -439,7 +447,7 @@ impl JsonValue {
             kind: InputErrorKind::Limit,
             byte_offset: limits.max_bytes,
             code: "byte-limit",
-            route: Route::Admission,
+            route: Route::String,
         })?;
         let mut bytes = Vec::with_capacity(size.bytes);
         serde_json::to_writer(&mut bytes, value).expect("a Rust string serializes as JSON");
@@ -854,6 +862,19 @@ mod tests {
             );
             codes.insert(error.code);
         }
+        // A string constructor that takes no limits names parsing its text.
+        let string = JsonValue::string_with_limits(
+            "abc",
+            JsonLimits {
+                max_bytes: 2,
+                ..JsonLimits::default()
+            },
+        )
+        .unwrap_err();
+        assert!(string.to_string().ends_with(
+            "; parse the string's JSON text with JsonValue::parse_with_limits and a larger \
+             JsonLimits::max_bytes"
+        ));
         let over = JsonValue::parse_with_limits(
             "[0]",
             JsonLimits {

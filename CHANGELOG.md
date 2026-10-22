@@ -36,14 +36,17 @@
   for TypeScript's `validateDocument`, `Document.parse` and `parseJson`, whose
   unspecified entries keep the `JsonLimits` defaults (malformed limits throw
   `invalid-json-limits`). `Document::new`, `Document::from_json`,
-  `Document.create()`, `Publication::from_bytes`, `validate_json` and
-  `validateJson` use the defaults. A document keeps the limits it was admitted
+  `JsonValue::parse`, `JsonValue::string`, `Publication::from_bytes` and
+  `validate_json` use the defaults, as do TypeScript's `Document.create()`,
+  `ExactJson.from`, `validateJson` and ordinary-value `validate` and `explain`.
+  A document keeps the limits it was admitted
   under (`Document::limits`, TypeScript `limits`), and its edits and typed
   setters apply them to the edited document, the same way in both languages.
   Value-contract preparation keeps its own fixed bounds, as before. Discovery
   validates a body with its byte limit raised to the configured body bound and
-  the default 1,000,000 nodes. Each limit refusal names how to raise it in both
-  languages.
+  the default 1,000,000 nodes. Every admission and edit limit refusal names how
+  to admit more in both languages, including the route for calls that take no
+  limits; the projection's fixed bounds have no setting.
 - Document validation's memory grows linearly with the document. Compared
   identifiers share runs of the `$id` texts, so long and nested `$id`s take
   memory and time linear in the document, as do repeated findings deep in a

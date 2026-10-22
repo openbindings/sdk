@@ -411,7 +411,8 @@ writes what the parser expected or found and the byte where, such as
 syntax finding's message; for an exceeded limit it adds the setting that raises
 it, as in `; raise JsonLimits::max_bytes (limits.maxBytes in TypeScript)`, or,
 from `validate_json`, which takes no limits, parsing with
-`JsonValue::parse_with_limits` and a larger limit, then validating. An
+`JsonValue::parse_with_limits` and a larger limit, then validating, and from
+`JsonValue::string` parsing the string's JSON text the same way. An
 input-limit finding's message instead states the limit reached, as in
 `the document's 33554433 bytes exceed the 33554432-byte admission limit`, and
 names validating again with `validate_document_with_limits` and a larger
@@ -512,8 +513,12 @@ returns stable identifiers: `invalid-pointer`, `missing-parent`, `missing-value`
 error. An exceeded limit displays as `document edit refused: the edited document
 exceeds its byte limit; admit the document with a larger JsonLimits::max_bytes
 (limits.maxBytes in TypeScript)`, or its node or nesting limit; TypeScript's
-`EditError` gives the same code and message on every edit route, and the limits
-apply to the edited document, not to an edit batch's own structure. `EditError::FieldCollision { part_pointer, .. }` carries a logical pointer
+`EditError` gives the same code and message on every edit route, with
+`partPointer` null as Rust's carries none, and the limits apply to the edited
+document, not to an edit batch's own structure. A TypeScript edit row holds only
+its op's members (`op`, `pointer` and `value` for `set`, `op` and `pointer` for
+`remove`, `op` and `value` for a typed namespace); anything else refuses with
+`invalid-edits`, and a pointer that is not a string with `invalid-pointer`. `EditError::FieldCollision { part_pointer, .. }` carries a logical pointer
 into the typed part input, as TypeScript's `EditError.partPointer` does;
 `InterpretationError::source_location` addresses current exact source bytes.
 These coordinates serve different purposes.

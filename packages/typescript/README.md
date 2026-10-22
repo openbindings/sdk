@@ -189,9 +189,11 @@ A document keeps the limits it was parsed with (`limits`): its edits and typed
 setters apply them to the edited document, as Rust's do, whatever route writes
 the value. `discover` raises only the byte limit, to `maxDocumentBytes`; a body
 past the default 1,000,000 nodes comes back undetermined, and `validateDocument`
-with a larger `maxNodes` admits it. `Document.create()`, `validateJson` and
-`ExactJson.from` use the defaults. Value-contract preparation keeps fixed bounds
-of its own. Each limit refusal names how to raise it. To check a value past the
+with a larger `maxNodes` admits it. `Document.create()`, `ExactJson.from`,
+`validateJson` and a prepared contract's `validate` and `explain` of an ordinary
+value use the defaults. Value-contract preparation keeps fixed bounds of its own,
+which no setting raises. Every admission and edit limit refusal names how to
+admit more, including the route for calls that take no limits. To check a value past the
 defaults, parse it with `parseJson` and larger limits and pass the `ExactJson`
 to `validate`.
 
