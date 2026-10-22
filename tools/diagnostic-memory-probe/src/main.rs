@@ -5,6 +5,7 @@ use std::alloc::{GlobalAlloc, Layout, System};
 use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
 
 mod constructors;
+mod limits;
 mod near_misses;
 mod patterns;
 mod references;
@@ -40,11 +41,13 @@ unsafe impl GlobalAlloc for Counting {
         unsafe { System.dealloc(p, layout) };
         LIVE.fetch_sub(layout.size(), Relaxed);
     }
+    // A reallocation that moves holds the old block and the new one at once.
+    // Every one is counted so, moved or not: peaks are conservative.
     unsafe fn realloc(&self, p: *mut u8, layout: Layout, size: usize) -> *mut u8 {
         let next = unsafe { System.realloc(p, layout, size) };
         if !next.is_null() {
-            LIVE.fetch_sub(layout.size(), Relaxed);
             add(size);
+            LIVE.fetch_sub(layout.size(), Relaxed);
         }
         next
     }
@@ -62,6 +65,10 @@ fn measured<T>(call: impl FnOnce() -> T) -> (T, usize, u128) {
 fn main() {
     if std::env::args().any(|arg| arg == "--references-only") {
         println!("{}", serde_json::json!(references::run()));
+        return;
+    }
+    if std::env::args().any(|arg| arg == "--limits-only") {
+        limits::run();
         return;
     }
     constructors::run();
@@ -113,18 +120,17 @@ fn main() {
         };
         let raw = RawDocument::new(value.clone());
         let lane = case["lane"].as_str().unwrap();
+        let index = raw.schema_index();
+        let schemas: Vec<JsonValue> = if lane == "document" {
+            Vec::new()
+        } else {
+            index.nodes.iter().map(|node| index.owned(node)).collect()
+        };
         let mut checks = Vec::new();
         if lane != "meta" {
             checks.push((&value, false));
         }
-        if lane != "document" {
-            checks.extend(
-                raw.schema_index()
-                    .nodes
-                    .iter()
-                    .map(|node| (&node.value, true)),
-            );
-        }
+        checks.extend(schemas.iter().map(|schema| (schema, true)));
         for repetition in 0..3 {
             // Validation is cached on an owner; use a fresh parsed owner for every sample.
             let parsed = openbindings::Document::parse(&text).unwrap();
@@ -236,4 +242,5 @@ fn main() {
     drop(references::run());
     near_misses::run();
     patterns::run();
+    limits::run();
 }

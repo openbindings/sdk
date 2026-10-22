@@ -1,7 +1,6 @@
 //! Immutable supplied-resource input policy. Association conflicts are retained
 //! for reached-resource admission, so an unused collision does not poison a job.
 use crate::*;
-use openbindings_internal_json::backend::node_id;
 use std::{
     collections::{BTreeMap, HashSet},
     sync::{Arc, OnceLock},
@@ -100,14 +99,10 @@ impl Supplied {
                 }
             };
             if let Some(root) = index.nodes.first() {
-                add(&resource.uri, node_id(&root.value));
+                add(&resource.uri, root.id as usize);
             }
-            for node in &index.nodes {
-                if node.value.get("$id").is_some()
-                    && let Some(base) = &node.base
-                {
-                    add(base, node_id(&node.value));
-                }
+            for (node, base) in index.declared_bases() {
+                add(base, index.nodes[*node as usize].id as usize);
             }
         }
         Ok(Self {

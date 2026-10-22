@@ -619,6 +619,110 @@ produce work proportional to source/key size; deliberate collisions can require
 more exact comparisons. Caller byte and node limits still bound admission. These
 fixtures do not characterize arbitrary schema evaluation or cold compilation.
 
+### Memory at the default limits
+
+`validate_document` admits up to 64 MiB and 1,000,000 nodes, at any nesting.
+Its memory grows linearly with the document. Beyond the caller's own copy of
+the input it allocates:
+
+- The document's copy of its text, as long as the input.
+- The decoded text of its escaped strings, at most as long as the input, since
+  no escape decodes longer than it is written. A string holding an unpaired
+  surrogate escape keeps no decoded copy: its UTF-16 units are read from its
+  token when asked for.
+- The parsed tree: 32 bytes per node, 4 per array element or member name, 8 per
+  escaped string, and for an object of 16 or more members a name index of 17
+  bytes per slot, at most about 39 per member.
+- Validation state: 12 bytes per schema position and 8 per position still to
+  visit, plus 4 per position once a same-document pointer is resolved; 8 bytes
+  per resource and 4 per compared `$id` declaration; for compared identifiers,
+  a 40-byte record per declaration and 16 bytes per query or fragment, and at
+  most three 48-byte directories with a 17-byte index slot each, whatever the
+  length of the identifier, since a directory holds a run of whole segments as
+  a span of one `$id`'s text, plus once the text of a path whose removed dot
+  segments separate its segments; for a `uniqueItems` check, 8 bytes per node
+  of the array and 9 per slot of its hash table, and 8 more per element once
+  unequal elements share a hash; 9 bytes per alias; and at most 4,096 findings
+  and 8 MiB of their pointers, with a table of 4 bytes per node (8 when an
+  unpaired surrogate occurs) once one finding's pointer has not fitted. The
+  fixed checks read every string in place: they would escape U+E000 only beside
+  an unpaired surrogate, and a document holding one fails OBI-01 before they
+  run.
+- The decoded text, the tree and the validation state grow by doubling, so
+  each can hold up to twice what it needs, and while it grows, its old block as
+  well.
+
+These are requested bytes, counted as the
+[diagnostic memory probe](../tools/diagnostic-memory-probe/README.md) counts
+them: every reallocation holds its old block and its new one at once, whether
+or not it moved. They are not resident memory, which adds allocator overhead
+and leaves out capacity never touched. The probe's limits phase validates 34
+documents, most filling the byte or node limit, with structures that grow these
+terms, alone or beside an escaped string filling the bytes left. Among them are
+one `$id` of 4 million segments (8 MiB)
+and of 33 million (64 MiB), alone and beside identifiers declared twice; one
+interrupted by dot segments; a 60 MiB authority read back by 150,000 relative
+identifiers; 2,399 relative identifiers, each giving up a different number of
+a long identifier's 10 million segments; a third of a million `$id`s that each
+add directories, under a base or with authorities of their own, alone, in pairs
+and with a query and fragment; a third of a million escaped `$id`s, each with
+its own authority and a dot segment that makes its path a copy; and an
+operation name, an extension name and an alias of U+E000 filling the limit.
+The phase fails if a call exceeds 448 MiB, seven times the byte limit, which
+bounds these documents, not every document. On 2026-10-22 (macOS arm64, Rust
+1.99.0, release build) the largest, 333,320 escaped `$id`s, each with its own
+authority, a query, a fragment and a dot segment that makes its path a copy,
+peaked at 412.2 MiB, 35.8 MiB below that, and every shape validated within
+0.8 s. No admission limit changed.
+
+The operating system's maximum resident set size of a process that reads a file
+and validates it three times, including that process's own copy of the file,
+compared with revision `ac50faf`:
+
+| Document | Bytes | Before | After |
+| --- | ---: | ---: | ---: |
+| 999,980 nested arrays around a string | 64 MiB | 389 MiB | 240 MiB |
+| 499,990 invalid operation names | 6.4 MB | 337 MiB | 136 MiB |
+| The same names beside a string | 64 MiB | 453 MiB | 252 MiB |
+| 250,000 invalid 200-byte operation names | 51 MB | 552 MiB | 165 MiB |
+| 499,990 invalid operation names holding escapes | 65 MB | 945 MiB | 295 MiB |
+| One escaped string | 64 MiB | 583 MiB | 199 MiB |
+| One string with an unpaired surrogate escape | 64 MiB | 429 MiB | 130 MiB |
+| 999,990 escaped strings | 64 MiB | 384 MiB | 237 MiB |
+| 999,980-element `allOf` beside an escaped string | 64 MiB | 770 MiB | 341 MiB |
+| 999,980 aliases beside an escaped string | 64 MiB | 727 MiB | 321 MiB |
+| 499,985 schemas beside an escaped string | 64 MiB | 676 MiB | 313 MiB |
+| 249,990 absolute `$id`s beside an escaped string | 64 MiB | 577 MiB | 333 MiB |
+| 333,320 `$id`s, each an authority and a directory, beside an escaped string | 64 MiB | 574 MiB | 318 MiB |
+| The same with a query and fragment | 64 MiB | 571 MiB | 340 MiB |
+| 333,320 relative directory `$id`s in pairs beside an escaped string | 64 MiB | 662 MiB | 340 MiB |
+| 333,320 escaped `$id`s, each an authority and a copied path | 64 MiB | 584 MiB | 417 MiB |
+| The same with a query and fragment | 64 MiB | 584 MiB | 455 MiB |
+| One operation name of U+E000 | 64 MiB | 2,526 MiB | 137 MiB |
+| One alias of U+E000 | 64 MiB | 2,484 MiB | 137 MiB |
+| One extension name of U+E000 | 64 MiB | 519 MiB | 135 MiB |
+| 10,000 nested relative `$id`s | 270 KB | 247 MiB | 12 MiB |
+| 10,000 nested relative `$id`s, each beside a repeated one | 590 KB | 603 MiB | 32 MiB |
+| One `$id` of 4 million segments | 8 MiB | 47 MiB | 23 MiB |
+| One `$id` of 33 million segments | 64 MiB | 327 MiB | 135 MiB |
+| The same beside identifiers declared twice | 64 MiB | 327 MiB | 135 MiB |
+| One `$id` of 33 million segments and dot segments | 64 MiB | 263 MiB | 233 MiB |
+| 199 relative `$id`s inside one of 300,000 segments | 1.1 MB | 707 MiB | 10 MiB |
+| 1,500 relative `$id`s below a 1 MB authority | 1 MiB | 5,714 MiB | 10 MiB |
+
+Before, each nested relative `$id` held its compared identifier spelled out,
+twice, and every schema below it a further copy, so memory grew with the
+square of the nesting: 166,000 nested `$id`s (4.5 MB) would have needed tens of
+gigabytes, where validating them now allocates at most 76 MiB. A malformed
+reference at each level of a 20,000-level schema chain (600 KB) took 5.9 s,
+because each finding after the pointer allowance was spent measured its pointer
+by walking to the root; it now takes 62 ms, and a 120,000-level chain 0.15 s.
+Validating one `$id` of 33 million segments took 0.50 s and now takes 0.28 s;
+199 relative `$id`s inside one of 300,000 segments took 0.68 s and take 5 ms;
+one operation name of U+E000 took 1.02 s, copied with each character doubled,
+and now takes 0.17 s. On the probe's frozen suite the largest
+complete-validation peak fell from 17,949,677 to 8,738,243 bytes.
+
 ## Pattern matching
 
 Patterns match on the regex crate's finite automata, in time linear in the

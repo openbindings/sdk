@@ -41,6 +41,7 @@ files = [root / 'crates/openbindings-internal-schema/src/fixed_schema.rs',
          root / 'tools/diagnostic-memory-probe/src/constructors.rs',
          root / 'tools/diagnostic-memory-probe/src/near_misses.rs',
          root / 'tools/diagnostic-memory-probe/src/patterns.rs',
+         root / 'tools/diagnostic-memory-probe/src/limits.rs',
          root / 'crates/openbindings-json-schema-evaluator/src/lib.rs',
          root / 'tools/diagnostic-memory-probe/generate_inputs.py']
 files += sorted((root / 'crates/openbindings-internal-schema/schemas').rglob('*.json'))
@@ -50,6 +51,7 @@ receipt = {
     'default_value_samples': [r for r in raw if r['phase'] == 'default-value'],
     'near_miss_samples': [r for r in raw if r['phase'] == 'near-miss'],
     'pattern_form_samples': [r for r in raw if r['phase'] == 'pattern-forms'],
+    'default_limit_samples': [r for r in raw if r['phase'] == 'default-limits'],
     'compilation': [r for r in raw if r['phase'] == 'location-map-compilation'],
     'summary': summary,
     'source_sha256': {str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest() for p in files},

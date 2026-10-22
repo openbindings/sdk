@@ -927,6 +927,10 @@ struct Checks<'a> {
     retained_at: HashMap<usize, Vec<usize>>,
     retained_direct: Vec<usize>,
     pointer_bytes: usize,
+    // Once one location's pointer has not fitted the allowance, every later
+    // one is read from a table measured in one pass, so that many findings
+    // deep in a large document are not each measured by a walk to the root.
+    pointer_sizes: Option<backend::LocationPointerSizes>,
     truncated: bool,
 }
 impl<'a> Checks<'a> {
@@ -938,6 +942,7 @@ impl<'a> Checks<'a> {
             retained_at: HashMap::new(),
             retained_direct: Vec::new(),
             pointer_bytes: MAX_FINDING_POINTER_BYTES,
+            pointer_sizes: None,
             truncated: false,
         }
     }
@@ -1005,26 +1010,36 @@ impl<'a> Checks<'a> {
             self.truncated = true;
         }
     }
-    fn mark_at(
+    // A message becomes owned text only when its finding is retained.
+    fn mark_at<M: AsRef<str> + Into<String>>(
         &mut self,
         rule: usize,
         status: Evidence,
         at: JsonRef<'a>,
         code: &'static str,
-        message: impl Into<String>,
+        message: M,
     ) {
         self.update_evidence(rule, status);
-        let message = message.into();
         // Identity is checked before either allowance. Only retained findings
         // have index entries, so omitted data never grows an all-seen set.
-        if self.contains_at(rule, status, at, code, &message) {
+        if self.contains_at(rule, status, at, code, message.as_ref()) {
             return;
         }
         if self.findings.len() >= MAX_FINDINGS {
             self.truncated = true;
             return;
         }
-        let Some(bytes) = backend::location_pointer_size(at, self.pointer_bytes) else {
+        let bytes = match &self.pointer_sizes {
+            Some(sizes) => sizes.size(at, self.pointer_bytes),
+            None => backend::location_pointer_size(at, self.pointer_bytes),
+        };
+        let Some(bytes) = bytes else {
+            if self.pointer_sizes.is_none() {
+                self.pointer_sizes = Some(backend::LocationPointerSizes::new(
+                    at,
+                    MAX_FINDING_POINTER_BYTES + 1,
+                ));
+            }
             self.truncated = true;
             return;
         };
@@ -1040,15 +1055,15 @@ impl<'a> Checks<'a> {
             status,
             code,
             location: None,
-            message,
+            message: message.into(),
         });
     }
-    fn violation(
+    fn violation<M: AsRef<str> + Into<String>>(
         &mut self,
         rule: usize,
         at: JsonRef<'a>,
         code: &'static str,
-        message: impl Into<String>,
+        message: M,
     ) {
         self.mark_at(rule, Evidence::Violated, at, code, message);
     }
@@ -1080,7 +1095,7 @@ impl<'a> Checks<'a> {
             findings_truncated: self.truncated,
         }
     }
-    fn fixed(&mut self, value: &'a JsonValue, rule: usize, is_meta: bool) {
+    fn fixed(&mut self, value: JsonRef<'a>, rule: usize, is_meta: bool) {
         match fixed_schema::check_with_retained(
             value,
             is_meta,
@@ -1107,7 +1122,7 @@ impl<'a> Checks<'a> {
             Err(reason) => self.mark_at(
                 rule,
                 Evidence::Inconclusive,
-                value.view(),
+                value,
                 "fixed-schema-limit-or-failure",
                 reason,
             ),
@@ -1167,7 +1182,7 @@ fn assess_value(document: &Document) -> Result<ValidationReport, VersionRefusal>
             "required openbindings member is absent",
         ),
     }
-    c.fixed(value, 1, false);
+    c.fixed(value.view(), 1, false);
     let operations = value.get("operations");
     let sources = value.get("sources");
     for map in [
@@ -1185,24 +1200,49 @@ fn assess_value(document: &Document) -> Result<ValidationReport, VersionRefusal>
             }
         }
     }
-    let mut names: HashMap<Vec<u16>, JsonValue> = HashMap::new();
-    if let Some(entries) = operations.and_then(|v| v.members()) {
-        let entries: Vec<_> = entries.collect();
-        for entry in &entries {
-            if let Some(name) = entry.name.utf16_units() {
-                names.insert(name, entry.name.to_owned());
+    if let Some(operations) = operations
+        && let Some(entries) = operations.members()
+    {
+        // Keys and aliases share one namespace. OBI-01 holds here, so no member
+        // name repeats and every string is scalar text: an alias repeats a name
+        // exactly when it is a key, found through the map's own index, or an
+        // earlier alias, found by sorting the aliases by text.
+        let aliases: Vec<u32> = operations
+            .members()
+            .into_iter()
+            .flatten()
+            .filter_map(|entry| entry.value.get("aliases").and_then(|v| v.elements()))
+            .flatten()
+            .map(|alias| backend::ref_id(alias) as u32)
+            .collect();
+        let text =
+            |at: u32| backend::node(value, aliases[at as usize] as usize).and_then(|a| a.as_str());
+        // A stable sort keeps each text's aliases in document order.
+        let mut by_text: Vec<u32> = (0..aliases.len() as u32).collect();
+        by_text.sort_by_key(|&at| text(at));
+        let mut repeated = vec![false; aliases.len()];
+        for run in by_text.chunk_by(|&a, &b| text(a) == text(b)) {
+            if text(run[0]).is_some() {
+                for &later in &run[1..] {
+                    repeated[later as usize] = true;
+                }
             }
         }
+        drop(by_text);
+        drop(aliases);
+        let mut ordinal = 0;
         for entry in entries {
-            if let Some(aliases) = entry.value.get("aliases").and_then(|v| v.elements()) {
-                for alias in aliases {
+            if let Some(list) = entry.value.get("aliases").and_then(|v| v.elements()) {
+                for alias in list {
+                    let earlier = repeated[ordinal];
+                    ordinal += 1;
                     if !alias.as_str().is_some_and(is_valid_name) {
                         c.violation(3, alias, "name-grammar", NAME_GRAMMAR_MESSAGE);
                     }
-                    let Some(name) = alias.utf16_units() else {
+                    let Some(name) = alias.as_str() else {
                         continue;
                     };
-                    if names.insert(name, alias.to_owned()).is_some() {
+                    if earlier || operations.get(name).is_some() {
                         c.violation(
                             4,
                             alias,
@@ -1222,28 +1262,19 @@ fn assess_value(document: &Document) -> Result<ValidationReport, VersionRefusal>
         }
     }
     // References name primary map keys, including keys whose values are
-    // independently malformed. Index once: JsonRef::get scans object members,
-    // so calling it per reference made large binding maps quadratic.
-    fn primary_keys(map: Option<JsonRef<'_>>) -> HashSet<Vec<u16>> {
-        map.and_then(|v| v.members())
-            .into_iter()
-            .flatten()
-            .filter_map(|m| m.name.utf16_units())
-            .collect()
-    }
-    let operation_keys = primary_keys(operations);
-    let source_keys = primary_keys(sources);
+    // independently malformed. A large map's lookup uses its member index, so
+    // checking many references stays linear. Every string is scalar here.
     for (map, field, targets, rule) in [
-        ("bindings", "operation", &operation_keys, 5),
-        ("bindings", "source", &source_keys, 6),
-        ("dependencies", "operation", &operation_keys, 7),
+        ("bindings", "operation", operations, 5),
+        ("bindings", "source", sources, 6),
+        ("dependencies", "operation", operations, 7),
     ] {
         if let Some(entries) = value.get(map).and_then(|v| v.members()) {
             for entry in entries {
                 if let Some(reference) = entry.value.get(field)
                     && reference
-                        .utf16_units()
-                        .is_none_or(|name| !targets.contains(&name))
+                        .as_str()
+                        .is_none_or(|name| targets.and_then(|map| map.get(name)).is_none())
                 {
                     c.violation(
                         rule,
@@ -1262,9 +1293,9 @@ fn assess_value(document: &Document) -> Result<ValidationReport, VersionRefusal>
     let schemas = document.schema_index();
     // The index visits each contained schema occurrence once. Equal text at
     // different positions must still be checked at each original location.
-    for node in &schemas.nodes {
-        let schema = node.value.view();
-        c.fixed(&node.value, 9, true);
+    for (index, node) in schemas.nodes.iter().enumerate() {
+        let schema = schemas.value(node);
+        c.fixed(schema, 9, true);
         if let Some(dialect) = schema.get("$schema")
             && !matches!(
                 dialect.as_str(),
@@ -1278,7 +1309,7 @@ fn assess_value(document: &Document) -> Result<ValidationReport, VersionRefusal>
                 "contained schemas must name the 2020-12 dialect",
             );
         }
-        if node.obi_position {
+        if schemas.obi_position(index) {
             if let Some(id) = schema.get("$id") {
                 if !id.as_str().is_some_and(uri::absolute) {
                     c.violation(
@@ -1326,28 +1357,29 @@ fn assess_value(document: &Document) -> Result<ValidationReport, VersionRefusal>
             }
         }
     }
-    for ((resource, _), declarations) in &schemas.anchors {
-        if *resource == 0 && declarations.len() > 1 {
-            for (value, keyword) in declarations {
+    for declarations in schemas.anchor_declarations() {
+        if declarations[0].resource == 0 && declarations.len() > 1 {
+            for anchor in declarations {
                 c.violation(
                     12,
-                    value.get(keyword).unwrap(),
+                    schemas.anchor_token(anchor),
                     "duplicate-anchor",
                     "plain name is declared more than once in the document resource",
                 );
             }
         }
     }
-    for declarations in schemas.identifiers.values() {
-        if declarations.len() > 1 {
-            for value in declarations {
-                c.violation(
-                    12,
-                    value.get("$id").unwrap(),
-                    "duplicate-schema-id",
-                    "schemas declare the same compared identifier",
-                );
-            }
+    for declarations in schemas.repeated_identifiers() {
+        for &(_, node) in declarations {
+            c.violation(
+                12,
+                schemas
+                    .value(&schemas.nodes[node as usize])
+                    .get("$id")
+                    .unwrap(),
+                "duplicate-schema-id",
+                "schemas declare the same compared identifier",
+            );
         }
     }
     Ok(c.finish())
@@ -1565,7 +1597,7 @@ mod finding_identity_tests {
     fn fixed_stream_excludes_already_retained_findings_before_intermediate_cap() {
         let value = JsonValue::parse("null").unwrap();
         let mut checks = Checks::new();
-        checks.fixed(&value, 2, true);
+        checks.fixed(value.view(), 2, true);
         let fixed_count = checks.findings.len();
         for i in fixed_count..MAX_FINDINGS {
             checks.mark(
@@ -1576,7 +1608,7 @@ mod finding_identity_tests {
                 format!("distinct {i}"),
             );
         }
-        checks.fixed(&value, 2, true);
+        checks.fixed(value.view(), 2, true);
         assert_eq!(checks.findings.len(), MAX_FINDINGS);
         assert!(!checks.truncated);
         assert_eq!(checks.evidence[2], Evidence::Violated);
