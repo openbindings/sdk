@@ -707,7 +707,7 @@ function contractRaw(owner: ValueContract): wasm.WasmValueContract {
 }
 /** Ordinary JSON scalar types; runtime admission additionally requires finite numbers. JavaScript number precision already lost before admission cannot be reconstructed. */
 export type JsonPrimitive = null | boolean | number | string;
-/** Checked ordinary JSON input, including nested borrowed ExactJson owners for precise subtrees. Arrays must be dense; objects plain with enumerable data properties; cycles, accessors, symbols, bigint and undefined are refused. Admission never invokes toJSON or getters. Ordinary encoding admits at most 67,108,864 UTF-16 code units of serialized text, 1,000,000 visited values and depth 10,000; subsequent exact parsing also enforces 64 MiB UTF-8 and 1,000,000 total nodes, including member-name tokens. */
+/** Checked ordinary JSON input, including nested borrowed ExactJson owners for precise subtrees. Arrays must be dense; objects plain with enumerable data properties; cycles, accessors, symbols, bigint and undefined are refused. Admission never invokes toJSON or getters. Ordinary encoding admits at most 33,554,432 UTF-16 code units of serialized text, 1,000,000 visited values and depth 10,000; subsequent exact parsing also enforces 32 MiB UTF-8 and 1,000,000 total nodes, including member-name tokens. */
 export type JsonInput =
   | JsonPrimitive
   | ExactJson
@@ -944,7 +944,7 @@ export class ExactJson extends Managed {
     return { status: "converted", value: value as JsonOutput };
   }
 }
-/** Parse exact JSON using default admission limits (64 MiB UTF-8, 10,000 container depth, 1,000,000 nodes). Returns a caller-owned ExactJson or input-error. Initialization, wrong input types and literal unpaired UTF-16 text throw; JSON escapes preserve such units. */
+/** Parse exact JSON using default admission limits (32 MiB UTF-8, 10,000 container depth, 1,000,000 nodes). Returns a caller-owned ExactJson or input-error. Initialization, wrong input types and literal unpaired UTF-16 text throw; JSON escapes preserve such units. */
 export function parseJson(input: ExactInput): ParseResult<ExactJson> {
   requireReady();
   const data = bytes(input);
@@ -957,7 +957,7 @@ export function parseJson(input: ExactInput): ParseResult<ExactJson> {
     return failure(e);
   }
 }
-/** Assess all normative document rules directly from exact source, including invalid JSON. Unsupported declared versions return version-refused; parse/limit failures become truthful evidence. Returns plain data with no handle to dispose. Initialization, wrong input types and literal unpaired UTF-16 text throw; represent unpaired units with JSON escapes or exact UTF-8 bytes. */
+/** Assess all normative document rules directly from exact source, including invalid JSON. Unsupported declared versions return version-refused; parse/limit failures become truthful evidence. Admits up to the default limits, 32 MiB UTF-8 and 1,000,000 nodes at any nesting, which TypeScript has no setting to raise; a larger document leaves every rule inconclusive with input-limit findings. Returns plain data with no handle to dispose. Initialization, wrong input types and literal unpaired UTF-16 text throw; represent unpaired units with JSON escapes or exact UTF-8 bytes. */
 export function validateDocument(input: ExactInput): DocumentReport {
   requireReady();
   return decode(wasm.validateBytes(bytes(input)));
@@ -2671,11 +2671,11 @@ function encodeOrdinary(
     nodes = 0;
   const add = (s: string, pointer: string) => {
     size += s.length;
-    if (size > 64 * 1024 * 1024)
+    if (size > 32 * 1024 * 1024)
       reject(
         "authoring-limit",
         pointer,
-        "Ordinary value exceeds the 64 MiB character limit.",
+        "Ordinary value exceeds the 32 MiB character limit.",
         true,
       );
     parts.push(s);

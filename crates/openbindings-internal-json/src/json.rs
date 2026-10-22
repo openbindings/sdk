@@ -8,7 +8,7 @@ use std::{collections::HashMap, fmt, sync::Arc};
 /// Finite input limits. Nesting counts arrays and objects, including the root.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct JsonLimits {
-    /// Maximum admitted source bytes; default 64 MiB (67,108,864 bytes).
+    /// Maximum admitted source bytes; default 32 MiB (33,554,432 bytes).
     pub max_bytes: usize,
     /// Maximum nested arrays/objects, including a container root; default 10,000.
     pub max_depth: usize,
@@ -18,7 +18,7 @@ pub struct JsonLimits {
 impl Default for JsonLimits {
     fn default() -> Self {
         Self {
-            max_bytes: 64 * 1024 * 1024,
+            max_bytes: 32 * 1024 * 1024,
             max_depth: 10_000,
             max_nodes: 1_000_000,
         }

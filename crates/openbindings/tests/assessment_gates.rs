@@ -99,21 +99,38 @@ fn native_names_compare_decoded_pairs_even_when_grammar_is_violated() {
 fn assessment_admission_is_caller_selected_and_precedes_version() {
     // all three limits precede a complete version declaration.
     let text = r#"{"openbindings":"0.3.0","operations":{},"x":[0]}"#;
-    for limits in [
-        JsonLimits {
-            max_bytes: 10,
-            ..JsonLimits::default()
-        },
-        JsonLimits {
-            max_nodes: 2,
-            ..JsonLimits::default()
-        },
-        JsonLimits {
-            max_depth: 1,
-            ..JsonLimits::default()
-        },
+    for (limits, setting) in [
+        (
+            JsonLimits {
+                max_bytes: 10,
+                ..JsonLimits::default()
+            },
+            "JsonLimits::max_bytes",
+        ),
+        (
+            JsonLimits {
+                max_nodes: 2,
+                ..JsonLimits::default()
+            },
+            "JsonLimits::max_nodes",
+        ),
+        (
+            JsonLimits {
+                max_depth: 1,
+                ..JsonLimits::default()
+            },
+            "JsonLimits::max_depth",
+        ),
     ] {
         let validation = validate_document_with_limits(text, limits).unwrap();
+        // Each refusal names the setting that raises its limit.
+        assert!(
+            validation
+                .report()
+                .findings
+                .iter()
+                .all(|f| f.message.contains(setting))
+        );
         assert_eq!(validation.report().conclusion, Conformance::Undetermined);
         assert!(
             validation
@@ -143,6 +160,52 @@ fn assessment_admission_is_caller_selected_and_precedes_version() {
         &text,
         JsonLimits {
             max_nodes: 1_000_100,
+            ..JsonLimits::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(raised.report().conclusion, Conformance::Conformant);
+}
+
+#[test]
+fn the_default_byte_limit_admits_32_mib_and_names_its_setting_past_it() {
+    let limit = JsonLimits::default().max_bytes;
+    assert_eq!(limit, 32 * 1024 * 1024);
+    // A conformant document of exactly `bytes`, padded by one string.
+    let document = |bytes: usize| {
+        let head = r#"{"openbindings":"0.2.0","operations":{},"x-fill":""#;
+        let mut text = String::with_capacity(bytes);
+        text.push_str(head);
+        text.extend(std::iter::repeat_n('a', bytes - head.len() - 2));
+        text.push_str(r#""}"#);
+        assert_eq!(text.len(), bytes);
+        text
+    };
+    assert_eq!(
+        checked(&document(limit)).report().conclusion,
+        Conformance::Conformant
+    );
+    let over = document(limit + 1);
+    let validation = checked(&over);
+    let report = validation.report();
+    assert_eq!(report.conclusion, Conformance::Undetermined);
+    assert_eq!(report.findings.len(), DOCUMENT_RULES.len());
+    for finding in &report.findings {
+        assert_eq!(finding.code, "input-limit");
+        assert_eq!(finding.location, None);
+        assert_eq!(
+            finding.message,
+            "the document's 33554433 bytes exceed the 33554432-byte admission limit; \
+             raise JsonLimits::max_bytes through validate_document_with_limits \
+             (TypeScript's validateDocument applies the default limits)"
+        );
+    }
+    // Raising the named setting admits the same document.
+    let raised = validate_document_with_limits(
+        &over,
+        JsonLimits {
+            max_bytes: limit + 1,
+            max_depth: usize::MAX,
             ..JsonLimits::default()
         },
     )

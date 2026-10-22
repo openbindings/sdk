@@ -899,13 +899,14 @@ pub fn validate_document_with_limits(
             let mut checks = Checks::new();
             let limit = error.kind == InputErrorKind::Limit;
             if limit {
+                let message = input_limit_message(error.code, limits, bytes.len());
                 for rule in Rule::ALL {
                     checks.mark(
                         rule,
                         Evidence::Inconclusive,
                         "input-limit",
                         None,
-                        error.to_string(),
+                        message.as_str(),
                     );
                 }
             } else {
@@ -955,6 +956,38 @@ fn version_refusal(value: &JsonValue) -> Option<VersionRefusal> {
         return None;
     }
     VersionRefusal::new(declared)
+}
+// Which admission limit stopped parsing, and the setting that raises it.
+// Parsing reports an exceeded limit as `byte-limit`, `node-limit` or
+// `depth-limit`.
+fn input_limit_message(code: &str, limits: JsonLimits, bytes: usize) -> String {
+    let (reached, setting) = match code {
+        "byte-limit" => (
+            format!(
+                "the document's {bytes} bytes exceed the {}-byte admission limit",
+                limits.max_bytes
+            ),
+            "max_bytes",
+        ),
+        "node-limit" => (
+            format!(
+                "the document holds more than the {} nodes admitted",
+                limits.max_nodes.min(u32::MAX as usize)
+            ),
+            "max_nodes",
+        ),
+        _ => (
+            format!(
+                "the document nests containers deeper than the {} levels admitted",
+                limits.max_depth
+            ),
+            "max_depth",
+        ),
+    };
+    format!(
+        "{reached}; raise JsonLimits::{setting} through validate_document_with_limits \
+         (TypeScript's validateDocument applies the default limits)"
+    )
 }
 const MAX_FINDINGS: usize = 4096;
 const MAX_FINDING_POINTER_BYTES: usize = 8 * 1024 * 1024;
