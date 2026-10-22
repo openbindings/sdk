@@ -95,13 +95,28 @@ impl fmt::Debug for Edit<'_> {
 }
 
 /// Atomic editing failure. The document and all its caches remain unchanged.
-#[derive(Clone, Debug, PartialEq, Eq)]
+///
+/// Every editing method returns this one error, for pointer edits and typed parts
+/// alike; [`Self::code`] gives each case a stable identifier. `Debug` shows the
+/// case and never a typed part's pointer, which holds caller-chosen keys.
+#[derive(Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum EditError {
-    /// Rebuilt JSON exceeded admission limits or could not be parsed.
+    /// Rebuilt JSON exceeded admission limits or could not be parsed, including a
+    /// typed part that does not fit the remaining byte budget (`byte-limit`).
     Input(InputError),
-    /// A typed part could not be serialized without collisions or within limits.
-    Authoring(AuthoringError),
+    /// A typed part's additional field shadows one of its typed members, such as
+    /// an `input` entry in an operation's `additional_fields`.
+    #[non_exhaustive]
+    FieldCollision {
+        /// Logical pointer into the typed part input, through `additional_fields`,
+        /// such as `/operations/lookup/additional_fields/input`; it addresses the
+        /// caller's Rust value, not document source bytes. `None` when its escaped
+        /// spelling would exceed 4,096 bytes; it is never the root.
+        part_pointer: Option<String>,
+    },
+    /// A typed part could not be encoded as supported exact JSON.
+    Serialization,
     /// Invalid RFC 6901 syntax, array index, or removal of the root.
     InvalidPointer,
     /// The pointer's parent does not exist.
@@ -120,19 +135,32 @@ impl EditError {
     pub fn code(&self) -> &'static str {
         match self {
             Self::Input(error) => error.code,
-            Self::Authoring(error) => match error.kind() {
-                AuthoringErrorKind::FieldCollision => "field-collision",
-                AuthoringErrorKind::InvalidField => "invalid-field",
-                AuthoringErrorKind::DuplicateMembers => "duplicate-members",
-                AuthoringErrorKind::Serialization => "serialization",
-                AuthoringErrorKind::Limit => "byte-limit",
-            },
+            Self::FieldCollision { .. } => "field-collision",
+            Self::Serialization => "serialization",
             Self::InvalidPointer => "invalid-pointer",
             Self::MissingParent => "missing-parent",
             Self::MissingValue => "missing-value",
             Self::NotContainer => "not-container",
             Self::DuplicateMembers => "duplicate-members",
             Self::Overlap => "overlapping-edits",
+        }
+    }
+}
+impl fmt::Debug for EditError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Input(error) => f.debug_tuple("Input").field(error).finish(),
+            Self::FieldCollision { part_pointer } => f
+                .debug_struct("FieldCollision")
+                .field("part_pointer_omitted", &part_pointer.is_none())
+                .finish_non_exhaustive(),
+            Self::Serialization => f.write_str("Serialization"),
+            Self::InvalidPointer => f.write_str("InvalidPointer"),
+            Self::MissingParent => f.write_str("MissingParent"),
+            Self::MissingValue => f.write_str("MissingValue"),
+            Self::NotContainer => f.write_str("NotContainer"),
+            Self::DuplicateMembers => f.write_str("DuplicateMembers"),
+            Self::Overlap => f.write_str("Overlap"),
         }
     }
 }
@@ -145,7 +173,6 @@ impl std::error::Error for EditError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::Input(error) => Some(error),
-            Self::Authoring(error) => Some(error),
             _ => None,
         }
     }
@@ -153,11 +180,6 @@ impl std::error::Error for EditError {
 impl From<InputError> for EditError {
     fn from(error: InputError) -> Self {
         Self::Input(error)
-    }
-}
-impl From<AuthoringError> for EditError {
-    fn from(error: AuthoringError) -> Self {
-        Self::Authoring(error)
     }
 }
 fn limit(limits: JsonLimits) -> EditError {
@@ -240,16 +262,14 @@ impl BoundedWriter {
 }
 impl<T: Serialize + ?Sized> WriteJson for Typed<'_, T> {
     fn write(&self, out: &mut BoundedWriter) -> Result<(), EditError> {
+        let limits = out.limits;
         serde_json::to_writer(out, self.0).map_err(|error| {
-            AuthoringError::plain(
-                if error.is_io() {
-                    AuthoringErrorKind::Limit
-                } else {
-                    AuthoringErrorKind::Serialization
-                },
-                "part could not be serialized within the supported JSON profile",
-            )
-            .into()
+            // The bounded writer's only failure is the byte budget.
+            if error.is_io() {
+                limit(limits)
+            } else {
+                EditError::Serialization
+            }
         })
     }
 }
@@ -827,37 +847,37 @@ impl Document {
     }
     /// Set one whole operation, creating its namespace if absent.
     /// # Errors
-    /// Returns an editing or typed-part error without changing the document.
+    /// Returns an editing error, including a typed part's field collision, without changing the document.
     pub fn set_operation(&mut self, key: &str, value: &Operation) -> Result<(), EditError> {
         self.set_part("operations", key, value)
     }
     /// Commit a complete operations map in one splice and parse, for bulk synthesis.
     /// # Errors
-    /// Returns an editing or typed-part error without changing the document.
+    /// Returns an editing error, including a typed part's field collision, without changing the document.
     pub fn set_operations(&mut self, value: &BTreeMap<String, Operation>) -> Result<(), EditError> {
         self.edit(&[Edit::SetOperations { value }])
     }
     /// Set one whole binding, creating its namespace if absent.
     /// # Errors
-    /// Returns an editing or typed-part error without changing the document.
+    /// Returns an editing error, including a typed part's field collision, without changing the document.
     pub fn set_binding(&mut self, key: &str, value: &Binding) -> Result<(), EditError> {
         self.set_part("bindings", key, value)
     }
     /// Set one whole source, creating its namespace if absent.
     /// # Errors
-    /// Returns an editing or typed-part error without changing the document.
+    /// Returns an editing error, including a typed part's field collision, without changing the document.
     pub fn set_source(&mut self, key: &str, value: &Source) -> Result<(), EditError> {
         self.set_part("sources", key, value)
     }
     /// Set one whole dependency, creating its namespace if absent.
     /// # Errors
-    /// Returns an editing or typed-part error without changing the document.
+    /// Returns an editing error, including a typed part's field collision, without changing the document.
     pub fn set_dependency(&mut self, key: &str, value: &Dependency) -> Result<(), EditError> {
         self.set_part("dependencies", key, value)
     }
     /// Set an example on an existing operation, creating its examples map if absent.
     /// # Errors
-    /// Returns an editing or typed-part error without changing the document.
+    /// Returns an editing error, including a typed part's field collision, without changing the document.
     pub fn set_example(
         &mut self,
         operation: &str,
@@ -877,7 +897,7 @@ impl Document {
 macro_rules! set_namespace {
     ($method:ident, $field:literal, $part:ty, $variant:ident) => {
         impl Document {
-            #[doc = concat!("Commit a complete `", $field, "` map in one splice and parse.\n\n# Errors\nReturns an editing or typed-part error without changing the document.")]
+            #[doc = concat!("Commit a complete `", $field, "` map in one splice and parse.\n\n# Errors\nReturns an editing error, including a typed part's field collision, without changing the document.")]
             pub fn $method(&mut self, value: &BTreeMap<String, $part>) -> Result<(), EditError> {
                 self.edit(&[Edit::$variant { value }])
             }
@@ -1069,6 +1089,8 @@ mod tests {
             )
             .unwrap_err();
         assert_eq!(error.code(), "byte-limit");
+        // A typed part over budget is the same admission limit as any other edit.
+        assert!(matches!(&error, EditError::Input(input) if input.kind == InputErrorKind::Limit));
         assert_eq!(witness.calls.get(), 1);
         assert!(witness.fields.get() < 10);
         assert_eq!(document.as_bytes(), before);

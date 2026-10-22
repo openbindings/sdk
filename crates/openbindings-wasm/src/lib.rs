@@ -1584,7 +1584,8 @@ pub fn discovery_policy() -> String {
 }
 #[wasm_bindgen]
 pub struct WasmDiscovery {
-    outcome: openbindings_http_discovery::DiscoveryOutcome,
+    // The discovery client's own judgment of a complete body: one validation.
+    validation: Result<DocumentValidation, VersionRefusal>,
 }
 impl std::fmt::Debug for WasmDiscovery {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1597,37 +1598,26 @@ impl WasmDiscovery {
     #[wasm_bindgen(constructor)]
     pub fn new(bytes: &[u8]) -> WasmDiscovery {
         Self {
-            outcome: openbindings_http_discovery::validate_body(bytes),
+            validation: openbindings::validate_document(bytes),
         }
     }
     pub fn result(&self) -> String {
-        use openbindings_http_discovery::DiscoveryOutcome::*;
-        match &self.outcome {
-            Found { document } => object!(
-                "report": document.as_document().validate().unwrap().report(),
-                "status": "found",
+        match &self.validation {
+            Ok(validation) => object!(
+                "report": validation.report(),
+                "status": match validation.report().conclusion {
+                    Conformance::Conformant => "found",
+                    Conformance::NonConformant => "non-conformant",
+                    Conformance::Undetermined => "undetermined",
+                },
             ),
-            NonConformant { validation } => {
-                object!("report": validation.report(), "status": "non-conformant")
-            }
-            Undetermined { validation } => {
-                object!("report": validation.report(), "status": "undetermined")
-            }
-            VersionRefused { refusal } => {
-                encoded(json!({"status":"version-refused","refusal":refusal}))
-            }
-            _ => unreachable!("complete body validation only"),
+            Err(refusal) => encoded(json!({"status":"version-refused","refusal":refusal})),
         }
     }
     pub fn document(&self) -> Option<WasmDocument> {
-        use openbindings_http_discovery::DiscoveryOutcome::*;
-        let document = match &self.outcome {
-            Found { document } => Some(document.as_document()),
-            NonConformant { validation } | Undetermined { validation } => validation.document(),
-            _ => None,
-        };
-        document.map(|d| WasmDocument {
-            handle: DocumentHandle::new(d.clone()),
+        let document = self.validation.as_ref().ok()?.document()?;
+        Some(WasmDocument {
+            handle: DocumentHandle::new(document.clone()),
         })
     }
 }

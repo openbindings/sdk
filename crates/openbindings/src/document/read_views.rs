@@ -273,8 +273,9 @@ impl BindingView {
         self.value
             .get("preference")
             .map(|value| {
-                Preference::from_json_value(value)
-                    .map_err(|_| InterpretationError::invalid("invalid-binding-preference", value))
+                Preference::from_json_value(value).ok_or_else(|| {
+                    InterpretationError::invalid("invalid-binding-preference", value)
+                })
             })
             .transpose()
     }

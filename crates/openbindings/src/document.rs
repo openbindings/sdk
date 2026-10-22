@@ -281,6 +281,13 @@ pub struct DocumentValidation {
 }
 #[derive(Clone, Debug)]
 /// Retained proof that a document revision met every applicable normative rule.
+///
+/// Its reads hand out one conformant view per document part,
+/// [`ConformantOperationView`], [`ConformantBindingView`], [`ConformantSourceView`],
+/// [`ConformantDependencyView`] and [`ConformantExampleView`]: each is the plain
+/// view of the same name, such as [`OperationView`], read with this proof, so its
+/// field reads are infallible.
+///
 /// Proof has no public unchecked constructor or deserializer:
 /// ```compile_fail
 /// use openbindings::*;

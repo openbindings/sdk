@@ -3,7 +3,7 @@
 use openbindings::{Document, JsonValue, Operation, Source};
 use openbindings_source_inspection::CancellationToken;
 use openbindings_source_inspection::{
-    BindableTarget, BindingFragment, InspectionError, InspectionErrorKind, InspectionLimitation,
+    BindableTarget, BindingValue, InspectionError, InspectionErrorKind, InspectionLimitation,
     Inspector, SourceInspection, SourceInspector,
 };
 use std::{
@@ -120,7 +120,7 @@ pub fn inspect_catalog(
             });
         let mut target = BindableTarget::new(
             id,
-            BindingFragment {
+            BindingValue {
                 content: entry.get("binding").map(|v| v.to_owned()),
                 idempotent,
                 ..Default::default()
@@ -221,7 +221,7 @@ pub fn author_target(
             &target
                 .binding
                 .bind("chosen.operation", "chosen.source")
-                .map_err(AuthoringFailure::Inspection)?,
+                .map_err(|error| AuthoringFailure::Inspection(error.into()))?,
         )
         .map_err(AuthoringFailure::Edit)?;
     let validation = document.validate().map_err(AuthoringFailure::Version)?;

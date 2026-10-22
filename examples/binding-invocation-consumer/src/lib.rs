@@ -27,11 +27,20 @@ pub struct Catalog {
     pub last_scope: Mutex<Option<String>>,
 }
 
+/// One advisory list serves every job. The three interfaces define the supported
+/// kind record identically, and each companion hands out the same type.
+fn supported_kinds() -> Vec<binding::SupportedKind> {
+    vec![binding::SupportedKind::new(KIND).with_description("Example catalog of units")]
+}
+
 impl inspection::SourceInspector for Catalog {
     type Inspection<'a> =
         <interface_synthesis_consumer::Catalog as inspection::SourceInspector>::Inspection<'a>;
     fn supports_kind(&self, kind: &str) -> bool {
         kind == KIND
+    }
+    fn supported_kinds(&self) -> Vec<inspection::SupportedKind> {
+        supported_kinds()
     }
     fn inspect<'a>(
         &'a self,
@@ -47,6 +56,9 @@ impl synthesis::InterfaceSynthesizer for Catalog {
         <interface_synthesis_consumer::Catalog as synthesis::InterfaceSynthesizer>::Synthesis<'a>;
     fn supports_kind(&self, kind: &str) -> bool {
         kind == KIND
+    }
+    fn supported_kinds(&self) -> Vec<synthesis::SupportedKind> {
+        supported_kinds()
     }
     fn synthesize<'a>(
         &'a self,
@@ -172,6 +184,9 @@ impl binding::BindingInvoker for Catalog {
     type Invocation<'a> = Pin<Box<dyn Future<Output = Result<(), InvocationError>> + Send + 'a>>;
     fn supports_kind(&self, kind: &str) -> bool {
         kind == KIND
+    }
+    fn supported_kinds(&self) -> Vec<binding::SupportedKind> {
+        supported_kinds()
     }
     fn invoke<'a>(
         &'a self,

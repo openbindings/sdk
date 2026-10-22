@@ -18,7 +18,11 @@
 
 - One exact OpenBindings 0.2 `Document` for parsing, inspection and in-place
   editing: atomic batches of JSON Pointer edits and typed part maps, and typed
-  field and part setters, all keeping untouched bytes exact. Validation with original source locations, bounded
+  field and part setters, all keeping untouched bytes exact. Every edit refuses
+  with one `EditError`; a typed part's field collision carries a pointer into
+  that part (TypeScript `EditError.partPointer`), and a typed part that cannot be
+  encoded as supported exact JSON refuses with `EditError::Serialization`
+  (`serialization`). Validation with original source locations, bounded
   findings and per-rule evidence.
 - Document validation's fixed checks (OBI-02, OBI-10) and reference inspection use
   the unmodified jsonschema 0.58.6 library with its default pattern engine, which
@@ -113,9 +117,22 @@
   `/.well-known/%6Fpenbindings` (RFC 3986 section 2.3), and never decodes a
   reserved escape such as `%2F` into a path separator.
 - Provisional Rust provider traits and checked callers for source inspection,
-  interface synthesis, binding invocation and operation invocation.
+  interface synthesis, binding invocation and operation invocation. The three
+  kind-facing companions share one `SupportedKind` and `KindSupportVerdict`, so a
+  provider serving several jobs builds one advisory list. Inspection and
+  invocation share one by-value `BindingValue`: an inspected target's binding
+  invokes as it is, and `bind(operation, source)` gives the author's core binding;
+  its `BoundaryError` converts into an `InspectionError` that keeps the boundary
+  code and location. A synthesis provider's typed-part edit over the byte budget
+  now refuses as `openbindings.synthesis.byte-limit` instead of
+  `openbindings.synthesis.authoring`.
 - A TypeScript API with bundled Wasm, exact-value editing, disposable owners and
-  Fetch discovery for qualified browser, Node ESM and Worker hosts.
+  Fetch discovery for qualified browser, Node ESM and Worker hosts. Its names
+  follow Rust's where the concept is the same: `Document.validate()` returns a
+  `DocumentValidation`, whose conformant branch carries the proof, and
+  `validateDocument` returns the plain `DocumentReport`. `DocumentValidation` thus
+  changes meaning: it now names the validation carrying the proof (formerly
+  `ValidationResult`), while the plain report it named before is `DocumentReport`.
 - A bundled Wasm module whose bytes do not depend on where it was built. The
   build gives the builder's Cargo home, toolchain, target directory and checkout
   fixed names in the module, and refuses a module that still embeds one; CI

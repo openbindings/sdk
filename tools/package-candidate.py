@@ -21,7 +21,7 @@ PUBLIC_CRATES = {
 
 INTERNAL_CRATES = {
     "openbindings-internal-json", "openbindings-internal-schema",
-    "openbindings-internal-cancellation",
+    "openbindings-internal-cancellation", "openbindings-internal-interfaces",
 }
 BUILD_ONLY_CRATES = {"openbindings-wasm"}
 

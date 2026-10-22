@@ -71,7 +71,13 @@ async fn http_rows(
     validation: &DocumentValidation,
 ) -> Vec<Row> {
     let exact = http::AllowOrigin::Exact(format!("https://user:{SECRET}@example.invalid"));
-    let mut config = http::validate_allow_origin(&exact).unwrap_err();
+    let mut config = http::Publication::new(
+        &validation.conformant().unwrap(),
+        http::PublicationOptions {
+            allow_origin: exact.clone(),
+        },
+    )
+    .unwrap_err();
     let mut rows = Vec::new();
     for (variant, policy) in [
         ("Exact", exact),

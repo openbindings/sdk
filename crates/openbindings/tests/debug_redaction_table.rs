@@ -402,12 +402,12 @@ fn debug_redacts_caller_text_at_every_boundary() {
     operation
         .additional_fields
         .insert("description".into(), JsonValue::null());
-    let EditError::Authoring(authoring) = draft.set_operation(SECRET, &operation).unwrap_err()
-    else {
+    let collision = draft.set_operation(SECRET, &operation).unwrap_err();
+    let EditError::FieldCollision { part_pointer, .. } = &collision else {
         panic!()
     };
-    assert!(authoring.draft_pointer().unwrap().contains(SECRET));
-    rows.push(row("AuthoringError", &authoring));
+    assert!(part_pointer.as_deref().unwrap().contains(SECRET));
+    rows.push(row("EditError::FieldCollision", &collision));
     let source = Source {
         kind: SECRET.into(),
         content: Some(context.clone()),

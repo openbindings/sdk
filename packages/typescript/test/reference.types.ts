@@ -8,7 +8,9 @@ import {
   type ValueCheck,
   type ValueContractPreparation,
   type PreparedValueContract,
-  type ValidationResult,
+  type DocumentValidation,
+  type DocumentReport,
+  validateDocument,
 } from "../dist/index.js";
 import { DiscoveryPublication } from "../dist/http-discovery.js";
 
@@ -20,7 +22,10 @@ export async function referenceExample(wasmBytes: Uint8Array, source: string) {
   // Every access returns its own owner; this one is scoped independently.
   using original = document.value();
   const copy: Uint8Array = original.bytes;
-  const proof: ValidationResult = document.validate();
+  const proof: DocumentValidation = document.validate();
+  // validateDocument returns plain data: a report or a refusal, never a proof.
+  const plain: DocumentReport = validateDocument(source);
+  if (plain.status === "report") void plain.report.conclusion;
   if (proof.status !== "conformant") return proof;
   using validated = proof.document;
   using publication = new DiscoveryPublication(validated);

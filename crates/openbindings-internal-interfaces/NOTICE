@@ -1,0 +1,3 @@
+OpenBindings Rust SDK
+Applies OpenBindings draft revision 30416ef1ca626e58eb8c383a0c71422a68f9243f.
+Public package behavior is bounded by the declared core or companion scope.
