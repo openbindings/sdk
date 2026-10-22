@@ -395,8 +395,11 @@ explanations, not machine identifiers. Multiple rules can share a code. Parse
 locations use original byte coordinates. Pointers are exact, including a member
 name with an unpaired UTF-16 unit (Rust `Pointer::as_str` is then `None`), and are
 absent only for a syntax error, which precedes any value. Input-limit findings have
-no location. Input admission refusals are not violations. `InputError` outside whole-document validation retains its existing
-code-based Display representation.
+no location. Input admission refusals are not violations. Outside whole-document
+validation, an `InputError` keeps its code and byte offset, and its `Display`
+writes what the parser expected or found and the byte where, such as
+`expected a colon after the member name at byte 5`, with the same wording as a
+syntax finding's message. An input-limit finding's message is that `Display`.
 
 | Code | Rule | Meaning |
 | --- | --- | --- |

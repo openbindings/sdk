@@ -76,7 +76,7 @@ export interface InputFailure {
     kind?: string;
     /** Zero-based offset in original UTF-8 source when available. */
     byteOffset?: number;
-    /** Human-readable explanation; use structured discriminants/codes for logic. */
+    /** Human-readable explanation of what the parser expected or found and the byte where, such as `expected a colon after the member name at byte 5`; use `code` and `byteOffset` for logic. */
     message: string;
   };
 }
