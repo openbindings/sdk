@@ -121,9 +121,11 @@ copied paths, a query and a fragment, adds 256.0 MiB, 44.0 MiB below that. The
 ceiling is not a multiple of the byte limit: at the former 64 MiB default the
 same shape adds 364.9 MiB, since much of its memory is held for each
 declaration, whatever its length. This bounds these shapes, not every document.
-Run the phase alone with `--limits-only`. The TypeScript package's
-`test/wasm-memory.test.mjs` holds the module memory that validating the two
-copied-identifier documents adds to the same allowance.
+Run the phase alone with `--limits-only`. The phase passes the caller's input
+by reference; handed over through `validate_document_owned`, the same
+documents allocate one copy of the input less, 224.3 MiB at the largest. The
+TypeScript package's `test/wasm-memory.test.mjs` holds the module memory that
+validating the two copied-identifier documents adds to the same allowance.
 
 ## Recorded results
 

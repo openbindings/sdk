@@ -632,7 +632,10 @@ fixtures do not characterize arbitrary schema evaluation or cold compilation.
 Its memory grows linearly with the document. Beyond the caller's own copy of
 the input it allocates:
 
-- The document's copy of its text, as long as the input.
+- The document's copy of its text, as long as the input. The owned entry
+  points (`validate_document_owned`, `Document::parse_owned`, their
+  `_with_limits` forms and `JsonValue::parse_owned_with_limits`) take the
+  caller's buffer as the text and make no copy.
 - The decoded text of its escaped strings, at most as long as the input, since
   no escape decodes longer than it is written. A string holding an unpaired
   surrogate escape keeps no decoded copy: its UTF-16 units are read from its

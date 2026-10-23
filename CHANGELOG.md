@@ -72,6 +72,17 @@
   `String.prototype.isWellFormed`, which Node 22, Chromium, WebKit and workerd
   provide, and scans the text itself only on a host without it; both refuse
   the same texts. Checking 32 MiB of text no longer takes a 65 ms scan.
+- Owned input: `validate_document_owned(Vec<u8>)`,
+  `validate_document_owned_with_limits(Vec<u8>, JsonLimits)`,
+  `Document::parse_owned(Vec<u8>)`, `Document::parse_owned_with_limits(Vec<u8>,
+  JsonLimits)` and `JsonValue::parse_owned_with_limits(Vec<u8>, JsonLimits)`
+  take the caller's buffer as the document's or value's text instead of
+  copying it, with exactly the results, reports, errors, messages and
+  locations of the borrowed forms. The SDK hands over the buffers it builds
+  itself, for document edits, ordinary-value conversion, synthesized
+  interfaces, invocation carriers and inspection models. The diagnostic
+  memory probe's largest document allocates 224.3 MiB beyond a handed-over
+  buffer, against 256.0 MiB beyond a borrowed one.
 - Exact-input refusals say what the parser expected or found and the byte where:
   `InputError`'s `Display` and TypeScript's `InputFailure.message` read, for
   example, `expected a colon after the member name at byte 5`. Codes, kinds

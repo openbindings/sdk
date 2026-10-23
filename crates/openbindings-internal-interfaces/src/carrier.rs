@@ -359,7 +359,7 @@ pub fn encode<T: Serialize>(value: &T, limits: JsonLimits) -> Result<JsonValue, 
     };
     serde_json::to_writer(&mut output, value)
         .map_err(|_| boundary_error(BoundaryCode::EncodingLimit, ""))?;
-    JsonValue::parse_with_limits(output.bytes, limits)
+    JsonValue::parse_owned_with_limits(output.bytes, limits)
         .map_err(|_| boundary_error(BoundaryCode::EncodingLimit, ""))
 }
 

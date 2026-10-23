@@ -102,6 +102,7 @@ kind union.
 | --- | --- |
 | `validate_document`, `validate_document_with_limits` | Judge bytes as they are, for reading: a JSON syntax or encoding error is an OBI-01 violation and an exceeded admission limit leaves every rule inconclusive, both in the report. Only an unsupported declared version is `Err`. |
 | `Document::parse`, `Document::parse_with_limits(input, JsonLimits)`, `Document::from_json` | Admit exact JSON for editing, without a conformance claim, including documents with missing or mistyped fields. `parse` and `parse_with_limits` return `InputError` for invalid UTF-8, a byte order mark, a JSON syntax error or an exceeded admission limit; `parse` and `from_json` use `JsonLimits::default()`. |
+| `validate_document_owned(input: Vec<u8>)`, `validate_document_owned_with_limits(input: Vec<u8>, JsonLimits)`, `Document::parse_owned(input: Vec<u8>)`, `Document::parse_owned_with_limits(input: Vec<u8>, JsonLimits)`, `JsonValue::parse_owned_with_limits(input: Vec<u8>, JsonLimits)` | Exactly the results, reports, errors, messages and locations of the borrowed forms, taking the bytes: the document or value keeps the caller's buffer as its text instead of a copy, so a caller that hands over its buffer holds one copy of the text, not two. |
 | `Document::limits(&self) -> JsonLimits` | The admission limits the document was admitted under, which its edits and typed setters apply to the edited document: the caller's for `parse_with_limits` and `validate_document_with_limits`, no nesting cap for `validate_document`, the bytes of the configured body bound (at least the default) for a discovered document, and the defaults for `parse`, `new` and `from_json`. Value-contract preparation keeps fixed bounds of its own: a projection stops at 64 MiB (`program-byte-limit`) and each resource it writes fits 64 MiB, 1,000,000 nodes and 10,000 levels (`program-json-limit`). TypeScript's `limits` getter on a document reports the same. |
 | `is_valid_name` | Tests the specification's ASCII name grammar without normalizing the name. |
 | `Document::new` | Create an empty OBI declaring the authoring version. |
@@ -358,7 +359,10 @@ and `Document::parse_with_limits`. TypeScript's `validateDocument(input, { limit
 mirrors both: without `limits`, `validate_document`; with them,
 `validate_document_with_limits`, unspecified entries keeping the `JsonLimits`
 defaults, including the 10,000-level nesting cap. The validated document keeps
-the limits it was admitted under.
+the limits it was admitted under. `validate_document_owned` and
+`validate_document_owned_with_limits` judge a `Vec<u8>` the caller hands over
+exactly as the borrowed forms judge its bytes, and a document they keep holds
+that buffer as its text.
 Both return `Result<DocumentValidation, VersionRefusal>`; only a conformant
 validation provides a `Conformant<Document>` proof.
 
