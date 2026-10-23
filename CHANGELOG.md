@@ -239,6 +239,10 @@
   contract*, never an unqualified *contract*, which the specification reserves for
   an operation's whole contract: a failure reads "value does not satisfy the value
   contract", and limit refusals read "this value contract ...".
+- `THIRD-PARTY-NOTICES.txt` and `DEPENDENCIES.json` cover the native dependency
+  closure of Linux (GNU), macOS and Windows (MSVC) on x86_64 and aarch64, which
+  the inventory's `platforms` lists, so the Linux and Windows target-specific
+  dependencies are attributed too.
 - Runnable first-use and lifecycle examples, legacy Go and TypeScript migration
   guidance, API reference documentation and reproducible performance measurements.
 

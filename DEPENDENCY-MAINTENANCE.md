@@ -192,7 +192,10 @@ Core and the evaluator share one copy of the library and never exchange a value:
   consumer of core alone, holds no evaluator.
 
 Refresh both attribution inventories and notices offline with
-`python3 tools/attribution.py`; verify with `--check`.
+`python3 tools/attribution.py`; verify with `--check`. The native inventory is
+the union of the closures for Linux (GNU), macOS and Windows (MSVC) on x86_64
+and aarch64, so a dependency one of them alone pulls in is attributed; fetch
+every platform's sources first with `cargo fetch --locked`.
 
 ## The unevaluated-walk transform
 
