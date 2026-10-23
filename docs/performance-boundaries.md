@@ -128,7 +128,11 @@ adapter, which compares the stack address it runs at with the address the
 pass started at (each level of the value is such a read). A pass that has
 used more than half of `stack_bytes`, 128 KiB at the default, stops with
 `evaluation-depth-limit`: from then on every read fails,
-so the library stops descending and its answer is discarded. The guard adds
+so the library stops descending and its answer is discarded. The guard bounds
+the stack's bytes, not a depth: how deep a value it admits depends on the
+frames the code takes, so the deepest admitted values below vary with the build
+and the host, and what each host qualifies is the margin in the stack table.
+The guard adds
 no schema keyword, so preparation is unchanged; each read pays an address
 comparison. Checking a 20,000-integer array took 131 µs instead of 100 µs, and
 a 100-level object 9.8 µs instead of 9.5 µs, against a contract holding an

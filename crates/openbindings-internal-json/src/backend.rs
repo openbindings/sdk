@@ -29,8 +29,8 @@ fn charge(units: usize) -> bool {
 /// uniqueness check runs within one pass, so each reads this once and charges
 /// only when it holds, instead of reaching the thread's state for every probe.
 /// The member and element iterators charge each read themselves: the library
-/// recurses through them, and an iterator that held the state would take more
-/// stack at every level a guarded pass measures.
+/// holds one in every frame it recurses through, and one that also held the
+/// state would take more stack at every level of the value.
 #[inline]
 fn counting() -> bool {
     #[cfg(feature = "evaluator-work")]
@@ -452,9 +452,6 @@ impl<'a> From<MemberName<'a>> for Cow<'a, str> {
         name.text
     }
 }
-// A guarded pass checks its stack at this reader's charge, so the reader's
-// shape and frame decide how deep a value it admits; they are kept as they
-// were measured (docs/performance-boundaries.md).
 impl<'a> Iterator for Members<'a> {
     type Item = (MemberName<'a>, View<'a>);
     #[inline]
@@ -464,21 +461,34 @@ impl<'a> Iterator for Members<'a> {
         }
         self.1.next().map(|&name| {
             let name = name as usize;
+            let scalar = self.0.string(name);
             (
                 MemberName {
-                    text: if STRING_ACCESS.get().fixed {
-                        fixed_presentation(self.0, name).expect("member name is a string")
-                    } else {
-                        self.0.string(name).map(Cow::Borrowed).unwrap_or_else(|| {
-                            present_string(self.0, name).expect("member name is a string")
-                        })
+                    text: match scalar {
+                        // Without an unpaired unit in the arena a name is
+                        // presented as itself either way.
+                        Some(text) if self.0.unpaired.is_empty() => Cow::Borrowed(text),
+                        _ => presented_name(self.0, name, scalar),
                     },
-                    unpaired: self.0.string(name).is_none(),
+                    unpaired: scalar.is_none(),
                 },
                 // A member's value is the node after its name.
                 View::Stored(self.0, name + 1),
             )
         })
+    }
+}
+// A member name of an arena holding an unpaired unit, as the pass presents
+// it; kept out of line so that the iterator inlines.
+#[cold]
+#[inline(never)]
+fn presented_name<'a>(arena: &'a Arena, name: Id, scalar: Option<&'a str>) -> Cow<'a, str> {
+    if STRING_ACCESS.get().fixed {
+        return fixed_presentation(arena, name).expect("member name is a string");
+    }
+    match scalar {
+        Some(text) => Cow::Borrowed(text),
+        None => present_string(arena, name).expect("member name is a string"),
     }
 }
 impl<'a> Object<'a, FlatJson> for ObjectView<'a> {

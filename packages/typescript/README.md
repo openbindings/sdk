@@ -245,8 +245,9 @@ document admission limits (32 MiB and 1,000,000 nodes; see above); `stackBytes`
 (256 KiB), the stack the evaluator
 sizes its bounds from: 256 bytes for each nested schema evaluation (1,024 at
 the default), half of it for a pass of a contract holding
-`unevaluatedProperties` or `unevaluatedItems` as it evaluates, and the
-unevaluated walk limit below. In Wasm the guard measures the module's own
+`unevaluatedProperties` or `unevaluatedItems` as it evaluates (a bound on the
+stack's bytes, so the depth it admits varies with the build and the host), and
+the unevaluated walk limit below. In Wasm the guard measures the module's own
 1 MiB stack, while the JavaScript engine's call stack bounds how deep the
 module's calls go: Node 22 checked and explained the deepest admitted values
 of the shapes probed up to `stackBytes: 524288`, and at 1 MiB a guarded

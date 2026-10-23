@@ -109,7 +109,8 @@ from which the evaluator sizes evaluation depth (256 bytes for each nested
 schema evaluation, 1,024 at the default), bounded from the contract before a
 value is evaluated, the stack a pass of a contract holding
 `unevaluatedProperties` or `unevaluatedItems` may use as it evaluates (half,
-128 KiB at the default) and the unevaluated walk limit below, so release
+128 KiB at the default: a bound on the stack's bytes, so the depth it admits
+varies with the build and the host) and the unevaluated walk limit below, so release
 builds on Linux, macOS and Windows prepare, check and explain the 39 recursive
 shapes the stack test covers on threads of 192 KiB, 256 KiB and 1 MiB with the
 evaluator sized for each; each pattern's bytes, form and nesting (1 MiB,
