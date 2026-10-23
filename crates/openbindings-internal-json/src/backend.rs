@@ -620,43 +620,46 @@ impl ArrayView<'_> {
             held.resize(end - first, 0);
             &mut held
         };
+        // One buffer each for every container's item hashes, reused: hashing
+        // the slice hashes what hashing the collected vector did.
+        let (mut items, mut pairs) = (Vec::new(), Vec::new());
         for id in (first..end).rev() {
             if counting && !charge(1) {
                 return false;
             }
-            let hash = match self.0.nodes[id].kind {
-                Kind::Null => hasher.hash_one((0u8, 0u8)),
-                Kind::Bool(b) => hasher.hash_one((1u8, b)),
-                Kind::Number => hasher.hash_one((2u8, Decimal::parse(self.0.raw(id)))),
-                Kind::String {
-                    text: Text::UNPAIRED,
-                    ..
-                } => hasher.hash_one((3u8, 1u8, self.0.units(id))),
-                Kind::String { .. } => hasher.hash_one((3u8, 0u8, self.0.string(id))),
-                Kind::Array { .. } => hasher.hash_one((
-                    4u8,
-                    self.0
-                        .elements(id)
-                        .expect("an array")
-                        .iter()
-                        .map(|&i| hashes[i as usize - first])
-                        .collect::<Vec<_>>(),
-                )),
-                Kind::Object { .. } => {
-                    let mut pairs: Vec<_> = self
-                        .0
-                        .member_names(id)
-                        .expect("an object")
-                        .iter()
-                        .map(|&name| {
-                            let name = name as usize;
-                            (hashes[name - first], hashes[name + 1 - first])
-                        })
-                        .collect();
-                    pairs.sort_unstable();
-                    hasher.hash_one((5u8, pairs))
-                }
-            };
+            let hash =
+                match self.0.nodes[id].kind {
+                    Kind::Null => hasher.hash_one((0u8, 0u8)),
+                    Kind::Bool(b) => hasher.hash_one((1u8, b)),
+                    Kind::Number => hasher.hash_one((2u8, Decimal::parse(self.0.raw(id)))),
+                    Kind::String {
+                        text: Text::UNPAIRED,
+                        ..
+                    } => hasher.hash_one((3u8, 1u8, self.0.units(id))),
+                    Kind::String { .. } => hasher.hash_one((3u8, 0u8, self.0.string(id))),
+                    Kind::Array { .. } => {
+                        items.clear();
+                        items.extend(
+                            self.0
+                                .elements(id)
+                                .expect("an array")
+                                .iter()
+                                .map(|&i| hashes[i as usize - first]),
+                        );
+                        hasher.hash_one((4u8, items.as_slice()))
+                    }
+                    Kind::Object { .. } => {
+                        pairs.clear();
+                        pairs.extend(self.0.member_names(id).expect("an object").iter().map(
+                            |&name| {
+                                let name = name as usize;
+                                (hashes[name - first], hashes[name + 1 - first])
+                            },
+                        ));
+                        pairs.sort_unstable();
+                        hasher.hash_one((5u8, pairs.as_slice()))
+                    }
+                };
             hashes[id - first] = hash;
         }
         let hashes = &*hashes;
