@@ -225,7 +225,7 @@ test("a contract's compiled patterns share its pattern memory", () => {
       ),
       new RegExp(`^${at}/prefixItems/[0-9]+/pattern$`),
     ),
-    "this contract compiles more than 3 regular expressions, as many as its 192 KiB " +
+    "this value contract compiles more than 3 regular expressions, as many as its 192 KiB " +
       "total_pattern_memory holds at 48 KiB each once their search caches take a quarter; " +
       raise,
   );
@@ -261,7 +261,7 @@ test("a contract's compiled patterns share its pattern memory", () => {
   assert.equal(unmatched.detail.code, "pattern-total-memory-limit");
   assert.equal(
     unmatched.detail.message,
-    "this contract's one compiled regular expression holds 48 KiB of its 256 KiB " +
+    "this value contract's one compiled regular expression holds 48 KiB of its 256 KiB " +
       "total_pattern_memory and 64 KiB for its search cache, which leaves 144 KiB; this " +
       "one, which needs more, may take it all, but does not compile within the 192 KiB " +
       "that gives it; " +

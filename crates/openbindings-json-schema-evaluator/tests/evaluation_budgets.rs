@@ -178,7 +178,7 @@ fn deep_values_report_the_depth_limit() {
     assert_eq!(detail.code, "evaluation-depth-limit");
     assert_eq!(
         detail.message,
-        "this value nests more than 203 levels, the deepest this contract evaluates within the \
+        "this value nests more than 203 levels, the deepest this value contract evaluates within the \
          1024 schema evaluations its 256 KiB stack_bytes holds at 256 bytes each; raise \
          stack_bytes (stackBytes in TypeScript)"
     );
@@ -221,7 +221,7 @@ fn a_contract_too_deep_for_the_stack_refuses_every_value() {
     };
     assert_eq!(
         detail.message,
-        "evaluating any value against this contract could nest more than the 256 schema \
+        "evaluating any value against this value contract could nest more than the 256 schema \
          evaluations its 64 KiB stack_bytes holds at 256 bytes each; raise stack_bytes \
          (stackBytes in TypeScript)"
     );

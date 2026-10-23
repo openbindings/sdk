@@ -66,7 +66,7 @@ mod tests {
                 }
             }
             ValueOutcome::Fails {
-                message: "value does not satisfy the contract".into(),
+                message: "value does not satisfy the value contract".into(),
                 problems: vec![ValueProblem::new(
                     "".parse().unwrap(),
                     self.schema.clone(),

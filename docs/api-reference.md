@@ -175,7 +175,7 @@ resolution space is assembled only when an evaluator requests the core projectio
 once per live revision and set; repeated or alternating preparation reuses it. The
 space without supplied resources stays with the revision, and a space with a set
 stays with that set until the set or the revision is dropped, so a prepared
-contract never retains a space for resources it did not receive.
+value contract never retains a space for resources it did not receive.
 
 A preparation refusal is a `NoVerdict`, with its Debug redaction: the broad
 reason is shown, while its code, message and original schema text and
@@ -246,7 +246,7 @@ Local futures and `Rc` providers are also supported.
   fixed code and redacts arbitrary codes, text and pointers. Explicit fields and
   serialization retain them. `NoVerdictReason` contains only inability causes.
 - Prepared does not mean decidable. Every value may still return
-  `NoVerdict`. Contracts expose no resource-completeness classification. Applications
+  `NoVerdict`. Prepared value contracts expose no resource-completeness classification. Applications
   own replacement policy and handle refusal at preparation and validation.
 - Static inspection uses `ReferenceRefusal` and `ReferenceRefusalReason`, including
   cancellation, instead of value-outcome `NoVerdict`. Original keyword and target
@@ -543,7 +543,7 @@ See the [maintainer guide](maintainers.md) for rendering and verification comman
 
 One prepared value contract serves both calls. `validate` (and `validate_with_control`,
 `validate_json`) is the cheap check: it returns `Fails` with the fixed message
-“value does not satisfy the contract”, no problems, and `problems_complete =
+“value does not satisfy the value contract”, no problems, and `problems_complete =
 false`. TypeScript's `validate` returns `message`, no problems and
 `problemsComplete: false`.
 

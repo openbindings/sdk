@@ -91,7 +91,7 @@ def main():
             run(args)
             result = run([executable], stdout=subprocess.PIPE, text=True)
             print(result.stdout, end='')
-            if name == 'evaluator_readme' and result.stdout != 'input satisfies the contract\n':
+            if name == 'evaluator_readme' and result.stdout != 'input satisfies the input contract\n':
                 raise AssertionError('Evaluator README example must demonstrate a satisfied input')
 
 

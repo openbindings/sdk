@@ -112,12 +112,12 @@
 - An optional JSON Schema 2020-12 evaluator composed over the unmodified
   jsonschema 0.58.6 library, with exact numeric semantics, ECMAScript `u`-mode
   patterns on a linear-time engine, dynamic references resolved through each
-  path's dynamic scope, and cooperative cancellation. It bundles each contract
+  path's dynamic scope, and cooperative cancellation. It bundles each value contract
   into one resource, so every reached schema compiles once, and reuses a
   resource set's identity index instead of indexing its resources again. A
-  contract that reaches a resource that was not supplied prepares with an empty
+  value contract that reaches a resource that was not supplied prepares with an empty
   stand-in for it, and a pass that reaches the stand-in gives no verdict
-  (`resource-unavailable`) naming it. A contract in which an
+  (`resource-unavailable`) naming it. A value contract in which an
   `unevaluatedProperties` or `unevaluatedItems` keyword's annotation sources
   reach a stand-in, a reference to a fragment of a missing resource, or one that
   identifies no schema refuses preparation. Patterns, including the word
@@ -131,17 +131,17 @@
   the host's resources: `Limits::stack_bytes` (TypeScript `stackBytes`,
   256 KiB) is the stack preparation and evaluation may use, from which the
   evaluator sizes evaluation depth (256 bytes for each nested schema
-  evaluation), bounded from the contract before a value is evaluated, the stack
-  a pass of a contract holding an unevaluated keyword may use as it evaluates
+  evaluation), bounded from the value contract before a value is evaluated, the stack
+  a pass of a value contract holding an unevaluated keyword may use as it evaluates
   (half, measured as it goes: a bound on bytes, so the depth it admits varies
   with the build and the host) and the unevaluated walk limit below, so a host
   that gives a larger thread admits deeper values and longer walks; each
   pattern's size, form
-  and nesting, and the forms kept for all of a contract's patterns together,
+  and nesting, and the forms kept for all of a value contract's patterns together,
   counted as each is written, with each distinct `pattern` form kept once
   (`Limits::total_pattern_bytes`, TypeScript `totalPatternBytes`, 4 MiB,
   `pattern-total-byte-limit`); the regex crate's memory for all of a
-  contract's compiled patterns together (`Limits::total_pattern_memory`,
+  value contract's compiled patterns together (`Limits::total_pattern_memory`,
   TypeScript `totalPatternMemory`, 64 MiB, `pattern-total-memory-limit`, whose
   message states the arithmetic) for each distinct `pattern` form the run
   matcher does not match and each `patternProperties` name: a quarter, at most
@@ -150,10 +150,10 @@
   with the forms that need more sharing what is left, at most 32 MiB each, so
   small patterns elsewhere change a large one's outcome only through their
   48 KiB each, no outcome depends on the order strings reach the patterns, a
-  contract compiling more than 1,024 patterns refuses before compiling any, 40
+  value contract compiling more than 1,024 patterns refuses before compiling any, 40
   counted-repetition names that peaked at 1.1 GB refuse in about 0.2 s, and a
   `pattern` value compiled when a string first reaches it stays within what it
-  is given; the memory dynamic specialization adds to a contract's program,
+  is given; the memory dynamic specialization adds to a value contract's program,
   estimated for the SDK's own copies and dynamic contexts
   (`Limits::program_bytes`, TypeScript `programBytes`, 48 MiB,
   `program-specialization-limit`); and an unevaluated keyword's annotation
@@ -171,9 +171,9 @@
   application's to set and are off by default: `Limits::evaluation_steps`,
   which bounds only time, caps each pass's work, without which time can grow
   exponentially with some schemas, and `Limits::schema_resources` (TypeScript
-  `schemaResources`) caps the schema resources one contract may reach, refusing
+  `schemaResources`) caps the schema resources one value contract may reach, refusing
   with `LimitExceeded` and `schema-resource-limit` before the library compiles
-  the contract, which bounds that compilation's time and memory (a
+  the value contract, which bounds that compilation's time and memory (a
   99,990-resource `$id` chain: 11.5 s and 723 MB without a cap, 1.2 s and
   502 MB refused at 1,000). Exact `multipleOf` divides within a fixed
   arithmetic bound: past 4,096 significant digits or an exponent of ±20,000 in
@@ -231,6 +231,10 @@
   fixed names in the module, and refuses a module that still embeds one; CI
   rebuilds it from another checkout path and Cargo home and requires identical
   bytes.
+- Evaluator messages and the documentation use the specification's term *value
+  contract*, never an unqualified *contract*, which the specification reserves for
+  an operation's whole contract: a failure reads "value does not satisfy the value
+  contract", and limit refusals read "this value contract ...".
 - Runnable first-use and lifecycle examples, legacy Go and TypeScript migration
   guidance, API reference documentation and reproducible performance measurements.
 

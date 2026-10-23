@@ -1,6 +1,6 @@
 //! One schema resource for the JSON Schema library.
 //!
-//! The projection gives every schema a contract reaches its own definition,
+//! The projection gives every schema a value contract reaches its own definition,
 //! `<resource>#/$defs/n<number>`, in one projected resource per original
 //! resource, and writes every subschema position as a `$ref` to its child's
 //! definition. Definition numbers are unique across resources, so this module

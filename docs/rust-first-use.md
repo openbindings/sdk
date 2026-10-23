@@ -76,16 +76,16 @@ lookup distinguishes found, missing and ambiguous.
 A conformant operation's `input()` and `output()` return its value contracts, or
 `None` when the operation declares none. `schema()` borrows the exact schema.
 `prepare(&DefaultEvaluator::new())` uses the default evaluator budgets and no
-supplied resources; reading a contract prepares nothing. The SDK never acquires
+supplied resources; reading a value contract prepares nothing. The SDK never acquires
 resources. Use `prepare_with(&evaluator, &resources)` for a shared or configured
 evaluator, custom budgets, supplied resources or a custom evaluator. The evaluator
 is borrowed for the call. Each check chooses its detail: `validate` is cheap and
-reports only whether a value fails; `explain` on the same contract reports why.
+reports only whether a value fails; `explain` on the same value contract reports why.
 
 Preparation returns `Result<PreparedValueContract, NoVerdict>`, so `?` propagates a
 refusal with its reason, code, message and location. A missing operation and an
-absent contract are `None` before preparation. Only a `Conformant<Document>` hands
-out contracts; a plain `Document` operation exposes the exact schema value.
+absent value contract are `None` before preparation. Only a `Conformant<Document>` hands
+out value contracts; a plain `Document` operation exposes the exact schema value.
 Document validation itself needs no caller-supplied evaluator. See
 [evaluator integration](schema-evaluators.md).
 
@@ -169,7 +169,7 @@ the [replacement example](../crates/openbindings-json-schema-evaluator/examples/
 shows supplied resources and retained work. Schema resources are explicit and immutable. The SDK never fetches missing
 references. Prepare again with a new set to change resources; prepared value contracts keep
 their original snapshots. An application can prepare a candidate before replacing
-its active contract and keep serving old work if preparation fails.
+its active value contract and keep serving old work if preparation fails.
 
 A `ResourceSet` indexes its resource identities once when it is built, and clones
 share that index. Evaluators that request the core projection reuse one resolution

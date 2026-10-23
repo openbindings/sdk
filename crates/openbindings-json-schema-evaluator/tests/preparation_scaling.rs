@@ -434,7 +434,7 @@ fn a_specialization_refusal_states_its_arithmetic() {
     .unwrap_err();
     assert_eq!(
         refused.message,
-        "this contract's dynamic references specialize 3352 schemas, taking 4 MiB, and 304 \
+        "this value contract's dynamic references specialize 3352 schemas, taking 4 MiB, and 304 \
          dynamic contexts holding 1740 entries, taking 32 KiB, before preparation stops: \
          together they pass its projected schemas' 76 KiB by more than its 4 MiB program_bytes; \
          raise program_bytes (programBytes in TypeScript)"

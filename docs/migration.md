@@ -53,7 +53,7 @@ plain data, while `schemas()` and schema access methods acquire new owners.
 Preparation has its own refusal. An absent value contract is not success against
 an implicit schema. Retain a prepared value contract for reuse; preparation compiles anew.
 Resources are caller-supplied and immutable, with no automatic reference fetching.
-Changing resources means preparing again; old contracts keep their snapshots.
+Changing resources means preparing again; old value contracts keep their snapshots.
 A prepared value contract may still return no-verdict for individual values. An undefined
 result is its own outcome: match `ValueOutcome::Undefined { detail }` in Rust or
 `{ outcome: "undefined", detail }` in TypeScript. `UndefinedResult` carries a code,

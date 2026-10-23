@@ -63,8 +63,8 @@ undefined and no-verdict for each value. Preparation returns
 payload. Use `PreparedValueContract::validate_json` for exact JSON text or bytes; only
 admission failure returns `Err`. Retain a `JsonValue` and use `validate` for
 repeated checks or custom admission limits. `validate` is the cheap check; call
-`explain` on the same contract to learn why a value fails. Undefined means the value-contract
-rules leave whether the value satisfies its contract undefined; no-verdict means
+`explain` on the same value contract to learn why a value fails. Undefined means the value-contract
+rules leave whether the value satisfies its value contract undefined; no-verdict means
 the evaluator could not answer. Each preparation compiles independently; cloning a
 prepared value contract shares its compiled state. A `ResourceSet` indexes its resource
 identities once. For evaluators that request the core projection, a resolution

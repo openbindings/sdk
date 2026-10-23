@@ -26,21 +26,21 @@ use std::{collections::HashMap, sync::Arc};
 /// Default-evaluator limits. A limit that protects the process (its stack or
 /// its memory) has a default. `evaluation_steps`, which bounds only time, is
 /// the application's to set and is off unless it does, and so is
-/// `schema_resources`, which bounds the time and memory of compiling a contract
+/// `schema_resources`, which bounds the time and memory of compiling a value contract
 /// that reaches many resources. Exceeding a limit yields no verdict.
 pub struct Limits {
     /// Evaluation work units per verdict or explanation pass. `None`, the
     /// default, sets no cap: the time a pass takes then grows with the schema,
     /// exponentially for some (an `anyOf` naming the next level twice), and
-    /// with the value, so an application that evaluates untrusted contracts
+    /// with the value, so an application that evaluates untrusted value contracts
     /// or values within a deadline sets one. `Some(n)` charges one unit for each
     /// schema a reference enters and for each element, member and literal
     /// comparison step, and gives `evaluation-work-limit` once a pass spends
     /// `n`; preparing with a cap compiles a slightly larger validator.
     pub evaluation_steps: Option<usize>,
-    /// Bytes of stack the thread that prepares contracts and evaluates values
+    /// Bytes of stack the thread that prepares value contracts and evaluates values
     /// has; default 256 KiB (262,144 bytes). Preparation and evaluation
-    /// recurse with the contract and the value, so the evaluator sizes three
+    /// recurse with the value contract and the value, so the evaluator sizes three
     /// bounds from this stack, each with a stack cost measured in release
     /// builds on Linux, macOS and Windows:
     ///
@@ -50,7 +50,7 @@ pub struct Limits {
     ///   contract's schemas and the value's depth; a value whose bound is
     ///   larger yields `evaluation-depth-limit` without being evaluated, and
     ///   an explanation is built only within half that nesting.
-    /// - A contract holding `unevaluatedProperties` or `unevaluatedItems`,
+    /// - A value contract holding `unevaluatedProperties` or `unevaluatedItems`,
     ///   whose library validators recurse in ways the bound does not model, is
     ///   also guarded as it evaluates: a pass that uses more than half this
     ///   stack (128 KiB at the default) stops with `evaluation-depth-limit`.
@@ -80,7 +80,7 @@ pub struct Limits {
     /// Maximum group nesting in a schema regular expression; default 32. The
     /// regular-expression compiler recurses at each group level.
     pub pattern_depth: usize,
-    /// Maximum UTF-8 bytes in the forms the evaluator keeps for one contract's
+    /// Maximum UTF-8 bytes in the forms the evaluator keeps for one value contract's
     /// schema regular expressions: each distinct form of its `pattern` values
     /// and the form of each `patternProperties` name; default 4 MiB (4,194,304
     /// bytes). The forms spell every set out, so they can be far longer than
@@ -88,24 +88,24 @@ pub struct Limits {
     /// as it is written and refuses with `pattern-total-byte-limit` at the
     /// first that passes the limit.
     pub total_pattern_bytes: usize,
-    /// Bytes of linear-time engine memory one contract's compiled schema
+    /// Bytes of linear-time engine memory one value contract's compiled schema
     /// regular expressions may use together; default 64 MiB (67,108,864
-    /// bytes). The contract compiles each distinct form of its `pattern`
+    /// bytes). The value contract compiles each distinct form of its `pattern`
     /// values that the run matcher does not match, and the form of each
     /// `patternProperties` name, through the regex crate's two documented size
     /// settings. A quarter of the memory, at most 2 MiB for each pattern, is
     /// their search caches (`dfa_size_limit`), in equal parts, which bound only
     /// how fast a search runs. Each form first compiles within 48 KiB
-    /// (`size_limit`), so a contract compiling more patterns than the rest
+    /// (`size_limit`), so a value contract compiling more patterns than the rest
     /// holds at 48 KiB each (1,024 at the default) refuses with
     /// `pattern-total-memory-limit` at the first past that count, before any
     /// is compiled. The forms that need more share what is left equally;
     /// those that need less than their part keep only what they need, to
     /// within a sixteenth, and leave the rest to the others, at most 32 MiB
-    /// each. So small patterns elsewhere in a contract change a large one's
+    /// each. So small patterns elsewhere in a value contract change a large one's
     /// outcome only through their 48 KiB each, and no outcome depends on the
     /// order strings reach the patterns. The first time a form is found that
-    /// does not fit its 48 KiB, the contract's compiled patterns not yet
+    /// does not fit its 48 KiB, the value contract's compiled patterns not yet
     /// compiled are compiled then. A `patternProperties` name that does not
     /// fit what it is given refuses preparation, and a `pattern` value,
     /// compiled the first time a string reaches it, gives that string no
@@ -113,7 +113,7 @@ pub struct Limits {
     /// arithmetic, or `pattern-size-limit` when the form needs more than
     /// 32 MiB.
     pub total_pattern_memory: usize,
-    /// Bytes the SDK's program for one contract may grow by beyond its
+    /// Bytes the SDK's program for one value contract may grow by beyond its
     /// projected schemas; default 48 MiB (50,331,648 bytes). Dynamic
     /// specialization copies a schema reached through `$dynamicRef` once for
     /// each dynamic context it is reached in. Preparation estimates the memory
@@ -125,18 +125,18 @@ pub struct Limits {
     /// own estimate by more than this with `program-specialization-limit`,
     /// whose message states the arithmetic. The projected schemas themselves
     /// are bounded by core's admission limits and its 100,000 schema positions
-    /// per contract. This counts the SDK's own program, not the memory the
+    /// per value contract. This counts the SDK's own program, not the memory the
     /// library's compiled program takes.
     pub program_bytes: usize,
-    /// Schema resources one contract may reach, counted as its projection
-    /// holds them: the document resource holding the contract's schema and
+    /// Schema resources one value contract may reach, counted as its projection
+    /// holds them: the document resource holding the value contract's schema and
     /// each embedded `$id` resource, supplied resource and packaged
-    /// meta-schema resource it reaches. Ordinary contracts reach one or a
-    /// few. `None`, the default, sets no cap. `Some(n)` refuses a contract
+    /// meta-schema resource it reaches. Ordinary value contracts reach one or a
+    /// few. `None`, the default, sets no cap. `Some(n)` refuses a value contract
     /// reaching more than `n` with `LimitExceeded` and `schema-resource-limit`
     /// before compiling it, so an application preparing untrusted documents or
     /// resource sets can bound preparation at the size it chooses. The refusal
-    /// comes after core projects the contract, which its admission limits and
+    /// comes after core projects the value contract, which its admission limits and
     /// 100,000 schema positions bound, and before the evaluator copies the
     /// resources and the library compiles them, so it bounds the time and
     /// memory of that compilation: a 7 MB document whose input reaches a chain
@@ -165,9 +165,9 @@ impl Default for Limits {
 /// It performs no network or filesystem acquisition. `format` is an
 /// annotation. Patterns run on a linear-time engine, so one that needs a
 /// backtracking engine (lookaround or backreferences), has a Unicode property
-/// escape or holds the non-word boundary `\B` gives no verdict. A contract that reaches a resource that
+/// escape or holds the non-word boundary `\B` gives no verdict. A value contract that reaches a resource that
 /// was not supplied prepares with an empty stand-in for it, and a pass that
-/// reaches the stand-in gives no verdict naming the resource. A contract in
+/// reaches the stand-in gives no verdict naming the resource. A value contract in
 /// which an `unevaluatedProperties` or `unevaluatedItems` keyword's
 /// annotation sources reach a stand-in, a reference to a fragment of a missing
 /// resource, or one that identifies no schema refuses preparation. Use a custom
@@ -302,7 +302,7 @@ impl DefaultEvaluator {
             return Err(no_verdict(
                 NoVerdictReason::LimitExceeded,
                 "schema-resource-limit",
-                "the contract reaches more schema resources than the configured limit",
+                "the value contract reaches more schema resources than the configured limit",
             ));
         }
         let mut numbers = HashMap::new();
@@ -520,7 +520,7 @@ fn patterns(
                 no_verdict(
                     NoVerdictReason::LimitExceeded,
                     "pattern-total-byte-limit",
-                    "the forms of the contract's patterns exceed the admitted total byte limit",
+                    "the forms of the value contract's patterns exceed the admitted total byte limit",
                 ),
             ));
         }
@@ -657,9 +657,9 @@ fn pattern_memory_limit(shortfall: pattern::Shortfall) -> NoVerdict {
     let first = bytes(pattern::FIRST);
     let message = match shortfall {
         pattern::Shortfall::Count { most, total } => format!(
-            "this contract compiles more than {most} regular expressions, as many as its {} \
-             total_pattern_memory holds at {first} each once their search caches take a \
-             quarter; {RAISE}",
+            "this value contract compiles more than {most} regular expressions, as many as \
+             its {} total_pattern_memory holds at {first} each once their search caches take \
+             a quarter; {RAISE}",
             bytes(total),
         ),
         pattern::Shortfall::Pattern {
@@ -673,15 +673,16 @@ fn pattern_memory_limit(shortfall: pattern::Shortfall) -> NoVerdict {
         } => {
             let holding = if patterns == 1 {
                 format!(
-                    "this contract's one compiled regular expression holds {first} of its {} \
-                     total_pattern_memory and {} for its search cache",
+                    "this value contract's one compiled regular expression holds {first} of \
+                     its {} total_pattern_memory and {} for its search cache",
                     bytes(total),
                     bytes(cache),
                 )
             } else {
                 format!(
-                    "this contract's {patterns} compiled regular expressions hold {first} each \
-                     of its {} total_pattern_memory and {} each for their search caches",
+                    "this value contract's {patterns} compiled regular expressions hold \
+                     {first} each of its {} total_pattern_memory and {} each for their search \
+                     caches",
                     bytes(total),
                     bytes(cache),
                 )
@@ -722,10 +723,10 @@ fn specialization_limit(growth: bundle::Growth) -> NoVerdict {
         NoVerdictReason::LimitExceeded,
         "program-specialization-limit",
         format!(
-            "this contract's dynamic references specialize {} schemas, taking {}, and {} \
-             dynamic contexts holding {} entries, taking {}, before preparation stops: together \
-             they pass its projected schemas' {} by more than its {} program_bytes; raise \
-             program_bytes (programBytes in TypeScript)",
+            "this value contract's dynamic references specialize {} schemas, taking {}, and \
+             {} dynamic contexts holding {} entries, taking {}, before preparation stops: \
+             together they pass its projected schemas' {} by more than its {} program_bytes; \
+             raise program_bytes (programBytes in TypeScript)",
             growth.definitions,
             bytes(growth.definition_bytes),
             growth.contexts,
@@ -894,7 +895,7 @@ struct Compiled {
 }
 fn verdict_only_failure() -> ValueOutcome {
     ValueOutcome::Fails {
-        message: "value does not satisfy the contract".into(),
+        message: "value does not satisfy the value contract".into(),
         problems: Vec::new(),
         problems_complete: false,
     }
@@ -1054,7 +1055,7 @@ impl Compiled {
             _ => Vec::new(),
         };
         ValueOutcome::Fails {
-            message: "value does not satisfy the contract".into(),
+            message: "value does not satisfy the value contract".into(),
             problems,
             // A first error never claims exhaustive diagnostics.
             problems_complete: false,
