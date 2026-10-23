@@ -999,19 +999,20 @@ fn complement(ranges: &[(u32, u32)]) -> Vec<(u32, u32)> {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Run {
     set: Vec<(u32, u32)>,
-    // The set's ASCII members, one bit each, read without a search.
-    ascii: u128,
+    // The set's ASCII members, one bit each, read without a search; in two
+    // words, so that a test shifts one machine word.
+    ascii: [u64; 2],
     min: u32,
     max: Option<u32>,
 }
 impl Run {
     fn new(set: Vec<(u32, u32)>, min: u32, max: Option<u32>) -> Self {
-        let ascii = set
-            .iter()
-            .filter(|&&(first, _)| first < 128)
-            .fold(0u128, |bits, &(first, last)| {
-                (first..=last.min(127)).fold(bits, |bits, c| bits | 1 << c)
-            });
+        let mut ascii = [0u64; 2];
+        for &(first, last) in &set {
+            for c in first..=last.min(127) {
+                ascii[c as usize >> 6] |= 1 << (c & 63);
+            }
+        }
         Self {
             set,
             ascii,
@@ -1022,7 +1023,7 @@ impl Run {
     fn contains(&self, c: char) -> bool {
         let c = c as u32;
         if c < 128 {
-            return self.ascii >> c & 1 == 1;
+            return self.ascii[c as usize >> 6] >> (c & 63) & 1 == 1;
         }
         self.set
             .binary_search_by(|&(first, last)| {
