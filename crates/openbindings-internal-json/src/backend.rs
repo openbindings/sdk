@@ -1182,7 +1182,10 @@ pub fn unpaired_strings(value: &crate::JsonValue) -> impl Iterator<Item = crate:
 }
 /// Stack-safe exact comparison, charged to the enclosing evaluator work scope.
 pub fn equals(left: View<'_>, right: View<'_>) -> bool {
-    equals_charged(left, right, counting())
+    // Every step reaches the charge, which counts nothing outside a pass and
+    // whose access to the thread's state the loop holds once: reading the
+    // state up front as well would only add to each comparison.
+    equals_charged(left, right, true)
 }
 // The comparison, charging each step when `counting`.
 fn equals_charged(left: View<'_>, right: View<'_>, counting: bool) -> bool {
