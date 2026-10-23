@@ -80,9 +80,13 @@
   copying it, with exactly the results, reports, errors, messages and
   locations of the borrowed forms. The SDK hands over the buffers it builds
   itself, for document edits, ordinary-value conversion, synthesized
-  interfaces, invocation carriers and inspection models. The diagnostic
-  memory probe's largest document allocates 224.3 MiB beyond a handed-over
-  buffer, against 256.0 MiB beyond a borrowed one.
+  interfaces, invocation carriers and inspection models, and TypeScript's
+  `validateDocument`, `Document.parse` and `parseJson` hand over the module's
+  copy of their input. The diagnostic memory probe's largest document allocates 224.3 MiB
+  beyond a handed-over buffer, against 256.0 MiB beyond a borrowed one;
+  through the TypeScript package its validation adds 247.2 MiB to Node's
+  resident memory, from 278.5 MiB (351.5 MiB at a 64 MiB limit, from
+  416.5 MiB).
 - Exact-input refusals say what the parser expected or found and the byte where:
   `InputError`'s `Display` and TypeScript's `InputFailure.message` read, for
   example, `expected a colon after the member name at byte 5`. Codes, kinds

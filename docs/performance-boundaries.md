@@ -699,17 +699,18 @@ In WebAssembly the module's linear memory only grows, and a block freed inside
 it stays resident until the allocator reuses it. A buffer that grows by moving
 leaves its earlier storage resident beside it, where a native allocator would
 return it to the system; this is why the identifiers' copied text grows in
-blocks that never move. While a call runs, the TypeScript package also holds
-the module's copy of the input: the module cannot read JavaScript's bytes, and
-the document keeps its own copy of the text. Text input is encoded straight
-into module memory, with no JavaScript copy of its UTF-8. Through the package,
-in Node 22.19.0 on the same host, validating the shape above at the default
-limit adds 278.5 MiB to the resident memory of a process that has read the
-file, of which 31.7 MiB is that copy of the input; at a 64 MiB limit it adds
-416.5 MiB. The package's tests (`packages/typescript/test/wasm-memory.test.mjs`)
-validate the probe's two copied-identifier documents, each in a fresh process,
-and fail if either call adds more than the probe's 300 MiB to module memory;
-they add 255.5 and 259.5 MiB.
+blocks that never move. The module cannot read JavaScript's bytes, so the
+TypeScript package copies the input into module memory once, and the document
+takes that copy as its text through the owned entry points. Text input is
+encoded straight into module memory, with no JavaScript copy of its UTF-8.
+Through the package, in Node 22.19.0 on the same host, validating the shape
+above at the default limit adds 247.2 MiB to the resident memory of a process
+that has read the file, and 351.5 MiB at a 64 MiB limit. The package's tests
+(`packages/typescript/test/wasm-memory.test.mjs`) validate the probe's two
+copied-identifier documents, each in a fresh process, and fail if a call adds
+more module memory than it does now: 223.75 and 227.75 MiB, rounded up to the
+next MiB. Module memory is the same on every run of one build, so any growth
+fails.
 
 The operating system's maximum resident set size of a process that reads a file
 and validates it three times, including that process's own copy of the file,

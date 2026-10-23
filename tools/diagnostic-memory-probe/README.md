@@ -125,7 +125,7 @@ Run the phase alone with `--limits-only`. The phase passes the caller's input
 by reference; handed over through `validate_document_owned`, the same
 documents allocate one copy of the input less, 224.3 MiB at the largest. The
 TypeScript package's `test/wasm-memory.test.mjs` holds the module memory that
-validating the two copied-identifier documents adds to the same allowance.
+validating the two copied-identifier documents adds to what it adds now.
 
 ## Recorded results
 

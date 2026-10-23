@@ -59,7 +59,8 @@ makes its path a copy, allocates 256.0 MiB, against 364.9 MiB at the former
 `validate_document_owned`, `Document::parse_owned`, their `_with_limits` forms
 or `JsonValue::parse_owned_with_limits`, gives the document or value that
 buffer as its text, saving the copy: the same document then allocates
-224.3 MiB beyond the buffer. See
+224.3 MiB beyond the buffer. The TypeScript package always hands over the
+module's copy of its input. See
 [performance and allocation boundaries](docs/performance-boundaries.md).
 OBI-02's whole-document check and each embedded schema's OBI-10 meta-schema
 check run on the unmodified jsonschema 0.58.6 library with its default pattern
