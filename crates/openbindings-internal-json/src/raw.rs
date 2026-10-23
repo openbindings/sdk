@@ -133,6 +133,18 @@ pub struct Problem {
     pub code: &'static str,
     pub offset: usize,
 }
+fn bom() -> Problem {
+    Problem {
+        code: "bom",
+        offset: 0,
+    }
+}
+fn utf8(offset: usize) -> Problem {
+    Problem {
+        code: "utf8",
+        offset,
+    }
+}
 #[derive(Debug, Clone, Copy)]
 pub struct Limits {
     pub max_depth: usize,
@@ -202,7 +214,7 @@ impl PositionIndex {
 #[derive(Debug)]
 pub struct Arena {
     _lifetime: Lifetime,
-    source: Arc<str>,
+    source: Box<str>,
     positions: Mutex<PositionIndex>,
     // Completed objects of at least INDEX_MIN_MEMBERS members publish an
     // index built once, at their exact size, when they close; listed by object
@@ -236,24 +248,39 @@ impl Arena {
     pub fn parse(bytes: &[u8], limits: Limits) -> Result<Arc<Self>, Problem> {
         Self::parse_with_hasher(bytes, limits, KeyHasher::default())
     }
+    /// Parse owned bytes, which become the owner's source without a copy.
+    /// A refusal hands the bytes back.
+    pub fn parse_owned(bytes: Vec<u8>, limits: Limits) -> Result<Arc<Self>, (Problem, Vec<u8>)> {
+        if bytes.starts_with(&[0xef, 0xbb, 0xbf]) {
+            return Err((bom(), bytes));
+        }
+        let text = String::from_utf8(bytes).map_err(|e| {
+            let offset = e.utf8_error().valid_up_to();
+            (utf8(offset), e.into_bytes())
+        })?;
+        Self::parse_source(text.into_boxed_str(), limits, KeyHasher::default())
+            .map_err(|(problem, source)| (problem, source.into_string().into_bytes()))
+    }
     fn parse_with_hasher(
         bytes: &[u8],
         limits: Limits,
         key_hasher: KeyHasher,
     ) -> Result<Arc<Self>, Problem> {
         if bytes.starts_with(&[0xef, 0xbb, 0xbf]) {
-            return Err(Problem {
-                code: "bom",
-                offset: 0,
-            });
+            return Err(bom());
         }
-        let text = std::str::from_utf8(bytes).map_err(|e| Problem {
-            code: "utf8",
-            offset: e.valid_up_to(),
-        })?;
+        let text = std::str::from_utf8(bytes).map_err(|e| utf8(e.valid_up_to()))?;
+        Self::parse_source(Box::from(text), limits, key_hasher).map_err(|(problem, _)| problem)
+    }
+    // Parse `source` into a new owner; a refusal hands the source back.
+    fn parse_source(
+        source: Box<str>,
+        limits: Limits,
+        key_hasher: KeyHasher,
+    ) -> Result<Arc<Self>, (Problem, Box<str>)> {
         let mut owner = Arc::new(Self {
             _lifetime: Lifetime::new(),
-            source: Arc::from(text),
+            source,
             positions: Mutex::default(),
             member_indexes: Vec::new(),
             key_hasher,
@@ -274,7 +301,7 @@ impl Arena {
             duplicates: Vec::new(),
             unpaired: Vec::new(),
         });
-        let mut parser = Parser {
+        let parsed = Parser {
             out: Arc::get_mut(&mut owner).expect("a new owner"),
             pos: 0,
             open: NO_PARENT,
@@ -283,61 +310,15 @@ impl Arena {
             pending: Vec::new(),
             distinct: Vec::new(),
             limits,
-        };
-        parser.value(NO_PARENT, false)?;
-        // `open` is the innermost unclosed container; its state is 0 just
-        // after it opens, 1 after an item and 2 after a separating comma.
-        while parser.open != NO_PARENT {
-            let id = parser.open as usize;
-            let state = parser.state;
-            let object = matches!(parser.out.nodes[id].kind, Kind::Object { .. });
-            parser.space();
-            let next = parser.peek();
-            let close = if object { b'}' } else { b']' };
-            if next == Some(close) && state != 2 {
-                parser.pos += 1;
-                parser.close(id);
-                continue;
-            }
-            if state == 1 {
-                if next != Some(b',') {
-                    return Err(parser.error("comma-or-close"));
-                }
-                parser.pos += 1;
-                parser.state = 2;
-                continue;
-            }
-            if object {
-                if next != Some(b'"') {
-                    return Err(parser.error("object-key"));
-                }
-                let key = parser.string(id as u32, true)?;
-                parser.pending.push(key);
-                parser.space();
-                if parser.peek() != Some(b':') {
-                    return Err(parser.error("colon"));
-                }
-                parser.pos += 1;
-                parser.state = 1;
-                parser.value(id as u32, false)?;
-            } else {
-                parser.state = 1;
-                parser.value(id as u32, true)?;
+        }
+        .document();
+        match parsed {
+            Ok(()) => Ok(owner),
+            Err(problem) => {
+                let arena = Arc::into_inner(owner).expect("a new owner");
+                Err((problem, arena.source))
             }
         }
-        parser.space();
-        if parser.pos != parser.out.source.len() {
-            return Err(parser.error("trailing-token"));
-        }
-        // Objects record their repeated names and indexes as they close,
-        // innermost first; token ids follow the source, so this restores
-        // source order.
-        parser.out.duplicates.sort_unstable_by_key(|&(_, key)| key);
-        parser
-            .out
-            .member_indexes
-            .sort_unstable_by_key(|&(object, _)| object);
-        Ok(owner)
     }
     fn equal_keys(&self, left: Id, right: Id) -> bool {
         #[cfg(test)]
@@ -820,6 +801,62 @@ struct Parser<'a> {
     limits: Limits,
 }
 impl Parser<'_> {
+    /// Parse the whole source: one value, then only whitespace.
+    fn document(&mut self) -> Result<(), Problem> {
+        self.value(NO_PARENT, false)?;
+        // `open` is the innermost unclosed container; its state is 0 just
+        // after it opens, 1 after an item and 2 after a separating comma.
+        while self.open != NO_PARENT {
+            let id = self.open as usize;
+            let state = self.state;
+            let object = matches!(self.out.nodes[id].kind, Kind::Object { .. });
+            self.space();
+            let next = self.peek();
+            let close = if object { b'}' } else { b']' };
+            if next == Some(close) && state != 2 {
+                self.pos += 1;
+                self.close(id);
+                continue;
+            }
+            if state == 1 {
+                if next != Some(b',') {
+                    return Err(self.error("comma-or-close"));
+                }
+                self.pos += 1;
+                self.state = 2;
+                continue;
+            }
+            if object {
+                if next != Some(b'"') {
+                    return Err(self.error("object-key"));
+                }
+                let key = self.string(id as u32, true)?;
+                self.pending.push(key);
+                self.space();
+                if self.peek() != Some(b':') {
+                    return Err(self.error("colon"));
+                }
+                self.pos += 1;
+                self.state = 1;
+                self.value(id as u32, false)?;
+            } else {
+                self.state = 1;
+                self.value(id as u32, true)?;
+            }
+        }
+        self.space();
+        if self.pos != self.out.source.len() {
+            return Err(self.error("trailing-token"));
+        }
+        // Objects record their repeated names and indexes as they close,
+        // innermost first; token ids follow the source, so this restores
+        // source order.
+        self.out.duplicates.sort_unstable_by_key(|&(_, key)| key);
+        self.out
+            .member_indexes
+            .sort_unstable_by_key(|&(object, _)| object);
+        Ok(())
+    }
     fn error(&self, code: &'static str) -> Problem {
         Problem {
             code,

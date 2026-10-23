@@ -1,7 +1,7 @@
 //! Exact JSON values and source-backed views.
 use crate::Pointer;
 use crate::decimal::Decimal;
-use crate::raw::{Arena, Id, Kind, Limits};
+use crate::raw::{Arena, Id, Kind, Limits, Problem};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::{collections::HashMap, fmt, sync::Arc};
 
@@ -325,32 +325,19 @@ impl JsonValue {
     ) -> Result<Self, InputError> {
         let bytes = input.as_ref();
         if bytes.len() > limits.max_bytes {
-            return Err(InputError {
-                kind: InputErrorKind::Limit,
-                byte_offset: limits.max_bytes,
-                code: "byte-limit",
-                route: Route::Admission,
-            });
+            return Err(byte_limit(limits));
         }
-        let owner = Arena::parse(
-            bytes,
-            Limits {
-                max_depth: limits.max_depth,
-                max_nodes: limits.max_nodes.min(u32::MAX as usize),
-            },
-        )
-        .map_err(|p| InputError {
-            kind: match p.code {
-                "utf8" => InputErrorKind::InvalidUtf8,
-                "bom" => InputErrorKind::ByteOrderMark,
-                "depth-limit" | "node-limit" => InputErrorKind::Limit,
-                _ => InputErrorKind::Syntax,
-            },
-            byte_offset: p.offset,
-            code: p.code,
-            route: Route::Admission,
-        })?;
+        let owner = Arena::parse(bytes, arena_limits(limits)).map_err(admission)?;
         Ok(Self { owner, id: 0 })
+    }
+    /// Parse as [`Self::parse_with_limits`] does, taking the bytes: the value
+    /// keeps them as its source instead of a copy, so a caller that hands over
+    /// its buffer holds one copy of the text, not two.
+    ///
+    /// # Errors
+    /// Returns an input error for invalid UTF-8, a byte order mark, invalid JSON syntax, or an exceeded admission limit.
+    pub fn parse_owned_with_limits(input: Vec<u8>, limits: JsonLimits) -> Result<Self, InputError> {
+        parse_owned(input, limits).map_err(|(error, _)| error)
     }
     /// Borrow this value without incrementing its storage owner count.
     pub fn view(&self) -> JsonRef<'_> {
@@ -779,6 +766,51 @@ impl std::fmt::Debug for SourceLocation {
             .finish_non_exhaustive()
     }
 }
+// The refusal for a document longer than the admitted bytes, made before
+// anything is parsed.
+fn byte_limit(limits: JsonLimits) -> InputError {
+    InputError {
+        kind: InputErrorKind::Limit,
+        byte_offset: limits.max_bytes,
+        code: "byte-limit",
+        route: Route::Admission,
+    }
+}
+fn arena_limits(limits: JsonLimits) -> Limits {
+    Limits {
+        max_depth: limits.max_depth,
+        max_nodes: limits.max_nodes.min(u32::MAX as usize),
+    }
+}
+fn admission(p: Problem) -> InputError {
+    InputError {
+        kind: match p.code {
+            "utf8" => InputErrorKind::InvalidUtf8,
+            "bom" => InputErrorKind::ByteOrderMark,
+            "depth-limit" | "node-limit" => InputErrorKind::Limit,
+            _ => InputErrorKind::Syntax,
+        },
+        byte_offset: p.offset,
+        code: p.code,
+        route: Route::Admission,
+    }
+}
+/// [`JsonValue::parse_owned_with_limits`], handing the bytes back with a
+/// refusal so that a caller can still report on them, as document validation
+/// does; for the SDK's own crates.
+///
+/// # Errors
+/// Returns the input error and the bytes for invalid UTF-8, a byte order mark, invalid JSON syntax, or an exceeded admission limit.
+#[doc(hidden)]
+pub fn parse_owned(input: Vec<u8>, limits: JsonLimits) -> Result<JsonValue, (InputError, Vec<u8>)> {
+    if input.len() > limits.max_bytes {
+        return Err((byte_limit(limits), input));
+    }
+    Arena::parse_owned(input, arena_limits(limits))
+        .map(|owner| JsonValue { owner, id: 0 })
+        .map_err(|(problem, bytes)| (admission(problem), bytes))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

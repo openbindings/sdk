@@ -788,7 +788,7 @@ impl Document {
         }
         out.known(&old[from..])?;
         debug_assert_eq!(out.reserved, 0);
-        let next = JsonValue::parse_with_limits(out.bytes, limits)?;
+        let next = JsonValue::parse_owned_with_limits(out.bytes, limits)?;
         if next.has_duplicate_names() {
             return Err(EditError::DuplicateMembers);
         }

@@ -120,17 +120,19 @@ impl std::fmt::Debug for WasmJson {
 
 #[wasm_bindgen]
 impl WasmJson {
+    /// The bindings copy the bytes into module memory once; the value then
+    /// keeps that copy as its source.
     #[wasm_bindgen(js_name=parseBytes)]
-    pub fn parse_bytes(bytes: &[u8], limits: Option<Vec<u32>>) -> Result<WasmJson, JsValue> {
-        JsonValue::parse_with_limits(bytes, admission_or_default(limits)?)
+    pub fn parse_bytes(bytes: Vec<u8>, limits: Option<Vec<u32>>) -> Result<WasmJson, JsValue> {
+        JsonValue::parse_owned_with_limits(bytes, admission_or_default(limits)?)
             .map(|value| Self { value })
             .map_err(input_error)
     }
     /// As [`Self::parse_bytes`], for text: the bindings encode it into module
     /// memory directly, so the facade never holds a copy of its UTF-8.
     #[wasm_bindgen(js_name=parseText)]
-    pub fn parse_text(text: &str, limits: Option<Vec<u32>>) -> Result<WasmJson, JsValue> {
-        Self::parse_bytes(text.as_bytes(), limits)
+    pub fn parse_text(text: String, limits: Option<Vec<u32>>) -> Result<WasmJson, JsValue> {
+        Self::parse_bytes(text.into_bytes(), limits)
     }
     #[must_use]
     pub fn retain(&self) -> WasmJson {
@@ -352,9 +354,11 @@ impl std::fmt::Debug for WasmDocument {
 
 #[wasm_bindgen]
 impl WasmDocument {
+    /// The bindings copy the bytes into module memory once; the document then
+    /// keeps that copy as its text.
     #[wasm_bindgen(js_name=parseBytes)]
-    pub fn parse_bytes(bytes: &[u8], limits: Option<Vec<u32>>) -> Result<WasmDocument, JsValue> {
-        Document::parse_with_limits(bytes, admission_or_default(limits)?)
+    pub fn parse_bytes(bytes: Vec<u8>, limits: Option<Vec<u32>>) -> Result<WasmDocument, JsValue> {
+        Document::parse_owned_with_limits(bytes, admission_or_default(limits)?)
             .map(|document| Self {
                 handle: DocumentHandle::new(document),
             })
@@ -362,8 +366,8 @@ impl WasmDocument {
     }
     /// As [`Self::parse_bytes`], for text encoded into module memory directly.
     #[wasm_bindgen(js_name=parseText)]
-    pub fn parse_text(text: &str, limits: Option<Vec<u32>>) -> Result<WasmDocument, JsValue> {
-        Self::parse_bytes(text.as_bytes(), limits)
+    pub fn parse_text(text: String, limits: Option<Vec<u32>>) -> Result<WasmDocument, JsValue> {
+        Self::parse_bytes(text.into_bytes(), limits)
     }
     /// The admission limits this revision keeps: bytes, nodes and nesting.
     pub fn limits(&self) -> Vec<u32> {
@@ -952,7 +956,8 @@ impl WasmDocument {
             limits.max_depth = limits.max_depth.saturating_add(1);
             (namespace.to_owned(), format!("{{{key}:{text}}}"))
         };
-        let value = JsonValue::parse_with_limits(text, limits).map_err(admission_error)?;
+        let value = JsonValue::parse_owned_with_limits(text.into_bytes(), limits)
+            .map_err(admission_error)?;
         self.handle
             .editable()?
             .set(&pointer, &value)
@@ -1642,12 +1647,14 @@ impl WasmPrepared {
     }
 }
 /// Without limits, as `validate_document` admits: the default bytes and nodes, any
-/// nesting. With them, as `validate_document_with_limits` does.
+/// nesting. With them, as `validate_document_with_limits` does. The bindings copy
+/// the bytes into module memory once; a document the validation keeps holds that
+/// copy as its text.
 #[wasm_bindgen(js_name=validateBytes)]
-pub fn validate_bytes(bytes: &[u8], limits: Option<Vec<u32>>) -> Result<String, JsValue> {
+pub fn validate_bytes(bytes: Vec<u8>, limits: Option<Vec<u32>>) -> Result<String, JsValue> {
     let validation = match limits {
-        None => validate_document(bytes),
-        Some(limits) => validate_document_with_limits(bytes, admission(&limits)?),
+        None => validate_document_owned(bytes),
+        Some(limits) => validate_document_owned_with_limits(bytes, admission(&limits)?),
     };
     Ok(match validation {
         Ok(a) => object!("report": a.report(), "status": "report"),
@@ -1656,8 +1663,8 @@ pub fn validate_bytes(bytes: &[u8], limits: Option<Vec<u32>>) -> Result<String, 
 }
 /// As [`validate_bytes`], for text encoded into module memory directly.
 #[wasm_bindgen(js_name=validateText)]
-pub fn validate_text(text: &str, limits: Option<Vec<u32>>) -> Result<String, JsValue> {
-    validate_bytes(text.as_bytes(), limits)
+pub fn validate_text(text: String, limits: Option<Vec<u32>>) -> Result<String, JsValue> {
+    validate_bytes(text.into_bytes(), limits)
 }
 /// The default admission limits: bytes, nodes and nesting.
 #[wasm_bindgen(js_name=jsonLimits)]
@@ -1833,10 +1840,10 @@ mod location_transfer_tests {
         // A JSON tree cannot hold this finding's pointer; the bridge writes
         // its exact escape, which a JavaScript host parses back exactly.
         let text = r#"{"openbindings":"0.2.0","operations":{},"x":{"\ud800":{"k":0,"k":1}}}"#;
-        let report = validate_bytes(text.as_bytes(), None).unwrap();
+        let report = validate_bytes(text.as_bytes().to_vec(), None).unwrap();
         assert!(report.starts_with(r#"{"report":{"#));
         assert!(report.contains(r#""pointer":"/x/\ud800/k""#), "{report}");
-        let value = WasmJson::parse_text(text, None).unwrap();
+        let value = WasmJson::parse_text(text.into(), None).unwrap();
         let name = value
             .value
             .at("/x")
@@ -1853,7 +1860,7 @@ mod location_transfer_tests {
     }
     #[test]
     fn instance_pointers_are_located_on_demand_as_exact_text() {
-        let value = WasmJson::parse_text("{\"\\ud800\":[1,\n\"x\"]}", None).unwrap();
+        let value = WasmJson::parse_text("{\"\\ud800\":[1,\n\"x\"]}".into(), None).unwrap();
         assert_eq!(
             value.locate(r#""/\ud800/1""#).unwrap(),
             r#"{"pointer":"/\ud800/1","byte_offset":14,"line":2,"byte_column":1}"#
@@ -1866,7 +1873,8 @@ mod location_transfer_tests {
         let resources = WasmResources::new()
             .add(
                 uri,
-                &WasmJson::parse_text(r#"{"$defs":{"\ud800":{"type":"string"}}}"#, None).unwrap(),
+                &WasmJson::parse_text(r#"{"$defs":{"\ud800":{"type":"string"}}}"#.into(), None)
+                    .unwrap(),
             )
             .unwrap();
         let located = resources
