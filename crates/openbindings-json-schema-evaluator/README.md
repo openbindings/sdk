@@ -126,7 +126,11 @@ resources:
   one is also guarded as it evaluates: every read of a child instance compares
   the stack address it runs at with the pass's start, and a pass that has used
   more than half the stack (128 KiB at the default) stops descending and gives
-  `evaluation-depth-limit`. And preparation refuses an unevaluated keyword's
+  `evaluation-depth-limit`. The guard bounds the stack's bytes, not a depth:
+  how deep a value it admits depends on the frames the code takes, so it
+  varies with the build and the host; what holds on every host measured is
+  the margin each one keeps (`docs/performance-boundaries.md`). And
+  preparation refuses an unevaluated keyword's
   annotation walk weighing more than the stack admits (below). Each refusal
   states its arithmetic and names `stack_bytes`. Release builds prepare, check
   and explain the 39 recursive shapes `tests/evaluation_stack.rs` covers on

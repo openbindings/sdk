@@ -54,6 +54,9 @@ pub struct Limits {
     ///   whose library validators recurse in ways the bound does not model, is
     ///   also guarded as it evaluates: a pass that uses more than half this
     ///   stack (128 KiB at the default) stops with `evaluation-depth-limit`.
+    ///   The guard bounds the stack's bytes, not a depth: how deep a value it
+    ///   admits depends on the frames the code takes, so it varies with the
+    ///   build and the host.
     /// - The library compiles an unevaluated keyword's annotation walk by
     ///   recursion, so preparation refuses a walk weighing more than this
     ///   stack admits with `unevaluated-walk-limit`: a fifth of the stack is

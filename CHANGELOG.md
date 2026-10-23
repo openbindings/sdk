@@ -118,7 +118,8 @@
   evaluator sizes evaluation depth (256 bytes for each nested schema
   evaluation), bounded from the contract before a value is evaluated, the stack
   a pass of a contract holding an unevaluated keyword may use as it evaluates
-  (half, measured as it goes) and the unevaluated walk limit below, so a host
+  (half, measured as it goes: a bound on bytes, so the depth it admits varies
+  with the build and the host) and the unevaluated walk limit below, so a host
   that gives a larger thread admits deeper values and longer walks; each
   pattern's size, form
   and nesting, and the forms kept for all of a contract's patterns together,
