@@ -23,6 +23,22 @@ fn charge(units: usize) -> bool {
         true
     }
 }
+/// Whether this thread's reads are charged: its pass has an evaluation
+/// allowance or a stack guard. Outside both a charge counts nothing and always
+/// succeeds. A pass's state is fixed while it runs, and each iterator, lookup
+/// and comparison runs within one pass, so each reads this once and charges
+/// only when it holds, instead of reaching the thread's state for every read.
+#[inline]
+fn counting() -> bool {
+    #[cfg(feature = "evaluator-work")]
+    {
+        crate::work::counting()
+    }
+    #[cfg(not(feature = "evaluator-work"))]
+    {
+        false
+    }
+}
 
 /// Borrow one object member by source position, without visiting preceding members.
 /// This internal bridge helper preserves duplicate names and exact name tokens.
@@ -144,6 +160,11 @@ fn fixed_presentation(arena: &Arena, id: Id) -> Option<Cow<'_, str>> {
     }
 }
 fn read_string(arena: &Arena, id: Id) -> Option<Cow<'_, str>> {
+    // Without an unpaired unit every string is read as itself, in either
+    // presentation, so the pass's string state need not be read.
+    if arena.unpaired.is_empty() {
+        return arena.string(id).map(Cow::Borrowed);
+    }
     if STRING_ACCESS.get().fixed {
         return fixed_presentation(arena, id);
     }
@@ -295,8 +316,9 @@ impl<'a> Node<'a, FlatJson> for View<'a> {
         // Pairs still to compare; comparing scalars allocates nothing.
         let mut stack = Vec::new();
         let mut pair = Some((*self, expected));
+        let counting = counting();
         while let Some((left, right)) = pair.take().or_else(|| stack.pop()) {
-            if !charge(1) {
+            if counting && !charge(1) {
                 return false;
             }
             match right {
@@ -379,7 +401,8 @@ impl std::fmt::Debug for ObjectView<'_> {
     }
 }
 
-pub struct Members<'a>(&'a Arena, std::slice::Iter<'a, u32>);
+/// The arena, the member names left, and whether reading them is charged.
+pub struct Members<'a>(&'a Arena, std::slice::Iter<'a, u32>, bool);
 impl std::fmt::Debug for Members<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Members").finish_non_exhaustive()
@@ -418,21 +441,25 @@ impl<'a> Iterator for Members<'a> {
     type Item = (MemberName<'a>, View<'a>);
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        if !charge(1) {
+        if self.2 && !charge(1) {
             return None;
         }
         self.1.next().map(|&name| {
             let name = name as usize;
+            let scalar = self.0.string(name);
             (
                 MemberName {
-                    text: if STRING_ACCESS.get().fixed {
-                        fixed_presentation(self.0, name).expect("member name is a string")
-                    } else {
-                        self.0.string(name).map(Cow::Borrowed).unwrap_or_else(|| {
-                            present_string(self.0, name).expect("member name is a string")
-                        })
+                    text: match scalar {
+                        // Without an unpaired unit in the arena a name is
+                        // presented as itself either way.
+                        Some(text) if self.0.unpaired.is_empty() => Cow::Borrowed(text),
+                        _ if STRING_ACCESS.get().fixed => {
+                            fixed_presentation(self.0, name).expect("member name is a string")
+                        }
+                        Some(text) => Cow::Borrowed(text),
+                        None => present_string(self.0, name).expect("member name is a string"),
                     },
-                    unpaired: self.0.string(name).is_none(),
+                    unpaired: scalar.is_none(),
                 },
                 // A member's value is the node after its name.
                 View::Stored(self.0, name + 1),
@@ -455,13 +482,14 @@ impl<'a> Object<'a, FlatJson> for ObjectView<'a> {
         if self.2.is_empty() {
             return None;
         }
+        let counting = counting();
         self.0
-            .get_with_probe(self.1, key, || charge(1))
+            .get_with_probe(self.1, key, || !counting || charge(1))
             .map(|id| View::Stored(self.0, id))
     }
     #[inline]
     fn members(&self) -> Members<'a> {
-        Members(self.0, self.2.iter())
+        Members(self.0, self.2.iter(), counting())
     }
 }
 pub struct ArrayView<'a>(&'a Arena, &'a [u32]);
@@ -471,7 +499,8 @@ impl std::fmt::Debug for ArrayView<'_> {
     }
 }
 
-pub struct Elements<'a>(&'a Arena, std::slice::Iter<'a, u32>);
+/// The arena, the elements left, and whether reading them is charged.
+pub struct Elements<'a>(&'a Arena, std::slice::Iter<'a, u32>, bool);
 impl std::fmt::Debug for Elements<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Elements").finish_non_exhaustive()
@@ -482,7 +511,7 @@ impl<'a> Iterator for Elements<'a> {
     type Item = View<'a>;
     #[inline]
     fn next(&mut self) -> Option<View<'a>> {
-        if !charge(1) {
+        if self.2 && !charge(1) {
             return None;
         }
         self.1.next().map(|&id| View::Stored(self.0, id as usize))
@@ -497,7 +526,7 @@ impl<'a> Array<'a, FlatJson> for ArrayView<'a> {
     }
     #[inline]
     fn elements(&self) -> Elements<'a> {
-        Elements(self.0, self.1.iter())
+        Elements(self.0, self.1.iter(), counting())
     }
     fn is_unique(&self) -> bool {
         use std::{collections::hash_map::RandomState, hash::BuildHasher};
@@ -512,8 +541,9 @@ impl<'a> Array<'a, FlatJson> for ArrayView<'a> {
             .partition_point(|n| n.span.start < self.0.nodes[last].span.end);
         let hasher = RandomState::new();
         let mut hashes = vec![0u64; end - first];
+        let counting = counting();
         for id in (first..end).rev() {
-            if !charge(1) {
+            if counting && !charge(1) {
                 return false;
             }
             let hash = match self.0.nodes[id].kind {
@@ -551,7 +581,7 @@ impl<'a> Array<'a, FlatJson> for ArrayView<'a> {
             };
             hashes[id - first] = hash;
         }
-        self.unique_by_hash(&|at| hashes[self.1[at] as usize - first])
+        self.unique_by_hash(&|at| hashes[self.1[at] as usize - first], counting)
     }
 }
 impl ArrayView<'_> {
@@ -568,7 +598,7 @@ impl ArrayView<'_> {
     // repeat costs little; past that it grows once, to hold every element
     // left, rather than keeping old and new tables while doubling.
     // `hash_of` reads the hash of the element at a position.
-    fn unique_by_hash(&self, hash_of: &impl Fn(usize) -> u64) -> bool {
+    fn unique_by_hash(&self, hash_of: &impl Fn(usize) -> u64, counting: bool) -> bool {
         const DOUBLING: usize = 4096;
         let mut seen = std::collections::HashSet::new();
         for at in 0..self.1.len() {
@@ -581,22 +611,31 @@ impl ArrayView<'_> {
             }
             drop(seen);
             let earlier = (0..at).filter(|&prior| hash_of(prior) == hash);
-            return match self.repeats(at, earlier) {
+            return match self.repeats(at, earlier, counting) {
                 Some(unique) => unique,
-                None => self.unique_by_groups(at + 1, hash_of),
+                None => self.unique_by_groups(at + 1, hash_of, counting),
             };
         }
         true
     }
-    // Compare the element at `at` with each of `earlier`, charging each: an
-    // answer when an equal pair or exhausted work ends the check.
-    fn repeats(&self, at: usize, earlier: impl Iterator<Item = usize>) -> Option<bool> {
+    // Compare the element at `at` with each of `earlier`, charging each when
+    // `counting`: an answer when an equal pair or exhausted work ends the check.
+    fn repeats(
+        &self,
+        at: usize,
+        earlier: impl Iterator<Item = usize>,
+        counting: bool,
+    ) -> Option<bool> {
         let element = View::Stored(self.0, self.1[at] as usize);
         for prior in earlier {
-            if !charge(1) {
+            if counting && !charge(1) {
                 return Some(false);
             }
-            if equals(element, View::Stored(self.0, self.1[prior] as usize)) {
+            if equals_charged(
+                element,
+                View::Stored(self.0, self.1[prior] as usize),
+                counting,
+            ) {
                 return Some(false);
             }
         }
@@ -604,7 +643,12 @@ impl ArrayView<'_> {
     }
     // Every element from `from` on, compared with the earlier elements of its
     // hash, which positions sorted by hash list in array order.
-    fn unique_by_groups(&self, from: usize, hash_of: &impl Fn(usize) -> u64) -> bool {
+    fn unique_by_groups(
+        &self,
+        from: usize,
+        hash_of: &impl Fn(usize) -> u64,
+        counting: bool,
+    ) -> bool {
         let count = self.1.len();
         let mut order: Vec<u32> = (0..count as u32).collect();
         order.sort_unstable_by_key(|&at| (hash_of(at as usize), at));
@@ -621,7 +665,7 @@ impl ArrayView<'_> {
                 .rposition(|&prior| hash_of(prior as usize) != hash)
                 .map_or(0, |before| before + 1);
             let earlier = order[start..index].iter().map(|&prior| prior as usize);
-            if let Some(unique) = self.repeats(at, earlier) {
+            if let Some(unique) = self.repeats(at, earlier, counting) {
                 return unique;
             }
         }
@@ -1001,11 +1045,15 @@ pub fn unpaired_strings(value: &crate::JsonValue) -> impl Iterator<Item = crate:
 }
 /// Stack-safe exact comparison, charged to the enclosing evaluator work scope.
 pub fn equals(left: View<'_>, right: View<'_>) -> bool {
+    equals_charged(left, right, counting())
+}
+// The comparison, charging each step when `counting`.
+fn equals_charged(left: View<'_>, right: View<'_>, counting: bool) -> bool {
     // Pairs still to compare; comparing scalars allocates nothing.
     let mut stack = Vec::new();
     let mut pair = Some((left, right));
     while let Some((left, right)) = pair.take().or_else(|| stack.pop()) {
-        if !charge(1) {
+        if counting && !charge(1) {
             return false;
         }
         // One kind decides the comparison for both sides.
@@ -1030,13 +1078,18 @@ pub fn equals(left: View<'_>, right: View<'_>) -> bool {
             // genuine scalar member name containing the presentation marker.
             for &name in items.2 {
                 let name = name as usize;
-                if !charge(1) {
+                if counting && !charge(1) {
                     return false;
                 }
                 // Names compare by their exact UTF-16 units (§5), so a name with
-                // an unpaired unit decides equality without interpretation.
+                // an unpaired unit decides equality without interpretation. A
+                // scalar name is looked up as `Object::get` looks it up, each
+                // probe charged, without copying it.
                 let matched = if let Some(key) = items.0.string(name) {
-                    other.get(&key.to_owned())
+                    other
+                        .0
+                        .get_with_probe(other.1, key, || !counting || charge(1))
+                        .map(|id| View::Stored(other.0, id))
                 } else {
                     let key = items
                         .0
@@ -1045,7 +1098,7 @@ pub fn equals(left: View<'_>, right: View<'_>) -> bool {
                     let mut matched = None;
                     for &candidate in other.2 {
                         let candidate = candidate as usize;
-                        if !charge(1) {
+                        if counting && !charge(1) {
                             return false;
                         }
                         // A scalar name's units are never those of one holding
@@ -1634,7 +1687,7 @@ mod tests {
             let array = view(&value).as_array().unwrap();
             // A constant hash makes every element a candidate for every later
             // one. Hash equality alone must never decide uniqueness.
-            assert_eq!(array.unique_by_hash(&|_| 0), expected, "{text}");
+            assert_eq!(array.unique_by_hash(&|_| 0, counting()), expected, "{text}");
         }
     }
 
@@ -1664,7 +1717,7 @@ mod tests {
             reads.set(reads.get() + 1);
             (at / 2) as u64
         };
-        assert!(array.unique_by_hash(&hash_of));
+        assert!(array.unique_by_hash(&hash_of, counting()));
         assert!(
             reads.get() <= 64 * 2 * pairs,
             "{} hash reads for {} elements",
@@ -1675,7 +1728,7 @@ mod tests {
         let text = format!("{},{{\"a\":1}},{{\"a\":1}}]", &text[..text.len() - 1]);
         let value = crate::JsonValue::parse(&text).unwrap();
         let array = view(&value).as_array().unwrap();
-        assert!(!array.unique_by_hash(&|at| (at / 2) as u64));
+        assert!(!array.unique_by_hash(&|at| (at / 2) as u64, counting()));
     }
 
     #[test]
