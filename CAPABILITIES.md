@@ -54,7 +54,7 @@ limit, with structures that grow these terms, and fails if one allocates more
 than 300 MiB beyond the caller's input, counting every reallocation as holding
 its old and new blocks at once. The largest, a third of a million escaped
 `$id`s, each with its own authority, a query, a fragment and a dot segment that
-makes its path a copy, allocates 272.2 MiB, against 412.2 MiB at the former
+makes its path a copy, allocates 256.0 MiB, against 364.9 MiB at the former
 64 MiB default. See
 [performance and allocation boundaries](docs/performance-boundaries.md).
 OBI-02's whole-document check and each embedded schema's OBI-10 meta-schema

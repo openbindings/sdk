@@ -117,9 +117,9 @@ number of a long `$id`'s 5 million segments; and a malformed reference at every
 level of a 120,000-level schema chain. Each `validate_document` call must add at
 most **300 MiB** of live allocation above the caller's input, and must reach its
 expected conclusion. The largest, a third of a million escaped `$id`s with
-copied paths, a query and a fragment, adds 272.2 MiB, 27.8 MiB below that. The
+copied paths, a query and a fragment, adds 256.0 MiB, 44.0 MiB below that. The
 ceiling is not a multiple of the byte limit: at the former 64 MiB default the
-same shape added 412.2 MiB, since much of its memory is held for each
+same shape adds 364.9 MiB, since much of its memory is held for each
 declaration, whatever its length. This bounds these shapes, not every document.
 Run the phase alone with `--limits-only`.
 
