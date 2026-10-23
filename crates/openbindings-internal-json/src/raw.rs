@@ -482,6 +482,23 @@ impl Arena {
             None => self.string(id).map(|s| s.encode_utf16().collect()),
         }
     }
+    // Whether the member name token `name` spells `key`: `string(name) ==
+    // Some(key)`, deciding an unescaped name by its length and first byte
+    // before comparing the rest.
+    #[inline]
+    fn name_is(&self, name: Id, key: &str) -> bool {
+        let node = &self.nodes[name];
+        match node.kind {
+            Kind::String {
+                text: Text::SOURCE, ..
+            } => {
+                let body = &self.source.as_bytes()[node.span.start + 1..node.span.end - 1];
+                let key = key.as_bytes();
+                body.len() == key.len() && body.first() == key.first() && body == key
+            }
+            _ => self.string(name) == Some(key),
+        }
+    }
     pub fn get(&self, id: Id, key: &str) -> Option<Id> {
         self.get_with_probe(id, key, || true)
     }
@@ -507,7 +524,7 @@ impl Arena {
             #[cfg(test)]
             self.member_probes
                 .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            Some(self.string(name as usize) == Some(key))
+            Some(self.name_is(name as usize, key))
         };
         if let Some(index) = self.member_index(id) {
             // hash the token once, then inspect only its exact-name bucket.

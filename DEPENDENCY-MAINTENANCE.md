@@ -292,7 +292,7 @@ checked and preserves only the spelling/value the consumer actually emits.
 Ordinary Serde flatten/untagged behavior is covered by the external consumer tests.
 
 Shared runtime version floors remain Serde 1.0.229, serde_json 1.0.151,
-itoa 1.0.18, fluent-uri 0.4.1, url 2.5.8, reqwest 0.13.5, Tokio 1.53.2 and
+itoa 1.0.18, fluent-uri 0.4.1, url 2.5.8, reqwest 0.13.5, Tokio 1.54.1 and
 bytes 1.12.1. The relocated arithmetic uses num-bigint 0.4.8 and num-traits
 0.2.19; both floors are included in consumer resolution checks. SDK packages, jsonschema, jsonschema-value and wasm-bindgen
 remain exact at their declared versions. The workspace lock fixes qualification.

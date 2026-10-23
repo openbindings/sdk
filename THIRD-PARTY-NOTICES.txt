@@ -24150,7 +24150,7 @@ Permission is granted to anyone to use this software for any purpose, including 
 
 
 ========================================================================
-tokio 1.53.2
+tokio 1.54.1
 Declared license: MIT
 Repository: https://github.com/tokio-rs/tokio
 

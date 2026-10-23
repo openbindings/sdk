@@ -630,7 +630,7 @@ impl Parser<'_> {
         let count = self.quantifier()?;
         if depth == 0 {
             match (set, count) {
-                (Some(set), Some((min, max))) => self.record(Term::Run(Run { set, min, max })),
+                (Some(set), Some((min, max))) => self.record(Term::Run(Run::new(set, min, max))),
                 _ => self.shape = None,
             }
         }
@@ -999,12 +999,32 @@ fn complement(ranges: &[(u32, u32)]) -> Vec<(u32, u32)> {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Run {
     set: Vec<(u32, u32)>,
+    // The set's ASCII members, one bit each, read without a search; in two
+    // words, so that a test shifts one machine word.
+    ascii: [u64; 2],
     min: u32,
     max: Option<u32>,
 }
 impl Run {
+    fn new(set: Vec<(u32, u32)>, min: u32, max: Option<u32>) -> Self {
+        let mut ascii = [0u64; 2];
+        for &(first, last) in &set {
+            for c in first..=last.min(127) {
+                ascii[c as usize >> 6] |= 1 << (c & 63);
+            }
+        }
+        Self {
+            set,
+            ascii,
+            min,
+            max,
+        }
+    }
     fn contains(&self, c: char) -> bool {
         let c = c as u32;
+        if c < 128 {
+            return self.ascii[c as usize >> 6] >> (c & 63) & 1 == 1;
+        }
         self.set
             .binary_search_by(|&(first, last)| {
                 if last < c {
@@ -1078,6 +1098,27 @@ impl Simple {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn a_run_holds_exactly_its_set_inside_and_beyond_ascii() {
+        for set in [
+            vec![],
+            vec![(0x30, 0x39)],
+            vec![(0x30, 0x39), (0x5f, 0x5f), (0x61, 0x7a)],
+            vec![(0, 0x7f)],
+            vec![(0x7f, 0x80)],
+            vec![(0x64, 0xc8), (0x1f600, 0x1f64f)],
+            vec![(0, 0x10ffff)],
+        ] {
+            let run = Run::new(set.clone(), 1, None);
+            for c in (0..0x300).chain([0x1f5ff, 0x1f600, 0x1f64f, 0x1f650, 0x10ffff]) {
+                let Some(c) = char::from_u32(c) else { continue };
+                let member = set
+                    .iter()
+                    .any(|&(first, last)| (first..=last).contains(&(c as u32)));
+                assert_eq!(run.contains(c), member, "{set:?} {c:?}");
+            }
+        }
+    }
     fn linear(pattern: &str) -> String {
         match read(pattern, 32, 1 << 20) {
             Ok(Reading::Linear(linear)) => linear.form,

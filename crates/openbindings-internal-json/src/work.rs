@@ -136,6 +136,14 @@ pub fn scope<T>(units: usize, evaluate: impl FnOnce() -> T) -> Result<T, Spent> 
     }
 }
 
+/// Whether an allowance or a guard is active, so that a [`charge`] counts or
+/// checks anything. Outside both every charge returns `true` and changes
+/// nothing; this holds until the enclosing [`scope`] or [`guard`] ends.
+#[inline]
+pub fn counting() -> bool {
+    STATE.with(|state| state.engaged.get())
+}
+
 /// Charge `units` to the current allowance; `false` once it is spent, so the
 /// caller stops. Without an allowance this counts nothing and returns `true`.
 /// In a guarded pass it also fails once the pass has used more stack than it
