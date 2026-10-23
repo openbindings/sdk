@@ -36,8 +36,11 @@ python3 tools/verify.py --browser
 `WASM_BINDGEN` may identify a task-local wasm-bindgen executable;
 `CHROMIUM_EXECUTABLE` may identify an installed Chromium binary, and
 `PLAYWRIGHT_BROWSERS_PATH` may select a task-local browser directory. The scripts do
-not require these overrides or any original workstation path. Wasm source hashing
-works without Git. Generated JS, Wasm and observations are ignored build outputs.
+not require these overrides or any original workstation path. CI runs the same
+browser commands in the pinned Playwright image instead of installing browsers and
+their system packages; see [maintainers](maintainers.md#build-and-verify). Wasm
+source hashing works without Git. Generated JS, Wasm and observations are ignored
+build outputs.
 
 The independent Python judge decodes the pinned specification fixtures and rejects
 missing/duplicate/unexpected/wrong results; the Rust/JS observers only exercise
