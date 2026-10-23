@@ -2296,7 +2296,7 @@
     },
     {
       "name": "tokio",
-      "version": "1.53.2",
+      "version": "1.54.1",
       "declared_license": "MIT",
       "repository": "https://github.com/tokio-rs/tokio",
       "notices": [

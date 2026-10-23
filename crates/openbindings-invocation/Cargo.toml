@@ -22,4 +22,4 @@ futures-core = "0.3.32"
 
 [dev-dependencies]
 openbindings-json-schema-evaluator = { version = "=0.2.0-alpha.1", path = "../openbindings-json-schema-evaluator" }
-tokio = { version = "1.53.2", features = ["rt", "macros"] }
+tokio = { version = "1.54.1", features = ["rt", "macros"] }
