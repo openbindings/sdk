@@ -159,12 +159,20 @@ fn fixed_presentation(arena: &Arena, id: Id) -> Option<Cow<'_, str>> {
         _ => present_string(arena, id),
     }
 }
+#[inline]
 fn read_string(arena: &Arena, id: Id) -> Option<Cow<'_, str>> {
     // Without an unpaired unit every string is read as itself, in either
     // presentation, so the pass's string state need not be read.
     if arena.unpaired.is_empty() {
         return arena.string(id).map(Cow::Borrowed);
     }
+    presented_string(arena, id)
+}
+// A string of an arena holding an unpaired unit, as the pass presents it;
+// kept out of line so that the readers above inline.
+#[cold]
+#[inline(never)]
+fn presented_string(arena: &Arena, id: Id) -> Option<Cow<'_, str>> {
     if STRING_ACCESS.get().fixed {
         return fixed_presentation(arena, id);
     }
@@ -297,6 +305,11 @@ impl<'a> Node<'a, FlatJson> for View<'a> {
     #[inline]
     fn is_null(&self) -> bool {
         matches!(self,Self::Stored(a,id) if matches!(a.nodes[*id].kind,Kind::Null))
+    }
+    // `as_number().is_some()`, without borrowing the token.
+    #[inline]
+    fn is_number(&self) -> bool {
+        matches!(self, Self::Stored(a, id) if matches!(a.nodes[*id].kind, Kind::Number))
     }
     #[inline]
     fn json_type(&self) -> JsonType {
@@ -453,11 +466,7 @@ impl<'a> Iterator for Members<'a> {
                         // Without an unpaired unit in the arena a name is
                         // presented as itself either way.
                         Some(text) if self.0.unpaired.is_empty() => Cow::Borrowed(text),
-                        _ if STRING_ACCESS.get().fixed => {
-                            fixed_presentation(self.0, name).expect("member name is a string")
-                        }
-                        Some(text) => Cow::Borrowed(text),
-                        None => present_string(self.0, name).expect("member name is a string"),
+                        _ => presented_name(self.0, name, scalar),
                     },
                     unpaired: scalar.is_none(),
                 },
@@ -465,6 +474,19 @@ impl<'a> Iterator for Members<'a> {
                 View::Stored(self.0, name + 1),
             )
         })
+    }
+}
+// A member name of an arena holding an unpaired unit, as the pass presents
+// it; kept out of line so that the iterator inlines.
+#[cold]
+#[inline(never)]
+fn presented_name<'a>(arena: &'a Arena, name: Id, scalar: Option<&'a str>) -> Cow<'a, str> {
+    if STRING_ACCESS.get().fixed {
+        return fixed_presentation(arena, name).expect("member name is a string");
+    }
+    match scalar {
+        Some(text) => Cow::Borrowed(text),
+        None => present_string(arena, name).expect("member name is a string"),
     }
 }
 impl<'a> Object<'a, FlatJson> for ObjectView<'a> {
