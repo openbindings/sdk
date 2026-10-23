@@ -703,7 +703,10 @@ into module memory, with no JavaScript copy of its UTF-8. Through the package,
 in Node 22.19.0 on the same host, validating the shape above at the default
 limit adds 278.5 MiB to the resident memory of a process that has read the
 file, of which 31.7 MiB is that copy of the input; at a 64 MiB limit it adds
-416.5 MiB.
+416.5 MiB. The package's tests (`packages/typescript/test/wasm-memory.test.mjs`)
+validate the probe's two copied-identifier documents, each in a fresh process,
+and fail if either call adds more than the probe's 300 MiB to module memory;
+they add 255.5 and 259.5 MiB.
 
 The operating system's maximum resident set size of a process that reads a file
 and validates it three times, including that process's own copy of the file,
