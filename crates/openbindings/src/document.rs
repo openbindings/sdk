@@ -445,6 +445,23 @@ impl Document {
     ) -> Result<Self, InputError> {
         JsonValue::parse_with_limits(input, limits).map(|value| Self::admitted(value, limits))
     }
+    /// Parse as [`Self::parse`] does, taking the bytes: the document keeps them
+    /// as its text instead of a copy, so a caller that hands over its buffer
+    /// holds one copy of the document, not two.
+    ///
+    /// # Errors
+    /// Returns an input error for invalid UTF-8, a byte order mark, invalid JSON syntax, or an exceeded admission limit.
+    pub fn parse_owned(input: Vec<u8>) -> Result<Self, InputError> {
+        Self::parse_owned_with_limits(input, JsonLimits::default())
+    }
+    /// Parse as [`Self::parse_with_limits`] does, taking the bytes as
+    /// [`Self::parse_owned`] does.
+    ///
+    /// # Errors
+    /// Returns an input error for invalid UTF-8, a byte order mark, invalid JSON syntax, or an exceeded admission limit.
+    pub fn parse_owned_with_limits(input: Vec<u8>, limits: JsonLimits) -> Result<Self, InputError> {
+        JsonValue::parse_owned_with_limits(input, limits).map(|value| Self::admitted(value, limits))
+    }
     /// Create a document snapshot from an exact value without validation. A subtree is made standalone so subsequent document coordinates refer to its independent source.
     /// The document keeps [`JsonLimits::default`] for its edits;
     /// [`Self::parse_with_limits`] admits one under other limits.
@@ -901,13 +918,23 @@ impl Conformant<Document> {
 /// # Errors
 /// Returns a version refusal only for a well-formed declaration outside the supported line. Malformed input and other rule violations are returned as validation evidence, not as this error.
 pub fn validate_document(input: impl AsRef<[u8]>) -> Result<DocumentValidation, VersionRefusal> {
-    validate_document_with_limits(
-        input,
-        JsonLimits {
-            max_depth: usize::MAX,
-            ..Default::default()
-        },
-    )
+    validate_document_with_limits(input, validation_limits())
+}
+/// Assess bytes as [`validate_document`] does, taking them: a document the
+/// validation keeps holds them as its text instead of a copy, so a caller that
+/// hands over its buffer holds one copy of the document, not two.
+///
+/// # Errors
+/// Returns a version refusal only for a well-formed declaration outside the supported line. Malformed input and other rule violations are returned as validation evidence, not as this error.
+pub fn validate_document_owned(input: Vec<u8>) -> Result<DocumentValidation, VersionRefusal> {
+    validate_document_owned_with_limits(input, validation_limits())
+}
+// What `validate_document` admits: the default bytes and nodes, any nesting.
+fn validation_limits() -> JsonLimits {
+    JsonLimits {
+        max_depth: usize::MAX,
+        ..Default::default()
+    }
 }
 
 /// Assess bytes with caller-selected byte, node and nesting admission limits.
@@ -924,35 +951,51 @@ pub fn validate_document_with_limits(
     let bytes = input.as_ref();
     match JsonValue::parse_with_limits(bytes, limits) {
         Ok(value) => Document::admitted(value, limits).validate(),
-        Err(error) => {
-            let mut checks = Checks::new();
-            let limit = error.kind == InputErrorKind::Limit;
-            if limit {
-                let message = input_limit_message(error.code, limits, bytes.len());
-                for rule in Rule::ALL {
-                    checks.mark(
-                        rule,
-                        Evidence::Inconclusive,
-                        "input-limit",
-                        None,
-                        message.as_str(),
-                    );
-                }
-            } else {
-                checks.mark(
-                    Rule::Obi01,
-                    Evidence::Violated,
-                    error.code,
-                    Some(backend::input_location(bytes, error.byte_offset)),
-                    parse_error_message(error.code),
-                );
-                checks.not_applicable_after_json();
-            }
-            Ok(DocumentValidation {
-                document: None,
-                report: Arc::new(checks.finish()),
-            })
+        Err(error) => Ok(refused(bytes, &error, limits)),
+    }
+}
+/// Assess bytes as [`validate_document_with_limits`] does, taking them as
+/// [`validate_document_owned`] does.
+///
+/// # Errors
+/// Returns a version refusal only for a well-formed declaration outside the supported line. Malformed input and other rule violations are returned as validation evidence, not as this error.
+pub fn validate_document_owned_with_limits(
+    input: Vec<u8>,
+    limits: JsonLimits,
+) -> Result<DocumentValidation, VersionRefusal> {
+    match openbindings_internal_json::parse_owned(input, limits) {
+        Ok(value) => Document::admitted(value, limits).validate(),
+        Err((error, bytes)) => Ok(refused(&bytes, &error, limits)),
+    }
+}
+// The evidence for bytes admission refused: every rule inconclusive past a
+// limit, otherwise an OBI-01 violation at the refused byte.
+fn refused(bytes: &[u8], error: &InputError, limits: JsonLimits) -> DocumentValidation {
+    let mut checks = Checks::new();
+    if error.kind == InputErrorKind::Limit {
+        let message = input_limit_message(error.code, limits, bytes.len());
+        for rule in Rule::ALL {
+            checks.mark(
+                rule,
+                Evidence::Inconclusive,
+                "input-limit",
+                None,
+                message.as_str(),
+            );
         }
+    } else {
+        checks.mark(
+            Rule::Obi01,
+            Evidence::Violated,
+            error.code,
+            Some(backend::input_location(bytes, error.byte_offset)),
+            parse_error_message(error.code),
+        );
+        checks.not_applicable_after_json();
+    }
+    DocumentValidation {
+        document: None,
+        report: Arc::new(checks.finish()),
     }
 }
 fn parse_error_message(code: &str) -> &'static str {

@@ -342,7 +342,8 @@ impl JsonValue {
             return Err(error);
         }
         result?;
-        Self::parse_with_limits(&state.bytes, limits).map_err(|e| {
+        let bytes = std::mem::take(&mut state.bytes);
+        Self::parse_owned_with_limits(bytes, limits).map_err(|e| {
             state.locate(ValueConversionError::new(
                 ValueConversionErrorKind::Serialization,
                 e.code,

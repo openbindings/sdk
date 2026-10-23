@@ -912,7 +912,7 @@ impl PreparedSchema for Compiled {
                 detail: self.host.too_deep(self.deepest),
             };
         }
-        let valid = self.pass(|| Ok(self.validator.is_valid(backend::view(value))));
+        let valid = self.pass(|| self.validator.is_valid(backend::view(value)));
         // A completed verdict pass establishes its verdict: cancellation
         // observed later never discards it.
         match valid {
@@ -939,8 +939,10 @@ impl Compiled {
             }
         }
     }
-    // One verdict or diagnostic pass.
-    fn pass<T>(&self, evaluate: impl FnOnce() -> Result<T, NoVerdict>) -> Result<T, NoVerdict> {
+    // One verdict or diagnostic pass, and what it evaluated unless it met a
+    // reason to give no verdict. The pass carries only `evaluate`'s own
+    // result, so a verdict pass moves a `bool` rather than a no-verdict.
+    fn pass<T>(&self, evaluate: impl FnOnce() -> T) -> Result<T, NoVerdict> {
         let run = || pass::scope(evaluate);
         let allowed = || match self.limits.evaluation_steps {
             Some(steps) => openbindings_internal_json::work::scope(steps, run),
@@ -1004,7 +1006,7 @@ impl Compiled {
                 });
                 Err(detail)
             }
-            Ok((result, None)) => result,
+            Ok((result, None)) => Ok(result),
         }
     }
     fn diagnostics(&self, value: &JsonValue, control: &dyn WorkControl) -> ValueOutcome {
@@ -1014,7 +1016,7 @@ impl Compiled {
         // check takes, so a value is explained only within half the limit.
         let explains = self.nests_within(value, self.deepest_explained);
         let problem = (explains).then(|| {
-            self.pass(|| {
+            self.pass(|| -> Result<_, NoVerdict> {
                 control.check()?;
                 let Err(error) = self.validator.validate(backend::view(value)) else {
                     return Ok(None);
@@ -1038,6 +1040,7 @@ impl Compiled {
                 };
                 Ok(Some(ValueProblem::new(instance, schema, code, message)))
             })
+            .and_then(|problem| problem)
         });
         let problems = match problem {
             Some(Ok(Some(problem))) => {

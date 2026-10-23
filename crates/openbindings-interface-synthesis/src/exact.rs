@@ -28,5 +28,5 @@ pub(crate) fn encode<T: Serialize>(
         max: limits.max_bytes,
     };
     serde_json::to_writer(&mut out, value).map_err(|e| error(e.to_string()))?;
-    JsonValue::parse_with_limits(out.bytes, limits).map_err(|e| error(e.to_string()))
+    JsonValue::parse_owned_with_limits(out.bytes, limits).map_err(|e| error(e.to_string()))
 }

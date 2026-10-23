@@ -23,6 +23,25 @@ fn charge(units: usize) -> bool {
         true
     }
 }
+/// Whether this thread's reads are charged: its pass has an evaluation
+/// allowance or a stack guard. Outside both a charge counts nothing and always
+/// succeeds. A pass's state is fixed while it runs, and each lookup and
+/// uniqueness check runs within one pass, so each reads this once and charges
+/// only when it holds, instead of reaching the thread's state for every probe.
+/// The member and element iterators charge each read themselves: the library
+/// recurses through them, and an iterator that held the state would take more
+/// stack at every level a guarded pass measures.
+#[inline]
+fn counting() -> bool {
+    #[cfg(feature = "evaluator-work")]
+    {
+        crate::work::counting()
+    }
+    #[cfg(not(feature = "evaluator-work"))]
+    {
+        false
+    }
+}
 
 /// Borrow one object member by source position, without visiting preceding members.
 /// This internal bridge helper preserves duplicate names and exact name tokens.
@@ -143,7 +162,20 @@ fn fixed_presentation(arena: &Arena, id: Id) -> Option<Cow<'_, str>> {
         _ => present_string(arena, id),
     }
 }
+#[inline]
 fn read_string(arena: &Arena, id: Id) -> Option<Cow<'_, str>> {
+    // Without an unpaired unit every string is read as itself, in either
+    // presentation, so the pass's string state need not be read.
+    if arena.unpaired.is_empty() {
+        return arena.string(id).map(Cow::Borrowed);
+    }
+    presented_string(arena, id)
+}
+// A string of an arena holding an unpaired unit, as the pass presents it;
+// kept out of line so that the readers above inline.
+#[cold]
+#[inline(never)]
+fn presented_string(arena: &Arena, id: Id) -> Option<Cow<'_, str>> {
     if STRING_ACCESS.get().fixed {
         return fixed_presentation(arena, id);
     }
@@ -277,6 +309,11 @@ impl<'a> Node<'a, FlatJson> for View<'a> {
     fn is_null(&self) -> bool {
         matches!(self,Self::Stored(a,id) if matches!(a.nodes[*id].kind,Kind::Null))
     }
+    // `as_number().is_some()`, without borrowing the token.
+    #[inline]
+    fn is_number(&self) -> bool {
+        matches!(self, Self::Stored(a, id) if matches!(a.nodes[*id].kind, Kind::Number))
+    }
     #[inline]
     fn json_type(&self) -> JsonType {
         match self {
@@ -295,8 +332,9 @@ impl<'a> Node<'a, FlatJson> for View<'a> {
         // Pairs still to compare; comparing scalars allocates nothing.
         let mut stack = Vec::new();
         let mut pair = Some((*self, expected));
+        let counting = counting();
         while let Some((left, right)) = pair.take().or_else(|| stack.pop()) {
-            if !charge(1) {
+            if counting && !charge(1) {
                 return false;
             }
             match right {
@@ -414,6 +452,9 @@ impl<'a> From<MemberName<'a>> for Cow<'a, str> {
         name.text
     }
 }
+// A guarded pass checks its stack at this reader's charge, so the reader's
+// shape and frame decide how deep a value it admits; they are kept as they
+// were measured (docs/performance-boundaries.md).
 impl<'a> Iterator for Members<'a> {
     type Item = (MemberName<'a>, View<'a>);
     #[inline]
@@ -455,8 +496,9 @@ impl<'a> Object<'a, FlatJson> for ObjectView<'a> {
         if self.2.is_empty() {
             return None;
         }
+        let counting = counting();
         self.0
-            .get_with_probe(self.1, key, || charge(1))
+            .get_with_probe(self.1, key, || !counting || charge(1))
             .map(|id| View::Stored(self.0, id))
     }
     #[inline]
@@ -500,61 +542,162 @@ impl<'a> Array<'a, FlatJson> for ArrayView<'a> {
         Elements(self.0, self.1.iter())
     }
     fn is_unique(&self) -> bool {
-        use std::{collections::hash_map::RandomState, hash::BuildHasher};
         let Some(&first) = self.1.first() else {
             return true;
         };
         let first = first as usize;
-        let last = *self.1.last().unwrap() as usize;
-        let end = self
-            .0
-            .nodes
-            .partition_point(|n| n.span.start < self.0.nodes[last].span.end);
-        let hasher = RandomState::new();
-        let mut hashes = vec![0u64; end - first];
-        for id in (first..end).rev() {
-            if !charge(1) {
-                return false;
-            }
-            let hash = match self.0.nodes[id].kind {
-                Kind::Null => hasher.hash_one((0u8, 0u8)),
-                Kind::Bool(b) => hasher.hash_one((1u8, b)),
-                Kind::Number => hasher.hash_one((2u8, Decimal::parse(self.0.raw(id)))),
-                Kind::String {
-                    text: Text::UNPAIRED,
-                    ..
-                } => hasher.hash_one((3u8, 1u8, self.0.units(id))),
-                Kind::String { .. } => hasher.hash_one((3u8, 0u8, self.0.string(id))),
-                Kind::Array { .. } => hasher.hash_one((
-                    4u8,
-                    self.0
-                        .elements(id)
-                        .expect("an array")
-                        .iter()
-                        .map(|&i| hashes[i as usize - first])
-                        .collect::<Vec<_>>(),
-                )),
-                Kind::Object { .. } => {
-                    let mut pairs: Vec<_> = self
-                        .0
-                        .member_names(id)
-                        .expect("an object")
-                        .iter()
-                        .map(|&name| {
-                            let name = name as usize;
-                            (hashes[name - first], hashes[name + 1 - first])
-                        })
-                        .collect();
-                    pairs.sort_unstable();
-                    hasher.hash_one((5u8, pairs))
-                }
-            };
-            hashes[id - first] = hash;
+        let end = subtree_end(self.0, *self.1.last().unwrap() as usize);
+        let counting = counting();
+        // One element is unique; its nodes are charged as hashing them would
+        // charge each, which leaves the allowance as one charge of them all.
+        if self.1.len() == 1 {
+            return !counting || charge(end - first);
         }
-        self.unique_by_hash(&|at| hashes[self.1[at] as usize - first])
+        // Scalars only: no element is a container, empty ones included.
+        if self.1.len() <= SMALL
+            && end - first == self.1.len()
+            && !self
+                .1
+                .iter()
+                .any(|&id| self.0.nodes[id as usize].is_container())
+        {
+            return self.scalars_unique(counting);
+        }
+        self.hashed_unique(first, end, counting)
+    }
+}
+/// Arrays of at most this many elements, or subtrees of this many nodes,
+/// check uniqueness without allocating.
+const SMALL: usize = 16;
+// A scalar element as exact equality compares it: numbers by value, strings
+// by their UTF-16 units, which for scalar text is the text and otherwise the
+// string's own units.
+#[derive(PartialEq)]
+enum Scalar<'a> {
+    Null,
+    Bool(bool),
+    Number(Decimal),
+    Text(&'a str),
+    // A string holding an unpaired unit, by its node; never equal to `Text`.
+    Units(Id),
+}
+// The id after `id`'s subtree. A subtree's ids are contiguous in source order,
+// so it ends after its last descendant, found down the chain of last items.
+fn subtree_end(arena: &Arena, mut id: Id) -> Id {
+    loop {
+        if let Some(&item) = arena.elements(id).and_then(<[u32]>::last) {
+            id = item as usize;
+        } else if let Some(&name) = arena.member_names(id).and_then(<[u32]>::last) {
+            // A member's value is the node after its name.
+            id = name as usize + 1;
+        } else {
+            return id + 1;
+        }
     }
 }
 impl ArrayView<'_> {
+    // Hash every node of the elements, `first..end`, charging each, and
+    // compare the elements whose hashes repeat. Each check is its own frame,
+    // so a check holds only its own table on the stack.
+    #[inline(never)]
+    fn hashed_unique(&self, first: Id, end: Id, counting: bool) -> bool {
+        use std::{collections::hash_map::RandomState, hash::BuildHasher};
+        let hasher = RandomState::new();
+        // A small array's hashes are kept on the stack.
+        let (mut inline, mut held) = ([0u64; SMALL], Vec::new());
+        let hashes: &mut [u64] = if end - first <= SMALL {
+            &mut inline[..end - first]
+        } else {
+            held.resize(end - first, 0);
+            &mut held
+        };
+        // One buffer each for every container's item hashes, reused: hashing
+        // the slice hashes what hashing the collected vector did.
+        let (mut items, mut pairs) = (Vec::new(), Vec::new());
+        for id in (first..end).rev() {
+            if counting && !charge(1) {
+                return false;
+            }
+            let hash =
+                match self.0.nodes[id].kind {
+                    Kind::Null => hasher.hash_one((0u8, 0u8)),
+                    Kind::Bool(b) => hasher.hash_one((1u8, b)),
+                    Kind::Number => hasher.hash_one((2u8, Decimal::parse(self.0.raw(id)))),
+                    Kind::String {
+                        text: Text::UNPAIRED,
+                        ..
+                    } => hasher.hash_one((3u8, 1u8, self.0.units(id))),
+                    Kind::String { .. } => hasher.hash_one((3u8, 0u8, self.0.string(id))),
+                    Kind::Array { .. } => {
+                        items.clear();
+                        items.extend(
+                            self.0
+                                .elements(id)
+                                .expect("an array")
+                                .iter()
+                                .map(|&i| hashes[i as usize - first]),
+                        );
+                        hasher.hash_one((4u8, items.as_slice()))
+                    }
+                    Kind::Object { .. } => {
+                        pairs.clear();
+                        pairs.extend(self.0.member_names(id).expect("an object").iter().map(
+                            |&name| {
+                                let name = name as usize;
+                                (hashes[name - first], hashes[name + 1 - first])
+                            },
+                        ));
+                        pairs.sort_unstable();
+                        hasher.hash_one((5u8, pairs.as_slice()))
+                    }
+                };
+            hashes[id - first] = hash;
+        }
+        let hashes = &*hashes;
+        self.unique_by_hash(&|at| hashes[self.1[at] as usize - first], counting)
+    }
+    // A small array of scalars, compared directly. Scalars hash alike exactly
+    // when they are equal, so the hash check charges each element, finds the
+    // first element equal to an earlier one and compares it with its first
+    // equal predecessor, its first candidate; these charges are the same.
+    // (Keyed 64-bit hashes of two unequal scalars, which would add a
+    // candidate, collide with probability 2^-64.)
+    #[inline(never)]
+    fn scalars_unique(&self, counting: bool) -> bool {
+        if counting && !charge(self.1.len()) {
+            return false;
+        }
+        // Each element read once, as exact equality reads it.
+        let mut scalars: [Scalar<'_>; SMALL] = std::array::from_fn(|_| Scalar::Null);
+        for (scalar, &id) in scalars.iter_mut().zip(self.1) {
+            let id = id as usize;
+            *scalar = match self.0.nodes[id].kind {
+                Kind::Null => Scalar::Null,
+                Kind::Bool(b) => Scalar::Bool(b),
+                Kind::Number => Scalar::Number(Decimal::parse(self.0.raw(id))),
+                Kind::String { .. } => match self.0.string(id) {
+                    Some(text) => Scalar::Text(text),
+                    None => Scalar::Units(id),
+                },
+                Kind::Array { .. } | Kind::Object { .. } => unreachable!("only scalars"),
+            };
+        }
+        let same = |left: &Scalar<'_>, right: &Scalar<'_>| match (left, right) {
+            (Scalar::Units(left), Scalar::Units(right)) => {
+                let units = |id: &Id| self.0.unpaired_units(*id).expect("an unpaired string");
+                units(left).eq(units(right))
+            }
+            _ => left == right,
+        };
+        for at in 1..self.1.len() {
+            if let Some(prior) = (0..at).find(|&prior| same(&scalars[at], &scalars[prior])) {
+                return self
+                    .repeats(at, std::iter::once(prior), counting)
+                    .unwrap_or(false);
+            }
+        }
+        true
+    }
     // Hashes only select candidates: an element is compared, in array order,
     // with every earlier element of its hash, each comparison charged and
     // verified exactly. Equal elements hash alike, but unequal ones may too:
@@ -568,8 +711,23 @@ impl ArrayView<'_> {
     // repeat costs little; past that it grows once, to hold every element
     // left, rather than keeping old and new tables while doubling.
     // `hash_of` reads the hash of the element at a position.
-    fn unique_by_hash(&self, hash_of: &impl Fn(usize) -> u64) -> bool {
+    fn unique_by_hash(&self, hash_of: &impl Fn(usize) -> u64, counting: bool) -> bool {
         const DOUBLING: usize = 4096;
+        // A small array finds its first repeated hash by scanning the earlier
+        // ones, as the table would find it.
+        if self.1.len() <= SMALL {
+            for at in 1..self.1.len() {
+                let hash = hash_of(at);
+                if (0..at).any(|prior| hash_of(prior) == hash) {
+                    let earlier = (0..at).filter(|&prior| hash_of(prior) == hash);
+                    return match self.repeats(at, earlier, counting) {
+                        Some(unique) => unique,
+                        None => self.unique_by_groups(at + 1, hash_of, counting),
+                    };
+                }
+            }
+            return true;
+        }
         let mut seen = std::collections::HashSet::new();
         for at in 0..self.1.len() {
             let hash = hash_of(at);
@@ -581,22 +739,31 @@ impl ArrayView<'_> {
             }
             drop(seen);
             let earlier = (0..at).filter(|&prior| hash_of(prior) == hash);
-            return match self.repeats(at, earlier) {
+            return match self.repeats(at, earlier, counting) {
                 Some(unique) => unique,
-                None => self.unique_by_groups(at + 1, hash_of),
+                None => self.unique_by_groups(at + 1, hash_of, counting),
             };
         }
         true
     }
-    // Compare the element at `at` with each of `earlier`, charging each: an
-    // answer when an equal pair or exhausted work ends the check.
-    fn repeats(&self, at: usize, earlier: impl Iterator<Item = usize>) -> Option<bool> {
+    // Compare the element at `at` with each of `earlier`, charging each when
+    // `counting`: an answer when an equal pair or exhausted work ends the check.
+    fn repeats(
+        &self,
+        at: usize,
+        earlier: impl Iterator<Item = usize>,
+        counting: bool,
+    ) -> Option<bool> {
         let element = View::Stored(self.0, self.1[at] as usize);
         for prior in earlier {
-            if !charge(1) {
+            if counting && !charge(1) {
                 return Some(false);
             }
-            if equals(element, View::Stored(self.0, self.1[prior] as usize)) {
+            if equals_charged(
+                element,
+                View::Stored(self.0, self.1[prior] as usize),
+                counting,
+            ) {
                 return Some(false);
             }
         }
@@ -604,7 +771,12 @@ impl ArrayView<'_> {
     }
     // Every element from `from` on, compared with the earlier elements of its
     // hash, which positions sorted by hash list in array order.
-    fn unique_by_groups(&self, from: usize, hash_of: &impl Fn(usize) -> u64) -> bool {
+    fn unique_by_groups(
+        &self,
+        from: usize,
+        hash_of: &impl Fn(usize) -> u64,
+        counting: bool,
+    ) -> bool {
         let count = self.1.len();
         let mut order: Vec<u32> = (0..count as u32).collect();
         order.sort_unstable_by_key(|&at| (hash_of(at as usize), at));
@@ -621,7 +793,7 @@ impl ArrayView<'_> {
                 .rposition(|&prior| hash_of(prior as usize) != hash)
                 .map_or(0, |before| before + 1);
             let earlier = order[start..index].iter().map(|&prior| prior as usize);
-            if let Some(unique) = self.repeats(at, earlier) {
+            if let Some(unique) = self.repeats(at, earlier, counting) {
                 return unique;
             }
         }
@@ -1001,11 +1173,18 @@ pub fn unpaired_strings(value: &crate::JsonValue) -> impl Iterator<Item = crate:
 }
 /// Stack-safe exact comparison, charged to the enclosing evaluator work scope.
 pub fn equals(left: View<'_>, right: View<'_>) -> bool {
+    // Every step reaches the charge, which counts nothing outside a pass and
+    // whose access to the thread's state the loop holds once: reading the
+    // state up front as well would only add to each comparison.
+    equals_charged(left, right, true)
+}
+// The comparison, charging each step when `counting`.
+fn equals_charged(left: View<'_>, right: View<'_>, counting: bool) -> bool {
     // Pairs still to compare; comparing scalars allocates nothing.
     let mut stack = Vec::new();
     let mut pair = Some((left, right));
     while let Some((left, right)) = pair.take().or_else(|| stack.pop()) {
-        if !charge(1) {
+        if counting && !charge(1) {
             return false;
         }
         // One kind decides the comparison for both sides.
@@ -1030,13 +1209,18 @@ pub fn equals(left: View<'_>, right: View<'_>) -> bool {
             // genuine scalar member name containing the presentation marker.
             for &name in items.2 {
                 let name = name as usize;
-                if !charge(1) {
+                if counting && !charge(1) {
                     return false;
                 }
                 // Names compare by their exact UTF-16 units (§5), so a name with
-                // an unpaired unit decides equality without interpretation.
+                // an unpaired unit decides equality without interpretation. A
+                // scalar name is looked up as `Object::get` looks it up, each
+                // probe charged, without copying it.
                 let matched = if let Some(key) = items.0.string(name) {
-                    other.get(&key.to_owned())
+                    other
+                        .0
+                        .get_with_probe(other.1, key, || !counting || charge(1))
+                        .map(|id| View::Stored(other.0, id))
                 } else {
                     let key = items
                         .0
@@ -1045,7 +1229,7 @@ pub fn equals(left: View<'_>, right: View<'_>) -> bool {
                     let mut matched = None;
                     for &candidate in other.2 {
                         let candidate = candidate as usize;
-                        if !charge(1) {
+                        if counting && !charge(1) {
                             return false;
                         }
                         // A scalar name's units are never those of one holding
@@ -1619,6 +1803,70 @@ mod tests {
     }
 
     #[test]
+    fn subtree_ends_are_found_down_the_last_items() {
+        for text in [
+            "7",
+            "[]",
+            "{}",
+            r#"[1,[2,[3,{}]],{"a":[{"b":{}}],"c":[]}]"#,
+            r#"{"a":1,"b":{"c":[1,2,{"d":null}],"e":{}},"f":"g"}"#,
+            r#"[[[[["deep"]]]],{"\ud800":[true,{"x":[]}]}]"#,
+        ] {
+            let value = crate::JsonValue::parse(text).unwrap();
+            let nodes = &value.owner.nodes;
+            for id in 0..nodes.len() {
+                let end = nodes.partition_point(|n| n.span.start < nodes[id].span.end);
+                assert_eq!(subtree_end(&value.owner, id), end, "{text} {id}");
+            }
+        }
+    }
+
+    #[cfg(feature = "evaluator-work")]
+    #[test]
+    fn small_scalar_arrays_decide_and_charge_as_hashing_does() {
+        // Equal scalars spelled differently, unpaired strings, and repeats at
+        // every position, under every allowance from none to more than enough.
+        let pool: Vec<&str> = concat!(
+            r#"1 1.0 10e-1 2 -0 0 0e5 "a" "\u0061" "b" "\ud800" "\ud800" "\udc00" true false "#,
+            r#"null 1e400 10e399 9007199254740993 9007199254740992 [] {} [1] {"a":1}"#
+        )
+        .split(' ')
+        .collect();
+        let mut seed = 0x2545_f491_4f6c_dd1du64;
+        let mut next = |bound: usize| {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            (seed % bound as u64) as usize
+        };
+        for _ in 0..400 {
+            let length = 2 + next(SMALL - 1);
+            let items: Vec<_> = (0..length).map(|_| pool[next(pool.len())]).collect();
+            let value = crate::JsonValue::parse(format!("[{}]", items.join(","))).unwrap();
+            // Containers, empty ones included, take the hash check.
+            let decide = |chosen: bool, units: usize| {
+                crate::work::scope(units, || {
+                    let array = view(&value).as_array().unwrap();
+                    let first = array.1[0] as usize;
+                    let end = subtree_end(array.0, array.1[length - 1] as usize);
+                    if chosen {
+                        array.is_unique()
+                    } else {
+                        array.hashed_unique(first, end, counting())
+                    }
+                })
+            };
+            for units in 0..2 * length + 6 {
+                assert_eq!(
+                    decide(true, units),
+                    decide(false, units),
+                    "{items:?} {units}"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn uniqueness_verifies_every_forced_hash_collision() {
         for (text, expected) in [
             ("[]", true),
@@ -1634,7 +1882,7 @@ mod tests {
             let array = view(&value).as_array().unwrap();
             // A constant hash makes every element a candidate for every later
             // one. Hash equality alone must never decide uniqueness.
-            assert_eq!(array.unique_by_hash(&|_| 0), expected, "{text}");
+            assert_eq!(array.unique_by_hash(&|_| 0, counting()), expected, "{text}");
         }
     }
 
@@ -1664,7 +1912,7 @@ mod tests {
             reads.set(reads.get() + 1);
             (at / 2) as u64
         };
-        assert!(array.unique_by_hash(&hash_of));
+        assert!(array.unique_by_hash(&hash_of, counting()));
         assert!(
             reads.get() <= 64 * 2 * pairs,
             "{} hash reads for {} elements",
@@ -1675,7 +1923,7 @@ mod tests {
         let text = format!("{},{{\"a\":1}},{{\"a\":1}}]", &text[..text.len() - 1]);
         let value = crate::JsonValue::parse(&text).unwrap();
         let array = view(&value).as_array().unwrap();
-        assert!(!array.unique_by_hash(&|at| (at / 2) as u64));
+        assert!(!array.unique_by_hash(&|at| (at / 2) as u64, counting()));
     }
 
     #[test]
