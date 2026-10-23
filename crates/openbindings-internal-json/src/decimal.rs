@@ -28,6 +28,15 @@ impl Power {
         let magnitude = self.digits.parse::<u64>().ok()? as i128;
         i64::try_from(if self.negative { -magnitude } else { magnitude }).ok()
     }
+    // Numeric order against `n`; a power beyond `i64` is beyond `n` on its
+    // sign's side.
+    fn cmp_small(&self, n: i64) -> Ordering {
+        match self.small() {
+            Some(power) => power.cmp(&n),
+            None if self.negative => Ordering::Less,
+            None => Ordering::Greater,
+        }
+    }
     fn offset(&self, amount: usize, negative: bool) -> Self {
         if amount == 0 {
             return self.clone();
@@ -241,8 +250,8 @@ impl Decimal {
             exponent,
         }))
     }
-    // The digit-text form of this value, which every operation with a wide
-    // operand reads.
+    // The digit-text form of this value, which the tests compare.
+    #[cfg(test)]
     fn wide(&self) -> std::borrow::Cow<'_, Wide> {
         match &self.0 {
             Repr::Wide(wide) => std::borrow::Cow::Borrowed(wide),
@@ -255,6 +264,47 @@ impl Decimal {
                 digits: coefficient.to_string().into(),
                 power: Power::parse(&exponent.to_string()),
             }),
+        }
+    }
+    // An operation with a wide operand reads each operand as the digit-text
+    // operations read it, without writing an inline operand's digits out: its
+    // exponent's order, its digit count, its exponent if small and its
+    // coefficient.
+    fn exponent_cmp(&self, other: &Self) -> Ordering {
+        match (&self.0, &other.0) {
+            (
+                Repr::Inline { exponent, .. },
+                Repr::Inline {
+                    exponent: other, ..
+                },
+            ) => exponent.cmp(other),
+            (Repr::Inline { exponent, .. }, Repr::Wide(other)) => {
+                other.power.cmp_small(i64::from(*exponent)).reverse()
+            }
+            (Repr::Wide(wide), Repr::Inline { exponent, .. }) => {
+                wide.power.cmp_small(i64::from(*exponent))
+            }
+            (Repr::Wide(wide), Repr::Wide(other)) => wide.power.cmp(&other.power),
+        }
+    }
+    fn digit_count(&self) -> usize {
+        match &self.0 {
+            Repr::Inline { coefficient, .. } => {
+                coefficient.checked_ilog10().map_or(1, |n| n as usize + 1)
+            }
+            Repr::Wide(wide) => wide.digits.len(),
+        }
+    }
+    fn small_exponent(&self) -> Option<i64> {
+        match &self.0 {
+            Repr::Inline { exponent, .. } => Some(i64::from(*exponent)),
+            Repr::Wide(wide) => wide.power.small(),
+        }
+    }
+    fn coefficient(&self) -> BigUint {
+        match &self.0 {
+            Repr::Inline { coefficient, .. } => BigUint::from(*coefficient),
+            Repr::Wide(wide) => wide.digits.parse().unwrap(),
         }
     }
     pub fn is_zero(&self) -> bool {
@@ -303,7 +353,26 @@ impl Decimal {
             },
         ) = (&self.0, &other.0)
         else {
-            return self.wide().compare(&other.wide());
+            return match (&self.0, &other.0) {
+                (Repr::Wide(wide), Repr::Wide(other)) => wide.compare(other),
+                (
+                    &Repr::Inline {
+                        negative,
+                        coefficient,
+                        exponent,
+                    },
+                    Repr::Wide(wide),
+                ) => compare_inline_wide(negative, coefficient, exponent, wide),
+                (
+                    Repr::Wide(wide),
+                    &Repr::Inline {
+                        negative,
+                        coefficient,
+                        exponent,
+                    },
+                ) => compare_inline_wide(negative, coefficient, exponent, wide).reverse(),
+                _ => unreachable!("two inline values are compared above"),
+            };
         };
         if negative != other_negative {
             return negative.cmp(&other_negative).reverse();
@@ -351,7 +420,7 @@ impl Decimal {
             },
         ) = (&self.0, &divisor.0)
         else {
-            return self.wide().multiple_of(&divisor.wide());
+            return self.multiple_of_wide(divisor);
         };
         if coefficient == 0 {
             return Some(true);
@@ -381,6 +450,66 @@ impl Decimal {
             shift >>= 1;
         }
         Some(u128::from(coefficient) % modulus * scale % modulus == 0)
+    }
+    // The digit-text division of `Wide::multiple_of`, for operands of which
+    // at least one is wide, reading an inline operand without its digit text.
+    fn multiple_of_wide(&self, divisor: &Self) -> Option<bool> {
+        if self.is_zero() {
+            return Some(true);
+        }
+        // Both coefficients have no trailing zero: negative shifts cannot divide.
+        if self.exponent_cmp(divisor) == Ordering::Less {
+            return Some(false);
+        }
+        if self.digit_count() > 4096 || divisor.digit_count() > 4096 {
+            return None;
+        }
+        let left = self.small_exponent()?;
+        let right = divisor.small_exponent()?;
+        if left.unsigned_abs() > 20_000 || right.unsigned_abs() > 20_000 {
+            return None;
+        }
+        let shift = (left - right) as u64;
+        let (numerator, denominator) = (self.coefficient(), divisor.coefficient());
+        let scale = BigUint::from(10u8).modpow(&BigUint::from(shift), &denominator);
+        Some((numerator * scale % denominator).is_zero())
+    }
+}
+// `Wide::compare` of an inline value with a wide one, writing the inline
+// coefficient's digits on the stack rather than as digit text.
+fn compare_inline_wide(negative: bool, coefficient: u64, exponent: i32, wide: &Wide) -> Ordering {
+    if negative != wide.negative {
+        return negative.cmp(&wide.negative).reverse();
+    }
+    let magnitude = if coefficient == 0 || wide.is_zero() {
+        wide.is_zero().cmp(&(coefficient == 0))
+    } else {
+        let mut text = [0u8; INLINE_DIGITS];
+        let mut start = INLINE_DIGITS;
+        let mut rest = coefficient;
+        while rest > 0 {
+            start -= 1;
+            text[start] = b'0' + (rest % 10) as u8;
+            rest /= 10;
+        }
+        let digits = &text[start..];
+        // The leading digit's place, then the digits aligned to it.
+        let place = i64::from(exponent) + digits.len() as i64;
+        let wide_place = wide.power.offset(wide.digits.len(), false);
+        wide_place.cmp_small(place).reverse().then_with(|| {
+            let n = digits.len().max(wide.digits.len());
+            digits
+                .iter()
+                .copied()
+                .chain(std::iter::repeat(b'0'))
+                .take(n)
+                .cmp(wide.digits.bytes().chain(std::iter::repeat(b'0')).take(n))
+        })
+    };
+    if negative {
+        magnitude.reverse()
+    } else {
+        magnitude
     }
 }
 
@@ -466,6 +595,9 @@ impl Wide {
             magnitude
         }
     }
+    // The digit-text division `Decimal::multiple_of_wide` follows, which the
+    // tests compare it with.
+    #[cfg(test)]
     fn multiple_of(&self, divisor: &Self) -> Option<bool> {
         if self.is_zero() {
             return Some(true);
