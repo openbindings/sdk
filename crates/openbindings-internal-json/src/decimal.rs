@@ -164,8 +164,8 @@ impl std::fmt::Debug for Decimal {
 
 impl Decimal {
     pub fn parse(text: &str) -> Self {
-        if let Some(inline) = Self::parse_inline(text) {
-            return inline;
+        if let Some(value) = Self::read(text) {
+            return value;
         }
         let wide = Wide::parse(text);
         if wide.is_zero() {
@@ -174,26 +174,31 @@ impl Decimal {
             Self(Repr::Wide(Box::new(wide)))
         }
     }
-    // One pass over a JSON number token, without allocating; `None` when the
-    // value is not held inline (a longer coefficient or an exponent beyond
-    // `i32`) or the text is not a number token, which the digit text then reads.
-    fn parse_inline(text: &str) -> Option<Self> {
+    // One pass over a JSON number token: the value inline when it fits, and
+    // otherwise its digit text, read on from where the inline reading stopped
+    // so that no byte is read twice. `None` for text that is not a number
+    // token, which the digit-text reader then reads as it always has.
+    fn read(text: &str) -> Option<Self> {
         let bytes = text.as_bytes();
         let negative = bytes.first() == Some(&b'-');
         let mut at = usize::from(negative);
         let (mut coefficient, mut digits) = (0u64, 0usize);
         // Zeros after the last nonzero digit, which are trailing until another
-        // nonzero digit follows them.
-        let mut zeros = 0usize;
-        // The digits from `at` on, before and after the point.
-        let mut read_digits = |at: &mut usize| -> Option<()> {
+        // nonzero digit follows them; and where the first nonzero digit is.
+        let (mut zeros, mut first) = (0usize, 0usize);
+        // The digits from `at` on, before and after the point; `false` at the
+        // first nonzero digit the inline form cannot hold.
+        let mut read_digits = |at: &mut usize| {
             while let Some(&byte) = bytes.get(*at).filter(|byte| byte.is_ascii_digit()) {
                 if byte == b'0' {
                     zeros += usize::from(digits > 0);
                 } else {
                     let added = zeros + 1;
                     if digits + added > INLINE_DIGITS {
-                        return None;
+                        return false;
+                    }
+                    if digits == 0 {
+                        first = *at;
                     }
                     coefficient = coefficient * POW10[added] + u64::from(byte - b'0');
                     digits += added;
@@ -201,15 +206,19 @@ impl Decimal {
                 }
                 *at += 1;
             }
-            Some(())
+            true
         };
-        read_digits(&mut at)?;
+        if !read_digits(&mut at) {
+            return Self::read_wide(text, negative, first, at, None);
+        }
         let mut fraction = 0;
         if bytes.get(at) == Some(&b'.') {
+            let point = at;
             at += 1;
-            let start = at;
-            read_digits(&mut at)?;
-            fraction = at - start;
+            if !read_digits(&mut at) {
+                return Self::read_wide(text, negative, first, at, Some(point));
+            }
+            fraction = at - point - 1;
         }
         match bytes.get(at) {
             None | Some(b'e' | b'E') => {}
@@ -219,12 +228,15 @@ impl Decimal {
             return Some(ZERO);
         }
         let mut written = 0i128;
-        if at < bytes.len() {
+        let mut fits = true;
+        // Where the `e` is, if there is one.
+        let e = (at < bytes.len()).then_some(at);
+        if e.is_some() {
             at += 1;
             let exponent_negative = bytes.get(at) == Some(&b'-');
             at += usize::from(matches!(bytes.get(at), Some(b'-' | b'+')));
             let mut significant = 0;
-            for &byte in &bytes[at..] {
+            for &byte in &bytes[at.min(bytes.len())..] {
                 if !byte.is_ascii_digit() {
                     return None;
                 }
@@ -236,7 +248,8 @@ impl Decimal {
                 // (below isize::MAX bytes) brings within `i32`.
                 significant += 1;
                 if significant > 19 {
-                    return None;
+                    fits = false;
+                    break;
                 }
                 written = written * 10 + i128::from(byte - b'0');
             }
@@ -244,12 +257,83 @@ impl Decimal {
                 written = -written;
             }
         }
-        let exponent = i32::try_from(written + zeros as i128 - fraction as i128).ok()?;
-        Some(Self(Repr::Inline {
+        if fits && let Ok(exponent) = i32::try_from(written + zeros as i128 - fraction as i128) {
+            return Some(Self(Repr::Inline {
+                negative,
+                coefficient,
+                exponent,
+            }));
+        }
+        // The coefficient fits but its exponent does not: its digits are the
+        // coefficient's, without the trailing zeros, which the power holds.
+        Some(Self::wide_from(
             negative,
-            coefficient,
-            exponent,
-        }))
+            coefficient.to_string(),
+            text,
+            e,
+            zeros,
+            fraction,
+        ))
+    }
+    // The rest of a token whose coefficient is too long to hold inline, from
+    // the nonzero digit at `at` that did not fit: the digits up to the last
+    // nonzero one, from the first at `first`, without the point.
+    #[cold]
+    #[inline(never)]
+    fn read_wide(
+        text: &str,
+        negative: bool,
+        first: usize,
+        mut at: usize,
+        mut point: Option<usize>,
+    ) -> Option<Self> {
+        let bytes = text.as_bytes();
+        let (mut last, mut zeros) = (at, 0usize);
+        at += 1;
+        loop {
+            match bytes.get(at) {
+                Some(b'0') => zeros += 1,
+                Some(b'1'..=b'9') => {
+                    last = at;
+                    zeros = 0;
+                }
+                Some(b'.') if point.is_none() => point = Some(at),
+                None | Some(b'e' | b'E') => break,
+                Some(_) => return None,
+            }
+            at += 1;
+        }
+        let fraction = point.map_or(0, |point| at - point - 1);
+        let inside = point.filter(|&point| first < point && point < last);
+        let mut digits = String::with_capacity(last + 1 - first - usize::from(inside.is_some()));
+        match inside {
+            Some(point) => {
+                digits.push_str(&text[first..point]);
+                digits.push_str(&text[point + 1..=last]);
+            }
+            None => digits.push_str(&text[first..=last]),
+        }
+        let exponent = (at < bytes.len()).then_some(at);
+        Some(Self::wide_from(
+            negative, digits, text, exponent, zeros, fraction,
+        ))
+    }
+    // The digit-text value from its significant digits, the position of its
+    // `e` in `text`, if any, and the trailing zeros and fraction digits that
+    // shift it, as `Wide::parse` would build it.
+    fn wide_from(
+        negative: bool,
+        digits: String,
+        text: &str,
+        exponent: Option<usize>,
+        zeros: usize,
+        fraction: usize,
+    ) -> Self {
+        let written = exponent.map_or("0", |at| &text[at + 1..]);
+        let written = written.strip_prefix('+').unwrap_or(written);
+        Self(Repr::Wide(Box::new(Wide::from_parts(
+            negative, digits, written, zeros, fraction,
+        ))))
     }
     // The digit-text form of this value, which the tests compare.
     #[cfg(test)]
@@ -522,6 +606,8 @@ struct Wide {
     power: Power,
 }
 impl Wide {
+    // Any text: a JSON number token, or other text, which `Decimal::read`
+    // leaves to it.
     fn parse(text: &str) -> Self {
         let negative = text.starts_with('-');
         let text = text.strip_prefix('-').unwrap_or(text);
@@ -539,6 +625,17 @@ impl Wide {
         }
         let trimmed = digits.trim_end_matches('0');
         let zeros = digits.len() - trimmed.len();
+        Self::from_parts(negative, trimmed.to_owned(), exponent, zeros, fraction)
+    }
+    // A nonzero value from its significant digits, its exponent as written
+    // and the trailing zeros and fraction digits that shift it.
+    fn from_parts(
+        negative: bool,
+        digits: String,
+        exponent: &str,
+        zeros: usize,
+        fraction: usize,
+    ) -> Self {
         // An offset by nothing is the power itself; it is not copied.
         let mut power = Power::parse(exponent);
         if zeros > 0 {
@@ -549,7 +646,7 @@ impl Wide {
         }
         Self {
             negative,
-            digits: trimmed.into(),
+            digits: digits.into_boxed_str(),
             power,
         }
     }
@@ -698,17 +795,41 @@ mod tests {
         }
         tokens
     }
+    // Long zero runs before, inside and after the significant digits, around
+    // the point, long coefficients and exponents beyond `i32`.
+    fn long_tokens() -> Vec<String> {
+        let run = "0".repeat(300);
+        vec![
+            format!("1{run}1"),
+            format!("1.{run}1"),
+            format!("0.{run}1"),
+            format!("1{run}"),
+            format!("-1{run}.0{run}"),
+            format!("9{run}9e-300"),
+            format!("{}e3", "9".repeat(4_100)),
+            "1e3000000000".to_owned(),
+            "-1.5e-3000000000".to_owned(),
+            "12.000".to_owned(),
+            "0.0012".to_owned(),
+        ]
+    }
     #[test]
     fn inline_values_decide_exactly_as_their_digit_text() {
-        let tokens = tokens(600);
+        let mut tokens = tokens(600);
         let inline = tokens
             .iter()
-            .filter(|t| Decimal::parse_inline(t).is_some())
+            .filter(|t| matches!(Decimal::parse(t).0, Repr::Inline { .. }))
             .count();
         assert!(
             inline > 240 && inline < 560,
             "both forms are exercised: {inline}"
         );
+        // Each long token is paired with every other and with the first 40.
+        let short = tokens.len();
+        tokens.extend(long_tokens());
+        let paired = |left: usize, right: usize| {
+            left.max(right) < short || left.min(right) < 40 || left.min(right) >= short
+        };
         let parsed: Vec<_> = tokens.iter().map(|t| Decimal::parse(t)).collect();
         let texts: Vec<_> = tokens.iter().map(|t| Wide::parse(t)).collect();
         for ((token, value), text) in tokens.iter().zip(&parsed).zip(&texts) {
@@ -724,8 +845,13 @@ mod tests {
         }
         let state = std::collections::hash_map::RandomState::new();
         let hash = |value: &Decimal| std::hash::BuildHasher::hash_one(&state, value);
-        for (left, (value, text)) in tokens.iter().zip(parsed.iter().zip(&texts)) {
-            for (right, (other, other_text)) in tokens.iter().zip(parsed.iter().zip(&texts)) {
+        for (i, (left, (value, text))) in tokens.iter().zip(parsed.iter().zip(&texts)).enumerate() {
+            for (j, (right, (other, other_text))) in
+                tokens.iter().zip(parsed.iter().zip(&texts)).enumerate()
+            {
+                if !paired(i, j) {
+                    continue;
+                }
                 let pair = format!("{left} {right}");
                 assert_eq!(value.compare(other), text.compare(other_text), "{pair}");
                 // One representation per value, so equality and hashing are numeric.
