@@ -13,5 +13,5 @@ compression = ["reqwest/gzip", "reqwest/brotli", "reqwest/deflate"]
 
 [dependencies]
 reqwest = { version = "0.13.5", default-features = false, features = ["rustls"] }
-tokio = { version = "1.53.2", features = ["rt", "macros"] }
+tokio = { version = "1.54.1", features = ["rt", "macros"] }
 openbindings-http-discovery = { path = "../..", optional = true, features = ["native"] }

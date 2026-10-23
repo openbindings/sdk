@@ -70,7 +70,7 @@ with tempfile.TemporaryDirectory(prefix='openbindings-consumer-') as temporary:
     (fixture / 'Cargo.toml').write_text(text, encoding='utf-8')
     shutil.copyfile(source / 'Cargo.lock', fixture / 'Cargo.lock')
     floors = {'serde': '1.0.229', 'serde_json': '1.0.151', 'itoa': '1.0.18',
-              'fluent-uri': '0.4.1', 'reqwest': '0.13.5', 'tokio': '1.53.2', 'bytes': '1.12.1',
+              'fluent-uri': '0.4.1', 'reqwest': '0.13.5', 'tokio': '1.54.1', 'bytes': '1.12.1',
               'num-bigint': '0.4.8', 'num-traits': '0.2.19'}
     if a.resolution == 'minimum':
         for package, version in floors.items():
