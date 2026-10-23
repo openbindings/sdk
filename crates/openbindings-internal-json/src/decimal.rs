@@ -231,10 +231,11 @@ impl Decimal {
                 if significant == 0 && byte == b'0' {
                     continue;
                 }
-                // More than 38 significant digits put the exponent far
-                // beyond `i32`, whatever the coefficient's shift.
+                // Twenty significant digits put the written exponent at
+                // 10^19 or beyond, which no shift by the token's own length
+                // (below isize::MAX bytes) brings within `i32`.
                 significant += 1;
-                if significant > 38 {
+                if significant > 19 {
                     return None;
                 }
                 written = written * 10 + i128::from(byte - b'0');
@@ -538,12 +539,18 @@ impl Wide {
         }
         let trimmed = digits.trim_end_matches('0');
         let zeros = digits.len() - trimmed.len();
+        // An offset by nothing is the power itself; it is not copied.
+        let mut power = Power::parse(exponent);
+        if zeros > 0 {
+            power = power.offset(zeros, false);
+        }
+        if fraction > 0 {
+            power = power.offset(fraction, true);
+        }
         Self {
             negative,
             digits: trimmed.into(),
-            power: Power::parse(exponent)
-                .offset(zeros, false)
-                .offset(fraction, true),
+            power,
         }
     }
     fn is_zero(&self) -> bool {
