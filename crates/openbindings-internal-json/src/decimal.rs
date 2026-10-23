@@ -126,11 +126,22 @@ enum Repr {
         coefficient: u64,
         exponent: i32,
     },
-    Wide(Wide),
+    // Boxed, so that a decimal takes two words.
+    Wide(Box<Wide>),
 }
 /// The digits a coefficient has at most to be held inline: 10^19 - 1 fits
 /// `u64`.
 const INLINE_DIGITS: usize = 19;
+/// 10^n for every shift an inline coefficient takes.
+const POW10: [u64; INLINE_DIGITS + 1] = {
+    let mut powers = [1u64; INLINE_DIGITS + 1];
+    let mut n = 1;
+    while n <= INLINE_DIGITS {
+        powers[n] = powers[n - 1] * 10;
+        n += 1;
+    }
+    powers
+};
 const ZERO: Decimal = Decimal(Repr::Inline {
     negative: false,
     coefficient: 0,
@@ -151,7 +162,7 @@ impl Decimal {
         if wide.is_zero() {
             ZERO
         } else {
-            Self(Repr::Wide(wide))
+            Self(Repr::Wide(Box::new(wide)))
         }
     }
     // One pass over a JSON number token, without allocating; `None` when the
@@ -165,26 +176,35 @@ impl Decimal {
         // Zeros after the last nonzero digit, which are trailing until another
         // nonzero digit follows them.
         let mut zeros = 0usize;
-        let (mut fraction, mut in_fraction) = (0usize, false);
-        while let Some(&byte) = bytes.get(at) {
-            match byte {
-                b'0' if digits == 0 => {}
-                b'0' => zeros += 1,
-                b'1'..=b'9' => {
+        // The digits from `at` on, before and after the point.
+        let mut read_digits = |at: &mut usize| -> Option<()> {
+            while let Some(&byte) = bytes.get(*at).filter(|byte| byte.is_ascii_digit()) {
+                if byte == b'0' {
+                    zeros += usize::from(digits > 0);
+                } else {
                     let added = zeros + 1;
                     if digits + added > INLINE_DIGITS {
                         return None;
                     }
-                    coefficient = coefficient * 10u64.pow(added as u32) + u64::from(byte - b'0');
+                    coefficient = coefficient * POW10[added] + u64::from(byte - b'0');
                     digits += added;
                     zeros = 0;
                 }
-                b'.' if !in_fraction => in_fraction = true,
-                b'e' | b'E' => break,
-                _ => return None,
+                *at += 1;
             }
-            fraction += usize::from(in_fraction && byte != b'.');
+            Some(())
+        };
+        read_digits(&mut at)?;
+        let mut fraction = 0;
+        if bytes.get(at) == Some(&b'.') {
             at += 1;
+            let start = at;
+            read_digits(&mut at)?;
+            fraction = at - start;
+        }
+        match bytes.get(at) {
+            None | Some(b'e' | b'E') => {}
+            Some(_) => return None,
         }
         if digits == 0 {
             return Some(ZERO);
@@ -290,6 +310,13 @@ impl Decimal {
         }
         let magnitude = if coefficient == 0 || other_coefficient == 0 {
             (other_coefficient == 0).cmp(&(coefficient == 0))
+        } else if exponent.abs_diff(other_exponent) <= INLINE_DIGITS as u32 {
+            // Scaled to the smaller exponent, both fit u128.
+            let scale = |coefficient: u64, exponent: i32, to: i32| {
+                u128::from(coefficient) * u128::from(POW10[(exponent - to) as usize])
+            };
+            let to = exponent.min(other_exponent);
+            scale(coefficient, exponent, to).cmp(&scale(other_coefficient, other_exponent, to))
         } else {
             // The leading digit's place, then the digits aligned to it.
             let (digits, other_digits) = (coefficient.ilog10() + 1, other_coefficient.ilog10() + 1);
@@ -297,8 +324,8 @@ impl Decimal {
                 .cmp(&(i64::from(other_exponent) + i64::from(other_digits)))
                 .then_with(|| {
                     let width = digits.max(other_digits);
-                    (coefficient * 10u64.pow(width - digits))
-                        .cmp(&(other_coefficient * 10u64.pow(width - other_digits)))
+                    (coefficient * POW10[(width - digits) as usize])
+                        .cmp(&(other_coefficient * POW10[(width - other_digits) as usize]))
                 })
         };
         if negative {
