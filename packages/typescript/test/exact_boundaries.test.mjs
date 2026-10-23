@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import * as sdk from "../dist/index.js";
 import * as bridge from "../dist/wasm/openbindings_wasm.js";
+import { prepareInput } from "./conformant-contracts.mjs";
 await sdk.initialize(
   await readFile(
     new URL("../dist/wasm/openbindings_wasm_bg.wasm", import.meta.url),
@@ -505,4 +506,117 @@ test("keyed metadata checks selected rows and avoids operation namespace interpr
   } finally {
     malformed.dispose();
   }
+});
+
+// Text crosses into the module encoded there directly, not through a
+// JavaScript copy of its UTF-8; each entry point admits it exactly as it
+// admits those bytes.
+test("text and its UTF-8 bytes are admitted alike by every exact entry point", () => {
+  const document = parsed(
+    '{"openbindings":"0.2.0","operations":{"run":{"input":{"type":"string"}}}}',
+  );
+  const prepared = prepareInput(document, "run");
+  document.dispose();
+  assert.equal(prepared.status, "ready");
+  const contract = prepared.valueContract;
+  const before = testing.liveStorageOwners();
+  const plain = (result) => {
+    const value = result.value;
+    if (!value) return result;
+    try {
+      return { status: result.status, text: value.toBytes?.() ?? value.text };
+    } finally {
+      value.dispose();
+    }
+  };
+  try {
+    for (const text of [
+      '"ascii"',
+      '"café 𝄞"',
+      String.raw`"caf\u00e9 \ud834\udd1e \ud800"`,
+      '{"openbindings":"0.2.0","operations":{"é":{}},"x":"𝄞"}',
+      '{"openbindings":"0.2.0","operations":{}}',
+      "\ufeff7",
+      '{"a" 𝄞',
+      "[1 2]",
+    ]) {
+      const bytes = new TextEncoder().encode(text);
+      assert.deepEqual(sdk.validateDocument(text), sdk.validateDocument(bytes));
+      assert.deepEqual(
+        sdk.validateDocument(text, { limits: { maxBytes: 8 } }),
+        sdk.validateDocument(bytes, { limits: { maxBytes: 8 } }),
+      );
+      assert.deepEqual(plain(sdk.parseJson(text)), plain(sdk.parseJson(bytes)));
+      assert.deepEqual(
+        plain(sdk.Document.parse(text)),
+        plain(sdk.Document.parse(bytes)),
+      );
+      assert.deepEqual(
+        contract.validateJson(text),
+        contract.validateJson(bytes),
+      );
+    }
+    assert.equal(testing.liveStorageOwners(), before);
+  } finally {
+    contract.dispose();
+  }
+});
+
+// The facade asks the host whether text holds an unpaired UTF-16 unit, and
+// scans for one on a host that cannot say; either way the same texts are
+// refused, before anything crosses into the module.
+test("unpaired UTF-16 is refused alike with and without the host's isWellFormed", async () => {
+  const { spawnSync } = await import("node:child_process");
+  const probe = (withoutHost) => `
+${withoutHost ? "delete String.prototype.isWellFormed;" : ""}
+import { readFile } from "node:fs/promises";
+const url = (path) => new URL(path, ${JSON.stringify(import.meta.url)});
+const host = typeof String.prototype.isWellFormed;
+const sdk = await import(url("../dist/index.js"));
+await sdk.initialize(await readFile(url("../dist/wasm/openbindings_wasm_bg.wasm")));
+const units = [0x22, 0x37, 0x41, 0xe9, 0xd800, 0xd83d, 0xdbff, 0xdc00, 0xde00, 0xdfff, 0xfffd, 0xffff];
+const texts = ["", "\\ud800", "\\udc00", "\\ud83d\\ude00", "\\ude00\\ud83d", "a\\ud800", "\\ud800a", "a\\udfff\\ud800", "7".repeat(4096) + "\\ud800"];
+let state = 0x2545f491;
+const next = () => ((state ^= state << 13), (state ^= state >>> 17), (state ^= state << 5), state >>> 0);
+for (let i = 0; i < 4000; i++) {
+  let text = "";
+  for (let length = next() % 10; length > 0; length--) text += String.fromCharCode(units[next() % units.length]);
+  texts.push(text);
+}
+const outcome = (call) => {
+  try {
+    const result = call();
+    return typeof result === "string" ? result : (result.value?.dispose(), result.status);
+  } catch (error) {
+    if (error instanceof TypeError) return "refused";
+    throw error;
+  }
+};
+console.log(JSON.stringify({
+  host,
+  unpaired: texts.map((text) => /[\\ud800-\\udbff](?![\\udc00-\\udfff])|(?<![\\ud800-\\udbff])[\\udc00-\\udfff]/.test(text)),
+  version: texts.map((text) => outcome(() => sdk.checkVersion(text))),
+  json: texts.map((text) => outcome(() => sdk.parseJson(text))),
+}));
+`;
+  const [native, scanned] = [false, true].map((withoutHost) => {
+    const result = spawnSync(
+      process.execPath,
+      ["--input-type=module", "-e", probe(withoutHost)],
+      { encoding: "utf8" },
+    );
+    assert.equal(result.status, 0, result.stderr);
+    return JSON.parse(result.stdout);
+  });
+  assert.equal(native.host, "function");
+  assert.equal(scanned.host, "undefined");
+  assert.deepEqual(scanned.version, native.version);
+  assert.deepEqual(scanned.json, native.json);
+  assert.deepEqual(
+    native.version.map((outcome) => outcome === "refused"),
+    native.unpaired,
+  );
+  // Both kinds of text are well represented.
+  assert(native.unpaired.filter(Boolean).length > 500);
+  assert(native.unpaired.filter((unpaired) => !unpaired).length > 500);
 });

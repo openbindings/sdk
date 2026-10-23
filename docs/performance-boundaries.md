@@ -657,7 +657,10 @@ the input it allocates:
   run.
 - The decoded text, the tree and the validation state grow by doubling, so
   each can hold up to twice what it needs, and while it grows, its old block as
-  well.
+  well. The text copied for compared identifiers grows in blocks instead: a
+  new block is as large as the text before it, but no larger than the
+  identifiers still to come can copy, and text once kept never moves, so no
+  old block is held beside it.
 
 These are requested bytes, counted as the
 [diagnostic memory probe](../tools/diagnostic-memory-probe/README.md) counts
@@ -678,16 +681,32 @@ operation name, an extension name and an alias of U+E000 filling the limit.
 The phase fails if a call exceeds 300 MiB, which bounds these documents, not
 every document. On 2026-10-22 (macOS arm64, Rust 1.99.0, release build) the
 largest, 333,320 escaped `$id`s, each with its own authority, a query, a
-fragment and a dot segment that makes its path a copy, peaked at 272.2 MiB,
-27.8 MiB below that, and every shape validated within 0.6 s.
+fragment and a dot segment that makes its path a copy, peaked at 256.0 MiB,
+44.0 MiB below that, and every shape validated within 0.6 s.
 
-The default byte limit was 64 MiB, at which the same shape peaked at
-412.2 MiB. Halving it took about a third off that peak, since much of the
+The default byte limit was 64 MiB, at which the same shape peaks at
+364.9 MiB. Halving it takes about 30% off that peak, since much of the
 shape's memory is held for each of its 333,320 declarations, whatever their
 length; the ceiling is therefore not a multiple of the byte limit. The default
 is 32 MiB so that validation at the defaults fits a typical container. A host
 that admits larger documents raises `JsonLimits::max_bytes` (`limits.maxBytes`
 in TypeScript) and gives its process the memory they take.
+
+In WebAssembly the module's linear memory only grows, and a block freed inside
+it stays resident until the allocator reuses it. A buffer that grows by moving
+leaves its earlier storage resident beside it, where a native allocator would
+return it to the system; this is why the identifiers' copied text grows in
+blocks that never move. While a call runs, the TypeScript package also holds
+the module's copy of the input: the module cannot read JavaScript's bytes, and
+the document keeps its own copy of the text. Text input is encoded straight
+into module memory, with no JavaScript copy of its UTF-8. Through the package,
+in Node 22.19.0 on the same host, validating the shape above at the default
+limit adds 278.5 MiB to the resident memory of a process that has read the
+file, of which 31.7 MiB is that copy of the input; at a 64 MiB limit it adds
+416.5 MiB. The package's tests (`packages/typescript/test/wasm-memory.test.mjs`)
+validate the probe's two copied-identifier documents, each in a fresh process,
+and fail if either call adds more than the probe's 300 MiB to module memory;
+they add 255.5 and 259.5 MiB.
 
 The operating system's maximum resident set size of a process that reads a file
 and validates it three times, including that process's own copy of the file,

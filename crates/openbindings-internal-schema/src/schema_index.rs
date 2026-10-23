@@ -175,7 +175,8 @@ impl SchemaIndex {
         Self::build_roots(
             document,
             schemas.chain(operations),
-            Bases::Compared(Box::new(Identifiers::new())),
+            // A document's identifiers are texts of it, so its length bounds them.
+            Bases::Compared(Box::new(Identifiers::new(document.original_source().len()))),
         )
     }
     pub fn supplied(value: &JsonValue, retrieval_uri: &str) -> Self {
