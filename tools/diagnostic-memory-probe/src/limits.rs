@@ -3,9 +3,9 @@
 //! of the text, the decoded text of escaped strings, and its tree and
 //! validation state, with the buffers they grow in. Each must stay within one
 //! allowance above the caller's input, 300 MiB, which the largest, copied
-//! identifier paths with pieces, approaches within 27.8 MiB. The allowance is
-//! not a multiple of the byte limit: halving the limit from 64 MiB took that
-//! document from 412.2 to 272.2 MiB, since much of its memory is held for
+//! identifier paths with pieces, approaches within 44.0 MiB. The allowance is
+//! not a multiple of the byte limit: halving the limit from 64 MiB takes that
+//! document from 364.9 to 256.0 MiB, since much of its memory is held for
 //! each of its 333,320 declarations, whatever their length.
 use super::{ALLOCATIONS, measured};
 use serde_json::json;

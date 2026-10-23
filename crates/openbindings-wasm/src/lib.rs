@@ -126,9 +126,11 @@ impl WasmJson {
             .map(|value| Self { value })
             .map_err(input_error)
     }
+    /// As [`Self::parse_bytes`], for text: the bindings encode it into module
+    /// memory directly, so the facade never holds a copy of its UTF-8.
     #[wasm_bindgen(js_name=parseText)]
-    pub fn parse_text(text: &str) -> Result<WasmJson, JsValue> {
-        Self::parse_bytes(text.as_bytes(), None)
+    pub fn parse_text(text: &str, limits: Option<Vec<u32>>) -> Result<WasmJson, JsValue> {
+        Self::parse_bytes(text.as_bytes(), limits)
     }
     #[must_use]
     pub fn retain(&self) -> WasmJson {
@@ -357,6 +359,11 @@ impl WasmDocument {
                 handle: DocumentHandle::new(document),
             })
             .map_err(input_error)
+    }
+    /// As [`Self::parse_bytes`], for text encoded into module memory directly.
+    #[wasm_bindgen(js_name=parseText)]
+    pub fn parse_text(text: &str, limits: Option<Vec<u32>>) -> Result<WasmDocument, JsValue> {
+        Self::parse_bytes(text.as_bytes(), limits)
     }
     /// The admission limits this revision keeps: bytes, nodes and nesting.
     pub fn limits(&self) -> Vec<u32> {
@@ -1622,6 +1629,11 @@ impl WasmPrepared {
             .map(encoded)
             .map_err(input_error)
     }
+    /// As [`Self::validate_json`], for text encoded into module memory directly.
+    #[wasm_bindgen(js_name=validateJsonText)]
+    pub fn validate_json_text(&self, text: &str) -> Result<String, JsValue> {
+        self.validate_json(text.as_bytes())
+    }
     #[must_use]
     pub fn retain(&self) -> WasmPrepared {
         Self {
@@ -1641,6 +1653,11 @@ pub fn validate_bytes(bytes: &[u8], limits: Option<Vec<u32>>) -> Result<String, 
         Ok(a) => object!("report": a.report(), "status": "report"),
         Err(e) => encoded(json!({"status":"version-refused","refusal":e})),
     })
+}
+/// As [`validate_bytes`], for text encoded into module memory directly.
+#[wasm_bindgen(js_name=validateText)]
+pub fn validate_text(text: &str, limits: Option<Vec<u32>>) -> Result<String, JsValue> {
+    validate_bytes(text.as_bytes(), limits)
 }
 /// The default admission limits: bytes, nodes and nesting.
 #[wasm_bindgen(js_name=jsonLimits)]
@@ -1819,7 +1836,7 @@ mod location_transfer_tests {
         let report = validate_bytes(text.as_bytes(), None).unwrap();
         assert!(report.starts_with(r#"{"report":{"#));
         assert!(report.contains(r#""pointer":"/x/\ud800/k""#), "{report}");
-        let value = WasmJson::parse_text(text).unwrap();
+        let value = WasmJson::parse_text(text, None).unwrap();
         let name = value
             .value
             .at("/x")
@@ -1836,7 +1853,7 @@ mod location_transfer_tests {
     }
     #[test]
     fn instance_pointers_are_located_on_demand_as_exact_text() {
-        let value = WasmJson::parse_text("{\"\\ud800\":[1,\n\"x\"]}").unwrap();
+        let value = WasmJson::parse_text("{\"\\ud800\":[1,\n\"x\"]}", None).unwrap();
         assert_eq!(
             value.locate(r#""/\ud800/1""#).unwrap(),
             r#"{"pointer":"/\ud800/1","byte_offset":14,"line":2,"byte_column":1}"#
@@ -1849,7 +1866,7 @@ mod location_transfer_tests {
         let resources = WasmResources::new()
             .add(
                 uri,
-                &WasmJson::parse_text(r#"{"$defs":{"\ud800":{"type":"string"}}}"#).unwrap(),
+                &WasmJson::parse_text(r#"{"$defs":{"\ud800":{"type":"string"}}}"#, None).unwrap(),
             )
             .unwrap();
         let located = resources

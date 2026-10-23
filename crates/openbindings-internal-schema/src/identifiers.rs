@@ -27,7 +27,8 @@ const SLASH: u32 = 1;
 const AUTH: u32 = 2;
 
 /// Text of a directory: a span of one `$id`'s text, or of the text copied out
-/// of `$id`s whose removed dot segments separate the segments they write.
+/// of `$id`s whose removed dot segments separate the segments they write,
+/// given by its offsets in all the copied text.
 #[derive(Clone, Copy, Debug)]
 enum Label<'a> {
     Borrowed(&'a str),
@@ -83,8 +84,17 @@ enum Bucket {
 #[derive(Debug)]
 pub(crate) struct Identifiers<'a> {
     nodes: Vec<Node<'a>>,
-    /// The copied labels' text.
+    /// The copied labels' text, in blocks: walks write to `copied`, which
+    /// begins at offset `copied_from` of all the copied text, and `retired`
+    /// holds the earlier blocks, each with its offset. Text a walk has kept
+    /// never moves, so growing the text never copies it again or leaves its
+    /// old storage behind.
     copied: String,
+    copied_from: usize,
+    retired: Vec<(usize, Box<str>)>,
+    /// At least the length of the identifiers still to come, which bounds
+    /// the text they can copy: no walk copies more than its own `$id`.
+    budget: usize,
     children: HashMap<u64, Bucket>,
     collisions: Vec<Vec<u32>>,
     hasher: RandomState,
@@ -128,18 +138,32 @@ struct Walk<'a> {
     authority: &'a str,
     count: usize,
     /// The own segments: a span of `own`, or, once removed dot segments
-    /// separate them, a copy at the end of the copied labels' text, from
-    /// `base`.
+    /// separate them, a copy at the end of the copied labels' current block,
+    /// from `base`.
     start: usize,
     end: usize,
     copy: String,
     base: usize,
     copied: bool,
+    /// The offset in all the copied text at which `copy` begins.
+    from: usize,
+    /// The block the walk left for want of room, for [`Identifiers::place`]
+    /// to retire.
+    retired: Option<String>,
+    /// At least the length of this and the identifiers still to come.
+    budget: usize,
     /// The last own segment written, while it is the output's.
     last: Option<&'a str>,
 }
 impl<'a> Walk<'a> {
-    fn new(own: &'a str, x: Pos, authority: &'a str, copy: String) -> Self {
+    fn new(
+        own: &'a str,
+        x: Pos,
+        authority: &'a str,
+        copy: String,
+        from: usize,
+        budget: usize,
+    ) -> Self {
         Self {
             own,
             x,
@@ -152,8 +176,31 @@ impl<'a> Walk<'a> {
             base: copy.len(),
             copy,
             copied: false,
+            from,
+            retired: None,
+            budget,
             last: None,
         }
+    }
+    /// Room for `more` bytes of this walk's copy. When the block lacks it
+    /// and holds text earlier walks kept, the copy so far moves to a new
+    /// block and the earlier text stays where it is. The new block is as
+    /// large as all the copied text before it, so the blocks double in
+    /// total without kept text moving, but never larger than the text the
+    /// identifiers still to come can copy. A copy alone in its block grows
+    /// as a string does.
+    fn reserve(&mut self, more: usize) {
+        if self.base == 0 || self.copy.capacity() - self.copy.len() >= more {
+            return;
+        }
+        debug_assert!(self.retired.is_none(), "a moved copy is alone in its block");
+        let written = &self.copy[self.base..];
+        let total = (self.from + self.base).min(self.budget);
+        let mut block = String::with_capacity((written.len() + more).max(total));
+        block.push_str(written);
+        self.copy.truncate(self.base);
+        self.retired = Some(std::mem::replace(&mut self.copy, block));
+        (self.from, self.base) = (self.from + self.base, 0);
     }
     fn offset(&self, piece: &str) -> usize {
         let offset = piece.as_ptr() as usize - self.own.as_ptr() as usize;
@@ -166,6 +213,7 @@ impl<'a> Walk<'a> {
             (self.start, self.end, self.copied) = (at, at + segment.len(), false);
             self.copy.truncate(self.base);
         } else if self.copied {
+            self.reserve(1 + segment.len());
             self.copy.push('/');
             self.copy.push_str(segment);
         } else if self.own.as_bytes().get(self.end) == Some(&b'/')
@@ -173,6 +221,7 @@ impl<'a> Walk<'a> {
         {
             self.end += 1 + segment.len();
         } else {
+            self.reserve(self.end - self.start + 1 + segment.len());
             self.copy.push_str(&self.own[self.start..self.end]);
             self.copy.push('/');
             self.copy.push_str(segment);
@@ -233,7 +282,9 @@ impl<'a> Walk<'a> {
 }
 
 impl<'a> Identifiers<'a> {
-    pub fn new() -> Self {
+    /// Identifiers whose texts total at most `budget` bytes, such as the
+    /// length of the document that holds them.
+    pub fn new(budget: usize) -> Self {
         let mut ids = Self {
             nodes: vec![Node {
                 parent: NONE,
@@ -243,6 +294,9 @@ impl<'a> Identifiers<'a> {
                 label: Label::Borrowed(""),
             }],
             copied: String::new(),
+            copied_from: 0,
+            retired: Vec::new(),
+            budget,
             children: HashMap::new(),
             collisions: Vec::new(),
             hasher: RandomState::new(),
@@ -259,7 +313,14 @@ impl<'a> Identifiers<'a> {
     fn text(&self, label: Label<'a>) -> &str {
         match label {
             Label::Borrowed(text) => text,
-            Label::Copied { start, end } => &self.copied[start..end],
+            Label::Copied { start, end } => match start.checked_sub(self.copied_from) {
+                Some(at) => &self.copied[at..end - self.copied_from],
+                None => {
+                    let block = self.retired.partition_point(|&(from, _)| from <= start) - 1;
+                    let (from, text) = &self.retired[block];
+                    &text[start - from..end - from]
+                }
+            },
         }
     }
     fn label(&self, node: u32) -> &str {
@@ -489,9 +550,18 @@ impl<'a> Identifiers<'a> {
             mut copy,
             base,
             copied,
+            from,
+            retired,
             last,
             ..
         } = walk;
+        if let Some(block) = retired {
+            if !block.is_empty() {
+                self.retired
+                    .push((self.copied_from, block.into_boxed_str()));
+            }
+            self.copied_from = from;
+        }
         if !copied || count < 2 {
             copy.truncate(base);
         }
@@ -515,11 +585,13 @@ impl<'a> Identifiers<'a> {
         }
         // The own segments before the last name directories below `at`.
         let length = run - last.len() - 1;
+        // The walk's copy, by its offset in all the copied text.
+        let begin = from + base;
         let path = if copied {
             self.copied.truncate(base + length);
             Label::Copied {
-                start: base,
-                end: base + length,
+                start: begin,
+                end: begin + length,
             }
         } else {
             Label::Borrowed(&own[start..start + length])
@@ -531,19 +603,20 @@ impl<'a> Identifiers<'a> {
             let used = self.nodes[nodes..]
                 .iter()
                 .filter_map(|node| match node.label {
-                    Label::Copied { start, .. } if start >= base => Some(start),
+                    Label::Copied { start, .. } if start >= begin => Some(start),
                     _ => None,
                 })
                 .min();
             match used {
                 None => self.copied.truncate(base),
-                Some(from) => {
-                    self.copied.replace_range(base..from, "");
+                Some(used) => {
+                    let unused = used - begin;
+                    self.copied.replace_range(base..base + unused, "");
                     for node in &mut self.nodes[nodes..] {
                         if let Label::Copied { start, end } = &mut node.label
-                            && *start >= base
+                            && *start >= begin
                         {
-                            (*start, *end) = (*start - (from - base), *end - (from - base));
+                            (*start, *end) = (*start - unused, *end - unused);
                         }
                     }
                 }
@@ -602,6 +675,7 @@ impl<'a> Identifiers<'a> {
         } else if !walk.copied && walk.end == at {
             walk.end = at + input.len();
         } else if walk.copied {
+            walk.reserve(input.len());
             walk.copy.push_str(input);
         } else {
             return false;
@@ -648,7 +722,8 @@ impl<'a> Identifiers<'a> {
             }
             None => (Pos::Node { node: SLASH, up: 0 }, ""),
         };
-        let mut walk = Walk::new(own, x, authority, std::mem::take(&mut self.copied));
+        let copy = std::mem::take(&mut self.copied);
+        let mut walk = Walk::new(own, x, authority, copy, self.copied_from, self.budget);
         Self::remove_dots(&mut walk, reference.path().as_str());
         let (dir, last) = self.place(walk);
         Leaf {
@@ -712,7 +787,9 @@ impl<'a> Identifiers<'a> {
                     Some(authority) => Pos::Auth(authority),
                     None => Pos::Node { node: SLASH, up: 0 },
                 };
-                let mut walk = Walk::new(identifier, origin, "", std::mem::take(&mut self.copied));
+                let copy = std::mem::take(&mut self.copied);
+                let mut walk =
+                    Walk::new(identifier, origin, "", copy, self.copied_from, self.budget);
                 if path.starts_with('/') {
                     Self::remove_dots(&mut walk, path);
                 } else if base_authority.is_some() && base.dir == AUTH {
@@ -753,6 +830,7 @@ impl<'a> Identifiers<'a> {
                 }
             }
         };
+        self.budget = self.budget.saturating_sub(identifier.len());
         self.leaves.push(leaf);
         Some(u32::try_from(self.leaves.len() - 1).expect("identifiers are bounded by the source"))
     }
@@ -1191,7 +1269,8 @@ mod tests {
         let mut state = 0x9e37_79b9_u64;
         for _ in 0..6000 {
             let declarations = tree(&mut state, 32);
-            let mut ids = Identifiers::new();
+            // Exactly the identifiers' length, the tightest budget.
+            let mut ids = Identifiers::new(declarations.iter().map(|(_, t)| t.len()).sum());
             let mut strings: Vec<Option<String>> = Vec::new();
             let mut handles: Vec<Option<u32>> = Vec::new();
             for &(parent, text) in &declarations {
@@ -1284,7 +1363,7 @@ mod tests {
         let mut state = 0x2545_f491_4f6c_dd1d_u64;
         for _ in 0..4000 {
             let declarations = segment_tree(&mut state, 24);
-            let mut ids = Identifiers::new();
+            let mut ids = Identifiers::new(declarations.iter().map(|(_, t)| t.len()).sum());
             let mut strings: Vec<Option<String>> = Vec::new();
             let mut handles: Vec<Option<u32>> = Vec::new();
             for (parent, text) in &declarations {
@@ -1327,7 +1406,7 @@ mod tests {
         // Each level adds one directory: the pieces held grow with the
         // declarations, not with the length of the identifiers they spell.
         let levels = 20_000;
-        let mut ids = Identifiers::new();
+        let mut ids = Identifiers::new(usize::MAX);
         let mut parent = ids.compared(None, "https://e.test/");
         for _ in 0..levels {
             parent = ids.compared(parent, "a/");
@@ -1344,13 +1423,38 @@ mod tests {
     }
 
     #[test]
+    fn copied_labels_read_back_from_every_block() {
+        // A dot segment makes each path a copy, and an authority of its own
+        // keeps each copy: the copied text fills block after block, and
+        // every identifier still spells out once all are declared.
+        let texts: Vec<String> = (0..5000)
+            .map(|i| format!("s://{i:x}/q/a/../b/{}/x", "c".repeat(i % 50)))
+            .collect();
+        let mut ids = Identifiers::new(texts.iter().map(String::len).sum());
+        let handles: Vec<u32> = texts
+            .iter()
+            .map(|text| ids.compared(None, text).unwrap())
+            .collect();
+        for (text, &handle) in texts.iter().zip(&handles) {
+            assert_eq!(Some(ids.spelled(handle)), compared_id(None, text));
+        }
+        assert!(ids.retired.len() > 1);
+        let mut from = 0;
+        for (start, block) in &ids.retired {
+            assert_eq!(*start, from);
+            from += block.len();
+        }
+        assert_eq!(ids.copied_from, from);
+    }
+
+    #[test]
     fn identifiers_hold_runs_of_segments_not_segments() {
         // One identifier of many segments is one directory, and identifiers
         // giving up and replacing some of its segments add a few each,
         // however many segments their paths hold.
         let segments = 100_000;
         let long = format!("https://e.test/{}", "a/".repeat(segments));
-        let mut ids = Identifiers::new();
+        let mut ids = Identifiers::new(usize::MAX);
         let base = ids.compared(None, &long);
         let children: Vec<String> = (1..200)
             .map(|up| format!("{}x{up}/y", "../".repeat(up * 37)))
@@ -1366,7 +1470,7 @@ mod tests {
         assert!(ids.nodes.len() <= 3 + 1 + 3 * children.len() + 3);
         // The run interrupted by dot segments is copied once and not kept,
         // since its directories exist.
-        assert!(ids.copied.is_empty());
+        assert!(ids.copied.is_empty() && ids.retired.is_empty());
         let duplicates = ids.duplicates();
         assert_eq!(
             duplicates.iter().map(|&(_, h)| h).collect::<Vec<_>>(),

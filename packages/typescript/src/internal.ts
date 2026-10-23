@@ -663,8 +663,15 @@ function failure(error: unknown): InputFailure {
   if (!info || typeof info.code !== "string") throw error;
   return { status: "input-error", error: info };
 }
+// The host's own check for unpaired UTF-16 (ES2024), which every host the
+// package is qualified on provides; elsewhere the scan below answers alike.
+const hostWellFormed = (
+  String.prototype as { isWellFormed?: (this: string) => boolean }
+).isWellFormed;
 // Whether text holds no unpaired UTF-16 unit, so it crosses the bridge exactly as UTF-8.
 function wellFormed(text: string): boolean {
+  if (hostWellFormed && typeof text === "string")
+    return hostWellFormed.call(text);
   for (let i = 0; i < text.length; i++) {
     const c = text.charCodeAt(i);
     if (c >= 0xd800 && c <= 0xdbff) {
@@ -680,12 +687,12 @@ function scalar(text: string): void {
       "Unpaired UTF-16 in JSON text; use a JSON \\u escape or exact UTF-8 bytes.",
     );
 }
-function bytes(input: ExactInput): Uint8Array {
-  if (typeof input === "string") {
-    scalar(input);
-    return new TextEncoder().encode(input);
-  }
-  if (!(input instanceof Uint8Array))
+// Exact input as it crosses into the module: text is checked here and the
+// bindings encode it straight into module memory, so no JavaScript copy of its
+// UTF-8 is made beside the module's own.
+function exact(input: ExactInput): ExactInput {
+  if (typeof input === "string") scalar(input);
+  else if (!(input instanceof Uint8Array))
     throw new TypeError("Expected JSON text or Uint8Array.");
   return input;
 }
@@ -1031,11 +1038,15 @@ export function parseJson(
 ): ParseResult<ExactJson> {
   requireReady();
   const limits = limitsOption(options);
-  const data = bytes(input);
+  const data = exact(input);
   try {
     return {
       status: "parsed",
-      value: new ExactJson(wasm.WasmJson.parseBytes(data, limits)),
+      value: new ExactJson(
+        typeof data === "string"
+          ? wasm.WasmJson.parseText(data, limits)
+          : wasm.WasmJson.parseBytes(data, limits),
+      ),
     };
   } catch (e) {
     return failure(e);
@@ -1051,7 +1062,14 @@ export function validateDocument(
 ): DocumentReport {
   requireReady();
   const limits = limitsOption(options);
-  return decode(sdkCall(() => wasm.validateBytes(bytes(input), limits)));
+  const data = exact(input);
+  return decode(
+    sdkCall(() =>
+      typeof data === "string"
+        ? wasm.validateText(data, limits)
+        : wasm.validateBytes(data, limits),
+    ),
+  );
 }
 /** Return authoring default, supported specification line and exact applied specification revision. These identities are independent of the npm package version. */
 export function versionPolicy(): {
@@ -1300,11 +1318,15 @@ export class Document extends DocumentReads {
   ): ParseResult<Document> {
     requireReady();
     const limits = limitsOption(options);
-    const data = bytes(input);
+    const data = exact(input);
     try {
       return {
         status: "parsed",
-        value: adoptDocument(wasm.WasmDocument.parseBytes(data, limits)),
+        value: adoptDocument(
+          typeof data === "string"
+            ? wasm.WasmDocument.parseText(data, limits)
+            : wasm.WasmDocument.parseBytes(data, limits),
+        ),
       };
     } catch (error) {
       return failure(error);
@@ -2084,9 +2106,13 @@ export class PreparedValueContract extends Managed {
     const prepared = handle<wasm.WasmPrepared>(this);
     const signal = workSignal(options);
     if (isAborted(signal)) return cancelledValue();
-    const data = bytes(input);
+    const data = exact(input);
     try {
-      return decode(prepared.validateJson(data));
+      return decode(
+        typeof data === "string"
+          ? prepared.validateJsonText(data)
+          : prepared.validateJson(data),
+      );
     } catch (error) {
       return { outcome: "input-error", error: failure(error).error };
     }

@@ -53,8 +53,25 @@
   document, large maps, alias lists and `uniqueItems` arrays, and fixed checks
   read names holding U+E000 in place. Of the diagnostic memory probe's 34
   documents at the default limits (32 MiB, 1,000,000 nodes, any nesting), the
-  largest allocates 272.2 MiB beyond the caller's input, counting each
+  largest allocates 256.0 MiB beyond the caller's input, counting each
   reallocation as holding its old and new blocks at once.
+- The text compared identifiers copy out of `$id`s whose dot segments separate
+  their segments is kept in blocks that never move, instead of one buffer that
+  doubled: each new block is as large as the text before it, but no larger
+  than the identifiers still to come can copy. Text once kept is never copied
+  again, and growing it leaves no old buffer behind, which WebAssembly's
+  linear memory, unable to release it, kept resident. The probe's largest
+  document fell from 272.2 to 256.0 MiB (from 412.2 to 364.9 MiB at a 64 MiB
+  limit); through the TypeScript package its validation adds 278.5 MiB to
+  Node's resident memory, from 317.0 MiB.
+- TypeScript's `validateDocument`, `Document.parse`, `parseJson` and
+  `validateJson` encode text input straight into module memory instead of
+  first into a JavaScript copy of its UTF-8, so text crosses into the module
+  once, as bytes do. Results are unchanged.
+- TypeScript checks text for unpaired UTF-16 with the host's
+  `String.prototype.isWellFormed`, which Node 22, Chromium, WebKit and workerd
+  provide, and scans the text itself only on a host without it; both refuse
+  the same texts. Checking 32 MiB of text no longer takes a 65 ms scan.
 - Exact-input refusals say what the parser expected or found and the byte where:
   `InputError`'s `Display` and TypeScript's `InputFailure.message` read, for
   example, `expected a colon after the member name at byte 5`. Codes, kinds
