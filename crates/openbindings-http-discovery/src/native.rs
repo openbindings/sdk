@@ -171,6 +171,7 @@ impl Client {
     }
 }
 fn failure(error: reqwest::Error) -> RequestError {
+    let error = error.without_url();
     RequestError {
         kind: if error.is_timeout() {
             ErrorKind::Timeout
@@ -181,7 +182,13 @@ fn failure(error: reqwest::Error) -> RequestError {
         } else {
             ErrorKind::Network
         },
-        message: error.without_url().to_string(),
+        // reqwest displays every refused redirect as "error following redirect"
+        // and keeps the policy's reason as its source, so name the rule.
+        message: if error.is_redirect() {
+            message_with_sources(&error)
+        } else {
+            error.to_string()
+        },
     }
 }
 fn body_failure(error: reqwest::Error) -> RequestError {

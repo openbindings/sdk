@@ -208,7 +208,11 @@
   refused with `invalid-timeout`. Publication serves the well-known path
   when a request spells an unreserved character percent-encoded, as in
   `/.well-known/%6Fpenbindings` (RFC 3986 section 2.3), and never decodes a
-  reserved escape such as `%2F` into a path separator.
+  reserved escape such as `%2F` into a path separator. A native redirect refusal's
+  message names the rule that refused the hop, as in "error following redirect:
+  HTTPS to HTTP discovery redirect refused": the destination's scheme or host,
+  credentials in its URL, the ten-redirect limit (which also ends a cycle) or
+  credential replay.
 - Provisional Rust provider traits and checked callers for source inspection,
   interface synthesis, binding invocation and operation invocation. The three
   kind-facing companions share one `SupportedKind` and `KindSupportVerdict`, so a
