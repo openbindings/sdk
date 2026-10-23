@@ -663,8 +663,15 @@ function failure(error: unknown): InputFailure {
   if (!info || typeof info.code !== "string") throw error;
   return { status: "input-error", error: info };
 }
+// The host's own check for unpaired UTF-16 (ES2024), which every host the
+// package is qualified on provides; elsewhere the scan below answers alike.
+const hostWellFormed = (
+  String.prototype as { isWellFormed?: (this: string) => boolean }
+).isWellFormed;
 // Whether text holds no unpaired UTF-16 unit, so it crosses the bridge exactly as UTF-8.
 function wellFormed(text: string): boolean {
+  if (hostWellFormed && typeof text === "string")
+    return hostWellFormed.call(text);
   for (let i = 0; i < text.length; i++) {
     const c = text.charCodeAt(i);
     if (c >= 0xd800 && c <= 0xdbff) {

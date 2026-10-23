@@ -68,6 +68,10 @@
   `validateJson` encode text input straight into module memory instead of
   first into a JavaScript copy of its UTF-8, so text crosses into the module
   once, as bytes do. Results are unchanged.
+- TypeScript checks text for unpaired UTF-16 with the host's
+  `String.prototype.isWellFormed`, which Node 22, Chromium, WebKit and workerd
+  provide, and scans the text itself only on a host without it; both refuse
+  the same texts. Checking 32 MiB of text no longer takes a 65 ms scan.
 - Exact-input refusals say what the parser expected or found and the byte where:
   `InputError`'s `Display` and TypeScript's `InputFailure.message` read, for
   example, `expected a colon after the member name at byte 5`. Codes, kinds

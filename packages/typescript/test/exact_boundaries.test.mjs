@@ -561,3 +561,62 @@ test("text and its UTF-8 bytes are admitted alike by every exact entry point", (
     contract.dispose();
   }
 });
+
+// The facade asks the host whether text holds an unpaired UTF-16 unit, and
+// scans for one on a host that cannot say; either way the same texts are
+// refused, before anything crosses into the module.
+test("unpaired UTF-16 is refused alike with and without the host's isWellFormed", async () => {
+  const { spawnSync } = await import("node:child_process");
+  const probe = (withoutHost) => `
+${withoutHost ? "delete String.prototype.isWellFormed;" : ""}
+import { readFile } from "node:fs/promises";
+const url = (path) => new URL(path, ${JSON.stringify(import.meta.url)});
+const host = typeof String.prototype.isWellFormed;
+const sdk = await import(url("../dist/index.js"));
+await sdk.initialize(await readFile(url("../dist/wasm/openbindings_wasm_bg.wasm")));
+const units = [0x22, 0x37, 0x41, 0xe9, 0xd800, 0xd83d, 0xdbff, 0xdc00, 0xde00, 0xdfff, 0xfffd, 0xffff];
+const texts = ["", "\\ud800", "\\udc00", "\\ud83d\\ude00", "\\ude00\\ud83d", "a\\ud800", "\\ud800a", "a\\udfff\\ud800", "7".repeat(4096) + "\\ud800"];
+let state = 0x2545f491;
+const next = () => ((state ^= state << 13), (state ^= state >>> 17), (state ^= state << 5), state >>> 0);
+for (let i = 0; i < 4000; i++) {
+  let text = "";
+  for (let length = next() % 10; length > 0; length--) text += String.fromCharCode(units[next() % units.length]);
+  texts.push(text);
+}
+const outcome = (call) => {
+  try {
+    const result = call();
+    return typeof result === "string" ? result : (result.value?.dispose(), result.status);
+  } catch (error) {
+    if (error instanceof TypeError) return "refused";
+    throw error;
+  }
+};
+console.log(JSON.stringify({
+  host,
+  unpaired: texts.map((text) => /[\\ud800-\\udbff](?![\\udc00-\\udfff])|(?<![\\ud800-\\udbff])[\\udc00-\\udfff]/.test(text)),
+  version: texts.map((text) => outcome(() => sdk.checkVersion(text))),
+  json: texts.map((text) => outcome(() => sdk.parseJson(text))),
+}));
+`;
+  const [native, scanned] = [false, true].map((withoutHost) => {
+    const result = spawnSync(
+      process.execPath,
+      ["--input-type=module", "-e", probe(withoutHost)],
+      { encoding: "utf8" },
+    );
+    assert.equal(result.status, 0, result.stderr);
+    return JSON.parse(result.stdout);
+  });
+  assert.equal(native.host, "function");
+  assert.equal(scanned.host, "undefined");
+  assert.deepEqual(scanned.version, native.version);
+  assert.deepEqual(scanned.json, native.json);
+  assert.deepEqual(
+    native.version.map((outcome) => outcome === "refused"),
+    native.unpaired,
+  );
+  // Both kinds of text are well represented.
+  assert(native.unpaired.filter(Boolean).length > 500);
+  assert(native.unpaired.filter((unpaired) => !unpaired).length > 500);
+});
