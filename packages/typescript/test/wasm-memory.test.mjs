@@ -4,12 +4,13 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
 const MIB = 1024 * 1024;
-// The diagnostic memory probe's allowance for one validate_document call at
-// the default limits (tools/diagnostic-memory-probe/src/limits.rs), held here
-// to the module memory the same call adds through the package. Wasm linear
-// memory only grows, so its size after the call is the call's high-water mark,
-// and it includes the module's copy of the input.
-const ALLOWANCE = 300 * MIB;
+// Wasm linear memory only grows, so its size after a call is the call's
+// high-water mark, the module's copy of the input included. For one build it is
+// the same on every run, so each document's bound is what its validation adds
+// now, 223.75 and 227.75 MiB, rounded up to the next MiB: any growth fails.
+// Lower a bound when its figure falls; raise one only for a reason recorded
+// beside it. The diagnostic memory probe allows 300 MiB of native requested
+// memory for the same documents (tools/diagnostic-memory-probe/src/limits.rs).
 const run = promisify(execFile);
 
 // The probe's costliest documents at the default 32 MiB limit, byte for byte:
@@ -44,10 +45,10 @@ console.log(JSON.stringify({
 }));
 `;
 
-test("validating the probe's costliest documents adds at most its allowance of module memory", async () => {
+test("validating the probe's costliest documents adds no more module memory than it does now", async () => {
   const shapes = [
-    ["copied identifier paths", "", "conformant"],
-    ["copied identifier paths with pieces", "?#f", "non-conformant"],
+    ["copied identifier paths", "", "conformant", 224 * MIB],
+    ["copied identifier paths with pieces", "?#f", "non-conformant", 228 * MIB],
   ];
   const results = await Promise.all(
     shapes.map(async ([, pieces]) => {
@@ -60,12 +61,12 @@ test("validating the probe's costliest documents adds at most its allowance of m
     }),
   );
   results.forEach((result, at) => {
-    const [name, , conclusion] = shapes[at];
+    const [name, , conclusion, bound] = shapes[at];
     assert.equal(result.conclusion, conclusion, name);
     assert(result.bytes <= 32 * MIB, `${name}: ${result.bytes} bytes`);
     assert(
-      result.added <= ALLOWANCE,
-      `${name}: the call added ${(result.added / MIB).toFixed(1)} MiB of module memory, more than ${ALLOWANCE / MIB} MiB`,
+      result.added <= bound,
+      `${name}: the call added ${(result.added / MIB).toFixed(2)} MiB of module memory, more than its ${bound / MIB} MiB bound`,
     );
   });
   assert.equal(results[1].findings, 4096);
