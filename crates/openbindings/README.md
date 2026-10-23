@@ -76,11 +76,14 @@ and binding content remain opaque. Kind implementations interpret them outside
 core. Document conformance does not establish that a binding works or that an
 example satisfies its value contract.
 
-Default JSON admission allows 32 MiB, 10,000 container levels and 1,000,000 nodes.
-A host that admits larger documents passes `JsonLimits` to
-`validate_document_with_limits` or `Document::parse_with_limits`; the document
-keeps those limits (`Document::limits`) for its edits. Values take them through
-`JsonValue::parse_with_limits`.
+Default JSON admission allows 32 MiB, 10,000 container levels and 1,000,000 nodes:
+`Document::parse`, `Document::parse_owned` and `JsonValue::parse` apply all three.
+`validate_document` and `validate_document_owned` apply the same bytes and nodes
+at any nesting. A host that needs other limits passes `JsonLimits` to
+`validate_document_with_limits`, `Document::parse_with_limits` or
+`JsonValue::parse_with_limits`; `JsonLimits::default()` there includes the
+10,000-level cap. A document keeps the limits it was admitted under
+(`Document::limits`) for its edits.
 Checked ordinary Serde conversion has a 128-container ceiling. Exact parsing is
 the route for existing JSON tokens. Findings retain at most 4,096 entries and
 8 MiB of pointers; truncation leaves rule evidence intact. Use codes and evidence
