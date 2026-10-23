@@ -698,7 +698,8 @@ leaves its earlier storage resident beside it, where a native allocator would
 return it to the system; this is why the identifiers' copied text grows in
 blocks that never move. While a call runs, the TypeScript package also holds
 the module's copy of the input: the module cannot read JavaScript's bytes, and
-the document keeps its own copy of the text. Through the package,
+the document keeps its own copy of the text. Text input is encoded straight
+into module memory, with no JavaScript copy of its UTF-8. Through the package,
 in Node 22.19.0 on the same host, validating the shape above at the default
 limit adds 278.5 MiB to the resident memory of a process that has read the
 file, of which 31.7 MiB is that copy of the input; at a 64 MiB limit it adds

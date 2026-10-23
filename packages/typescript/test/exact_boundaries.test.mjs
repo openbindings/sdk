@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import * as sdk from "../dist/index.js";
 import * as bridge from "../dist/wasm/openbindings_wasm.js";
+import { prepareInput } from "./conformant-contracts.mjs";
 await sdk.initialize(
   await readFile(
     new URL("../dist/wasm/openbindings_wasm_bg.wasm", import.meta.url),
@@ -504,5 +505,59 @@ test("keyed metadata checks selected rows and avoids operation namespace interpr
     interpretation(() => malformed.source("x"));
   } finally {
     malformed.dispose();
+  }
+});
+
+// Text crosses into the module encoded there directly, not through a
+// JavaScript copy of its UTF-8; each entry point admits it exactly as it
+// admits those bytes.
+test("text and its UTF-8 bytes are admitted alike by every exact entry point", () => {
+  const document = parsed(
+    '{"openbindings":"0.2.0","operations":{"run":{"input":{"type":"string"}}}}',
+  );
+  const prepared = prepareInput(document, "run");
+  document.dispose();
+  assert.equal(prepared.status, "ready");
+  const contract = prepared.valueContract;
+  const before = testing.liveStorageOwners();
+  const plain = (result) => {
+    const value = result.value;
+    if (!value) return result;
+    try {
+      return { status: result.status, text: value.toBytes?.() ?? value.text };
+    } finally {
+      value.dispose();
+    }
+  };
+  try {
+    for (const text of [
+      '"ascii"',
+      '"café 𝄞"',
+      String.raw`"caf\u00e9 \ud834\udd1e \ud800"`,
+      '{"openbindings":"0.2.0","operations":{"é":{}},"x":"𝄞"}',
+      '{"openbindings":"0.2.0","operations":{}}',
+      "\ufeff7",
+      '{"a" 𝄞',
+      "[1 2]",
+    ]) {
+      const bytes = new TextEncoder().encode(text);
+      assert.deepEqual(sdk.validateDocument(text), sdk.validateDocument(bytes));
+      assert.deepEqual(
+        sdk.validateDocument(text, { limits: { maxBytes: 8 } }),
+        sdk.validateDocument(bytes, { limits: { maxBytes: 8 } }),
+      );
+      assert.deepEqual(plain(sdk.parseJson(text)), plain(sdk.parseJson(bytes)));
+      assert.deepEqual(
+        plain(sdk.Document.parse(text)),
+        plain(sdk.Document.parse(bytes)),
+      );
+      assert.deepEqual(
+        contract.validateJson(text),
+        contract.validateJson(bytes),
+      );
+    }
+    assert.equal(testing.liveStorageOwners(), before);
+  } finally {
+    contract.dispose();
   }
 });

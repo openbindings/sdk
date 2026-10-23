@@ -64,6 +64,10 @@
   document fell from 272.2 to 256.0 MiB (from 412.2 to 364.9 MiB at a 64 MiB
   limit); through the TypeScript package its validation adds 278.5 MiB to
   Node's resident memory, from 317.0 MiB.
+- TypeScript's `validateDocument`, `Document.parse`, `parseJson` and
+  `validateJson` encode text input straight into module memory instead of
+  first into a JavaScript copy of its UTF-8, so text crosses into the module
+  once, as bytes do. Results are unchanged.
 - Exact-input refusals say what the parser expected or found and the byte where:
   `InputError`'s `Display` and TypeScript's `InputFailure.message` read, for
   example, `expected a colon after the member name at byte 5`. Codes, kinds
