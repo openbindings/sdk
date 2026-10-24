@@ -564,10 +564,11 @@ impl openbindings_internal_schema::SuppliedSet for ResourceSet {
         &self.inner.input_policy
     }
 }
-// It also reuses the schema index the revision built when it was validated.
+// It also reuses the schema index the revision built when it was validated,
+// and what that validation established about its schemas.
 impl openbindings_internal_schema::IndexedDocument for Conformant<Document> {
     fn indexed(&self) -> openbindings_internal_schema::RawDocument {
-        self.as_document().indexed()
+        self.as_document().indexed_conformant()
     }
 }
 

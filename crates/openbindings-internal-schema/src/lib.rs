@@ -39,6 +39,9 @@ pub struct ProjectedResource {
 pub struct RawDocument {
     value: JsonValue,
     index: Arc<schema_index::SchemaIndex>,
+    // Whether every indexed schema already satisfied the 2020-12
+    // meta-schemas when the document was validated, as conformance requires.
+    checked: bool,
 }
 impl std::fmt::Debug for RawDocument {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -49,13 +52,36 @@ impl std::fmt::Debug for RawDocument {
 impl RawDocument {
     pub fn new(value: JsonValue) -> Self {
         let index = Arc::new(schema_index::SchemaIndex::build(&value));
-        Self { value, index }
+        Self {
+            value,
+            index,
+            checked: false,
+        }
     }
     /// The document with the index [`schema_index::SchemaIndex::build`] built
     /// for this same value, shared rather than built again.
     pub fn with_index(value: JsonValue, index: Arc<schema_index::SchemaIndex>) -> Self {
         debug_assert!(index.indexes(&value), "the index is the value's own");
-        Self { value, index }
+        Self {
+            value,
+            index,
+            checked: false,
+        }
+    }
+    /// A conformant document with its index: every indexed schema satisfied
+    /// the 2020-12 meta-schemas through [`fixed_schema::check_with_retained`]
+    /// when the document was validated, so a schema space does not check its
+    /// schemas against them again.
+    pub fn conformant(value: JsonValue, index: Arc<schema_index::SchemaIndex>) -> Self {
+        Self {
+            checked: true,
+            ..Self::with_index(value, index)
+        }
+    }
+    /// Whether the indexed schemas are known to satisfy the 2020-12
+    /// meta-schemas ([`Self::conformant`]).
+    pub fn schemas_checked(&self) -> bool {
+        self.checked
     }
     pub fn parse(text: impl AsRef<str>) -> Result<Self, openbindings_internal_json::InputError> {
         Ok(Self::new(JsonValue::parse(text.as_ref())?))

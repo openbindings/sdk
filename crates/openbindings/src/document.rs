@@ -537,6 +537,14 @@ impl Document {
             self.shared_schema_index().clone(),
         )
     }
+    /// The same, for a revision that validated as conformant: rule OBI-10
+    /// then found every indexed schema to satisfy the 2020-12 meta-schemas.
+    pub(crate) fn indexed_conformant(&self) -> openbindings_internal_schema::RawDocument {
+        openbindings_internal_schema::RawDocument::conformant(
+            self.value().clone(),
+            self.shared_schema_index().clone(),
+        )
+    }
     pub(crate) fn interpretable(&self) -> Result<(), InterpretationError> {
         self.inner
             .interpretation

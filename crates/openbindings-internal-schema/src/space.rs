@@ -1347,9 +1347,13 @@ impl SchemaSpace {
                 "schema interpretation requires Unicode scalar strings",
             ));
         }
-        // Only the verdict matters here, so no finding is located.
-        let valid = crate::fixed_schema::validity(&node.value, true)
-            .map_err(|e| self.failure(id, FailureReason::LimitExceeded, "meta-schema-check", e))?;
+        // Only the verdict matters here, so no finding is located. A
+        // conformant document's schemas already passed this check.
+        let checked = node.source == 0 && self.document.schemas_checked();
+        let valid = checked
+            || crate::fixed_schema::validity(&node.value, true).map_err(|e| {
+                self.failure(id, FailureReason::LimitExceeded, "meta-schema-check", e)
+            })?;
         if !valid {
             return Err(self.failure(
                 id,
