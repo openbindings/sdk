@@ -25,24 +25,6 @@ pub struct TextMember<'a> {
     pub name: TextValue<'a>,
     /// The member's value.
     pub value: TextValue<'a>,
-    // Known from finding the value: where the name ends and whether it escapes.
-    name_end: usize,
-    name_escaped: bool,
-}
-impl<'a> TextMember<'a> {
-    /// The name's scalar text, as [`TextValue::string`] returns it, without
-    /// scanning the name again.
-    pub fn name_string(self) -> Option<TextString<'a>> {
-        if self.name_escaped {
-            return self.name.string();
-        }
-        let raw = &self.name.text[self.name.start + 1..self.name_end - 1];
-        Some(TextString {
-            raw,
-            len: raw.len(),
-            escaped: false,
-        })
-    }
 }
 /// A string token whose escapes denote Unicode scalar text only.
 #[derive(Clone, Copy)]
@@ -231,16 +213,10 @@ impl<'a> TextValue<'a> {
                 return None;
             }
             let name = TextValue { text, start };
-            let (name_end, name_escaped) = string_scan(bytes, start);
-            let colon = space(bytes, name_end);
+            let colon = space(bytes, string_end(bytes, start));
             let value = TextValue::at(text, colon + 1);
             cursor = Some(Cursor::After(value.start));
-            Some(TextMember {
-                name,
-                value,
-                name_end,
-                name_escaped,
-            })
+            Some(TextMember { name, value })
         })
     }
     /// Iterate array elements in order; empty for other kinds. Each element is
@@ -376,12 +352,6 @@ mod tests {
         for (a, t) in members.iter().zip(&text_members) {
             agree(a.name, t.name);
             agree(a.value, t.value);
-            assert_eq!(
-                a.name.as_str(),
-                t.name_string()
-                    .map(|s| s.chars().collect::<String>())
-                    .as_deref()
-            );
         }
         let elements: Vec<_> = arena.elements().into_iter().flatten().collect();
         let text_elements: Vec<_> = text.elements().collect();
