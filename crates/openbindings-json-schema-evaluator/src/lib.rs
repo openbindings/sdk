@@ -317,11 +317,17 @@ impl DefaultEvaluator {
             ));
         }
         let mut operands = operands::Operands::default();
+        #[cfg(feature = "conversion-check")]
+        let bounds: Vec<(usize, usize)> = projected
+            .resources
+            .iter()
+            .map(|resource| (resource.bytes, resource.nodes))
+            .collect();
         let converted = self.defined(projected, &mut operands, space, &missing, control)?;
         // The SDK's own tests and tools (`conversion-check`) check that the
         // definitions convert as the program's text does.
         #[cfg(feature = "conversion-check")]
-        self.check_conversion(&converted, &operands, space, entry, &missing);
+        self.check_conversion(&converted, &operands, space, entry, &missing, &bounds);
         #[cfg(not(feature = "conversion-check"))]
         let _ = entry;
         Ok(Arc::new(
@@ -455,6 +461,7 @@ impl DefaultEvaluator {
         space: &SchemaSpace,
         entry: usize,
         missing: &[String],
+        bounds: &[(usize, usize)],
     ) {
         let unmapped = space
             .program_unmapped(entry, &|| false)
@@ -474,6 +481,21 @@ impl DefaultEvaluator {
         assert_eq!(text.entry, converted.entry);
         assert_eq!(text.numbers, converted.numbers);
         assert_eq!(text.resources.len(), converted.resources.len());
+        // The definitions' bounds on each resource's text hold.
+        for ((resource, text), (bytes, nodes)) in unmapped
+            .program
+            .resources
+            .iter()
+            .zip(&text.resources)
+            .zip(bounds)
+        {
+            assert_eq!(resource.uri, text.uri);
+            assert!(resource.document.text().len() <= *bytes);
+            assert_eq!(
+                openbindings_internal_json::backend::node_count(resource.document.view()),
+                *nodes
+            );
+        }
         for (text, converted) in text.resources.iter().zip(&converted.resources) {
             assert_eq!(text.uri, converted.uri);
             assert_eq!(text.definitions, converted.definitions);

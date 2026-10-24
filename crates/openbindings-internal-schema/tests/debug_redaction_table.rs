@@ -118,6 +118,8 @@ fn internal_rows(context: &JsonValue) -> Vec<Row> {
                             (SECRET, schema::Field::Copied(context.view())),
                         ]),
                     }],
+                    bytes: 0,
+                    nodes: 0,
                 }],
                 literals: vec![context.clone()],
             },

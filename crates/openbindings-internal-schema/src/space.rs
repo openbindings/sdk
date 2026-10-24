@@ -133,6 +133,11 @@ pub struct DefinedResource<'s> {
     pub entry: Option<String>,
     /// In `$defs` order.
     pub definitions: Vec<Definition<'s>>,
+    /// At least the bytes of the resource's text.
+    pub bytes: usize,
+    /// The nodes the resource's text holds, names included, as its parse
+    /// counts them.
+    pub nodes: usize,
 }
 /// A projection as definitions, with its separated literals.
 pub struct Definitions<'s> {
@@ -1169,11 +1174,13 @@ impl SchemaSpace {
         let reach = self.reach(entry, control)?;
         let namespace = PROGRAM_NAMESPACE;
         // The text's fixed bounds refuse with byte offsets in the text. The
-        // definitions carry bounds on the text each definition and resource
-        // would take, which also bound their nodes (each holds at least a
-        // byte of its own) and their nesting (each level at least two). Once
-        // a bound could reach a fixed limit, the projection is written as text
-        // too, which refuses as it does there or admits the definitions.
+        // definitions carry a bound on the bytes of text each definition and
+        // resource would take, the exact count of nodes each resource's text
+        // would hold, and the nesting of any copied value long enough to nest
+        // deeply (each level takes at least two bytes); the rest of a
+        // resource nests five levels at most. Once a bound could reach a fixed
+        // limit, the projection is written as text too, which refuses as it
+        // does there or admits the definitions.
         let mut written = false;
         let write = |written: &mut bool| -> Result<(), Failure> {
             if !std::mem::replace(written, true) {
@@ -1192,37 +1199,46 @@ impl SchemaSpace {
         let mut values = Vec::new();
         let mut separated = 0usize;
         let mut total = 0usize;
-        let mut resources: BTreeMap<usize, (usize, Vec<Definition<'_>>)> = BTreeMap::new();
+        let mut resources: BTreeMap<usize, (usize, usize, Vec<Definition<'_>>)> = BTreeMap::new();
         let mut nodes: Vec<_> = reach.nodes.iter().copied().collect();
         nodes.sort_unstable();
         for id in nodes {
             control.check()?;
             let node = self.node(id);
-            let (schema, bound) = match node.value.view().as_bool() {
-                Some(value) => (Schema::Boolean(value), node.value.text().len()),
+            // The definition's bytes bound and its nodes: one value node for
+            // a boolean, and for an object its node, then for each keyword its
+            // name's node and its value's: a reference's string, a subschema's
+            // `{"$ref": <address>}` (three), a map of them (one, and for each
+            // member its name and three), a list of them (one, and three
+            // each), a literal's index or the nodes of the copied value.
+            let (schema, bound, count) = match node.value.view().as_bool() {
+                Some(value) => (Schema::Boolean(value), node.value.text().len(), 1usize),
                 None => {
                     let fields =
                         self.fields(id, &reach, namespace, true, &mut values, &mut separated)?;
                     let mut bound = 2usize;
+                    let mut count = 1usize;
                     for (keyword, field) in &fields {
-                        let value = match field {
-                            Field::Reference(uri) => quoted_bound(uri),
-                            Field::Single(address) => quoted_bound(address) + 9,
-                            Field::Map(children) => {
+                        let (value, nodes) = match field {
+                            Field::Reference(uri) => (quoted_bound(uri), 1),
+                            Field::Single(address) => (quoted_bound(address) + 9, 3),
+                            Field::Map(children) => (
                                 2 + children
                                     .iter()
                                     .map(|(name, address)| {
                                         quoted_bound(name) + quoted_bound(address) + 11
                                     })
-                                    .sum::<usize>()
-                            }
-                            Field::List(children) => {
+                                    .sum::<usize>(),
+                                1 + 4 * children.len(),
+                            ),
+                            Field::List(children) => (
                                 2 + children
                                     .iter()
                                     .map(|address| quoted_bound(address) + 10)
-                                    .sum::<usize>()
-                            }
-                            Field::Literal(_) => 20,
+                                    .sum::<usize>(),
+                                1 + 3 * children.len(),
+                            ),
+                            Field::Literal(_) => (20, 1),
                             Field::Copied(value) => {
                                 let length = value.text().len();
                                 if !written
@@ -1234,15 +1250,19 @@ impl SchemaSpace {
                                 {
                                     write(&mut written)?;
                                 }
-                                length
+                                (
+                                    length,
+                                    openbindings_internal_json::backend::node_count(*value),
+                                )
                             }
                         };
                         bound = bound
                             .saturating_add(quoted_bound(keyword))
                             .saturating_add(value)
                             .saturating_add(2);
+                        count = count.saturating_add(1).saturating_add(nodes);
                     }
-                    (Schema::Object(fields), bound)
+                    (Schema::Object(fields), bound, count)
                 }
             };
             total = total
@@ -1252,8 +1272,10 @@ impl SchemaSpace {
                 write(&mut written)?;
             }
             let name = format!("n{}", self.node_number(id));
-            let (size, definitions) = resources.entry(node.resource).or_default();
+            let (size, nodes, definitions) = resources.entry(node.resource).or_default();
             *size = size.saturating_add(bound).saturating_add(name.len() + 4);
+            // The definition's name, and its schema.
+            *nodes = nodes.saturating_add(1).saturating_add(count);
             definitions.push(Definition {
                 name,
                 node: id,
@@ -1263,14 +1285,18 @@ impl SchemaSpace {
         let entry_resource = self.node(entry).resource;
         let entry_uri = self.resource_uri(namespace, entry_resource);
         let mut projected = Vec::with_capacity(resources.len());
-        for (id, (size, mut definitions)) in resources {
+        for (id, (size, nodes, mut definitions)) in resources {
             let uri = self.resource_uri(namespace, id);
             let entry = (id == entry_resource).then(|| self.address(namespace, entry));
-            let size = size
+            let bytes = size
                 .saturating_add(64 + DIALECT.len() + uri.len())
                 .saturating_add(entry.as_ref().map_or(0, String::len));
-            // The node bound; the nesting bound is the copies' checked above.
-            if size > PROJECTION_LIMITS.max_nodes {
+            // The resource's object, `$defs` with its name and object, then
+            // `$id` and `$schema` and, in the entry's resource, `$ref`, each a
+            // name and a string.
+            let nodes = nodes.saturating_add(7 + if entry.is_some() { 2 } else { 0 });
+            // The nesting bound is the copies' checked above.
+            if bytes > PROJECTION_LIMITS.max_bytes || nodes > PROJECTION_LIMITS.max_nodes {
                 write(&mut written)?;
             }
             definitions.sort_unstable_by(|a, b| a.name.cmp(&b.name));
@@ -1278,6 +1304,8 @@ impl SchemaSpace {
                 uri,
                 entry,
                 definitions,
+                bytes,
+                nodes,
             });
         }
         Ok(Definitions {
