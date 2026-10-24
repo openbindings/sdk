@@ -54,7 +54,7 @@ function checkInput(input: JsonInput) {
   const checked = document.validate();
   if (checked.status !== "conformant") return checked;
   using proof = checked.document;
-  const operations = proof.operations;
+  const operations = proof.operations; // plain metadata: key, aliases, tags...
   using operation = proof.resolveOperation("find"); // primary name or alias
   if (!operation) return { status: "operation-missing" } as const;
   using contract = operation.input();
@@ -62,7 +62,8 @@ function checkInput(input: JsonInput) {
   const setup = contract.prepare();
   if (setup.status !== "ready") return setup;
   using prepared = setup.valueContract;
-  return { operations, result: prepared.validate(input) };
+  const result = prepared.validate(input); // narrow on result.outcome
+  return { operations, result };
 }
 
 console.log(checkInput(7));
@@ -80,13 +81,18 @@ platform types that `DOM` declares, such as `Response`, `URL`, `AbortSignal` and
 `DocumentValidation`, as Rust's `validate()` does: a `conformant` branch carrying a
 `ConformantDocument`, or a version refusal or conformance report.
 `validateDocument(bytes)` returns only the plain `DocumentReport`, with no proof
-and nothing to dispose. Only a conformant document's operations hand out value
-contracts: `resolveOperation` returns `undefined` for a missing operation, and
-`input()` or `output()` returns `undefined` when no value contract is declared.
-`prepare()` returns a ready `PreparedValueContract` or a no-verdict refusal. Handle
-each result before validating a value. Value results distinguish `satisfies`, `fails`, `undefined`
-(the specification gives the value no defined validity), `no-verdict` (the SDK could
-not answer) and an `input-error` when ordinary JavaScript data cannot be admitted.
+and nothing to dispose. `operations` lists every operation's frozen metadata in
+lexical key order, its primary `key` and declared `aliases` (`null` when absent)
+among them; an operation view's `metadata` holds the same record. Only a
+conformant document's operations hand out value contracts: `resolveOperation`
+returns `undefined` for a missing operation, and `input()` or `output()` returns
+`undefined` when no value contract is declared. `prepare()` returns a ready
+`PreparedValueContract` or a no-verdict refusal. Handle each result before
+validating a value. Parsing, validation, preparation and discovery results
+discriminate on `status`; value results discriminate on `outcome`, which is
+`satisfies`, `fails`, `undefined` (the specification gives the value no defined
+validity), `no-verdict` (the SDK could not answer) or `input-error` when ordinary
+JavaScript data cannot be admitted.
 `validate` reads a string as a JSON string value; check JSON text or bytes, such as
 a request body, with `validateJson`, which admits them as `parseJson` does.
 
