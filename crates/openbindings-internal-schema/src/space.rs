@@ -1709,15 +1709,12 @@ mod projection_tests {
         let index = std::sync::Arc::new(SchemaIndex::build(&malformed));
         assert!(!RawDocument::new(malformed.clone()).schemas_checked());
         assert!(!RawDocument::shared(index.clone()).schemas_checked());
-        for order in [
-            (0..index.nodes.len()).rev().collect::<Vec<_>>(),
-            (0..index.nodes.len()).collect(),
-        ] {
-            for at in order {
-                index.check_meta(at, 0, |_, _| false).unwrap();
-            }
-            assert!(!index.schemas_checked());
+        let mut meta = index.meta_checks();
+        for _ in 0..index.nodes.len() {
+            meta.check_next(0, |_, _| false).1.unwrap();
         }
+        meta.finish();
+        assert!(!index.schemas_checked());
         let space = SchemaSpace::new(RawDocument::shared(index.clone()), Supplied::default());
         let entry = space
             .document_node(&malformed.at("/operations/op/input").unwrap().to_owned())
@@ -1731,14 +1728,18 @@ mod projection_tests {
         )
         .unwrap();
         let index = std::sync::Arc::new(SchemaIndex::build(&valid));
-        let last = index.nodes.len() - 1;
-        index.check_meta(last, 0, |_, _| false).unwrap();
+        // Checking some of the schemas, or none, records nothing.
+        let mut meta = index.meta_checks();
+        meta.check_next(0, |_, _| false).1.unwrap();
+        meta.finish();
+        index.meta_checks().finish();
         assert!(!index.schemas_checked());
-        for at in 0..last {
-            index.check_meta(at, 0, |_, _| false).unwrap();
+        let mut meta = index.meta_checks();
+        for _ in 0..index.nodes.len() {
+            meta.check_next(0, |_, _| false).1.unwrap();
         }
         assert!(!index.schemas_checked());
-        index.check_meta(last, 0, |_, _| false).unwrap();
+        meta.finish();
         assert!(index.schemas_checked());
         assert!(RawDocument::shared(index).schemas_checked());
     }

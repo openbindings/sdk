@@ -1,7 +1,7 @@
 //! One exact editable document and retained conformance evidence.
 use crate::{
     fixed_schema,
-    schema_index::{DIALECT, SameDocument, SchemaIndex},
+    schema_index::{self, DIALECT, SameDocument, SchemaIndex},
     *,
 };
 use openbindings_internal_json::backend;
@@ -1242,18 +1242,17 @@ impl<'a> Checks<'a> {
         );
         self.fixed_checked(value, rule, checked);
     }
-    // OBI-10 for the indexed schema at `at`, checked through the index, which
+    // OBI-10 for the next indexed schema, checked through the index, which
     // records whether every indexed schema satisfies the meta-schemas.
-    fn meta_fixed(&mut self, schemas: &'a SchemaIndex, at: usize) {
+    fn meta_fixed(&mut self, meta: &mut schema_index::MetaChecks<'a>) {
         let rule = Rule::Obi10;
-        let checked = schemas.check_meta(
-            at,
+        let (value, checked) = meta.check_next(
             MAX_FINDINGS.saturating_sub(self.findings.len()),
             |at, message| {
                 self.contains_at(rule, Evidence::Violated, at, "schema-mismatch", message)
             },
         );
-        self.fixed_checked(schemas.value(&schemas.nodes[at]), rule, checked);
+        self.fixed_checked(value, rule, checked);
     }
     fn fixed_checked(
         &mut self,
@@ -1466,9 +1465,10 @@ fn assess_value(document: &Document) -> Result<ValidationReport, VersionRefusal>
     let schemas = document.schema_index();
     // The index visits each contained schema occurrence once. Equal text at
     // different positions must still be checked at each original location.
+    let mut meta = schemas.meta_checks();
     for (index, node) in schemas.nodes.iter().enumerate() {
         let schema = schemas.value(node);
-        c.meta_fixed(schemas, index);
+        c.meta_fixed(&mut meta);
         if let Some(dialect) = schema.get("$schema")
             && !matches!(
                 dialect.as_str(),
@@ -1530,6 +1530,7 @@ fn assess_value(document: &Document) -> Result<ValidationReport, VersionRefusal>
             }
         }
     }
+    meta.finish();
     for declarations in schemas.anchor_declarations() {
         if declarations[0].resource == 0 && declarations.len() > 1 {
             for anchor in declarations {

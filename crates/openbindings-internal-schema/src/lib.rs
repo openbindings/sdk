@@ -59,8 +59,8 @@ impl RawDocument {
     }
     /// Whether every indexed schema is known to satisfy the 2020-12
     /// meta-schemas: each was checked against them through its index
-    /// ([`schema_index::SchemaIndex::check_meta`]), as validating a document
-    /// does, and none failed.
+    /// ([`schema_index::MetaChecks`]), as validating a document does, and
+    /// none failed.
     pub fn schemas_checked(&self) -> bool {
         self.index.schemas_checked()
     }
