@@ -18,12 +18,12 @@ value contracts whose patterns nest to the default `pattern_depth` and check
 values against them. The evaluator sizes its evaluation depth, stack guard and
 unevaluated walk limit from `Limits::stack_bytes` (256 KiB by default), and
 release builds on the same hosts prepare, check and explain values as deep as
-it admits for the 39 recursive contract shapes `evaluation_stack` covers,
+it admits for the 39 recursive value contract shapes `evaluation_stack` covers,
 unevaluated keywords included, on threads of 192 KiB, 256 KiB and 1 MiB, and
 prepare the longest unevaluated annotation walk of each kind it admits with a
 fifth of a 192 KiB, 256 KiB or 512 KiB thread already in use (`walk_stack`);
 the derivations were measured from 128 KiB to 2 MiB. The static depth bound models
-the library's frames, and a contract holding an unevaluated keyword is also
+the library's frames, and a value contract holding an unevaluated keyword is also
 guarded by measuring the stack its pass uses. Unoptimized code needs more:
 compiling 32 nested quantified groups takes up to about 1 MiB of stack in debug
 builds, and debug evaluation frames exceed 256 KiB at the default depth, so
@@ -53,13 +53,13 @@ in proportion to inputs and explains only values within half the depth limit.
 An empty problem list never turns an established failure into success.
 See the [evaluator policy](../crates/openbindings-json-schema-evaluator/README.md).
 
-The default evaluator prepares a contract that reaches a missing resource with
+The default evaluator prepares a value contract that reaches a missing resource with
 an empty stand-in for it; a pass that reaches the stand-in gives no verdict
-naming it. It refuses preparation for a contract in which an
+naming it. It refuses preparation for a value contract in which an
 `unevaluatedProperties` or `unevaluatedItems` keyword's annotation sources
 reach a stand-in, a reference to a fragment of a missing resource, or a static
 reference defect (an absent pointer target or anchor, or a malformed
-fragment). As conservative preparation, it also refuses a contract that reaches
+fragment). As conservative preparation, it also refuses a value contract that reaches
 a pattern invalid as an ECMA-262 regular expression with Unicode semantics
 (`schema-pattern-compilation`), or a schema that could apply again without
 consuming the instance, such as one whose `$ref` names itself

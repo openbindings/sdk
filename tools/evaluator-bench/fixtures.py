@@ -84,7 +84,7 @@ def fixtures():
         message='evaluation work limit reached', reason='limit-exceeded')
     # The refusal states its arithmetic and the setting to raise.
     rows['depth-stop']['expected']['detail'] = dict(code='evaluation-depth-limit', location=None,
-        message='this value nests more than 0 levels, the deepest this contract evaluates within the '
+        message='this value nests more than 0 levels, the deepest this value contract evaluates within the '
                 '8 schema evaluations its 2 KiB stack_bytes holds at 256 bytes each; raise stack_bytes '
                 '(stackBytes in TypeScript)', reason='limit-exceeded')
     rows['source-diagnostics']['expected'].update(problems_complete=False, problems=[dict(

@@ -569,15 +569,7 @@ async fn tls_uses_private_ca_and_downgrade_chain_is_refused_before_plaintext_dis
     )
     .unwrap();
     let r = client.discover(&tls.origin).await.unwrap();
-    assert!(matches!(
-        r.outcome,
-        DiscoveryOutcome::TransportError {
-            error: RequestError {
-                kind: ErrorKind::RedirectPolicy,
-                ..
-            }
-        }
-    ));
+    assert_redirect_refusal(&r.outcome, "HTTPS to HTTP discovery redirect refused");
     assert!(
         plain.records.lock().unwrap().is_empty(),
         "plaintext downgrade was dispatched"
@@ -619,16 +611,48 @@ async fn safe_native_constructor_follows_five_statuses_relative_locations_and_te
     )
     .unwrap();
     let r = client.discover(&server.origin).await.unwrap();
-    assert!(matches!(
-        r.outcome,
-        DiscoveryOutcome::TransportError {
-            error: RequestError {
-                kind: ErrorKind::RedirectPolicy,
-                ..
-            }
-        }
-    ));
+    // A cycle back to the same URL ends at the limit.
+    assert_redirect_refusal(&r.outcome, "discovery redirect limit exceeded");
     assert_eq!(server.records.lock().unwrap().len(), MAX_REDIRECTS + 1);
+}
+
+// A refused redirect keeps its kind, and its message names the rule that refused it.
+fn assert_redirect_refusal(outcome: &DiscoveryOutcome, rule: &str) {
+    let DiscoveryOutcome::TransportError { error } = outcome else {
+        panic!("{outcome:?}")
+    };
+    assert_eq!(error.kind, ErrorKind::RedirectPolicy);
+    assert_eq!(error.message, format!("error following redirect: {rule}"));
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn native_redirect_destination_refusals_name_the_rule() {
+    let server = Server::new();
+    let port = server.origin.rsplit(':').next().unwrap();
+    for (location, rule) in [
+        (
+            format!("http://localhost:{port}/done"),
+            "discovery requires HTTPS except for literal IPv4 127/8 or IPv6 ::1",
+        ),
+        (
+            format!("http://user:hop-secret@127.0.0.1:{port}/done"),
+            "discovery destination must have a host and no credentials",
+        ),
+    ] {
+        server.records.lock().unwrap().clear();
+        let client = native::Client::new(
+            http(
+                "redirect-302",
+                &[("x-location", &location)],
+                reqwest::redirect::Policy::none(),
+            ),
+            ClientOptions::default(),
+        )
+        .unwrap();
+        let r = client.discover(&server.origin).await.unwrap();
+        assert_redirect_refusal(&r.outcome, rule);
+        assert_eq!(server.records.lock().unwrap().len(), 1, "{location}");
+    }
 }
 
 #[tokio::test(flavor = "current_thread")]
@@ -896,15 +920,10 @@ async fn credential_origin_chains_refuse_only_cross_origin_then_same_origin() {
             );
         }
         if chain == "A-B-B" {
-            assert!(matches!(
-                r.outcome,
-                DiscoveryOutcome::TransportError {
-                    error: RequestError {
-                        kind: ErrorKind::RedirectPolicy,
-                        ..
-                    }
-                }
-            ));
+            assert_redirect_refusal(
+                &r.outcome,
+                "redirect would replay original credentials to a foreign origin",
+            );
         } else {
             assert!(
                 matches!(r.outcome, DiscoveryOutcome::Found { .. }),

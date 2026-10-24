@@ -222,7 +222,7 @@ impl<P> std::fmt::Debug for Invoker<P> {
     }
 }
 /// What an attempt was started from: the invoker and, for a prepared attempt,
-/// the handle's contracts. A plain attempt prepares its contracts lazily from
+/// the handle's value contracts. A plain attempt prepares its value contracts lazily from
 /// the invoker's evaluator. Attempts capture these two references, which keeps
 /// their futures small, and never the handle's share of the invoker, so an
 /// attempt's future is `Send` whenever the provider is `Sync`.
@@ -666,7 +666,7 @@ impl<P: BindingInvoker> Invoker<P> {
 /// provider is: wrap it in an `Arc` to share one handle across spawned tasks.
 /// Each attempt supplies its own binding selection and context, with
 /// independent cancellation, queues and validation evidence. Sharing a handle
-/// does not share attempt state. Dropping it releases its contract owners.
+/// does not share attempt state. Dropping it releases its value contract owners.
 pub struct PreparedOperation<P> {
     invoker: Arc<Invoker<P>>,
     prepared: Prepared,

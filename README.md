@@ -29,7 +29,7 @@ assert_eq!(operation.key(), "lookup");
 OBI-01 violation in the report, located like any other finding, and only an
 unsupported version is an `Err`. Continue with [Rust first use](docs/rust-first-use.md) to prepare a value contract,
 validate input, edit opaque values and retain prepared work. Rust needs no runtime
-initialization. A conformant operation hands out its contracts:
+initialization. A conformant operation hands out its value contracts:
 `operation.input().ok_or("no input contract")?.prepare(&DefaultEvaluator::new())?`
 uses default budgets and no supplied resources, then
 `contract.validate_json(input)?` checks JSON text or bytes; `contract.explain(&value)`

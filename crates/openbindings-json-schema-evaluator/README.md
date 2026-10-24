@@ -23,7 +23,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .ok_or("operation has no input contract")?
         .prepare(&DefaultEvaluator::new())?;
     match input.validate_json(r#""item""#)? {
-        ValueOutcome::Satisfies => println!("input satisfies the contract"),
+        ValueOutcome::Satisfies => println!("input satisfies the input contract"),
         ValueOutcome::Fails { message, problems, problems_complete } => {
             println!("{message}: {problems:?}; diagnostics complete: {problems_complete}");
         }
@@ -39,7 +39,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```
 
 `prepare(&DefaultEvaluator::new())` uses `Limits::default()` and no supplied
-resources. A missing operation and an absent contract are `None`;
+resources. A missing operation and an absent value contract are `None`;
 preparation refusal is a `NoVerdict` error that judges no instance. Ready means
 prepared, not decidable. `validate_json` admits exact text or bytes under the
 default JSON limits; `Err` means admission failed and `Ok` contains any of the
@@ -76,20 +76,20 @@ keeps old work usable while installing a new document and resource set.
 ## Limits
 
 The evaluator never fetches references. Supply resources through `ResourceSet`;
-new resources require a new preparation. A contract that reaches a resource that
+new resources require a new preparation. A value contract that reaches a resource that
 was not supplied still prepares, with an empty stand-in for it: a pass that
 reaches the stand-in gives no verdict (`resource-unavailable`) naming the
 missing resource, and a value whose evaluation never reaches it keeps its
 verdict, which then cannot depend on the missing content. One keyword decides
 without evaluating its sources: `unevaluatedProperties` and `unevaluatedItems`
 read the structure of the schemas that apply to the same instance to collect
-their annotations, so a contract in which those sources can reach a stand-in
+their annotations, so a value contract in which those sources can reach a stand-in
 refuses preparation (`resource-unavailable`, naming the missing resource).
 Preparation also refuses a reference to a fragment of a resource that was not
 supplied, or a reference that identifies no schema (an absent pointer target or
 plain-name anchor, or a malformed fragment), with a `NoVerdict` that names the
 schema holding the reference.
-As conservative preparation, it also refuses a contract that reaches a pattern
+As conservative preparation, it also refuses a value contract that reaches a pattern
 invalid as an ECMA-262 regular expression with Unicode semantics
 (`schema-pattern-compilation`), or a schema that could apply again without
 consuming the instance, such as one whose `$ref` names itself (`in-place-cycle`). The default evaluator never returns
@@ -102,7 +102,7 @@ It does not estimate the memory the JSON Schema library's compiled program
 takes. `Limits` holds the configurable bounds. A limit that protects the
 process has a default; `evaluation_steps`, which bounds only time, is the
 application's to set and is off unless it does, and so is `schema_resources`,
-which bounds the time and memory of compiling a contract that reaches many
+which bounds the time and memory of compiling a value contract that reaches many
 resources:
 
 - `evaluation_steps` sets no cap by default, so a pass takes time that grows
@@ -111,18 +111,25 @@ resources:
   `false`, take about 2.5 s to check `{}`. `Some(n)` charges one unit for
   each schema a reference enters and for each element, member and literal
   comparison step, and gives `evaluation-work-limit` once a pass spends `n`;
-  an application that evaluates untrusted contracts or values within a
-  deadline sets one.
+  an application that evaluates untrusted value contracts or values within a
+  deadline sets one. A cap places a work marker before every reference, which
+  wraps it in one more schema, so each reference a value's evaluation follows
+  nests one more schema evaluation, and within the same `stack_bytes` a
+  recursive value contract decides fewer levels, at worst about half as many:
+  an array nested through one subschema reference per level nests five schema
+  evaluations per level instead of three and decides 203 levels at the default
+  stack instead of 340.
 - `stack_bytes` (256 KiB) is the stack the thread that prepares and evaluates
   has. The evaluator sizes three bounds from it, each with a stack cost
   measured in release builds on Linux, macOS and Windows. A value is evaluated
   only if the schema evaluations it could nest fit 256 bytes of the stack each
   (1,024 at the default): preparation bounds the schema objects any evaluation
   path can hold as a function of the value's depth, and a value whose bound
-  exceeds that gives `evaluation-depth-limit` before it is evaluated. The
-  bound is static: a deep contract whose paths only some values follow refuses
+  exceeds that gives `evaluation-depth-limit` before it is evaluated; with
+  `evaluation_steps` set, each reference followed adds one to that nesting. The
+  bound is static: a deep value contract whose paths only some values follow refuses
   the others too. The library's `unevaluatedProperties` and `unevaluatedItems`
-  validators recurse in ways that bound does not model, so a contract holding
+  validators recurse in ways that bound does not model, so a value contract holding
   one is also guarded as it evaluates: every read of a child instance compares
   the stack address it runs at with the pass's start, and a pass that has used
   more than half the stack (128 KiB at the default) stops descending and gives
@@ -148,28 +155,28 @@ resources:
   need more; see
   [support](https://github.com/openbindings/sdk/blob/main/docs/support.md)).
   `total_pattern_bytes` (4 MiB) bounds the forms the evaluator keeps for a
-  contract's patterns together: each distinct `pattern` form once, and the form
+  value contract's patterns together: each distinct `pattern` form once, and the form
   of each `patternProperties` name. A form spells every set out, so it can be
   far longer than its pattern (`\S` takes 191 bytes); preparation counts each as
   it is written and refuses at the first that passes the limit
   (`pattern-total-byte-limit`).
 - `total_pattern_memory` (64 MiB) bounds the linear-time engine's memory for
-  a contract's compiled patterns together: each distinct `pattern` form the
+  a value contract's compiled patterns together: each distinct `pattern` form the
   run matcher does not match, and each `patternProperties` name, built through
   the regex crate's two size settings. A quarter of it, at most 2 MiB each, is
   their search caches (`dfa_size_limit`), in equal parts; a cache bounds only
   how fast a search runs. Each form first compiles within 48 KiB
   (`size_limit`), which all but one of 5,389 measured real patterns fit, so a
-  contract compiling more patterns than the rest holds at 48 KiB each (1,024 at
+  value contract compiling more patterns than the rest holds at 48 KiB each (1,024 at
   the default) refuses at the first past that count, before compiling any. The
   forms that need more share what is left equally; those that need less than
   their part keep only what they need, to within a sixteenth, and the rest is
   shared again among the others, at most 32 MiB each. So a pattern's outcome
-  depends on the small patterns elsewhere in its contract only through their
+  depends on the small patterns elsewhere in its value contract only through their
   48 KiB each, and never on the order strings reach the patterns: a single
   `^.{1,10000}$` (about 13.2 MiB) compiles beside up to 743 small patterns,
   four of them compile together, and five need more than is left. The first
-  time a form is found that does not fit its 48 KiB, the contract's compiled
+  time a form is found that does not fit its 48 KiB, the value contract's compiled
   patterns not yet compiled are compiled then. A `patternProperties` name that
   does not fit what it is given refuses preparation, and a `pattern` value,
   compiled the first time a string reaches it, gives that string no verdict;
@@ -178,7 +185,7 @@ resources:
   that together need more than is left takes building about that much: 40
   names of the form `^.{1,10000}N$` refuse in about 0.2 s, with about 2 MB of
   heap at their peak.
-- `program_bytes` (48 MiB) bounds how much the SDK's program for one contract
+- `program_bytes` (48 MiB) bounds how much the SDK's program for one value contract
   may grow beyond its projected schemas. Dynamic specialization copies
   a schema reached through `$dynamicRef` once for each dynamic context it is
   reached in. Preparation estimates the memory each copy takes as the SDK holds
@@ -186,18 +193,18 @@ resources:
   member, 32 for each array element and a byte for each byte of its strings and
   member names; ordinary definitions measure at most a sixth below the estimate)
   and each context (64 bytes and 8 for each dynamic-scope entry), and refuses a
-  contract whose copies and contexts would pass the projected schemas' own
+  value contract whose copies and contexts would pass the projected schemas' own
   estimate by more than `program_bytes` with `program-specialization-limit`,
   whose message states the arithmetic. It counts the SDK's own program, not the
   memory of the library's compiled program.
-- `schema_resources` sets no cap by default; `Some(n)` refuses a contract
+- `schema_resources` sets no cap by default; `Some(n)` refuses a value contract
   reaching more than `n` schema resources (the document resource holding its
   schema and each embedded `$id`, supplied and packaged meta-schema resource)
   with `LimitExceeded` and `schema-resource-limit` before compiling it
   (`limits: { schemaResources: n }` in TypeScript). Preparation time grows
-  linearly with the resources a contract reaches: 10,000 supplied resources
+  linearly with the resources a value contract reaches: 10,000 supplied resources
   take 0.22 s in the reference build. The refusal comes after core projects
-  the contract, which its admission limits and 100,000 schema positions bound,
+  the value contract, which its admission limits and 100,000 schema positions bound,
   and before the evaluator copies the resources and the library compiles them,
   so it bounds the time and memory of that compilation: a 7 MB document whose
   input reaches a chain of 99,990 `$id` resources prepared in 11.5 s at a
@@ -206,7 +213,7 @@ resources:
   process).
 
 Core's document admission limits bound the bytes and nodes of every document
-and resource, and its projection refuses a contract reaching more than 100,000
+and resource, and its projection refuses a value contract reaching more than 100,000
 schema positions (`schema-node-limit`); that bound is core's, shared with its
 own fixed checks. The projection holds the document's reached schemas, its
 supplied resources and packaged meta-schemas, so it keeps fixed bounds of its
@@ -232,7 +239,7 @@ Within those bounds, preparing a schema can still take more memory than a
 host may want, since the library's compiled program grows with what it
 compiles: 1,000 holders of
 `unevaluatedProperties` that each inherit a base schema of 4,000 properties
-peak at 400 MB, and a dynamically specialized contract whose 4,096 contexts
+peak at 400 MB, and a dynamically specialized value contract whose 4,096 contexts
 take 44.8 MiB of the default `program_bytes` peaks at 158 MB. A host that prepares schemas from untrusted parties should
 prepare them in an isolated worker or process with an operating-system memory
 limit. Values checked against trusted schemas stay bounded by
@@ -276,7 +283,7 @@ preparation compiles a schema once for each dynamic context it is reached in,
 within `program_bytes`: the 256 dynamic contexts of 8 levels that each choose
 between two paths take about 6.8 MiB, and the 2,048 of 11 levels about
 70 MiB, more than the default 48 MiB. Otherwise preparation compiles each
-reached schema once, in time and memory that grow with the contract, except
+reached schema once, in time and memory that grow with the value contract, except
 that the library takes time quadratic in the length of a long same-document
 reference chain. See
 [measured behavior](https://github.com/openbindings/sdk/blob/main/docs/performance-boundaries.md).

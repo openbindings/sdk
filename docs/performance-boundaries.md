@@ -4,7 +4,7 @@ The document-validation and diagnostic-allocation tables retain measurements of
 engine revision `a2e5a380018754bf8b96ffebadd4545fec0a07cb`, with documentation
 and measurement harness changes only. The host was macOS 26.6.2 arm64, Rust
 1.99.0. Wasm used wasm-bindgen 0.2.129. Timings are examples, not latency
-guarantees or CI thresholds. Prepared-contract measurements were updated on
+guarantees or CI thresholds. Prepared value contract measurements were updated on
 2026-10-15 and, with the preparation and pattern sections and the Wasm size, on
 2026-10-20 below; the compiled-pattern memory and the exponential evaluation
 example were measured on 2026-10-21. Use the locked dependencies and release
@@ -20,7 +20,7 @@ evaluator results.
 On 2026-10-15, paired release measurements against revision `3fd152c` on macOS
 arm64 / Rust 1.99.0 produced the following medians, including shared carrier inspection
 and compact reference routing. Preparation includes schema parsing, minimal document proof, resource
-contexts, compilation and destruction; evaluation retains the contract and parsed
+contexts, compilation and destruction; evaluation retains the value contract and parsed
 value. Twelve adjacent randomized pairs used adaptive batches of at least 80 ms
 targeting 120 ms. Ratio intervals are 95% paired bootstrap intervals within this
 session, not portable budgets.
@@ -41,7 +41,7 @@ against the faster of two peers. Exact decimal-array evaluation changed by
 +1.7% (ratio interval 1.007–1.026); integer shortcuts retain its general
 arithmetic costs.
 
-On 2026-10-16, preparing contracts from the operation instead of a retained
+On 2026-10-16, preparing value contracts from the operation instead of a retained
 context was compared with revision `37bfd7f` by the benchmark harness's cross-API
 pairs (macOS arm64, Rust 1.99.0, two batches of 20 adjacent randomized pairs).
 Preparation no longer assembles a core resolution space unless an evaluator asks
@@ -58,7 +58,7 @@ were compared with revision `fa2d0b9` by the benchmark harness's identical
 instrument pairs (macOS arm64, Rust 1.99.0, two batches of 20 adjacent
 randomized pairs, shared host). Literals are now parsed once, into an arena that
 holds only them, so `large-literal` preparation fell 1.5–2% and a 128-branch
-`oneOf` of constants retains 2,533,394 instead of 2,636,468 bytes. A contract no
+`oneOf` of constants retains 2,533,394 instead of 2,636,468 bytes. A value contract no
 longer keeps the annotations of the schemas its literals came from: an `enum`
 beside an 8 MiB `description` retains 2.4 KB instead of 8.4 MB. Requested heap
 and allocation counts were within policy on every row. Reference-chain evaluation
@@ -81,14 +81,14 @@ regex allowance, explanations without schema details) and make no timing or
 memory decision. The `unevaluated-patterns` preparation rows exceed the heap
 and allocation policy: they take 1.16 to 1.18 times as long (2.57 ms to
 2.99 ms), with 9 to 10% more allocations, 11 to 13% more requested bytes and
-18 to 20% more transient peak heap (323 KB), while the prepared contract
+18 to 20% more transient peak heap (323 KB), while the prepared value contract
 retains 12% less. That residual is the cost of the unevaluated-walk transform
 on this shape, where the library's walk compiles the `true` subschemas the
 transform leaves once for each walk; the harness declares it accepted, with
 bounds just above these ratios, and the enforced comparison passes. The
 workload's evaluation row, which the stack guard covers, measured 1.00.
 `work-stop`, evaluating under a 16-unit cap, stops 71 ns later. Process heap
-retained with a prepared contract before any timed operation fell by about
+retained with a prepared value contract before any timed operation fell by about
 458 KB.
 
 No evaluation work cap applies by default, so values as large as the default
@@ -98,15 +98,21 @@ schema a reference enters and for each element, member and literal comparison
 step, and stops a pass with `evaluation-work-limit` once it spends the cap; a
 700,000-integer array against a referenced item schema spends two units per
 element (`evaluation_budgets`). Preparing with a cap places a marker keyword
-before every reference, so a capped contract's validator is slightly larger.
+before every reference, wrapping each reference in one more schema, so a capped
+value contract's validator is slightly larger, and each reference a value's
+evaluation follows nests one more schema evaluation. The depth bound below counts
+those evaluations, so within the same stack a recursive value contract decides
+fewer levels with a cap, at worst about half as many: an array nested through one
+subschema reference per level nests five schema evaluations per level instead of
+three, and at the default stack decides 203 levels instead of 340.
 
 Evaluation depth is bounded before evaluation, from the stack the host gives
 (`Limits::stack_bytes`, 256 KiB by default). Preparation derives from the
-bundled contract's references a bound on the schema objects an evaluation path
+bundled value contract's references a bound on the schema objects an evaluation path
 can hold for a value of a given depth, and a value whose bound exceeds the
 nesting the stack holds at 256 bytes for each schema evaluation (1,024 at the
 default) gets `evaluation-depth-limit` without being evaluated, with a message
-giving the deepest level the contract evaluates and the setting to raise. The
+giving the deepest level the value contract evaluates and the setting to raise. The
 bound is the lesser of two: one from the reference graph's
 strongly connected components, and one from its descents (a path holds at most
 the entry's same-instance run, then for each level of the value one descent
@@ -114,7 +120,7 @@ and one same-instance run), so a long chain of descents admits shallow values.
 The check reads the value's node count, scans its nesting only when the count
 does not settle it, stops at the first container nested too deep, and
 allocates nothing for a value nested at most 32 levels. The bound is static,
-so a deep contract whose paths only some values follow refuses the others too
+so a deep value contract whose paths only some values follow refuses the others too
 (a same-instance chain of 400 `anyOf` levels refuses every value).
 
 The library's `unevaluatedProperties` and `unevaluatedItems` validators take
@@ -122,7 +128,7 @@ larger frames and recurse through the schemas they read, about 1 KiB per
 level for one recursing through its own subschema beside an `anyOf` and up to
 about 18 KiB per level for one whose walk follows a 30-reference chain,
 against about 330 bytes for `additionalProperties`; the static bound does not
-model that. So a contract holding one is guarded as it evaluates: every read
+model that. So a value contract holding one is guarded as it evaluates: every read
 the library makes of a child instance already passes through the SDK's value
 adapter, which compares the stack address it runs at with the address the
 pass started at (each level of the value is such a read). A pass that has
@@ -135,9 +141,9 @@ and the host, and what each host qualifies is the margin in the stack table.
 The guard adds
 no schema keyword, so preparation is unchanged; each read pays an address
 comparison. Checking a 20,000-integer array took 131 µs instead of 100 µs, and
-a 100-level object 9.8 µs instead of 9.5 µs, against a contract holding an
+a 100-level object 9.8 µs instead of 9.5 µs, against a value contract holding an
 unevaluated keyword that does not apply to the value, compared with the same
-contract without it. Release builds prepare 39 recursive contract shapes,
+value contract without it. Release builds prepare 39 recursive value contract shapes,
 including both reviews' unevaluated chains, and check and explain their deepest
 admitted values on threads of 192 KiB, 256 KiB and 1 MiB with the evaluator
 sized for each (`evaluation_stack`); at the default the deepest admitted range
@@ -163,7 +169,7 @@ crate's parser and compiler recurse at each group level; a debug build needs up
 to about 1 MiB to compile 32 nested quantified groups, so the pattern stack test
 runs in release builds. A `pattern` keyword's expression is compiled the first
 time a string reaches it, so preparation compiles only `patternProperties`
-names. Each pattern's form compiles within what the contract's pattern memory
+names. Each pattern's form compiles within what the value contract's pattern memory
 gives it (below), at most 32 MiB, enough for counted repetitions of large sets
 (`^.{1,10000}$` compiles in about 40 ms with a 49 MB process peak), and a form
 longer than `pattern_bytes` is neither
@@ -313,21 +319,21 @@ harness for exact floors, confirmation and calibration policy.
 
 ## Preparation
 
-Preparation projects the contract, bundles its definitions into one resource and
+Preparation projects the value contract, bundles its definitions into one resource and
 compiles that resource with the library once, so every reached schema compiles
 once, whatever paths reach it. A schema reached through a `$dynamicRef` compiles
 once for each dynamic context it is reached in. Preparation estimates the memory
 the SDK holds for each specialized copy (160 bytes for the definition, 640 for
 each object's map, 56 for each member, 32 for each array element and a byte for
 each byte of its strings and member names) and for each context (64 bytes and 8
-for each dynamic-scope entry), and a contract whose copies and contexts would
+for each dynamic-scope entry), and a value contract whose copies and contexts would
 pass its projected schemas' own estimate by more than `Limits::program_bytes`
 (48 MiB by default) refuses with `program-specialization-limit`, whose message
 gives the counts and sizes and names the setting. A counting allocator measures
 cloned projected definitions at most a sixth below the estimate: 649 bytes for
 a lone `$ref` against 713, 650 for `{"type":"integer","minimum":0}` against
 770, and 151,092 for a 4,096-name `required` against 151,212. These count the
-SDK's own output; the library's compiled program for an admitted contract can
+SDK's own output; the library's compiled program for an admitted value contract can
 be larger. A context holds only the anchor names some
 `$dynamicRef` looks up, and only those it assigns. The budget replaces three
 separate caps (100,000 specialized definitions, 16,777,216 units of copied
@@ -336,7 +342,7 @@ of the review corpora they were measured on. Those corpora bound it from both
 sides: 12 levels of fan-out whose 4,096 dynamic contexts need 44.8 MiB
 prepare, and a chain of 4,000 resources, each declaring and dynamically
 referencing its own anchor, whose contexts need 61.3 MiB refuses. One budget
-cannot keep every outcome the separate caps gave, since a contract's memory no
+cannot keep every outcome the separate caps gave, since a value contract's memory no
 longer depends on which structure holds it: the 2,048 contexts of 11 levels
 below, which the definition cap admitted, take more of the SDK's memory than
 the 4,000-resource chain the entry cap refused, and now refuse too.
@@ -352,11 +358,11 @@ the 4,000-resource chain the entry cap refused, and now refuse too.
 | The same with 8,000 resources | 244.7 MiB | refused |
 | 1,000 resources sharing one with `required` of 100,000 names, with a reachable dynamic anchor | under 1 KiB | prepared |
 
-Preparation has no work charge of its own. Core's projection refuses a contract
+Preparation has no work charge of its own. Core's projection refuses a value contract
 reaching more than 100,000 schema positions (`schema-node-limit`), which bounds
 its time and memory; that bound is core's, shared with its fixed document
 checks. Within it, two library behaviors grow faster than
-the contract. Each time the library defers a nested `$ref` target it copies
+the value contract. Each time the library defers a nested `$ref` target it copies
 every in-progress reference placeholder, so a long same-document reference chain
 prepares in time quadratic in its length. An `unevaluatedProperties` keyword
 walks the schemas it can reach once for each schema holding it, and compiles
@@ -441,7 +447,7 @@ validation, not this compilation. In the Wasm build, the stack the guard
 measures is the module's own 1 MiB stack, while the JavaScript engine's call
 stack bounds how deep the module's calls go: Node 22 checks and explains the
 deepest admitted values of the shapes probed at up to 512 KiB, and at 1 MiB a
-guarded contract's deepest admitted value overflowed the engine's stack, which
+guarded value contract's deepest admitted value overflowed the engine's stack, which
 the guard does not see.
 
 Release measurements on macOS arm64, Rust 1.99.0, 2026-10-20, against `b6ef531`
@@ -467,8 +473,8 @@ memory of the whole process):
 
 "Refused" before is `preparation-work-limit`, the work charge the forked
 compiler applied. Registering one bundled resource makes preparation linear in
-the resources a contract reaches, where registering each resource separately
-was quadratic. `Limits::schema_resources` still refuses a contract reaching more
+the resources a value contract reaches, where registering each resource separately
+was quadratic. `Limits::schema_resources` still refuses a value contract reaching more
 than a configured number of resources before compiling it; there is no cap by
 default. The last row is the benchmark's `unevaluated-patterns` workload: the
 library's walk compiles the `true` the unevaluated-walk transform leaves for
@@ -476,15 +482,15 @@ each pattern, once for each of the 100 walks, where the fork's walk compiled
 only the patterns.
 
 The evaluator bounds what the SDK itself reads and writes: core's document
-admission limits and its 100,000 schema positions per contract; each pattern's
+admission limits and its 100,000 schema positions per value contract; each pattern's
 bytes and translated form (`pattern_bytes`) and the forms kept for all of a
-contract's patterns together (`total_pattern_bytes`, 4 MiB); the memory the
-regex crate builds for all of a contract's compiled patterns together
+value contract's patterns together (`total_pattern_bytes`, 4 MiB); the memory the
+regex crate builds for all of a value contract's compiled patterns together
 (`total_pattern_memory`, 64 MiB, below); and the memory dynamic specialization
 adds to the program (`program_bytes`, 48 MiB). It does not estimate the memory
 of the library's compiled program, which grows with what the library compiles.
 `Limits::schema_resources` is a tighter cap an application can set. It refuses
-a contract after core projects it and before the evaluator copies its resources
+a value contract after core projects it and before the evaluator copies its resources
 and the library compiles them, so it bounds that compilation's memory as well
 as its time. Measured on 2026-10-22 by the same method, against `68a6bb9`, a
 7 MB document whose input reaches a chain of 99,990 `$id` resources prepared in
@@ -530,26 +536,26 @@ counting allocations:
 | 5 such `patternProperties` names | 151 MB, prepared | 6.1 MB, refused | 0.75 MB |
 
 `total_pattern_memory` (64 MiB) bounds what the regex crate builds for a
-contract's compiled patterns: each distinct `pattern` form the run matcher does
+value contract's compiled patterns: each distinct `pattern` form the run matcher does
 not match, and each `patternProperties` name, through its two documented size
 settings. A quarter of it, at most 2 MiB each, is the patterns' search caches
 (`dfa_size_limit`), in equal parts; a cache bounds only how fast a search runs.
 Each form first compiles within 48 KiB (`size_limit`). Every compiled pattern
 also holds memory neither setting counts (about 7.7 KB for a small
-`patternProperties` name), so a contract compiling more than the rest holds at
+`patternProperties` name), so a value contract compiling more than the rest holds at
 48 KiB each, 1,024 at the default, refuses at the next, before compiling any.
 The forms that need more share what is left: each is given an equal part,
 those that need less than their part keep only the least they need, to within
 a sixteenth, and the rest is shared again among the others, until all fit their
 parts, none does, or the parts grow by no more than a sixteenth; those that
 then do not fit are refused, and none is given more than 32 MiB. What a form is
-given depends only on the contract's forms, so no outcome depends on the order
+given depends only on the value contract's forms, so no outcome depends on the order
 strings reach the patterns, and small patterns change a large one's outcome
 only through their 48 KiB each: a counted-repetition name such as
 `^.{1,10000}N$`, about 13.2 MiB, compiles beside up to 743 small patterns,
 four compile together and five do not fit.
 
-The memory is shared once per contract, the first time a form is found that
+The memory is shared once per value contract, the first time a form is found that
 does not fit its 48 KiB: at preparation for a `patternProperties` name, when the
 SDK compiles each name's form and every `pattern` form, or when a string first
 reaches a `pattern` form, when it compiles those not yet compiled. The library
@@ -559,7 +565,7 @@ round, and otherwise it builds again within the largest size any name is given.
 Refusing forms that together need more than is left takes about as much
 building as is left, since an attempt that does not fit stops once it passes
 its size: 40 such names refuse in about 0.2 s. Dividing the whole memory
-equally among all of a contract's patterns would refuse them in milliseconds,
+equally among all of a value contract's patterns would refuse them in milliseconds,
 but would refuse `^.{1,10000}$` beside ten small patterns too.
 
 Each row ran in a fresh release process on macOS arm64 against revision
@@ -774,7 +780,7 @@ matcher), and a 1 MiB string, which exhausted that matcher's default
 `^(a+)+$` decides strings of a million characters at the same linear cost. A
 pattern that needs a backtracking engine gives no verdict instead
 (`pattern-backtracking`). Anchor a pattern only when anchoring expresses the
-intended contract.
+intended value contract.
 
 ## Wasm size
 

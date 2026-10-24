@@ -373,7 +373,7 @@ pub struct SchemaResource {
 /// the set while both are alive, and released when either is dropped. The
 /// default evaluator reuses the index instead of indexing the set again, but
 /// assembles its own resolution space for each preparation, so its preparation
-/// time still grows with the set's resources, including those the contract
+/// time still grows with the set's resources, including those the value contract
 /// never reaches.
 #[derive(Clone, Default)]
 pub struct ResourceSet {

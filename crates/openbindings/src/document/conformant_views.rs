@@ -145,7 +145,7 @@ impl ConformantOperationView {
             .map(|v| v.as_bool().expect("conformant boolean"))
     }
     /// The input value contract, or `None` when the operation declares no input.
-    /// Present `true`, `false` and object schemas are all contracts; read the exact
+    /// Present `true`, `false` and object schemas are all value contracts; read the exact
     /// schema with [`ValueContract::schema`]. Nothing is prepared here.
     pub fn input(&self) -> Option<ValueContract<'_>> {
         ValueContract::declared(self, Side::Input)

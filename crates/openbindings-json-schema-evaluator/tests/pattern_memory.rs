@@ -266,7 +266,7 @@ fn the_compiled_patterns_are_bounded_in_number() {
     assert_memory_refusal(&refused, "/prefixItems/*/pattern");
     assert_eq!(
         refused.message,
-        "this contract compiles more than 3 regular expressions, as many as its 192 KiB \
+        "this value contract compiles more than 3 regular expressions, as many as its 192 KiB \
          total_pattern_memory holds at 48 KiB each once their search caches take a quarter; \
          raise total_pattern_memory (totalPatternMemory in TypeScript)"
     );
@@ -308,7 +308,7 @@ fn a_small_pattern_memory_refuses_a_pattern_beyond_what_it_leaves() {
     assert_eq!(refused.code, "pattern-total-memory-limit");
     assert_eq!(
         refused.message,
-        "this contract's one compiled regular expression holds 48 KiB of its 256 KiB \
+        "this value contract's one compiled regular expression holds 48 KiB of its 256 KiB \
          total_pattern_memory and 64 KiB for its search cache, which leaves 144 KiB; this \
          one, which needs more, may take it all, but does not compile within the 192 KiB \
          that gives it; raise total_pattern_memory (totalPatternMemory in TypeScript)"
@@ -319,7 +319,7 @@ fn a_small_pattern_memory_refuses_a_pattern_beyond_what_it_leaves() {
     assert_memory_refusal(&refused, "/patternProperties");
     assert_eq!(
         refused.message,
-        "this contract's 2 compiled regular expressions hold 48 KiB each of its 2 MiB \
+        "this value contract's 2 compiled regular expressions hold 48 KiB each of its 2 MiB \
          total_pattern_memory and 256 KiB each for their search caches, which leaves 1.4 MiB; \
          the 2 that need more share it equally, but this one does not compile within the \
          768 KiB that gives it; raise total_pattern_memory (totalPatternMemory in TypeScript)"

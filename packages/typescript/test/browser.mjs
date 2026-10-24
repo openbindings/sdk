@@ -37,6 +37,7 @@ for (const name of [
   "internal.js",
   "http-discovery.js",
   "wasm/openbindings_wasm.js",
+  "wasm/openbindings_wasm_signature.js",
   "wasm/openbindings_wasm_bg.wasm",
 ]) {
   const bytes = await fs.readFile(path.join(packageRoot, "dist", name));

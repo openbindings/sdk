@@ -3,16 +3,20 @@
 
 Rules inferred from the existing DEPENDENCIES.json / THIRD-PARTY-NOTICES.txt:
 
-* The native label aarch64-apple-darwin-native-http means Cargo's platform
-  aarch64-apple-darwin, workspace default features plus
-  openbindings-http-discovery/native, and all workspace members as roots.
-  The wasm32-unknown-unknown inventory uses workspace default features and
-  openbindings-wasm as its sole root. Both use offline, locked Cargo metadata.
+* The native-http inventory covers every native platform the SDK supports:
+  Linux (GNU), macOS and Windows (MSVC), each on x86_64 and aarch64. It uses
+  workspace default features plus openbindings-http-discovery/native and all
+  workspace members as roots, and holds the union of the platforms' closures,
+  since target-specific dependencies differ between them. The
+  wasm32-unknown-unknown inventory uses workspace default features and
+  openbindings-wasm as its sole root. Both use offline, locked Cargo metadata,
+  filtered to one platform at a time.
 * Traverse every resolved normal (kind null) and build edge, even conservative
   optional edges Cargo metadata reports; exclude edges whose kinds are all dev.
   Omit authored workspace members from attribution, but include every
   reachable registry package as a distinct package identity.
-* JSON keys are target, scope, packages; package keys are name, version,
+* JSON keys are target, scope, packages, with platforms after target when the
+  target label names no single platform; package keys are name, version,
   declared_license, repository, notices. Notice keys are path, sha256, retrieved_from. License and
   repository come verbatim from Cargo metadata. JSON uses two-space indentation,
   ASCII escaping, a final LF, and lexicographic (name, version) package ordering.
@@ -62,15 +66,26 @@ PREAMBLE = (
 INVENTORIES = (
     {
         "directory": Path("."),
-        "target": "aarch64-apple-darwin-native-http",
-        "platform": "aarch64-apple-darwin",
+        "target": "native-http",
+        # The supported native platforms; their target-specific dependencies differ.
+        "platforms": [
+            "aarch64-apple-darwin",
+            "aarch64-pc-windows-msvc",
+            "aarch64-unknown-linux-gnu",
+            "x86_64-apple-darwin",
+            "x86_64-pc-windows-msvc",
+            "x86_64-unknown-linux-gnu",
+        ],
         "features": ["openbindings-http-discovery/native"],
         "root": None,
+        "labelled": False,
     },
     {
         "directory": Path("packages/typescript"),
         "target": "wasm32-unknown-unknown",
-        "platform": "wasm32-unknown-unknown",
+        "platforms": ["wasm32-unknown-unknown"],
+        # The target label is the platform itself.
+        "labelled": True,
         "features": [],
         "root": "openbindings-wasm",
     },
@@ -118,11 +133,11 @@ def supplements():
     return result, texts
 
 
-def metadata(inventory):
+def metadata(inventory, platform):
     command = [
         "cargo", "metadata", "--offline", "--locked", "--format-version", "1",
         "--manifest-path", str(ROOT / "Cargo.toml"),
-        "--filter-platform", inventory["platform"],
+        "--filter-platform", platform,
     ]
     if inventory["features"]:
         command += ["--features", ",".join(inventory["features"])]
@@ -131,14 +146,15 @@ def metadata(inventory):
     completed = subprocess.run(command, cwd=ROOT, env=env, capture_output=True, text=True)
     if completed.returncode:
         raise ValueError(
-            f"Cargo metadata failed for {inventory['target']}:\n{completed.stderr.rstrip()}\n"
+            f"Cargo metadata failed for {inventory['target']} on {platform}:\n"
+            f"{completed.stderr.rstrip()}\n"
             "Inventories cover other platforms' dependencies; acquire every platform's "
             "sources first with `cargo fetch --locked`."
         )
     return json.loads(completed.stdout)
 
 
-def dependency_closure(graph, inventory):
+def platform_closure(graph, inventory):
     packages = {p["id"]: p for p in graph["packages"]}
     nodes = {n["id"]: n for n in graph["resolve"]["nodes"]}
     members = set(graph["workspace_members"])
@@ -157,10 +173,16 @@ def dependency_closure(graph, inventory):
         for dependency in nodes[identity]["deps"]:
             if any(kind["kind"] in (None, "build") for kind in dependency["dep_kinds"]):
                 pending.append(dependency["pkg"])
-    return sorted(
-        (packages[i] for i in seen - members),
-        key=lambda p: (p["name"], p["version"]),
-    )
+    return {i: packages[i] for i in seen - members}
+
+
+def dependency_closure(inventory):
+    # Each platform's closure is exact; filtering to all of them at once would
+    # also follow one platform's edges out of a package only another reaches.
+    closure = {}
+    for platform in inventory["platforms"]:
+        closure.update(platform_closure(metadata(inventory, platform), inventory))
+    return sorted(closure.values(), key=lambda p: (p["name"], p["version"]))
 
 
 def package_record(package, retrieved, texts):
@@ -221,14 +243,14 @@ def generate():
     retrieved, texts = supplements()
     outputs = {}
     for inventory in INVENTORIES:
-        graph = metadata(inventory)
-        items = [package_record(p, retrieved, texts) for p in dependency_closure(graph, inventory)]
+        items = [package_record(p, retrieved, texts) for p in dependency_closure(inventory)]
         directory = inventory["directory"]
-        outputs[directory / "DEPENDENCIES.json"] = json_bytes({
-            "target": inventory["target"],
-            "scope": SCOPE,
-            "packages": [record for record, _ in items],
-        })
+        catalogue = {"target": inventory["target"]}
+        if not inventory["labelled"]:
+            catalogue["platforms"] = inventory["platforms"]
+        catalogue["scope"] = SCOPE
+        catalogue["packages"] = [record for record, _ in items]
+        outputs[directory / "DEPENDENCIES.json"] = json_bytes(catalogue)
         outputs[directory / "THIRD-PARTY-NOTICES.txt"] = render_notices(items)
     return outputs
 

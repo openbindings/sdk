@@ -104,14 +104,14 @@ enum Compiled {
     Regex(regex::Regex),
     Refused(Unsupported),
 }
-/// A contract's `pattern` matchers and its pattern memory. Each compiled
+/// A value contract's `pattern` matchers and its pattern memory. Each compiled
 /// matcher first compiles within its first allowance. When a pattern is found
 /// that does not fit its own, at preparation for a `patternProperties` name or
 /// when a string first reaches a `pattern` matcher, every compiled pattern of
-/// the contract not yet compiled is compiled within its first allowance, and
+/// the value contract not yet compiled is compiled within its first allowance, and
 /// those that do not fit share what the first allowances leave. That happens
 /// once, so whether a pattern compiles does not depend on the order strings
-/// reach the contract's patterns.
+/// reach the value contract's patterns.
 pub(crate) struct Patterns {
     matchers: Vec<Matcher>,
     memory: Memory,
@@ -251,7 +251,7 @@ const PROPERTY_ESCAPE: &str = "\u{1}property-escape";
 const NON_WORD_BOUNDARY: &str = "\u{1}non-word-boundary";
 const SIZE: &str = "\u{1}size";
 /// The SDK's `pattern` keyword, which matches with ECMA-262 semantics through
-/// its pattern's reading: the contract's matchers, its matcher's index, and
+/// its pattern's reading: the value contract's matchers, its matcher's index, and
 /// its own site. A string that reaches a pattern the evaluator does not match
 /// ends the pass with no verdict naming the keyword's location.
 struct Pattern(Arc<Patterns>, usize, u32);
@@ -466,7 +466,7 @@ impl Operands {
         index.to_string()
     }
     /// The library's options with the SDK's keywords, and the `pattern`
-    /// keyword's matchers, which compile within the contract's `memory`.
+    /// keyword's matchers, which compile within the value contract's `memory`.
     pub(crate) fn apply<R>(
         self,
         mut options: ValidationOptions<'_, R, FlatJson>,

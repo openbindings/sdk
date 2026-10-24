@@ -45,7 +45,7 @@ fn cheap_checks_are_value_free_and_explanations_are_one_first_error() {
     else {
         panic!()
     };
-    assert_eq!(message, "value does not satisfy the contract");
+    assert_eq!(message, "value does not satisfy the value contract");
     assert!(problems.is_empty());
     assert!(!problems_complete);
     let doc = Document::parse(

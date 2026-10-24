@@ -36,7 +36,7 @@ The optional evaluator package is an explicit application dependency. Without
 `.with_evaluator`, absent schemas still forward values; a declared schema yields
 `ERR_SCHEMA_UNRESOLVED` on its first actual value. Supplying an evaluator retains
 it with one immutable resource set for every preparation. Plain `invoke` prepares each used
-direction lazily once per attempt and retains that contract for its stream; zero
+direction lazily once per attempt and retains that value contract for its stream; zero
 values do not trigger preparation. Fresh attempts prepare again. There is no network retrieval
 or whole-graph readiness gate.
 

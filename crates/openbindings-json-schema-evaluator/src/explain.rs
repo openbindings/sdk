@@ -2,7 +2,7 @@
 //!
 //! The library names a failing keyword by its location in the bundled
 //! resource, `<bundle>#/$defs/<definition>/<keyword>`, which means nothing to
-//! the document's author. A prepared contract keeps, for each bundled
+//! the document's author. A prepared value contract keeps, for each bundled
 //! definition, the original location of the schema it was projected from, and
 //! nothing else of the document: the error maps back to that location and the
 //! keyword. Every subschema position is a definition of its own, so the
@@ -18,7 +18,7 @@ use std::collections::HashMap;
 /// The keyword the unevaluated-walk transform's definitions stand for.
 const TRANSFORMED: &str = "patternProperties";
 
-/// The original schema locations a prepared contract's explanations name.
+/// The original schema locations a prepared value contract's explanations name.
 pub(crate) struct Locations {
     // Original pointers, escaped and concatenated.
     text: String,

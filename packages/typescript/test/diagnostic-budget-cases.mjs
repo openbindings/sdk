@@ -20,7 +20,7 @@ export function diagnosticBudgetCases(sdk) {
         const result = setup.valueContract[call](42);
         check(result.outcome === "fails", "same verdict");
         check(
-          result.message === "value does not satisfy the contract",
+          result.message === "value does not satisfy the value contract",
           "fixed explanation",
         );
         check(

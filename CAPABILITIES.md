@@ -33,7 +33,7 @@ and at TypeScript's `validateDocument`, `Document.parse` and `parseJson`
 (`limits`). `Document::new`, `Document::from_json`, `JsonValue::parse`,
 `JsonValue::string`, `Publication::from_bytes` and `validate_json` use the
 defaults, as do TypeScript's `Document.create()`, `ExactJson.from`,
-`validateJson` and a prepared contract's `validate` and `explain` of an ordinary
+`validateJson` and a prepared value contract's `validate` and `explain` of an ordinary
 value.
 A document keeps the limits it was admitted under, and its edits apply them to
 the edited document. Discovery raises only the byte limit, to its configured
@@ -101,22 +101,22 @@ of the path that reaches it, also through `$ref` cycles.
 
 The evaluator bounds what the SDK itself reads, writes and recurses through; it
 does not estimate the JSON Schema library's compiled memory. On by default:
-core's document admission limits and its 100,000 schema positions per contract;
+core's document admission limits and its 100,000 schema positions per value contract;
 the projected JSON nesting compiled (`compile_json_depth`, 512,
 `compileJsonDepth` in TypeScript);
 the stack the host gives (`stack_bytes`, 256 KiB, `stackBytes` in TypeScript),
 from which the evaluator sizes evaluation depth (256 bytes for each nested
-schema evaluation, 1,024 at the default), bounded from the contract before a
-value is evaluated, the stack a pass of a contract holding
+schema evaluation, 1,024 at the default), bounded from the value contract before a
+value is evaluated, the stack a pass of a value contract holding
 `unevaluatedProperties` or `unevaluatedItems` may use as it evaluates (half,
 128 KiB at the default: a bound on the stack's bytes, so the depth it admits
 varies with the build and the host) and the unevaluated walk limit below, so release
 builds on Linux, macOS and Windows prepare, check and explain the 39 recursive
 shapes the stack test covers on threads of 192 KiB, 256 KiB and 1 MiB with the
 evaluator sized for each; each pattern's bytes, form and nesting (1 MiB,
-32 groups) and the forms kept for all of a contract's patterns together (4 MiB,
+32 groups) and the forms kept for all of a value contract's patterns together (4 MiB,
 `totalPatternBytes` in TypeScript); the regex crate's memory for all of a
-contract's compiled patterns together (`total_pattern_memory`, 64 MiB,
+value contract's compiled patterns together (`total_pattern_memory`, 64 MiB,
 `totalPatternMemory` in TypeScript, `pattern-total-memory-limit`, with a
 message that states the arithmetic), spent through the crate's lazy-DFA cache
 setting, a quarter of it in equal parts, and its compiled-size setting, within
@@ -125,7 +125,7 @@ the rest, so small patterns beside a large one change its outcome only through
 their 48 KiB each: `^.{1,10000}$` compiles beside up to 743 small patterns and
 four such counted repetitions of about 13 MiB compile together, while 40
 refuse in about 0.2 s; the
-memory dynamic specialization adds to a contract's program, estimated for the
+memory dynamic specialization adds to a value contract's program, estimated for the
 SDK's own copies and dynamic contexts (`program_bytes`, 48 MiB, `programBytes`
 in TypeScript, `program-specialization-limit`); and an unevaluated keyword's
 annotation walk, which the library compiles by recursion, weighed by the kind
@@ -134,9 +134,14 @@ the caller (`unevaluated-walk-limit`: at the default 26 `$ref`s, 8 levels of
 `allOf` inheritance, 7 through `then` or `dependentSchemas`). Each of these
 refusals states its arithmetic and names the setting to raise. Off unless an
 application sets them: an evaluation work cap (`evaluation_steps`), which bounds
-only time and without which time can grow exponentially with some schemas, and a
-cap on the schema resources one contract may reach (`schema_resources`,
-`schemaResources` in TypeScript). That cap refuses a contract after core projects
+only time and without which time can grow exponentially with some schemas (its
+marker before every reference nests one more schema evaluation for each
+reference a value's evaluation follows, so within the same `stack_bytes` a
+recursive value contract decides fewer levels, at worst about half as many:
+203 instead of 340 for an array nested through one subschema reference per
+level), and a
+cap on the schema resources one value contract may reach (`schema_resources`,
+`schemaResources` in TypeScript). That cap refuses a value contract after core projects
 it and before the evaluator copies its resources and the library compiles them,
 so it bounds the time and memory of that compilation: a 7 MB document whose input
 reaches a chain of 99,990 `$id` resources prepared in 11.5 s at a 723 MB peak
@@ -162,14 +167,14 @@ while a keyword that reads a string or member name as Unicode text, such as
 `propertyNames`, gives no verdict (`lone-surrogate-instance`) when it reaches
 one.
 
-A contract that reaches a resource that was not supplied prepares with an
+A value contract that reaches a resource that was not supplied prepares with an
 empty stand-in for it: a pass that reaches the stand-in gives no verdict
 (`resource-unavailable`) naming the resource, and other values keep their
-verdicts. Preparation refuses a contract in which an `unevaluatedProperties`
+verdicts. Preparation refuses a value contract in which an `unevaluatedProperties`
 or `unevaluatedItems` keyword's annotation sources reach a stand-in, since the
 library reads those sources rather than evaluating them, and a reference to a
 fragment of a missing resource or one that identifies no schema.
-As conservative preparation, it also refuses a contract that reaches a pattern
+As conservative preparation, it also refuses a value contract that reaches a pattern
 invalid as an ECMA-262 regular expression with Unicode semantics
 (`schema-pattern-compilation`), or a schema that could apply again without
 consuming the instance, such as one whose `$ref` names itself (`in-place-cycle`). An established
@@ -192,7 +197,7 @@ problems; `explain` reports the library's first error, an explicit choice that
 allocates in proportion to input and is made only for values within half the
 nesting `stack_bytes` admits. The explained problem names the failing node by exact pointer from
 the value and the failing keyword by resource and exact pointer; the value,
-document or resource set finds line and column on demand. A prepared contract
+document or resource set finds line and column on demand. A prepared value contract
 keeps only the original locations of the schemas it compiled for explanations,
 never their text, its document, supplied resources or any position. Diagnostic
 completeness is separate from the established value outcome.

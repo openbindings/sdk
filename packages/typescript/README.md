@@ -82,7 +82,7 @@ platform types that `DOM` declares, such as `Response`, `URL`, `AbortSignal` and
 `validateDocument(bytes)` returns only the plain `DocumentReport`, with no proof
 and nothing to dispose. Only a conformant document's operations hand out value
 contracts: `resolveOperation` returns `undefined` for a missing operation, and
-`input()` or `output()` returns `undefined` when no contract is declared.
+`input()` or `output()` returns `undefined` when no value contract is declared.
 `prepare()` returns a ready `PreparedValueContract` or a no-verdict refusal. Handle
 each result before validating a value. Value results distinguish `satisfies`, `fails`, `undefined`
 (the specification gives the value no defined validity), `no-verdict` (the SDK could
@@ -122,7 +122,9 @@ imports pass a `WebAssembly.Module` to `initialize(module)`; the asset export is
 Hosts that restrict entropy to active requests must initialize inside an allowed
 request context. [The workerd example](examples/workerd-service.mjs) shows this.
 Initialization is shared across concurrent calls. Loading and entropy failures
-reject with `SdkError`; retry after correcting the host condition.
+reject with `SdkError`, as does a WebAssembly module that is not this package's,
+which is refused before it is instantiated; retry after correcting the host
+condition.
 
 ## Exact values and editing
 
@@ -190,7 +192,7 @@ setters apply them to the edited document, as Rust's do, whatever route writes
 the value. `discover` raises only the byte limit, to `maxDocumentBytes`; a body
 past the default 1,000,000 nodes comes back undetermined, and `validateDocument`
 with a larger `maxNodes` admits it. `Document.create()`, `ExactJson.from`,
-`validateJson` and a prepared contract's `validate` and `explain` of an ordinary
+`validateJson` and a prepared value contract's `validate` and `explain` of an ordinary
 value use the defaults. Value-contract preparation keeps fixed bounds of its own,
 which no setting raises. Every admission and edit limit refusal names how to
 admit more, including the route for calls that take no limits. To check a value past the
@@ -199,13 +201,13 @@ to `validate`.
 
 Schema resources are explicit and immutable. Pass `SchemaResources` to
 `prepare({ resources })`; the SDK never fetches a missing reference. A
-contract that reaches a resource that was not supplied still prepares, and a
+value contract that reaches a resource that was not supplied still prepares, and a
 value whose evaluation reaches that resource gets a `resource-unavailable`
-no-verdict naming it. Preparation refuses a contract in which an
+no-verdict naming it. Preparation refuses a value contract in which an
 `unevaluatedProperties` or `unevaluatedItems` keyword's annotation sources
 reach a missing resource, a reference to a fragment of a missing resource, or
 a reference that identifies no schema.
-As conservative preparation, it also refuses a contract that reaches a pattern
+As conservative preparation, it also refuses a value contract that reaches a pattern
 invalid as an ECMA-262 regular expression with Unicode semantics
 (`schema-pattern-compilation`), or a schema that could apply again without
 consuming the instance, such as one whose `$ref` names itself (`in-place-cycle`).
@@ -228,11 +230,14 @@ Patterns, the word boundary `\b` included, match in time linear in the
 string, so no limit bounds pattern work. Replacing resources
 means preparing again. No evaluation work cap applies by default, and
 evaluation time can grow exponentially with some schemas (30 levels of `anyOf`
-that each name the next level twice take seconds); when validating untrusted contracts or
-values within a deadline, pass `limits: { evaluationSteps: n }`. Preparation time and memory grow with the schema
-resources a contract reaches (10,000 supplied resources prepare in about 0.2 s
+that each name the next level twice take seconds); when validating untrusted value contracts or
+values within a deadline, pass `limits: { evaluationSteps: n }`. A cap nests one more schema evaluation for each
+reference a value's evaluation follows, so within the same `stackBytes` a recursive value contract decides fewer
+levels, at worst about half as many (203 instead of 340 for an array nested through one subschema reference per
+level). Preparation time and memory grow with the schema
+resources a value contract reaches (10,000 supplied resources prepare in about 0.2 s
 natively), and the SDK sets no cap by default. When preparing untrusted
-documents or resources, pass `limits: { schemaResources: n }`; a contract
+documents or resources, pass `limits: { schemaResources: n }`; a value contract
 reaching more than `n` refuses with the `schema-resource-limit` no-verdict
 before the library compiles it, which bounds the time and memory of that
 compilation: natively, a 7 MB document reaching a chain of 99,990 `$id`
@@ -244,18 +249,18 @@ the memory of the JSON Schema library's compiled program. On by default:
 document admission limits (32 MiB and 1,000,000 nodes; see above); `stackBytes`
 (256 KiB), the stack the evaluator
 sizes its bounds from: 256 bytes for each nested schema evaluation (1,024 at
-the default), half of it for a pass of a contract holding
+the default), half of it for a pass of a value contract holding
 `unevaluatedProperties` or `unevaluatedItems` as it evaluates (a bound on the
 stack's bytes, so the depth it admits varies with the build and the host), and
 the unevaluated walk limit below. In Wasm the guard measures the module's own
 1 MiB stack, while the JavaScript engine's call stack bounds how deep the
 module's calls go: Node 22 checked and explained the deepest admitted values
 of the shapes probed up to `stackBytes: 524288`, and at 1 MiB a guarded
-contract's deepest admitted value overflowed the engine's stack. Also on by
+value contract's deepest admitted value overflowed the engine's stack. Also on by
 default: `compileJsonDepth` (512), the projected JSON nesting compiled;
 `patternBytes` (1 MiB), `patternDepth` (32) and `totalPatternBytes`
-(4 MiB of the forms kept for a contract's patterns);
-`totalPatternMemory` (64 MiB) for a contract's compiled patterns, a quarter of
+(4 MiB of the forms kept for a value contract's patterns);
+`totalPatternMemory` (64 MiB) for a value contract's compiled patterns, a quarter of
 it for their search caches in equal parts and the rest for their compiled
 forms, each first within 48 KiB while those that need more share what is
 left, so `^.{1,10000}$` (about 13 MiB) compiles beside up to 743 small
@@ -263,7 +268,7 @@ patterns and four such counted repetitions compile together, while 40
 `patternProperties` names of the form `^.{1,10000}N$` refuse with
 `pattern-total-memory-limit`, whose message states the arithmetic;
 `programBytes` (48 MiB) for the memory dynamic specialization adds to a
-contract's program (`program-specialization-limit`); and an unevaluated
+value contract's program (`program-specialization-limit`); and an unevaluated
 keyword's walk, refused past what `stackBytes` admits
 (`unevaluated-walk-limit`). Each refusal states its arithmetic and names the
 setting to raise. Within

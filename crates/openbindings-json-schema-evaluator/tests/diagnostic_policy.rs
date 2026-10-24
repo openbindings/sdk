@@ -347,7 +347,7 @@ impl SchemaEvaluator for Custom {
 impl PreparedSchema for CustomPrepared {
     fn validate(&self, _: &JsonValue, _: Detail, _: &dyn WorkControl) -> ValueOutcome {
         ValueOutcome::Fails {
-            message: "value does not satisfy the contract".into(),
+            message: "value does not satisfy the value contract".into(),
             problems: vec![ValueProblem::new(
                 "".parse().unwrap(),
                 self.0.clone(),

@@ -34,7 +34,7 @@ private generated names change; error locations resolve to original sources.
 `openbindings-internal-json` contains the flat source arena and exact numeric
 arithmetic. Core's fixed checks and reference inspection and the default
 evaluator all use the unmodified jsonschema library; the SDK carries no fork of
-any dependency. The evaluator bundles each projected contract into one resource,
+any dependency. The evaluator bundles each projected value contract into one resource,
 resolves dynamic references itself, reads patterns for the regex crate and
 applies one schema transform that keeps the library's `unevaluatedProperties`
 walk from a known bug; see `DEPENDENCY-MAINTENANCE.md` for the composition, the

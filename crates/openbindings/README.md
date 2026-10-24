@@ -63,8 +63,8 @@ undefined and no-verdict for each value. Preparation returns
 payload. Use `PreparedValueContract::validate_json` for exact JSON text or bytes; only
 admission failure returns `Err`. Retain a `JsonValue` and use `validate` for
 repeated checks or custom admission limits. `validate` is the cheap check; call
-`explain` on the same contract to learn why a value fails. Undefined means the value-contract
-rules leave whether the value satisfies its contract undefined; no-verdict means
+`explain` on the same value contract to learn why a value fails. Undefined means the value-contract
+rules leave whether the value satisfies its value contract undefined; no-verdict means
 the evaluator could not answer. Each preparation compiles independently; cloning a
 prepared value contract shares its compiled state. A `ResourceSet` indexes its resource
 identities once. For evaluators that request the core projection, a resolution
@@ -76,11 +76,14 @@ and binding content remain opaque. Kind implementations interpret them outside
 core. Document conformance does not establish that a binding works or that an
 example satisfies its value contract.
 
-Default JSON admission allows 32 MiB, 10,000 container levels and 1,000,000 nodes.
-A host that admits larger documents passes `JsonLimits` to
-`validate_document_with_limits` or `Document::parse_with_limits`; the document
-keeps those limits (`Document::limits`) for its edits. Values take them through
-`JsonValue::parse_with_limits`.
+Default JSON admission allows 32 MiB, 10,000 container levels and 1,000,000 nodes:
+`Document::parse`, `Document::parse_owned` and `JsonValue::parse` apply all three.
+`validate_document` and `validate_document_owned` apply the same bytes and nodes
+at any nesting. A host that needs other limits passes `JsonLimits` to
+`validate_document_with_limits`, `Document::parse_with_limits` or
+`JsonValue::parse_with_limits`; `JsonLimits::default()` there includes the
+10,000-level cap. A document keeps the limits it was admitted under
+(`Document::limits`) for its edits.
 Checked ordinary Serde conversion has a 128-container ceiling. Exact parsing is
 the route for existing JSON tokens. Findings retain at most 4,096 entries and
 8 MiB of pointers; truncation leaves rule evidence intact. Use codes and evidence

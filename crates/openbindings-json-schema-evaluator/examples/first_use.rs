@@ -84,7 +84,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             outcome => outcome,
         };
         match outcome {
-            ValueOutcome::Satisfies => println!("input satisfies the contract"),
+            ValueOutcome::Satisfies => println!("input satisfies the input contract"),
             ValueOutcome::Fails {
                 problems,
                 problems_complete,

@@ -54,18 +54,18 @@ pub(crate) enum Unsupported {
     /// within the most compiled size any one pattern is given
     /// ([`COMPILED_SIZE`]), which is found when the pattern is first compiled.
     Size,
-    /// Its form does not compile within what the contract's pattern memory
+    /// Its form does not compile within what the value contract's pattern memory
     /// gives it, found when the pattern is first compiled.
     Memory(Shortfall),
 }
-/// How a contract's pattern memory fell short, for the refusal to state.
+/// How a value contract's pattern memory fell short, for the refusal to state.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Shortfall {
-    /// The contract compiles more patterns than its `total` bytes hold first
+    /// The value contract compiles more patterns than its `total` bytes hold first
     /// allowances for, `most`.
     Count { most: usize, total: usize },
     /// One pattern needs a larger compiled size than it is given. Each of the
-    /// contract's `patterns` compiled patterns holds [`FIRST`] for its form
+    /// value contract's `patterns` compiled patterns holds [`FIRST`] for its form
     /// and `cache` for its search cache, which leaves `left` of the `total`;
     /// those that need more share it, and those of them that need less than
     /// an equal part keep only what they need, `kept` in all. The `sharing`
@@ -100,7 +100,7 @@ pub(crate) const SEARCH_CACHE: usize = 2 * 1024 * 1024;
 /// The compiled size every pattern's form first compiles within, in bytes.
 /// Every compiled pattern also holds memory that neither of the engine's size
 /// settings counts, so holding this much of the pattern memory bounds how many
-/// patterns a contract compiles as well as their size.
+/// patterns a value contract compiles as well as their size.
 pub(crate) const FIRST: usize = 48 * 1024;
 
 /// What the linear-time engine may build for one compiled pattern, through the
@@ -123,7 +123,7 @@ pub(crate) fn compile(form: &str, allowance: Allowance) -> Option<regex::Regex> 
         .ok()
 }
 
-/// A contract's pattern memory (`Limits::total_pattern_memory`) and how it is
+/// A value contract's pattern memory (`Limits::total_pattern_memory`) and how it is
 /// divided. A quarter of it, up to [`SEARCH_CACHE`] for each, is the compiled
 /// patterns' search caches, in equal parts, which bound only how fast a search
 /// runs. Each pattern's form first compiles within [`FIRST`]; the patterns
@@ -152,7 +152,7 @@ impl Memory {
     pub(crate) fn most_patterns(total: usize) -> usize {
         (total - total / 4) / FIRST
     }
-    /// The memory of a contract compiling `patterns` patterns, at most
+    /// The memory of a value contract compiling `patterns` patterns, at most
     /// [`Self::most_patterns`].
     pub(crate) fn new(total: usize, patterns: usize) -> Self {
         Self {

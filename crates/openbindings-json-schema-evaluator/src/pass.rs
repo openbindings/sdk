@@ -11,7 +11,7 @@ pub(crate) enum Stop {
     /// A `multipleOf` division the exact arithmetic declined.
     Arithmetic,
     /// A pattern the evaluator does not match, and the site of the `pattern`
-    /// keyword that holds it, by the index its contract's patterns give it.
+    /// keyword that holds it, by the index its value contract's patterns give it.
     Unmatched(Unsupported, u32),
     /// The stand-in for a schema resource that was not supplied, by index.
     Missing(u32),

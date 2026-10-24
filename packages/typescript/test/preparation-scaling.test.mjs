@@ -179,7 +179,7 @@ test("the program and stack budgets scale what preparation and evaluation admit"
     assert.equal(refused.detail.code, "evaluation-depth-limit");
     assert.equal(
       refused.detail.message,
-      "this value nests more than 340 levels, the deepest this contract evaluates within the 1024 schema evaluations its 256 KiB stack_bytes holds at 256 bytes each; raise stack_bytes (stackBytes in TypeScript)",
+      "this value nests more than 340 levels, the deepest this value contract evaluates within the 1024 schema evaluations its 256 KiB stack_bytes holds at 256 bytes each; raise stack_bytes (stackBytes in TypeScript)",
     );
     defaults.valueContract.dispose();
     const larger = preparation(nested, { stackBytes: 512 * 1024 });

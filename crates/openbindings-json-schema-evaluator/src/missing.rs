@@ -1,8 +1,8 @@
 //! Stand-ins for schema resources a request does not supply.
 //!
-//! The evaluator never fetches a reference. When a contract reaches a resource
+//! The evaluator never fetches a reference. When a value contract reaches a resource
 //! the request does not supply, preparation adds an empty resource at that URI
-//! for each one and projects the contract again, and every schema projected
+//! for each one and projects the value contract again, and every schema projected
 //! from such a stand-in is compiled as the SDK's `$obMissing` keyword. A pass
 //! that reaches it gives no verdict naming the missing resource; a value whose
 //! evaluation never reaches it keeps the library's verdict. That verdict
@@ -16,7 +16,7 @@
 //! annotations of the schemas that apply to the same instance, which the
 //! library reads from their structure rather than by evaluating them, so it
 //! would read a stand-in as annotating nothing and decide without reaching
-//! it. A contract in which such a keyword's annotation sources can reach a
+//! it. A value contract in which such a keyword's annotation sources can reach a
 //! stand-in therefore refuses preparation, whatever order the library
 //! evaluates keywords in.
 use crate::bundle::Bundle;
