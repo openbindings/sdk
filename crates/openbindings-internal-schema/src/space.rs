@@ -102,7 +102,8 @@ pub enum Field<'s> {
     /// One subschema: its definition's address, which the program writes as
     /// `{"$ref": <address>}`.
     Single(String),
-    /// Subschemas by name, in member order.
+    /// Subschemas by name, in member order; the program's text holds them
+    /// in name order, each name once, the last of a repeated one.
     Map(Vec<(&'s str, String)>),
     /// Subschemas in order.
     List(Vec<String>),

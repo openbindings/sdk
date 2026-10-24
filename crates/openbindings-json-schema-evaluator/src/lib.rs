@@ -477,6 +477,12 @@ impl DefaultEvaluator {
         for (text, converted) in text.resources.iter().zip(&converted.resources) {
             assert_eq!(text.uri, converted.uri);
             assert_eq!(text.definitions, converted.definitions);
+            // Equal maps can still iterate differently, as they do when
+            // serde_json keeps insertion order, so the order must agree too.
+            assert_eq!(
+                serde_json::to_string(&text.definitions).expect("definitions serialize"),
+                serde_json::to_string(&converted.definitions).expect("definitions serialize"),
+            );
         }
         assert!(text_operands.same_literals(operands));
     }

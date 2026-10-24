@@ -93,6 +93,63 @@ mod tests {
         );
     }
 
+    // Preparation and every verdict and explanation are the same whatever
+    // order the consumer's serde_json maps keep: these outcomes were taken
+    // from the SDK before projected definitions, whose text always held
+    // keywords and subschemas by name. The `po` configuration keeps insertion
+    // order, and with `check` each preparation also checks its conversion.
+    #[cfg(feature = "evaluator")]
+    #[test]
+    fn serde_json_member_order_never_changes_preparation_or_verdicts() {
+        use openbindings::{Document, JsonValue};
+        use openbindings_json_schema_evaluator::{DefaultEvaluator, Limits};
+        let cases: Value = serde_json::from_str(include_str!("member-order-cases.json")).unwrap();
+        let mut runs = 0;
+        for case in cases.as_array().unwrap() {
+            let id = case["id"].as_str().unwrap();
+            let document = Document::parse(case["document"].as_str().unwrap()).unwrap();
+            let proof = document
+                .validate()
+                .unwrap()
+                .conformant()
+                .expect("conformant case");
+            let operation = proof.resolve_operation("t").unwrap();
+            let contract = operation.input().unwrap();
+            let values: Vec<JsonValue> = case["values"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|value| JsonValue::parse(value.as_str().unwrap()).unwrap())
+                .collect();
+            for run in case["runs"].as_array().unwrap() {
+                let limits: Limits = serde_json::from_value(run["limits"].clone()).unwrap();
+                let expected = &run["expected"];
+                match contract.prepare(&DefaultEvaluator::with_limits(limits)) {
+                    Err(refusal) => assert_eq!(
+                        serde_json::to_value(&refusal).unwrap(),
+                        expected["prepare"],
+                        "{id} {}",
+                        run["limits"]
+                    ),
+                    Ok(prepared) => {
+                        assert_eq!(expected["prepare"], "prepared", "{id} {}", run["limits"]);
+                        let expected = expected["values"].as_array().unwrap();
+                        assert_eq!(values.len(), expected.len());
+                        for (value, expected) in values.iter().zip(expected) {
+                            let outcomes = serde_json::json!([
+                                serde_json::to_value(prepared.validate(value)).unwrap(),
+                                serde_json::to_value(prepared.explain(value)).unwrap(),
+                            ]);
+                            assert_eq!(&outcomes, expected, "{id} {} {}", run["limits"], value.text());
+                        }
+                    }
+                }
+                runs += 1;
+            }
+        }
+        assert_eq!(runs, 77);
+    }
+
     #[cfg(feature = "sdk")]
     #[test]
     fn exact_values_cross_package_serde_boundaries() {

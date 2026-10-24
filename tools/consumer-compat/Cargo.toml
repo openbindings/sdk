@@ -10,6 +10,10 @@ publish = false
 [features]
 default = []
 ap = ["serde_json/arbitrary_precision"]
+# A consumer whose maps keep their insertion order.
+po = ["serde_json/preserve_order"]
+# The SDK's own check of each preparation's conversion (not for consumers).
+check = ["openbindings-json-schema-evaluator?/conversion-check"]
 sdk = ["dep:openbindings"]
 evaluator = ["sdk", "dep:openbindings-json-schema-evaluator"]
 native = ["evaluator", "dep:openbindings-http-discovery", "openbindings-http-discovery/native", "dep:reqwest", "dep:tokio", "dep:bytes"]

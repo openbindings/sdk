@@ -446,6 +446,8 @@ impl Operands {
             let value = match definition.schema {
                 Schema::Boolean(value) => Value::Bool(value),
                 Schema::Object(mut fields) => {
+                    // In the order the program's text holds them, which a map
+                    // that keeps its insertion order keeps.
                     fields.sort_by(|a, b| a.0.cmp(b.0));
                     let mut fields = fields.into_iter().peekable();
                     let mut schema = Map::new();
@@ -518,9 +520,18 @@ impl Operands {
             (Role::Read | Role::DynamicAnchor, Field::Copied(value)) => read(value, limits)?,
             (Role::Read, Field::Reference(uri)) => Value::String(uri),
             (Role::Read, Field::Single(address)) => nested(1, reference(address))?,
-            (Role::Read, Field::Map(children)) => {
+            (Role::Read, Field::Map(mut children)) => {
+                // In the order the program's text holds them: by name, each
+                // once, the last of a repeated one. A map that keeps its
+                // insertion order, as serde_json's `preserve_order` makes
+                // it, then holds them as the text's parse did.
+                children.sort_by(|a, b| a.0.cmp(b.0));
+                let mut children = children.into_iter().peekable();
                 let mut object = Map::new();
-                for (name, address) in children {
+                while let Some((name, address)) = children.next() {
+                    if children.peek().is_some_and(|next| next.0 == name) {
+                        continue;
+                    }
                     object.insert(name.into(), reference(address));
                 }
                 nested(if object.is_empty() { 1 } else { 2 }, Value::Object(object))?
