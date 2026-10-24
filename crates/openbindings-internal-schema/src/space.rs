@@ -139,13 +139,6 @@ pub struct Definitions<'s> {
     pub resources: Vec<DefinedResource<'s>>,
     pub literals: Vec<JsonValue>,
 }
-/// A projection of [`SchemaSpace::program_definitions`].
-pub enum Projected<'s> {
-    Definitions(Definitions<'s>),
-    /// Written as text, because its definitions could pass the projection's
-    /// fixed bounds.
-    Program(UnmappedProgram),
-}
 // Debug is structural: no projected name, address or value is written.
 macro_rules! structural_debug {
     ($($name:ident),*) => {$(
@@ -156,14 +149,7 @@ macro_rules! structural_debug {
         }
     )*};
 }
-structural_debug!(
-    Field,
-    Schema,
-    Definition,
-    DefinedResource,
-    Definitions,
-    Projected
-);
+structural_debug!(Field, Schema, Definition, DefinedResource, Definitions);
 /// How a projected schema keyword holds its subschemas. A projection writes each
 /// child position as `{"$ref": <generated child address>}`; every other keyword
 /// value is copied from the original source unchanged.
@@ -1171,32 +1157,36 @@ impl SchemaSpace {
     /// themselves rather than as text parsed again: each projected resource
     /// with its definitions in `$defs` order, each schema object's keywords in
     /// the order the program's text holds them, and each `const` and `enum`
-    /// value copied into the same literal arena. Neither it nor the text can
-    /// pass the projection's fixed bounds: when the projection could, this
-    /// projects as [`Self::program_unmapped`] does, which refuses exactly as it
-    /// does there, and gives that program.
+    /// value copied into the same literal arena. It refuses exactly as
+    /// [`Self::program_unmapped`] does.
     pub fn program_definitions(
         &self,
         entry: usize,
         control: &dyn Control,
-    ) -> Result<Projected<'_>, Failure> {
+    ) -> Result<Definitions<'_>, Failure> {
         control.check()?;
         let reach = self.reach(entry, control)?;
         let namespace = PROGRAM_NAMESPACE;
-        let as_text = |reach: &Reach| {
-            let mut literals = Vec::new();
-            let (program, definitions) =
-                self.projection(entry, reach, control, namespace, false, Some(&mut literals))?;
-            Ok(Projected::Program(UnmappedProgram {
-                program,
-                definitions,
-                literals,
-            }))
+        // The text's fixed bounds refuse with byte offsets in the text. The
+        // definitions carry bounds on the text each definition and resource
+        // would take, which also bound their nodes (each holds at least a
+        // byte of its own) and their nesting (each level at least two). Once
+        // a bound could reach a fixed limit, the projection is written as text
+        // too, which refuses as it does there or admits the definitions.
+        let mut written = false;
+        let write = |written: &mut bool| -> Result<(), Failure> {
+            if !std::mem::replace(written, true) {
+                self.projection(
+                    entry,
+                    &reach,
+                    control,
+                    namespace,
+                    false,
+                    Some(&mut Vec::new()),
+                )?;
+            }
+            Ok(())
         };
-        // Bounds on the text each definition and resource would take, which
-        // also bound their nodes (each holds at least a byte of its own) and
-        // their nesting (each level at least two). A projection whose bounds
-        // reach the fixed limits is written as text instead.
         const DEEP: usize = 9_990;
         let mut values = Vec::new();
         let mut separated = 0usize;
@@ -1234,13 +1224,14 @@ impl SchemaSpace {
                             Field::Literal(_) => 20,
                             Field::Copied(value) => {
                                 let length = value.text().len();
-                                if length >= 2 * DEEP
+                                if !written
+                                    && length >= 2 * DEEP
                                     && !openbindings_internal_json::backend::depth_at_most(
                                         &JsonRef::to_owned(*value),
                                         DEEP,
                                     )
                                 {
-                                    return as_text(&reach);
+                                    write(&mut written)?;
                                 }
                                 length
                             }
@@ -1257,7 +1248,7 @@ impl SchemaSpace {
                 .saturating_add(bound)
                 .saturating_add(std::mem::take(&mut separated));
             if total > PROJECTION_LIMITS.max_bytes {
-                return as_text(&reach);
+                write(&mut written)?;
             }
             let name = format!("n{}", self.node_number(id));
             let (size, definitions) = resources.entry(node.resource).or_default();
@@ -1279,7 +1270,7 @@ impl SchemaSpace {
                 .saturating_add(entry.as_ref().map_or(0, String::len));
             // The node bound; the nesting bound is the copies' checked above.
             if size > PROJECTION_LIMITS.max_nodes {
-                return as_text(&reach);
+                write(&mut written)?;
             }
             definitions.sort_unstable_by(|a, b| a.name.cmp(&b.name));
             projected.push(DefinedResource {
@@ -1288,11 +1279,11 @@ impl SchemaSpace {
                 definitions,
             });
         }
-        Ok(Projected::Definitions(Definitions {
+        Ok(Definitions {
             entry_uri,
             resources: projected,
             literals: openbindings_internal_json::backend::standalone_list(&values),
-        }))
+        })
     }
     pub fn check_known_node(&self, id: usize) -> Result<(), Failure> {
         let node = self.node(id);

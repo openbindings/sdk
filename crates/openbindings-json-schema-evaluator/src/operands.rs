@@ -350,9 +350,11 @@ pub(crate) fn role(keyword: &str) -> Option<Role> {
     })
 }
 impl Operands {
-    /// The library's copy of a projected resource. Its `const` and `enum`
+    /// The library's copy of a projected resource's text, which debug builds
+    /// still compare with [`Self::definitions`]. Its `const` and `enum`
     /// values are indices into `literals`, the literals the projection
     /// separates, which the compiled keywords share rather than copy.
+    #[cfg(debug_assertions)]
     pub(crate) fn resource(
         &mut self,
         resource: &JsonValue,
@@ -539,6 +541,7 @@ impl Operands {
         self.numbers.insert(token)
     }
     /// Whether two conversions separated the same literals.
+    #[cfg(debug_assertions)]
     pub(crate) fn same_literals(&self, other: &Self) -> bool {
         let texts = |operands: &Self| -> Vec<Vec<String>> {
             operands
@@ -713,6 +716,7 @@ fn compile_json_depth() -> NoVerdict {
     )
 }
 /// The separated literal a projected `const` or `enum` names by its index.
+#[cfg(debug_assertions)]
 pub(crate) fn separated<'a>(
     index: JsonRef<'_>,
     literals: &'a [JsonValue],

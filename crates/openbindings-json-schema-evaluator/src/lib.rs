@@ -17,9 +17,9 @@ mod stack;
 mod unevaluated_walk;
 use openbindings::*;
 use openbindings_internal_json::backend::{self, FlatJson};
-use openbindings_internal_schema::{
-    Program as EvaluationProgram, Projected, SchemaSpace, SuppliedSet,
-};
+#[cfg(debug_assertions)]
+use openbindings_internal_schema::Program as EvaluationProgram;
+use openbindings_internal_schema::{Definitions, SchemaSpace, SuppliedSet};
 use serde_json::Value;
 use std::{collections::HashMap, sync::Arc};
 
@@ -299,20 +299,16 @@ struct Converted {
 impl DefaultEvaluator {
     fn prepared(
         &self,
-        projected: Projected<'_>,
+        projected: Definitions<'_>,
         space: &SchemaSpace,
         entry: usize,
         missing: Vec<String>,
         control: &dyn WorkControl,
     ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
-        let resources = match &projected {
-            Projected::Definitions(definitions) => definitions.resources.len(),
-            Projected::Program(unmapped) => unmapped.program.resources.len(),
-        };
         if self
             .limits
             .schema_resources
-            .is_some_and(|cap| resources > cap)
+            .is_some_and(|cap| projected.resources.len() > cap)
         {
             return Err(no_verdict(
                 NoVerdictReason::LimitExceeded,
@@ -321,32 +317,19 @@ impl DefaultEvaluator {
             ));
         }
         let mut operands = operands::Operands::default();
-        let converted = match projected {
-            Projected::Definitions(definitions) => {
-                let converted =
-                    self.defined(definitions, &mut operands, space, &missing, control)?;
-                // Debug builds check that the definitions convert as the
-                // program's text does.
-                if cfg!(debug_assertions) {
-                    self.check_conversion(&converted, &operands, space, entry, &missing);
-                }
-                converted
-            }
-            Projected::Program(unmapped) => self.parsed(
-                &unmapped.program,
-                &unmapped.literals,
-                &unmapped.definitions,
-                &mut operands,
-                space,
-                &missing,
-                control,
-            )?,
-        };
+        let converted = self.defined(projected, &mut operands, space, &missing, control)?;
+        // Debug builds check that the definitions convert as the program's
+        // text does.
+        #[cfg(debug_assertions)]
+        self.check_conversion(&converted, &operands, space, entry, &missing);
+        #[cfg(not(debug_assertions))]
+        let _ = entry;
         Ok(Arc::new(
             self.compile(converted, operands, space, missing, control)?,
         ))
     }
-    // Convert a projection's definitions as `parsed` converts its text.
+    // Convert a projection's definitions as the evaluator converted the
+    // program's text, which debug builds still check (`parsed`).
     fn defined(
         &self,
         projected: openbindings_internal_schema::Definitions<'_>,
@@ -407,6 +390,7 @@ impl DefaultEvaluator {
     // separated `const` and `enum` values, in an arena holding only them,
     // which the program names by index; `nodes` are each projected resource's
     // definitions' nodes in `space`, in `$defs` order.
+    #[cfg(debug_assertions)]
     #[allow(clippy::too_many_arguments)]
     fn parsed(
         &self,
@@ -463,6 +447,7 @@ impl DefaultEvaluator {
         })
     }
     // That the text projection, converted, gives what the definitions gave.
+    #[cfg(debug_assertions)]
     fn check_conversion(
         &self,
         converted: &Converted,
