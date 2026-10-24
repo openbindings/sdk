@@ -21,7 +21,7 @@ use openbindings::validate_document;
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let text = r#"{"openbindings":"0.2.0","operations":{"lookup":{"inputSchema":{"type":"integer"}}}}"#;
+    let text = r#"{"openbindings":"0.2.0","operations":{"lookup":{"aliases":["find"],"inputSchema":{"type":"integer"}}}}"#;
     let validation = validate_document(text)?;
     for finding in &validation.report().findings {
         // Debug quotes and escapes the pointer, including any control characters.
@@ -39,6 +39,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let Some(proof) = validation.conformant() else {
         return Err(format!("document conformance: {:?}", validation.report().conclusion).into());
     };
+    for operation in proof.operations() {
+        let aliases: Vec<&str> = operation.aliases().into_iter().flatten().collect();
+        println!("operation {} (aliases {aliases:?})", operation.key());
+    }
     let operation = proof.resolve_operation("lookup").ok_or("operation is missing")?;
     let input = operation
         .input()
@@ -67,9 +71,11 @@ It judges the bytes as they are: invalid UTF-8, a byte order mark or a JSON synt
 error is an OBI-01 violation in the report, located like any other finding.
 A report can be conformant, non-conformant or undetermined. Only established
 conformance yields a `Conformant<Document>`. Its typed field reads are infallible;
-document editor reads remain fallible. Resolve primary names or aliases with
-`resolve_operation`. A conformant lookup returns an optional operation; a document
-lookup distinguishes found, missing and ambiguous.
+document editor reads remain fallible. `operations()` returns every operation as a
+`ConformantOperationView` in lexical key order: `key()` is its primary name and
+`aliases()` its declared aliases, or `None` when it declares none. Resolve primary
+names or aliases with `resolve_operation`. A conformant lookup returns an optional
+operation; a document lookup distinguishes found, missing and ambiguous.
 
 ## Validate values
 
