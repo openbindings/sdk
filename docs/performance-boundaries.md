@@ -93,33 +93,35 @@ retained with a prepared value contract before any timed operation fell by about
 
 On 2026-10-24, preparation was compared with `8be7fe3` by the benchmark
 harness's identical instrument pairs (macOS arm64, Rust 1.99.0, two batches of
-20 adjacent randomized pairs, one-minute load 1.3 to 2.4). Preparation now
+20 adjacent randomized pairs, one-minute load 1.1 to 3.8). Preparation now
 shares the revision's schema index and the meta-schema verdicts its validation
-reached, takes core's projection as definitions instead of parsing it back from
-text, routes the packaged meta-schemas' references only when one is resolved,
-walks a resource set's schema positions once, registers only the SDK keywords
-a value contract holds, and names the bundle with a URN. Apart from
+recorded there, takes core's projection as definitions instead of parsing it
+back from text, routes the packaged meta-schemas' references only when one is
+resolved, walks a resource set's schema positions once, registers only the SDK
+keywords a value contract holds, and names the bundle with a URN. Apart from
 `large-literal` and `missing-resource`, one-shot preparation (`compile`) took
-0.61 to 0.93 times as long (scalar 37.0 → 22.7 µs, object 75.0 → 52.0 µs, refs
-90.7 → 64.7 µs) and repeated preparation (`context`) 0.55 to 0.91 times;
-`large-literal` took 0.41 and 0.33 times as long, and `missing-resource` 0.13
+0.61 to 0.94 times as long (scalar 37.7 → 23.3 µs, object 74.7 → 52.3 µs, refs
+90.4 → 65.0 µs) and repeated preparation (`context`) 0.55 to 0.92 times;
+`large-literal` took 0.41 and 0.35 times as long, and `missing-resource` 0.15
 and 0.14 times, since the scan for missing resources no longer resolves the
-packaged meta-schemas' references. Preparation allocations per
-operation fell by 24 to 81% and requested bytes by 6 to 85%. Evaluation, parse,
-read, explanation and document rows measured 0.98 to 1.01, except the
-`reference-text-*` evaluation rows, which measured 0.73 to 0.88 with unchanged
-evaluation code; document
-validation makes one more allocation, 24 bytes, to share its index. A resource
-set retains its schema positions once a preparation walks them, so
-`reference-fan-in`, whose carrier holds 5,000 definitions, retains 94 KB (3%)
-more. No heap or allocation flag was raised. Over all 101 rows the geometric
-mean time ratio was 0.83, and over the preparation rows 0.58. Against
-jsonschema-rs 0.58.6 and boon 0.6.1 compiling the same schema bytes, the SDK's
-validation and preparation of a document from its bytes went from 5.38, 1.60,
-1.93, 3.03 and 6.16 times the faster peer's time to 3.61, 1.16, 1.36, 2.17 and
-4.18 times on five representative workloads (a scalar, a 790-byte object, an
-array of such objects, a `propertyNames` map and a recursive tree; median of
-ten fresh processes, one-minute load 0.8 to 1.2).
+packaged meta-schemas' references. Preparation allocations per operation fell
+by 24 to 81% and requested bytes by 6 to 85%. Evaluation, parse, read,
+explanation and document rows measured 0.98 to 1.02, except the
+`reference-text-*` evaluation rows, which measured 0.90 to 0.97 with unchanged
+evaluation code; document validation makes one more allocation, 24 bytes, to
+share its index. A resource set retains its schema positions once a
+preparation walks them, so `reference-fan-in`, whose carrier holds 5,000
+definitions, retains 94 KB (3%) more; preparing a value contract that reaches
+one resource of 50 holding 1,000 schemas each takes 3.4 ms instead of 6.6 ms
+without that walk kept, for 625 KB more held by the set. No heap or allocation
+flag was raised. Over all 101 rows the geometric mean time ratio was 0.84, and
+over the preparation rows 0.59.
+Against jsonschema-rs 0.58.6 and boon 0.6.1 compiling the same schema bytes,
+the SDK's validation and preparation of a document from its bytes went from
+5.40, 1.60, 1.92, 3.02 and 6.19 times the faster peer's time to 3.63, 1.16,
+1.37, 2.17 and 4.23 times on five representative workloads (a scalar, a
+790-byte object, an array of such objects, a `propertyNames` map and a
+recursive tree; median of ten fresh processes, one-minute load 1.9 to 4.8).
 
 No evaluation work cap applies by default, so values as large as the default
 1,000,000-node admission limit are decided, in time that grows with the schema
@@ -833,10 +835,10 @@ print('sha256', hashlib.sha256(b).hexdigest())
 PY
 ```
 
-The 2026-10-24 implementation asset is **6,048,312 bytes**, or **1,696,477 bytes**
+The 2026-10-24 implementation asset is **6,055,465 bytes**, or **1,698,044 bytes**
 with gzip level 9 (`8be7fe3`: 6,010,809 and 1,681,221; `94b6991`: 7,445,434 and
 1,951,593). Its SHA-256 is
-`856a23b2b3b5d140bbcaa45442898a940796f052275e5d53e6abe9f22e09a10e`.
+`be69d4fb0ca43b030a23184837c9e724990da64aa11fcee3de9000d327e0b84c`.
 The build uses the workspace release profile and removes the Wasm name section.
 These lengths exclude JavaScript, declarations, runtime memory and host overhead.
 `build-info.json` beside the generated asset records its source and tool identities.

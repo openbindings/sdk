@@ -26,7 +26,8 @@ that set until either the set or the revision is dropped. The default evaluator
 assembles its own space for each preparation and drops it afterwards; the space
 shares the set's identity index and schema positions and the revision's schema
 index instead of building them again, and takes the revision's schemas as
-already checked against the 2020-12 meta-schemas, as its conformance requires.
+already checked against the 2020-12 meta-schemas once its validation has checked
+each of them through that index and found none failing.
 Core gives the default evaluator its projection as definitions rather than as
 JSON text to parse again; it writes the text only when the projection could
 reach the text's fixed bounds, which then decide as they do for the text. Every space
