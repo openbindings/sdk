@@ -77,3 +77,32 @@ for (const [owner, member, expected, insertion] of [
     }
   });
 }
+
+test("reference check rejects declarations that import the generated Wasm bindings", async () => {
+  const temporary = await mkdtemp(path.join(tmpdir(), "sdk-reference-wasm-"));
+  try {
+    await cp(path.join(root, "dist"), path.join(temporary, "dist"), {
+      recursive: true,
+    });
+    const filename = path.join(temporary, "dist/internal.d.ts");
+    const source = await readFile(filename, "utf8");
+    assert.doesNotMatch(source, /\.\/wasm\//);
+    await writeFile(
+      filename,
+      'import * as wasm from "./wasm/openbindings_wasm.js";\n' + source,
+    );
+    const result = spawnSync(process.execPath, [checker], {
+      encoding: "utf8",
+      env: { ...process.env, OPENBINDINGS_REFERENCE_PACKAGE_ROOT: temporary },
+    });
+    assert.equal(result.status, 1, result.stderr || result.stdout);
+    assert.ok(
+      JSON.parse(result.stdout).failures.some((failure) =>
+        failure.endsWith("public declarations import generated Wasm bindings"),
+      ),
+      result.stdout,
+    );
+  } finally {
+    await rm(temporary, { recursive: true, force: true });
+  }
+});

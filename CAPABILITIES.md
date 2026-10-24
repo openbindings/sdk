@@ -104,7 +104,9 @@ of the path that reaches it, also through `$ref` cycles.
 
 The evaluator bounds what the SDK itself reads, writes and recurses through; it
 does not estimate the JSON Schema library's compiled memory. On by default:
-core's document admission limits and its 100,000 schema positions per value contract;
+core's document admission limits, its 100,000 schema positions per value contract
+and its fixed depth of 256 nested schemas below a schema position or supplied
+resource root (`schema-depth-limit`);
 the projected JSON nesting compiled (`compile_json_depth`, 512,
 `compileJsonDepth` in TypeScript);
 the stack the host gives (`stack_bytes`, 256 KiB, `stackBytes` in TypeScript),
@@ -146,9 +148,9 @@ level), and a
 cap on the schema resources one value contract may reach (`schema_resources`,
 `schemaResources` in TypeScript). That cap refuses a value contract after core projects
 it and before the evaluator copies its resources and the library compiles them,
-so it bounds the time and memory of that compilation: a 7 MB document whose input
-reaches a chain of 99,990 `$id` resources prepared in 11.5 s at a 723 MB peak
-without it, and refused in 1.2 s at a 502 MB peak with it set to 1,000. Within
+so it bounds the time and memory of that compilation: an 8 MB document whose input
+reaches a chain of 99,990 `$id` resources prepared in 8.1 s at a 725 MB peak
+without it, and refused in 1.1 s at a 499 MB peak with it set to 1,000. Within
 these bounds, preparing a schema can still take more memory than a host may
 want, since the library's compiled program grows with what it compiles: 1,000
 holders of `unevaluatedProperties` that each inherit 4,000 properties peak at

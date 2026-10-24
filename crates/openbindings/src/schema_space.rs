@@ -212,6 +212,8 @@ pub struct ReferenceReport {
     /// Whether traversal completed; individual unresolved references may still occur in a complete report.
     pub complete: bool,
     /// Traversal-level cause when inspection is incomplete, distinct from per-reference refusals.
+    /// Inspection skips the references of a schema nested more than 256 schemas below the
+    /// schema position that holds it, with a `LimitExceeded` limitation (`schema-depth`).
     pub limitation: Option<ReferenceRefusal>,
 }
 use serde::Serialize;

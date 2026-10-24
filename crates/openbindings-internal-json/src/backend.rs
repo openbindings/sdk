@@ -856,34 +856,6 @@ pub fn pointer_bytes(pointer: &crate::Pointer) -> usize {
 pub fn same_source(value: crate::JsonRef<'_>, source: &crate::JsonValue) -> bool {
     std::sync::Arc::ptr_eq(value.owner, &source.owner)
 }
-/// Measure separately owned decoded UTF-8 strings in a borrowed exact subtree,
-/// including member names. Raw source bytes are excluded. Unescaped strings borrow
-/// their source; escaped scalar strings own their complete decoded value. This
-/// visits the existing flat nodes without parsing or allocating. `None` means the
-/// byte limit is exceeded or the subtree contains non-scalar UTF-16 strings.
-pub fn decoded_string_size(value: crate::JsonRef<'_>, limit: usize) -> Option<usize> {
-    let arena = value.owner.as_ref();
-    let end = arena.nodes[value.id].span.end;
-    let mut size = 0usize;
-    for (offset, node) in arena.nodes[value.id..]
-        .iter()
-        .take_while(|node| node.span.start < end)
-        .enumerate()
-    {
-        if let Kind::String { text, .. } = node.kind {
-            if text == Text::UNPAIRED {
-                return None;
-            }
-            if text.decoded().is_some() {
-                size = size.checked_add(arena.decoded_len(value.id + offset))?;
-                if size > limit {
-                    return None;
-                }
-            }
-        }
-    }
-    Some(size)
-}
 /// Measure an escaped source pointer before allocating it. `None` means that
 /// the pointer is unavailable or would exceed the caller's remaining byte budget.
 pub fn pointer_size(value: crate::JsonRef<'_>, limit: usize) -> Option<usize> {
@@ -1377,11 +1349,9 @@ pub fn standalone_list(values: &[crate::JsonRef<'_>]) -> Vec<crate::JsonValue> {
     copies
 }
 /// Borrow duplicate-containing objects in parse order without materializing
-/// pointers or coordinates. Callers cap this iterator before collecting nodes.
-/// Document validation passes a standalone root, so this covers its whole arena.
-pub fn duplicate_nodes(
-    value: &crate::JsonValue,
-) -> impl ExactSizeIterator<Item = crate::JsonRef<'_>> {
+/// pointers or coordinates, for tests of location materialization.
+#[cfg(test)]
+fn duplicate_nodes(value: &crate::JsonValue) -> impl ExactSizeIterator<Item = crate::JsonRef<'_>> {
     value
         .owner
         .duplicates
@@ -1528,27 +1498,6 @@ mod tests {
         }
     }
 
-    #[test]
-    fn decoded_string_size_counts_owned_subtree_strings_without_ancestors_or_siblings() {
-        let value = crate::JsonValue::parse(
-            r#"{"outside\n":"sibling\t","nested":{"key\"":"raw雪","list":["a\/b","\uD83D\uDE00",{"\u006b":"end\n"}]},"after":"other\r"}"#,
-        ).unwrap();
-        let nested = value.at("/nested").unwrap();
-        // key\" (4), a\/b (3), emoji (4 UTF-8), \u006b (1), end\n (4).
-        assert_eq!(decoded_string_size(nested, 16), Some(16));
-        assert_eq!(decoded_string_size(nested, 15), None);
-        assert_eq!(
-            decoded_string_size(value.at("/nested/key\"").unwrap(), 0),
-            Some(0)
-        );
-        assert_eq!(
-            decoded_string_size(value.at("/nested/list/1").unwrap(), 4),
-            Some(4)
-        );
-        assert_eq!(decoded_string_size(value.view(), 38), Some(38));
-        let unsupported = crate::JsonValue::parse(r#"["\ud800"]"#).unwrap();
-        assert_eq!(decoded_string_size(unsupported.view(), usize::MAX), None);
-    }
     #[test]
     fn node_counts_cover_a_value_and_everything_below_it() {
         let source = r#"{"a":[1,{"b":null}],"c":"d"}"#;

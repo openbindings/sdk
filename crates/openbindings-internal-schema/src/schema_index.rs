@@ -114,6 +114,8 @@ pub const SCHEMA_SELECTORS: &[(&str, SchemaSelector)] = &[
     ("oneOf", SchemaSelector::Array),
     ("prefixItems", SchemaSelector::Array),
 ];
+/// Each schema a schema position holds, in document order, for tests.
+#[cfg(test)]
 pub fn schema_children(value: JsonRef<'_>) -> Vec<JsonRef<'_>> {
     let mut out = Vec::new();
     each_schema_child(value, |child| out.push(child));

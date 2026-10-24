@@ -5,10 +5,10 @@ engine revision `a2e5a380018754bf8b96ffebadd4545fec0a07cb`, with documentation
 and measurement harness changes only. The host was macOS 26.6.2 arm64, Rust
 1.99.0. Wasm used wasm-bindgen 0.2.129. Timings are examples, not latency
 guarantees or CI thresholds. Prepared value contract measurements were updated on
-2026-10-15 and, with the preparation and pattern sections and the Wasm size, on
-2026-10-20 below; the compiled-pattern memory and the exponential evaluation
-example were measured on 2026-10-21. Use the locked dependencies and release
-profile to reproduce them.
+2026-10-15 and, with the preparation and pattern sections, on 2026-10-20 below;
+the compiled-pattern memory and the exponential evaluation example were measured
+on 2026-10-21, and the Wasm size on 2026-10-24. Use the locked dependencies and
+release profile to reproduce them.
 
 ## Prepared value contracts
 
@@ -492,16 +492,22 @@ of the library's compiled program, which grows with what the library compiles.
 `Limits::schema_resources` is a tighter cap an application can set. It refuses
 a value contract after core projects it and before the evaluator copies its resources
 and the library compiles them, so it bounds that compilation's memory as well
-as its time. Measured on 2026-10-22 by the same method, against `68a6bb9`, a
-7 MB document whose input reaches a chain of 99,990 `$id` resources prepared in
-11.5 s at a 723 MB peak without a cap, and refused (`schema-resource-limit`) in
-1.2 s at a 502 MB peak with a cap of 1,000; validating that document alone
-peaks at 61 MB, so the projection, which comes before the cap, takes most of
-the rest. The shapes below were measured by the same method:
+as its time. Measured on 2026-10-24 by the same method, against `1eb1814`
+(each figure the median of three fresh processes), an 8 MB document whose
+input reaches a chain of 99,990 `$id` resources prepared in 8.1 s at a 725 MB
+peak without a cap, and refused (`schema-resource-limit`) in 1.1 s at a 499 MB
+peak with a cap of 1,000; validating that document alone peaks at 56 MB, so
+the projection, which comes before the cap, takes most of the rest. At core's
+bound itself, a 7 MB input whose own `$defs` chain 99,999 one-schema `$id`
+resources, exactly 100,000 schema positions, prepared in 7.4 s at a 749 MB
+peak, and with one more resource it is refused (`schema-node-limit`) in 0.8 s
+at a 321 MB peak, before the evaluator copies a resource. A shape's peak
+varied by about a tenth between runs. The shapes below were measured by the
+same method:
 
 | Shape | Result |
 | --- | --- |
-| 99,990-resource `$id` chain (8 MB) | prepared, 8.0 s, 903 MB |
+| 99,990-resource `$id` chain (8 MB) | prepared, 8.1 s, 725 MB |
 | 99,990-link same-document chain (3.7 MB) | prepared, 9.1 s, 457 MB |
 | 100,000-link same-document chain | refused (`schema-node-limit`), 0.12 s, 119 MB |
 | 11 levels of two paths, one declaring that level's dynamic anchor, ending in a schema of 27 subschemas reached in 2,048 dynamic contexts | refused (`program-specialization-limit`) at the default; with `program_bytes` raised it prepares as before, 0.71 s, 450 MB |
@@ -797,9 +803,9 @@ print('sha256', hashlib.sha256(b).hexdigest())
 PY
 ```
 
-The 2026-10-20 implementation asset is **5,795,269 bytes**, or **1,595,571 bytes**
+The 2026-10-24 implementation asset is **6,010,809 bytes**, or **1,681,221 bytes**
 with gzip level 9 (`94b6991`: 7,445,434 and 1,951,593). Its SHA-256 is
-`37298181233039e9bdf1b15e17f06921f066e6f253348285046155ae7be6e113`.
+`349f5217690af68b63ab422658285aaad2bde9bf06b52d6ded5a080478c0d9e2`.
 The build uses the workspace release profile and removes the Wasm name section.
 These lengths exclude JavaScript, declarations, runtime memory and host overhead.
 `build-info.json` beside the generated asset records its source and tool identities.

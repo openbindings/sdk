@@ -54,7 +54,7 @@ function checkInput(input: JsonInput) {
   const checked = document.validate();
   if (checked.status !== "conformant") return checked;
   using proof = checked.document;
-  const operations = proof.operations;
+  const operations = proof.operations; // plain metadata: key, aliases, tags...
   using operation = proof.resolveOperation("find"); // primary name or alias
   if (!operation) return { status: "operation-missing" } as const;
   using contract = operation.input();
@@ -62,7 +62,8 @@ function checkInput(input: JsonInput) {
   const setup = contract.prepare();
   if (setup.status !== "ready") return setup;
   using prepared = setup.valueContract;
-  return { operations, result: prepared.validate(input) };
+  const result = prepared.validate(input); // narrow on result.outcome
+  return { operations, result };
 }
 
 console.log(checkInput(7));
@@ -80,13 +81,18 @@ platform types that `DOM` declares, such as `Response`, `URL`, `AbortSignal` and
 `DocumentValidation`, as Rust's `validate()` does: a `conformant` branch carrying a
 `ConformantDocument`, or a version refusal or conformance report.
 `validateDocument(bytes)` returns only the plain `DocumentReport`, with no proof
-and nothing to dispose. Only a conformant document's operations hand out value
-contracts: `resolveOperation` returns `undefined` for a missing operation, and
-`input()` or `output()` returns `undefined` when no value contract is declared.
-`prepare()` returns a ready `PreparedValueContract` or a no-verdict refusal. Handle
-each result before validating a value. Value results distinguish `satisfies`, `fails`, `undefined`
-(the specification gives the value no defined validity), `no-verdict` (the SDK could
-not answer) and an `input-error` when ordinary JavaScript data cannot be admitted.
+and nothing to dispose. `operations` lists every operation's frozen metadata in
+lexical key order, its primary `key` and declared `aliases` (`null` when absent)
+among them; an operation view's `metadata` holds the same record. Only a
+conformant document's operations hand out value contracts: `resolveOperation`
+returns `undefined` for a missing operation, and `input()` or `output()` returns
+`undefined` when no value contract is declared. `prepare()` returns a ready
+`PreparedValueContract` or a no-verdict refusal. Handle each result before
+validating a value. Parsing, validation, preparation and discovery results
+discriminate on `status`; value results discriminate on `outcome`, which is
+`satisfies`, `fails`, `undefined` (the specification gives the value no defined
+validity), `no-verdict` (the SDK could not answer) or `input-error` when ordinary
+JavaScript data cannot be admitted.
 `validate` reads a string as a JSON string value; check JSON text or bytes, such as
 a request body, with `validateJson`, which admits them as `parseJson` does.
 
@@ -199,7 +205,9 @@ past the default 1,000,000 nodes comes back undetermined, and `validateDocument`
 with a larger `maxNodes` admits it. `Document.create()`, `ExactJson.from`,
 `validateJson` and a prepared value contract's `validate` and `explain` of an ordinary
 value use the defaults. Value-contract preparation keeps fixed bounds of its own,
-which no setting raises. Every admission and edit limit refusal names how to
+which no setting raises, such as its 100,000 schema positions and a reached schema
+nested at most 256 schemas below the schema position or resource root holding it
+(`schema-depth-limit`). Every admission and edit limit refusal names how to
 admit more, including the route for calls that take no limits. To check a value past the
 defaults, parse it with `parseJson` and larger limits and pass the `ExactJson`
 to `validate`.
@@ -245,9 +253,9 @@ natively), and the SDK sets no cap by default. When preparing untrusted
 documents or resources, pass `limits: { schemaResources: n }`; a value contract
 reaching more than `n` refuses with the `schema-resource-limit` no-verdict
 before the library compiles it, which bounds the time and memory of that
-compilation: natively, a 7 MB document reaching a chain of 99,990 `$id`
-resources prepared in 11.5 s at a 723 MB peak without a cap, and refused in
-1.2 s at a 502 MB peak with a cap of 1,000.
+compilation: natively, an 8 MB document reaching a chain of 99,990 `$id`
+resources prepared in 8.1 s at a 725 MB peak without a cap, and refused in
+1.1 s at a 499 MB peak with a cap of 1,000.
 
 The evaluator bounds what the SDK itself reads, writes and recurses through, not
 the memory of the JSON Schema library's compiled program. On by default:

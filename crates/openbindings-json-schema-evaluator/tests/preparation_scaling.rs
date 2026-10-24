@@ -615,3 +615,74 @@ fn a_projection_keeps_its_own_bounds_whatever_the_document_was_admitted_under() 
     let value = JsonValue::parse_with_limits(&literal, raised).unwrap();
     assert!(matches!(contract.validate(&value), ValueOutcome::Satisfies));
 }
+
+// Preparation refuses a reached schema nested more than 256 schemas below the
+// schema position or supplied resource root that holds it, whatever `Limits`
+// sets. The levels are schemas, not JSON containers: a `properties` level
+// nests two containers.
+#[test]
+fn a_schema_nested_more_than_256_levels_deep_refuses_whatever_the_limits() {
+    fn not(levels: usize) -> String {
+        (0..levels).fold("{}".to_owned(), |inner, _| format!(r#"{{"not":{inner}}}"#))
+    }
+    fn properties(levels: usize) -> String {
+        (0..levels).fold("{}".to_owned(), |inner, _| {
+            format!(r#"{{"properties":{{"a":{inner}}}}}"#)
+        })
+    }
+    let raised = Limits {
+        stack_bytes: 16 << 20,
+        compile_json_depth: 100_000,
+        ..Limits::default()
+    };
+    let refused = |result: Result<PreparedValueContract, NoVerdict>| {
+        let detail = result.expect_err("refused");
+        assert_eq!(
+            (detail.reason, detail.code.as_str()),
+            (NoVerdictReason::LimitExceeded, "schema-depth-limit")
+        );
+    };
+    for schema in [not, properties] {
+        let deepest = prepare(&document(&[], &schema(256))).unwrap();
+        assert!(matches!(
+            deepest.validate_json("{}").unwrap(),
+            ValueOutcome::Satisfies | ValueOutcome::Fails { .. }
+        ));
+        for limits in [Limits::default(), raised.clone()] {
+            refused(prepare_within(
+                &document(&[], &schema(257)),
+                &ResourceSet::default(),
+                limits,
+            ));
+        }
+    }
+    // Reference inspection skips the references nested past the same depth:
+    // a reference 256 schemas below the input is reported, one 257 below is not.
+    let inspect = |levels: usize| {
+        let inner = (0..levels).fold(
+            r#"{"$ref":"https://depth.test/inner"}"#.to_owned(),
+            |inner, _| format!(r#"{{"not":{inner}}}"#),
+        );
+        let input = format!(r#"{{"$ref":"https://depth.test/r","allOf":[{inner}]}}"#);
+        Document::parse(document(&[], &input))
+            .unwrap()
+            .references()
+            .unwrap()
+    };
+    let report = inspect(255);
+    assert!(report.complete && report.limitation.is_none());
+    assert_eq!(report.references.len(), 2);
+    let report = inspect(256);
+    assert!(!report.complete);
+    let limitation = report.limitation.expect("a limitation");
+    assert_eq!(
+        (limitation.reason, limitation.code.as_str()),
+        (ReferenceRefusalReason::LimitExceeded, "schema-depth")
+    );
+    assert_eq!(report.references.len(), 1);
+    // A supplied resource counts from its own root.
+    let input = document(&[], r#"{"$ref":"https://depth.test/r"}"#);
+    let supplied = |levels| resources(vec![("https://depth.test/r".into(), not(levels))]);
+    assert!(prepare_with(&input, &supplied(256)).is_ok());
+    refused(prepare_with(&input, &supplied(257)));
+}

@@ -37,14 +37,17 @@ On pull requests and pushes to `main`, the [CI workflow](../.github/workflows/ci
 also runs the workspace advisory check with all features and the locked graph.
 Vulnerabilities and yanked versions fail the `advisories` job, which is required
 by the aggregate `ci` check alongside the `native`, `package`, `browser`,
-`wasm-reproducibility` and `msrv` jobs.
+`node-floors`, `wasm-reproducibility` and `msrv` jobs.
 See [advisory policy](../DEPENDENCY-MAINTENANCE.md#advisory-policy) for the local
 command and the required advisory ID and reason for every exception. This check
 needs network access; `tools/verify-advisory-policy.py --self-test` checks only
 the repository policy offline.
 
 The `package` job builds the Wasm and TypeScript package, runs its archive and
-Wasm qualification, and hands `packages/typescript/dist` to the `browser` job.
+Wasm qualification and the TypeScript tests on Node 22.23.0, and hands
+`packages/typescript/dist` to the `browser` and `node-floors` jobs. The
+`node-floors` job runs the TypeScript tests on that build at the other
+supported lines' floors, Node 24.17.0 and 26.2.0.
 That job runs the Chromium and WebKit replay and judges inside Microsoft's
 Playwright image, which already contains the browsers and their system packages,
 so CI installs no browser dependencies. The image is pinned by its
