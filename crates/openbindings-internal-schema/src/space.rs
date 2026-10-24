@@ -152,6 +152,9 @@ struct Layer {
     names: BTreeMap<String, NameSelection>,
     // How inspection reaches each reference's carrier, for the packaged layer.
     lookups: std::sync::OnceLock<Vec<library::PackagedLookup>>,
+    // For the packaged layer: every name its references look up and every
+    // base of its resources, sorted.
+    claimable: std::sync::OnceLock<Vec<String>>,
 }
 impl std::fmt::Debug for SchemaSpace {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -525,6 +528,13 @@ impl SchemaSpace {
     /// resource's, then the packaged meta-schemas', in identifier order.
     pub fn nodes(&self) -> impl Iterator<Item = (usize, &SpaceNode)> {
         self.local.nodes().chain(self.packaged.nodes())
+    }
+    /// The document's and each supplied resource's schema nodes, as
+    /// [`Self::nodes`] begins. A packaged meta-schema's reference always names
+    /// a resource the packaged layer holds, so only these can name a resource
+    /// that no resource holds.
+    pub fn local_nodes(&self) -> impl Iterator<Item = (usize, &SpaceNode)> {
+        self.local.nodes()
     }
     /// Every resource with its identifier, in identifier order.
     pub fn resources(&self) -> impl Iterator<Item = (usize, &Resource)> {

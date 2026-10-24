@@ -29,10 +29,11 @@ use std::collections::BTreeSet;
 pub(crate) const KEYWORD: &str = "$obMissing";
 
 /// The resources the references in `space` name but no resource holds, in
-/// order.
+/// order. Only the document's and the supplied resources' references can name
+/// one: the packaged meta-schemas' name packaged resources.
 pub(crate) fn uris(space: &SchemaSpace) -> Vec<String> {
     let mut missing = BTreeSet::new();
-    for (id, node) in space.nodes() {
+    for (id, node) in space.local_nodes() {
         for keyword in ["$ref", "$dynamicRef"] {
             if let Some(reference) = node.value.get(keyword).and_then(|value| value.as_str()) {
                 let _ = space.resolve_with_missing(id, reference, &mut |uri| {
