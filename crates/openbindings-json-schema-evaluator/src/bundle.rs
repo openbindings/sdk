@@ -22,7 +22,7 @@ use serde_json::{Map, Value};
 use std::collections::HashMap;
 
 /// The bundle's resource URI. Library errors name keywords under it.
-pub(crate) const URI: &str = "https://sdk-bundle.openbindings.invalid/";
+pub(crate) const URI: &str = "urn:openbindings:bundle";
 
 /// A program as one resource, by definition until [`Bundle::document`]
 /// assembles it.
