@@ -538,12 +538,11 @@ impl SchemaSpace {
             ResourceOrigin::Contained,
             protected,
         );
-        for resource in supplied.iter() {
-            let index = SchemaIndex::supplied_nodes(&resource.document);
+        for (resource, index) in supplied.iter().zip(supplied.nodes()) {
             local.add_source(
                 Some(resource.uri.clone()),
                 resource.document.clone(),
-                &index,
+                index,
                 ResourceOrigin::Supplied,
                 protected,
             );
