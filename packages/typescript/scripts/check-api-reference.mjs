@@ -176,6 +176,14 @@ function followTypes(node) {
 }
 for (const symbol of targets.keys())
   for (const declaration of symbol.declarations ?? []) followTypes(declaration);
+// The generated Wasm bindings are implementation details, so no public
+// declaration may import them, even through a protected signature.
+const generated = path.join(root, "dist", "wasm") + path.sep;
+for (const source of program.getSourceFiles())
+  if (source.fileName.startsWith(generated))
+    failures.push(
+      `${path.relative(root, source.fileName)}: public declarations import generated Wasm bindings`,
+    );
 const result = {
   exportsByEntry,
   uniqueExports: targets.size,

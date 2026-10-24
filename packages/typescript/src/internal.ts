@@ -1150,6 +1150,7 @@ abstract class DocumentReads extends Managed {
   #bindings?: readonly BindingMetadata[] | null;
   #sources?: readonly SourceMetadata[] | null;
   #dependencies?: readonly DependencyMetadata[] | null;
+  /** @internal */
   protected constructor(raw: wasm.WasmDocument | wasm.WasmConformantDocument) {
     super(raw);
   }
@@ -1736,6 +1737,7 @@ type OperationRaw = wasm.WasmOperation | wasm.WasmConformantOperation;
 abstract class OperationReads extends Managed {
   #metadata?: OperationMetadata;
   #examples?: readonly ExampleMetadata[] | null;
+  /** @internal */
   protected constructor(
     raw: wasm.WasmOperation | wasm.WasmConformantOperation,
   ) {

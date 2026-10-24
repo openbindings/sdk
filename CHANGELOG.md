@@ -236,7 +236,8 @@
   now refuses as `openbindings.synthesis.byte-limit` instead of
   `openbindings.synthesis.authoring`.
 - A TypeScript API with bundled Wasm, exact-value editing, disposable owners and
-  Fetch discovery for qualified browser, Node ESM and Worker hosts. Its names
+  Fetch discovery for qualified browser, Node ESM and Worker hosts, whose
+  declarations import none of the generated Wasm bindings. Its names
   follow Rust's where the concept is the same: `Document.validate()` returns a
   `DocumentValidation`, whose conformant branch carries the proof, and
   `validateDocument` returns the plain `DocumentReport`. `DocumentValidation` thus
