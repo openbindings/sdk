@@ -112,14 +112,21 @@ resources:
   each schema a reference enters and for each element, member and literal
   comparison step, and gives `evaluation-work-limit` once a pass spends `n`;
   an application that evaluates untrusted value contracts or values within a
-  deadline sets one.
+  deadline sets one. A cap places a work marker before every reference, which
+  wraps it in one more schema, so each reference a value's evaluation follows
+  nests one more schema evaluation, and within the same `stack_bytes` a
+  recursive value contract decides fewer levels, at worst about half as many:
+  an array nested through one subschema reference per level nests five schema
+  evaluations per level instead of three and decides 203 levels at the default
+  stack instead of 340.
 - `stack_bytes` (256 KiB) is the stack the thread that prepares and evaluates
   has. The evaluator sizes three bounds from it, each with a stack cost
   measured in release builds on Linux, macOS and Windows. A value is evaluated
   only if the schema evaluations it could nest fit 256 bytes of the stack each
   (1,024 at the default): preparation bounds the schema objects any evaluation
   path can hold as a function of the value's depth, and a value whose bound
-  exceeds that gives `evaluation-depth-limit` before it is evaluated. The
+  exceeds that gives `evaluation-depth-limit` before it is evaluated; with
+  `evaluation_steps` set, each reference followed adds one to that nesting. The
   bound is static: a deep value contract whose paths only some values follow refuses
   the others too. The library's `unevaluatedProperties` and `unevaluatedItems`
   validators recurse in ways that bound does not model, so a value contract holding

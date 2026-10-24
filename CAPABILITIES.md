@@ -134,7 +134,12 @@ the caller (`unevaluated-walk-limit`: at the default 26 `$ref`s, 8 levels of
 `allOf` inheritance, 7 through `then` or `dependentSchemas`). Each of these
 refusals states its arithmetic and names the setting to raise. Off unless an
 application sets them: an evaluation work cap (`evaluation_steps`), which bounds
-only time and without which time can grow exponentially with some schemas, and a
+only time and without which time can grow exponentially with some schemas (its
+marker before every reference nests one more schema evaluation for each
+reference a value's evaluation follows, so within the same `stack_bytes` a
+recursive value contract decides fewer levels, at worst about half as many:
+203 instead of 340 for an array nested through one subschema reference per
+level), and a
 cap on the schema resources one value contract may reach (`schema_resources`,
 `schemaResources` in TypeScript). That cap refuses a value contract after core projects
 it and before the evaluator copies its resources and the library compiles them,

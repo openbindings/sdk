@@ -36,7 +36,14 @@ pub struct Limits {
     /// or values within a deadline sets one. `Some(n)` charges one unit for each
     /// schema a reference enters and for each element, member and literal
     /// comparison step, and gives `evaluation-work-limit` once a pass spends
-    /// `n`; preparing with a cap compiles a slightly larger validator.
+    /// `n`. Preparing with a cap places a work marker before every reference,
+    /// which wraps it in one more schema, so the validator is slightly larger
+    /// and each reference a value's evaluation follows nests one more schema
+    /// evaluation. Within the same `stack_bytes`, a recursive value contract
+    /// therefore decides fewer levels with a cap, at worst about half as many:
+    /// an array nested through one subschema reference per level nests five
+    /// schema evaluations per level instead of three, so at the default stack
+    /// it decides 203 levels instead of 340.
     pub evaluation_steps: Option<usize>,
     /// Bytes of stack the thread that prepares value contracts and evaluates values
     /// has; default 256 KiB (262,144 bytes). Preparation and evaluation
@@ -49,7 +56,10 @@ pub struct Limits {
     ///   evaluating a value, the evaluator bounds that nesting from the
     ///   value contract's schemas and the value's depth; a value whose bound is
     ///   larger yields `evaluation-depth-limit` without being evaluated, and
-    ///   an explanation is built only within half that nesting.
+    ///   an explanation is built only within half that nesting. With
+    ///   `evaluation_steps` set, each reference followed nests one more
+    ///   schema evaluation, so the same stack admits fewer levels of a
+    ///   recursive value contract.
     /// - A value contract holding `unevaluatedProperties` or `unevaluatedItems`,
     ///   whose library validators recurse in ways the bound does not model, is
     ///   also guarded as it evaluates: a pass that uses more than half this

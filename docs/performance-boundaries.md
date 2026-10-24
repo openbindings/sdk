@@ -98,7 +98,13 @@ schema a reference enters and for each element, member and literal comparison
 step, and stops a pass with `evaluation-work-limit` once it spends the cap; a
 700,000-integer array against a referenced item schema spends two units per
 element (`evaluation_budgets`). Preparing with a cap places a marker keyword
-before every reference, so a capped value contract's validator is slightly larger.
+before every reference, wrapping each reference in one more schema, so a capped
+value contract's validator is slightly larger, and each reference a value's
+evaluation follows nests one more schema evaluation. The depth bound below counts
+those evaluations, so within the same stack a recursive value contract decides
+fewer levels with a cap, at worst about half as many: an array nested through one
+subschema reference per level nests five schema evaluations per level instead of
+three, and at the default stack decides 203 levels instead of 340.
 
 Evaluation depth is bounded before evaluation, from the stack the host gives
 (`Limits::stack_bytes`, 256 KiB by default). Preparation derives from the

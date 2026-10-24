@@ -170,7 +170,10 @@
   process with an operating-system memory limit. Two limits are the
   application's to set and are off by default: `Limits::evaluation_steps`,
   which bounds only time, caps each pass's work, without which time can grow
-  exponentially with some schemas, and `Limits::schema_resources` (TypeScript
+  exponentially with some schemas (its marker before every reference nests one
+  more schema evaluation for each reference followed, so within the same
+  `stack_bytes` a capped recursive value contract decides fewer levels, at worst
+  about half as many), and `Limits::schema_resources` (TypeScript
   `schemaResources`) caps the schema resources one value contract may reach, refusing
   with `LimitExceeded` and `schema-resource-limit` before the library compiles
   the value contract, which bounds that compilation's time and memory (a

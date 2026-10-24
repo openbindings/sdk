@@ -229,7 +229,10 @@ string, so no limit bounds pattern work. Replacing resources
 means preparing again. No evaluation work cap applies by default, and
 evaluation time can grow exponentially with some schemas (30 levels of `anyOf`
 that each name the next level twice take seconds); when validating untrusted value contracts or
-values within a deadline, pass `limits: { evaluationSteps: n }`. Preparation time and memory grow with the schema
+values within a deadline, pass `limits: { evaluationSteps: n }`. A cap nests one more schema evaluation for each
+reference a value's evaluation follows, so within the same `stackBytes` a recursive value contract decides fewer
+levels, at worst about half as many (203 instead of 340 for an array nested through one subschema reference per
+level). Preparation time and memory grow with the schema
 resources a value contract reaches (10,000 supplied resources prepare in about 0.2 s
 natively), and the SDK sets no cap by default. When preparing untrusted
 documents or resources, pass `limits: { schemaResources: n }`; a value contract
