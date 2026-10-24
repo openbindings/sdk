@@ -9,6 +9,7 @@ use jsonschema::{Keyword, ValidationError, ValidationOptions};
 use openbindings::*;
 use openbindings_internal_json::backend::{self, FlatJson, View};
 use openbindings_internal_json::numeric;
+use openbindings_internal_schema::{Definition, Field, Schema};
 use serde_json::{Map, Value};
 use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 
@@ -422,6 +423,125 @@ impl Operands {
         }
         Ok(Value::Object(root))
     }
+    /// The library's copy of a projected resource's definitions, as
+    /// [`Self::resource`] gives its `$defs` from the program's text: each
+    /// schema object's keywords in name order, each once, and the same
+    /// operands and literals in the same order.
+    pub(crate) fn definitions(
+        &mut self,
+        definitions: &[Definition<'_>],
+        literals: &[JsonValue],
+        limits: &Limits,
+        control: &dyn WorkControl,
+    ) -> Result<Map<String, Value>, NoVerdict> {
+        let mut defs = Map::new();
+        for definition in definitions {
+            control.check()?;
+            let value = match &definition.schema {
+                Schema::Boolean(value) => Value::Bool(*value),
+                Schema::Object(fields) => {
+                    let mut ordered: Vec<&(&str, Field<'_>)> = fields.iter().collect();
+                    ordered.sort_by(|a, b| a.0.cmp(b.0));
+                    let mut schema = Map::new();
+                    for (at, (key, field)) in ordered.iter().enumerate() {
+                        // The text holds the last of a repeated keyword.
+                        if ordered.get(at + 1).is_some_and(|next| next.0 == *key) {
+                            continue;
+                        }
+                        let Some(role) = role(key) else {
+                            continue;
+                        };
+                        let value = self.field(role, field, literals, limits)?;
+                        schema.insert((*key).into(), value);
+                    }
+                    Value::Object(schema)
+                }
+            };
+            defs.insert(definition.name.clone(), value);
+        }
+        Ok(defs)
+    }
+    // One projected keyword's value for the library, as `resource` reads it
+    // from the text the program writes for it.
+    fn field(
+        &mut self,
+        role: Role,
+        field: &Field<'_>,
+        literals: &[JsonValue],
+        limits: &Limits,
+    ) -> Result<Value, NoVerdict> {
+        // The nesting the program's text gives a subschema's reference, and
+        // the reference itself.
+        let reference = |address: &str| {
+            let mut object = Map::new();
+            object.insert("$ref".into(), Value::String(address.into()));
+            Value::Object(object)
+        };
+        let nested = |depth: usize, value: Value| {
+            if depth > limits.compile_json_depth {
+                Err(compile_json_depth())
+            } else {
+                Ok(value)
+            }
+        };
+        Ok(match (role, field) {
+            (Role::Number, Field::Copied(value)) => self.numbers.insert(value.text()),
+            (Role::Size, Field::Copied(value)) => Value::from(
+                openbindings_internal_json::decimal::Decimal::parse(value.text())
+                    .nonnegative_integer_u64_saturating()
+                    .expect("admitted size operand"),
+            ),
+            (Role::Const, Field::Literal(index)) => {
+                let value = literal(*index, literals)?.clone();
+                let id = self.literals.len();
+                self.literals.push(Literal::Value(value));
+                Value::from(id)
+            }
+            (Role::Enum, Field::Literal(index)) => {
+                let choices: Vec<_> = literal(*index, literals)?
+                    .view()
+                    .elements()
+                    .expect("admitted enum array")
+                    .map(|v| v.to_owned())
+                    .collect();
+                let id = self.literals.len();
+                self.literals.push(Literal::Choices(choices.into()));
+                Value::Array(vec![Value::from(id)])
+            }
+            (Role::Read | Role::DynamicAnchor, Field::Copied(value)) => read(*value, limits)?,
+            (Role::Read, Field::Reference(uri)) => Value::String(uri.clone()),
+            (Role::Read, Field::Single(address)) => nested(1, reference(address))?,
+            (Role::Read, Field::Map(children)) => {
+                let mut object = Map::new();
+                for (name, address) in children {
+                    object.insert((*name).into(), reference(address));
+                }
+                nested(if object.is_empty() { 1 } else { 2 }, Value::Object(object))?
+            }
+            (Role::Read, Field::List(children)) => nested(
+                if children.is_empty() { 1 } else { 2 },
+                Value::Array(children.iter().map(|address| reference(address)).collect()),
+            )?,
+            // A projection writes each keyword in one shape.
+            _ => return Err(crate::program_failure()),
+        })
+    }
+    /// Whether two conversions separated the same literals.
+    pub(crate) fn same_literals(&self, other: &Self) -> bool {
+        let texts = |operands: &Self| -> Vec<Vec<String>> {
+            operands
+                .literals
+                .iter()
+                .map(|literal| match literal {
+                    Literal::Value(value) => vec![value.text().to_owned()],
+                    Literal::Choices(choices) => {
+                        choices.iter().map(|c| c.text().to_owned()).collect()
+                    }
+                })
+                .collect()
+        };
+        texts(self) == texts(other)
+    }
     /// Whether a `pattern` keyword with this form already has a matcher, so
     /// another adds nothing.
     pub(crate) fn has_pattern(&self, form: &str) -> bool {
@@ -538,6 +658,24 @@ impl Operands {
         (options, patterns)
     }
 }
+/// The separated literal at `index`.
+fn literal(index: usize, literals: &[JsonValue]) -> Result<&JsonValue, NoVerdict> {
+    literals.get(index).ok_or_else(missing_literal)
+}
+fn missing_literal() -> NoVerdict {
+    no_verdict(
+        NoVerdictReason::EvaluatorFailure,
+        "program-literal",
+        "a projected literal is missing",
+    )
+}
+fn compile_json_depth() -> NoVerdict {
+    no_verdict(
+        NoVerdictReason::LimitExceeded,
+        "compile-json-depth",
+        "projected schema structure exceeds the dependency compilation-depth admission limit",
+    )
+}
 /// The separated literal a projected `const` or `enum` names by its index.
 pub(crate) fn separated<'a>(
     index: JsonRef<'_>,
@@ -547,21 +685,11 @@ pub(crate) fn separated<'a>(
         .number_text()
         .and_then(|index| index.parse::<usize>().ok())
         .and_then(|index| literals.get(index))
-        .ok_or_else(|| {
-            no_verdict(
-                NoVerdictReason::EvaluatorFailure,
-                "program-literal",
-                "a projected literal is missing",
-            )
-        })
+        .ok_or_else(missing_literal)
 }
 fn read(value: JsonRef<'_>, limits: &Limits) -> Result<Value, NoVerdict> {
     if !backend::depth_at_most(&value.to_owned(), limits.compile_json_depth) {
-        return Err(no_verdict(
-            NoVerdictReason::LimitExceeded,
-            "compile-json-depth",
-            "projected schema structure exceeds the dependency compilation-depth admission limit",
-        ));
+        return Err(compile_json_depth());
     }
     if let Some(value) = direct(value) {
         return Ok(value);

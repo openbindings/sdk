@@ -17,7 +17,9 @@ mod stack;
 mod unevaluated_walk;
 use openbindings::*;
 use openbindings_internal_json::backend::{self, FlatJson};
-use openbindings_internal_schema::{Program as EvaluationProgram, SchemaSpace, SuppliedSet};
+use openbindings_internal_schema::{
+    Program as EvaluationProgram, Projected, SchemaSpace, SuppliedSet,
+};
 use serde_json::Value;
 use std::{collections::HashMap, sync::Arc};
 
@@ -229,10 +231,9 @@ impl SchemaEvaluator for DefaultEvaluator {
         control: &dyn WorkControl,
     ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
         control.check()?;
-        let (mut space, mut entry) = space(request, Vec::new())?;
+        let (space, entry) = space(request, Vec::new())?;
         let cancellation = || control.is_cancelled();
-        let mut missing = Vec::new();
-        let unmapped = match space.program_unmapped(entry, &cancellation) {
+        let projected = match space.program_definitions(entry, &cancellation) {
             Err(failure)
                 if failure.reason
                     == openbindings_internal_schema::FailureReason::ResourceUnavailable =>
@@ -240,25 +241,19 @@ impl SchemaEvaluator for DefaultEvaluator {
                 // Stand in for every resource the references name but the
                 // request does not supply, and project again; a contract the
                 // stand-ins cannot complete refuses as it first did.
-                missing = missing::uris(&space);
+                let missing = missing::uris(&space);
                 if missing.is_empty() {
                     return Err(projection_failure(failure));
                 }
-                (space, entry) = self::space(request, missing::stand_ins(&missing).collect())?;
-                space
-                    .program_unmapped(entry, &cancellation)
-                    .map_err(|_| projection_failure(failure))?
+                let (space, entry) = self::space(request, missing::stand_ins(&missing).collect())?;
+                let projected = space
+                    .program_definitions(entry, &cancellation)
+                    .map_err(|_| projection_failure(failure))?;
+                return self.prepared(projected, &space, entry, missing, control);
             }
             other => other.map_err(projection_failure)?,
         };
-        Ok(Arc::new(self.compile(
-            unmapped.program,
-            unmapped.literals,
-            &unmapped.definitions,
-            &space,
-            missing,
-            control,
-        )?))
+        self.prepared(projected, &space, entry, Vec::new(), control)
     }
 }
 
@@ -294,23 +289,30 @@ mod resource_identity;
 #[path = "../tests/private/supplied_reuse.rs"]
 mod supplied_reuse;
 
+// The projected resources converted for the library, each definition's number
+// with its node in the space, and the entry's projected reference.
+struct Converted {
+    resources: Vec<bundle::Resource>,
+    numbers: HashMap<u32, usize>,
+    entry: String,
+}
 impl DefaultEvaluator {
-    // `literals` are the program's separated `const` and `enum` values, in an
-    // arena holding only them, which the program names by index; `nodes` are
-    // each projected resource's definitions' nodes in `space`, in `$defs` order.
-    fn compile(
+    fn prepared(
         &self,
-        program: EvaluationProgram,
-        literals: Vec<JsonValue>,
-        nodes: &[Vec<usize>],
+        projected: Projected<'_>,
         space: &SchemaSpace,
+        entry: usize,
         missing: Vec<String>,
         control: &dyn WorkControl,
-    ) -> Result<Compiled, NoVerdict> {
+    ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
+        let resources = match &projected {
+            Projected::Definitions(definitions) => definitions.resources.len(),
+            Projected::Program(unmapped) => unmapped.program.resources.len(),
+        };
         if self
             .limits
             .schema_resources
-            .is_some_and(|cap| program.resources.len() > cap)
+            .is_some_and(|cap| resources > cap)
         {
             return Err(no_verdict(
                 NoVerdictReason::LimitExceeded,
@@ -318,14 +320,108 @@ impl DefaultEvaluator {
                 "the value contract reaches more schema resources than the configured limit",
             ));
         }
-        let mut numbers = HashMap::new();
         let mut operands = operands::Operands::default();
+        let converted = match projected {
+            Projected::Definitions(definitions) => {
+                let converted =
+                    self.defined(&definitions, &mut operands, space, &missing, control)?;
+                // Debug builds check that the definitions convert as the
+                // program's text does.
+                if cfg!(debug_assertions) {
+                    self.check_conversion(&converted, &operands, space, entry, &missing);
+                }
+                converted
+            }
+            Projected::Program(unmapped) => self.parsed(
+                &unmapped.program,
+                &unmapped.literals,
+                &unmapped.definitions,
+                &mut operands,
+                space,
+                &missing,
+                control,
+            )?,
+        };
+        Ok(Arc::new(
+            self.compile(converted, operands, space, missing, control)?,
+        ))
+    }
+    // Convert a projection's definitions as `parsed` converts its text.
+    fn defined(
+        &self,
+        projected: &openbindings_internal_schema::Definitions<'_>,
+        operands: &mut operands::Operands,
+        space: &SchemaSpace,
+        missing: &[String],
+        control: &dyn WorkControl,
+    ) -> Result<Converted, NoVerdict> {
+        let mut numbers = HashMap::new();
+        let mut resources = Vec::with_capacity(projected.resources.len());
+        let mut entry = None;
+        for resource in &projected.resources {
+            control.check()?;
+            let mut definitions = operands.definitions(
+                &resource.definitions,
+                &projected.literals,
+                &self.limits,
+                control,
+            )?;
+            // Every schema projected from a stand-in is the missing keyword.
+            if !missing.is_empty() {
+                for definition in &resource.definitions {
+                    if let Some(at) = space
+                        .source_uri(definition.node)
+                        .and_then(|uri| missing.binary_search_by(|m| m.as_str().cmp(uri)).ok())
+                        && let Some(schema) = definitions.get_mut(&definition.name)
+                    {
+                        *schema = serde_json::json!({ missing::KEYWORD: at });
+                    }
+                }
+            }
+            for definition in &resource.definitions {
+                let number = definition
+                    .name
+                    .strip_prefix('n')
+                    .and_then(|n| n.parse::<u32>().ok())
+                    .ok_or_else(program_failure)?;
+                numbers.insert(number, definition.node);
+            }
+            if resource.uri == projected.entry_uri {
+                entry.clone_from(&resource.entry);
+            }
+            resources.push(bundle::Resource {
+                uri: resource.uri.clone(),
+                definitions,
+            });
+        }
+        Ok(Converted {
+            resources,
+            numbers,
+            entry: entry.ok_or_else(program_failure)?,
+        })
+    }
+    // Convert a projection the core wrote as text: `literals` are its
+    // separated `const` and `enum` values, in an arena holding only them,
+    // which the program names by index; `nodes` are each projected resource's
+    // definitions' nodes in `space`, in `$defs` order.
+    #[allow(clippy::too_many_arguments)]
+    fn parsed(
+        &self,
+        program: &EvaluationProgram,
+        literals: &[JsonValue],
+        nodes: &[Vec<usize>],
+        operands: &mut operands::Operands,
+        space: &SchemaSpace,
+        missing: &[String],
+        control: &dyn WorkControl,
+    ) -> Result<Converted, NoVerdict> {
+        let mut numbers = HashMap::new();
         let mut resources = Vec::with_capacity(program.resources.len());
         let mut entry = None;
         for (index, resource) in program.resources.iter().enumerate() {
             control.check()?;
             let mut root =
-                operands.resource(&resource.document, &literals, &self.limits, control)?;
+                operands.resource(&resource.document, literals, &self.limits, control)?;
             let Some(Value::Object(mut definitions)) =
                 root.as_object_mut().and_then(|r| r.remove("$defs"))
             else {
@@ -357,7 +453,58 @@ impl DefaultEvaluator {
                 definitions,
             });
         }
-        let entry = entry.ok_or_else(program_failure)?;
+        Ok(Converted {
+            resources,
+            numbers,
+            entry: entry.ok_or_else(program_failure)?,
+        })
+    }
+    // That the text projection, converted, gives what the definitions gave.
+    fn check_conversion(
+        &self,
+        converted: &Converted,
+        operands: &operands::Operands,
+        space: &SchemaSpace,
+        entry: usize,
+        missing: &[String],
+    ) {
+        let unmapped = space
+            .program_unmapped(entry, &|| false)
+            .expect("the text projection admits what the definitions admit");
+        let mut text_operands = operands::Operands::default();
+        let text = self
+            .parsed(
+                &unmapped.program,
+                &unmapped.literals,
+                &unmapped.definitions,
+                &mut text_operands,
+                space,
+                missing,
+                &std::sync::atomic::AtomicBool::new(false),
+            )
+            .expect("the text converts as the definitions do");
+        assert_eq!(text.entry, converted.entry);
+        assert_eq!(text.numbers, converted.numbers);
+        assert_eq!(text.resources.len(), converted.resources.len());
+        for (text, converted) in text.resources.iter().zip(&converted.resources) {
+            assert_eq!(text.uri, converted.uri);
+            assert_eq!(text.definitions, converted.definitions);
+        }
+        assert!(text_operands.same_literals(operands));
+    }
+    fn compile(
+        &self,
+        converted: Converted,
+        mut operands: operands::Operands,
+        space: &SchemaSpace,
+        missing: Vec<String>,
+        control: &dyn WorkControl,
+    ) -> Result<Compiled, NoVerdict> {
+        let Converted {
+            mut resources,
+            numbers,
+            entry,
+        } = converted;
         // Read every pattern while the schemas still have their original
         // locations, counting the forms kept for them together.
         let mut kept = Kept::default();
