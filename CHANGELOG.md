@@ -265,6 +265,11 @@
   closure of Linux (GNU), macOS and Windows (MSVC) on x86_64 and aarch64, which
   the inventory's `platforms` lists, so the Linux and Windows target-specific
   dependencies are attributed too.
+- The bundled JSON Schema 2020-12 meta-schemas carry their authors' terms, the
+  BSD 3-Clause License or the Academic Free License 3.0, as
+  `schemas/LICENSE-json-schema-spec` in the internal schema crate and
+  `licenses/JSON-SCHEMA-SPEC-LICENSE` in the npm package, beside the Apache-2.0
+  license of the Go package the copies came from.
 - Runnable first-use and lifecycle examples, legacy Go and TypeScript migration
   guidance, API reference documentation and reproducible performance measurements.
 

@@ -10,8 +10,11 @@ c5c6076fcf6bcf30a428c70c00bb4f3cbf6447df; it is not a source-identical port.
 Third-party runtime/build dependency licenses and notices are reproduced in
 THIRD-PARTY-NOTICES.txt and catalogued in DEPENDENCIES.json. The TypeScript
 archive also includes the Rust standard library's attribution under licenses/.
-The embedded JSON Schema 2020-12 meta-schema copies came from
-https://github.com/santhosh-tekuri/jsonschema/tree/v6.0.3
+The embedded JSON Schema 2020-12 meta-schemas are the work of the JSON Schema
+Specification Authors (https://github.com/json-schema-org/json-schema-spec),
+licensed under the BSD 3-Clause License or the Academic Free License 3.0; that
+repository's license text is retained under schemas/ or licenses/. The copies
+came from https://github.com/santhosh-tekuri/jsonschema/tree/v6.0.3
 and retain that package's Apache-2.0 license under schemas/ or licenses/.
 The evaluator test-support fixture package preserves its JSON Schema Test Suite
 MIT notice and Go SDK license beside the imported fixtures.
