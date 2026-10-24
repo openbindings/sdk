@@ -13,7 +13,7 @@ this TypeScript facade; the facade exposes document operations and HTTP discover
 This `0.2.0-alpha.1` package is unpublished. Install a locally built archive;
 registry releases use the legacy API. Build the archive from a checkout of this
 repository with Rust 1.99.0 and its `wasm32-unknown-unknown` target,
-wasm-bindgen-cli 0.2.129 and Node 22 ([source replay](https://github.com/openbindings/sdk/blob/main/docs/REPLAY.md)
+wasm-bindgen-cli 0.2.129 and Node 22.23.0 or later ([source replay](https://github.com/openbindings/sdk/blob/main/docs/REPLAY.md)
 lists the toolchain):
 
 ```sh
@@ -113,6 +113,11 @@ owners but does not promise shrinking process memory or Wasm capacity.
 
 ## Initialization
 
+The package runs on Node `^22.23.0 || ^24.17.0 || >=26.2.0`, the first releases whose bundled
+undici rejects a chunked body cut short as its connection closes
+([nodejs/undici#5273](https://github.com/nodejs/undici/pull/5273)) instead of handing `discover` the prefix
+as a complete body.
+
 Call and await `initialize()` before using the SDK. In Node ESM it reads the
 installed package's Wasm asset independently of the working directory. Browser
 modules load the asset relative to the package module. Hosts with compiled Wasm
@@ -208,7 +213,7 @@ no-verdict naming it. Preparation refuses a value contract in which an
 reach a missing resource, a reference to a fragment of a missing resource, or
 a reference that identifies no schema.
 As conservative preparation, it also refuses a value contract that reaches a pattern
-invalid as an ECMA-262 regular expression with Unicode semantics
+invalid as an ECMA-262 11th edition (ES2020) regular expression with Unicode semantics, the dialect JSON Schema 2020-12 cites
 (`schema-pattern-compilation`), or a schema that could apply again without
 consuming the instance, such as one whose `$ref` names itself (`in-place-cycle`).
 Retain a prepared value contract for repeated validation. Ready

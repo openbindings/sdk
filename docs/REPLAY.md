@@ -3,7 +3,9 @@
 Start with a clean clone or extracted source archive. Rust 1.88 is the MSRV; Rust 1.99.0 is the
 qualification compiler; install rustfmt, Clippy and wasm32-unknown-unknown for that
 toolchain. Install wasm-bindgen-cli 0.2.129 with its locked dependencies. Use Node
-22.19.0/npm 10.9.3 and Python 3.13 or later. First acquisition needs public network
+22.23.0/npm 10.9.8, the first Node 22 release whose bundled undici rejects a chunked
+body cut short as its connection closes ([nodejs/undici#5273](https://github.com/nodejs/undici/pull/5273)), and Python
+3.13 or later. First acquisition needs public network
 access. Subsequent Cargo commands can use the resulting cache offline.
 
 For a source archive, export its tracked-file inventory from the same checkout

@@ -91,9 +91,12 @@ schema. The [evaluator guide](docs/schema-evaluators.md) explains integration.
 The optional default evaluator supports JSON Schema 2020-12 with exact decimal
 comparison and explicit immutable resources, composed over the unmodified
 jsonschema 0.58.6 library. It performs no reference acquisition. `format`
-remains an annotation. Patterns are read as ECMAScript `u`-mode patterns,
-the word boundary `\b` included, and translated for a linear-time engine; a
+remains an annotation. Patterns are read in the dialect JSON Schema 2020-12
+cites, ECMA-262 11th edition (ES2020) section 21.2.1 with Unicode semantics, the
+word boundary `\b` included, and translated for a linear-time engine; a
 differential against V8 checks the translation through both pattern keywords.
+Syntax later editions added, such as ES2025's modifiers `(?i:a)` and duplicate
+named groups, is invalid in that edition and refused.
 One that needs a backtracking engine (lookaround or backreferences), applies
 a Unicode property escape or holds the non-word boundary `\B` produces
 no-verdict, as do other unsupported capabilities. A `$dynamicRef` resolves through the dynamic scope
@@ -175,7 +178,7 @@ or `unevaluatedItems` keyword's annotation sources reach a stand-in, since the
 library reads those sources rather than evaluating them, and a reference to a
 fragment of a missing resource or one that identifies no schema.
 As conservative preparation, it also refuses a value contract that reaches a pattern
-invalid as an ECMA-262 regular expression with Unicode semantics
+invalid as an ECMA-262 11th edition (ES2020) regular expression with Unicode semantics, the dialect JSON Schema 2020-12 cites
 (`schema-pattern-compilation`), or a schema that could apply again without
 consuming the instance, such as one whose `$ref` names itself (`in-place-cycle`). An established
 undefined result has its own `Undefined` outcome, separate from no-verdict,

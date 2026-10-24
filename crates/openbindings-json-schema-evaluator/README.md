@@ -90,7 +90,7 @@ supplied, or a reference that identifies no schema (an absent pointer target or
 plain-name anchor, or a malformed fragment), with a `NoVerdict` that names the
 schema holding the reference.
 As conservative preparation, it also refuses a value contract that reaches a pattern
-invalid as an ECMA-262 regular expression with Unicode semantics
+invalid as an ECMA-262 11th edition (ES2020) regular expression with Unicode semantics, the dialect JSON Schema 2020-12 cites
 (`schema-pattern-compilation`), or a schema that could apply again without
 consuming the instance, such as one whose `$ref` names itself (`in-place-cycle`). The default evaluator never returns
 `ValueOutcome::Undefined`, which custom evaluators may establish. A prepared
@@ -257,8 +257,11 @@ as Unicode text, such as `minLength`, `maxLength`, `pattern`, `properties`,
 `patternProperties` or `propertyNames`, gives no verdict
 (`UnsupportedCapability`, `lone-surrogate-instance`) when it reaches one.
 
-Patterns are ECMA-262 patterns with Unicode semantics, matched by a linear-time
-engine, so a match takes time linear in the string. The word boundary `\b`
+Patterns are read in the dialect JSON Schema 2020-12 cites, ECMA-262 11th
+edition (ES2020) section 21.2.1 with Unicode semantics; syntax later editions
+added, such as ES2025's modifiers `(?i:a)` and duplicate named groups, is
+invalid there and refuses preparation (`schema-pattern-compilation`). They are
+matched by a linear-time engine, so a match takes time linear in the string. The word boundary `\b`
 matches against ECMA-262's ASCII word characters. A pattern that needs a
 backtracking engine (lookaround or a backreference), has a Unicode property
 escape, or holds the non-word boundary `\B` (which the engine's `is_match` can
