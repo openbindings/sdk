@@ -183,7 +183,11 @@
   with `LimitExceeded` and `schema-resource-limit` before the library compiles
   the value contract, which bounds that compilation's time and memory (a
   99,990-resource `$id` chain: 11.5 s and 723 MB without a cap, 1.2 s and
-  502 MB refused at 1,000). Exact `multipleOf` divides within a fixed
+  502 MB refused at 1,000). Whatever `Limits` sets, preparation refuses a
+  reached schema nested more than 256 schemas below the schema position or
+  supplied resource root that holds it (`schema-depth-limit`), and reference
+  inspection skips the references nested past that depth (`schema-depth`).
+  Exact `multipleOf` divides within a fixed
   arithmetic bound: past 4,096 significant digits or an exponent of ±20,000 in
   the value or the divisor, a division the answer needs gives no verdict
   (`numeric-arithmetic-limit`). A keyword that reads as text a string or

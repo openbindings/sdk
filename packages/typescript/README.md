@@ -199,7 +199,9 @@ past the default 1,000,000 nodes comes back undetermined, and `validateDocument`
 with a larger `maxNodes` admits it. `Document.create()`, `ExactJson.from`,
 `validateJson` and a prepared value contract's `validate` and `explain` of an ordinary
 value use the defaults. Value-contract preparation keeps fixed bounds of its own,
-which no setting raises. Every admission and edit limit refusal names how to
+which no setting raises, such as its 100,000 schema positions and a reached schema
+nested at most 256 schemas below the schema position or resource root holding it
+(`schema-depth-limit`). Every admission and edit limit refusal names how to
 admit more, including the route for calls that take no limits. To check a value past the
 defaults, parse it with `parseJson` and larger limits and pass the `ExactJson`
 to `validate`.

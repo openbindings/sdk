@@ -144,8 +144,9 @@ resources:
   threads of 192 KiB, 256 KiB and 1 MiB with the evaluator sized for each: a
   larger stack admits deeper values of every shape, and a smaller one refuses
   them sooner. The other recursion preparation does is bounded by the
-  input-shaped limits below and core's admission limits, whose defaults fit
-  the default stack; a host giving a smaller stack lowers those too.
+  input-shaped limits below, core's admission limits and core's fixed schema
+  depth (below), which fit the default stack; a host giving a smaller stack
+  lowers the configurable ones too.
 - `compile_json_depth` (512) bounds the projected JSON nesting compiled.
 - `pattern_bytes` (1 MiB) bounds each pattern, and its form for the
   linear-time engine, which spells each set out (a `\S` takes 191
@@ -215,7 +216,13 @@ resources:
 Core's document admission limits bound the bytes and nodes of every document
 and resource, and its projection refuses a value contract reaching more than 100,000
 schema positions (`schema-node-limit`); that bound is core's, shared with its
-own fixed checks. The projection holds the document's reached schemas, its
+own fixed checks. The projection also refuses a value contract reaching a schema
+nested more than 256 schemas below the schema position (a `schemas` entry or an
+operation's `input` or `output`) or supplied resource root that holds it
+(`schema-depth-limit`). It counts schemas, not JSON containers, so 256 levels
+of `properties` nest 513 containers. No `Limits` field raises it, and core's
+reference inspection skips the references of schemas nested past the same
+depth (`schema-depth`). The projection holds the document's reached schemas, its
 supplied resources and packaged meta-schemas, so it keeps fixed bounds of its
 own, whatever limits the document was admitted under: it stops once its text,
 `const` and `enum` literals included, passes 64 MiB (`program-byte-limit`), and

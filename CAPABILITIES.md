@@ -104,7 +104,9 @@ of the path that reaches it, also through `$ref` cycles.
 
 The evaluator bounds what the SDK itself reads, writes and recurses through; it
 does not estimate the JSON Schema library's compiled memory. On by default:
-core's document admission limits and its 100,000 schema positions per value contract;
+core's document admission limits, its 100,000 schema positions per value contract
+and its fixed depth of 256 nested schemas below a schema position or supplied
+resource root (`schema-depth-limit`);
 the projected JSON nesting compiled (`compile_json_depth`, 512,
 `compileJsonDepth` in TypeScript);
 the stack the host gives (`stack_bytes`, 256 KiB, `stackBytes` in TypeScript),
