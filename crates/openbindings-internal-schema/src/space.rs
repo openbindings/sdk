@@ -1060,8 +1060,8 @@ impl SchemaSpace {
     // The generated address of a node's definition.
     fn address(&self, namespace: &str, node: usize) -> String {
         format!(
-            "{}#/$defs/n{}",
-            self.resource_uri(namespace, self.node(node).resource),
+            "{namespace}r{}#/$defs/n{}",
+            self.resource_number(self.node(node).resource),
             self.node_number(node)
         )
     }

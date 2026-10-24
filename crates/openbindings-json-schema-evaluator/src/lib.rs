@@ -549,7 +549,7 @@ impl DefaultEvaluator {
             bundle::Refusal::Budget(growth) => specialization_limit(growth),
             bundle::Refusal::Shape => program_failure(),
         })?;
-        if let Some(at) = missing::behind_unevaluated(&bundle) {
+        if guarded && let Some(at) = missing::behind_unevaluated(&bundle) {
             let mut detail = no_verdict(
                 NoVerdictReason::ResourceUnavailable,
                 "resource-unavailable",
@@ -563,7 +563,9 @@ impl DefaultEvaluator {
             });
             return Err(detail);
         }
-        unevaluated_walk::apply(&mut bundle);
+        if guarded {
+            unevaluated_walk::apply(&mut bundle);
+        }
         let host = stack::Stack {
             bytes: self.limits.stack_bytes,
         };
@@ -578,15 +580,21 @@ impl DefaultEvaluator {
             })?;
         control.check()?;
         let locations = explain::Locations::new(space, &numbers, &bundle);
-        let holders: Vec<bool> = bundle
-            .schemas
-            .iter()
-            .map(|schema| {
-                schema.get("unevaluatedProperties").is_some()
-                    || schema.get("unevaluatedItems").is_some()
-            })
-            .collect();
-        if let Some((length, holder)) = depth::longest_walk(&bundle.definitions, &holders)
+        // Without an unevaluated keyword, no definition holds a walk.
+        let holders: Vec<bool> = if guarded {
+            bundle
+                .schemas
+                .iter()
+                .map(|schema| {
+                    schema.get("unevaluatedProperties").is_some()
+                        || schema.get("unevaluatedItems").is_some()
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
+        if guarded
+            && let Some((length, holder)) = depth::longest_walk(&bundle.definitions, &holders)
             && length > host.walk()
         {
             let mut detail = host.walk_too_heavy(length);
@@ -608,7 +616,12 @@ impl DefaultEvaluator {
         }
         let document = bundle.document();
         let first = memory.first();
-        let (options, patterns) = operands.apply(jsonschema::options_for::<FlatJson>(), memory);
+        let (options, patterns) = operands.apply(
+            jsonschema::options_for::<FlatJson>(),
+            memory,
+            self.limits.evaluation_steps.is_some(),
+            !missing.is_empty(),
+        );
         let options = options
             .with_draft(jsonschema::Draft::Draft202012)
             .with_retriever(NoRetrieval)

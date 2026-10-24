@@ -18,6 +18,10 @@ pub(crate) struct Operands {
     // Each compiled `const` and `enum` keyword's literal, by the id it holds.
     literals: Vec<Literal>,
     numbers: numeric::Operands,
+    // Which numeric keywords, by their place in `numeric::KEYWORDS`, hold an
+    // operand, so the validator registers only the SDK keywords the value
+    // contract holds.
+    numeric: [bool; numeric::KEYWORDS.len()],
     // Each distinct `pattern` matcher, in the order preparation reads them; a
     // `pattern` keyword holds its index.
     patterns: Vec<Matcher>,
@@ -375,7 +379,7 @@ impl Operands {
                             for field in member.value.members().expect("admitted schema object") {
                                 let key = field.name.as_str().expect("admitted scalar name");
                                 let value = match role(key) {
-                                    Some(Role::Number) => self.numbers.insert(field.value.text()),
+                                    Some(Role::Number) => self.number(key, field.value.text()),
                                     // No finite JSON collection can reach u64::MAX elements.
                                     // Preserve contains annotations by keeping its native keyword;
                                     // normalize every size operand without exponent expansion.
@@ -451,7 +455,7 @@ impl Operands {
                         let Some(role) = role(key) else {
                             continue;
                         };
-                        let value = self.field(role, field, literals, limits)?;
+                        let value = self.field(key, role, field, literals, limits)?;
                         schema.insert((*key).into(), value);
                     }
                     Value::Object(schema)
@@ -465,6 +469,7 @@ impl Operands {
     // from the text the program writes for it.
     fn field(
         &mut self,
+        key: &str,
         role: Role,
         field: &Field<'_>,
         literals: &[JsonValue],
@@ -485,7 +490,7 @@ impl Operands {
             }
         };
         Ok(match (role, field) {
-            (Role::Number, Field::Copied(value)) => self.numbers.insert(value.text()),
+            (Role::Number, Field::Copied(value)) => self.number(key, value.text()),
             (Role::Size, Field::Copied(value)) => Value::from(
                 openbindings_internal_json::decimal::Decimal::parse(value.text())
                     .nonnegative_integer_u64_saturating()
@@ -525,6 +530,13 @@ impl Operands {
             // A projection writes each keyword in one shape.
             _ => return Err(crate::program_failure()),
         })
+    }
+    // A numeric keyword's operand: its handle.
+    fn number(&mut self, keyword: &str, token: &str) -> Value {
+        if let Some(at) = numeric::KEYWORDS.iter().position(|k| *k == keyword) {
+            self.numeric[at] = true;
+        }
+        self.numbers.insert(token)
     }
     /// Whether two conversions separated the same literals.
     pub(crate) fn same_literals(&self, other: &Self) -> bool {
@@ -587,21 +599,33 @@ impl Operands {
     }
     /// The library's options with the SDK's keywords, and the `pattern`
     /// keyword's matchers, which compile within the value contract's `memory`.
+    /// Only the keywords the bundle can hold are registered: the work marker
+    /// with `markers`, the missing keyword with `missing`, and the literal,
+    /// numeric and `pattern` keywords this value contract's schemas hold. The
+    /// library compiles a keyword the bundle does not hold the same whether
+    /// it is registered or not: it never meets it.
     pub(crate) fn apply<R>(
         self,
         mut options: ValidationOptions<'_, R, FlatJson>,
         memory: Memory,
+        markers: bool,
+        missing: bool,
     ) -> (ValidationOptions<'_, R, FlatJson>, Arc<Patterns>) {
-        options = options.with_keyword(crate::bundle::MARKER, |_, _, _| Ok(Box::new(Work)));
-        options = options.with_keyword(crate::missing::KEYWORD, |_, value, _| {
-            let at = value
-                .as_u64()
-                .and_then(|at| u32::try_from(at).ok())
-                .ok_or_else(|| ValidationError::custom("invalid internal stand-in index"))?;
-            Ok(Box::new(Missing(at)))
-        });
+        if markers {
+            options = options.with_keyword(crate::bundle::MARKER, |_, _, _| Ok(Box::new(Work)));
+        }
+        if missing {
+            options = options.with_keyword(crate::missing::KEYWORD, |_, value, _| {
+                let at = value
+                    .as_u64()
+                    .and_then(|at| u32::try_from(at).ok())
+                    .ok_or_else(|| ValidationError::custom("invalid internal stand-in index"))?;
+                Ok(Box::new(Missing(at)))
+            });
+        }
         // Only the matchers outlive preparation; their index by form does not.
         drop(self.indices);
+        let matched = !self.patterns.is_empty();
         let patterns = Arc::new(Patterns {
             matchers: self.patterns,
             memory,
@@ -609,23 +633,29 @@ impl Operands {
             sites: Mutex::new(Vec::new()),
         });
         let keyword = patterns.clone();
-        options = options.with_keyword("pattern", move |_, value, at| {
-            let index = value
-                .as_str()
-                .and_then(|key| key.parse::<usize>().ok())
-                .filter(|&index| index < keyword.matchers.len())
-                .ok_or_else(|| ValidationError::custom("invalid internal pattern reference"))?;
-            // The library compiles each keyword as it builds; a contract built
-            // again records its keywords again.
-            let mut sites = keyword.sites.lock().unwrap_or_else(PoisonError::into_inner);
-            let site = u32::try_from(sites.len())
-                .map_err(|_| ValidationError::custom("too many internal pattern sites"))?;
-            sites.push(at);
-            drop(sites);
-            Ok(Box::new(Pattern(keyword.clone(), index, site)))
-        });
+        if matched {
+            options = options.with_keyword("pattern", move |_, value, at| {
+                let index = value
+                    .as_str()
+                    .and_then(|key| key.parse::<usize>().ok())
+                    .filter(|&index| index < keyword.matchers.len())
+                    .ok_or_else(|| ValidationError::custom("invalid internal pattern reference"))?;
+                // The library compiles each keyword as it builds; a contract built
+                // again records its keywords again.
+                let mut sites = keyword.sites.lock().unwrap_or_else(PoisonError::into_inner);
+                let site = u32::try_from(sites.len())
+                    .map_err(|_| ValidationError::custom("too many internal pattern sites"))?;
+                sites.push(at);
+                drop(sites);
+                Ok(Box::new(Pattern(keyword.clone(), index, site)))
+            });
+        }
         let numbers = Arc::new(self.numbers);
-        for keyword in numeric::KEYWORDS {
+        for (keyword, _) in numeric::KEYWORDS
+            .into_iter()
+            .zip(self.numeric)
+            .filter(|&(_, held)| held)
+        {
             let numbers = numbers.clone();
             options = options.with_keyword(keyword, move |_, value, _| {
                 if value.as_number().is_none() {
@@ -637,8 +667,14 @@ impl Operands {
                 Ok(Box::new(ExactBound(bound)))
             });
         }
+        let held = |choices: bool| {
+            self.literals
+                .iter()
+                .any(|literal| matches!(literal, Literal::Choices(_)) == choices)
+        };
+        let keywords = [("const", held(false)), ("enum", held(true))];
         let literals = Arc::new(self.literals);
-        for keyword in ["const", "enum"] {
+        for (keyword, _) in keywords.into_iter().filter(|&(_, held)| held) {
             let literals = literals.clone();
             options = options.with_keyword(keyword, move |_, value, _| {
                 let id = if keyword == "enum" {
