@@ -91,6 +91,11 @@
   `InputError`'s `Display` and TypeScript's `InputFailure.message` read, for
   example, `expected a colon after the member name at byte 5`. Codes, kinds
   and byte offsets are unchanged.
+- `ValueConversionError`'s `Display` states why `JsonValue::from_serializable`
+  refused a value, naming the byte, node or depth limit it exceeds, as in
+  `JSON value conversion failed: the value nests containers more than 128 levels
+  deep, the most this conversion admits`; when the value's own serializer
+  failed, it says so and leaves the serializer's text to `message()`.
 - OBI-10 findings name the meta-schema keyword whose value fails and point at
   that value (`the value of the type keyword does not satisfy the JSON Schema
   2020-12 meta-schema`), one finding for each failing keyword; a schema that is
