@@ -47,7 +47,7 @@ pub struct Limits {
     /// - A value is evaluated only if the schema evaluations it could nest
     ///   fit 256 bytes of this stack each (1,024 at the default). Before
     ///   evaluating a value, the evaluator bounds that nesting from the
-    ///   contract's schemas and the value's depth; a value whose bound is
+    ///   value contract's schemas and the value's depth; a value whose bound is
     ///   larger yields `evaluation-depth-limit` without being evaluated, and
     ///   an explanation is built only within half that nesting.
     /// - A value contract holding `unevaluatedProperties` or `unevaluatedItems`,
@@ -121,7 +121,7 @@ pub struct Limits {
     /// for each object's map, 56 for each member, 32 for each array element
     /// and a byte for each byte of its strings and member names) and each
     /// context (64 bytes and 8 for each dynamic-scope entry), and refuses a
-    /// contract whose copies and contexts would pass the projected schemas'
+    /// value contract whose copies and contexts would pass the projected schemas'
     /// own estimate by more than this with `program-specialization-limit`,
     /// whose message states the arithmetic. The projected schemas themselves
     /// are bounded by core's admission limits and its 100,000 schema positions

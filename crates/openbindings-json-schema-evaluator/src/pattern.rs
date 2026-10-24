@@ -65,7 +65,7 @@ pub(crate) enum Shortfall {
     /// allowances for, `most`.
     Count { most: usize, total: usize },
     /// One pattern needs a larger compiled size than it is given. Each of the
-    /// contract's `patterns` compiled patterns holds [`FIRST`] for its form
+    /// value contract's `patterns` compiled patterns holds [`FIRST`] for its form
     /// and `cache` for its search cache, which leaves `left` of the `total`;
     /// those that need more share it, and those of them that need less than
     /// an equal part keep only what they need, `kept` in all. The `sharing`
