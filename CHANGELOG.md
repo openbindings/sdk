@@ -27,9 +27,9 @@
   encoded as supported exact JSON refuses with `EditError::Serialization`
   (`serialization`). Validation with original source locations, bounded
   findings and per-rule evidence.
-- The default document byte limit is 32 MiB (33,554,432 bytes), down from 64 MiB,
-  because validation memory grows with the document and the protective default
-  should fit a typical container, and the admission limits are a setting at the
+- The default document byte limit is 32 MiB (33,554,432 bytes), so that
+  validation, whose memory grows with the document, fits a typical container
+  under the protective default, and the admission limits are a setting at the
   calls that admit documents and values: `JsonLimits` for
   `validate_document_with_limits`, `Document::parse_with_limits` and
   `JsonValue::parse_with_limits`, and `limits: { maxBytes, maxNodes, maxDepth }`
@@ -42,7 +42,7 @@
   A document keeps the limits it was admitted
   under (`Document::limits`, TypeScript `limits`), and its edits and typed
   setters apply them to the edited document, the same way in both languages.
-  Value-contract preparation keeps its own fixed bounds, as before. Discovery
+  Value-contract preparation keeps its own fixed bounds. Discovery
   validates a body with its byte limit raised to the configured body bound and
   the default 1,000,000 nodes. Every admission and edit limit refusal names how
   to admit more in both languages, including the route for calls that take no
@@ -56,22 +56,19 @@
   largest allocates 256.0 MiB beyond the caller's input, counting each
   reallocation as holding its old and new blocks at once.
 - The text compared identifiers copy out of `$id`s whose dot segments separate
-  their segments is kept in blocks that never move, instead of one buffer that
-  doubled: each new block is as large as the text before it, but no larger
-  than the identifiers still to come can copy. Text once kept is never copied
-  again, and growing it leaves no old buffer behind, which WebAssembly's
-  linear memory, unable to release it, kept resident. The probe's largest
-  document fell from 272.2 to 256.0 MiB (from 412.2 to 364.9 MiB at a 64 MiB
-  limit); through the TypeScript package its validation adds 278.5 MiB to
-  Node's resident memory, from 317.0 MiB.
+  their segments is kept in blocks that never move: each new block is as large
+  as the text before it, but no larger than the identifiers still to come can
+  copy. Text once kept is never copied again, and growing it leaves no old
+  buffer behind for WebAssembly's linear memory, which cannot release one, to
+  keep resident.
 - TypeScript's `validateDocument`, `Document.parse`, `parseJson` and
-  `validateJson` encode text input straight into module memory instead of
-  first into a JavaScript copy of its UTF-8, so text crosses into the module
-  once, as bytes do. Results are unchanged.
+  `validateJson` encode text input straight into module memory, with no
+  JavaScript copy of its UTF-8, so text crosses into the module once, as bytes
+  do.
 - TypeScript checks text for unpaired UTF-16 with the host's
   `String.prototype.isWellFormed`, which Node 22, Chromium, WebKit and workerd
   provide, and scans the text itself only on a host without it; both refuse
-  the same texts. Checking 32 MiB of text no longer takes a 65 ms scan.
+  the same texts.
 - Owned input: `validate_document_owned(Vec<u8>)`,
   `validate_document_owned_with_limits(Vec<u8>, JsonLimits)`,
   `Document::parse_owned(Vec<u8>)`, `Document::parse_owned_with_limits(Vec<u8>,
@@ -85,12 +82,11 @@
   copy of their input. The diagnostic memory probe's largest document allocates 224.3 MiB
   beyond a handed-over buffer, against 256.0 MiB beyond a borrowed one;
   through the TypeScript package its validation adds 247.2 MiB to Node's
-  resident memory, from 278.5 MiB (351.5 MiB at a 64 MiB limit, from
-  416.5 MiB).
+  resident memory (351.5 MiB at a 64 MiB limit).
 - Exact-input refusals say what the parser expected or found and the byte where:
   `InputError`'s `Display` and TypeScript's `InputFailure.message` read, for
-  example, `expected a colon after the member name at byte 5`. Codes, kinds
-  and byte offsets are unchanged.
+  example, `expected a colon after the member name at byte 5`, beside the
+  refusal's code, kind and byte offset.
 - `ValueConversionError`'s `Display` states why `JsonValue::from_serializable`
   refused a value, naming the byte, node or depth limit it exceeds, as in
   `JSON value conversion failed: the value nests containers more than 128 levels
@@ -100,7 +96,7 @@
   that value (`the value of the type keyword does not satisfy the JSON Schema
   2020-12 meta-schema`), one finding for each failing keyword; a schema that is
   neither an object nor a boolean is reported at the schema (`a schema must be
-  a JSON object or boolean`). Rule evidence is unchanged.
+  a JSON object or boolean`).
 - Document validation's fixed checks (OBI-02, OBI-10) and reference inspection use
   the unmodified jsonschema 0.58.6 library with its default pattern engine, which
   matches every fixed pattern on a finite automaton, exactly as ECMAScript does.
@@ -156,7 +152,7 @@
   small patterns elsewhere change a large one's outcome only through their
   48 KiB each, no outcome depends on the order strings reach the patterns, a
   value contract compiling more than 1,024 patterns refuses before compiling any, 40
-  counted-repetition names that peaked at 1.1 GB refuse in about 0.2 s, and a
+  counted-repetition names refuse in about 0.2 s, and a
   `pattern` value compiled when a string first reaches it stays within what it
   is given; the memory dynamic specialization adds to a value contract's program,
   estimated for the SDK's own copies and dynamic contexts
@@ -233,16 +229,13 @@
   invokes as it is, and `bind(operation, source)` gives the author's core binding;
   its `BoundaryError` converts into an `InspectionError` that keeps the boundary
   code and location. A synthesis provider's typed-part edit over the byte budget
-  now refuses as `openbindings.synthesis.byte-limit` instead of
-  `openbindings.synthesis.authoring`.
+  refuses as `openbindings.synthesis.byte-limit`.
 - A TypeScript API with bundled Wasm, exact-value editing, disposable owners and
   Fetch discovery for qualified browser, Node ESM and Worker hosts, whose
   declarations import none of the generated Wasm bindings. Its names
   follow Rust's where the concept is the same: `Document.validate()` returns a
   `DocumentValidation`, whose conformant branch carries the proof, and
-  `validateDocument` returns the plain `DocumentReport`. `DocumentValidation` thus
-  changes meaning: it now names the validation carrying the proof (formerly
-  `ValidationResult`), while the plain report it named before is `DocumentReport`.
+  `validateDocument` returns the plain `DocumentReport`.
 - TypeScript `initialize()` compiles its input and refuses, before instantiating
   it, a WebAssembly module whose imports and exports are not this package's
   (`wasm-initialization`, "the supplied module is not this package's"), so every
