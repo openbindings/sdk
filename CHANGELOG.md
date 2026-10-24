@@ -233,6 +233,12 @@
   `validateDocument` returns the plain `DocumentReport`. `DocumentValidation` thus
   changes meaning: it now names the validation carrying the proof (formerly
   `ValidationResult`), while the plain report it named before is `DocumentReport`.
+- TypeScript `initialize()` compiles its input and refuses, before instantiating
+  it, a WebAssembly module whose imports and exports are not this package's
+  (`wasm-initialization`, "the supplied module is not this package's"), so every
+  failed attempt, a wrong module included, leaves initialization retryable. The
+  build records the module's imports and exports in
+  `dist/wasm/openbindings_wasm_signature.js`.
 - A bundled Wasm module whose bytes do not depend on where it was built. The
   build gives the builder's Cargo home, toolchain, target directory and checkout
   fixed names in the module, and refuses a module that still embeds one; CI

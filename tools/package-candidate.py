@@ -194,7 +194,8 @@ def main():
         "import {rustSourceIdentity} from './packages/typescript/scripts/source-identity.mjs'; "
         "console.log(JSON.stringify(await rustSourceIdentity()));"]))
     require(identity["rustSource"] == current_identity, "Wasm source identity differs from this candidate.")
-    require(set(identity["artifacts"]) == {"openbindings_wasm.js", "openbindings_wasm_bg.wasm"},
+    require(set(identity["artifacts"]) == {"openbindings_wasm.js", "openbindings_wasm_bg.wasm",
+                                           "openbindings_wasm_signature.js"},
             "Incomplete Wasm artifact inventory.")
     for name, expected in identity["artifacts"].items():
         require(digest(npm_root / "dist/wasm" / name) == expected, f"Wasm artifact mismatch: {name}")

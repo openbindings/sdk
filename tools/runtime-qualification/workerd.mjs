@@ -44,7 +44,13 @@ const modules = [
   `(name="worker",esModule=embed "worker.mjs")`,
   `(name="workloads.mjs",esModule=embed "workloads.mjs")`,
   `(name="asset",wasm=embed ${quote(path.join(packageRoot, "dist/wasm/openbindings_wasm_bg.wasm"))})`,
-  ...["index.js", "testing.js", "internal.js", "wasm/openbindings_wasm.js"].map(
+  ...[
+    "index.js",
+    "testing.js",
+    "internal.js",
+    "wasm/openbindings_wasm.js",
+    "wasm/openbindings_wasm_signature.js",
+  ].map(
     (name) =>
       `(name=${JSON.stringify("sdk/" + name)},esModule=embed ${quote(path.join(packageRoot, "dist", name))})`,
   ),

@@ -122,7 +122,9 @@ imports pass a `WebAssembly.Module` to `initialize(module)`; the asset export is
 Hosts that restrict entropy to active requests must initialize inside an allowed
 request context. [The workerd example](examples/workerd-service.mjs) shows this.
 Initialization is shared across concurrent calls. Loading and entropy failures
-reject with `SdkError`; retry after correcting the host condition.
+reject with `SdkError`, as does a WebAssembly module that is not this package's,
+which is refused before it is instantiated; retry after correcting the host
+condition.
 
 ## Exact values and editing
 

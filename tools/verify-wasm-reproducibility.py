@@ -16,7 +16,7 @@ import shutil
 import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
-ARTIFACTS = ["openbindings_wasm.js", "openbindings_wasm_bg.wasm"]
+ARTIFACTS = ["openbindings_wasm.js", "openbindings_wasm_bg.wasm", "openbindings_wasm_signature.js"]
 
 
 def require(condition, message):

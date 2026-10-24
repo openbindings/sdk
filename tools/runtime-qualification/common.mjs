@@ -44,6 +44,7 @@ export async function identity(packageRoot) {
     "dist/internal.js",
     "dist/http-discovery.js",
     "dist/wasm/openbindings_wasm.js",
+    "dist/wasm/openbindings_wasm_signature.js",
     "dist/wasm/openbindings_wasm_bg.wasm",
   ]) {
     const raw = await fs.readFile(path.join(packageRoot, name));
