@@ -13,7 +13,7 @@ this TypeScript facade; the facade exposes document operations and HTTP discover
 This `0.2.0-alpha.1` package is unpublished. Install a locally built archive;
 registry releases use the legacy API. Build the archive from a checkout of this
 repository with Rust 1.99.0 and its `wasm32-unknown-unknown` target,
-wasm-bindgen-cli 0.2.129 and Node 22 ([source replay](https://github.com/openbindings/sdk/blob/main/docs/REPLAY.md)
+wasm-bindgen-cli 0.2.129 and Node 22.23.0 or later ([source replay](https://github.com/openbindings/sdk/blob/main/docs/REPLAY.md)
 lists the toolchain):
 
 ```sh
@@ -112,6 +112,11 @@ global symbols to the application. Finalizers are best effort; disposal releases
 owners but does not promise shrinking process memory or Wasm capacity.
 
 ## Initialization
+
+The package runs on Node `^22.23.0 || ^24.17.0 || >=26.2.0`, the first releases whose bundled
+undici rejects a chunked body cut short as its connection closes
+([nodejs/undici#5273](https://github.com/nodejs/undici/pull/5273)) instead of handing `discover` the prefix
+as a complete body.
 
 Call and await `initialize()` before using the SDK. In Node ESM it reads the
 installed package's Wasm asset independently of the working directory. Browser

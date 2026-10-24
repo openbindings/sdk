@@ -239,6 +239,12 @@
   failed attempt, a wrong module included, leaves initialization retryable. The
   build records the module's imports and exports in
   `dist/wasm/openbindings_wasm_signature.js`.
+- The TypeScript package's `engines` admits Node `^22.23.0 || ^24.17.0 || >=26.2.0`,
+  the first releases whose bundled undici rejects a chunked body cut short as its
+  connection closes ([nodejs/undici#5273](https://github.com/nodejs/undici/pull/5273)).
+  Earlier releases, Node 22.19.0 among them, handed `discover` the prefix as a complete
+  body, so a truncated document could be reported found or non-conformant instead of a
+  `body-error`. CI pins Node 22.23.0 and runs the discovery tests at 24.17.0 and 26.2.0.
 - A bundled Wasm module whose bytes do not depend on where it was built. The
   build gives the builder's Cargo home, toolchain, target directory and checkout
   fixed names in the module, and refuses a module that still embeds one; CI

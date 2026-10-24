@@ -4,14 +4,14 @@ This is a public-API caller harness for C1–C5 of the SDK adoption plan. It cha
 
 ## Inputs and reproducibility
 
-Use Node22+, Python3, Rust1.99.0, an unpacked `npm pack` archive, its original `.tgz`, and installed Chromium/WebKit plus their matching Playwright driver. The baseline used Playwright1.61.0 with Chromium revision1228/WebKit2311. Use real workerd and its matching `workerd.capnp`; no Node compatibility flag or mock workerd is used. All paths are supplied by the caller. Historical design directories are not runtime dependencies of these scripts.
+Use Node22.23.0+ (or 24.17.0+, 26.2.0+; earlier releases' bundled undici accepts a chunked body cut short as its connection closes, [nodejs/undici#5273](https://github.com/nodejs/undici/pull/5273)), Python3, Rust1.99.0, an unpacked `npm pack` archive, its original `.tgz`, and installed Chromium/WebKit plus their matching Playwright driver. The baseline used Playwright1.61.0 with Chromium revision1228/WebKit2311. Use real workerd and its matching `workerd.capnp`; no Node compatibility flag or mock workerd is used. All paths are supplied by the caller. Historical design directories are not runtime dependencies of these scripts.
 
 ```sh
 python3 tools/runtime-qualification/fixtures.py /tmp/sdk-fixtures
 cargo build --release --locked --manifest-path tools/runtime-qualification/native/Cargo.toml
 export PLAYWRIGHT_MODULE=/absolute/path/to/playwright-core/index.mjs
 export NODE_BIN=/absolute/path/to/node
-export NODE_VERSION=v22.19.0
+export NODE_VERSION=v22.23.0
 export WORKERD_BIN=/absolute/path/to/workerd
 export WORKERD_CAPNP=/absolute/path/to/workerd.capnp
 python3 tools/runtime-qualification/compare.py --self-test

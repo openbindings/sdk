@@ -5,8 +5,10 @@ The Rust packages and TypeScript facade are unpublished. Existing npm
 prepares and checks local artifacts; it does not publish, reserve package names,
 change npm tags, or deploy documentation.
 
-Use the toolchain in `rust-toolchain.toml`, Python 3.13 or later, Node 22 or later,
-and the matching `wasm-bindgen` CLI from the workspace manifest. Install the
+Use the toolchain in `rust-toolchain.toml`, Python 3.13 or later, a Node release
+in `^22.23.0 || ^24.17.0 || >=26.2.0` (the first whose bundled undici rejects a
+chunked body cut short as its connection closes,
+[nodejs/undici#5273](https://github.com/nodejs/undici/pull/5273)), and the matching `wasm-bindgen` CLI from the workspace manifest. Install the
 TypeScript development dependencies with `npm ci --ignore-scripts` in
 `packages/typescript`. Run the required qualification from `RELEASING.md` on a
 clean, committed candidate before selecting it for release.

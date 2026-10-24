@@ -6,7 +6,9 @@ starts in the [SDK README](../README.md).
 ## Build and verify
 
 Development uses Rust 1.99.0 with `wasm32-unknown-unknown`, wasm-bindgen-cli 0.2.129,
-Node 22.19.0/npm 10.9.3 and Python 3.13+. Rust 1.88 is the declared MSRV. Use
+Node 22.23.0/npm 10.9.8 (the first Node 22 release whose bundled undici rejects a
+chunked body cut short as its connection closes, [nodejs/undici#5273](https://github.com/nodejs/undici/pull/5273)) and
+Python 3.13+. Rust 1.88 is the declared MSRV. Use
 tracked dependency locks. Offline builds require the tools and dependencies to be
 cached already. [Source replay](REPLAY.md) describes acquisition and host setup.
 

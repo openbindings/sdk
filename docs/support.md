@@ -8,7 +8,7 @@ replacing an existing dependency.
 | Environment | Supported path and qualification |
 | --- | --- |
 | Rust | MSRV 1.88, edition 2024; independent native/Wasm MSRV CI. Development toolchain 1.99; Linux, macOS, and Windows native CI. Core has no mandatory async runtime. |
-| Node | ESM on Node 22 or later; CI pins 22.19.0. Read the exported Wasm asset and initialize explicitly. |
+| Node | ESM on Node 22.23.0 or later in the 22 line, 24.17.0 or later in the 24 line, or 26.2.0 or later (`engines`: `^22.23.0 || ^24.17.0 || >=26.2.0`), the first releases whose bundled undici rejects a chunked body cut short as its connection closes ([nodejs/undici#5273](https://github.com/nodejs/undici/pull/5273)) instead of handing `discover` the prefix as a complete body. CI pins 22.23.0 and runs the discovery tests at the 24 and 26 floors. Read the exported Wasm asset and initialize explicitly. |
 | Browser | Desktop Chromium and WebKit with explicit initialization; use a Worker for potentially expensive work. Firefox, mobile devices, and particular framework/bundler versions require their own qualification. |
 | Worker service | Local workerd with a compiled Wasm module and initialization in an allowed request context. This is not evidence of deployed Cloudflare latency, quotas, or service availability. |
 
