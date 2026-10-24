@@ -9,7 +9,7 @@ mod input_policy;
 pub mod schema_index;
 mod space;
 pub mod uri;
-pub use input_policy::{InputPolicy, Supplied, SuppliedSet};
+pub use input_policy::{IndexedDocument, InputPolicy, Supplied, SuppliedSet};
 mod program;
 pub use program::*;
 use serde::Serialize;
@@ -49,6 +49,12 @@ impl std::fmt::Debug for RawDocument {
 impl RawDocument {
     pub fn new(value: JsonValue) -> Self {
         let index = Arc::new(schema_index::SchemaIndex::build(&value));
+        Self { value, index }
+    }
+    /// The document with the index [`schema_index::SchemaIndex::build`] built
+    /// for this same value, shared rather than built again.
+    pub fn with_index(value: JsonValue, index: Arc<schema_index::SchemaIndex>) -> Self {
+        debug_assert!(index.indexes(&value), "the index is the value's own");
         Self { value, index }
     }
     pub fn parse(text: impl AsRef<str>) -> Result<Self, openbindings_internal_json::InputError> {

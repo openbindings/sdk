@@ -259,9 +259,10 @@ impl SchemaEvaluator for DefaultEvaluator {
 }
 
 // The request's schema space and its entry node. The set admitted its resources
-// and built their identity index once; the space shares that index and drops
-// its handle when preparation returns. Stand-ins are admitted with the set's
-// resources, so their space indexes those again.
+// and built their identity index once, and the revision built its schema index
+// when it was validated; the space shares both and drops its handles when
+// preparation returns. Stand-ins are admitted with the set's resources, so
+// their space indexes those again.
 fn space(
     request: &SchemaRequest,
     stand_ins: Vec<openbindings_internal_schema::ProjectedResource>,
@@ -274,9 +275,7 @@ fn space(
             .map_err(|_| program_failure())?
     };
     let space = SchemaSpace::new(
-        openbindings_internal_schema::RawDocument::new(
-            request.document().as_document().value().clone(),
-        ),
+        openbindings_internal_schema::IndexedDocument::indexed(request.document()),
         supplied,
     );
     let entry = space

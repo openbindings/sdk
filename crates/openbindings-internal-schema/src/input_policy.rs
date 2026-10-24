@@ -25,6 +25,14 @@ pub trait SuppliedSet {
     /// The admitted resources and their identity policy.
     fn supplied(&self) -> &Supplied;
 }
+/// A document revision whose schema index the SDK already built, so the
+/// default evaluator shares it rather than walking the document again on
+/// every preparation. Not a supported API, like [`SuppliedSet`].
+#[doc(hidden)]
+pub trait IndexedDocument {
+    /// The revision's value with its schema index.
+    fn indexed(&self) -> crate::RawDocument;
+}
 struct NoRetrieval;
 impl jsonschema::Retrieve for NoRetrieval {
     fn retrieve(

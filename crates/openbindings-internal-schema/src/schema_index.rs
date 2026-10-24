@@ -299,6 +299,15 @@ impl SchemaIndex {
         }
         out
     }
+    /// Whether this index was built for `value`: the same node of the same
+    /// source.
+    pub fn indexes(&self, value: &JsonValue) -> bool {
+        self.source.as_ref().is_some_and(|source| {
+            openbindings_internal_json::backend::same_source(source.view(), value)
+                && openbindings_internal_json::backend::node_id(source)
+                    == openbindings_internal_json::backend::node_id(value)
+        })
+    }
     /// A schema's value.
     pub fn value(&self, node: &SchemaNode) -> JsonRef<'_> {
         node_of(self.source.as_ref(), node.id)

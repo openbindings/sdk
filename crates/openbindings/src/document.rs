@@ -254,7 +254,7 @@ pub(crate) struct DocumentInner {
     // The limits this revision was admitted under; edits parse the edited
     // document under them.
     limits: JsonLimits,
-    pub schemas: OnceLock<SchemaIndex>,
+    pub schemas: OnceLock<Arc<SchemaIndex>>,
     // Value-contract resolution spaces are assembled only when an evaluator asks
     // for the core projection. The space without supplied resources lives here;
     // a space with a nonempty set lives in that set, which this revision tells
@@ -522,9 +522,20 @@ impl Document {
         })
     }
     pub(crate) fn schema_index(&self) -> &SchemaIndex {
+        self.shared_schema_index()
+    }
+    fn shared_schema_index(&self) -> &Arc<SchemaIndex> {
         self.inner
             .schemas
-            .get_or_init(|| SchemaIndex::build(self.value()))
+            .get_or_init(|| Arc::new(SchemaIndex::build(self.value())))
+    }
+    /// The revision's value with its schema index, which preparation shares
+    /// instead of indexing the document again.
+    pub(crate) fn indexed(&self) -> openbindings_internal_schema::RawDocument {
+        openbindings_internal_schema::RawDocument::with_index(
+            self.value().clone(),
+            self.shared_schema_index().clone(),
+        )
     }
     pub(crate) fn interpretable(&self) -> Result<(), InterpretationError> {
         self.inner
