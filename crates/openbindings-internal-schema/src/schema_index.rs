@@ -1,7 +1,10 @@
 //! The normative schema-position walk. Unknown keywords remain opaque.
 use crate::{JsonKind, JsonRef, JsonValue, identifiers::Identifiers};
 use openbindings_internal_json::backend::{node, ref_id};
-use std::sync::{Arc, OnceLock};
+use std::sync::{
+    Arc, OnceLock,
+    atomic::{AtomicUsize, Ordering},
+};
 
 pub const DIALECT: &str = "https://json-schema.org/draft/2020-12/schema";
 /// One schema position. Its value is [`SchemaIndex::value`]; a schema whose
@@ -52,6 +55,9 @@ pub struct SchemaIndex {
     /// Each `$id` declaration with a base and that base, in walk order. A
     /// supplied resource's index only.
     bases: Vec<(u32, Arc<str>)>,
+    /// How many schemas, from the first in walk order, [`Self::check_meta`]
+    /// found to satisfy the 2020-12 meta-schemas, each in turn.
+    checked: AtomicUsize,
 }
 impl std::fmt::Debug for SchemaIndex {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -301,14 +307,38 @@ impl SchemaIndex {
         }
         out
     }
-    /// Whether this index was built for `value`: the same node of the same
-    /// source.
-    pub fn indexes(&self, value: &JsonValue) -> bool {
-        self.source.as_ref().is_some_and(|source| {
-            openbindings_internal_json::backend::same_source(source.view(), value)
-                && openbindings_internal_json::backend::node_id(source)
-                    == openbindings_internal_json::backend::node_id(value)
-        })
+    /// The value this index was built for.
+    pub fn source(&self) -> Option<&JsonValue> {
+        self.source.as_ref()
+    }
+    /// Check the schema at `at` against the 2020-12 meta-schemas, as
+    /// [`crate::fixed_schema::check_with_retained`] does. The index records
+    /// each schema found to satisfy them in walk order, so it knows every
+    /// schema satisfies them ([`Self::schemas_checked`]) only once each has
+    /// been checked and none failed; nothing else records it.
+    pub fn check_meta<'a>(
+        &'a self,
+        at: usize,
+        max_problems: usize,
+        already_retained: impl Fn(JsonRef<'a>, &str) -> bool,
+    ) -> Result<crate::fixed_schema::Problems<'a>, String> {
+        let problems = crate::fixed_schema::check_with_retained(
+            self.value(&self.nodes[at]),
+            true,
+            max_problems,
+            already_retained,
+        )?;
+        if !problems.violated {
+            let _ = self
+                .checked
+                .compare_exchange(at, at + 1, Ordering::AcqRel, Ordering::Acquire);
+        }
+        Ok(problems)
+    }
+    /// Whether [`Self::check_meta`] found every indexed schema to satisfy
+    /// the 2020-12 meta-schemas.
+    pub fn schemas_checked(&self) -> bool {
+        self.checked.load(Ordering::Acquire) == self.nodes.len()
     }
     /// A schema's value.
     pub fn value(&self, node: &SchemaNode) -> JsonRef<'_> {

@@ -530,20 +530,16 @@ impl Document {
             .get_or_init(|| Arc::new(SchemaIndex::build(self.value())))
     }
     /// The revision's value with its schema index, which preparation shares
-    /// instead of indexing the document again.
+    /// instead of indexing the document again. Validation checks each indexed
+    /// schema against the meta-schemas through the index (OBI-10), so the
+    /// index knows whether they all satisfied them. A revision that has not
+    /// built its index, because it was never validated, keeps none: the
+    /// document is indexed for this use alone.
     pub(crate) fn indexed(&self) -> openbindings_internal_schema::RawDocument {
-        openbindings_internal_schema::RawDocument::with_index(
-            self.value().clone(),
-            self.shared_schema_index().clone(),
-        )
-    }
-    /// The same, for a revision that validated as conformant: rule OBI-10
-    /// then found every indexed schema to satisfy the 2020-12 meta-schemas.
-    pub(crate) fn indexed_conformant(&self) -> openbindings_internal_schema::RawDocument {
-        openbindings_internal_schema::RawDocument::conformant(
-            self.value().clone(),
-            self.shared_schema_index().clone(),
-        )
+        match self.inner.schemas.get() {
+            Some(index) => openbindings_internal_schema::RawDocument::shared(index.clone()),
+            None => openbindings_internal_schema::RawDocument::new(self.value().clone()),
+        }
     }
     pub(crate) fn interpretable(&self) -> Result<(), InterpretationError> {
         self.inner
@@ -1236,14 +1232,36 @@ impl<'a> Checks<'a> {
         }
     }
     fn fixed(&mut self, value: JsonRef<'a>, rule: Rule, is_meta: bool) {
-        match fixed_schema::check_with_retained(
+        let checked = fixed_schema::check_with_retained(
             value,
             is_meta,
             MAX_FINDINGS.saturating_sub(self.findings.len()),
             |at, message| {
                 self.contains_at(rule, Evidence::Violated, at, "schema-mismatch", message)
             },
-        ) {
+        );
+        self.fixed_checked(value, rule, checked);
+    }
+    // OBI-10 for the indexed schema at `at`, checked through the index, which
+    // records whether every indexed schema satisfies the meta-schemas.
+    fn meta_fixed(&mut self, schemas: &'a SchemaIndex, at: usize) {
+        let rule = Rule::Obi10;
+        let checked = schemas.check_meta(
+            at,
+            MAX_FINDINGS.saturating_sub(self.findings.len()),
+            |at, message| {
+                self.contains_at(rule, Evidence::Violated, at, "schema-mismatch", message)
+            },
+        );
+        self.fixed_checked(schemas.value(&schemas.nodes[at]), rule, checked);
+    }
+    fn fixed_checked(
+        &mut self,
+        value: JsonRef<'a>,
+        rule: Rule,
+        checked: Result<fixed_schema::Problems<'a>, String>,
+    ) {
+        match checked {
             Ok(problems) => {
                 self.truncated |= problems.truncated;
                 if problems.violated {
@@ -1450,7 +1468,7 @@ fn assess_value(document: &Document) -> Result<ValidationReport, VersionRefusal>
     // different positions must still be checked at each original location.
     for (index, node) in schemas.nodes.iter().enumerate() {
         let schema = schemas.value(node);
-        c.fixed(schema, Rule::Obi10, true);
+        c.meta_fixed(schemas, index);
         if let Some(dialect) = schema.get("$schema")
             && !matches!(
                 dialect.as_str(),

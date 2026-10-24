@@ -1667,6 +1667,54 @@ mod projection_tests {
         }
     }
 
+    // A document is known checked against the meta-schemas only once its
+    // index has checked every schema, in order, and found none failing; no
+    // constructor or partial check marks it, so a space checks the schemas of
+    // any other document itself.
+    #[test]
+    fn only_checking_every_schema_marks_a_document_checked() {
+        let control = std::sync::atomic::AtomicBool::new(false);
+        let malformed = JsonValue::parse(
+            r#"{"openbindings":"0.2.0","operations":{"op":{"input":{"properties":[1]}}},"schemas":{"a":{"minimum":"x","type":5}}}"#,
+        )
+        .unwrap();
+        let index = std::sync::Arc::new(SchemaIndex::build(&malformed));
+        assert!(!RawDocument::new(malformed.clone()).schemas_checked());
+        assert!(!RawDocument::shared(index.clone()).schemas_checked());
+        for order in [
+            (0..index.nodes.len()).rev().collect::<Vec<_>>(),
+            (0..index.nodes.len()).collect(),
+        ] {
+            for at in order {
+                index.check_meta(at, 0, |_, _| false).unwrap();
+            }
+            assert!(!index.schemas_checked());
+        }
+        let space = SchemaSpace::new(RawDocument::shared(index.clone()), Supplied::default());
+        let entry = space
+            .document_node(&malformed.at("/operations/op/input").unwrap().to_owned())
+            .unwrap();
+        assert_eq!(
+            space.reach(entry, &control).unwrap_err().code,
+            "invalid-schema"
+        );
+        let valid = JsonValue::parse(
+            r#"{"openbindings":"0.2.0","operations":{"op":{"input":{"properties":{"a":{"type":"integer"}}}}}}"#,
+        )
+        .unwrap();
+        let index = std::sync::Arc::new(SchemaIndex::build(&valid));
+        let last = index.nodes.len() - 1;
+        index.check_meta(last, 0, |_, _| false).unwrap();
+        assert!(!index.schemas_checked());
+        for at in 0..last {
+            index.check_meta(at, 0, |_, _| false).unwrap();
+        }
+        assert!(!index.schemas_checked());
+        index.check_meta(last, 0, |_, _| false).unwrap();
+        assert!(index.schemas_checked());
+        assert!(RawDocument::shared(index).schemas_checked());
+    }
+
     fn verdict(program: &Program, value: &JsonValue) -> (bool, Vec<Location>) {
         let mut registry = jsonschema::Registry::new();
         let mut root = None;

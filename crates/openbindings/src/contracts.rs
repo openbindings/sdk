@@ -568,7 +568,7 @@ impl openbindings_internal_schema::SuppliedSet for ResourceSet {
 // and what that validation established about its schemas.
 impl openbindings_internal_schema::IndexedDocument for Conformant<Document> {
     fn indexed(&self) -> openbindings_internal_schema::RawDocument {
-        self.as_document().indexed_conformant()
+        self.as_document().indexed()
     }
 }
 
