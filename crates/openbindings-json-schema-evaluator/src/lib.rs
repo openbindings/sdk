@@ -78,8 +78,12 @@ pub struct Limits {
     /// deeper values and longer walks; one with less refuses them sooner.
     /// These bounds were measured with stacks from 128 KiB to 2 MiB. The
     /// other recursion preparation does is bounded by `pattern_depth`,
-    /// `compile_json_depth` and core's admission limits, whose defaults fit
-    /// the default stack; a host giving less stack lowers those too.
+    /// `compile_json_depth`, core's admission limits and core's fixed schema
+    /// depth: whatever these limits set, preparation refuses a reached schema
+    /// nested more than 256 schemas below the schema position or supplied
+    /// resource root that holds it (`schema-depth-limit`). The defaults and
+    /// that depth fit the default stack; a host giving less stack lowers the
+    /// configurable bounds too.
     pub stack_bytes: usize,
     /// Maximum projected JSON nesting admitted to evaluator compilation; default 512.
     pub compile_json_depth: usize,
@@ -149,9 +153,9 @@ pub struct Limits {
     /// comes after core projects the value contract, which its admission limits and
     /// 100,000 schema positions bound, and before the evaluator copies the
     /// resources and the library compiles them, so it bounds the time and
-    /// memory of that compilation: a 7 MB document whose input reaches a chain
-    /// of 99,990 `$id` resources prepared in 11.5 s at a 723 MB peak without a
-    /// cap, and refused in 1.2 s at a 502 MB peak with a cap of 1,000.
+    /// memory of that compilation: an 8 MB document whose input reaches a chain
+    /// of 99,990 `$id` resources prepared in 8.1 s at a 725 MB peak without a
+    /// cap, and refused in 1.1 s at a 499 MB peak with a cap of 1,000.
     pub schema_resources: Option<usize>,
 }
 impl Default for Limits {

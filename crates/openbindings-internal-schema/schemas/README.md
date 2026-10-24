@@ -14,6 +14,16 @@ have the [JSON Schema 2020-12 publication](https://json-schema.org/draft/2020-12
 as their authoritative source. The bundled files must match the published
 meta-schemas byte-for-byte or by exact JSON equality.
 
+The JSON Schema Specification Authors publish them from
+<https://github.com/json-schema-org/json-schema-spec>, whose contents are
+licensed under the BSD 3-Clause License or the Academic Free License 3.0. At the
+release the specification cites, that repository's README states the
+"AFL or BSD" terms; its `LICENSE`, added in `51326f8090` (2022-07-12) and
+unchanged since, names the two licenses' versions and is retained here verbatim
+as `LICENSE-json-schema-spec` (SHA-256
+`909b25a80d4945b21d3adb2fb17f90bf592e0274bdf117c069c088a8e44dc7b6`; the npm
+package carries it as `licenses/JSON-SCHEMA-SPEC-LICENSE`).
+
 These files were originally copied from the distribution carried by
 `github.com/santhosh-tekuri/jsonschema/v6` v6.0.3. The acquisition history is
 retained here with `LICENSE-jsonschema-go`. Core embeds the meta-schemas in a

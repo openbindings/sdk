@@ -208,3 +208,37 @@ fn unevaluated_keywords_beside_a_stub_refuse_or_agree_with_every_completion() {
         assert!(decided > 0, "{schema}");
     }
 }
+
+// A failure decided without reaching the stub keeps its verdict when it is
+// explained, but an explanation pass that reaches the stub states no problem:
+// the library's error would rest on the stub's stand-in answer. Two `oneOf`
+// branches accept 1, so the check decides before the third, the stub, while
+// the library's explanation collects every branch's errors.
+#[test]
+fn an_explanation_that_reaches_the_stub_states_no_problem() {
+    let schema =
+        format!(r#"{{"oneOf":[{{"type":"integer"}},{{"minimum":0}},{{"$ref":"{MISSING}"}}]}}"#);
+    let value = JsonValue::parse("1").unwrap();
+    let stubbed = prepare(&schema, None).unwrap();
+    assert!(matches!(
+        stubbed.validate(&value),
+        ValueOutcome::Fails { .. }
+    ));
+    match stubbed.explain(&value) {
+        ValueOutcome::Fails {
+            problems,
+            problems_complete,
+            ..
+        } => assert!(problems.is_empty() && !problems_complete, "{problems:?}"),
+        other => panic!("{other:?}"),
+    }
+    // With the resource supplied, the same explanation names the `oneOf`.
+    let supplied = prepare(&schema, Some("true")).unwrap();
+    match supplied.explain(&value) {
+        ValueOutcome::Fails { problems, .. } => {
+            assert_eq!(problems.len(), 1);
+            assert_eq!(problems[0].code, "oneOf");
+        }
+        other => panic!("{other:?}"),
+    }
+}

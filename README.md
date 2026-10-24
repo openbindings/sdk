@@ -22,6 +22,11 @@ assert_eq!(validation.report().conclusion, Conformance::Conformant);
 let conformant = validation.conformant().ok_or("document is not conformant")?;
 let operation = conformant.resolve_operation("find").ok_or("operation is missing")?;
 assert_eq!(operation.key(), "lookup");
+for operation in conformant.operations() {
+    // Each view is one operation, in key order; aliases are None when absent.
+    let aliases: Vec<&str> = operation.aliases().into_iter().flatten().collect();
+    assert_eq!((operation.key(), aliases), ("lookup", vec!["find"]));
+}
 # Ok::<(), Box<dyn std::error::Error>>(())
 ```
 

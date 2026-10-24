@@ -470,6 +470,7 @@ impl Arena {
     }
     /// Separately held decoded bytes of an escaped scalar string; zero for one
     /// that borrows its source.
+    #[cfg(test)]
     pub fn decoded_len(&self, id: Id) -> usize {
         match self.nodes[id].kind {
             Kind::String { text, .. } => text.decoded().map_or(0, |i| self.decoded_text(i).len()),

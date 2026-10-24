@@ -280,6 +280,10 @@ fn emitted_limits_duplicates_and_diagnostics_are_bounded_and_located() {
     assert!(e.pointer().is_none());
     assert!(e.path_omitted_for_limit());
     assert!(!e.to_string().contains("private"));
+    assert_eq!(
+        e.to_string(),
+        "JSON value conversion failed: the value's serializer returned an error"
+    );
     assert!(!format!("{e:?}").contains("private"));
     assert!(e.message().starts_with("private"));
     // Output work stops at admission: the second array item is never entered.
@@ -398,23 +402,49 @@ fn serde_profile_depth_is_explicit_and_smaller_limits_apply() {
         v
     }
     assert!(JsonValue::from_serializable(&nested(128)).is_ok());
+    let e = JsonValue::from_serializable(&nested(129)).unwrap_err();
+    assert_eq!(e.kind(), ValueConversionErrorKind::Limit);
+    // Display names the ceiling, which a larger requested depth does not lift.
+    let ceiling = "JSON value conversion failed: the value nests containers more than 128 levels deep, the most this conversion admits";
+    assert_eq!(e.to_string(), ceiling);
+    let raised = JsonLimits {
+        max_depth: 10_000,
+        ..Default::default()
+    };
+    let e = JsonValue::from_serializable_with_limits(&nested(129), raised).unwrap_err();
+    assert_eq!(e.to_string(), ceiling);
+    let e = JsonValue::from_serializable_with_limits(
+        &nested(5),
+        JsonLimits {
+            max_depth: 4,
+            ..Default::default()
+        },
+    )
+    .unwrap_err();
+    assert_eq!(e.kind(), ValueConversionErrorKind::Limit);
     assert_eq!(
-        JsonValue::from_serializable(&nested(129))
-            .unwrap_err()
-            .kind(),
-        ValueConversionErrorKind::Limit
+        e.to_string(),
+        "JSON value conversion failed: the value nests containers more than 4 levels deep, the configured depth limit"
     );
+    let bytes = JsonLimits {
+        max_bytes: 4,
+        ..Default::default()
+    };
     assert_eq!(
-        JsonValue::from_serializable_with_limits(
-            &nested(5),
-            JsonLimits {
-                max_depth: 4,
-                ..Default::default()
-            }
-        )
-        .unwrap_err()
-        .kind(),
-        ValueConversionErrorKind::Limit
+        JsonValue::from_serializable_with_limits(&vec![1, 2], bytes)
+            .unwrap_err()
+            .to_string(),
+        "JSON value conversion failed: the value's JSON exceeds the byte limit of 4 bytes"
+    );
+    let nodes = JsonLimits {
+        max_nodes: 2,
+        ..Default::default()
+    };
+    assert_eq!(
+        JsonValue::from_serializable_with_limits(&vec![1, 2], nodes)
+            .unwrap_err()
+            .to_string(),
+        "JSON value conversion failed: the value exceeds the node limit of 2 nodes"
     );
     let text = format!("{}true{}", "[".repeat(200), "]".repeat(200));
     assert!(

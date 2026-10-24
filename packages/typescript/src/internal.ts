@@ -432,7 +432,7 @@ export interface ReferenceReport {
   references: readonly Reference[];
   /** Whether traversal completed; unresolved entries can occur even when true. */
   complete: boolean;
-  /** Traversal-level limitation when incomplete, otherwise null. */
+  /** Traversal-level limitation when incomplete, otherwise null. Inspection skips the references of a schema nested more than 256 schemas below the schema position that holds it, with a limit-exceeded limitation (`schema-depth`). */
   limitation: ReferenceRefusal | null;
 }
 /** Cooperative work control. A pre-aborted signal returns cancellation. Synchronous Wasm does not yield to same-thread JavaScript, so use a worker plus host scheduling to interrupt long synchronous work externally. This is not a wall-clock deadline. */
@@ -1150,6 +1150,7 @@ abstract class DocumentReads extends Managed {
   #bindings?: readonly BindingMetadata[] | null;
   #sources?: readonly SourceMetadata[] | null;
   #dependencies?: readonly DependencyMetadata[] | null;
+  /** @internal */
   protected constructor(raw: wasm.WasmDocument | wasm.WasmConformantDocument) {
     super(raw);
   }
@@ -1736,6 +1737,7 @@ type OperationRaw = wasm.WasmOperation | wasm.WasmConformantOperation;
 abstract class OperationReads extends Managed {
   #metadata?: OperationMetadata;
   #examples?: readonly ExampleMetadata[] | null;
+  /** @internal */
   protected constructor(
     raw: wasm.WasmOperation | wasm.WasmConformantOperation,
   ) {

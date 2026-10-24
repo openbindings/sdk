@@ -27,12 +27,16 @@ pub enum ValueConversionErrorKind {
     /// The caller's serializer returned an error.
     Serialization,
 }
-/// An owned diagnostic. Custom serializer text is available only through `message`.
+/// An owned diagnostic. `Display` states the SDK's own reason for a refusal,
+/// such as the limit a value exceeds; a custom serializer's error text is
+/// available only through `message`.
 #[derive(Clone, PartialEq, Eq)]
 pub struct ValueConversionError {
     kind: ValueConversionErrorKind,
     pointer: Option<String>,
     message: String,
+    // Whether `message` is the SDK's own text rather than a serializer's.
+    own_message: bool,
     message_truncated: bool,
     path_omitted_for_limit: bool,
 }
@@ -45,7 +49,7 @@ impl ValueConversionError {
     pub fn pointer(&self) -> Option<&str> {
         self.pointer.as_deref()
     }
-    /// Borrow diagnostic text, including caller-provided serializer errors when applicable; treat it as untrusted display data. Debug/Display intentionally omit this prose.
+    /// Borrow diagnostic text: the SDK's reason for its own refusal, which `Display` states too, or the error text a caller's serializer provided, which `Debug` and `Display` omit; treat it as untrusted display data.
     pub fn message(&self) -> &str {
         &self.message
     }
@@ -62,6 +66,7 @@ impl ValueConversionError {
             kind,
             pointer: None,
             message: message.into(),
+            own_message: true,
             message_truncated: false,
             path_omitted_for_limit: false,
         }
@@ -78,7 +83,11 @@ impl fmt::Debug for ValueConversionError {
 }
 impl fmt::Display for ValueConversionError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "JSON value conversion failed ({:?})", self.kind)
+        if self.own_message {
+            write!(f, "JSON value conversion failed: {}", self.message)
+        } else {
+            f.write_str("JSON value conversion failed: the value's serializer returned an error")
+        }
     }
 }
 impl std::error::Error for ValueConversionError {}
@@ -141,6 +150,7 @@ impl ser::Error for ValueConversionError {
             kind: ValueConversionErrorKind::Serialization,
             pointer: None,
             message: message.text,
+            own_message: false,
             message_truncated: message.truncated,
             path_omitted_for_limit: false,
         }
@@ -176,10 +186,17 @@ impl State {
     fn fail(&mut self, kind: ValueConversionErrorKind, message: &str) -> ValueConversionError {
         self.latch(ValueConversionError::new(kind, message))
     }
+    fn byte_limit(&mut self) -> ValueConversionError {
+        let message = format!(
+            "the value's JSON exceeds the byte limit of {} bytes",
+            self.limits.max_bytes
+        );
+        self.fail(ValueConversionErrorKind::Limit, &message)
+    }
     fn write(&mut self, bytes: &[u8]) -> Result<(), ValueConversionError> {
         self.guard()?;
         if bytes.len() > self.limits.max_bytes.saturating_sub(self.bytes.len()) {
-            return Err(self.fail(ValueConversionErrorKind::Limit, "byte limit exceeded"));
+            return Err(self.byte_limit());
         }
         self.bytes.extend_from_slice(bytes);
         Ok(())
@@ -187,7 +204,11 @@ impl State {
     fn node(&mut self) -> Result<(), ValueConversionError> {
         self.guard()?;
         if self.nodes >= self.limits.max_nodes {
-            return Err(self.fail(ValueConversionErrorKind::Limit, "node limit exceeded"));
+            let message = format!(
+                "the value exceeds the node limit of {} nodes",
+                self.limits.max_nodes
+            );
+            return Err(self.fail(ValueConversionErrorKind::Limit, &message));
         }
         self.nodes += 1;
         Ok(())
@@ -203,7 +224,7 @@ impl State {
                 .saturating_sub(self.bytes.len())
                 .saturating_sub(2)
         {
-            return Err(self.fail(ValueConversionErrorKind::Limit, "byte limit exceeded"));
+            return Err(self.byte_limit());
         }
         self.write(b"\"")?;
         let bytes = value.as_bytes();
@@ -292,10 +313,18 @@ impl State {
     fn begin(&mut self, object: bool) -> Result<(), ValueConversionError> {
         self.node()?;
         if self.depth >= self.limits.max_depth {
-            return Err(self.fail(
-                ValueConversionErrorKind::Limit,
-                "container depth exceeds configured limit or checked Serde profile ceiling (128)",
-            ));
+            // The depth limit is the caller's or the profile's ceiling, whichever is lower.
+            let message = if self.limits.max_depth == SERDE_MAX_DEPTH {
+                format!(
+                    "the value nests containers more than {SERDE_MAX_DEPTH} levels deep, the most this conversion admits"
+                )
+            } else {
+                format!(
+                    "the value nests containers more than {} levels deep, the configured depth limit",
+                    self.limits.max_depth
+                )
+            };
+            return Err(self.fail(ValueConversionErrorKind::Limit, &message));
         }
         self.depth += 1;
         self.write(if object { b"{" } else { b"[" })
@@ -346,7 +375,7 @@ impl JsonValue {
         Self::parse_owned_with_limits(bytes, limits).map_err(|e| {
             state.locate(ValueConversionError::new(
                 ValueConversionErrorKind::Serialization,
-                e.code,
+                crate::json::input_error_description(e.code).unwrap_or(e.code),
             ))
         })
     }
