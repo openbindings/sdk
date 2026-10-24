@@ -5,10 +5,10 @@ engine revision `a2e5a380018754bf8b96ffebadd4545fec0a07cb`, with documentation
 and measurement harness changes only. The host was macOS 26.6.2 arm64, Rust
 1.99.0. Wasm used wasm-bindgen 0.2.129. Timings are examples, not latency
 guarantees or CI thresholds. Prepared value contract measurements were updated on
-2026-10-15 and, with the preparation and pattern sections and the Wasm size, on
-2026-10-20 below; the compiled-pattern memory and the exponential evaluation
-example were measured on 2026-10-21. Use the locked dependencies and release
-profile to reproduce them.
+2026-10-15 and, with the preparation and pattern sections, on 2026-10-20 below;
+the compiled-pattern memory and the exponential evaluation example were measured
+on 2026-10-21, and the Wasm size on 2026-10-24. Use the locked dependencies and
+release profile to reproduce them.
 
 ## Prepared value contracts
 
@@ -803,9 +803,9 @@ print('sha256', hashlib.sha256(b).hexdigest())
 PY
 ```
 
-The 2026-10-20 implementation asset is **5,795,269 bytes**, or **1,595,571 bytes**
+The 2026-10-24 implementation asset is **6,010,809 bytes**, or **1,681,221 bytes**
 with gzip level 9 (`94b6991`: 7,445,434 and 1,951,593). Its SHA-256 is
-`37298181233039e9bdf1b15e17f06921f066e6f253348285046155ae7be6e113`.
+`349f5217690af68b63ab422658285aaad2bde9bf06b52d6ded5a080478c0d9e2`.
 The build uses the workspace release profile and removes the Wasm name section.
 These lengths exclude JavaScript, declarations, runtime memory and host overhead.
 `build-info.json` beside the generated asset records its source and tool identities.
