@@ -23,3 +23,13 @@ openbindings-internal-json = { version = "=0.2.0-alpha.1", path = "../openbindin
 serde.workspace = true
 
 openbindings-internal-schema = { version = "=0.2.0-alpha.1", path = "../openbindings-internal-schema" }
+
+[features]
+# Not for applications. The SDK's own tests and verification tools enable it:
+# every preparation then also converts core's projection from its text and
+# checks that it gives the definitions' conversion, at about twice the cost.
+conversion-check = []
+
+[dev-dependencies]
+# The crate's own tests run with the conversion check.
+openbindings-json-schema-evaluator = { path = ".", features = ["conversion-check"] }

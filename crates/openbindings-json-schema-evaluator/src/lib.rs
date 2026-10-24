@@ -17,7 +17,7 @@ mod stack;
 mod unevaluated_walk;
 use openbindings::*;
 use openbindings_internal_json::backend::{self, FlatJson};
-#[cfg(debug_assertions)]
+#[cfg(feature = "conversion-check")]
 use openbindings_internal_schema::Program as EvaluationProgram;
 use openbindings_internal_schema::{Definitions, SchemaSpace, SuppliedSet};
 use serde_json::Value;
@@ -318,18 +318,18 @@ impl DefaultEvaluator {
         }
         let mut operands = operands::Operands::default();
         let converted = self.defined(projected, &mut operands, space, &missing, control)?;
-        // Debug builds check that the definitions convert as the program's
-        // text does.
-        #[cfg(debug_assertions)]
+        // The SDK's own tests and tools (`conversion-check`) check that the
+        // definitions convert as the program's text does.
+        #[cfg(feature = "conversion-check")]
         self.check_conversion(&converted, &operands, space, entry, &missing);
-        #[cfg(not(debug_assertions))]
+        #[cfg(not(feature = "conversion-check"))]
         let _ = entry;
         Ok(Arc::new(
             self.compile(converted, operands, space, missing, control)?,
         ))
     }
     // Convert a projection's definitions as the evaluator converted the
-    // program's text, which debug builds still check (`parsed`).
+    // program's text, which `conversion-check` still checks (`parsed`).
     fn defined(
         &self,
         projected: openbindings_internal_schema::Definitions<'_>,
@@ -390,7 +390,7 @@ impl DefaultEvaluator {
     // separated `const` and `enum` values, in an arena holding only them,
     // which the program names by index; `nodes` are each projected resource's
     // definitions' nodes in `space`, in `$defs` order.
-    #[cfg(debug_assertions)]
+    #[cfg(feature = "conversion-check")]
     #[allow(clippy::too_many_arguments)]
     fn parsed(
         &self,
@@ -447,7 +447,7 @@ impl DefaultEvaluator {
         })
     }
     // That the text projection, converted, gives what the definitions gave.
-    #[cfg(debug_assertions)]
+    #[cfg(feature = "conversion-check")]
     fn check_conversion(
         &self,
         converted: &Converted,

@@ -18,4 +18,4 @@ serde.workspace = true
 serde_json.workspace = true
 
 [dev-dependencies]
-openbindings-json-schema-evaluator = { version = "=0.2.0-alpha.1", path = "../openbindings-json-schema-evaluator" }
+openbindings-json-schema-evaluator = { version = "=0.2.0-alpha.1", path = "../openbindings-json-schema-evaluator", features = ["conversion-check"] }
