@@ -177,9 +177,9 @@ jobs:
 
   # The package admits Node ^22.23.0 || ^24.17.0 || >=26.2.0: the first releases
   # whose bundled undici rejects a chunked body cut short as its connection
-  # closes (nodejs/undici#5273). The package job runs every test at the 22
-  # floor; this one runs the discovery tests, which use the host's fetch, at
-  # the other lines' floors against the package job's build.
+  # closes (nodejs/undici#5273). The package job runs the TypeScript tests at
+  # the 22 floor; this one runs them at the other lines' floors against the
+  # package job's build.
   node-floors:
     needs: package
     strategy:
@@ -197,7 +197,7 @@ jobs:
         with:
           name: typescript-dist
           path: packages/typescript/dist
-      - run: node --test test/discovery.test.mjs test/discovery-redirects.test.mjs test/discovery-truncation.test.mjs
+      - run: npm ci --ignore-scripts && npm test
         working-directory: packages/typescript
 
   wasm-reproducibility:

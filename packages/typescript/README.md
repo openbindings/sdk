@@ -213,7 +213,7 @@ no-verdict naming it. Preparation refuses a value contract in which an
 reach a missing resource, a reference to a fragment of a missing resource, or
 a reference that identifies no schema.
 As conservative preparation, it also refuses a value contract that reaches a pattern
-invalid as an ECMA-262 regular expression with Unicode semantics
+invalid as an ECMA-262 11th edition (ES2020) regular expression with Unicode semantics, the dialect JSON Schema 2020-12 cites
 (`schema-pattern-compilation`), or a schema that could apply again without
 consuming the instance, such as one whose `$ref` names itself (`in-place-cycle`).
 Retain a prepared value contract for repeated validation. Ready

@@ -1,5 +1,10 @@
-// The ECMAScript oracle for the evaluator's reading of schema patterns: V8's
-// `new RegExp(pattern, "u")` over seeded generated patterns and strings.
+// The ECMAScript oracle for the evaluator's reading of schema patterns: the
+// dialect JSON Schema 2020-12 cites, ECMA-262 11th edition (ES2020) section
+// 21.2.1 with Unicode semantics, recorded as V8's `new RegExp(pattern, "u")`
+// over seeded generated patterns and strings. The checked-in results come from
+// V8 12.4 (Node 22), whose `u`-mode syntax agrees with that edition on every
+// row: an independent ES2020 pattern parser accepts exactly the patterns it
+// accepts.
 //
 // Patterns combine literals, escapes, classes, groups, quantifiers, anchors and
 // alternation, with some syntax errors, word boundaries, and some constructs
@@ -15,7 +20,9 @@
 // check rejects. `pattern_correctness.rs` checks the evaluator
 // against it through `pattern` and `patternProperties`; the TypeScript suite's
 // `pattern-ecma.test.mjs` generates the rows again and derives their results
-// from V8 on every run.
+// from the running V8 on every run, except where a later edition's syntax lets
+// a newer engine accept a pattern the 11th edition refuses
+// (`laterEditionSyntax`).
 //
 // Regenerate with: node crates/openbindings-json-schema-evaluator/tests/fixtures/pattern-ecma.mjs --write
 import { readFileSync, writeFileSync } from "node:fs";
@@ -179,6 +186,39 @@ export function fixture(spec = SPEC) {
       return { ...row, matches };
     }),
   };
+}
+
+// The pattern syntax ECMA-262 added after the 11th edition, which a newer
+// engine accepts though the 11th edition, and so the evaluator, refuses it.
+// The 16th edition (ES2025) added both classes: modifiers, as in `(?i:a)` and
+// `(?i-m:a)` (section 22.2.1, the `RegularExpressionModifiers` forms of
+// `Atom`), and duplicate named groups in alternatives that cannot both
+// participate (section 22.2.1.1, the `MightBothParticipate` early error, where
+// the 11th edition's section 21.2.1.1 refuses any repeated group name). V8
+// accepts both from 12.5 on, so Node 24 does and Node 22 does not. Returns the
+// classes a pattern's text uses outside escapes and character classes; a
+// repeated name counts even where the later edition still refuses it.
+export function laterEditionSyntax(pattern) {
+  const classes = new Set();
+  const names = new Set();
+  let inClass = false;
+  for (let i = 0; i < pattern.length; i++) {
+    const c = pattern[i];
+    if (c === "\\") i++;
+    else if (inClass) inClass = c !== "]";
+    else if (c === "[") inClass = true;
+    else if (c === "(" && pattern[i + 1] === "?") {
+      const rest = pattern.slice(i + 2);
+      if (/^[ims]*-?[ims]*:/.test(rest) && !rest.startsWith(":"))
+        classes.add("modifiers");
+      const name = /^<([^=!>][^>]*)>/.exec(rest);
+      if (name) {
+        if (names.has(name[1])) classes.add("duplicate named groups");
+        names.add(name[1]);
+      }
+    }
+  }
+  return [...classes];
 }
 
 export function checkedIn() {

@@ -244,7 +244,11 @@
   connection closes ([nodejs/undici#5273](https://github.com/nodejs/undici/pull/5273)).
   Earlier releases, Node 22.19.0 among them, handed `discover` the prefix as a complete
   body, so a truncated document could be reported found or non-conformant instead of a
-  `body-error`. CI pins Node 22.23.0 and runs the discovery tests at 24.17.0 and 26.2.0.
+  `body-error`. CI pins Node 22.23.0 and runs the TypeScript tests at 24.17.0 and 26.2.0 too.
+- The documentation names the pattern dialect: ECMA-262 11th edition (ES2020) with
+  Unicode semantics, as JSON Schema 2020-12 cites it, so syntax later editions added,
+  such as ES2025's modifiers `(?i:a)` and duplicate named groups, refuses preparation
+  (`schema-pattern-compilation`) even where the host's own RegExp accepts it.
 - A bundled Wasm module whose bytes do not depend on where it was built. The
   build gives the builder's Cargo home, toolchain, target directory and checkout
   fixed names in the module, and refuses a module that still embeds one; CI
