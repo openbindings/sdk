@@ -1105,7 +1105,7 @@ impl SchemaSpace {
                 continue;
             }
             if matches!(keyword, "$ref" | "$dynamicRef") {
-                let target = &reach.targets[&(id, keyword.into())];
+                let target = &reach.targets[&(id, keyword == "$dynamicRef")];
                 let uri = if keyword == "$dynamicRef" {
                     if let Some(name) = &target.dynamic_name {
                         format!(
@@ -1413,7 +1413,8 @@ impl SchemaSpace {
                             )
                         })?;
                         let target = self.resolve(id, reference)?;
-                        out.targets.insert((id, keyword.into()), target.clone());
+                        out.targets
+                            .insert((id, keyword == "$dynamicRef"), target.clone());
                         out.edges.entry(id).or_default().push(target.node);
                         queue.push_back(target.node);
                         if keyword == "$dynamicRef"
@@ -1575,7 +1576,9 @@ pub struct Reach {
     pub nodes: HashSet<usize>,
     pub resources: HashSet<usize>,
     pub edges: HashMap<usize, Vec<usize>>,
-    pub targets: HashMap<(usize, String), Target>,
+    /// Each reference's target, by its holder and whether it is a
+    /// `$dynamicRef`.
+    pub targets: HashMap<(usize, bool), Target>,
     pub dynamic: BTreeMap<String, Vec<usize>>,
 }
 impl std::fmt::Debug for Reach {
