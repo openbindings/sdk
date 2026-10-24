@@ -433,7 +433,7 @@ impl Operands {
     /// operands and literals in the same order.
     pub(crate) fn definitions(
         &mut self,
-        definitions: &[Definition<'_>],
+        definitions: Vec<Definition<'_>>,
         literals: &[JsonValue],
         limits: &Limits,
         control: &dyn WorkControl,
@@ -441,27 +441,27 @@ impl Operands {
         let mut defs = Map::new();
         for definition in definitions {
             control.check()?;
-            let value = match &definition.schema {
-                Schema::Boolean(value) => Value::Bool(*value),
-                Schema::Object(fields) => {
-                    let mut ordered: Vec<&(&str, Field<'_>)> = fields.iter().collect();
-                    ordered.sort_by(|a, b| a.0.cmp(b.0));
+            let value = match definition.schema {
+                Schema::Boolean(value) => Value::Bool(value),
+                Schema::Object(mut fields) => {
+                    fields.sort_by(|a, b| a.0.cmp(b.0));
+                    let mut fields = fields.into_iter().peekable();
                     let mut schema = Map::new();
-                    for (at, (key, field)) in ordered.iter().enumerate() {
+                    while let Some((key, field)) = fields.next() {
                         // The text holds the last of a repeated keyword.
-                        if ordered.get(at + 1).is_some_and(|next| next.0 == *key) {
+                        if fields.peek().is_some_and(|next| next.0 == key) {
                             continue;
                         }
                         let Some(role) = role(key) else {
                             continue;
                         };
                         let value = self.field(key, role, field, literals, limits)?;
-                        schema.insert((*key).into(), value);
+                        schema.insert(key.into(), value);
                     }
                     Value::Object(schema)
                 }
             };
-            defs.insert(definition.name.clone(), value);
+            defs.insert(definition.name, value);
         }
         Ok(defs)
     }
@@ -471,15 +471,15 @@ impl Operands {
         &mut self,
         key: &str,
         role: Role,
-        field: &Field<'_>,
+        field: Field<'_>,
         literals: &[JsonValue],
         limits: &Limits,
     ) -> Result<Value, NoVerdict> {
         // The nesting the program's text gives a subschema's reference, and
         // the reference itself.
-        let reference = |address: &str| {
+        let reference = |address: String| {
             let mut object = Map::new();
-            object.insert("$ref".into(), Value::String(address.into()));
+            object.insert("$ref".into(), Value::String(address));
             Value::Object(object)
         };
         let nested = |depth: usize, value: Value| {
@@ -497,13 +497,13 @@ impl Operands {
                     .expect("admitted size operand"),
             ),
             (Role::Const, Field::Literal(index)) => {
-                let value = literal(*index, literals)?.clone();
+                let value = literal(index, literals)?.clone();
                 let id = self.literals.len();
                 self.literals.push(Literal::Value(value));
                 Value::from(id)
             }
             (Role::Enum, Field::Literal(index)) => {
-                let choices: Vec<_> = literal(*index, literals)?
+                let choices: Vec<_> = literal(index, literals)?
                     .view()
                     .elements()
                     .expect("admitted enum array")
@@ -513,19 +513,19 @@ impl Operands {
                 self.literals.push(Literal::Choices(choices.into()));
                 Value::Array(vec![Value::from(id)])
             }
-            (Role::Read | Role::DynamicAnchor, Field::Copied(value)) => read(*value, limits)?,
-            (Role::Read, Field::Reference(uri)) => Value::String(uri.clone()),
+            (Role::Read | Role::DynamicAnchor, Field::Copied(value)) => read(value, limits)?,
+            (Role::Read, Field::Reference(uri)) => Value::String(uri),
             (Role::Read, Field::Single(address)) => nested(1, reference(address))?,
             (Role::Read, Field::Map(children)) => {
                 let mut object = Map::new();
                 for (name, address) in children {
-                    object.insert((*name).into(), reference(address));
+                    object.insert(name.into(), reference(address));
                 }
                 nested(if object.is_empty() { 1 } else { 2 }, Value::Object(object))?
             }
             (Role::Read, Field::List(children)) => nested(
                 if children.is_empty() { 1 } else { 2 },
-                Value::Array(children.iter().map(|address| reference(address)).collect()),
+                Value::Array(children.into_iter().map(reference).collect()),
             )?,
             // A projection writes each keyword in one shape.
             _ => return Err(crate::program_failure()),

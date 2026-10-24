@@ -324,7 +324,7 @@ impl DefaultEvaluator {
         let converted = match projected {
             Projected::Definitions(definitions) => {
                 let converted =
-                    self.defined(&definitions, &mut operands, space, &missing, control)?;
+                    self.defined(definitions, &mut operands, space, &missing, control)?;
                 // Debug builds check that the definitions convert as the
                 // program's text does.
                 if cfg!(debug_assertions) {
@@ -349,7 +349,7 @@ impl DefaultEvaluator {
     // Convert a projection's definitions as `parsed` converts its text.
     fn defined(
         &self,
-        projected: &openbindings_internal_schema::Definitions<'_>,
+        projected: openbindings_internal_schema::Definitions<'_>,
         operands: &mut operands::Operands,
         space: &SchemaSpace,
         missing: &[String],
@@ -358,26 +358,11 @@ impl DefaultEvaluator {
         let mut numbers = HashMap::new();
         let mut resources = Vec::with_capacity(projected.resources.len());
         let mut entry = None;
-        for resource in &projected.resources {
+        let mut stand_ins = Vec::new();
+        for resource in projected.resources {
             control.check()?;
-            let mut definitions = operands.definitions(
-                &resource.definitions,
-                &projected.literals,
-                &self.limits,
-                control,
-            )?;
-            // Every schema projected from a stand-in is the missing keyword.
-            if !missing.is_empty() {
-                for definition in &resource.definitions {
-                    if let Some(at) = space
-                        .source_uri(definition.node)
-                        .and_then(|uri| missing.binary_search_by(|m| m.as_str().cmp(uri)).ok())
-                        && let Some(schema) = definitions.get_mut(&definition.name)
-                    {
-                        *schema = serde_json::json!({ missing::KEYWORD: at });
-                    }
-                }
-            }
+            // Each definition's node, and the stand-ins' definitions, which
+            // are the missing keyword, by name.
             for definition in &resource.definitions {
                 let number = definition
                     .name
@@ -385,12 +370,30 @@ impl DefaultEvaluator {
                     .and_then(|n| n.parse::<u32>().ok())
                     .ok_or_else(program_failure)?;
                 numbers.insert(number, definition.node);
+                if !missing.is_empty()
+                    && let Some(at) = space
+                        .source_uri(definition.node)
+                        .and_then(|uri| missing.binary_search_by(|m| m.as_str().cmp(uri)).ok())
+                {
+                    stand_ins.push((definition.name.clone(), at));
+                }
+            }
+            let mut definitions = operands.definitions(
+                resource.definitions,
+                &projected.literals,
+                &self.limits,
+                control,
+            )?;
+            for (name, at) in stand_ins.drain(..) {
+                if let Some(schema) = definitions.get_mut(&name) {
+                    *schema = serde_json::json!({ missing::KEYWORD: at });
+                }
             }
             if resource.uri == projected.entry_uri {
-                entry.clone_from(&resource.entry);
+                entry = resource.entry;
             }
             resources.push(bundle::Resource {
-                uri: resource.uri.clone(),
+                uri: resource.uri,
                 definitions,
             });
         }

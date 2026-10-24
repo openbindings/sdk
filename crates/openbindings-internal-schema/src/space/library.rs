@@ -316,14 +316,14 @@ fn copy(
         // Only inspection is repaired. The authored invocation and its syntax
         // evidence remain in SchemaSpace. No identifier, anchor, or target is
         // reconstructed here; ordinary lookup still belongs to the registry.
-        if positions
-            .get(&ref_id(node))
-            .is_some_and(|&id| repair_reference(id))
-            && let Value::Object(object) = &mut copied
+        if let Value::Object(object) = &mut copied
             && object
                 .get("$ref")
                 .and_then(Value::as_str)
                 .is_some_and(|r| !uri::valid(r))
+            && positions
+                .get(&ref_id(node))
+                .is_some_and(|&id| repair_reference(id))
         {
             object.remove("$ref");
         }
