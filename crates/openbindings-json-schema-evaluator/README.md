@@ -207,11 +207,12 @@ resources:
   take 0.22 s in the reference build. The refusal comes after core projects
   the value contract, which its admission limits and 100,000 schema positions bound,
   and before the evaluator copies the resources and the library compiles them,
-  so it bounds the time and memory of that compilation: a 7 MB document whose
-  input reaches a chain of 99,990 `$id` resources prepared in 11.5 s at a
-  723 MB peak without a cap, and refused in 1.2 s at a 502 MB peak with a cap
-  of 1,000 (release build on macOS arm64, peak resident memory of the whole
-  process).
+  so it bounds the time and memory of that compilation: an 8 MB document whose
+  input reaches a chain of 99,990 `$id` resources, near core's 100,000 schema
+  positions, prepared in 8.1 s at a 725 MB peak without a cap, and refused in
+  1.1 s at a 499 MB peak with a cap of 1,000 (release build on macOS arm64,
+  peak resident memory of the whole process, which varied by about a tenth
+  between runs).
 
 Core's document admission limits bound the bytes and nodes of every document
 and resource, and its projection refuses a value contract reaching more than 100,000

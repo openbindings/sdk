@@ -148,9 +148,9 @@ level), and a
 cap on the schema resources one value contract may reach (`schema_resources`,
 `schemaResources` in TypeScript). That cap refuses a value contract after core projects
 it and before the evaluator copies its resources and the library compiles them,
-so it bounds the time and memory of that compilation: a 7 MB document whose input
-reaches a chain of 99,990 `$id` resources prepared in 11.5 s at a 723 MB peak
-without it, and refused in 1.2 s at a 502 MB peak with it set to 1,000. Within
+so it bounds the time and memory of that compilation: an 8 MB document whose input
+reaches a chain of 99,990 `$id` resources prepared in 8.1 s at a 725 MB peak
+without it, and refused in 1.1 s at a 499 MB peak with it set to 1,000. Within
 these bounds, preparing a schema can still take more memory than a host may
 want, since the library's compiled program grows with what it compiles: 1,000
 holders of `unevaluatedProperties` that each inherit 4,000 properties peak at

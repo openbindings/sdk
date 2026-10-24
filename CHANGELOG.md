@@ -178,8 +178,8 @@
   `schemaResources`) caps the schema resources one value contract may reach, refusing
   with `LimitExceeded` and `schema-resource-limit` before the library compiles
   the value contract, which bounds that compilation's time and memory (a
-  99,990-resource `$id` chain: 11.5 s and 723 MB without a cap, 1.2 s and
-  502 MB refused at 1,000). Whatever `Limits` sets, preparation refuses a
+  99,990-resource `$id` chain: 8.1 s and 725 MB without a cap, 1.1 s and
+  499 MB refused at 1,000). Whatever `Limits` sets, preparation refuses a
   reached schema nested more than 256 schemas below the schema position or
   supplied resource root that holds it (`schema-depth-limit`), and reference
   inspection skips the references nested past that depth (`schema-depth`).

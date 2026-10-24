@@ -253,9 +253,9 @@ natively), and the SDK sets no cap by default. When preparing untrusted
 documents or resources, pass `limits: { schemaResources: n }`; a value contract
 reaching more than `n` refuses with the `schema-resource-limit` no-verdict
 before the library compiles it, which bounds the time and memory of that
-compilation: natively, a 7 MB document reaching a chain of 99,990 `$id`
-resources prepared in 11.5 s at a 723 MB peak without a cap, and refused in
-1.2 s at a 502 MB peak with a cap of 1,000.
+compilation: natively, an 8 MB document reaching a chain of 99,990 `$id`
+resources prepared in 8.1 s at a 725 MB peak without a cap, and refused in
+1.1 s at a 499 MB peak with a cap of 1,000.
 
 The evaluator bounds what the SDK itself reads, writes and recurses through, not
 the memory of the JSON Schema library's compiled program. On by default:
