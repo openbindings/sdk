@@ -60,7 +60,7 @@ fn error(code: &str, message: impl ToString) -> JsValue {
 }
 fn input_error(e: InputError) -> JsValue {
     JsValue::from_str(&encoded(
-        json!({"code":e.code,"kind":format!("{:?}",e.kind),"byte_offset":e.byte_offset,"message":e.to_string()}),
+        json!({"code":e.code(),"kind":format!("{:?}",e.kind()),"byte_offset":e.byte_offset(),"message":e.to_string()}),
     ))
 }
 // Admission limits as the facade passes them: bytes, nodes and nesting, each a
@@ -972,7 +972,7 @@ struct Envelope {
 }
 // An exceeded limit while admitting what an edit writes is the document's.
 fn admission_error(error: InputError) -> JsValue {
-    if error.kind == InputErrorKind::Limit {
+    if error.kind() == InputErrorKind::Limit {
         edit_error(EditError::Input(error))
     } else {
         input_error(error)

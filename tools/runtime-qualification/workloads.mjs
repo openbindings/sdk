@@ -45,7 +45,7 @@ export function prepare(sdk, source) {
 export function describe(result) {
   const wire = JSON.stringify(result);
   return {
-    outcome: result.outcome,
+    outcome: result.status,
     problems: result.problems?.length ?? 0,
     complete: result.problemsComplete ?? null,
     wireBytes: bytes(wire),
@@ -71,8 +71,8 @@ export function retainedBatch(
   const start = clock();
   for (let n = 0; n < repetitions; n++) {
     const result = contract.validate(value);
-    if (result.outcome !== expectedOutcome)
-      throw Error("retained batch changed verdict: " + result.outcome);
+    if (result.status !== expectedOutcome)
+      throw Error("retained batch changed verdict: " + result.status);
   }
   const elapsed = clock() - start;
   check(Number.isFinite(elapsed) && elapsed >= 0, "invalid timer duration");
@@ -89,8 +89,8 @@ export function invalidSerializedBatch(contract, value, repetitions, clock) {
   const start = clock();
   for (let n = 0; n < repetitions; n++) {
     lastResult = contract.validate(value);
-    if (lastResult.outcome !== "fails")
-      throw Error("diagnostic batch changed verdict: " + lastResult.outcome);
+    if (lastResult.status !== "fails")
+      throw Error("diagnostic batch changed verdict: " + lastResult.status);
     lastWire = JSON.stringify(lastResult);
   }
   const elapsed = clock() - start;
@@ -144,18 +144,18 @@ export function runTier(sdk, testing, fixture, timed = true) {
       });
       value = take("parseValue", () => parsed(sdk, fixture.valid));
       const first = take("firstValidation", () => contract.validate(value));
-      check(first.outcome === fixture.validOutcome, JSON.stringify(first));
+      check(first.status === fixture.validOutcome, JSON.stringify(first));
       const hot = take("hotSingleDescriptive", () => contract.validate(value));
-      check(hot.outcome === fixture.validOutcome, JSON.stringify(hot));
+      check(hot.status === fixture.validOutcome, JSON.stringify(hot));
       invalid = take("parseInvalid", () => parsed(sdk, fixture.invalid));
       const failed = take("invalid", () => contract.validate(invalid));
-      check(failed.outcome === "fails", JSON.stringify(failed));
+      check(failed.status === "fails", JSON.stringify(failed));
       const wire = take("serialize", () => JSON.stringify(failed));
       last = {
         ...describe(failed),
         wireBytes: bytes(wire),
         assessment: assessment.report.conclusion,
-        validOutcome: first.outcome,
+        validOutcome: first.status,
         validRefusal: first.detail ?? null,
       };
     } finally {
@@ -321,7 +321,7 @@ export function lifetime(sdk, testing, fixture, timed = true) {
   try {
     for (let n = 0; n < 1000; n++)
       check(
-        active.validate(1).outcome === "satisfies",
+        active.validate(1).status === "satisfies",
         "sustained retained call",
       );
     for (let n = 1; n <= 200; n++) {
@@ -330,15 +330,15 @@ export function lifetime(sdk, testing, fixture, timed = true) {
       active = make(n % 2 ? "string" : "integer", n);
       const oldValue = n % 2 ? 1 : "old";
       check(
-        old.validate(oldValue).outcome === "satisfies",
+        old.validate(oldValue).status === "satisfies",
         "old snapshot survives replacement",
       );
       check(
-        active.validate(n % 2 ? "new" : 1).outcome === "satisfies",
+        active.validate(n % 2 ? "new" : 1).status === "satisfies",
         "new snapshot",
       );
       check(
-        active.validate(oldValue).outcome === "fails",
+        active.validate(oldValue).status === "fails",
         "snapshots must not mix",
       );
       old.dispose();
@@ -370,12 +370,12 @@ export function lifetime(sdk, testing, fixture, timed = true) {
     const cancellation = new AbortController();
     cancellation.abort();
     check(
-      active.validate(1, { signal: cancellation.signal }).outcome ===
+      active.validate(1, { signal: cancellation.signal }).status ===
         "no-verdict",
       "pre-cancellation",
     );
     check(
-      active.validate(1).outcome === "satisfies",
+      active.validate(1).status === "satisfies",
       "recovery after cancellation",
     );
   } finally {
@@ -448,11 +448,11 @@ export function amplification(sdk, fixture, timed = true) {
       const wire = JSON.stringify(result);
       const ended = timed ? performance.now() : 0;
       check(
-        result.outcome === "fails" && result.problemsComplete === false,
+        result.status === "fails" && result.problemsComplete === false,
         "amplification witness preserves failure and truthful incompleteness",
       );
       observation = {
-        outcome: result.outcome,
+        outcome: result.status,
         complete: result.problemsComplete,
         problems: result.problems.length,
         wireBytes: bytes(wire),

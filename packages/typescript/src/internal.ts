@@ -285,12 +285,12 @@ export interface ValueProblem {
 /** Closed selected-schema result partition: satisfies, fails, undefined, or no-verdict. An established failure may have incomplete diagnostics; problemsComplete does not weaken its verdict. Neither satisfies nor fails proves normative OBI conformance of the surrounding document. */
 export type ValueOutcome =
   | {
-      /** Semantic result discriminant; narrow before reading branch-specific data. */
-      outcome: "satisfies";
+      /** Result discriminant; narrow this before reading branch-specific fields. */
+      status: "satisfies";
     }
   | {
-      /** Semantic result discriminant; narrow before reading branch-specific data. */
-      outcome: "fails";
+      /** Result discriminant; narrow this before reading branch-specific fields. */
+      status: "fails";
       /** Value-free explanation of the established failure. */
       message: string;
       /** Retained actual failing instance locations. */
@@ -299,14 +299,14 @@ export type ValueOutcome =
       problemsComplete: boolean;
     }
   | {
-      /** Semantic result discriminant; narrow before reading branch-specific data. */
-      outcome: "undefined";
+      /** Result discriminant; narrow this before reading branch-specific fields. */
+      status: "undefined";
       /** Established undefined result, with an original schema coordinate when known. */
       detail: UndefinedResult;
     }
   | {
-      /** Semantic result discriminant; narrow before reading branch-specific data. */
-      outcome: "no-verdict";
+      /** Result discriminant; narrow this before reading branch-specific fields. */
+      status: "no-verdict";
       /** Structured no-verdict reason; no satisfaction/failure is claimed. */
       detail: NoVerdict;
     };
@@ -365,8 +365,8 @@ export interface ValueAdmissionFailure {
 export type ValueCheck =
   | ValueOutcome
   | {
-      /** Semantic result discriminant; narrow before reading branch-specific data. */
-      outcome: "input-error";
+      /** Result discriminant; narrow this before reading branch-specific fields. */
+      status: "input-error";
       /** Structured expected failure for this branch. */
       error: ValueAdmissionFailure;
     };
@@ -374,8 +374,8 @@ export type ValueCheck =
 export type JsonCheck =
   | ValueOutcome
   | {
-      /** Semantic result discriminant; narrow before reading branch-specific data. */
-      outcome: "input-error";
+      /** Result discriminant; narrow this before reading branch-specific fields. */
+      status: "input-error";
       /** Exact-input refusal: stable code, optional kind and zero-based byte offset, and message. */
       error: InputFailure["error"];
     };
@@ -413,7 +413,7 @@ export interface Reference {
   resolution:
     | {
         /** Located establishes a static target; unresolved preserves the refusal. */
-        outcome: "located";
+        status: "located";
         /** Original source target coordinate. */
         target: SchemaLocation;
         /** Whether runtime dynamic-anchor scope must still be applied. */
@@ -421,7 +421,7 @@ export interface Reference {
       }
     | {
         /** Located establishes a static target; unresolved preserves the refusal. */
-        outcome: "unresolved";
+        status: "unresolved";
         /** Structured unresolved-reference cause. */
         detail: ReferenceRefusal;
       };
@@ -2119,7 +2119,7 @@ function isAborted(signal: AbortSignal | undefined): boolean {
 }
 function cancelledValue(): ValueOutcome {
   return {
-    outcome: "no-verdict",
+    status: "no-verdict",
     detail: {
       reason: "cancelled",
       code: "caller-cancelled",
@@ -2169,7 +2169,7 @@ export class PreparedValueContract extends Managed {
           : prepared.validateJson(data),
       );
     } catch (error) {
-      return { outcome: "input-error", error: failure(error).error };
+      return { status: "input-error", error: failure(error).error };
     }
   }
   // As for validate, the first signature is the one an untyped argument takes.
@@ -2220,7 +2220,7 @@ function checkValue(
     } catch (error) {
       if (!(error instanceof PartSerializationError)) throw error;
       return {
-        outcome: "input-error",
+        status: "input-error",
         error: {
           code: (error.code === "authoring-limit"
             ? "input-limit"
@@ -2236,7 +2236,7 @@ function checkValue(
       // Only known JSON admission limits can refuse text produced by the checked encoder.
       if (inputErrorKind(error) !== "Limit") throw error;
       return {
-        outcome: "input-error",
+        status: "input-error",
         error: {
           code: "input-limit",
           instancePointer: null,

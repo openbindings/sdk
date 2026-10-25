@@ -307,7 +307,7 @@ test("a projection keeps its own bounds whatever the document was admitted under
   const prepared = prepareInput(large, "op");
   assert.equal(prepared.status, "ready");
   const value = parsed(sdk.parseJson(literal, { limits }));
-  assert.equal(prepared.valueContract.validate(value).outcome, "satisfies");
+  assert.equal(prepared.valueContract.validate(value).status, "satisfies");
   for (const owner of [large, prepared.valueContract, value]) owner.dispose();
 });
 

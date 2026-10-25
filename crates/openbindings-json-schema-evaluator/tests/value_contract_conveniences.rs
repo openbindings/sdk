@@ -174,7 +174,7 @@ fn json_validation_returns_original_admission_errors() {
         (deep.as_bytes(), InputErrorKind::Limit),
     ] {
         let expected = JsonValue::parse(bytes).unwrap_err();
-        assert_eq!(expected.kind, kind);
+        assert_eq!(expected.kind(), kind);
         assert_eq!(ready.validate_json(bytes).unwrap_err(), expected);
     }
     // A limit names parsing with limits and then validating, since this call

@@ -273,5 +273,21 @@
 - Runnable first-use and lifecycle examples, legacy Go and TypeScript migration
   guidance, API reference documentation and reproducible performance measurements.
 
+### Changed
+
+- `InputError` is read through methods, as `EditError` is through `code()`:
+  `kind()`, `byte_offset()` and `code()` return its kind, zero-based byte offset
+  and stable code, and its fields are private. `InputErrorKind` is `Copy`, so
+  `kind()` returns it by value. Equality compares the kind, byte offset and code.
+- Every TypeScript result union discriminates on `status`. Value results
+  (`ValueOutcome`, `ValueCheck` and `JsonCheck`) narrow on `status` to
+  `satisfies`, `fails`, `undefined`, `no-verdict` or `input-error`, and a
+  reference's `resolution` to `located` or `unresolved`, as parse, validation,
+  preparation, selection and discovery results narrow on it.
+- Rust's serialized value and reference results discriminate on `status`: a
+  serialized `ValueOutcome` or `ReferenceResolution` names its variant in
+  `status`, so the JSON a Rust caller writes and the object TypeScript returns
+  carry the same discriminant and values.
+
 This first release remains unpublished. Package and specification versions are
 independent.

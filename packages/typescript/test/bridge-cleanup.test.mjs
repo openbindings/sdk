@@ -89,7 +89,7 @@ test("owned selection and preparation wrappers release untaken children on decod
     selected.operation.dispose();
     const prepared = contract.prepare();
     assert.equal(prepared.status, "ready");
-    assert.equal(prepared.valueContract.validate(7).outcome, "satisfies");
+    assert.equal(prepared.valueContract.validate(7).status, "satisfies");
     prepared.valueContract.dispose();
   } finally {
     contract.dispose();
@@ -111,7 +111,7 @@ test("ordinary admission maps only known engine limits and preserves unexpected 
       throw '{"kind":"Limit","message":"fixture admission limit"}';
     };
     assert.deepEqual(prepared.validate(7), {
-      outcome: "input-error",
+      status: "input-error",
       error: {
         code: "input-limit",
         instancePointer: null,

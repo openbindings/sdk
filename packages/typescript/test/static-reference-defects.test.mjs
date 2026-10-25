@@ -55,7 +55,7 @@ test("static reference matrix and concrete completions through Wasm", async () =
       const result =
         setup.status === "ready"
           ? contract.validate(c.value)
-          : { outcome: "no-verdict", detail: setup.detail };
+          : { status: "no-verdict", detail: setup.detail };
       const actual = {
         stage: setup.status === "ready" ? "ready" : "preparation",
         outcome: {
@@ -63,7 +63,7 @@ test("static reference matrix and concrete completions through Wasm", async () =
           fails: "F",
           undefined: "undefined",
           "no-verdict": "N",
-        }[result.outcome],
+        }[result.status],
       };
       if (result.detail)
         actual.detail = {
@@ -81,7 +81,7 @@ test("static reference matrix and concrete completions through Wasm", async () =
         expected.outcome = "undefined";
         delete expected.detail.reason;
       }
-      if (result.outcome === "undefined") {
+      if (result.status === "undefined") {
         assert.equal("reason" in result.detail, false, c.id);
         assert.equal(typeof result.detail.message, "string", c.id);
       }

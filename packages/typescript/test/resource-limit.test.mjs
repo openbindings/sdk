@@ -67,7 +67,7 @@ const assertReaches = (text, resources, reached, value = 7) => {
   for (const cap of [reached, null]) {
     const prepared = preparation(text, resources, cap);
     assert.equal(prepared.status, "ready", `cap ${cap}`);
-    assert.equal(prepared.valueContract.validate(value).outcome, "satisfies");
+    assert.equal(prepared.valueContract.validate(value).status, "satisfies");
     prepared.valueContract.dispose();
   }
   assertRefused(preparation(text, resources, reached - 1));
@@ -186,8 +186,8 @@ test("a contract's compiled patterns share its pattern memory", () => {
   const alone = ready(
     preparation(document({}, { patternProperties: names(1) }), undefined, null),
   );
-  assert.equal(alone.validateJson('{"a0":1}').outcome, "fails");
-  assert.equal(alone.validateJson("{}").outcome, "satisfies");
+  assert.equal(alone.validateJson('{"a0":1}').status, "fails");
+  assert.equal(alone.validateJson("{}").status, "satisfies");
   alone.dispose();
   // Small patterns elsewhere leave the large name its outcome.
   const small = Object.fromEntries(
@@ -200,7 +200,7 @@ test("a contract's compiled patterns share its pattern memory", () => {
       null,
     ),
   );
-  assert.equal(among.validateJson('{"a0":1}').outcome, "fails");
+  assert.equal(among.validateJson('{"a0":1}').status, "fails");
   among.dispose();
   // Three patterns' 48 KiB admit three compiled patterns; run matchers do
   // not count.
@@ -257,7 +257,7 @@ test("a contract's compiled patterns share its pattern memory", () => {
     ),
   );
   const unmatched = lazy.validateJson('"ax"');
-  assert.equal(unmatched.outcome, "no-verdict");
+  assert.equal(unmatched.status, "no-verdict");
   assert.equal(unmatched.detail.code, "pattern-total-memory-limit");
   assert.equal(
     unmatched.detail.message,

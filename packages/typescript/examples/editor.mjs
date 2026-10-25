@@ -80,7 +80,7 @@ function schemaLocation(location) {
 }
 
 function valueLines(result) {
-  switch (result.outcome) {
+  switch (result.status) {
     case "satisfies":
       return ["Selected input satisfies the input contract."];
     case "fails":

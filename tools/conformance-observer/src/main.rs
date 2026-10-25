@@ -252,10 +252,10 @@ fn observe_value(preparation: &Preparation, value: &JsonValue) -> String {
         Preparation::Prepared(Ok(contract)) => {
             serde_json::to_string(&contract.validate(value)).unwrap()
         }
-        Preparation::NoContract => json!({"outcome":"no-contract"}).to_string(),
-        Preparation::OperationMissing => json!({"outcome":"operation-missing"}).to_string(),
+        Preparation::NoContract => json!({"status":"no-contract"}).to_string(),
+        Preparation::OperationMissing => json!({"status":"operation-missing"}).to_string(),
         Preparation::Prepared(Err(detail)) => extended(
-            json!({"outcome":"no-verdict"}).to_string(),
+            json!({"status":"no-verdict"}).to_string(),
             &[("detail", serde_json::to_string(detail).unwrap())],
         ),
     }

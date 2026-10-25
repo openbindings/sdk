@@ -175,7 +175,7 @@ test("the program and stack budgets scale what preparation and evaluation admit"
   try {
     const defaults = preparation(nested);
     const refused = defaults.valueContract.validate(deep);
-    assert.equal(refused.outcome, "no-verdict");
+    assert.equal(refused.status, "no-verdict");
     assert.equal(refused.detail.code, "evaluation-depth-limit");
     assert.equal(
       refused.detail.message,
@@ -183,7 +183,7 @@ test("the program and stack budgets scale what preparation and evaluation admit"
     );
     defaults.valueContract.dispose();
     const larger = preparation(nested, { stackBytes: 512 * 1024 });
-    assert.equal(larger.valueContract.validate(deep).outcome, "satisfies");
+    assert.equal(larger.valueContract.validate(deep).status, "satisfies");
     larger.valueContract.dispose();
   } finally {
     deep.dispose();

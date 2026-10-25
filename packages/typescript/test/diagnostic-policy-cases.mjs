@@ -148,11 +148,11 @@ export function diagnosticPolicyCases(sdk) {
     );
     const contract = own(prepared.valueContract);
     check(
-      contract.validate(null).outcome === "fails",
+      contract.validate(null).status === "fails",
       "false schema establishes fails",
     );
     check(
-      contract.validate(NaN).outcome === "input-error",
+      contract.validate(NaN).status === "input-error",
       "ordinary input errors remain admission outcomes",
     );
     const error = thrown(() => declared.prepare({ diagnostics: "sideways" }));
@@ -249,7 +249,7 @@ export function diagnosticPolicyCases(sdk) {
         check(state.status === "ready", "missing resource prepares");
         const result = own(state.valueContract).validate(null);
         check(
-          result.outcome === "no-verdict" &&
+          result.status === "no-verdict" &&
             result.detail.reason === "resource-unavailable",
           "missing resource refuses dependent validation",
         );
@@ -324,7 +324,7 @@ export function diagnosticPolicyCases(sdk) {
       check(state.status === "ready", "type/message contract prepared");
       const outcome = own(state.valueContract).explain(instance);
       check(
-        outcome.outcome === "fails" && outcome.problems[0].message === expected,
+        outcome.status === "fails" && outcome.problems[0].message === expected,
         "useful expected type or safe generic guidance",
       );
       for (const problem of outcome.problems) safe(problem.message);

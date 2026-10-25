@@ -56,7 +56,7 @@ test("explained problems locate the value's node and the document's keyword", ()
     const value = own(exact(text));
     assert.deepEqual(contract.validate(value).problems, []);
     const result = contract.explain(value);
-    assert.equal(result.outcome, "fails");
+    assert.equal(result.status, "fails");
     const [problem] = result.problems;
     assert.equal(problem.instance, "/items/1");
     // The value holds its text, so it finds the line and column when asked.

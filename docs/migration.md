@@ -56,7 +56,7 @@ Resources are caller-supplied and immutable, with no automatic reference fetchin
 Changing resources means preparing again; old value contracts keep their snapshots.
 A prepared value contract may still return no-verdict for individual values. An undefined
 result is its own outcome: match `ValueOutcome::Undefined { detail }` in Rust or
-`{ outcome: "undefined", detail }` in TypeScript. `UndefinedResult` carries a code,
+`{ status: "undefined", detail }` in TypeScript. `UndefinedResult` carries a code,
 message and optional original schema location. Move handling of the former
 `NoVerdictReason::Undefined` or `"undefined"` refusal reason to this branch;
 no-verdict now carries only inability to answer. Legacy

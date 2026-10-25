@@ -29,11 +29,11 @@ test("service replacement retains in-flight work and handles partial contracts",
   });
   let resume, pending;
   try {
-    assert.equal(partial.validate("preview").outcome, "satisfies");
+    assert.equal(partial.validate("preview").status, "satisfies");
     service.replace(partial.retain());
-    assert.equal(service.check("preview").outcome, "satisfies");
+    assert.equal(service.check("preview").status, "satisfies");
     service.replace(candidate({ type: "integer" }));
-    assert.equal(service.check(7).outcome, "satisfies");
+    assert.equal(service.check(7).status, "satisfies");
     pending = service.checkBytes(
       new Promise((resolve) => {
         resume = resolve;
@@ -41,8 +41,8 @@ test("service replacement retains in-flight work and handles partial contracts",
     );
     service.replace(candidate({ type: "string" }));
     resume("7");
-    assert.equal((await pending).outcome, "satisfies");
-    assert.equal(service.check("new snapshot").outcome, "satisfies");
+    assert.equal((await pending).status, "satisfies");
+    assert.equal(service.check("new snapshot").status, "satisfies");
   } finally {
     resume?.("7");
     await pending;

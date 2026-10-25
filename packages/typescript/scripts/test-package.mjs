@@ -112,8 +112,8 @@ try {
   console.log = log;
 }
 assert.equal(results.length, 2);
-assert.equal(results[0].result.outcome, "satisfies");
-assert.equal(results[1].result.outcome, "fails");
+assert.equal(results[0].result.status, "satisfies");
+assert.equal(results[1].result.status, "fails");
 console.log("Installed README TypeScript first-use block compiled and ran verbatim.");
 `,
   );
@@ -223,19 +223,19 @@ console.log(JSON.stringify(inspectEditExampleCases(sdk, inspectionEditing)));
       encoding: "utf8",
     }),
   );
-  assert.equal(firstUse.accepted.result.outcome, "satisfies");
-  assert.equal(firstUse.fails.result.outcome, "fails");
-  assert.equal(firstUse.invalidInput.result.outcome, "input-error");
+  assert.equal(firstUse.accepted.result.status, "satisfies");
+  assert.equal(firstUse.fails.result.status, "fails");
+  assert.equal(firstUse.invalidInput.result.status, "input-error");
   const lifecycle = JSON.parse(
     execFileSync(process.execPath, [join(examples, "service-lifecycle.mjs")], {
       cwd: temporary,
       encoding: "utf8",
     }),
   );
-  assert.equal(lifecycle.outcomes.inFlight.outcome, "satisfies");
-  assert.equal(lifecycle.outcomes.current.outcome, "satisfies");
+  assert.equal(lifecycle.outcomes.inFlight.status, "satisfies");
+  assert.equal(lifecycle.outcomes.current.status, "satisfies");
   assert.equal(lifecycle.outcomes.cancelled.detail.reason, "cancelled");
-  assert.equal(lifecycle.outcomes.sameOwnerRecovery.outcome, "satisfies");
+  assert.equal(lifecycle.outcomes.sameOwnerRecovery.status, "satisfies");
   assert.equal(lifecycle.arenas.released, lifecycle.arenas.warmed);
   console.log("Installed first-use and service lifecycle examples passed.");
 } finally {

@@ -38,10 +38,10 @@ export async function firstUsePage(browser, url, configure = async () => {}) {
       loadingFailed,
     ]);
     assert.deepEqual(errors, []);
-    assert.equal(result.accepted.result.outcome, "satisfies");
+    assert.equal(result.accepted.result.status, "satisfies");
     assert.equal(result.accepted.operations[0].key, "lookup");
-    assert.equal(result.fails.result.outcome, "fails");
-    assert.equal(result.invalidInput.result.outcome, "input-error");
+    assert.equal(result.fails.result.status, "fails");
+    assert.equal(result.invalidInput.result.status, "input-error");
     return { firstUse: result, errors: [...errors] };
   } finally {
     await page.close();

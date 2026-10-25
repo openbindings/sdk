@@ -165,9 +165,9 @@ test("retained contracts and metadata support repeated native-feeling caller use
     document.dispose();
     const good = sdk.ExactJson.from(7),
       bad = sdk.ExactJson.from("private-value");
-    assert.equal(input.validate(good).outcome, "satisfies");
+    assert.equal(input.validate(good).status, "satisfies");
     const mismatch = input.validate(bad);
-    assert.equal(mismatch.outcome, "fails");
+    assert.equal(mismatch.status, "fails");
     assert.ok(!JSON.stringify(mismatch).includes("private-value"));
     assert.equal(output, undefined);
     good.dispose();
@@ -366,7 +366,7 @@ test("explicit resources, evaluator limits and pre-cancellation keep their disti
   schema.dispose();
   const references = document.references({ resources });
   assert.equal(references.complete, true);
-  assert.equal(references.references[0].resolution.outcome, "located");
+  assert.equal(references.references[0].resolution.status, "located");
   const control = new AbortController();
   control.abort();
   const checked = document.validate();
@@ -380,16 +380,16 @@ test("explicit resources, evaluator limits and pre-cancellation keep their disti
   assert.equal(cancelled.status, "no-verdict");
   assert.equal(cancelled.detail.reason, "cancelled");
   const healthy = ready(contract.prepare({ resources }));
-  assert.equal(healthy.validate(value).outcome, "satisfies");
+  assert.equal(healthy.validate(value).status, "satisfies");
   assert.equal(
     healthy.validate(value, { signal: control.signal }).detail.reason,
     "cancelled",
   );
-  assert.equal(healthy.validate(value).outcome, "satisfies");
+  assert.equal(healthy.validate(value).status, "satisfies");
   const input = ready(
     contract.prepare({ resources, limits: { evaluationSteps: 0 } }),
   );
-  assert.equal(input.validate(value).outcome, "no-verdict");
+  assert.equal(input.validate(value).status, "no-verdict");
   assert.equal(input.validate(value).detail.reason, "limit-exceeded");
   input.dispose();
   // By default no work cap applies; null selects that, and a number caps
@@ -398,7 +398,7 @@ test("explicit resources, evaluator limits and pre-cancellation keep their disti
   const grown = ready(
     contract.prepare({ resources, limits: { evaluationSteps: null } }),
   );
-  assert.equal(grown.validate(value).outcome, "satisfies");
+  assert.equal(grown.validate(value).status, "satisfies");
   grown.dispose();
   // Only evaluationSteps and schemaResources have null defaults, and the
   // refusal says so.
@@ -540,7 +540,7 @@ test("operation views retain independent owners", () => {
   retained.dispose();
   const prepared = ready(contract.prepare());
   contract.dispose();
-  assert.equal(prepared.validate(7).outcome, "satisfies");
+  assert.equal(prepared.validate(7).status, "satisfies");
   prepared.dispose();
   assert.equal(testing.liveStorageOwners(), before);
 });
@@ -552,15 +552,15 @@ test("validateJson admits JSON text as parseJson does, then validates", () => {
   document.dispose();
   const before = testing.liveStorageOwners();
   const utf8 = (value) => new TextEncoder().encode(value);
-  assert.equal(contract.validate("7").outcome, "fails");
-  assert.equal(contract.validateJson("7").outcome, "satisfies");
-  assert.equal(contract.validateJson(utf8(" 7 ")).outcome, "satisfies");
-  assert.equal(contract.validateJson("9007199254740993").outcome, "satisfies");
-  assert.equal(contract.validateJson("1.5").outcome, "fails");
+  assert.equal(contract.validate("7").status, "fails");
+  assert.equal(contract.validateJson("7").status, "satisfies");
+  assert.equal(contract.validateJson(utf8(" 7 ")).status, "satisfies");
+  assert.equal(contract.validateJson("9007199254740993").status, "satisfies");
+  assert.equal(contract.validateJson("1.5").status, "fails");
   const failed = contract.validateJson('"7"');
   assert.deepEqual(failed, contract.validate("7"));
   const duplicate = contract.validateJson('{"a":1,"a":2}');
-  assert.equal(duplicate.outcome, "no-verdict");
+  assert.equal(duplicate.status, "no-verdict");
   assert.equal(duplicate.detail.code, "duplicate-instance-members");
   // A refusal's message says what was expected and where; code and offset
   // stay the machine-readable fields.
@@ -591,7 +591,7 @@ test("validateJson admits JSON text as parseJson does, then validates", () => {
         ? "the input nests deeper than the admitted depth limit at byte 10000; parse the value with JsonValue::parse_with_limits and a larger JsonLimits::max_depth, then validate it (parseJson with a larger limits.maxDepth in TypeScript)"
         : admitted.error.message;
     assert.deepEqual(contract.validateJson(input), {
-      outcome: "input-error",
+      status: "input-error",
       error: { ...admitted.error, message },
     });
   }
