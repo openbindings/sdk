@@ -274,7 +274,8 @@ default: `compileJsonDepth` (512), the projected JSON nesting compiled;
 (4 MiB of the forms kept for a value contract's patterns);
 `totalPatternMemory` (64 MiB) for a value contract's patterns: the run matchers
 that match anchored sequences of single-character runs, which hold a few bytes
-for each step and set and a byte for each byte of literal text, and the
+for each step and each range of members past ASCII and a byte for each byte of
+literal text, and the
 compiled patterns, a quarter of it for their search caches in equal parts and
 the rest for their compiled forms beside the run matchers, each first within
 48 KiB while those that need more share what is

@@ -125,7 +125,8 @@ patterns together (`total_pattern_memory`, 64 MiB, `totalPatternMemory` in
 TypeScript, `pattern-total-memory-limit`, with a message that states the
 arithmetic): the SDK's run matchers, which match anchored sequences of
 single-character runs without an automaton and hold a few bytes for each step
-and set and a byte for each byte of literal text, and the regex crate's memory
+and each range of members past ASCII and a byte for each byte of literal text,
+and the regex crate's memory
 for the compiled patterns, spent through the crate's lazy-DFA cache setting, a
 quarter of it in equal parts, and its compiled-size setting, within which each
 pattern first compiles in 48 KiB beside the run matchers while those that need

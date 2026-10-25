@@ -109,20 +109,25 @@ pub struct Limits {
     /// default 64 MiB (67,108,864 bytes). A distinct form of a `pattern`
     /// value that is one anchored sequence of single-character runs, every
     /// run but the last with a fixed count, is matched by a run matcher, which
-    /// holds 104 bytes, 12 for each step (adjacent literal characters share
-    /// one, as adjacent runs of one set do), 24 for each distinct set, 8 for
-    /// each range of a set's members past ASCII and a byte for each byte of
-    /// literal text. The value contract compiles each other distinct `pattern`
-    /// form, and the form of each `patternProperties` name, through the regex
-    /// crate's two documented size settings. A quarter of the memory, at most
-    /// 2 MiB for each compiled pattern, is their search caches
-    /// (`dfa_size_limit`), in equal parts, which bound only how fast a search
-    /// runs. Each form first compiles within 48 KiB (`size_limit`), and the
-    /// run matchers and these first allowances share the other three
-    /// quarters, so a value contract whose run matchers and compiled patterns
-    /// need more refuses with `pattern-total-memory-limit` at the first
-    /// pattern past it, before any is compiled: at the default, 1,024
-    /// compiled patterns fill them, and beside any run matcher 1,023 do. The
+    /// holds 104 bytes, 24 for each step (adjacent literal characters share
+    /// one, as adjacent runs of one set do), 16 for each character of a short
+    /// fixed part of ASCII it holds as a table instead, 8 for each range of a
+    /// run's members past ASCII and a byte for each byte of literal text. The
+    /// value contract compiles each other distinct `pattern` form, and the
+    /// form of each `patternProperties` name, through the regex crate's two
+    /// documented size settings. A quarter of the memory, at most 2 MiB for
+    /// each compiled pattern, is their search caches (`dfa_size_limit`), in
+    /// equal parts, which bound only how fast a search runs. Each form first
+    /// compiles within 48 KiB (`size_limit`), and the run matchers and these
+    /// first allowances share the other three quarters: at the default those
+    /// are 48 MiB, which hold 1,024 first allowances, and each 48 KiB or part
+    /// of it that the run matchers hold takes the place of one. Preparation
+    /// reads the patterns in order and refuses with
+    /// `pattern-total-memory-limit` at the first pattern past what the three
+    /// quarters hold, before any is compiled, so run matchers read early can
+    /// bring the refusal to an earlier compiled pattern. When the compiled
+    /// patterns read by then pass the count on their own, the message states
+    /// the count; otherwise it states the run matchers' bytes too. The
     /// forms that need more share what is left equally; those that need less
     /// than their part keep only what they need, to within a sixteenth, and
     /// leave the rest to the others, at most 32 MiB each. So small patterns
@@ -897,9 +902,11 @@ fn pattern_memory_limit(shortfall: pattern::Shortfall) -> NoVerdict {
         } => {
             let most = pattern::Memory::most_patterns(total, 0)
                 .expect("any pattern memory holds no run matcher");
-            // Compiled patterns past the count without the run matchers refuse
-            // where and as they do without them; otherwise the run matchers'
-            // bytes are why the value contract refuses.
+            // The refusal comes at the first pattern past what the memory
+            // holds for the run matchers and first allowances together. When
+            // the compiled patterns read by then pass the count on their own,
+            // it states the count, as it would without run matchers;
+            // otherwise the run matchers' bytes are part of why it refuses.
             if matched == 0 || compiled > most {
                 format!(
                     "this value contract compiles more than {most} regular expressions, as \

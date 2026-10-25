@@ -166,23 +166,28 @@ resources:
   for its compiled patterns. A distinct `pattern` form that is one anchored
   sequence of single-character runs, every run but the last with a fixed
   count (`^[a-z0-9_]{3,16}$`, `^\d{4}-\d{2}-\d{2}$`), is matched by a run
-  matcher without an automaton. It holds 104 bytes, 12 for each step (adjacent
+  matcher without an automaton. It holds 104 bytes, 24 for each step (adjacent
   literal characters share one and are compared as bytes, as adjacent runs of
-  one set share one), 24 for each distinct set, 8 for each range of a set's
-  members past ASCII and a byte for each byte of literal text, so a
-  10,002-byte literal pattern holds 10,116 bytes. Each other distinct
-  `pattern` form, and each `patternProperties` name, is compiled through the
-  regex crate's two size settings. A quarter of the memory, at most 2 MiB each,
-  is their search caches (`dfa_size_limit`), in equal parts; a cache bounds
-  only how fast a search runs. Each form first compiles within 48 KiB
-  (`size_limit`), which all but one of 5,389 measured real patterns fit, and
-  the run matchers and these first allowances share the other three quarters,
-  so a value contract whose run matchers and compiled patterns need more
-  refuses at the first pattern past them, before compiling any: 1,024 compiled
-  patterns fill them at the default, and beside any run matcher 1,023 do. The
-  forms that need more share what is left equally; those that need less than
-  their part keep only what they need, to within a sixteenth, and the rest is
-  shared again among the others, at most 32 MiB each. So a pattern's outcome
+  one set share one), 16 for each character of a short fixed part of ASCII it
+  holds as a table instead, 8 for each range of a run's members past ASCII and
+  a byte for each byte of literal text, so a 10,002-byte literal pattern holds
+  10,128 bytes. Each other distinct `pattern` form, and each
+  `patternProperties` name, is compiled through the regex crate's two size
+  settings. A quarter of the memory, at most 2 MiB each, is their search
+  caches (`dfa_size_limit`), in equal parts; a cache bounds only how fast a
+  search runs. Each form first compiles within 48 KiB (`size_limit`), which
+  all but one of 5,389 measured real patterns fit, and the run matchers and
+  these first allowances share the other three quarters: at the default those
+  are 48 MiB, which hold 1,024 first allowances, and each 48 KiB or part of it
+  that the run matchers hold takes the place of one. Preparation reads the
+  patterns in order and refuses at the first past what the three quarters
+  hold, before compiling any, so run matchers read early can bring the refusal
+  to an earlier compiled pattern; when the compiled patterns read by then pass
+  the count on their own, the message states the count, and otherwise the run
+  matchers' bytes too. The forms that need more share what is left equally;
+  those that need less than their part keep only what they need, to within a
+  sixteenth, and the rest is shared again among the others, at most 32 MiB
+  each. So a pattern's outcome
   depends on the small patterns elsewhere in its value contract only through
   what they hold, 48 KiB for each compiled pattern and its bytes for each run
   matcher, and never on the order strings reach the patterns: a single
