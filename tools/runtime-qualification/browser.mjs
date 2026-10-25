@@ -169,7 +169,7 @@ try {
               ]);
               if (
                 result.status !== "evaluated" ||
-                result.result.outcome !== fixture.validOutcome
+                result.result.status !== fixture.validOutcome
               )
                 throw Error(JSON.stringify(result));
               if (n >= 2) samples.push(performance.now() - start);

@@ -153,8 +153,9 @@ fn reference_refusal(f: embedding::Failure) -> ReferenceRefusal {
     }
 }
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
-#[serde(tag = "outcome", rename_all = "kebab-case")]
+#[serde(tag = "status", rename_all = "kebab-case")]
 /// Static reference inspection outcome. Located dynamic references still require evaluation-time scope resolution.
+/// Serializes with its variant, `located` or `unresolved`, in `status`.
 ///
 /// This closed partition may be exhaustively matched:
 /// ```

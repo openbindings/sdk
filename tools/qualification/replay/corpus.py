@@ -72,7 +72,7 @@ def lacking(features,profile):
 def judge_value(expected,actual,features,profile):
     form={'result':expected} if isinstance(expected,str) else expected
     dependent=form.get('dependsOn',features); unsupported=lacking(dependent,profile)
-    want=form['result']; result=actual['outcome']
+    want=form['result']; result=actual['status']
     if result=='no-contract': return want=='no-contract'
     if result=='undefined': return want=='undefined'
     if result=='no-verdict':
@@ -117,14 +117,14 @@ def controls():
             'reject_unexpected':bool(reconcile(cases,valid+[{'id':'fabricated','executed':True}])),
             'reject_unexecuted':bool(reconcile(cases,[dict(r,executed=False) if i==0 else r for i,r in enumerate(valid)])),
             'exact_integer':exact_text(read_text('{"n":9007199254740993}'))=='{"n":9007199254740993}',
-            'reject_wrong_verdict':not judge_value('satisfies',{'outcome':'fails'},[],PROFILE),
-            'reject_no_contract_for_undefined':not judge_value('undefined',{'outcome':'no-contract'},[],PROFILE),
-            'reject_no_verdict_for_absence':not judge_value('no-contract',{'outcome':'no-verdict','detail':{'reason':'resource-unavailable'}},[],PROFILE),
-            'reject_undefined_for_external':not judge_value('external',{'outcome':'undefined','detail':{'code':'static-reference-defect','message':'established undefined result','location':None}},[],PROFILE),
-            'reject_undefined_for_valid':not judge_value('satisfies',{'outcome':'undefined','detail':{'code':'static-reference-defect','message':'established undefined result','location':None}},[],PROFILE),
-            'reject_obsolete_undefined_reason':not judge_value('undefined',{'outcome':'no-verdict','detail':{'reason':'undefined'}},[],PROFILE),
-            'accept_proven_undefined':judge_value('undefined',{'outcome':'undefined','detail':{'code':'static-reference-defect','message':'established undefined result','location':None}},[],PROFILE),
-            'reject_unsupported_misuse':not judge_value('satisfies',{'outcome':'no-verdict'},['exact-numbers'],PROFILE)}
+            'reject_wrong_verdict':not judge_value('satisfies',{'status':'fails'},[],PROFILE),
+            'reject_no_contract_for_undefined':not judge_value('undefined',{'status':'no-contract'},[],PROFILE),
+            'reject_no_verdict_for_absence':not judge_value('no-contract',{'status':'no-verdict','detail':{'reason':'resource-unavailable'}},[],PROFILE),
+            'reject_undefined_for_external':not judge_value('external',{'status':'undefined','detail':{'code':'static-reference-defect','message':'established undefined result','location':None}},[],PROFILE),
+            'reject_undefined_for_valid':not judge_value('satisfies',{'status':'undefined','detail':{'code':'static-reference-defect','message':'established undefined result','location':None}},[],PROFILE),
+            'reject_obsolete_undefined_reason':not judge_value('undefined',{'status':'no-verdict','detail':{'reason':'undefined'}},[],PROFILE),
+            'accept_proven_undefined':judge_value('undefined',{'status':'undefined','detail':{'code':'static-reference-defect','message':'established undefined result','location':None}},[],PROFILE),
+            'reject_unsupported_misuse':not judge_value('satisfies',{'status':'no-verdict'},['exact-numbers'],PROFILE)}
     for n in range(1,14):
         rule=f'OBI-{n:02}'; case=next(c for c in cases if rule in c['expected'].get('violates',[]))
         result={'id':case['id'],'executed':True,'outcome':'non-conformant','rules':{r:'violated' for r in case['expected']['violates']}}

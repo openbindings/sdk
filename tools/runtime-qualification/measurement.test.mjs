@@ -12,7 +12,7 @@ test("retained timer encloses complete batch with a verdict guard", () => {
     validate(input) {
       assert.equal(input, value);
       events.push("validate");
-      return { outcome: "satisfies" };
+      return { status: "satisfies" };
     },
   };
   let ticks = 0;
@@ -25,7 +25,7 @@ test("retained timer encloses complete batch with a verdict guard", () => {
   assert.throws(
     () =>
       retainedBatch(
-        { validate: () => ({ outcome: "fails" }) },
+        { validate: () => ({ status: "fails" }) },
         value,
         "satisfies",
         10,
@@ -38,7 +38,7 @@ test("unresolved and nonfinite durations cannot become a throughput claim", () =
   for (const duration of [0, -1, NaN, Infinity, -Infinity])
     assert.equal(callsPerSecond(duration), null);
   assert.equal(callsPerSecond(2), 500);
-  const contract = { validate: () => ({ outcome: "satisfies" }) };
+  const contract = { validate: () => ({ status: "satisfies" }) };
   assert.equal(
     retainedBatch(contract, null, "satisfies", 10, () => 0).perCallMs,
     0,
@@ -52,10 +52,10 @@ test("diagnostic timer includes every validation, guard, and one serialization",
   const events = [];
   const value = { exact: true };
   const result = {
-    outcome: "fails",
+    status: "fails",
     toJSON() {
       events.push("serialize");
-      return { outcome: "fails" };
+      return { status: "fails" };
     },
   };
   const contract = {
@@ -78,13 +78,13 @@ test("diagnostic timer includes every validation, guard, and one serialization",
   assert.equal(batch.elapsedMs, 20);
   assert.equal(batch.perCallMs, 2);
   assert.equal(batch.lastResult, result);
-  assert.equal(batch.serializedCodeUnits, '{"outcome":"fails"}'.length);
+  assert.equal(batch.serializedCodeUnits, '{"status":"fails"}'.length);
   assert.throws(
     () =>
       invalidSerializedBatch(
         {
           validate: () => ({
-            outcome: "satisfies",
+            status: "satisfies",
             toJSON() {
               throw Error("must not serialize an unexpected verdict");
             },
@@ -98,7 +98,7 @@ test("diagnostic timer includes every validation, guard, and one serialization",
   );
 });
 test("diagnostic batches retain zero as unresolved and reject nonfinite clocks", () => {
-  const contract = { validate: () => ({ outcome: "fails" }) };
+  const contract = { validate: () => ({ status: "fails" }) };
   assert.equal(
     invalidSerializedBatch(contract, null, 10, () => 0).perCallMs,
     0,

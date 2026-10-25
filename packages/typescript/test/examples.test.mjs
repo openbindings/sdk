@@ -21,16 +21,16 @@ test("first-use caller keeps setup refusals separate and releases its owners", (
   const baseline = liveStorageOwners();
   const accepted = firstUse({ id: 7 });
   assert.equal(accepted.status, "checked");
-  assert.equal(accepted.result.outcome, "satisfies");
+  assert.equal(accepted.result.status, "satisfies");
   assert.equal(accepted.operations[0].key, "lookup");
   assert.deepEqual(accepted.operations[0].aliases, ["find"]);
   assert.equal(
-    firstUse({ id: 7 }, exampleDocument, "lookup").result.outcome,
+    firstUse({ id: 7 }, exampleDocument, "lookup").result.status,
     "satisfies",
   );
-  assert.equal(firstUse({ id: 0 }).result.outcome, "fails");
+  assert.equal(firstUse({ id: 0 }).result.status, "fails");
   const admission = firstUse({ id: NaN }).result;
-  assert.equal(admission.outcome, "input-error");
+  assert.equal(admission.status, "input-error");
   assert.equal(admission.error.instancePointer, "/id");
   assert.equal(
     firstUse({}, exampleDocument, "missing").status,
@@ -68,7 +68,7 @@ test("source editor requires conformance and retains prepared partial snapshots"
 
     const accepted = editor.update(corrected);
     assert.equal(accepted.status, "updated");
-    assert.equal(accepted.result.outcome, "satisfies");
+    assert.equal(accepted.result.status, "satisfies");
     retained = editor.snapshot();
     assert.equal(new TextDecoder().decode(retained.toBytes()), corrected);
     assert.equal(editor.update("{").status, "input-error");
@@ -82,14 +82,14 @@ test("source editor requires conformance and retains prepared partial snapshots"
       '{"openbindings":"0.2.0","operations":{"lookup":{"aliases":["find"],"input":{"$ref":"https://schema.example/missing"}}}}';
     const partial = editor.update(partialText);
     assert.equal(partial.status, "updated");
-    assert.equal(partial.result.outcome, "no-verdict");
+    assert.equal(partial.result.status, "no-verdict");
     assert.equal(partial.result.detail.reason, "resource-unavailable");
     assert.match(formatEditorResult(partial), /resource-unavailable/);
     const negatedText =
       '{"openbindings":"0.2.0","operations":{"lookup":{"aliases":["find"],"input":{"not":{"$ref":"https://schema.example/missing"}}}}}';
     const negated = editor.update(negatedText);
     assert.equal(negated.status, "updated");
-    assert.equal(negated.result.outcome, "no-verdict");
+    assert.equal(negated.result.status, "no-verdict");
     assert.equal(
       negated.result.detail.location.resource,
       "https://schema.example/missing",
@@ -151,7 +151,7 @@ test("editor presentation quotes original pointers and reports diagnostic trunca
       status: "updated",
       operations: [{ key: "lookup" }],
       result: {
-        outcome: "fails",
+        status: "fails",
         problems: [
           {
             instance: "/id",

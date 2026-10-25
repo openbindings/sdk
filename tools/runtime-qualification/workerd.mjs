@@ -33,7 +33,7 @@ export default {async fetch(request){
  if(job.kind==='lifetime')return Response.json(lifetime(sdk,testing,job.fixture,false));
  if(job.kind==='prepare'){contract?.dispose();valid?.dispose();invalid?.dispose();contract=prepare(sdk,job.fixture.document);valid=parsed(sdk,job.fixture.valid);invalid=parsed(sdk,job.fixture.invalid);return Response.json({ready:true,owners:testing.liveStorageOwners()});}
  if(job.kind==='invalid'){const batch=invalidSerializedBatch(contract,invalid,job.repetitions,()=>0);return Response.json(describe(batch.lastResult));}
- if(job.kind==='hot'){let result;for(let n=0;n<job.repetitions;n++){result=contract.validate(valid);if(result.outcome!==job.expectedOutcome)throw Error('retained batch changed verdict');}return Response.json(describe(result));}
+ if(job.kind==='hot'){let result;for(let n=0;n<job.repetitions;n++){result=contract.validate(valid);if(result.status!==job.expectedOutcome)throw Error('retained batch changed verdict');}return Response.json(describe(result));}
  if(job.kind==='dispose'){contract?.dispose();valid?.dispose();invalid?.dispose();contract=valid=invalid=undefined;return Response.json({owners:testing.liveStorageOwners()});}
  return Response.json({initialized:true,owners:testing.liveStorageOwners()});
  }catch(error){return Response.json({error:String(error),stack:error.stack},{status:500});}

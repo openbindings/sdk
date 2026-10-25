@@ -581,7 +581,7 @@ fn undefined_result_redacts_text_and_locations_but_shows_the_fixed_code() {
         5,
     );
     let wire = serde_json::to_value(&outcome).unwrap();
-    assert_eq!(wire["outcome"], "undefined");
+    assert_eq!(wire["status"], "undefined");
     assert!(wire["detail"].get("reason").is_none());
     assert_eq!(wire["detail"]["message"], SECRET);
     assert_eq!(wire["detail"]["location"]["pointer"], format!("/{SECRET}"));

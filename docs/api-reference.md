@@ -241,7 +241,10 @@ Local futures and `Rc` providers are also supported.
   `Document.references()` expose explicit reference spellings and keyword
   locations; apply an application disclosure policy before logging these source facts.
 - `ValueOutcome::Undefined { detail }` establishes an undefined result under the
-  value-contract rules. TypeScript uses `{ outcome: "undefined", detail }`.
+  value-contract rules. It serializes as `{"status": "undefined", "detail": ..}`,
+  the object TypeScript returns: a serialized `ValueOutcome` or
+  `ReferenceResolution` names its variant in `status`, as every TypeScript result
+  discriminates on `status`.
   The public `UndefinedResult` record has `code`, `message` and `location` fields;
   Rust provides `new(code, message)` and `with_location(location)`. A missing
   location is `None` in Rust and `null` in TypeScript. Debug shows the recognized

@@ -59,7 +59,7 @@ export function diagnosticDetailsCases(sdk) {
   ]) {
     for (const call of ["validate", "explain"]) {
       const result = run(`{"exclusiveMinimum":${token}}`, token, call);
-      check(result.outcome === "fails", "exact exclusive bound");
+      check(result.status === "fails", "exact exclusive bound");
       check(!result.problemsComplete, "truthful first-error completeness");
       if (call === "validate")
         check(result.problems.length === 0, "cheap check omits payloads");
@@ -82,7 +82,7 @@ export function diagnosticDetailsCases(sdk) {
     const ordinary = run(schema, input),
       detailed = run(schema, input, "explain");
     check(
-      ordinary.outcome === "fails" && detailed.outcome === "fails",
+      ordinary.status === "fails" && detailed.status === "fails",
       "same failure",
     );
     check(

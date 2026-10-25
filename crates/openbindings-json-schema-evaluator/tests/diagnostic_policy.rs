@@ -125,7 +125,7 @@ fn draft_metadata_and_semantic_setup_partitions_remain_distinct() {
     };
     let outcome = contract.explain(&JsonValue::parse("null").unwrap());
     assert!(matches!(outcome, ValueOutcome::Fails { .. }));
-    assert_eq!(serde_json::to_value(outcome).unwrap()["outcome"], "fails");
+    assert_eq!(serde_json::to_value(outcome).unwrap()["status"], "fails");
 }
 #[test]
 fn cycles_are_conservative_even_with_a_dominating_success_branch() {

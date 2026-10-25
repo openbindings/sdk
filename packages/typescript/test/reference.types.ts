@@ -44,10 +44,10 @@ export async function referenceExample(wasmBytes: Uint8Array, source: string) {
   const exactOutcome: ValueOutcome = contract.validate(value);
   const ordinary: JsonInput = { precise: value };
   const ordinaryOutcome: ValueCheck = contract.validate(ordinary);
-  if (ordinaryOutcome.outcome === "input-error") {
+  if (ordinaryOutcome.status === "input-error") {
     ordinaryOutcome.error.instancePointer satisfies string | null;
   }
-  if (exactOutcome.outcome === "no-verdict")
+  if (exactOutcome.status === "no-verdict")
     exactOutcome.detail.reason satisfies string;
   // @ts-expect-error Ordinary admission introduces the input-error branch.
   const missingAdmission: ValueOutcome = contract.validate(ordinary);

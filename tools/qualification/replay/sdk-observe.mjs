@@ -13,8 +13,8 @@ export function observe(sdk, request) {
   // recording the setup state separately. Non-ready setup never validates values.
   const preparationOutcome = (result) =>
     result.status === "no-verdict"
-      ? { outcome: "no-verdict", detail: result.detail }
-      : { outcome: result.status };
+      ? { status: "no-verdict", detail: result.detail }
+      : { status: result.status };
   const output = { id: request.id, executed: true };
   const given = request.given;
   const bytes = Uint8Array.from(atob(given.documentBase64), (c) =>
