@@ -323,7 +323,7 @@ pub(crate) fn read(pattern: &str, max_depth: usize, max_form: usize) -> Result<R
         max_form,
         out: String::with_capacity(pattern.len() + 8),
         unsupported: None,
-        shape: Some(Vec::new()),
+        shape: Some(Shape::default()),
     };
     parser.disjunction(0)?;
     if parser.at != chars.len() {
@@ -336,7 +336,7 @@ pub(crate) fn read(pattern: &str, max_depth: usize, max_form: usize) -> Result<R
     Ok(match parser.unsupported {
         Some(unsupported) => Reading::Unsupported(unsupported),
         None => Reading::Linear(Linear {
-            simple: parser.shape.and_then(Simple::new),
+            simple: parser.shape.and_then(Shape::finish),
             form: parser.out,
         }),
     })
@@ -532,16 +532,10 @@ struct Parser<'a> {
     max_form: usize,
     out: String,
     unsupported: Option<Unsupported>,
-    // The top-level terms while the pattern is one sequence of anchors and
-    // single-character atoms with simple quantifiers.
-    shape: Option<Vec<Term>>,
-}
-// One top-level term of a simple pattern.
-#[derive(Clone, Debug, PartialEq, Eq)]
-enum Term {
-    Start,
-    End,
-    Run(Run),
+    // The run matcher while the top-level terms are one sequence of anchors
+    // and single-character atoms with simple quantifiers, and the pattern is
+    // one the evaluator matches.
+    shape: Option<Shape>,
 }
 impl Parser<'_> {
     fn peek(&self) -> Option<char> {
@@ -564,11 +558,13 @@ impl Parser<'_> {
         }
     }
     // A backtracking construct takes precedence over a property escape: it
-    // would stay unmatched even with property tables.
+    // would stay unmatched even with property tables. A pattern the evaluator
+    // does not match has no run matcher.
     fn unsupported(&mut self, kind: Unsupported) {
         if self.unsupported != Some(Unsupported::Backtracking) {
             self.unsupported = Some(kind);
         }
+        self.shape = None;
     }
     fn disjunction(&mut self, depth: usize) -> Result<(), Refusal> {
         self.alternative(depth)?;
@@ -597,7 +593,7 @@ impl Parser<'_> {
                 self.at += 1;
                 self.out.push(c);
                 if depth == 0 {
-                    self.record(if c == '^' { Term::Start } else { Term::End });
+                    self.record(|shape| if c == '^' { shape.start() } else { shape.end() });
                 }
                 return Ok(());
             }
@@ -630,15 +626,17 @@ impl Parser<'_> {
         let count = self.quantifier()?;
         if depth == 0 {
             match (set, count) {
-                (Some(set), Some((min, max))) => self.record(Term::Run(Run::new(set, min, max))),
+                (Some(set), Some((min, max))) => self.record(|shape| shape.run(set, min, max)),
                 _ => self.shape = None,
             }
         }
         Ok(())
     }
-    fn record(&mut self, term: Term) {
-        if let Some(shape) = &mut self.shape {
-            shape.push(term);
+    fn record(&mut self, term: impl FnOnce(&mut Shape) -> Option<()>) {
+        if let Some(shape) = &mut self.shape
+            && term(shape).is_none()
+        {
+            self.shape = None;
         }
     }
     fn lookaround(&mut self, depth: usize) -> Result<(), Refusal> {
@@ -995,103 +993,290 @@ fn complement(ranges: &[(u32, u32)]) -> Vec<(u32, u32)> {
     scalar(&out)
 }
 
-/// A run of characters from one set, between `min` and `max` of them.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct Run {
-    set: Vec<(u32, u32)>,
-    // The set's ASCII members, one bit each, read without a search; in two
-    // words, so that a test shifts one machine word.
-    ascii: [u64; 2],
-    min: u32,
-    max: Option<u32>,
-}
-impl Run {
-    fn new(set: Vec<(u32, u32)>, min: u32, max: Option<u32>) -> Self {
-        let mut ascii = [0u64; 2];
-        for &(first, last) in &set {
-            for c in first..=last.min(127) {
-                ascii[c as usize >> 6] |= 1 << (c & 63);
-            }
-        }
-        Self {
-            set,
-            ascii,
-            min,
-            max,
-        }
-    }
-    fn contains(&self, c: char) -> bool {
-        let c = c as u32;
-        if c < 128 {
-            return self.ascii[c as usize >> 6] >> (c & 63) & 1 == 1;
-        }
-        self.set
-            .binary_search_by(|&(first, last)| {
-                if last < c {
-                    std::cmp::Ordering::Less
-                } else if first > c {
-                    std::cmp::Ordering::Greater
-                } else {
-                    std::cmp::Ordering::Equal
-                }
-            })
-            .is_ok()
-    }
-}
-/// An anchored sequence of runs that matches without an automaton: every run
-/// but the last has a fixed count, so each character's run is known from its
-/// position.
+/// An anchored sequence of single-character runs that matches without an
+/// automaton: every run but the last has a fixed count, so each character's
+/// run is known from its position. The fixed runs are steps: a character
+/// matched once is literal text, adjacent literal characters share one step
+/// and are compared as bytes, and adjacent runs of one set share one step.
+/// The last run is a step too when its count is fixed. Each distinct set is
+/// held once, so the matcher holds a few bytes for each step and each set,
+/// and a byte for each literal byte.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Simple {
     // Whether the match must reach the end of the string.
     end: bool,
-    runs: Vec<Run>,
+    steps: Box<[Step]>,
+    // The last run when its count is not fixed.
+    last: Option<Last>,
+    // The literal steps' text, one after another.
+    text: Box<str>,
+    sets: Box<[Set]>,
+    // The members past ASCII of every set, each set's in order.
+    ranges: Box<[(u32, u32)]>,
+}
+/// One fixed step of a run matcher.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Step {
+    /// The next this many bytes of the matcher's text.
+    Text(u32),
+    /// `count` characters of the set at `set`.
+    Run { set: u32, count: u32 },
+}
+/// The last run of a run matcher, between `min` and `max` characters of the
+/// set at `set`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Last {
+    set: u32,
+    min: u32,
+    max: Option<u32>,
+}
+/// A set a run tests: its ASCII members, one bit each, read without a search,
+/// in two words so that a test shifts one machine word; and its members past
+/// ASCII, the matcher's `ranges` from `wide.0` to `wide.1`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Set {
+    ascii: [u64; 2],
+    wide: (u32, u32),
 }
 impl Simple {
-    fn new(terms: Vec<Term>) -> Option<Self> {
-        let mut terms = terms.into_iter().peekable();
-        terms.next_if_eq(&Term::Start)?;
-        let mut runs = Vec::new();
-        let mut end = false;
-        for term in terms {
-            match term {
-                Term::Run(run) if !end => runs.push(run),
-                Term::End if !end => end = true,
-                _ => return None,
-            }
+    // The members of the set at `at`, read once for a run.
+    fn members(&self, at: u32) -> Members<'_> {
+        let set = &self.sets[at as usize];
+        Members {
+            ascii: set.ascii,
+            wide: &self.ranges[set.wide.0 as usize..set.wide.1 as usize],
         }
-        let (_, fixed) = runs.split_last()?;
-        if fixed.iter().any(|run| run.max != Some(run.min)) {
-            return None;
-        }
-        Some(Self { end, runs })
     }
     /// Whether `text` matches, as the pattern's form would.
     pub(crate) fn is_match(&self, text: &str) -> bool {
-        let mut chars = text.chars();
-        let (last, fixed) = self.runs.split_last().expect("a simple pattern has a run");
-        for run in fixed {
-            for _ in 0..run.min {
-                match chars.next() {
-                    Some(c) if run.contains(c) => {}
-                    _ => return false,
+        let bytes = text.as_bytes();
+        let (mut at, mut literal) = (0, 0);
+        for step in &self.steps {
+            match *step {
+                Step::Text(length) => {
+                    let length = length as usize;
+                    let expected = &self.text.as_bytes()[literal..literal + length];
+                    literal += length;
+                    match bytes.get(at..at + length) {
+                        Some(found) if same(found, expected) => at += length,
+                        _ => return false,
+                    }
+                }
+                Step::Run { set, count } => {
+                    let members = self.members(set);
+                    for _ in 0..count {
+                        if members.next(bytes, &mut at) != Some(true) {
+                            return false;
+                        }
+                    }
                 }
             }
         }
+        let Some(last) = &self.last else {
+            return !self.end || at == bytes.len();
+        };
+        let members = self.members(last.set);
+        if !self.end {
+            // The match need not reach the end, so the run's least count
+            // decides it.
+            for _ in 0..last.min {
+                if members.next(bytes, &mut at) != Some(true) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        let max = last.max.map_or(u64::MAX, u64::from);
         let mut count: u64 = 0;
-        for c in chars.by_ref() {
-            if !self.end && count >= u64::from(last.min) {
-                return true;
-            }
-            if !last.contains(c) {
-                return !self.end && count >= u64::from(last.min);
-            }
+        while let Some(member) = members.next(bytes, &mut at) {
             count += 1;
-            if last.max.is_some_and(|max| count > u64::from(max)) {
-                return !self.end;
+            if !member || count > max {
+                return false;
             }
         }
         count >= u64::from(last.min)
+    }
+}
+// A set's members as a run tests them.
+struct Members<'a> {
+    ascii: [u64; 2],
+    wide: &'a [(u32, u32)],
+}
+impl Members<'_> {
+    #[cfg(test)]
+    fn contains(&self, c: char) -> bool {
+        let mut buffer = [0; 4];
+        self.next(c.encode_utf8(&mut buffer).as_bytes(), &mut 0) == Some(true)
+    }
+    // Whether the character of `text` at byte `at`, where a character
+    // starts, is a member, moving `at` past it; `None` at the end of `text`.
+    // An ASCII character is its byte; any other is decoded from its UTF-8
+    // bytes, which a `str` holds well formed.
+    #[inline(always)]
+    fn next(&self, text: &[u8], at: &mut usize) -> Option<bool> {
+        let lead = *text.get(*at)?;
+        if lead < 0x80 {
+            *at += 1;
+            return Some(self.ascii[usize::from(lead >> 6)] >> (lead & 63) & 1 == 1);
+        }
+        let next = |offset: usize| text.get(*at + offset).map(|&byte| u32::from(byte & 0x3F));
+        let (width, c) = match lead {
+            0xC0..=0xDF => (2, u32::from(lead & 0x1F) << 6 | next(1)?),
+            0xE0..=0xEF => (3, u32::from(lead & 0x0F) << 12 | next(1)? << 6 | next(2)?),
+            _ => (
+                4,
+                u32::from(lead & 0x07) << 18 | next(1)? << 12 | next(2)? << 6 | next(3)?,
+            ),
+        };
+        *at += width;
+        Some(
+            self.wide
+                .binary_search_by(|&(first, last)| {
+                    if last < c {
+                        std::cmp::Ordering::Less
+                    } else if first > c {
+                        std::cmp::Ordering::Greater
+                    } else {
+                        std::cmp::Ordering::Equal
+                    }
+                })
+                .is_ok(),
+        )
+    }
+}
+// Whether two equally long byte strings are equal. Short ones, as literal
+// steps between runs mostly are, compare in a loop rather than a call.
+fn same(found: &[u8], expected: &[u8]) -> bool {
+    if expected.len() <= 16 {
+        found.iter().zip(expected).all(|(a, b)| a == b)
+    } else {
+        found == expected
+    }
+}
+/// A run matcher being read, while the pattern is one anchored sequence of
+/// single-character runs.
+#[derive(Default)]
+struct Shape {
+    // Whether the start anchor has been read, and the end anchor.
+    start: bool,
+    end: bool,
+    steps: Vec<Step>,
+    text: String,
+    sets: Vec<Set>,
+    ranges: Vec<(u32, u32)>,
+    // Each set's index, by its members.
+    index: std::collections::HashMap<Vec<(u32, u32)>, u32>,
+    // The run read last, which is the last run unless another follows.
+    pending: Option<Pending>,
+}
+// A run as the parser reads it: its set's members and its counts.
+struct Pending {
+    members: Vec<(u32, u32)>,
+    min: u32,
+    max: Option<u32>,
+}
+impl Shape {
+    // Each method answers `None` when the pattern is not such a sequence: it
+    // starts with the start anchor, then holds runs, at least one, and then
+    // at most the end anchor, and every run but the last has a fixed count.
+    fn start(&mut self) -> Option<()> {
+        (!self.start).then(|| self.start = true)
+    }
+    fn end(&mut self) -> Option<()> {
+        (self.start && !self.end).then(|| self.end = true)
+    }
+    fn run(&mut self, set: Vec<(u32, u32)>, min: u32, max: Option<u32>) -> Option<()> {
+        if !self.start || self.end {
+            return None;
+        }
+        if let Some(run) = self.pending.take() {
+            if run.max != Some(run.min) {
+                return None;
+            }
+            self.fixed(run.members, run.min)?;
+        }
+        self.pending = Some(Pending {
+            members: set,
+            min,
+            max,
+        });
+        Some(())
+    }
+    fn fixed(&mut self, set: Vec<(u32, u32)>, count: u32) -> Option<()> {
+        if count == 0 {
+            return Some(());
+        }
+        if let (1, &[(first, last)]) = (count, set.as_slice())
+            && first == last
+            && let Some(c) = char::from_u32(first)
+        {
+            let length = c.len_utf8() as u32;
+            match self.steps.last_mut() {
+                Some(Step::Text(held)) if *held <= u32::MAX - length => *held += length,
+                _ => self.steps.push(Step::Text(length)),
+            }
+            self.text.push(c);
+            return Some(());
+        }
+        let set = self.set(set)?;
+        match self.steps.last_mut() {
+            Some(Step::Run {
+                set: held,
+                count: n,
+            }) if *held == set && *n <= u32::MAX - count => {
+                *n += count;
+            }
+            _ => self.steps.push(Step::Run { set, count }),
+        }
+        Some(())
+    }
+    // The index of the set of `members`, which are sorted and disjoint.
+    fn set(&mut self, members: Vec<(u32, u32)>) -> Option<u32> {
+        if let Some(&at) = self.index.get(&members) {
+            return Some(at);
+        }
+        let mut ascii = [0u64; 2];
+        for &(first, last) in &members {
+            for c in first..=last.min(127) {
+                ascii[c as usize >> 6] |= 1 << (c & 63);
+            }
+        }
+        let start = u32::try_from(self.ranges.len()).ok()?;
+        self.ranges.extend(
+            members
+                .iter()
+                .filter(|&&(_, last)| last >= 128)
+                .map(|&(first, last)| (first.max(128), last)),
+        );
+        let end = u32::try_from(self.ranges.len()).ok()?;
+        let at = u32::try_from(self.sets.len()).ok()?;
+        self.sets.push(Set {
+            ascii,
+            wide: (start, end),
+        });
+        self.index.insert(members, at);
+        Some(at)
+    }
+    fn finish(mut self) -> Option<Simple> {
+        let run = self.pending.take()?;
+        let last = if run.max == Some(run.min) {
+            self.fixed(run.members, run.min)?;
+            None
+        } else {
+            Some(Last {
+                set: self.set(run.members)?,
+                min: run.min,
+                max: run.max,
+            })
+        };
+        Some(Simple {
+            end: self.end,
+            steps: self.steps.into_boxed_slice(),
+            last,
+            text: self.text.into_boxed_str(),
+            sets: self.sets.into_boxed_slice(),
+            ranges: self.ranges.into_boxed_slice(),
+        })
     }
 }
 
@@ -1109,15 +1294,172 @@ mod tests {
             vec![(0x64, 0xc8), (0x1f600, 0x1f64f)],
             vec![(0, 0x10ffff)],
         ] {
-            let run = Run::new(set.clone(), 1, None);
+            let mut shape = Shape::default();
+            shape.start().unwrap();
+            shape.run(set.clone(), 1, None).unwrap();
+            let simple = shape.finish().unwrap();
+            let held = simple.members(simple.last.unwrap().set);
             for c in (0..0x300).chain([0x1f5ff, 0x1f600, 0x1f64f, 0x1f650, 0x10ffff]) {
                 let Some(c) = char::from_u32(c) else { continue };
                 let member = set
                     .iter()
                     .any(|&(first, last)| (first..=last).contains(&(c as u32)));
-                assert_eq!(run.contains(c), member, "{set:?} {c:?}");
+                assert_eq!(held.contains(c), member, "{set:?} {c:?}");
             }
         }
+    }
+    fn simple(pattern: &str) -> Option<Simple> {
+        match read(pattern, 32, 1 << 20) {
+            Ok(Reading::Linear(linear)) => linear.simple,
+            other => panic!("{pattern}: {other:?}"),
+        }
+    }
+    // Literal characters share one step of text, adjacent runs of one set
+    // share one step, a fixed last run is a step, and each set is held once.
+    #[test]
+    fn a_run_matcher_holds_a_step_for_each_change_of_set() {
+        let literal = format!("^t0x{}$", "a".repeat(9_997));
+        let matcher = simple(&literal).unwrap();
+        assert_eq!(*matcher.steps, [Step::Text(10_000)]);
+        assert_eq!(matcher.last, None);
+        assert!(matcher.sets.is_empty() && matcher.ranges.is_empty());
+        assert!(matcher.is_match(&literal[1..literal.len() - 1]));
+        assert!(!matcher.is_match(&literal[1..literal.len() - 2]));
+        let date = simple(r"^\d\d\d\d-\d{2}-[0-9][0-9]$").unwrap();
+        assert_eq!(
+            *date.steps,
+            [
+                Step::Run { set: 0, count: 4 },
+                Step::Text(1),
+                Step::Run { set: 0, count: 2 },
+                Step::Text(1),
+                Step::Run { set: 0, count: 2 },
+            ]
+        );
+        assert_eq!(date.sets.len(), 1);
+        assert!(date.is_match("2026-10-25") && !date.is_match("2026-10-2x"));
+        let open = simple(r"^é\d{3}é[a-zé]{2,}").unwrap();
+        assert_eq!(open.steps.len(), 3);
+        assert_eq!(open.last.map(|last| (last.min, last.max)), Some((2, None)));
+        assert_eq!(open.ranges.len(), 1);
+        assert!(open.is_match("é123éabé!") && !open.is_match("é123éa!"));
+        // A pattern whose runs vary before its last, or that is not one
+        // anchored sequence, has no run matcher.
+        for pattern in [
+            "^a*b", "a", "^", "^$", "^a|b", "^(a)", "^a$b", "^^a", r"^a\b",
+        ] {
+            assert!(simple(pattern).is_none(), "{pattern}");
+        }
+    }
+    // A small deterministic generator, so the differential needs no crate.
+    struct Generator(u64);
+    impl Generator {
+        fn below(&mut self, bound: usize) -> usize {
+            self.0 ^= self.0 << 13;
+            self.0 ^= self.0 >> 7;
+            self.0 ^= self.0 << 17;
+            (self.0 % bound as u64) as usize
+        }
+        fn pick<'a>(&mut self, items: &[&'a str]) -> &'a str {
+            items[self.below(items.len())]
+        }
+    }
+    // Run matchers decide as their forms do in the regex crate, for generated
+    // anchored sequences of literals and sets with every kind of count, on
+    // strings built from members of the patterns' sets, some changed by one
+    // character, and on strings of characters drawn at random.
+    #[test]
+    fn run_matchers_match_as_their_forms_do() {
+        // Each atom with characters it matches, if any.
+        const ATOMS: &[(&str, &[&str])] = &[
+            ("a", &["a"]),
+            ("b", &["b"]),
+            ("é", &["é"]),
+            ("😀", &["😀"]),
+            ("-", &["-"]),
+            (r"\.", &["."]),
+            (r"\d", &["1", "9"]),
+            (r"\w", &["a", "_", "1"]),
+            (r"\s", &[" ", "\n", "\u{3000}"]),
+            (r"\S", &["a", "é"]),
+            (".", &["a", "é", "😀"]),
+            ("[ab]", &["a", "b"]),
+            ("[^a]", &["b", "é", "\n"]),
+            ("[a-zé]", &["c", "é"]),
+            ("[😀-😂]", &["😁"]),
+            (r"[à-ÿ]", &["é", "è"]),
+            (r"\ud800", &[]),
+            ("[]", &[]),
+        ];
+        const COUNTS: &[&str] = &["", "", "", "{2}", "{0}", "{1,3}", "{2,}", "*", "+", "?"];
+        const FIXED: &[&str] = &["", "", "{2}", "{0}", "{1}", "{3}"];
+        const OTHERS: &[&str] = &[
+            "a", "c", "é", "è", "😀", "😁", "-", ".", "1", " ", "\n", "_",
+        ];
+        let mut generator = Generator(0x9E37_79B9_7F4A_7C15);
+        let (mut matched, mut unmatched) = (0, 0);
+        for _ in 0..4_000 {
+            let mut pattern = String::from("^");
+            let mut runs = Vec::new();
+            let count = 1 + generator.below(6);
+            for at in 0..count {
+                let (atom, members) = ATOMS[generator.below(ATOMS.len())];
+                let quantifier = generator.pick(if at + 1 == count { COUNTS } else { FIXED });
+                pattern.push_str(atom);
+                pattern.push_str(quantifier);
+                runs.push((members, quantifier));
+            }
+            if generator.below(2) == 0 {
+                pattern.push('$');
+            }
+            let Ok(Reading::Linear(linear)) = read(&pattern, 32, 1 << 20) else {
+                panic!("{pattern}")
+            };
+            let matcher = linear.simple.expect(&pattern);
+            let regex = regex::Regex::new(&linear.form).expect(&pattern);
+            for attempt in 0..40 {
+                let mut text = String::new();
+                if attempt % 2 == 0 {
+                    for &(members, quantifier) in &runs {
+                        let times = match quantifier {
+                            "" | "{1}" => 1,
+                            "{0}" => 0,
+                            "{2}" => 2,
+                            "{3}" => 3,
+                            _ => generator.below(5),
+                        };
+                        for _ in 0..times {
+                            text.push_str(match members {
+                                [] => generator.pick(OTHERS),
+                                members => generator.pick(members),
+                            });
+                        }
+                    }
+                    if attempt % 4 == 0 {
+                        text.push_str(generator.pick(OTHERS));
+                    }
+                    if attempt % 8 == 2 && !text.is_empty() {
+                        let mut chars: Vec<char> = text.chars().collect();
+                        let at = generator.below(chars.len());
+                        chars[at] = generator.pick(OTHERS).chars().next().unwrap();
+                        text = chars.into_iter().collect();
+                    }
+                } else {
+                    for _ in 0..generator.below(9) {
+                        text.push_str(generator.pick(OTHERS));
+                    }
+                }
+                let expected = regex.is_match(&text);
+                assert_eq!(matcher.is_match(&text), expected, "{pattern} on {text:?}");
+                if expected {
+                    matched += 1;
+                } else {
+                    unmatched += 1;
+                }
+            }
+        }
+        // 4,000 patterns with 40 strings each.
+        assert_eq!((matched, unmatched), (38_142, 121_858));
     }
     fn linear(pattern: &str) -> String {
         match read(pattern, 32, 1 << 20) {
