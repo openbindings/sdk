@@ -346,7 +346,7 @@ fn cancellation_during_preparation_allows_independent_retries() {
 fn conservative_preparation_is_not_semantic_undefinedness() {
     // A string whose verdict depends on an invalid pattern's match gives no
     // verdict, conservatively, rather than establishing an undefined result;
-    // one a true branch decides before the pattern keeps its verdict.
+    // one a true branch decides keeps its verdict in either order.
     let result = prepare(r#"{"anyOf":[false,{"pattern":"["}]}"#).explain(&value(r#""secret""#));
     assert!(matches!(
         result,
@@ -357,7 +357,10 @@ fn conservative_preparation_is_not_semantic_undefinedness() {
             }
         }
     ));
-    for schema in [r#"{"anyOf":[true,{"pattern":"["}]}"#] {
+    for schema in [
+        r#"{"anyOf":[true,{"pattern":"["}]}"#,
+        r#"{"anyOf":[{"pattern":"["},true]}"#,
+    ] {
         for value in [value(r#""secret""#), value("1")] {
             assert!(matches!(
                 prepare(schema).explain(&value),

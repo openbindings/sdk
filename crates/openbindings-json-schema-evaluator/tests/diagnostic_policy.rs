@@ -130,8 +130,8 @@ fn draft_metadata_and_semantic_setup_partitions_remain_distinct() {
 #[test]
 fn a_cycle_costs_only_values_whose_verdict_depends_on_it() {
     // A schema applying again without consuming the instance is a stand-in:
-    // a value whose evaluation reaches it gives no verdict naming the schema,
-    // and a success branch evaluation decides first keeps its verdict.
+    // a value whose verdict depends on it gives no verdict naming the schema,
+    // and a dominating success branch decides in either order.
     let contract = ready(&document(
         serde_json::json!({"$ref":"#/operations/op/input"}),
     ));
@@ -153,7 +153,10 @@ fn a_cycle_costs_only_values_whose_verdict_depends_on_it() {
         );
         safe(&detail.message);
     }
-    for schema in [serde_json::json!({"anyOf":[true,{"$ref":"#/operations/op/input"}]})] {
+    for schema in [
+        serde_json::json!({"anyOf":[true,{"$ref":"#/operations/op/input"}]}),
+        serde_json::json!({"anyOf":[{"$ref":"#/operations/op/input"},true]}),
+    ] {
         let contract = ready(&document(schema));
         for value in ["1", "{}", r#""s""#] {
             let value = JsonValue::parse(value).unwrap();

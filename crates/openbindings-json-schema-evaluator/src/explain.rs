@@ -7,9 +7,9 @@
 //! nothing else of the document: the error maps back to that location and the
 //! keyword. Every subschema position is a definition of its own, so the
 //! keyword is the first segment of the suffix. A copy of a definition, which
-//! an in-place cycle's unfolding makes, maps to the definition it copies. A
-//! definition a schema transform adds stands for one keyword of a projected
-//! definition, and maps to that keyword.
+//! an in-place cycle's unfolding or a bounds program makes, maps to the
+//! definition it copies. A definition a schema transform adds stands for one
+//! keyword of a projected definition, and maps to that keyword.
 use crate::bundle;
 use openbindings::*;
 use openbindings_internal_json::backend;

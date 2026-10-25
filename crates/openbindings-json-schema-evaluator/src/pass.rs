@@ -1,7 +1,8 @@
 //! What one evaluation pass met that the SDK's own keywords report: a string
 //! that reached a pattern the evaluator does not match, a stand-in for a
 //! problem preparation set aside, or exact arithmetic too large to decide.
-//! Any of them ends the pass with no verdict.
+//! Any of them ends the pass with no verdict, unless the stand-in's answer
+//! cannot change the value's (`crate::bounds`).
 use crate::pattern::Unsupported;
 use std::cell::Cell;
 
@@ -23,9 +24,22 @@ pub(crate) enum Stop {
     /// evaluator does not match, reached by a nonempty object, by index.
     Names(u32),
 }
+impl Stop {
+    /// Whether the pass stopped at a stand-in, whose answer the value's may
+    /// not depend on: a missing resource, an in-place cycle, or a pattern the
+    /// evaluator does not match for its syntax rather than for a limit.
+    pub(crate) fn stands_in(self) -> bool {
+        match self {
+            Stop::Missing(_) | Stop::Cycle(_) | Stop::Names(_) => true,
+            Stop::Unmatched(unsupported, _) => unsupported.stands_in(),
+            Stop::Arithmetic => false,
+        }
+    }
+}
 
 thread_local! {
     static STOP: Cell<Option<Stop>> = const { Cell::new(None) };
+    static LOWER: Cell<bool> = const { Cell::new(false) };
 }
 // Restores an enclosing pass's state, also on unwinding.
 struct Restore(Option<Stop>);
@@ -60,6 +74,21 @@ pub(crate) fn stand_in(stop: Stop) {
 pub(crate) fn arithmetic() {
     STOP.set(Some(Stop::Arithmetic));
 }
+/// Run `evaluate` as a bounds pass, the lower bound's when `lower` holds.
+pub(crate) fn bound<T>(lower: bool, evaluate: impl FnOnce() -> T) -> T {
+    struct Restore(bool);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            LOWER.set(self.0);
+        }
+    }
+    let _restore = Restore(LOWER.replace(lower));
+    evaluate()
+}
+/// Whether the current pass is a bounds pass for the lower bound.
+pub(crate) fn lower() -> bool {
+    LOWER.get()
+}
 
 #[cfg(test)]
 mod tests {
@@ -92,6 +121,9 @@ mod tests {
             stand_in(Stop::Names(5));
         });
         assert_eq!(stop, Some(Stop::Cycle(4)));
+        assert!(!lower());
+        assert!(bound(true, || bound(false, lower) || lower()));
+        assert!(!lower());
     }
     #[test]
     fn a_pass_left_by_unwinding_restores_the_enclosing_pass() {

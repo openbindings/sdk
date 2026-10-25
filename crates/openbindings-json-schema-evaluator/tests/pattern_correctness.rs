@@ -350,9 +350,9 @@ fn generated_patterns_match_as_ecmascript_does_through_both_keywords() {
 // The regex crate's `is_match` answers no for `\x{E9}|(?-u:\B)` on "aéa",
 // whose first branch matches, because the non-word boundary can hold inside a
 // multi-byte character. So `\B` is not matched: a string that reaches it gives
-// no verdict, as does an object with a member that a `patternProperties` name
-// holding it applies to, and an `unevaluatedProperties` keyword reading such a
-// name refuses preparation. `\b` keeps its verdicts.
+// no verdict, as does an object whose verdict depends on a `patternProperties`
+// name holding it, and an `unevaluatedProperties` keyword reading such a name
+// refuses preparation. `\b` keeps its verdicts.
 #[test]
 fn a_non_word_boundary_is_not_matched_and_a_word_boundary_is() {
     for (pattern, value) in [
@@ -379,6 +379,10 @@ fn a_non_word_boundary_is_not_matched_and_a_word_boundary_is() {
             panic!("{pattern}")
         };
         assert_eq!(detail.code, "pattern-non-word-boundary", "{pattern}");
+        assert!(matches!(
+            contract.validate(&JsonValue::parse(json!({ text: 1 }).to_string()).unwrap()),
+            ValueOutcome::Satisfies
+        ));
         let Err(detail) = prepare(
             json!({"patternProperties": {pattern: true}, "unevaluatedProperties": false}),
             ResourceSet::default(),

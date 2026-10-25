@@ -122,15 +122,35 @@ impl<'i> Keyword<'i, FlatJson> for Names {
         Ok(())
     }
 }
+/// The keyword a bounds program's root asks which bound a pass computes:
+/// it holds in a pass for the lower bound.
+struct Lower;
+impl<'i> Keyword<'i, FlatJson> for Lower {
+    fn is_valid(&self, _: View<'i>) -> bool {
+        crate::pass::lower()
+    }
+    fn validate(&self, instance: View<'i>) -> Result<(), ValidationError<'i>> {
+        if <Self as Keyword<'i, FlatJson>>::is_valid(self, instance) {
+            Ok(())
+        } else {
+            Err(ValidationError::custom("not the lower bound"))
+        }
+    }
+}
 /// The SDK keyword the stand-in for a schema that would apply again compiles
 /// to; its value is the stand-in's index.
 pub(crate) const CYCLE: &str = "$obCycle";
 /// The SDK keyword a schema holds for its `patternProperties` names that the
 /// evaluator does not match; its value is the stand-in's index.
 pub(crate) const NAMES: &str = "$obNames";
+/// The subschemas of the names [`NAMES`] stands in for, which the library
+/// never compiles: only a bounds program applies them.
+pub(crate) const NAME_SCHEMAS: &str = "$obNameSchemas";
 /// The keyword the same schema's `additionalProperties` applies with each
 /// member it reaches, which might match one of those names.
 pub(crate) const NAME_MEMBER: &str = "$obNameMember";
+/// The keyword a bounds program's root asks which bound a pass computes.
+pub(crate) const LOWER: &str = "$obLower";
 /// The bytes a run matcher's place among a value contract's matchers takes,
 /// as 64-bit hosts lay a matcher out. A 32-bit host takes less, and the
 /// pattern memory counts this on every host, so no outcome depends on it.
@@ -252,6 +272,27 @@ impl Patterns {
         }
         *shared = true;
         given
+    }
+    /// The allowance every compiled pattern first compiles within.
+    pub(crate) fn first(&self) -> Allowance {
+        self.memory.first()
+    }
+    /// What the pattern memory leaves once every compiled pattern holds its
+    /// first allowance and search cache, with that allowance, provided no
+    /// pattern ever needs more: every matcher not compiled yet is compiled now,
+    /// as its first use would compile it, and when one does not fit, or a
+    /// `patternProperties` name did not, the memory is shared as it is then,
+    /// and nothing is left.
+    pub(crate) fn spare(&self) -> Option<(usize, Allowance)> {
+        for (index, matcher) in self.matchers.iter().enumerate() {
+            if let Matcher::Regex { compiled, .. } = matcher
+                && compiled.get().is_none()
+            {
+                self.compile(index);
+            }
+        }
+        let shared = *self.shared.lock().unwrap_or_else(PoisonError::into_inner);
+        (!shared).then(|| (self.memory.left(), self.memory.first()))
     }
     /// The bundle location of the `pattern` keyword at `site`.
     pub(crate) fn site(&self, site: u32) -> Option<Location> {
@@ -686,6 +727,14 @@ impl Operands {
         };
         index.to_string()
     }
+    /// Which `pattern` matchers stand in, by matcher index: those for patterns
+    /// the evaluator does not match for their syntax rather than for a limit.
+    pub(crate) fn stand_in_patterns(&self) -> Vec<bool> {
+        self.patterns
+            .iter()
+            .map(|matcher| matches!(matcher, Matcher::Unmatched(unsupported) if unsupported.stands_in()))
+            .collect()
+    }
     /// The SDK's keywords for this value contract, and the `pattern` keyword's
     /// matchers, which compile within the value contract's `memory`.
     pub(crate) fn keywords(self, memory: Memory) -> Keywords {
@@ -738,6 +787,8 @@ pub(crate) struct Registered {
     pub(crate) cycles: bool,
     /// The unmatched-names stand-in.
     pub(crate) names: bool,
+    /// The bounds program's root.
+    pub(crate) lower: bool,
 }
 impl Keywords {
     /// The value contract's `pattern` matchers.
@@ -779,6 +830,9 @@ impl Keywords {
             options = options.with_keyword(NAME_MEMBER, |_, value, _| {
                 Ok(Box::new(StandIn(crate::pass::Stop::Names(index(value)?))))
             });
+        }
+        if registered.lower {
+            options = options.with_keyword(LOWER, |_, _, _| Ok(Box::new(Lower)));
         }
         if self.matched {
             let keyword = self.patterns.clone();

@@ -6,7 +6,8 @@
 //! references that apply to the same instance, so that a schema applying again
 //! is a stand-in instead of a reference back: a pass that reaches it records
 //! the stand-in, which names that schema's original location, and goes on as
-//! if it held. The pass then gives no verdict; a value whose evaluation never
+//! if it held. The pass then gives no verdict unless its value's verdict cannot
+//! depend on the stand-in (`crate::bounds`); a value whose evaluation never
 //! reaches it keeps its verdict.
 //!
 //! Each strongly connected component of same-instance references has entries:

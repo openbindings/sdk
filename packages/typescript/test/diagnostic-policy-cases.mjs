@@ -163,8 +163,8 @@ export function diagnosticPolicyCases(sdk) {
       "non-interpretation errors retain broad code only",
     );
     // A schema applying again without consuming the instance is a stand-in:
-    // a value whose evaluation reaches it gives no verdict naming the schema,
-    // and a success branch evaluation decides first keeps its verdict.
+    // a value whose verdict depends on it gives no verdict naming the
+    // schema, and a dominating success branch decides in either order.
     const cycle = prepareInput(
       withSchema({ $ref: "#/operations/op/input" }),
       "op",
@@ -184,7 +184,10 @@ export function diagnosticPolicyCases(sdk) {
       );
       safe(result.detail.message);
     }
-    for (const schema of [{ anyOf: [true, { $ref: "#/operations/op/input" }] }]) {
+    for (const schema of [
+      { anyOf: [true, { $ref: "#/operations/op/input" }] },
+      { anyOf: [{ $ref: "#/operations/op/input" }, true] },
+    ]) {
       const state = prepareInput(withSchema(schema), "op");
       check(state.status === "ready", "a cycle beside a true branch prepares");
       const contract = own(state.valueContract);
@@ -192,7 +195,7 @@ export function diagnosticPolicyCases(sdk) {
         check(
           contract.validate(value).status === "satisfies" &&
             contract.explain(value).status === "satisfies",
-          "a success branch decided first keeps its verdict",
+          "a dominating success branch decides in either order",
         );
       }
     }

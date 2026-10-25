@@ -111,7 +111,8 @@ pub(crate) struct Options {
 pub(crate) const MARKER: &str = "$obWork";
 
 /// Keywords whose subschemas apply to child instances: members, member names
-/// and items.
+/// and items, and the subschemas of `patternProperties` names the evaluator
+/// does not match, which only a bounds program applies, to members.
 pub(crate) fn descending(keyword: &str) -> bool {
     matches!(
         keyword,
@@ -124,6 +125,7 @@ pub(crate) fn descending(keyword: &str) -> bool {
             | "contains"
             | "unevaluatedItems"
             | "unevaluatedProperties"
+            | crate::operands::NAME_SCHEMAS
     )
 }
 /// What a reference adds to an annotation walk. With the weights below, each
@@ -163,9 +165,10 @@ pub(crate) fn subschemas<'a>(
         ("properties" | "patternProperties" | "dependentSchemas", Value::Object(members)) => {
             Box::new(members.values_mut())
         }
-        ("allOf" | "anyOf" | "oneOf" | "prefixItems", Value::Array(items)) => {
-            Box::new(items.iter_mut())
-        }
+        (
+            "allOf" | "anyOf" | "oneOf" | "prefixItems" | crate::operands::NAME_SCHEMAS,
+            Value::Array(items),
+        ) => Box::new(items.iter_mut()),
         (
             "additionalProperties"
             | "propertyNames"
@@ -257,12 +260,70 @@ impl Bundle {
         root.insert("$defs".into(), Value::Object(definitions));
         Value::Object(root)
     }
+    /// The bundle of a bounds program: its two entries are reached from a
+    /// root that asks which bound a pass computes.
+    pub(crate) fn document_with_bounds(self, lower: u32, upper: u32) -> Value {
+        let markers = self.markers;
+        let entry = |index: u32| {
+            let reference =
+                serde_json::json!({ "$ref": format!("#/$defs/{}", self.names[index as usize]) });
+            if markers {
+                serde_json::json!({ "allOf": [{ MARKER: 0 }, reference] })
+            } else {
+                reference
+            }
+        };
+        let (lower, upper) = (entry(lower), entry(upper));
+        let mut root = Map::new();
+        root.insert("$id".into(), Value::String(URI.into()));
+        root.insert(
+            "$schema".into(),
+            Value::String("https://json-schema.org/draft/2020-12/schema".into()),
+        );
+        root.insert(
+            "if".into(),
+            serde_json::json!({ crate::operands::LOWER: 0 }),
+        );
+        root.insert("then".into(), lower);
+        root.insert("else".into(), upper);
+        let definitions: Map<String, Value> = self.names.into_iter().zip(self.schemas).collect();
+        root.insert("$defs".into(), Value::Object(definitions));
+        Value::Object(root)
+    }
+    /// A bundle assembled from `names`, `schemas` and `definitions` by a
+    /// transform of another bundled with `markers`.
+    pub(crate) fn assembled(
+        names: Vec<String>,
+        schemas: Vec<Value>,
+        definitions: Vec<Definition>,
+        entry: u32,
+        markers: bool,
+    ) -> Self {
+        Self {
+            names,
+            schemas,
+            definitions,
+            entry,
+            entry_weight: if markers { 3 } else { 2 },
+            markers,
+            grown: 0,
+        }
+    }
+}
+/// The schema objects a bounds program's pass holds on reaching either entry:
+/// the root, the branch its condition selects, the work marker's wrapper
+/// under markers, and the entry.
+pub(crate) fn bounds_entry_weight(markers: bool) -> u32 {
+    if markers { 4 } else { 3 }
 }
 // Projected definitions keep their names (`n<number>`), specialized copies add
 // their context (`n<number>-<context>`), and a definition a schema transform
 // adds for one keyword of definition `n<number>` is `n<number>-p<index>`. An
 // in-place cycle's unfolding adds `-c<index>` to the name of each schema it
-// copies and `-r` to the stand-in for a schema applying again.
+// copies and `-r` to the stand-in for a schema applying again, and a bounds
+// program adds `-l` or `-u` to the name of each schema it copies for its lower
+// or upper bound and `-k<keyword>` to a definition that stands for one of
+// that copy's keywords.
 /// A bundled definition name read back: the projected definition number it
 /// holds, and the keyword a schema transform's definition stands for.
 pub(crate) fn parse_name(name: &str) -> Option<(u32, Option<&'static str>)> {
@@ -277,9 +338,25 @@ pub(crate) fn parse_name(name: &str) -> Option<(u32, Option<&'static str>)> {
             && index.bytes().all(|byte| byte.is_ascii_digit())
         {
             keyword = Some("patternProperties");
+        } else if let Some(stands) = segment.strip_prefix('k') {
+            keyword = STANDS_FOR.iter().copied().find(|known| *known == stands);
         }
     }
     Some((number.parse().ok()?, keyword))
+}
+/// The keywords a bounds program's added definitions stand for.
+const STANDS_FOR: [&str; 5] = [
+    "oneOf",
+    "if",
+    "contains",
+    "patternProperties",
+    "additionalProperties",
+];
+/// The name of the definition a bounds program adds for `keyword` of the copy
+/// named `copy`.
+pub(crate) fn standing_name(copy: &str, keyword: &str) -> String {
+    debug_assert!(STANDS_FOR.contains(&keyword));
+    format!("{copy}-k{keyword}")
 }
 /// The name of the definition a schema transform adds at `index` for a
 /// keyword of projected definition `number`.
@@ -453,6 +530,46 @@ fn walk(
     Ok(())
 }
 
+/// Each subschema of an applicator keyword's value, read only.
+fn subschemas_of<'a>(keyword: &str, value: &'a Value) -> Box<dyn Iterator<Item = &'a Value> + 'a> {
+    match (keyword, value) {
+        ("properties" | "patternProperties" | "dependentSchemas", Value::Object(members)) => {
+            Box::new(members.values())
+        }
+        (
+            "allOf" | "anyOf" | "oneOf" | "prefixItems" | crate::operands::NAME_SCHEMAS,
+            Value::Array(items),
+        ) => Box::new(items.iter()),
+        (
+            "additionalProperties"
+            | "propertyNames"
+            | "items"
+            | "contains"
+            | "unevaluatedItems"
+            | "unevaluatedProperties"
+            | "not"
+            | "if"
+            | "then"
+            | "else",
+            value,
+        ) => Box::new(std::iter::once(value)),
+        _ => Box::new(std::iter::empty()),
+    }
+}
+/// Whether any reference below a bundled schema satisfies `reaches`.
+pub(crate) fn any_reference(value: &Value, reaches: &mut dyn FnMut(&str) -> bool) -> bool {
+    let Value::Object(schema) = value else {
+        return false;
+    };
+    if let Some(Value::String(reference)) = schema.get("$ref")
+        && reaches(reference)
+    {
+        return true;
+    }
+    schema.iter().any(|(keyword, child)| {
+        subschemas_of(keyword, child).any(|subschema| any_reference(subschema, reaches))
+    })
+}
 /// Visit every reference below a bundled schema, with whether the path to it
 /// passes a keyword that applies to a child instance.
 pub(crate) fn references(

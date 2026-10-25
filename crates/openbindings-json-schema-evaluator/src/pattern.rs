@@ -211,7 +211,7 @@ impl Memory {
     }
     /// What the run matchers, the first allowances and the search caches
     /// leave for the forms that need more.
-    fn left(&self) -> usize {
+    pub(crate) fn left(&self) -> usize {
         self.total
             .saturating_sub(self.patterns.saturating_mul(FIRST + self.cache))
             .saturating_sub(self.matched)
