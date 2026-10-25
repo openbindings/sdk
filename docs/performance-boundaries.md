@@ -93,35 +93,34 @@ retained with a prepared value contract before any timed operation fell by about
 
 On 2026-10-24, preparation was compared with `8be7fe3` by the benchmark
 harness's identical instrument pairs (macOS arm64, Rust 1.99.0, two batches of
-20 adjacent randomized pairs, one-minute load 1.1 to 3.8). Preparation now
+20 adjacent randomized pairs, one-minute load 1.6 to 6.8). Preparation now
 shares the revision's schema index and the meta-schema verdicts its validation
 recorded there, takes core's projection as definitions instead of parsing it
-back from text, routes the packaged meta-schemas' references only when one is
-resolved, walks a resource set's schema positions once, registers only the SDK
-keywords a value contract holds, and names the bundle with a URN. Apart from
-`large-literal` and `missing-resource`, one-shot preparation (`compile`) took
-0.61 to 0.94 times as long (scalar 37.7 → 23.3 µs, object 74.7 → 52.3 µs, refs
-90.4 → 65.0 µs) and repeated preparation (`context`) 0.55 to 0.92 times;
-`large-literal` took 0.41 and 0.35 times as long, and `missing-resource` 0.15
-and 0.14 times, since the scan for missing resources no longer resolves the
-packaged meta-schemas' references. Preparation allocations per operation fell
-by 24 to 81% and requested bytes by 6 to 85%. Evaluation, parse, read,
-explanation and document rows measured 0.98 to 1.02, except the
-`reference-text-*` evaluation rows, which measured 0.90 to 0.97 with unchanged
-evaluation code; document validation makes one more allocation, 24 bytes, to
-share its index. A resource set retains its schema positions once a
+back from text, reads each pattern from them without copying it, routes the
+packaged meta-schemas' references only when one is resolved, walks a resource
+set's schema positions once, registers only the SDK keywords a value contract
+holds, and names the bundle with a URN. Apart from `large-literal` and
+`missing-resource`, one-shot preparation (`compile`) took 0.61 to 0.94 times as
+long (scalar 39.2 → 24.2 µs, object 79.7 → 55.5 µs, refs 95.9 → 68.5 µs) and
+repeated preparation (`context`) 0.54 to 0.92 times; `large-literal` took 0.41
+and 0.35 times as long, and `missing-resource` 0.15 and 0.14 times, since the
+scan for missing resources no longer resolves the packaged meta-schemas'
+references. Preparation allocations per operation fell by 24 to 81% and
+requested bytes by 6 to 85%. Evaluation, parse, read, explanation and document
+rows measured 0.96 to 1.02; document validation makes one more allocation, 24
+bytes, to share its index. A resource set retains its schema positions once a
 preparation walks them, so `reference-fan-in`, whose carrier holds 5,000
 definitions, retains 94 KB (3%) more; preparing a value contract that reaches
 one resource of 50 holding 1,000 schemas each takes 3.4 ms instead of 6.6 ms
 without that walk kept, for 625 KB more held by the set. No heap or allocation
-flag was raised. Over all 101 rows the geometric mean time ratio was 0.84, and
+flag was raised. Over all 101 rows the geometric mean time ratio was 0.83, and
 over the preparation rows 0.59.
 Against jsonschema-rs 0.58.6 and boon 0.6.1 compiling the same schema bytes,
 the SDK's validation and preparation of a document from its bytes went from
-5.40, 1.60, 1.92, 3.02 and 6.19 times the faster peer's time to 3.63, 1.16,
-1.37, 2.17 and 4.23 times on five representative workloads (a scalar, a
+5.33, 1.60, 1.92, 3.06 and 6.21 times the faster peer's time to 3.62, 1.16,
+1.36, 2.14 and 4.20 times on five representative workloads (a scalar, a
 790-byte object, an array of such objects, a `propertyNames` map and a
-recursive tree; median of ten fresh processes, one-minute load 1.9 to 4.8).
+recursive tree; median of ten fresh processes, one-minute load 2.1 to 3.4).
 
 No evaluation work cap applies by default, so values as large as the default
 1,000,000-node admission limit are decided, in time that grows with the schema
@@ -835,10 +834,10 @@ print('sha256', hashlib.sha256(b).hexdigest())
 PY
 ```
 
-The 2026-10-24 implementation asset is **6,055,465 bytes**, or **1,698,044 bytes**
+The 2026-10-24 implementation asset is **6,060,275 bytes**, or **1,699,844 bytes**
 with gzip level 9 (`8be7fe3`: 6,010,809 and 1,681,221; `94b6991`: 7,445,434 and
 1,951,593). Its SHA-256 is
-`be69d4fb0ca43b030a23184837c9e724990da64aa11fcee3de9000d327e0b84c`.
+`cd28e5d8cd3f44d05bfb3215316f3a7ff2888b1dbe33c2d57ba8cc05190d50df`.
 The build uses the workspace release profile and removes the Wasm name section.
 These lengths exclude JavaScript, declarations, runtime memory and host overhead.
 `build-info.json` beside the generated asset records its source and tool identities.
