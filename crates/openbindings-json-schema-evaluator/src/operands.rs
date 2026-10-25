@@ -11,7 +11,14 @@ use openbindings_internal_json::backend::{self, FlatJson, View};
 use openbindings_internal_json::numeric;
 use openbindings_internal_schema::{Definition, Field, Schema};
 use serde_json::{Map, Value};
+use std::borrow::Cow;
 use std::sync::{Arc, Mutex, OnceLock, PoisonError};
+
+/// Each string `pattern` keyword's source, by its definition's number.
+/// Preparation reads a pattern from the projection rather than from a copy:
+/// the library never meets the source, as reading writes its matcher's index
+/// in its place, so the converted schema holds `null` there until then.
+pub(crate) type Sources<'a> = std::collections::HashMap<u32, Cow<'a, str>>;
 
 #[derive(Default)]
 pub(crate) struct Operands {
@@ -355,11 +362,12 @@ impl Operands {
     /// values are indices into `literals`, the literals the projection
     /// separates, which the compiled keywords share rather than copy.
     #[cfg(feature = "conversion-check")]
-    pub(crate) fn resource(
+    pub(crate) fn resource<'a>(
         &mut self,
-        resource: &JsonValue,
+        resource: &'a JsonValue,
         literals: &[JsonValue],
         limits: &Limits,
+        sources: &mut Sources<'a>,
         control: &dyn WorkControl,
     ) -> Result<Value, NoVerdict> {
         let mut root = Map::new();
@@ -409,6 +417,19 @@ impl Operands {
                                         self.literals.push(Literal::Choices(choices.into()));
                                         Value::Array(vec![Value::from(id)])
                                     }
+                                    Some(Role::Read) if key == "pattern" => {
+                                        let number = member
+                                            .name
+                                            .as_str()
+                                            .and_then(definition_number)
+                                            .ok_or_else(crate::program_failure)?;
+                                        let (value, source) = pattern_source(field.value, limits)?;
+                                        match source {
+                                            Some(source) => sources.insert(number, source),
+                                            None => sources.remove(&number),
+                                        };
+                                        value
+                                    }
                                     Some(Role::Read) => read(field.value, limits)?,
                                     Some(Role::DynamicAnchor) => read(field.value, limits)?,
                                     // Annotations and unknown-keyword data do not affect this
@@ -432,12 +453,14 @@ impl Operands {
     /// The library's copy of a projected resource's definitions, as
     /// [`Self::resource`] gives its `$defs` from the program's text: each
     /// schema object's keywords in name order, each once, and the same
-    /// operands and literals in the same order.
-    pub(crate) fn definitions(
+    /// operands and literals in the same order, each string `pattern`'s
+    /// source in `sources`.
+    pub(crate) fn definitions<'a>(
         &mut self,
-        definitions: Vec<Definition<'_>>,
+        definitions: Vec<Definition<'a>>,
         literals: &[JsonValue],
         limits: &Limits,
+        sources: &mut Sources<'a>,
         control: &dyn WorkControl,
     ) -> Result<Map<String, Value>, NoVerdict> {
         let mut defs = Map::new();
@@ -459,7 +482,18 @@ impl Operands {
                         let Some(role) = role(key) else {
                             continue;
                         };
-                        let value = self.field(key, role, field, literals, limits)?;
+                        let value = match field {
+                            Field::Copied(value) if key == "pattern" => {
+                                let (value, source) = pattern_source(value, limits)?;
+                                if let Some(source) = source {
+                                    let number = definition_number(&definition.name)
+                                        .ok_or_else(crate::program_failure)?;
+                                    sources.insert(number, source);
+                                }
+                                value
+                            }
+                            field => self.field(key, role, field, literals, limits)?,
+                        };
                         schema.insert(key.into(), value);
                     }
                     Value::Object(schema)
@@ -737,6 +771,27 @@ pub(crate) fn separated<'a>(
         .and_then(|index| index.parse::<usize>().ok())
         .and_then(|index| literals.get(index))
         .ok_or_else(missing_literal)
+}
+// A definition's number, which its name `n<number>` gives.
+fn definition_number(name: &str) -> Option<u32> {
+    name.strip_prefix('n').and_then(|n| n.parse().ok())
+}
+// A `pattern` keyword's value for the library, as `read` reads it, except
+// that a string is `null`, its source borrowed rather than copied.
+fn pattern_source<'a>(
+    value: JsonRef<'a>,
+    limits: &Limits,
+) -> Result<(Value, Option<Cow<'a, str>>), NoVerdict> {
+    // A string holds no nesting for the depth limit to count, so `read` gives
+    // exactly its decoded text.
+    let source = match value.as_str() {
+        Some(source) => Cow::Borrowed(source),
+        None => match read(value, limits)? {
+            Value::String(source) => Cow::Owned(source),
+            other => return Ok((other, None)),
+        },
+    };
+    Ok((Value::Null, Some(source)))
 }
 fn read(value: JsonRef<'_>, limits: &Limits) -> Result<Value, NoVerdict> {
     if !backend::depth_at_most(&value.to_owned(), limits.compile_json_depth) {

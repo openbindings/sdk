@@ -290,11 +290,13 @@ mod resource_identity;
 mod supplied_reuse;
 
 // The projected resources converted for the library, each definition's number
-// with its node in the space, and the entry's projected reference.
-struct Converted {
+// with its node in the space, the entry's projected reference, and the
+// sources of the patterns preparation reads.
+struct Converted<'a> {
     resources: Vec<bundle::Resource>,
     numbers: HashMap<u32, usize>,
     entry: String,
+    sources: operands::Sources<'a>,
 }
 impl DefaultEvaluator {
     fn prepared(
@@ -336,15 +338,16 @@ impl DefaultEvaluator {
     }
     // Convert a projection's definitions as the evaluator converted the
     // program's text, which `conversion-check` still checks (`parsed`).
-    fn defined(
+    fn defined<'a>(
         &self,
-        projected: openbindings_internal_schema::Definitions<'_>,
+        projected: openbindings_internal_schema::Definitions<'a>,
         operands: &mut operands::Operands,
         space: &SchemaSpace,
         missing: &[String],
         control: &dyn WorkControl,
-    ) -> Result<Converted, NoVerdict> {
+    ) -> Result<Converted<'a>, NoVerdict> {
         let mut numbers = HashMap::new();
+        let mut sources = operands::Sources::new();
         let mut resources = Vec::with_capacity(projected.resources.len());
         let mut entry = None;
         let mut stand_ins = Vec::new();
@@ -371,6 +374,7 @@ impl DefaultEvaluator {
                 resource.definitions,
                 &projected.literals,
                 &self.limits,
+                &mut sources,
                 control,
             )?;
             for (name, at) in stand_ins.drain(..) {
@@ -390,6 +394,7 @@ impl DefaultEvaluator {
             resources,
             numbers,
             entry: entry.ok_or_else(program_failure)?,
+            sources,
         })
     }
     // Convert a projection the core wrote as text: `literals` are its
@@ -398,23 +403,29 @@ impl DefaultEvaluator {
     // definitions' nodes in `space`, in `$defs` order.
     #[cfg(feature = "conversion-check")]
     #[allow(clippy::too_many_arguments)]
-    fn parsed(
+    fn parsed<'a>(
         &self,
-        program: &EvaluationProgram,
+        program: &'a EvaluationProgram,
         literals: &[JsonValue],
         nodes: &[Vec<usize>],
         operands: &mut operands::Operands,
         space: &SchemaSpace,
         missing: &[String],
         control: &dyn WorkControl,
-    ) -> Result<Converted, NoVerdict> {
+    ) -> Result<Converted<'a>, NoVerdict> {
         let mut numbers = HashMap::new();
+        let mut sources = operands::Sources::new();
         let mut resources = Vec::with_capacity(program.resources.len());
         let mut entry = None;
         for (index, resource) in program.resources.iter().enumerate() {
             control.check()?;
-            let mut root =
-                operands.resource(&resource.document, literals, &self.limits, control)?;
+            let mut root = operands.resource(
+                &resource.document,
+                literals,
+                &self.limits,
+                &mut sources,
+                control,
+            )?;
             let Some(Value::Object(mut definitions)) =
                 root.as_object_mut().and_then(|r| r.remove("$defs"))
             else {
@@ -450,6 +461,7 @@ impl DefaultEvaluator {
             resources,
             numbers,
             entry: entry.ok_or_else(program_failure)?,
+            sources,
         })
     }
     // That the text projection, converted, gives what the definitions gave.
@@ -480,6 +492,7 @@ impl DefaultEvaluator {
             .expect("the text converts as the definitions do");
         assert_eq!(text.entry, converted.entry);
         assert_eq!(text.numbers, converted.numbers);
+        assert_eq!(text.sources, converted.sources);
         assert_eq!(text.resources.len(), converted.resources.len());
         // The definitions' bounds on each resource's text hold.
         for ((resource, text), (bytes, nodes)) in unmapped
@@ -520,6 +533,7 @@ impl DefaultEvaluator {
             mut resources,
             numbers,
             entry,
+            mut sources,
         } = converted;
         // Read every pattern while the schemas still have their original
         // locations, counting the forms kept for them together.
@@ -528,7 +542,12 @@ impl DefaultEvaluator {
             for (name, schema) in resource.definitions.iter_mut() {
                 control.check()?;
                 let number = name[1..].parse::<u32>().map_err(|_| program_failure())?;
-                patterns(schema, &self.limits, &mut operands, &mut kept).map_err(
+                let source = if sources.is_empty() {
+                    None
+                } else {
+                    sources.remove(&number)
+                };
+                patterns(schema, source, &self.limits, &mut operands, &mut kept).map_err(
                     |(keyword, mut detail)| {
                         detail.location = numbers
                             .get(&number)
@@ -684,17 +703,18 @@ fn keyword_location(space: &SchemaSpace, node: usize, keyword: &str) -> SchemaLo
     original_location(at)
 }
 
-// Read each `pattern` and `patternProperties` name of one schema, or refuse
-// it, naming the keyword. The SDK's `pattern` keyword matches a pattern
-// through its reading, and answers no verdict when a string reaches one the
-// evaluator does not match. The library matches `patternProperties` names
+// Read each `pattern`, from its `source`, and `patternProperties` name of one
+// schema, or refuse it, naming the keyword. The SDK's `pattern` keyword
+// matches a pattern through its reading, and answers no verdict when a string
+// reaches one the evaluator does not match. The library matches `patternProperties` names
 // itself, so each is written in its linear form, and one without such a form
 // refuses the contract.
-fn patterns(
+fn patterns<'a>(
     schema: &mut Value,
+    source: Option<std::borrow::Cow<'a, str>>,
     limits: &Limits,
     operands: &mut operands::Operands,
-    kept: &mut Kept,
+    kept: &mut Kept<'a>,
 ) -> Result<(), (&'static str, NoVerdict)> {
     let Value::Object(schema) = schema else {
         return Ok(());
@@ -726,11 +746,13 @@ fn patterns(
         }
         Ok(())
     };
-    if let Some(Value::String(source)) = schema.get("pattern") {
-        let key = match kept.read.get(source) {
+    if let Some(source) = source
+        && let Some(slot) = schema.get_mut("pattern")
+    {
+        let key = match kept.read.get(&*source) {
             Some(key) => key.clone(),
             None => {
-                let reading = read_pattern(source, "pattern", limits)
+                let reading = read_pattern(&source, "pattern", limits)
                     .map_err(|detail| ("pattern", detail))?;
                 // Patterns with the same form share one matcher, which keeps
                 // the form and compiles it unless the run matcher matches it.
@@ -739,14 +761,12 @@ fn patterns(
                 {
                     count("pattern", &linear.form, linear.simple.is_none())?;
                 }
-                operands.pattern(reading)
+                let key = operands.pattern(reading);
+                kept.read.insert(source, key.clone());
+                key
             }
         };
-        if let Some(Value::String(source)) =
-            schema.insert("pattern".into(), Value::String(key.clone()))
-        {
-            kept.read.entry(source).or_insert(key);
-        }
+        *slot = Value::String(key);
     }
     // The library matches these names itself, so the bundle keeps each form.
     if let Some(Value::Object(names)) = schema.get_mut("patternProperties") {
@@ -773,15 +793,15 @@ fn patterns(
 }
 // What preparation has kept for a contract's patterns so far.
 #[derive(Default)]
-struct Kept {
+struct Kept<'a> {
     // The bytes of the forms kept.
     bytes: usize,
     // The forms to be compiled: each distinct `pattern` form without a run
     // matcher and each `patternProperties` name.
     compiled: usize,
-    // The value written for each `pattern` already read, so a repeated
-    // pattern is read once.
-    read: HashMap<String, String>,
+    // The value written for each `pattern` already read, by its source, so a
+    // repeated pattern is read once.
+    read: HashMap<std::borrow::Cow<'a, str>, String>,
 }
 fn read_pattern(
     source: &str,

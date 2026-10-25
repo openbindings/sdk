@@ -30,7 +30,9 @@ already checked against the 2020-12 meta-schemas once its validation has checked
 each of them through that index and found none failing.
 Core gives the default evaluator its projection as definitions rather than as
 JSON text to parse again; it writes the text only when the projection could
-reach the text's fixed bounds, which then decide as they do for the text. Every space
+reach the text's fixed bounds, which then decide as they do for the text. The
+evaluator reads each `pattern` from the source the definitions borrow rather
+than from a copy: the library meets only its matcher's index. Every space
 places the packaged 2020-12 meta-schemas after the document and supplied resources
 as one immutable layer, built once per process and shared, so assembly does not
 re-add them. The schema-space compiler builds a
