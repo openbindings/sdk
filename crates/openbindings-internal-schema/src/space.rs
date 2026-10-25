@@ -173,8 +173,8 @@ impl std::fmt::Debug for Target {
 }
 
 #[derive(Clone, Debug, Serialize)]
-#[serde(tag = "outcome", rename_all = "kebab-case")]
-/// Static reference inspection outcome. Located dynamic references still require evaluation-time scope resolution.
+#[serde(tag = "status", rename_all = "kebab-case")]
+/// Static reference inspection result, serialized with its variant in `status`. Located dynamic references still require evaluation-time scope resolution.
 pub enum ReferenceResolution {
     /// A static target was located in the supplied original context.
     Located {
