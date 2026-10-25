@@ -102,6 +102,28 @@ fn internal_rows(context: &JsonValue) -> Vec<Row> {
                 document: context.clone(),
             },
         ),
+        row(
+            "internal Definitions",
+            &schema::Definitions {
+                entry_uri: SECRET.into(),
+                resources: vec![schema::DefinedResource {
+                    uri: SECRET.into(),
+                    entry: Some(SECRET.into()),
+                    definitions: vec![schema::Definition {
+                        name: SECRET.into(),
+                        node: 0,
+                        schema: schema::Schema::Object(vec![
+                            (SECRET, schema::Field::Reference(SECRET.into())),
+                            (SECRET, schema::Field::Map(vec![(SECRET, SECRET.into())])),
+                            (SECRET, schema::Field::Copied(context.view())),
+                        ]),
+                    }],
+                    bytes: 0,
+                    nodes: 0,
+                }],
+                literals: vec![context.clone()],
+            },
+        ),
     ]
 }
 
@@ -128,5 +150,5 @@ fn debug_redacts_caller_text_at_every_boundary() {
     .unwrap();
     let rows = internal_rows(&context);
 
-    check_rows(rows, 11);
+    check_rows(rows, 12);
 }

@@ -1,7 +1,10 @@
 //! The normative schema-position walk. Unknown keywords remain opaque.
 use crate::{JsonKind, JsonRef, JsonValue, identifiers::Identifiers};
 use openbindings_internal_json::backend::{node, ref_id};
-use std::sync::{Arc, OnceLock};
+use std::sync::{
+    Arc, OnceLock,
+    atomic::{AtomicBool, Ordering},
+};
 
 pub const DIALECT: &str = "https://json-schema.org/draft/2020-12/schema";
 /// One schema position. Its value is [`SchemaIndex::value`]; a schema whose
@@ -52,6 +55,9 @@ pub struct SchemaIndex {
     /// Each `$id` declaration with a base and that base, in walk order. A
     /// supplied resource's index only.
     bases: Vec<(u32, Arc<str>)>,
+    /// Whether [`MetaChecks`] checked every schema against the 2020-12
+    /// meta-schemas and found none failing.
+    checked: AtomicBool,
 }
 impl std::fmt::Debug for SchemaIndex {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -301,6 +307,24 @@ impl SchemaIndex {
         }
         out
     }
+    /// The value this index was built for.
+    pub fn source(&self) -> Option<&JsonValue> {
+        self.source.as_ref()
+    }
+    /// The checks of every indexed schema against the 2020-12 meta-schemas,
+    /// one at a time in walk order.
+    pub fn meta_checks(&self) -> MetaChecks<'_> {
+        MetaChecks {
+            index: self,
+            next: 0,
+            failed: false,
+        }
+    }
+    /// Whether [`MetaChecks`] checked every indexed schema and found each to
+    /// satisfy the 2020-12 meta-schemas.
+    pub fn schemas_checked(&self) -> bool {
+        self.checked.load(Ordering::Acquire)
+    }
     /// A schema's value.
     pub fn value(&self, node: &SchemaNode) -> JsonRef<'_> {
         node_of(self.source.as_ref(), node.id)
@@ -399,6 +423,48 @@ impl SchemaIndex {
             [] => SameDocument::Missing,
             [anchor] => SameDocument::Found(self.owned(&self.nodes[anchor.node as usize])),
             _ => SameDocument::Ambiguous,
+        }
+    }
+}
+/// Checks each schema of an index against the 2020-12 meta-schemas, in walk
+/// order, as validating a document does. Once it has checked every schema and
+/// found none failing, [`Self::finish`] records that in the index, which then
+/// knows its schemas satisfy them ([`SchemaIndex::schemas_checked`]); nothing
+/// else records it.
+pub struct MetaChecks<'a> {
+    index: &'a SchemaIndex,
+    next: usize,
+    failed: bool,
+}
+impl std::fmt::Debug for MetaChecks<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MetaChecks").finish_non_exhaustive()
+    }
+}
+impl<'a> MetaChecks<'a> {
+    /// Check the next schema in walk order, as
+    /// [`crate::fixed_schema::check_with_retained`] does: the schema and its
+    /// check.
+    pub fn check_next(
+        &mut self,
+        max_problems: usize,
+        already_retained: impl Fn(JsonRef<'a>, &str) -> bool,
+    ) -> (
+        JsonRef<'a>,
+        Result<crate::fixed_schema::Problems<'a>, String>,
+    ) {
+        let value = self.index.value(&self.index.nodes[self.next]);
+        self.next += 1;
+        let checked =
+            crate::fixed_schema::check_with_retained(value, true, max_problems, already_retained);
+        self.failed |= !matches!(&checked, Ok(problems) if !problems.violated);
+        (value, checked)
+    }
+    /// Record that every schema satisfies the meta-schemas, if each was
+    /// checked and none failed.
+    pub fn finish(self) {
+        if !self.failed && self.next == self.index.nodes.len() {
+            self.index.checked.store(true, Ordering::Release);
         }
     }
 }

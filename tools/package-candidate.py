@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import sys
 import tarfile
+import tempfile
 import tomllib
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -90,8 +91,21 @@ def require_dependencies_first(order, dependencies):
                            "which Cargo resolves when it packages or publishes it.")
 
 
+def compat_fixture(compat, versions, patches):
+    """Write the compatibility fixture as a consumer of the packaged `versions`:
+    its whole source and lock, and its manifest naming those versions."""
+    fixture = ROOT / "tools/consumer-compat"
+    shutil.copytree(fixture / "src", compat / "src")
+    manifest = (fixture / "Cargo.toml").read_text(encoding='utf-8')
+    manifest = re.sub(r'path = "../../crates/([^\"]+)"', lambda m: 'version = "=' + versions[m[1]] + '"', manifest)
+    require("path =" not in manifest, "Compatibility fixture still references the source checkout.")
+    (compat / "Cargo.toml").write_text(manifest + patches)
+    shutil.copyfile(fixture / "Cargo.lock", compat / "Cargo.lock")
+
+
 def self_test():
-    """The order counts every dependency table, and the check refuses an order that does not."""
+    """The order counts every dependency table, and the check refuses an order
+    that does not; the archive consumer holds the whole compatibility fixture."""
     local = PUBLIC_CRATES | INTERNAL_CRATES
     dev_only = {
         "package": {"name": "openbindings-http-discovery"},
@@ -128,6 +142,13 @@ def self_test():
         pass
     else:
         raise AssertionError("Accepted a crate published before its development dependency")
+    with tempfile.TemporaryDirectory(prefix="openbindings-compat-") as temporary:
+        compat = Path(temporary) / "compat-consumer"
+        compat_fixture(compat, {name: "0.0.0" for name in PUBLIC_CRATES}, "")
+        source = ROOT / "tools/consumer-compat/src"
+        files = lambda root: sorted(path.relative_to(root) for path in root.rglob("*") if path.is_file())
+        assert files(compat / "src") == files(source), "Archive consumer lacks fixture sources"
+        tomllib.loads((compat / "Cargo.toml").read_text(encoding='utf-8'))
 
 
 def artifact_manifests():
@@ -144,7 +165,7 @@ def main():
     parser.add_argument("--output", type=Path)
     parser.add_argument("--offline", action="store_true", help="Require cached Cargo dependencies")
     parser.add_argument("--self-test", action="store_true",
-                        help="Check the publication-order rule and exit")
+                        help="Check the publication-order rule and the archive consumer, and exit")
     args = parser.parse_args()
     if args.self_test:
         self_test()
@@ -265,15 +286,8 @@ def main():
         run("archive-" + name, ["cargo", "run", *offline, "--bin", name], consumer)
     run("archive-exact-edit-tests", ["cargo", "test", *offline, "--bin", "exact_edit"], consumer)
     compat = out / "compat-consumer"
-    (compat / "src").mkdir(parents=True)
-    versions = {item["name"]: item["version"] for item in packages}
-    manifest = (ROOT / "tools/consumer-compat/Cargo.toml").read_text(encoding='utf-8')
-    manifest = re.sub(r'path = "../../crates/([^\"]+)"', lambda m: 'version = "=' + versions[m[1]] + '"', manifest)
-    require("path =" not in manifest, "Compatibility fixture still references the source checkout.")
-    (compat / "Cargo.toml").write_text(manifest + patches)
-    shutil.copyfile(ROOT / "tools/consumer-compat/src/lib.rs", compat / "src/lib.rs")
-    shutil.copyfile(ROOT / "tools/consumer-compat/Cargo.lock", compat / "Cargo.lock")
-    for features in ["", "ap", "sdk", "sdk,ap", "evaluator", "native", "native,ap",
+    compat_fixture(compat, {item["name"]: item["version"] for item in packages}, patches)
+    for features in ["", "ap", "sdk", "sdk,ap", "evaluator", "evaluator,po", "native", "native,ap",
                      "portable", "inspection", "synthesis", "invocation"]:
         feature_args = ["--features", features] if features else []
         label = features.replace(",", "-") or "baseline"

@@ -79,10 +79,14 @@ them or through the library's documented `with_keyword` and `PatternOptions`
 APIs:
 
 - Core's schema space projects the contract after the meta-schema check of
-  every schema it reaches: each reached schema becomes a definition of its own,
-  `n<number>`, in one projected resource per original resource, and every
-  subschema position a `$ref` to its child's definition. A reference that
-  identifies no schema refuses preparation and names the schema holding it.
+  every schema it reaches (a conformant document's own schemas passed that
+  check when the document was validated): each reached schema becomes a
+  definition of its own, `n<number>`, in one projected resource per original
+  resource, and every subschema position a `$ref` to its child's definition.
+  Core hands the evaluator these definitions directly; it writes them as JSON
+  text only to apply the text's fixed bounds when the projection could reach
+  them. A reference that identifies no schema refuses preparation and names
+  the schema holding it.
 - `missing.rs` stands in for resources the request does not supply. When the
   projection fails for want of one, preparation adds an empty resource at each
   missing URI and projects again, and every definition projected from a

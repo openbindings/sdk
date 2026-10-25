@@ -9,7 +9,7 @@ mod input_policy;
 pub mod schema_index;
 mod space;
 pub mod uri;
-pub use input_policy::{InputPolicy, Supplied, SuppliedSet};
+pub use input_policy::{IndexedDocument, InputPolicy, Supplied, SuppliedSet};
 mod program;
 pub use program::*;
 use serde::Serialize;
@@ -50,6 +50,19 @@ impl RawDocument {
     pub fn new(value: JsonValue) -> Self {
         let index = Arc::new(schema_index::SchemaIndex::build(&value));
         Self { value, index }
+    }
+    /// The document a document index ([`schema_index::SchemaIndex::build`])
+    /// was built for, with that index, shared rather than built again.
+    pub fn shared(index: Arc<schema_index::SchemaIndex>) -> Self {
+        let value = index.source().expect("a document index").clone();
+        Self { value, index }
+    }
+    /// Whether every indexed schema is known to satisfy the 2020-12
+    /// meta-schemas: each was checked against them through its index
+    /// ([`schema_index::MetaChecks`]), as validating a document does, and
+    /// none failed.
+    pub fn schemas_checked(&self) -> bool {
+        self.index.schemas_checked()
     }
     pub fn parse(text: impl AsRef<str>) -> Result<Self, openbindings_internal_json::InputError> {
         Ok(Self::new(JsonValue::parse(text.as_ref())?))

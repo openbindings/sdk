@@ -69,7 +69,7 @@
         }
       }
     },
-    "$id": "https://sdk-bundle.openbindings.invalid/",
+    "$id": "urn:openbindings:bundle",
     "$ref": "#/$defs/n12",
     "$schema": "https://json-schema.org/draft/2020-12/schema"
   },
@@ -157,7 +157,7 @@
         }
       }
     },
-    "$id": "https://sdk-bundle.openbindings.invalid/",
+    "$id": "urn:openbindings:bundle",
     "$ref": "#/$defs/n12",
     "$schema": "https://json-schema.org/draft/2020-12/schema"
   },

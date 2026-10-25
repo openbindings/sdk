@@ -10,11 +10,13 @@ pub struct InputPolicy {
     pub(crate) names: BTreeMap<String, Vec<(usize, usize)>>,
     pub(crate) protected: HashSet<String>,
 }
-/// Admitted supplied resources with their identity policy. Clones share both.
+/// Admitted supplied resources with their identity policy. Clones share both,
+/// and the resources' schema positions once a schema space first walks them.
 #[derive(Clone, Default)]
 pub struct Supplied {
     resources: Arc<[ProjectedResource]>,
     pub(crate) policy: Arc<InputPolicy>,
+    nodes: Arc<OnceLock<Box<[schema_index::SchemaIndex]>>>,
 }
 /// A holder of admitted supplied resources, such as the SDK's resource set, that
 /// lets a schema space reuse their identity policy instead of admitting them
@@ -24,6 +26,14 @@ pub struct Supplied {
 pub trait SuppliedSet {
     /// The admitted resources and their identity policy.
     fn supplied(&self) -> &Supplied;
+}
+/// A document revision whose schema index the SDK already built, so the
+/// default evaluator shares it rather than walking the document again on
+/// every preparation. Not a supported API, like [`SuppliedSet`].
+#[doc(hidden)]
+pub trait IndexedDocument {
+    /// The revision's value with its schema index.
+    fn indexed(&self) -> crate::RawDocument;
 }
 struct NoRetrieval;
 impl jsonschema::Retrieve for NoRetrieval {
@@ -74,6 +84,16 @@ impl Supplied {
     pub fn iter(&self) -> impl Iterator<Item = &ProjectedResource> {
         self.resources.iter()
     }
+    /// Each resource's schema nodes ([`schema_index::SchemaIndex::supplied_nodes`]),
+    /// in resource order: walked once for every space over these resources.
+    pub(crate) fn nodes(&self) -> &[schema_index::SchemaIndex] {
+        self.nodes.get_or_init(|| {
+            self.resources
+                .iter()
+                .map(|resource| schema_index::SchemaIndex::supplied_nodes(&resource.document))
+                .collect()
+        })
+    }
     pub fn new(resources: impl IntoIterator<Item = ProjectedResource>) -> Result<Self, String> {
         // Collected straight into the shared slice: one allocation, as a vector
         // takes, when the source has a trusted length like the resource set's;
@@ -108,6 +128,7 @@ impl Supplied {
         Ok(Self {
             resources,
             policy: Arc::new(policy),
+            nodes: Arc::default(),
         })
     }
 }

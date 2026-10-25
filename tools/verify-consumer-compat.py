@@ -83,7 +83,7 @@ with tempfile.TemporaryDirectory(prefix='openbindings-consumer-') as temporary:
                 if line.startswith('host: '))
     receipts = []
     baseline = None
-    for features in ['', 'ap', 'sdk', 'sdk,ap', 'evaluator', 'evaluator,ap', 'portable', 'inspection', 'synthesis', 'invocation', 'native', 'native,ap']:
+    for features in ['', 'ap', 'sdk', 'sdk,ap', 'evaluator', 'evaluator,ap', 'evaluator,po,check', 'portable', 'inspection', 'synthesis', 'invocation', 'native', 'native,ap']:
         label = features.replace(',', '-') or 'baseline'
         selection = ['--no-default-features'] + (['--features', features] if features else [])
         metadata = json.loads(run(['cargo', 'metadata', '--locked', '--format-version', '1', '--filter-platform', host, *selection], fixture).stdout)
@@ -107,6 +107,8 @@ with tempfile.TemporaryDirectory(prefix='openbindings-consumer-') as temporary:
         expected = set(baseline)
         if 'ap' in features.split(','):
             expected.add('arbitrary_precision')
+        if 'po' in features.split(','):
+            expected.update(['preserve_order', 'indexmap'])
         if features not in ['', 'ap']:
             expected.update(['raw_value', 'unbounded_depth', 'float_roundtrip'])
         assert shared_features == sorted(expected), (label, shared_features)

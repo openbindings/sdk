@@ -24,7 +24,15 @@ projection, once per live document revision and resource set: the space without
 supplied resources stays with the revision, and a space with a set stays with
 that set until either the set or the revision is dropped. The default evaluator
 assembles its own space for each preparation and drops it afterwards; the space
-shares the set's identity index instead of indexing the resources again. Every space
+shares the set's identity index and schema positions and the revision's schema
+index instead of building them again, and takes the revision's schemas as
+already checked against the 2020-12 meta-schemas once its validation has checked
+each of them through that index and found none failing.
+Core gives the default evaluator its projection as definitions rather than as
+JSON text to parse again; it writes the text only when the projection could
+reach the text's fixed bounds, which then decide as they do for the text. The
+evaluator reads each `pattern` from the source the definitions borrow rather
+than from a copy: the library meets only its matcher's index. Every space
 places the packaged 2020-12 meta-schemas after the document and supplied resources
 as one immutable layer, built once per process and shared, so assembly does not
 re-add them. The schema-space compiler builds a

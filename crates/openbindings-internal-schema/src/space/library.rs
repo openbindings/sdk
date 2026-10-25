@@ -81,6 +81,12 @@ pub(super) struct Inspection {
     carriers: BTreeMap<usize, Carrier>,
     absent: Mutex<Option<BTreeMap<String, Vec<Key>>>>,
     missing: OnceLock<Targets>,
+    // The packaged layer's references, routed when one of them is first
+    // resolved, when no local name selects their carriers
+    // ([`SchemaSpace::packaged_apart`]); otherwise they are routed in
+    // `routes` with the local ones. Most value contracts never reach a
+    // packaged schema, so most spaces route none of them.
+    packaged: Option<OnceLock<Box<Inspection>>>,
 }
 
 pub(super) type PackagedLookup = (Key, usize, Lookup<String>);
@@ -264,20 +270,26 @@ fn copy(
     positions: &HashMap<usize, usize>,
     repair_reference: impl Fn(usize) -> bool,
 ) -> (Tree, HashMap<usize, usize>) {
+    // A postorder walk: each container's children are copied, in order, onto
+    // `built` before the container takes them from its end.
     let mut stack = vec![(value.view(), false)];
-    let mut values = HashMap::new();
+    let mut built: Vec<Value> = Vec::new();
     while let Some((node, visited)) = stack.pop() {
         if !visited {
             stack.push((node, true));
+            let pending = stack.len();
             if let Some(items) = node.elements() {
                 stack.extend(items.map(|v| (v, false)));
             }
             if let Some(members) = node.members() {
                 stack.extend(members.map(|m| (m.value, false)));
             }
+            stack[pending..].reverse();
             continue;
         }
-        let mut child = |v: JsonRef<'_>| values.remove(&ref_id(v)).expect("postorder child");
+        let children = node.len().unwrap_or(0);
+        let mut children = built.drain(built.len() - children..);
+        let mut child = |_: JsonRef<'_>| children.next().expect("postorder child");
         let mut copied = match node.kind() {
             JsonKind::Null => Value::Null,
             JsonKind::Boolean => Value::Bool(node.as_bool().unwrap()),
@@ -300,25 +312,24 @@ fn copy(
                     .collect(),
             ),
         };
+        drop(children);
         // Only inspection is repaired. The authored invocation and its syntax
         // evidence remain in SchemaSpace. No identifier, anchor, or target is
         // reconstructed here; ordinary lookup still belongs to the registry.
-        if positions
-            .get(&ref_id(node))
-            .is_some_and(|&id| repair_reference(id))
-            && let Value::Object(object) = &mut copied
+        if let Value::Object(object) = &mut copied
             && object
                 .get("$ref")
                 .and_then(Value::as_str)
                 .is_some_and(|r| !uri::valid(r))
+            && positions
+                .get(&ref_id(node))
+                .is_some_and(|&id| repair_reference(id))
         {
             object.remove("$ref");
         }
-        values.insert(ref_id(node), copied);
+        built.push(copied);
     }
-    let tree = Tree(Box::new(
-        values.remove(&node_id(value)).expect("copied root"),
-    ));
+    let tree = Tree(Box::new(built.pop().expect("copied root")));
     let mut identity = HashMap::new();
     let mut stack = vec![(value.view(), &*tree.0)];
     while let Some((original, copied)) = stack.pop() {
@@ -330,7 +341,9 @@ fn copy(
         }
         if let (Some(members), Some(copies)) = (original.members(), copied.as_object()) {
             for member in members {
-                if let Some(value) = copies.get(&scalar(member.name)) {
+                let name = openbindings_internal_json::backend::fixed_string(member.name)
+                    .expect("JSON string");
+                if let Some(value) = copies.get(&*name) {
                     stack.push((member.value, value));
                 }
             }
@@ -347,6 +360,21 @@ impl SchemaSpace {
         missing: &mut impl FnMut(&str),
     ) -> Result<Target, Failure> {
         let index = self.inspection.get_or_init(|| self.index_inspection());
+        self.library_target_in(index, holder, reference, missing)
+    }
+    fn library_target_in(
+        &self,
+        index: &Inspection,
+        holder: usize,
+        reference: &str,
+        missing: &mut impl FnMut(&str),
+    ) -> Result<Target, Failure> {
+        let index = match &index.packaged {
+            Some(packaged) if holder >= PACKAGED => {
+                packaged.get_or_init(|| Box::new(self.index_packaged()))
+            }
+            _ => index,
+        };
         // Both keywords may exist at one node. Matching the original spelling
         // also preserves the refusal for queries absent from the original input.
         let key = REFERENCE_KEYWORDS
@@ -496,7 +524,40 @@ impl SchemaSpace {
             lookups
         })
     }
+    // Whether the packaged layer's references route as they do in a space
+    // with no local resources: no local name is one they name or one of the
+    // packaged resources' bases, so no local resource can carry them or make a
+    // packaged carrier ineligible. Their routes then depend on the packaged
+    // layer alone, and are made when one of them is first resolved.
+    fn packaged_apart(&self) -> bool {
+        let names = self.packaged.claimable.get_or_init(|| {
+            let mut names: Vec<String> = self
+                .packaged_lookups()
+                .iter()
+                .filter_map(|(_, _, found)| match found {
+                    Lookup::Name(name) => Some(name.clone()),
+                    Lookup::Scope(_) | Lookup::Invalid => None,
+                })
+                .chain(
+                    self.packaged
+                        .resources
+                        .iter()
+                        .filter_map(|resource| resource.base.clone()),
+                )
+                .collect();
+            names.sort_unstable();
+            names.dedup();
+            names
+        });
+        !names
+            .iter()
+            .any(|name| self.local.names.contains_key(name.as_str()))
+    }
     fn index_inspection(&self) -> Inspection {
+        self.index_with(self.packaged_apart())
+    }
+    // With `apart`, the packaged references are routed on first use.
+    fn index_with(&self, apart: bool) -> Inspection {
         let uri_registry = inspection_registry();
         let mut index = Index::default();
         for (key, resource, reference, base) in self.references_in(self.local.nodes()) {
@@ -504,9 +565,25 @@ impl SchemaSpace {
                 index.add(self, key, resource, found);
             });
         }
+        if !apart {
+            for (key, resource, found) in self.packaged_lookups() {
+                index.add(self, *key, *resource, found.borrowed());
+            }
+        }
+        let mut inspection = Self::routed(index);
+        inspection.packaged = apart.then(OnceLock::new);
+        inspection
+    }
+    // The packaged layer's references alone, routed as `index_inspection`
+    // routes them.
+    fn index_packaged(&self) -> Inspection {
+        let mut index = Index::default();
         for (key, resource, found) in self.packaged_lookups() {
             index.add(self, *key, *resource, found.borrowed());
         }
+        Self::routed(index)
+    }
+    fn routed(index: Index) -> Inspection {
         let Index {
             mut routes,
             groups,
@@ -540,6 +617,7 @@ impl SchemaSpace {
                 .collect(),
             absent: Mutex::new(Some(absent)),
             missing: OnceLock::new(),
+            packaged: None,
         }
     }
     fn inspect_missing(&self, absent: BTreeMap<String, Vec<Key>>) -> Targets {
@@ -773,6 +851,69 @@ mod tests {
                 .map(|carrier| carrier.preparations.load(Ordering::Relaxed))
                 .sum()
         })
+    }
+
+    // Routing the packaged layer's references on first use gives every
+    // reference, local or packaged, the resolution routing them with the
+    // local ones gives; and no packaged reference names a missing resource.
+    #[test]
+    fn packaged_references_route_apart_as_they_route_together() {
+        const META: &str = "https://json-schema.org/draft/2020-12/schema";
+        const CORE: &str = "https://json-schema.org/draft/2020-12/meta/core";
+        let documents = [
+            format!(
+                r#"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{{"$ref":"{META}"}}}}}}}}"#
+            ),
+            format!(
+                r##"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{{"allOf":[{{"$ref":"{CORE}"}},{{"$ref":"https://absent.test/a"}}]}}}}}},"schemas":{{"r":{{"$id":"https://local.test/r","$ref":"#/$defs/d","$defs":{{"d":true}}}}}}}}"##
+            ),
+            // A contained resource claims a packaged name.
+            format!(
+                r#"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{{"$ref":"{META}"}}}}}},"schemas":{{"c":{{"$id":"{CORE}","type":"object"}}}}}}"#
+            ),
+        ];
+        let supplied = [
+            Supplied::default(),
+            // A supplied resource claims a packaged name.
+            Supplied::new([ProjectedResource {
+                uri: CORE.into(),
+                document: JsonValue::parse(r#"{"type":"string"}"#).unwrap(),
+            }])
+            .unwrap(),
+        ];
+        let mut compared = 0;
+        for document in &documents {
+            for supplied in &supplied {
+                let space =
+                    SchemaSpace::new(RawDocument::parse(document).unwrap(), supplied.clone());
+                let (together, apart) = (space.index_with(false), space.index_with(true));
+                for (holder, node) in space.nodes() {
+                    for keyword in REFERENCE_KEYWORDS {
+                        let Some(reference) = node.value.get(keyword).and_then(|v| v.as_str())
+                        else {
+                            continue;
+                        };
+                        let resolve = |index: &Inspection| {
+                            let mut missing = Vec::new();
+                            let result = space
+                                .library_target_in(index, holder, reference, &mut |uri| {
+                                    missing.push(uri.to_owned())
+                                })
+                                .map(|target| (target.node, target.dynamic_name))
+                                .map_err(|failure| serde_json::to_string(&failure).unwrap());
+                            (result, missing)
+                        };
+                        let routed = resolve(&together);
+                        assert_eq!(routed, resolve(&apart), "{reference}");
+                        if holder >= PACKAGED {
+                            assert!(routed.1.is_empty(), "{reference}");
+                        }
+                        compared += 1;
+                    }
+                }
+            }
+        }
+        assert!(compared > 100);
     }
 
     #[test]

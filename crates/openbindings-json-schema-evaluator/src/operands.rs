@@ -9,14 +9,26 @@ use jsonschema::{Keyword, ValidationError, ValidationOptions};
 use openbindings::*;
 use openbindings_internal_json::backend::{self, FlatJson, View};
 use openbindings_internal_json::numeric;
+use openbindings_internal_schema::{Definition, Field, Schema};
 use serde_json::{Map, Value};
+use std::borrow::Cow;
 use std::sync::{Arc, Mutex, OnceLock, PoisonError};
+
+/// Each string `pattern` keyword's source, by its definition's number.
+/// Preparation reads a pattern from the projection rather than from a copy:
+/// the library never meets the source, as reading writes its matcher's index
+/// in its place, so the converted schema holds `null` there until then.
+pub(crate) type Sources<'a> = std::collections::HashMap<u32, Cow<'a, str>>;
 
 #[derive(Default)]
 pub(crate) struct Operands {
     // Each compiled `const` and `enum` keyword's literal, by the id it holds.
     literals: Vec<Literal>,
     numbers: numeric::Operands,
+    // Which numeric keywords, by their place in `numeric::KEYWORDS`, hold an
+    // operand, so the validator registers only the SDK keywords the value
+    // contract holds.
+    numeric: [bool; numeric::KEYWORDS.len()],
     // Each distinct `pattern` matcher, in the order preparation reads them; a
     // `pattern` keyword holds its index.
     patterns: Vec<Matcher>,
@@ -345,14 +357,17 @@ pub(crate) fn role(keyword: &str) -> Option<Role> {
     })
 }
 impl Operands {
-    /// The library's copy of a projected resource. Its `const` and `enum`
+    /// The library's copy of a projected resource's text, which the
+    /// `conversion-check` feature still compares with [`Self::definitions`]. Its `const` and `enum`
     /// values are indices into `literals`, the literals the projection
     /// separates, which the compiled keywords share rather than copy.
-    pub(crate) fn resource(
+    #[cfg(feature = "conversion-check")]
+    pub(crate) fn resource<'a>(
         &mut self,
-        resource: &JsonValue,
+        resource: &'a JsonValue,
         literals: &[JsonValue],
         limits: &Limits,
+        sources: &mut Sources<'a>,
         control: &dyn WorkControl,
     ) -> Result<Value, NoVerdict> {
         let mut root = Map::new();
@@ -374,7 +389,7 @@ impl Operands {
                             for field in member.value.members().expect("admitted schema object") {
                                 let key = field.name.as_str().expect("admitted scalar name");
                                 let value = match role(key) {
-                                    Some(Role::Number) => self.numbers.insert(field.value.text()),
+                                    Some(Role::Number) => self.number(key, field.value.text()),
                                     // No finite JSON collection can reach u64::MAX elements.
                                     // Preserve contains annotations by keeping its native keyword;
                                     // normalize every size operand without exponent expansion.
@@ -402,6 +417,19 @@ impl Operands {
                                         self.literals.push(Literal::Choices(choices.into()));
                                         Value::Array(vec![Value::from(id)])
                                     }
+                                    Some(Role::Read) if key == "pattern" => {
+                                        let number = member
+                                            .name
+                                            .as_str()
+                                            .and_then(definition_number)
+                                            .ok_or_else(crate::program_failure)?;
+                                        let (value, source) = pattern_source(field.value, limits)?;
+                                        match source {
+                                            Some(source) => sources.insert(number, source),
+                                            None => sources.remove(&number),
+                                        };
+                                        value
+                                    }
                                     Some(Role::Read) => read(field.value, limits)?,
                                     Some(Role::DynamicAnchor) => read(field.value, limits)?,
                                     // Annotations and unknown-keyword data do not affect this
@@ -421,6 +449,158 @@ impl Operands {
             }
         }
         Ok(Value::Object(root))
+    }
+    /// The library's copy of a projected resource's definitions, as
+    /// [`Self::resource`] gives its `$defs` from the program's text: each
+    /// schema object's keywords in name order, each once, and the same
+    /// operands and literals in the same order, each string `pattern`'s
+    /// source in `sources`.
+    pub(crate) fn definitions<'a>(
+        &mut self,
+        definitions: Vec<Definition<'a>>,
+        literals: &[JsonValue],
+        limits: &Limits,
+        sources: &mut Sources<'a>,
+        control: &dyn WorkControl,
+    ) -> Result<Map<String, Value>, NoVerdict> {
+        let mut defs = Map::new();
+        for definition in definitions {
+            control.check()?;
+            let value = match definition.schema {
+                Schema::Boolean(value) => Value::Bool(value),
+                Schema::Object(mut fields) => {
+                    // In the order the program's text holds them, which a map
+                    // that keeps its insertion order keeps.
+                    fields.sort_by(|a, b| a.0.cmp(b.0));
+                    let mut fields = fields.into_iter().peekable();
+                    let mut schema = Map::new();
+                    while let Some((key, field)) = fields.next() {
+                        // The text holds the last of a repeated keyword.
+                        if fields.peek().is_some_and(|next| next.0 == key) {
+                            continue;
+                        }
+                        let Some(role) = role(key) else {
+                            continue;
+                        };
+                        let value = match field {
+                            Field::Copied(value) if key == "pattern" => {
+                                let (value, source) = pattern_source(value, limits)?;
+                                if let Some(source) = source {
+                                    let number = definition_number(&definition.name)
+                                        .ok_or_else(crate::program_failure)?;
+                                    sources.insert(number, source);
+                                }
+                                value
+                            }
+                            field => self.field(key, role, field, literals, limits)?,
+                        };
+                        schema.insert(key.into(), value);
+                    }
+                    Value::Object(schema)
+                }
+            };
+            defs.insert(definition.name, value);
+        }
+        Ok(defs)
+    }
+    // One projected keyword's value for the library, as `resource` reads it
+    // from the text the program writes for it.
+    fn field(
+        &mut self,
+        key: &str,
+        role: Role,
+        field: Field<'_>,
+        literals: &[JsonValue],
+        limits: &Limits,
+    ) -> Result<Value, NoVerdict> {
+        // The nesting the program's text gives a subschema's reference, and
+        // the reference itself.
+        let reference = |address: String| {
+            let mut object = Map::new();
+            object.insert("$ref".into(), Value::String(address));
+            Value::Object(object)
+        };
+        let nested = |depth: usize, value: Value| {
+            if depth > limits.compile_json_depth {
+                Err(compile_json_depth())
+            } else {
+                Ok(value)
+            }
+        };
+        Ok(match (role, field) {
+            (Role::Number, Field::Copied(value)) => self.number(key, value.text()),
+            (Role::Size, Field::Copied(value)) => Value::from(
+                openbindings_internal_json::decimal::Decimal::parse(value.text())
+                    .nonnegative_integer_u64_saturating()
+                    .expect("admitted size operand"),
+            ),
+            (Role::Const, Field::Literal(index)) => {
+                let value = literal(index, literals)?.clone();
+                let id = self.literals.len();
+                self.literals.push(Literal::Value(value));
+                Value::from(id)
+            }
+            (Role::Enum, Field::Literal(index)) => {
+                let choices: Vec<_> = literal(index, literals)?
+                    .view()
+                    .elements()
+                    .expect("admitted enum array")
+                    .map(|v| v.to_owned())
+                    .collect();
+                let id = self.literals.len();
+                self.literals.push(Literal::Choices(choices.into()));
+                Value::Array(vec![Value::from(id)])
+            }
+            (Role::Read | Role::DynamicAnchor, Field::Copied(value)) => read(value, limits)?,
+            (Role::Read, Field::Reference(uri)) => Value::String(uri),
+            (Role::Read, Field::Single(address)) => nested(1, reference(address))?,
+            (Role::Read, Field::Map(mut children)) => {
+                // In the order the program's text holds them: by name, each
+                // once, the last of a repeated one. A map that keeps its
+                // insertion order, as serde_json's `preserve_order` makes
+                // it, then holds them as the text's parse did.
+                children.sort_by(|a, b| a.0.cmp(b.0));
+                let mut children = children.into_iter().peekable();
+                let mut object = Map::new();
+                while let Some((name, address)) = children.next() {
+                    if children.peek().is_some_and(|next| next.0 == name) {
+                        continue;
+                    }
+                    object.insert(name.into(), reference(address));
+                }
+                nested(if object.is_empty() { 1 } else { 2 }, Value::Object(object))?
+            }
+            (Role::Read, Field::List(children)) => nested(
+                if children.is_empty() { 1 } else { 2 },
+                Value::Array(children.into_iter().map(reference).collect()),
+            )?,
+            // A projection writes each keyword in one shape.
+            _ => return Err(crate::program_failure()),
+        })
+    }
+    // A numeric keyword's operand: its handle.
+    fn number(&mut self, keyword: &str, token: &str) -> Value {
+        if let Some(at) = numeric::KEYWORDS.iter().position(|k| *k == keyword) {
+            self.numeric[at] = true;
+        }
+        self.numbers.insert(token)
+    }
+    /// Whether two conversions separated the same literals.
+    #[cfg(feature = "conversion-check")]
+    pub(crate) fn same_literals(&self, other: &Self) -> bool {
+        let texts = |operands: &Self| -> Vec<Vec<String>> {
+            operands
+                .literals
+                .iter()
+                .map(|literal| match literal {
+                    Literal::Value(value) => vec![value.text().to_owned()],
+                    Literal::Choices(choices) => {
+                        choices.iter().map(|c| c.text().to_owned()).collect()
+                    }
+                })
+                .collect()
+        };
+        texts(self) == texts(other)
     }
     /// Whether a `pattern` keyword with this form already has a matcher, so
     /// another adds nothing.
@@ -467,21 +647,33 @@ impl Operands {
     }
     /// The library's options with the SDK's keywords, and the `pattern`
     /// keyword's matchers, which compile within the value contract's `memory`.
+    /// Only the keywords the bundle can hold are registered: the work marker
+    /// with `markers`, the missing keyword with `missing`, and the literal,
+    /// numeric and `pattern` keywords this value contract's schemas hold. The
+    /// library compiles a keyword the bundle does not hold the same whether
+    /// it is registered or not: it never meets it.
     pub(crate) fn apply<R>(
         self,
         mut options: ValidationOptions<'_, R, FlatJson>,
         memory: Memory,
+        markers: bool,
+        missing: bool,
     ) -> (ValidationOptions<'_, R, FlatJson>, Arc<Patterns>) {
-        options = options.with_keyword(crate::bundle::MARKER, |_, _, _| Ok(Box::new(Work)));
-        options = options.with_keyword(crate::missing::KEYWORD, |_, value, _| {
-            let at = value
-                .as_u64()
-                .and_then(|at| u32::try_from(at).ok())
-                .ok_or_else(|| ValidationError::custom("invalid internal stand-in index"))?;
-            Ok(Box::new(Missing(at)))
-        });
+        if markers {
+            options = options.with_keyword(crate::bundle::MARKER, |_, _, _| Ok(Box::new(Work)));
+        }
+        if missing {
+            options = options.with_keyword(crate::missing::KEYWORD, |_, value, _| {
+                let at = value
+                    .as_u64()
+                    .and_then(|at| u32::try_from(at).ok())
+                    .ok_or_else(|| ValidationError::custom("invalid internal stand-in index"))?;
+                Ok(Box::new(Missing(at)))
+            });
+        }
         // Only the matchers outlive preparation; their index by form does not.
         drop(self.indices);
+        let matched = !self.patterns.is_empty();
         let patterns = Arc::new(Patterns {
             matchers: self.patterns,
             memory,
@@ -489,23 +681,29 @@ impl Operands {
             sites: Mutex::new(Vec::new()),
         });
         let keyword = patterns.clone();
-        options = options.with_keyword("pattern", move |_, value, at| {
-            let index = value
-                .as_str()
-                .and_then(|key| key.parse::<usize>().ok())
-                .filter(|&index| index < keyword.matchers.len())
-                .ok_or_else(|| ValidationError::custom("invalid internal pattern reference"))?;
-            // The library compiles each keyword as it builds; a contract built
-            // again records its keywords again.
-            let mut sites = keyword.sites.lock().unwrap_or_else(PoisonError::into_inner);
-            let site = u32::try_from(sites.len())
-                .map_err(|_| ValidationError::custom("too many internal pattern sites"))?;
-            sites.push(at);
-            drop(sites);
-            Ok(Box::new(Pattern(keyword.clone(), index, site)))
-        });
+        if matched {
+            options = options.with_keyword("pattern", move |_, value, at| {
+                let index = value
+                    .as_str()
+                    .and_then(|key| key.parse::<usize>().ok())
+                    .filter(|&index| index < keyword.matchers.len())
+                    .ok_or_else(|| ValidationError::custom("invalid internal pattern reference"))?;
+                // The library compiles each keyword as it builds; a contract built
+                // again records its keywords again.
+                let mut sites = keyword.sites.lock().unwrap_or_else(PoisonError::into_inner);
+                let site = u32::try_from(sites.len())
+                    .map_err(|_| ValidationError::custom("too many internal pattern sites"))?;
+                sites.push(at);
+                drop(sites);
+                Ok(Box::new(Pattern(keyword.clone(), index, site)))
+            });
+        }
         let numbers = Arc::new(self.numbers);
-        for keyword in numeric::KEYWORDS {
+        for (keyword, _) in numeric::KEYWORDS
+            .into_iter()
+            .zip(self.numeric)
+            .filter(|&(_, held)| held)
+        {
             let numbers = numbers.clone();
             options = options.with_keyword(keyword, move |_, value, _| {
                 if value.as_number().is_none() {
@@ -517,8 +715,14 @@ impl Operands {
                 Ok(Box::new(ExactBound(bound)))
             });
         }
+        let held = |choices: bool| {
+            self.literals
+                .iter()
+                .any(|literal| matches!(literal, Literal::Choices(_)) == choices)
+        };
+        let keywords = [("const", held(false)), ("enum", held(true))];
         let literals = Arc::new(self.literals);
-        for keyword in ["const", "enum"] {
+        for (keyword, _) in keywords.into_iter().filter(|&(_, held)| held) {
             let literals = literals.clone();
             options = options.with_keyword(keyword, move |_, value, _| {
                 let id = if keyword == "enum" {
@@ -538,7 +742,26 @@ impl Operands {
         (options, patterns)
     }
 }
+/// The separated literal at `index`.
+fn literal(index: usize, literals: &[JsonValue]) -> Result<&JsonValue, NoVerdict> {
+    literals.get(index).ok_or_else(missing_literal)
+}
+fn missing_literal() -> NoVerdict {
+    no_verdict(
+        NoVerdictReason::EvaluatorFailure,
+        "program-literal",
+        "a projected literal is missing",
+    )
+}
+fn compile_json_depth() -> NoVerdict {
+    no_verdict(
+        NoVerdictReason::LimitExceeded,
+        "compile-json-depth",
+        "projected schema structure exceeds the dependency compilation-depth admission limit",
+    )
+}
 /// The separated literal a projected `const` or `enum` names by its index.
+#[cfg(feature = "conversion-check")]
 pub(crate) fn separated<'a>(
     index: JsonRef<'_>,
     literals: &'a [JsonValue],
@@ -547,21 +770,32 @@ pub(crate) fn separated<'a>(
         .number_text()
         .and_then(|index| index.parse::<usize>().ok())
         .and_then(|index| literals.get(index))
-        .ok_or_else(|| {
-            no_verdict(
-                NoVerdictReason::EvaluatorFailure,
-                "program-literal",
-                "a projected literal is missing",
-            )
-        })
+        .ok_or_else(missing_literal)
+}
+// A definition's number, which its name `n<number>` gives.
+fn definition_number(name: &str) -> Option<u32> {
+    name.strip_prefix('n').and_then(|n| n.parse().ok())
+}
+// A `pattern` keyword's value for the library, as `read` reads it, except
+// that a string is `null`, its source borrowed rather than copied.
+fn pattern_source<'a>(
+    value: JsonRef<'a>,
+    limits: &Limits,
+) -> Result<(Value, Option<Cow<'a, str>>), NoVerdict> {
+    // A string holds no nesting for the depth limit to count, so `read` gives
+    // exactly its decoded text.
+    let source = match value.as_str() {
+        Some(source) => Cow::Borrowed(source),
+        None => match read(value, limits)? {
+            Value::String(source) => Cow::Owned(source),
+            other => return Ok((other, None)),
+        },
+    };
+    Ok((Value::Null, Some(source)))
 }
 fn read(value: JsonRef<'_>, limits: &Limits) -> Result<Value, NoVerdict> {
     if !backend::depth_at_most(&value.to_owned(), limits.compile_json_depth) {
-        return Err(no_verdict(
-            NoVerdictReason::LimitExceeded,
-            "compile-json-depth",
-            "projected schema structure exceeds the dependency compilation-depth admission limit",
-        ));
+        return Err(compile_json_depth());
     }
     if let Some(value) = direct(value) {
         return Ok(value);

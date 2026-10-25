@@ -1,7 +1,7 @@
 //! One exact editable document and retained conformance evidence.
 use crate::{
     fixed_schema,
-    schema_index::{DIALECT, SameDocument, SchemaIndex},
+    schema_index::{self, DIALECT, SameDocument, SchemaIndex},
     *,
 };
 use openbindings_internal_json::backend;
@@ -254,7 +254,7 @@ pub(crate) struct DocumentInner {
     // The limits this revision was admitted under; edits parse the edited
     // document under them.
     limits: JsonLimits,
-    pub schemas: OnceLock<SchemaIndex>,
+    pub schemas: OnceLock<Arc<SchemaIndex>>,
     // Value-contract resolution spaces are assembled only when an evaluator asks
     // for the core projection. The space without supplied resources lives here;
     // a space with a nonempty set lives in that set, which this revision tells
@@ -522,9 +522,24 @@ impl Document {
         })
     }
     pub(crate) fn schema_index(&self) -> &SchemaIndex {
+        self.shared_schema_index()
+    }
+    fn shared_schema_index(&self) -> &Arc<SchemaIndex> {
         self.inner
             .schemas
-            .get_or_init(|| SchemaIndex::build(self.value()))
+            .get_or_init(|| Arc::new(SchemaIndex::build(self.value())))
+    }
+    /// The revision's value with its schema index, which preparation shares
+    /// instead of indexing the document again. Validation checks each indexed
+    /// schema against the meta-schemas through the index (OBI-10), so the
+    /// index knows whether they all satisfied them. A revision that has not
+    /// built its index, because it was never validated, keeps none: the
+    /// document is indexed for this use alone.
+    pub(crate) fn indexed(&self) -> openbindings_internal_schema::RawDocument {
+        match self.inner.schemas.get() {
+            Some(index) => openbindings_internal_schema::RawDocument::shared(index.clone()),
+            None => openbindings_internal_schema::RawDocument::new(self.value().clone()),
+        }
     }
     pub(crate) fn interpretable(&self) -> Result<(), InterpretationError> {
         self.inner
@@ -1217,14 +1232,35 @@ impl<'a> Checks<'a> {
         }
     }
     fn fixed(&mut self, value: JsonRef<'a>, rule: Rule, is_meta: bool) {
-        match fixed_schema::check_with_retained(
+        let checked = fixed_schema::check_with_retained(
             value,
             is_meta,
             MAX_FINDINGS.saturating_sub(self.findings.len()),
             |at, message| {
                 self.contains_at(rule, Evidence::Violated, at, "schema-mismatch", message)
             },
-        ) {
+        );
+        self.fixed_checked(value, rule, checked);
+    }
+    // OBI-10 for the next indexed schema, checked through the index, which
+    // records whether every indexed schema satisfies the meta-schemas.
+    fn meta_fixed(&mut self, meta: &mut schema_index::MetaChecks<'a>) {
+        let rule = Rule::Obi10;
+        let (value, checked) = meta.check_next(
+            MAX_FINDINGS.saturating_sub(self.findings.len()),
+            |at, message| {
+                self.contains_at(rule, Evidence::Violated, at, "schema-mismatch", message)
+            },
+        );
+        self.fixed_checked(value, rule, checked);
+    }
+    fn fixed_checked(
+        &mut self,
+        value: JsonRef<'a>,
+        rule: Rule,
+        checked: Result<fixed_schema::Problems<'a>, String>,
+    ) {
+        match checked {
             Ok(problems) => {
                 self.truncated |= problems.truncated;
                 if problems.violated {
@@ -1429,9 +1465,10 @@ fn assess_value(document: &Document) -> Result<ValidationReport, VersionRefusal>
     let schemas = document.schema_index();
     // The index visits each contained schema occurrence once. Equal text at
     // different positions must still be checked at each original location.
+    let mut meta = schemas.meta_checks();
     for (index, node) in schemas.nodes.iter().enumerate() {
         let schema = schemas.value(node);
-        c.fixed(schema, Rule::Obi10, true);
+        c.meta_fixed(&mut meta);
         if let Some(dialect) = schema.get("$schema")
             && !matches!(
                 dialect.as_str(),
@@ -1493,6 +1530,7 @@ fn assess_value(document: &Document) -> Result<ValidationReport, VersionRefusal>
             }
         }
     }
+    meta.finish();
     for declarations in schemas.anchor_declarations() {
         if declarations[0].resource == 0 && declarations.len() > 1 {
             for anchor in declarations {

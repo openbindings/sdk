@@ -95,6 +95,67 @@ fn unmapped() -> std::sync::Arc<BTreeMap<String, crate::ProgramOrigin>> {
         std::sync::OnceLock::new();
     EMPTY.get_or_init(Default::default).clone()
 }
+/// One keyword of a projected schema object, as its program writes it.
+pub enum Field<'s> {
+    /// `$ref` or `$dynamicRef`: the generated URI it names.
+    Reference(String),
+    /// One subschema: its definition's address, which the program writes as
+    /// `{"$ref": <address>}`.
+    Single(String),
+    /// Subschemas by name, in member order; the program's text holds them
+    /// in name order, each name once, the last of a repeated one.
+    Map(Vec<(&'s str, String)>),
+    /// Subschemas in order.
+    List(Vec<String>),
+    /// A `const` or `enum` value: its index in the literal arena.
+    Literal(usize),
+    /// Any other keyword's value, unchanged.
+    Copied(JsonRef<'s>),
+}
+/// A projected definition's schema.
+pub enum Schema<'s> {
+    Boolean(bool),
+    /// Its keywords in member order: the program's text holds each keyword
+    /// once, in name order, the last of a repeated one.
+    Object(Vec<(&'s str, Field<'s>)>),
+}
+/// One projected definition: its name in `$defs`, its node and its schema.
+pub struct Definition<'s> {
+    pub name: String,
+    pub node: usize,
+    pub schema: Schema<'s>,
+}
+/// One projected resource, as [`Program::resources`] holds it.
+pub struct DefinedResource<'s> {
+    pub uri: String,
+    /// In the entry's resource, the entry's address, which the resource's
+    /// root references.
+    pub entry: Option<String>,
+    /// In `$defs` order.
+    pub definitions: Vec<Definition<'s>>,
+    /// At least the bytes of the resource's text.
+    pub bytes: usize,
+    /// The nodes the resource's text holds, names included, as its parse
+    /// counts them.
+    pub nodes: usize,
+}
+/// A projection as definitions, with its separated literals.
+pub struct Definitions<'s> {
+    pub entry_uri: String,
+    pub resources: Vec<DefinedResource<'s>>,
+    pub literals: Vec<JsonValue>,
+}
+// Debug is structural: no projected name, address or value is written.
+macro_rules! structural_debug {
+    ($($name:ident),*) => {$(
+        impl std::fmt::Debug for $name<'_> {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.debug_struct(stringify!($name)).finish_non_exhaustive()
+            }
+        }
+    )*};
+}
+structural_debug!(Field, Schema, Definition, DefinedResource, Definitions);
 /// How a projected schema keyword holds its subschemas. A projection writes each
 /// child position as `{"$ref": <generated child address>}`; every other keyword
 /// value is copied from the original source unchanged.
@@ -152,6 +213,9 @@ struct Layer {
     names: BTreeMap<String, NameSelection>,
     // How inspection reaches each reference's carrier, for the packaged layer.
     lookups: std::sync::OnceLock<Vec<library::PackagedLookup>>,
+    // For the packaged layer: every name its references look up and every
+    // base of its resources, sorted.
+    claimable: std::sync::OnceLock<Vec<String>>,
 }
 impl std::fmt::Debug for SchemaSpace {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -466,12 +530,11 @@ impl SchemaSpace {
             ResourceOrigin::Contained,
             protected,
         );
-        for resource in supplied.iter() {
-            let index = SchemaIndex::supplied_nodes(&resource.document);
+        for (resource, index) in supplied.iter().zip(supplied.nodes()) {
             local.add_source(
                 Some(resource.uri.clone()),
                 resource.document.clone(),
-                &index,
+                index,
                 ResourceOrigin::Supplied,
                 protected,
             );
@@ -525,6 +588,13 @@ impl SchemaSpace {
     /// resource's, then the packaged meta-schemas', in identifier order.
     pub fn nodes(&self) -> impl Iterator<Item = (usize, &SpaceNode)> {
         self.local.nodes().chain(self.packaged.nodes())
+    }
+    /// The document's and each supplied resource's schema nodes, as
+    /// [`Self::nodes`] begins. A packaged meta-schema's reference always names
+    /// a resource the packaged layer holds, so only these can name a resource
+    /// that no resource holds.
+    pub fn local_nodes(&self) -> impl Iterator<Item = (usize, &SpaceNode)> {
+        self.local.nodes()
     }
     /// Every resource with its identifier, in identifier order.
     pub fn resources(&self) -> impl Iterator<Item = (usize, &Resource)> {
@@ -848,7 +918,7 @@ impl SchemaSpace {
                 self.node_number(node)
             )
         };
-        let reference = |node: usize| format!("{{\"$ref\":{}}}", quoted(&address(node)));
+        let reference = |address: &str| format!("{{\"$ref\":{}}}", quoted(address));
         // Reach admits every node through check_known_node before projection.
         // Its meta-schema and scalar-name checks establish the shapes below.
         let mut definitions: BTreeMap<usize, BTreeMap<String, (String, usize)>> = BTreeMap::new();
@@ -867,94 +937,39 @@ impl SchemaSpace {
             let transformed = if node.value.kind() == JsonKind::Boolean {
                 node.value.text().to_owned()
             } else {
-                let mut fields = BTreeMap::new();
-                for member in node.value.view().members().expect("checked schema object") {
-                    let keyword = member.name.as_str().expect("checked schema member");
-                    if matches!(
-                        keyword,
-                        "$id"
-                            | "$schema"
-                            | "$defs"
-                            | "definitions"
-                            | "dependencies"
-                            | "contentSchema"
-                            | "$anchor"
-                    ) {
-                        continue;
-                    }
-                    if keyword == "$dynamicAnchor"
-                        && !member
-                            .value
-                            .as_str()
-                            .is_some_and(|name| reach.dynamic.contains_key(name))
-                    {
-                        continue;
-                    }
-                    if matches!(keyword, "then" | "else") && node.value.get("if").is_none() {
-                        continue;
-                    }
-                    if matches!(keyword, "$ref" | "$dynamicRef") {
-                        let target = &reach.targets[&(id, keyword.into())];
-                        let uri = if keyword == "$dynamicRef" {
-                            if let Some(name) = &target.dynamic_name {
-                                format!("{}#{name}", resource_uri(self.node(target.node).resource))
-                            } else {
-                                address(target.node)
-                            }
-                        } else {
-                            address(target.node)
-                        };
-                        fields.insert(keyword.to_owned(), quoted(&uri));
-                        continue;
-                    }
-                    let child_reference = |value: JsonRef<'_>| -> Result<String, Failure> {
-                        let target = self
-                            .source(node.source)
-                            .positions
-                            .get(&ref_id(value))
-                            .copied()
-                            .filter(|n| reach.nodes.contains(n))
-                            .ok_or_else(|| {
-                                self.failure(
-                                    id,
-                                    FailureReason::ConservativePreparation,
-                                    "projection-target",
-                                    "an evaluated child is not in the prepared closure",
-                                )
-                            })?;
-                        Ok(reference(target))
+                let fields = self.fields(
+                    id,
+                    reach,
+                    namespace,
+                    separating,
+                    &mut values,
+                    &mut separated,
+                )?;
+                let mut text = BTreeMap::new();
+                for (keyword, field) in fields {
+                    let value = match field {
+                        Field::Reference(uri) => quoted(&uri),
+                        Field::Single(address) => reference(&address),
+                        Field::Map(children) => object(
+                            children
+                                .into_iter()
+                                .map(|(name, address)| (name.to_owned(), reference(&address)))
+                                .collect::<BTreeMap<_, _>>(),
+                        ),
+                        Field::List(children) => format!(
+                            "[{}]",
+                            children
+                                .iter()
+                                .map(|address| reference(address))
+                                .collect::<Vec<_>>()
+                                .join(",")
+                        ),
+                        Field::Literal(index) => index.to_string(),
+                        Field::Copied(value) => value.text().to_owned(),
                     };
-                    let value = match child_shape(keyword) {
-                        Some(ChildShape::Map) => {
-                            let mut children = BTreeMap::new();
-                            for m in member.value.members().expect("checked schema map") {
-                                children.insert(
-                                    m.name.as_str().unwrap().to_owned(),
-                                    child_reference(m.value)?,
-                                );
-                            }
-                            object(children)
-                        }
-                        Some(ChildShape::List) => {
-                            let children: Result<Vec<_>, _> = member
-                                .value
-                                .elements()
-                                .expect("checked schema list")
-                                .map(child_reference)
-                                .collect();
-                            format!("[{}]", children?.join(","))
-                        }
-                        Some(ChildShape::Single) => child_reference(member.value)?,
-                        None if separating && matches!(keyword, "const" | "enum") => {
-                            separated = separated.saturating_add(member.value.text().len());
-                            values.push(member.value);
-                            (values.len() - 1).to_string()
-                        }
-                        None => member.value.text().to_owned(),
-                    };
-                    fields.insert(keyword.to_owned(), value);
+                    text.insert(keyword.to_owned(), value);
                 }
-                object(fields)
+                object(text)
             };
             byte_count = byte_count
                 .saturating_add(transformed.len())
@@ -1029,6 +1044,276 @@ impl SchemaSpace {
         };
         Ok((program, nodes))
     }
+    // The generated URI of a projected resource.
+    fn resource_uri(&self, namespace: &str, resource: usize) -> String {
+        format!("{namespace}r{}", self.resource_number(resource))
+    }
+    // The generated address of a node's definition.
+    fn address(&self, namespace: &str, node: usize) -> String {
+        format!(
+            "{namespace}r{}#/$defs/n{}",
+            self.resource_number(self.node(node).resource),
+            self.node_number(node)
+        )
+    }
+    // The keywords a reached schema object's definition holds, in member
+    // order, as a projection writes them. With `separating`, each `const` and
+    // `enum` value is pushed to `values` and its text counted in `separated`.
+    fn fields<'s>(
+        &'s self,
+        id: usize,
+        reach: &Reach,
+        namespace: &str,
+        separating: bool,
+        values: &mut Vec<JsonRef<'s>>,
+        separated: &mut usize,
+    ) -> Result<Vec<(&'s str, Field<'s>)>, Failure> {
+        let node = self.node(id);
+        let members = node.value.view().members().expect("checked schema object");
+        let mut fields = Vec::with_capacity(members.len());
+        for member in members {
+            let keyword = member.name.as_str().expect("checked schema member");
+            if matches!(
+                keyword,
+                "$id"
+                    | "$schema"
+                    | "$defs"
+                    | "definitions"
+                    | "dependencies"
+                    | "contentSchema"
+                    | "$anchor"
+            ) {
+                continue;
+            }
+            if keyword == "$dynamicAnchor"
+                && !member
+                    .value
+                    .as_str()
+                    .is_some_and(|name| reach.dynamic.contains_key(name))
+            {
+                continue;
+            }
+            if matches!(keyword, "then" | "else") && node.value.get("if").is_none() {
+                continue;
+            }
+            if matches!(keyword, "$ref" | "$dynamicRef") {
+                let target = &reach.targets[&(id, keyword == "$dynamicRef")];
+                let uri = if keyword == "$dynamicRef" {
+                    if let Some(name) = &target.dynamic_name {
+                        format!(
+                            "{}#{name}",
+                            self.resource_uri(namespace, self.node(target.node).resource)
+                        )
+                    } else {
+                        self.address(namespace, target.node)
+                    }
+                } else {
+                    self.address(namespace, target.node)
+                };
+                fields.push((keyword, Field::Reference(uri)));
+                continue;
+            }
+            let child = |value: JsonRef<'_>| -> Result<String, Failure> {
+                let target = self
+                    .source(node.source)
+                    .positions
+                    .get(&ref_id(value))
+                    .copied()
+                    .filter(|n| reach.nodes.contains(n))
+                    .ok_or_else(|| {
+                        self.failure(
+                            id,
+                            FailureReason::ConservativePreparation,
+                            "projection-target",
+                            "an evaluated child is not in the prepared closure",
+                        )
+                    })?;
+                Ok(self.address(namespace, target))
+            };
+            let field = match child_shape(keyword) {
+                Some(ChildShape::Map) => {
+                    let entries = member.value.members().expect("checked schema map");
+                    let mut children = Vec::with_capacity(entries.len());
+                    for m in entries {
+                        children.push((m.name.as_str().unwrap(), child(m.value)?));
+                    }
+                    Field::Map(children)
+                }
+                Some(ChildShape::List) => Field::List(
+                    member
+                        .value
+                        .elements()
+                        .expect("checked schema list")
+                        .map(child)
+                        .collect::<Result<_, _>>()?,
+                ),
+                Some(ChildShape::Single) => Field::Single(child(member.value)?),
+                None if separating && matches!(keyword, "const" | "enum") => {
+                    *separated = separated.saturating_add(member.value.text().len());
+                    values.push(member.value);
+                    Field::Literal(values.len() - 1)
+                }
+                None => Field::Copied(member.value),
+            };
+            fields.push((keyword, field));
+        }
+        Ok(fields)
+    }
+    /// The same projection as [`Self::program_unmapped`], as the definitions
+    /// themselves rather than as text parsed again: each projected resource
+    /// with its definitions in `$defs` order, each schema object's keywords in
+    /// the order the program's text holds them, and each `const` and `enum`
+    /// value copied into the same literal arena. It refuses exactly as
+    /// [`Self::program_unmapped`] does.
+    pub fn program_definitions(
+        &self,
+        entry: usize,
+        control: &dyn Control,
+    ) -> Result<Definitions<'_>, Failure> {
+        control.check()?;
+        let reach = self.reach(entry, control)?;
+        let namespace = PROGRAM_NAMESPACE;
+        // The text's fixed bounds refuse with byte offsets in the text. The
+        // definitions carry a bound on the bytes of text each definition and
+        // resource would take, the exact count of nodes each resource's text
+        // would hold, and the nesting of any copied value long enough to nest
+        // deeply (each level takes at least two bytes); the rest of a
+        // resource nests five levels at most. Once a bound could reach a fixed
+        // limit, the projection is written as text too, which refuses as it
+        // does there or admits the definitions.
+        let mut written = false;
+        let write = |written: &mut bool| -> Result<(), Failure> {
+            if !std::mem::replace(written, true) {
+                self.projection(
+                    entry,
+                    &reach,
+                    control,
+                    namespace,
+                    false,
+                    Some(&mut Vec::new()),
+                )?;
+            }
+            Ok(())
+        };
+        const DEEP: usize = 9_990;
+        let mut values = Vec::new();
+        let mut separated = 0usize;
+        let mut total = 0usize;
+        let mut resources: BTreeMap<usize, (usize, usize, Vec<Definition<'_>>)> = BTreeMap::new();
+        let mut nodes: Vec<_> = reach.nodes.iter().copied().collect();
+        nodes.sort_unstable();
+        for id in nodes {
+            control.check()?;
+            let node = self.node(id);
+            // The definition's bytes bound and its nodes: one value node for
+            // a boolean, and for an object its node, then for each keyword its
+            // name's node and its value's: a reference's string, a subschema's
+            // `{"$ref": <address>}` (three), a map of them (one, and for each
+            // member its name and three), a list of them (one, and three
+            // each), a literal's index or the nodes of the copied value.
+            let (schema, bound, count) = match node.value.view().as_bool() {
+                Some(value) => (Schema::Boolean(value), node.value.text().len(), 1usize),
+                None => {
+                    let fields =
+                        self.fields(id, &reach, namespace, true, &mut values, &mut separated)?;
+                    let mut bound = 2usize;
+                    let mut count = 1usize;
+                    for (keyword, field) in &fields {
+                        let (value, nodes) = match field {
+                            Field::Reference(uri) => (quoted_bound(uri), 1),
+                            Field::Single(address) => (quoted_bound(address) + 9, 3),
+                            Field::Map(children) => (
+                                2 + children
+                                    .iter()
+                                    .map(|(name, address)| {
+                                        quoted_bound(name) + quoted_bound(address) + 11
+                                    })
+                                    .sum::<usize>(),
+                                1 + 4 * children.len(),
+                            ),
+                            Field::List(children) => (
+                                2 + children
+                                    .iter()
+                                    .map(|address| quoted_bound(address) + 10)
+                                    .sum::<usize>(),
+                                1 + 3 * children.len(),
+                            ),
+                            Field::Literal(_) => (20, 1),
+                            Field::Copied(value) => {
+                                let length = value.text().len();
+                                if !written
+                                    && length >= 2 * DEEP
+                                    && !openbindings_internal_json::backend::depth_at_most(
+                                        &JsonRef::to_owned(*value),
+                                        DEEP,
+                                    )
+                                {
+                                    write(&mut written)?;
+                                }
+                                (
+                                    length,
+                                    openbindings_internal_json::backend::node_count(*value),
+                                )
+                            }
+                        };
+                        bound = bound
+                            .saturating_add(quoted_bound(keyword))
+                            .saturating_add(value)
+                            .saturating_add(2);
+                        count = count.saturating_add(1).saturating_add(nodes);
+                    }
+                    (Schema::Object(fields), bound, count)
+                }
+            };
+            total = total
+                .saturating_add(bound)
+                .saturating_add(std::mem::take(&mut separated));
+            if total > PROJECTION_LIMITS.max_bytes {
+                write(&mut written)?;
+            }
+            let name = format!("n{}", self.node_number(id));
+            let (size, nodes, definitions) = resources.entry(node.resource).or_default();
+            *size = size.saturating_add(bound).saturating_add(name.len() + 4);
+            // The definition's name, and its schema.
+            *nodes = nodes.saturating_add(1).saturating_add(count);
+            definitions.push(Definition {
+                name,
+                node: id,
+                schema,
+            });
+        }
+        let entry_resource = self.node(entry).resource;
+        let entry_uri = self.resource_uri(namespace, entry_resource);
+        let mut projected = Vec::with_capacity(resources.len());
+        for (id, (size, nodes, mut definitions)) in resources {
+            let uri = self.resource_uri(namespace, id);
+            let entry = (id == entry_resource).then(|| self.address(namespace, entry));
+            let bytes = size
+                .saturating_add(64 + DIALECT.len() + uri.len())
+                .saturating_add(entry.as_ref().map_or(0, String::len));
+            // The resource's object, `$defs` with its name and object, then
+            // `$id` and `$schema` and, in the entry's resource, `$ref`, each a
+            // name and a string.
+            let nodes = nodes.saturating_add(7 + if entry.is_some() { 2 } else { 0 });
+            // The nesting bound is the copies' checked above.
+            if bytes > PROJECTION_LIMITS.max_bytes || nodes > PROJECTION_LIMITS.max_nodes {
+                write(&mut written)?;
+            }
+            definitions.sort_unstable_by(|a, b| a.name.cmp(&b.name));
+            projected.push(DefinedResource {
+                uri,
+                entry,
+                definitions,
+                bytes,
+                nodes,
+            });
+        }
+        Ok(Definitions {
+            entry_uri,
+            resources: projected,
+            literals: openbindings_internal_json::backend::standalone_list(&values),
+        })
+    }
     pub fn check_known_node(&self, id: usize) -> Result<(), Failure> {
         let node = self.node(id);
         let resource = self.resource(node.resource);
@@ -1081,9 +1366,13 @@ impl SchemaSpace {
                 "schema interpretation requires Unicode scalar strings",
             ));
         }
-        // Only the verdict matters here, so no finding is located.
-        let valid = crate::fixed_schema::validity(&node.value, true)
-            .map_err(|e| self.failure(id, FailureReason::LimitExceeded, "meta-schema-check", e))?;
+        // Only the verdict matters here, so no finding is located. A
+        // conformant document's schemas already passed this check.
+        let checked = node.source == 0 && self.document.schemas_checked();
+        let valid = checked
+            || crate::fixed_schema::validity(&node.value, true).map_err(|e| {
+                self.failure(id, FailureReason::LimitExceeded, "meta-schema-check", e)
+            })?;
         if !valid {
             return Err(self.failure(
                 id,
@@ -1144,7 +1433,8 @@ impl SchemaSpace {
                             )
                         })?;
                         let target = self.resolve(id, reference)?;
-                        out.targets.insert((id, keyword.into()), target.clone());
+                        out.targets
+                            .insert((id, keyword == "$dynamicRef"), target.clone());
                         out.edges.entry(id).or_default().push(target.node);
                         queue.push_back(target.node);
                         if keyword == "$dynamicRef"
@@ -1254,6 +1544,18 @@ impl SchemaSpace {
 pub fn quoted(text: &str) -> String {
     serde_json::to_string(text).expect("a Rust string serializes as JSON")
 }
+// At least the length of `quoted(text)`: JSON escapes a control character in
+// at most six bytes and a quote or backslash in two.
+fn quoted_bound(text: &str) -> usize {
+    2 + text
+        .bytes()
+        .map(|byte| match byte {
+            0..0x20 => 6,
+            b'"' | b'\\' => 2,
+            _ => 1,
+        })
+        .sum::<usize>()
+}
 pub fn object(fields: impl IntoIterator<Item = (String, String)>) -> String {
     format!(
         "{{{}}}",
@@ -1294,7 +1596,9 @@ pub struct Reach {
     pub nodes: HashSet<usize>,
     pub resources: HashSet<usize>,
     pub edges: HashMap<usize, Vec<usize>>,
-    pub targets: HashMap<(usize, String), Target>,
+    /// Each reference's target, by its holder and whether it is a
+    /// `$dynamicRef`.
+    pub targets: HashMap<(usize, bool), Target>,
     pub dynamic: BTreeMap<String, Vec<usize>>,
 }
 impl std::fmt::Debug for Reach {
@@ -1389,6 +1693,55 @@ mod projection_tests {
                 );
             }
         }
+    }
+
+    // A document is known checked against the meta-schemas only once its
+    // index has checked every schema, in order, and found none failing; no
+    // constructor or partial check marks it, so a space checks the schemas of
+    // any other document itself.
+    #[test]
+    fn only_checking_every_schema_marks_a_document_checked() {
+        let control = std::sync::atomic::AtomicBool::new(false);
+        let malformed = JsonValue::parse(
+            r#"{"openbindings":"0.2.0","operations":{"op":{"input":{"properties":[1]}}},"schemas":{"a":{"minimum":"x","type":5}}}"#,
+        )
+        .unwrap();
+        let index = std::sync::Arc::new(SchemaIndex::build(&malformed));
+        assert!(!RawDocument::new(malformed.clone()).schemas_checked());
+        assert!(!RawDocument::shared(index.clone()).schemas_checked());
+        let mut meta = index.meta_checks();
+        for _ in 0..index.nodes.len() {
+            meta.check_next(0, |_, _| false).1.unwrap();
+        }
+        meta.finish();
+        assert!(!index.schemas_checked());
+        let space = SchemaSpace::new(RawDocument::shared(index.clone()), Supplied::default());
+        let entry = space
+            .document_node(&malformed.at("/operations/op/input").unwrap().to_owned())
+            .unwrap();
+        assert_eq!(
+            space.reach(entry, &control).unwrap_err().code,
+            "invalid-schema"
+        );
+        let valid = JsonValue::parse(
+            r#"{"openbindings":"0.2.0","operations":{"op":{"input":{"properties":{"a":{"type":"integer"}}}}}}"#,
+        )
+        .unwrap();
+        let index = std::sync::Arc::new(SchemaIndex::build(&valid));
+        // Checking some of the schemas, or none, records nothing.
+        let mut meta = index.meta_checks();
+        meta.check_next(0, |_, _| false).1.unwrap();
+        meta.finish();
+        index.meta_checks().finish();
+        assert!(!index.schemas_checked());
+        let mut meta = index.meta_checks();
+        for _ in 0..index.nodes.len() {
+            meta.check_next(0, |_, _| false).1.unwrap();
+        }
+        assert!(!index.schemas_checked());
+        meta.finish();
+        assert!(index.schemas_checked());
+        assert!(RawDocument::shared(index).schemas_checked());
     }
 
     fn verdict(program: &Program, value: &JsonValue) -> (bool, Vec<Location>) {
