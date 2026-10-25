@@ -18,7 +18,7 @@ export function diagnosticBudgetCases(sdk) {
     try {
       for (const call of ["validate", "explain"]) {
         const result = setup.valueContract[call](42);
-        check(result.outcome === "fails", "same verdict");
+        check(result.status === "fails", "same verdict");
         check(
           result.message === "value does not satisfy the value contract",
           "fixed explanation",

@@ -62,7 +62,7 @@ function checkInput(input: JsonInput) {
   const setup = contract.prepare();
   if (setup.status !== "ready") return setup;
   using prepared = setup.valueContract;
-  const result = prepared.validate(input); // narrow on result.outcome
+  const result = prepared.validate(input); // narrow on result.status
   return { operations, result };
 }
 
@@ -88,8 +88,7 @@ conformant document's operations hand out value contracts: `resolveOperation`
 returns `undefined` for a missing operation, and `input()` or `output()` returns
 `undefined` when no value contract is declared. `prepare()` returns a ready
 `PreparedValueContract` or a no-verdict refusal. Handle each result before
-validating a value. Parsing, validation, preparation and discovery results
-discriminate on `status`; value results discriminate on `outcome`, which is
+validating a value. Every result narrows on `status`. A value result's is
 `satisfies`, `fails`, `undefined` (the specification gives the value no defined
 validity), `no-verdict` (the SDK could not answer) or `input-error` when ordinary
 JavaScript data cannot be admitted.

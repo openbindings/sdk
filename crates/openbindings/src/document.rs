@@ -987,8 +987,8 @@ pub fn validate_document_owned_with_limits(
 // limit, otherwise an OBI-01 violation at the refused byte.
 fn refused(bytes: &[u8], error: &InputError, limits: JsonLimits) -> DocumentValidation {
     let mut checks = Checks::new();
-    if error.kind == InputErrorKind::Limit {
-        let message = input_limit_message(error.code, limits, bytes.len());
+    if error.kind() == InputErrorKind::Limit {
+        let message = input_limit_message(error.code(), limits, bytes.len());
         for rule in Rule::ALL {
             checks.mark(
                 rule,
@@ -1002,9 +1002,9 @@ fn refused(bytes: &[u8], error: &InputError, limits: JsonLimits) -> DocumentVali
         checks.mark(
             Rule::Obi01,
             Evidence::Violated,
-            error.code,
-            Some(backend::input_location(bytes, error.byte_offset)),
-            parse_error_message(error.code),
+            error.code(),
+            Some(backend::input_location(bytes, error.byte_offset())),
+            parse_error_message(error.code()),
         );
         checks.not_applicable_after_json();
     }

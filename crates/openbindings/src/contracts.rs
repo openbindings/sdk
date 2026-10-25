@@ -306,10 +306,10 @@ impl ValueProblem {
     }
 }
 #[derive(Clone, PartialEq, Eq, Serialize)]
-#[serde(tag = "outcome", rename_all = "kebab-case")]
+#[serde(tag = "status", rename_all = "kebab-case")]
 /// Closed result partition for the selected schema and instance: satisfies, fails, undefined, or no verdict. No value outcome proves that the surrounding OpenBindings document conforms.
 ///
-/// Serializes as JSON text; a pointer through a member name with an unpaired UTF-16 unit has no `serde_json::Value` form, so `serde_json::to_value` refuses such a record and `json!` panics: use `serde_json::to_string` or `to_writer`.
+/// Serializes as JSON text naming the variant in `status`, the field every TypeScript result discriminates on; a pointer through a member name with an unpaired UTF-16 unit has no `serde_json::Value` form, so `serde_json::to_value` refuses such a record and `json!` panics: use `serde_json::to_string` or `to_writer`.
 #[must_use = "inspect the outcome before continuing"]
 pub enum ValueOutcome {
     /// The instance was established to satisfy the selected schema.

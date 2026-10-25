@@ -121,8 +121,8 @@ for (const call of ["validate", "explain"]) {
         const values = group.cases.map((entry) => {
           if (!prepared)
             return setup?.status === "no-verdict"
-              ? { outcome: "no-verdict", detail: setup.detail }
-              : { outcome: operation ? "no-contract" : "operation-missing" };
+              ? { status: "no-verdict", detail: setup.detail }
+              : { status: operation ? "no-contract" : "operation-missing" };
           const value = exact(entry.value);
           try {
             return prepared[call](value);

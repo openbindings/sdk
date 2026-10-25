@@ -71,7 +71,7 @@ async function caller(
       diagnostics: "upstream",
     });
     const result: ValueOutcome = input.explain(value);
-    if (result.outcome === "fails") {
+    if (result.status === "fails") {
       result.problems[0]!.instance satisfies string;
       value.locate(
         result.problems[0]!.instance,
@@ -91,7 +91,7 @@ async function caller(
       if (detail?.kind === "numeric-bound" || detail?.kind === "size-bound")
         detail.bound satisfies string;
     }
-    if (result.outcome === "no-verdict") result.detail.reason satisfies string;
+    if (result.status === "no-verdict") result.detail.reason satisfies string;
     const ordinary = value.toValue();
     if (ordinary.status === "converted") ordinary.value satisfies JsonOutput;
     // @ts-expect-error implementation handles are not a supported API
@@ -148,7 +148,7 @@ const ordinaryOutcome: import("../dist/index.js").ValueCheck =
   preparedValueContract.validate({ nested: exactInput });
 // @ts-expect-error ordinary admission may return input-error
 const incompleteOutcome: ValueOutcome = preparedValueContract.validate(7);
-if (ordinaryOutcome.outcome === "input-error") {
+if (ordinaryOutcome.status === "input-error") {
   ordinaryOutcome.error.instancePointer satisfies string | null;
 }
 const textOutcome: import("../dist/index.js").JsonCheck =
@@ -157,7 +157,7 @@ const textOutcome: import("../dist/index.js").JsonCheck =
 const unadmittedText: ValueOutcome = preparedValueContract.validateJson("7");
 // @ts-expect-error validateJson takes exact text or bytes, not ordinary values
 preparedValueContract.validateJson({ nested: exactInput });
-if (textOutcome.outcome === "input-error") {
+if (textOutcome.status === "input-error") {
   textOutcome.error.byteOffset satisfies number | undefined;
 }
 void unadmittedText;
@@ -166,19 +166,19 @@ void unadmittedText;
 declare const untyped: any;
 declare const ordinaryInput: import("../dist/index.js").JsonInput;
 const untypedCheck = preparedValueContract.validate(untyped);
-if (untypedCheck.outcome === "input-error")
+if (untypedCheck.status === "input-error")
   untypedCheck.error.instancePointer satisfies string | null;
 const untypedExplain = preparedValueContract.explain(untyped);
-if (untypedExplain.outcome === "input-error")
+if (untypedExplain.status === "input-error")
   untypedExplain.error.instancePointer satisfies string | null;
 const ordinaryCheck = preparedValueContract.validate(ordinaryInput);
-if (ordinaryCheck.outcome === "input-error")
+if (ordinaryCheck.status === "input-error")
   ordinaryCheck.error.instancePointer satisfies string | null;
 const ordinaryExplain = preparedValueContract.explain(ordinaryInput);
-if (ordinaryExplain.outcome === "input-error")
+if (ordinaryExplain.status === "input-error")
   ordinaryExplain.error.instancePointer satisfies string | null;
 const untypedText = preparedValueContract.validateJson(untyped);
-if (untypedText.outcome === "input-error")
+if (untypedText.status === "input-error")
   untypedText.error.code satisfies string;
 // @ts-expect-error an untyped value can return input-error
 const untypedOutcome: ValueOutcome = preparedValueContract.validate(untyped);
@@ -210,11 +210,16 @@ const specificCode: string | undefined = detailed.interpretationCode;
 void specificCode;
 const obsoleteOutcome: ValueOutcome = {
   // @ts-expect-error old value verdict spelling is intentionally not a synonym
-  outcome: "mismatch",
+  status: "mismatch",
   problems: [],
   problemsComplete: true,
 };
 void obsoleteOutcome;
+const outcomeDiscriminant: ValueOutcome = {
+  // @ts-expect-error value results discriminate on status, as every result does
+  outcome: "satisfies",
+};
+void outcomeDiscriminant;
 
 // Check actual emitted declarations.
 import {
@@ -404,7 +409,7 @@ const undefinedDetail: import("../dist/index.js").UndefinedResult = {
   location: null,
 };
 const undefinedOutcome: ValueOutcome = {
-  outcome: "undefined",
+  status: "undefined",
   detail: undefinedDetail,
 };
 undefinedOutcome.detail satisfies import("../dist/index.js").UndefinedResult;
@@ -412,9 +417,9 @@ undefinedOutcome.detail satisfies import("../dist/index.js").UndefinedResult;
 const obsoleteUndefinedReason: import("../dist/index.js").NoVerdictReason =
   "undefined";
 function exhaustiveValueOutcome(value: ValueOutcome): string {
-  switch (value.outcome) {
+  switch (value.status) {
     case "satisfies":
-      return value.outcome;
+      return value.status;
     case "fails":
       return value.message;
     case "undefined":

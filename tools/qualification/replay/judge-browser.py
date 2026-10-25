@@ -69,7 +69,7 @@ def pointer_exists(value,pointer):
 
 
 def judge_value(case,result,sources):
-    failures=[];tag=result.get('outcome');detail=result.get('detail',{})
+    failures=[];tag=result.get('status');detail=result.get('detail',{})
     # Optional capabilities, and dialects an evaluator may not read, accept the stated refusal beside their outcome.
     accepts_refusal=case['expected']!='no-verdict' and case.get('refusal_kind') is not None and (case['optional_capability'] is not None or case.get('refusal_kind')=='unsupported-capability')
     permitted=accepts_refusal and tag=='no-verdict' and detail.get('reason')==case.get('refusal_kind')
@@ -122,29 +122,30 @@ def judge_evaluator(fixture,observed):
 
 def controls():
     case={'id':'control','value':'{"a":7}','expected':'fails','acceptable_paths':[['/a']],'optional_capability':None,'refusal_kind':None}
-    valid={'outcome':'fails','problemsComplete':True,'problems':[{'instance':'/a','schema':{'resource':None,'pointer':'/type'}}]}
+    valid={'status':'fails','problemsComplete':True,'problems':[{'instance':'/a','schema':{'resource':None,'pointer':'/type'}}]}
     sources={None:{'type':'string'}}
     assert not judge_value(case,valid,sources)
     bad=[]
-    bad.append({**valid,'outcome':'mismatch'}) # obsolete public result tag is not a synonym
-    bad.append({'outcome':'satisfies'})
+    bad.append({**valid,'status':'mismatch'}) # obsolete public result tag is not a synonym
+    bad.append({'status':'satisfies'})
+    bad.append({k:v for k,v in valid.items() if k!='status'}|{'outcome':'fails'}) # the former discriminant is not read
     for field,value in [('instance','/missing'),('instance',None),('schema',None),('schema',{'resource':None,'pointer':'/missing'}),('schema',{'resource':'https://sdk-program.openbindings.invalid/private','pointer':''})]:
         x=copy.deepcopy(valid);x['problems'][0][field]=value;bad.append(x)
     x=copy.deepcopy(valid);x['problemsComplete']=False;assert not judge_value(case,x,sources)
     for result in bad:assert judge_value(case,result,sources)
     optional={**case,'optional_capability':'unicode','refusal_kind':'unsupported-capability'}
     for reason in ['cancelled','limit-exceeded','evaluator-failure','undefined','resource-unavailable']:
-        assert judge_value(optional,{'outcome':'no-verdict','detail':{'reason':reason,'code':'x','message':'x'}},sources)
+        assert judge_value(optional,{'status':'no-verdict','detail':{'reason':reason,'code':'x','message':'x'}},sources)
     # An undefined result an evaluator declines gives the stated refusal only.
     declined={**case,'expected':'undefined','optional_capability':'undefined-results','refusal_kind':'conservative-preparation'}
-    assert not judge_value(declined,{'outcome':'no-verdict','detail':{'reason':'conservative-preparation','code':'x','message':'x'}},sources)
-    assert judge_value(declined,{'outcome':'no-verdict','detail':{'reason':'unsupported-capability','code':'x','message':'x'}},sources)
-    undefined={'outcome':'undefined','detail':{'code':'proof','message':'established undefined result','location':{'resource':None,'pointer':'/type'}}}
+    assert not judge_value(declined,{'status':'no-verdict','detail':{'reason':'conservative-preparation','code':'x','message':'x'}},sources)
+    assert judge_value(declined,{'status':'no-verdict','detail':{'reason':'unsupported-capability','code':'x','message':'x'}},sources)
+    undefined={'status':'undefined','detail':{'code':'proof','message':'established undefined result','location':{'resource':None,'pointer':'/type'}}}
     semantic={**case,'expected':'undefined','refusal_kind':None}
     assert not judge_value(semantic,undefined,sources)
     assert judge_value(optional,undefined,sources)
-    assert judge_value(semantic,{'outcome':'no-verdict','detail':{'reason':'undefined','code':'proof','message':'old representation'}},sources)
-    assert judge_value(semantic,{'outcome':'undefined','detail':{}},sources)
+    assert judge_value(semantic,{'status':'no-verdict','detail':{'reason':'undefined','code':'proof','message':'old representation'}},sources)
+    assert judge_value(semantic,{'status':'undefined','detail':{}},sources)
     for location in [{'resource':None,'pointer':'/missing'}, {'resource':'https://sdk-program.openbindings.invalid/private','pointer':''}]:
         assert judge_value(semantic,{**undefined,'detail':{**undefined['detail'],'location':location}},sources)
     fixture={'resources':{},'groups':[{'id':'group','document':'{"type":"string"}','resources':[],'cases':[case]}]}
@@ -158,15 +159,15 @@ def controls():
     raw_group=next(g for g in raw['groups'] if g['id']==target)
     new_case=next(g for g in changed['groups'] if g['id']==target)['cases'][0]
     assert raw_group['cases'][0]['expected']=='no-verdict' and new_case['expected']=='satisfies'
-    assert not judge_value(new_case,{'outcome':'satisfies'}, {})
-    assert judge_value(new_case,{'outcome':'no-verdict','detail':{'reason':'conservative-preparation','code':'old','message':'old policy'}}, {})
+    assert not judge_value(new_case,{'status':'satisfies'}, {})
+    assert judge_value(new_case,{'status':'no-verdict','detail':{'reason':'conservative-preparation','code':'old','message':'old policy'}}, {})
     # A schema in another dialect expects JSON Schema's verdict or a truthful refusal.
     dialect=next(c for g in changed['groups'] for c in g['cases'] if c['id'].startswith('suite/draft2020-12/optional/cross-draft.json#0/0 '))
-    refusal={'outcome':'no-verdict','detail':{'reason':'unsupported-capability','code':'schema-dialect','message':'dialect not read'}}
+    refusal={'status':'no-verdict','detail':{'reason':'unsupported-capability','code':'schema-dialect','message':'dialect not read'}}
     assert dialect['expected']=='satisfies' and dialect['optional_capability'] is None
-    assert not judge_value(dialect,{'outcome':'satisfies'},{})
+    assert not judge_value(dialect,{'status':'satisfies'},{})
     assert not judge_value(dialect,refusal,{})
-    assert judge_value(dialect,{'outcome':'fails','problems':[]},{})
+    assert judge_value(dialect,{'status':'fails','problems':[]},{})
     assert judge_value(dialect,{**refusal,'detail':{**refusal['detail'],'reason':'conservative-preparation'}},{})
     for field in ['id','expected','refusal_kind','value','document','resource_uri','resource_document']:
         altered=copy.deepcopy(raw)

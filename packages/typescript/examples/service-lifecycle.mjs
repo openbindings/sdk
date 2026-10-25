@@ -43,7 +43,7 @@ const startupArenas = liveStorageOwners();
 const warm = prepare('{"type":"integer"}');
 assert.equal(warm.status, "ready");
 try {
-  assert.equal(warm.valueContract.validate(7).outcome, "satisfies");
+  assert.equal(warm.valueContract.validate(7).status, "satisfies");
 } finally {
   warm.valueContract.dispose();
 }
@@ -65,8 +65,8 @@ try {
   outcomes.current = service.check("new prepared value contract");
   releaseBody("9007199254740993");
   outcomes.inFlight = await oldRequest; // still uses the old exact const
-  assert.equal(outcomes.current.outcome, "satisfies");
-  assert.equal(outcomes.inFlight.outcome, "satisfies");
+  assert.equal(outcomes.current.status, "satisfies");
+  assert.equal(outcomes.inFlight.status, "satisfies");
 
   outcomes.invalidReplacement = replace(
     service,
@@ -76,13 +76,13 @@ try {
   assert.equal(outcomes.invalidReplacement.status, "report");
   assert.equal(outcomes.invalidReplacement.report.conclusion, "non-conformant");
   outcomes.stillCurrent = service.check("replacement was refused");
-  assert.equal(outcomes.stillCurrent.outcome, "satisfies");
+  assert.equal(outcomes.stillCurrent.status, "satisfies");
   outcomes.incompleteReplacement = replace(
     service,
     '{"$ref":"https://schema.example/missing"}',
   );
   assert.equal(outcomes.incompleteReplacement.status, "replaced");
-  assert.equal(service.check("missing resource").outcome, "no-verdict");
+  assert.equal(service.check("missing resource").status, "no-verdict");
   replace(service, '{"type":"string"}');
 
   const cancellation = new AbortController();
@@ -90,17 +90,17 @@ try {
   outcomes.cancelled = service.check("cancelled", {
     signal: cancellation.signal,
   });
-  assert.equal(outcomes.cancelled.outcome, "no-verdict");
+  assert.equal(outcomes.cancelled.status, "no-verdict");
   assert.equal(outcomes.cancelled.detail.reason, "cancelled");
   outcomes.sameOwnerRecovery = service.check("after cancellation");
-  assert.equal(outcomes.sameOwnerRecovery.outcome, "satisfies");
+  assert.equal(outcomes.sameOwnerRecovery.status, "satisfies");
   outcomes.recovery = replace(service, '{"type":"integer"}');
   outcomes.ordinary = service.check(7);
   outcomes.exact = await service.checkBytes(
     Promise.resolve("9007199254740993"),
   );
-  assert.equal(outcomes.ordinary.outcome, "satisfies");
-  assert.equal(outcomes.exact.outcome, "satisfies");
+  assert.equal(outcomes.ordinary.status, "satisfies");
+  assert.equal(outcomes.exact.status, "satisfies");
 } finally {
   // Settle an acquired request owner even if a later demonstration step throws.
   releaseBody?.("9007199254740993");
@@ -115,7 +115,7 @@ const partial = prepareService(document, []);
 assert.equal(partial.status, "ready");
 try {
   outcomes.missingResource = partial.valueContract.validate(7);
-  assert.equal(outcomes.missingResource.outcome, "no-verdict");
+  assert.equal(outcomes.missingResource.status, "no-verdict");
   assert.equal(outcomes.missingResource.detail.reason, "resource-unavailable");
 } finally {
   partial.valueContract.dispose();

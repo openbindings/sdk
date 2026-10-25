@@ -237,8 +237,8 @@ impl std::fmt::Debug for Target {
 }
 
 #[derive(Clone, Debug, Serialize)]
-#[serde(tag = "outcome", rename_all = "kebab-case")]
-/// Static reference inspection outcome. Located dynamic references still require evaluation-time scope resolution.
+#[serde(tag = "status", rename_all = "kebab-case")]
+/// Static reference inspection result, serialized with its variant in `status`. Located dynamic references still require evaluation-time scope resolution.
 pub enum ReferenceResolution {
     /// A static target was located in the supplied original context.
     Located {
@@ -1022,12 +1022,12 @@ impl SchemaSpace {
                     .map_err(|e| {
                         // A fixed bound: no admission setting raises it.
                         let what =
-                            openbindings_internal_json::backend::input_error_description(e.code)
-                                .unwrap_or(e.code);
+                            openbindings_internal_json::backend::input_error_description(e.code())
+                                .unwrap_or(e.code());
                         Failure::new(
                             FailureReason::LimitExceeded,
                             "program-json-limit",
-                            format!("{what} at byte {}", e.byte_offset),
+                            format!("{what} at byte {}", e.byte_offset()),
                         )
                     })
             })

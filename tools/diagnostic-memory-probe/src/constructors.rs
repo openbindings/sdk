@@ -16,7 +16,7 @@ pub fn run() {
         let (result, bytes, nanos) = measured(|| JsonValue::string(&input));
         let error = result.unwrap_err();
         assert_eq!(
-            (error.kind, error.byte_offset, error.code),
+            (error.kind(), error.byte_offset(), error.code()),
             (InputErrorKind::Limit, limit, "byte-limit")
         );
         assert!(

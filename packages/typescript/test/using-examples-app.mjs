@@ -42,8 +42,8 @@ try {
   console.log = log;
 }
 check(results.length === 2, "README must produce both results");
-check(results[0].result.outcome === "satisfies", "README passing value");
-check(results[1].result.outcome === "fails", "README failing value");
+check(results[0].result.status === "satisfies", "README passing value");
+check(results[1].result.status === "fails", "README failing value");
 check(testing.liveStorageOwners() === baseline, "README owners not released");
 
 const example = await import("./inspect-edit.js");
@@ -106,7 +106,7 @@ for (let cycle = 0; cycle < 25; cycle++) {
 }
 globalThis.usingResult = {
   status: "passed",
-  readmeVerdicts: results.map((row) => row.result.outcome),
+  readmeVerdicts: results.map((row) => row.result.status),
   editCycles: 25,
   coldOwners,
   liveOwnersBefore: baseline,

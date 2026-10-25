@@ -132,7 +132,7 @@ fn main() {
         // Avoid retaining every problem in the receipt; preserve exact first coordinate/code.
         let invalid = &observation["invalid"];
         rows.insert(tier.clone(), json!({"samplesMs":if timed {Some(samples)} else {None},"repetitions":reps,"observation":{
-            "valid":observation["valid"],"outcome":invalid["outcome"],"problems":invalid["problems"].as_array().unwrap().len(),
+            "valid":observation["valid"],"outcome":invalid["status"],"problems":invalid["problems"].as_array().unwrap().len(),
             "complete":invalid["problems_complete"],"firstProblem":invalid["problems"][0],"wireBytes":observation["invalidWireBytes"]
         },"concurrency":1,"throughputMeaning":"successful retained validation"}));
     }

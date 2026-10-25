@@ -214,7 +214,7 @@ export async function apiQualityCases(sdk, http) {
     own(remote.valueContract);
     const remoteResult = remote.valueContract.validate(null);
     check(
-      remoteResult.outcome === "no-verdict" &&
+      remoteResult.status === "no-verdict" &&
         remoteResult.detail.reason === "resource-unavailable",
       "bare missing resource remains undecidable at validation",
     );
@@ -234,10 +234,7 @@ export async function apiQualityCases(sdk, http) {
     );
     const input = ready(conformant, "run");
     const never = ready(conformant, "never");
-    check(
-      never.validate(null).outcome === "fails",
-      "false is present contract",
-    );
+    check(never.validate(null).status === "fails", "false is present contract");
     const nullDoc = parsed(
       '{"openbindings":"0.2.0","operations":{"run":{"input":null}}}',
     );
@@ -245,9 +242,9 @@ export async function apiQualityCases(sdk, http) {
       nullDoc.validate().status === "report",
       "null schema rejects the document; it is not absence",
     );
-    check(input.validate(7).outcome === "satisfies", "ordinary validation");
+    check(input.validate(7).status === "satisfies", "ordinary validation");
     check(
-      input.validate("7").outcome === "fails",
+      input.validate("7").status === "fails",
       "ordinary string not JSON text",
     );
     check(
@@ -276,7 +273,7 @@ export async function apiQualityCases(sdk, http) {
     check(input.validate([,]).error.code === "sparse-array", "sparse refusal");
     for (const value of ["\ud800", { v: "\ud800" }, { "\ud800": 1 }])
       check(
-        input.validate(value).outcome !== "input-error",
+        input.validate(value).status !== "input-error",
         "escaped surrogate admission preserved",
       );
     const trap = new Error("caller trap");
@@ -312,16 +309,16 @@ export async function apiQualityCases(sdk, http) {
     const object = ready(conformant, "object");
     const beforeValue = testing.liveStorageOwners();
     check(
-      object.validate({ n: large }).outcome === "satisfies",
+      object.validate({ n: large }).status === "satisfies",
       "nested exact token",
     );
     check(large.text === "9007199254740993", "nested owner remains");
     check(
-      object.validate({ n: 9007199254740992 }).outcome === "fails",
+      object.validate({ n: 9007199254740992 }).status === "fails",
       "rounded ordinary differs",
     );
     check(
-      object.validate({ n: large, bad: undefined }).outcome === "input-error",
+      object.validate({ n: large, bad: undefined }).status === "input-error",
       "partial ordinary refusal",
     );
     check(
@@ -370,7 +367,7 @@ export async function apiQualityCases(sdk, http) {
     const beforeDepthRefusal = testing.liveStorageOwners();
     const depthRefusal = input.validate({ nested: deep });
     check(
-      depthRefusal.outcome === "input-error",
+      depthRefusal.status === "input-error",
       "real aggregate admission limit",
     );
     check(
@@ -401,7 +398,7 @@ export async function apiQualityCases(sdk, http) {
       testing.liveStorageOwners() === beforeDepthRefusal,
       "aggregate limit cleanup",
     );
-    check(input.validate(8).outcome === "satisfies", "healthy reuse");
+    check(input.validate(8).status === "satisfies", "healthy reuse");
     const intSchema = exact('{"type":"integer"}');
     const stringSchema = exact('{"type":"string"}');
     const resources = own(
@@ -413,8 +410,7 @@ export async function apiQualityCases(sdk, http) {
     const a = ready(conformant, "remote", { resources }),
       b = ready(conformant, "remote", { resources: others });
     check(
-      a.validate(7).outcome === "satisfies" &&
-        b.validate(7).outcome === "fails",
+      a.validate(7).status === "satisfies" && b.validate(7).status === "fails",
       "same URI isolation",
     );
     const beforeBatch = testing.liveStorageOwners();
@@ -467,11 +463,11 @@ export async function apiQualityCases(sdk, http) {
     const child = own(operation.value());
     operation.dispose();
     check(child.text.includes("execute"), "retained exact child");
-    check(a.validate(7).outcome === "satisfies", "retained ready resource");
+    check(a.validate(7).status === "satisfies", "retained ready resource");
     const held = own(input.retain());
     input.dispose();
     await Promise.resolve();
-    check(held.validate(9).outcome === "satisfies", "retain across await");
+    check(held.validate(9).status === "satisfies", "retain across await");
     throws(
       () => input.validate(7, { signal: cancelled.signal }),
       (e) => e.code === "disposed-handle",

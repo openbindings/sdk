@@ -48,18 +48,13 @@ fn debug_redacts_caller_text_at_every_boundary() {
     source_location.byte_offset = 42;
     source_location.line = 2;
     source_location.byte_column = 3;
-    let mut secret_error = JsonValue::parse("]").unwrap_err();
-    secret_error.code = SECRET;
-    secret_error.byte_offset = 42;
-    let mut custom_prefix = JsonValue::parse_with_limits(
-        "[0]",
-        JsonLimits {
-            max_bytes: 0,
-            ..Default::default()
-        },
-    )
-    .unwrap_err();
-    custom_prefix.code = "byte-limit-PROBE-BEARER-TOKEN-7391";
+    // Sibling crates build refusals through the backend constructor, which accepts any code.
+    let secret_error = backend::input_error(InputErrorKind::Syntax, SECRET, 42);
+    let custom_prefix = backend::input_error(
+        InputErrorKind::Limit,
+        "byte-limit-PROBE-BEARER-TOKEN-7391",
+        0,
+    );
     let mut rows = vec![
         row("JsonValue", &context),
         row("JsonRef", &context.view()),
@@ -131,7 +126,7 @@ fn debug_redacts_caller_text_at_every_boundary() {
         );
     }
     assert_eq!(
-        (secret_error.kind.clone(), custom_prefix.kind.clone()),
+        (secret_error.kind(), custom_prefix.kind()),
         (InputErrorKind::Syntax, InputErrorKind::Limit)
     );
     rows.push(row_with_fields(
@@ -155,16 +150,16 @@ fn row_with_fields(label: &'static str, value: &impl Debug, fields: &[(&str, &st
     item
 }
 
-fn record_error(rows: &mut Vec<Row>, mut error: InputError, code: &str) {
-    assert_eq!(error.code, code);
+fn record_error(rows: &mut Vec<Row>, error: InputError, code: &str) {
+    assert_eq!(error.code(), code);
     let item = row_with_fields("InputError actual reason", &error, &[("code", code)]);
-    let kind = format!("kind: {:?}", error.kind);
+    let kind = format!("kind: {:?}", error.kind());
     assert!(item.text.iter().all(|text| text.contains(&kind)));
     rows.push(item);
-    error.code = SECRET;
+    let replaced = backend::input_error(error.kind(), SECRET, error.byte_offset());
     rows.push(row_with_fields(
         "InputError replaced reason",
-        &error,
+        &replaced,
         &[("code", "<redacted>")],
     ));
 }
