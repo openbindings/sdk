@@ -515,9 +515,10 @@ only the patterns.
 The evaluator bounds what the SDK itself reads and writes: core's document
 admission limits and its 100,000 schema positions per value contract; each pattern's
 bytes and translated form (`pattern_bytes`) and the forms kept for all of a
-value contract's patterns together (`total_pattern_bytes`, 4 MiB); the memory the
-regex crate builds for all of a value contract's compiled patterns together
-(`total_pattern_memory`, 64 MiB, below); and the memory dynamic specialization
+value contract's patterns together (`total_pattern_bytes`, 4 MiB); the memory of
+all of a value contract's patterns together, its run matchers and what the
+regex crate builds for its compiled patterns (`total_pattern_memory`, 64 MiB,
+below); and the memory dynamic specialization
 adds to the program (`program_bytes`, 48 MiB). It does not estimate the memory
 of the library's compiled program, which grows with what the library compiles.
 `Limits::schema_resources` is a tighter cap an application can set. It refuses
@@ -572,15 +573,27 @@ counting allocations:
 | One such pattern 380 times | 501 MB, 2.1 s | 23.0 MB, 26 ms | 23.0 MB |
 | 5 such `patternProperties` names | 151 MB, prepared | 6.1 MB, refused | 0.75 MB |
 
-`total_pattern_memory` (64 MiB) bounds what the regex crate builds for a
-value contract's compiled patterns: each distinct `pattern` form the run matcher does
-not match, and each `patternProperties` name, through its two documented size
-settings. A quarter of it, at most 2 MiB each, is the patterns' search caches
-(`dfa_size_limit`), in equal parts; a cache bounds only how fast a search runs.
-Each form first compiles within 48 KiB (`size_limit`). Every compiled pattern
-also holds memory neither setting counts (about 7.7 KB for a small
-`patternProperties` name), so a value contract compiling more than the rest holds at
-48 KiB each, 1,024 at the default, refuses at the next, before compiling any.
+`total_pattern_memory` (64 MiB) bounds the memory of a value contract's patterns
+together: its run matchers, and what the regex crate builds for its compiled
+patterns. A distinct `pattern` form that is one anchored sequence of
+single-character runs, every run but the last with a fixed count, is matched
+by a run matcher, which holds 104 bytes, 12 for each step (adjacent literal
+characters share one and are compared as bytes, as adjacent runs of one set
+share one), 24 for each distinct set, 8 for each range of a set's members past
+ASCII and a byte for each byte of literal text. That is its memory as 64-bit
+hosts lay it out, which the counting allocator confirms byte for byte; a
+32-bit host holds less, and the same count applies there, so no outcome
+depends on the host. Each other distinct `pattern` form, and each
+`patternProperties` name, is compiled through the regex crate's two documented
+size settings. A quarter of the memory, at most 2 MiB each, is the compiled
+patterns' search caches (`dfa_size_limit`), in equal parts; a cache bounds only
+how fast a search runs. Each form first compiles within 48 KiB (`size_limit`).
+Every compiled pattern also holds memory neither setting counts (about 7.7 KB
+for a small `patternProperties` name), so the run matchers and these first
+allowances share the other three quarters: a value contract whose run matchers
+and compiled patterns need more refuses at the first pattern past them, before
+compiling any. At the default 1,024 compiled patterns fill them, and beside any
+run matcher 1,023 do.
 The forms that need more share what is left: each is given an equal part,
 those that need less than their part keep only the least they need, to within
 a sixteenth, and the rest is shared again among the others, until all fit their
@@ -588,9 +601,46 @@ parts, none does, or the parts grow by no more than a sixteenth; those that
 then do not fit are refused, and none is given more than 32 MiB. What a form is
 given depends only on the value contract's forms, so no outcome depends on the order
 strings reach the patterns, and small patterns change a large one's outcome
-only through their 48 KiB each: a counted-repetition name such as
+only through what they hold, 48 KiB for each compiled pattern and its bytes for
+each run matcher: a counted-repetition name such as
 `^.{1,10000}N$`, about 13.2 MiB, compiles beside up to 743 small patterns,
 four compile together and five do not fit.
+
+A run matcher once held a 56-byte run and an 8-byte set of its own for every
+character, in a vector of doubling capacity: about 100 bytes for each byte of
+a literal pattern, which the pattern memory did not count, so 380 distinct
+literal patterns of 10,002 bytes, within `total_pattern_bytes`, kept 380 MB.
+The diagnostic memory probe now bounds that shape. The 46 distinct patterns
+the run matcher matches in the JSON Schema Test Suite, the specification's
+corpus and the workloads and probes of the evaluator benchmark and of the
+lane 2 performance review hold 128 bytes at the median and 268 at most,
+6.3 KB together, an eighth of one compiled pattern's 48 KiB. Measured on
+2026-10-25 against `095a6ca` (before) in a release build on macOS arm64 by
+counting allocations: the heap a prepared value contract keeps beyond its
+document, and the peak while preparing it.
+The process's maximum resident set for the first row, parsing and validating
+its document included, fell from 316 MB to 41 MB; preparation took the same
+150 to 160 ms. A run matcher reads a string a byte at a time, testing an ASCII
+character by its byte and decoding any other, so on the lane 2 adapter
+`^[a-z]*$` over 4 MiB checks in 0.73 of `095a6ca`'s time and the
+10,002-byte literal in 0.035, and none of the pattern workloads measured
+checks more than 2% slower.
+
+| Shape | Kept, before | Peak, before | Kept, now | Peak, now |
+| --- | --- | --- | --- | --- |
+| 380 distinct literal patterns of 10,002 bytes | 379.9 MB | 384.6 MB | 4.6 MB | 8.5 MB |
+| The same in a supplied resource | 379.8 MB | 384.6 MB | 4.6 MB | 8.5 MB |
+| 190 distinct such patterns, each twice | 190.3 MB | 193.2 MB | 2.7 MB | 4.6 MB |
+| One such pattern 380 times | 1.8 MB | 2.7 MB | 0.8 MB | 1.7 MB |
+| One literal pattern of 1 MiB | 67.2 MB | 131.1 MB | 1.1 MB | 6.4 MB |
+| Four literal patterns of 1 MiB | 268.5 MB | 335.6 MB | 4.3 MB | 12.7 MB |
+| `^t0x` and 4,998 `.a` | 1.3 MB | 2.9 MB | 0.19 MB | 1.2 MB |
+| `^t0x` and 4,998 `\d` | 0.56 MB | 1.1 MB | 0.07 MB | 0.15 MB |
+
+Each kept figure includes about 0.07 MB of the contract's other structures. In
+the first row the run matchers hold exactly what the pattern memory counts for
+them, 3,844,080 bytes: 10,000 bytes of text, a 12-byte step and a 104-byte
+place for each.
 
 The memory is shared once per value contract, the first time a form is found that
 does not fit its 48 KiB: at preparation for a `patternProperties` name, when the

@@ -1,13 +1,15 @@
-//! A contract's compiled regular expressions share its pattern memory
-//! (`Limits::total_pattern_memory`, 64 MiB by default). Each distinct `pattern`
-//! form the run matcher does not match and each `patternProperties` name is
-//! compiled. A quarter of the memory, up to 2 MiB each, is their search caches,
-//! in equal parts. Each form first compiles within 48 KiB, so the memory bounds
-//! how many patterns a contract compiles; the forms that need more share what
-//! that leaves, each an equal part, and those that need less than their part
-//! leave the rest to those that need more. A name that does not fit what it is
-//! given refuses preparation, and a `pattern` value, compiled when a string
-//! first reaches it, gives that string no verdict.
+//! A contract's run matchers and compiled regular expressions share its
+//! pattern memory (`Limits::total_pattern_memory`, 64 MiB by default). Each
+//! distinct `pattern` form the run matcher does not match and each
+//! `patternProperties` name is compiled. A quarter of the memory, up to 2 MiB
+//! each, is their search caches, in equal parts. Each run matcher holds the
+//! bytes it takes and each form first compiles within 48 KiB, so the memory
+//! bounds how many patterns a contract compiles and what its run matchers
+//! hold; the forms that need more share what that leaves, each an equal part,
+//! and those that need less than their part leave the rest to those that need
+//! more. A name that does not fit what it is given refuses preparation, and a
+//! `pattern` value, compiled when a string first reaches it, gives that string
+//! no verdict.
 use openbindings::*;
 use openbindings_json_schema_evaluator::{DefaultEvaluator, Limits};
 use serde_json::{Map, Value, json};
@@ -249,8 +251,7 @@ fn a_pattern_compiled_on_first_use_stays_within_the_memory() {
 // Each compiled pattern holds 48 KiB, so the pattern memory bounds how many
 // patterns a contract compiles: preparation counts them as it reads them and
 // refuses at the first past that count, naming its keyword, before compiling
-// any. Run matchers compile nothing and a repeated `pattern` form is compiled
-// once, so neither counts.
+// any. A repeated `pattern` form is compiled once, so it counts once.
 #[test]
 fn the_compiled_patterns_are_bounded_in_number() {
     let compiled = |count: usize| -> Vec<Value> {
@@ -270,10 +271,23 @@ fn the_compiled_patterns_are_bounded_in_number() {
          total_pattern_memory holds at 48 KiB each once their search caches take a quarter; \
          raise total_pattern_memory (totalPatternMemory in TypeScript)"
     );
+    // Run matchers compile nothing, but they hold their bytes of the same
+    // memory: 100 of them, 13,941 bytes, fit beside two compiled patterns,
+    // and one holds more than three leave.
     let run_matched: Vec<Value> = (0..100)
         .map(|i| json!({"pattern": format!("^a{{{i}}}$")}))
         .collect();
-    assert!(prepare(&schema([compiled(3), run_matched].concat()), three.clone()).is_ok());
+    assert!(prepare(&schema([compiled(2), run_matched].concat()), three.clone()).is_ok());
+    let one = vec![json!({"pattern": "^a{0}$"})];
+    let refused = prepare(&schema([compiled(3), one].concat()), three.clone()).unwrap_err();
+    assert_memory_refusal(&refused, "/prefixItems/*/pattern");
+    assert_eq!(
+        refused.message,
+        "this value contract's run matchers hold 104 bytes and its 3 compiled regular \
+         expressions 48 KiB each, more together than the 144 KiB its 192 KiB \
+         total_pattern_memory holds for them once search caches take a quarter; raise \
+         total_pattern_memory (totalPatternMemory in TypeScript)"
+    );
     let repeated = vec![json!({"pattern": "a|b"}); 100];
     assert!(prepare(&schema(repeated), three.clone()).is_ok());
     let names = json!({"patternProperties": {"a|b": true, "c|d": true, "e|f": true, "g|h": true}});
@@ -324,13 +338,56 @@ fn a_small_pattern_memory_refuses_a_pattern_beyond_what_it_leaves() {
          the 2 that need more share it equally, but this one does not compile within the \
          768 KiB that gives it; raise total_pattern_memory (totalPatternMemory in TypeScript)"
     );
-    // No pattern memory admits no compiled pattern, and leaves run matchers
-    // and contracts without patterns alone.
+    // No pattern memory admits no compiled pattern and no run matcher, and
+    // leaves patterns the evaluator does not match and contracts without
+    // patterns alone.
     let none = memory(0);
     assert_memory_refusal(
         &prepare(&json!({"pattern": "a|b"}), none.clone()).unwrap_err(),
         "/pattern",
     );
-    assert!(prepare(&json!({"pattern": "^[a-z]+$"}), none.clone()).is_ok());
+    let refused = prepare(&json!({"pattern": "^[a-z]+$"}), none.clone()).unwrap_err();
+    assert_memory_refusal(&refused, "/pattern");
+    assert_eq!(
+        refused.message,
+        "this value contract's run matchers hold 128 bytes, more than the 0 bytes its \
+         0 bytes total_pattern_memory holds for them once search caches take a quarter; \
+         raise total_pattern_memory (totalPatternMemory in TypeScript)"
+    );
+    let unmatched = prepare(&json!({"pattern": "^(?=a)"}), none.clone()).unwrap();
+    assert_eq!(
+        no_verdict(&unmatched, r#""a""#).code,
+        "pattern-backtracking"
+    );
     assert!(prepare(&json!({"type": "string"}), none).is_ok());
+}
+
+// A run matcher holds a step for each change of set and a byte for each byte
+// of literal text, so a long literal pattern holds about its own length, and
+// the pattern memory counts it. 380 distinct literal patterns of 10,002 bytes,
+// 3.8 MB within the default total_pattern_bytes, each hold 10,116 bytes:
+// 3.7 MiB, within the default memory, where they once held about 1 MB each.
+#[test]
+fn run_matchers_hold_about_their_text_of_the_pattern_memory() {
+    let literal = |i: usize| format!("^t{i:03}x{}$", "a".repeat(9_995));
+    let patterns: Vec<String> = (0..380).map(literal).collect();
+    assert!(patterns.iter().all(|pattern| pattern.len() == 10_002));
+    let contract = prepare(&pattern_values(&patterns), Limits::default()).unwrap();
+    let text = &patterns[7][1..10_001];
+    assert!(satisfies(&contract, &json!({ "p7": text }).to_string()));
+    assert!(matches!(
+        contract.validate(&value(&json!({ "p7": &text[1..] }).to_string())),
+        ValueOutcome::Fails { .. }
+    ));
+    // Three quarters of 4 MiB hold 310 of them and not 311.
+    let limits = memory(4 * MIB);
+    assert!(prepare(&pattern_values(&patterns[..310]), limits.clone()).is_ok());
+    let refused = prepare(&pattern_values(&patterns[..311]), limits).unwrap_err();
+    assert_memory_refusal(&refused, "/properties/p*/pattern");
+    assert_eq!(
+        refused.message,
+        "this value contract's run matchers hold 3.1 MiB, more than the 3 MiB its 4 MiB \
+         total_pattern_memory holds for them once search caches take a quarter; raise \
+         total_pattern_memory (totalPatternMemory in TypeScript)"
+    );
 }

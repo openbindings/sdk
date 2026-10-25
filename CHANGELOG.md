@@ -141,20 +141,24 @@
   and nesting, and the forms kept for all of a value contract's patterns together,
   counted as each is written, with each distinct `pattern` form kept once
   (`Limits::total_pattern_bytes`, TypeScript `totalPatternBytes`, 4 MiB,
-  `pattern-total-byte-limit`); the regex crate's memory for all of a
-  value contract's compiled patterns together (`Limits::total_pattern_memory`,
-  TypeScript `totalPatternMemory`, 64 MiB, `pattern-total-memory-limit`, whose
-  message states the arithmetic) for each distinct `pattern` form the run
-  matcher does not match and each `patternProperties` name: a quarter, at most
-  2 MiB each, for their search caches (`dfa_size_limit`) in equal parts, and
-  the rest for their compiled forms (`size_limit`), each first within 48 KiB,
-  with the forms that need more sharing what is left, at most 32 MiB each, so
-  small patterns elsewhere change a large one's outcome only through their
-  48 KiB each, no outcome depends on the order strings reach the patterns, a
-  value contract compiling more than 1,024 patterns refuses before compiling any, 40
-  counted-repetition names refuse in about 0.2 s, and a
-  `pattern` value compiled when a string first reaches it stays within what it
-  is given; the memory dynamic specialization adds to a value contract's program,
+  `pattern-total-byte-limit`); the memory of all of a value contract's
+  patterns together (`Limits::total_pattern_memory`, TypeScript
+  `totalPatternMemory`, 64 MiB, `pattern-total-memory-limit`, whose message
+  states the arithmetic): its run matchers, which match each distinct
+  `pattern` form that is one anchored sequence of single-character runs
+  without an automaton and hold 104 bytes, a few for each step and set and a
+  byte for each byte of literal text (a 10,002-byte literal pattern holds
+  10,116 bytes), and the regex crate's memory for each other distinct
+  `pattern` form and each `patternProperties` name: a quarter, at most 2 MiB
+  each, for their search caches (`dfa_size_limit`) in equal parts, and the
+  rest for the run matchers and the compiled forms (`size_limit`), each form
+  first within 48 KiB, with the forms that need more sharing what is left, at
+  most 32 MiB each, so small patterns elsewhere change a large one's outcome
+  only through what they hold, no outcome depends on the order strings reach
+  the patterns, a value contract compiling more than 1,024 patterns refuses
+  before compiling any, 40 counted-repetition names refuse in about 0.2 s, and
+  a `pattern` value compiled when a string first reaches it stays within what
+  it is given; the memory dynamic specialization adds to a value contract's program,
   estimated for the SDK's own copies and dynamic contexts
   (`Limits::program_bytes`, TypeScript `programBytes`, 48 MiB,
   `program-specialization-limit`); and an unevaluated keyword's annotation

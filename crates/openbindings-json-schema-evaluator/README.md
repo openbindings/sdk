@@ -161,20 +161,31 @@ resources:
   far longer than its pattern (`\S` takes 191 bytes); preparation counts each as
   it is written and refuses at the first that passes the limit
   (`pattern-total-byte-limit`).
-- `total_pattern_memory` (64 MiB) bounds the linear-time engine's memory for
-  a value contract's compiled patterns together: each distinct `pattern` form the
-  run matcher does not match, and each `patternProperties` name, built through
-  the regex crate's two size settings. A quarter of it, at most 2 MiB each, is
-  their search caches (`dfa_size_limit`), in equal parts; a cache bounds only
-  how fast a search runs. Each form first compiles within 48 KiB
-  (`size_limit`), which all but one of 5,389 measured real patterns fit, so a
-  value contract compiling more patterns than the rest holds at 48 KiB each (1,024 at
-  the default) refuses at the first past that count, before compiling any. The
+- `total_pattern_memory` (64 MiB) bounds the memory of a value contract's
+  patterns together: its run matchers and what the linear-time engine builds
+  for its compiled patterns. A distinct `pattern` form that is one anchored
+  sequence of single-character runs, every run but the last with a fixed
+  count (`^[a-z0-9_]{3,16}$`, `^\d{4}-\d{2}-\d{2}$`), is matched by a run
+  matcher without an automaton. It holds 104 bytes, 12 for each step (adjacent
+  literal characters share one and are compared as bytes, as adjacent runs of
+  one set share one), 24 for each distinct set, 8 for each range of a set's
+  members past ASCII and a byte for each byte of literal text, so a
+  10,002-byte literal pattern holds 10,116 bytes. Each other distinct
+  `pattern` form, and each `patternProperties` name, is compiled through the
+  regex crate's two size settings. A quarter of the memory, at most 2 MiB each,
+  is their search caches (`dfa_size_limit`), in equal parts; a cache bounds
+  only how fast a search runs. Each form first compiles within 48 KiB
+  (`size_limit`), which all but one of 5,389 measured real patterns fit, and
+  the run matchers and these first allowances share the other three quarters,
+  so a value contract whose run matchers and compiled patterns need more
+  refuses at the first pattern past them, before compiling any: 1,024 compiled
+  patterns fill them at the default, and beside any run matcher 1,023 do. The
   forms that need more share what is left equally; those that need less than
   their part keep only what they need, to within a sixteenth, and the rest is
   shared again among the others, at most 32 MiB each. So a pattern's outcome
-  depends on the small patterns elsewhere in its value contract only through their
-  48 KiB each, and never on the order strings reach the patterns: a single
+  depends on the small patterns elsewhere in its value contract only through
+  what they hold, 48 KiB for each compiled pattern and its bytes for each run
+  matcher, and never on the order strings reach the patterns: a single
   `^.{1,10000}$` (about 13.2 MiB) compiles beside up to 743 small patterns,
   four of them compile together, and five need more than is left. The first
   time a form is found that does not fit its 48 KiB, the value contract's compiled

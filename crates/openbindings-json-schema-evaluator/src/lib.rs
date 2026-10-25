@@ -104,30 +104,38 @@ pub struct Limits {
     /// as it is written and refuses with `pattern-total-byte-limit` at the
     /// first that passes the limit.
     pub total_pattern_bytes: usize,
-    /// Bytes of linear-time engine memory one value contract's compiled schema
-    /// regular expressions may use together; default 64 MiB (67,108,864
-    /// bytes). The value contract compiles each distinct form of its `pattern`
-    /// values that the run matcher does not match, and the form of each
-    /// `patternProperties` name, through the regex crate's two documented size
-    /// settings. A quarter of the memory, at most 2 MiB for each pattern, is
-    /// their search caches (`dfa_size_limit`), in equal parts, which bound only
-    /// how fast a search runs. Each form first compiles within 48 KiB
-    /// (`size_limit`), so a value contract compiling more patterns than the rest
-    /// holds at 48 KiB each (1,024 at the default) refuses with
-    /// `pattern-total-memory-limit` at the first past that count, before any
-    /// is compiled. The forms that need more share what is left equally;
-    /// those that need less than their part keep only what they need, to
-    /// within a sixteenth, and leave the rest to the others, at most 32 MiB
-    /// each. So small patterns elsewhere in a value contract change a large one's
-    /// outcome only through their 48 KiB each, and no outcome depends on the
-    /// order strings reach the patterns. The first time a form is found that
-    /// does not fit its 48 KiB, the value contract's compiled patterns not yet
-    /// compiled are compiled then. A `patternProperties` name that does not
-    /// fit what it is given refuses preparation, and a `pattern` value,
-    /// compiled the first time a string reaches it, gives that string no
-    /// verdict: with `pattern-total-memory-limit`, whose message states the
-    /// arithmetic, or `pattern-size-limit` when the form needs more than
-    /// 32 MiB.
+    /// Bytes of memory one value contract's schema regular expressions may
+    /// use together, in the SDK's run matchers and the linear-time engine;
+    /// default 64 MiB (67,108,864 bytes). A distinct form of a `pattern`
+    /// value that is one anchored sequence of single-character runs, every
+    /// run but the last with a fixed count, is matched by a run matcher, which
+    /// holds 104 bytes, 12 for each step (adjacent literal characters share
+    /// one, as adjacent runs of one set do), 24 for each distinct set, 8 for
+    /// each range of a set's members past ASCII and a byte for each byte of
+    /// literal text. The value contract compiles each other distinct `pattern`
+    /// form, and the form of each `patternProperties` name, through the regex
+    /// crate's two documented size settings. A quarter of the memory, at most
+    /// 2 MiB for each compiled pattern, is their search caches
+    /// (`dfa_size_limit`), in equal parts, which bound only how fast a search
+    /// runs. Each form first compiles within 48 KiB (`size_limit`), and the
+    /// run matchers and these first allowances share the other three
+    /// quarters, so a value contract whose run matchers and compiled patterns
+    /// need more refuses with `pattern-total-memory-limit` at the first
+    /// pattern past it, before any is compiled: at the default, 1,024
+    /// compiled patterns fill them, and beside any run matcher 1,023 do. The
+    /// forms that need more share what is left equally; those that need less
+    /// than their part keep only what they need, to within a sixteenth, and
+    /// leave the rest to the others, at most 32 MiB each. So small patterns
+    /// elsewhere in a value contract change a large one's outcome only through
+    /// what they hold, 48 KiB for each compiled pattern and its bytes for each
+    /// run matcher, and no outcome depends on the order strings reach the
+    /// patterns. The first time a form is found that does not fit its 48 KiB,
+    /// the value contract's compiled patterns not yet compiled are compiled
+    /// then. A `patternProperties` name that does not fit what it is given
+    /// refuses preparation, and a `pattern` value, compiled the first time a
+    /// string reaches it, gives that string no verdict: with
+    /// `pattern-total-memory-limit`, whose message states the arithmetic, or
+    /// `pattern-size-limit` when the form needs more than 32 MiB.
     pub total_pattern_memory: usize,
     /// Bytes the SDK's program for one value contract may grow by beyond its
     /// projected schemas; default 48 MiB (50,331,648 bytes). Dynamic
@@ -559,8 +567,12 @@ impl DefaultEvaluator {
         }
         // Each pattern the contract compiles holds its first allowance of the
         // pattern memory, the library's `patternProperties` names and the
-        // SDK's `pattern` matchers alike.
-        let memory = pattern::Memory::new(self.limits.total_pattern_memory, kept.compiled);
+        // SDK's `pattern` matchers alike, and each run matcher its own bytes.
+        let memory = pattern::Memory::new(
+            self.limits.total_pattern_memory,
+            kept.compiled,
+            kept.matched,
+        );
         drop(kept);
         // The library's unevaluated validators recurse in ways the static
         // bound does not model, so a contract holding one is guarded: every
@@ -719,9 +731,10 @@ fn patterns<'a>(
     let Value::Object(schema) = schema else {
         return Ok(());
     };
-    // Count each form the evaluator keeps as it is written, and each it
-    // compiles, so preparation stops at the first that passes either total.
-    let mut count = |keyword: &'static str, form: &str, compiled: bool| {
+    // Count each form the evaluator keeps as it is written, and the memory
+    // of each it compiles or matches with a run matcher, so preparation stops
+    // at the first that passes either total.
+    let mut count = |keyword: &'static str, form: &str, matcher: Option<&pattern::Simple>| {
         kept.bytes = kept.bytes.saturating_add(form.len());
         if kept.bytes > limits.total_pattern_bytes {
             return Err((
@@ -733,14 +746,24 @@ fn patterns<'a>(
                 ),
             ));
         }
-        kept.compiled += usize::from(compiled);
-        let most = pattern::Memory::most_patterns(limits.total_pattern_memory);
-        if kept.compiled > most {
+        match matcher {
+            Some(matcher) => {
+                kept.matched = kept
+                    .matched
+                    .saturating_add(operands::run_matcher_bytes(matcher));
+            }
+            None => kept.compiled += 1,
+        }
+        let total = limits.total_pattern_memory;
+        if pattern::Memory::most_patterns(total, kept.matched)
+            .is_none_or(|most| kept.compiled > most)
+        {
             return Err((
                 keyword,
                 pattern_memory_limit(pattern::Shortfall::Count {
-                    most,
-                    total: limits.total_pattern_memory,
+                    matched: kept.matched,
+                    compiled: kept.compiled,
+                    total,
                 }),
             ));
         }
@@ -759,7 +782,7 @@ fn patterns<'a>(
                 if let pattern::Reading::Linear(linear) = &reading
                     && !operands.has_pattern(&linear.form)
                 {
-                    count("pattern", &linear.form, linear.simple.is_none())?;
+                    count("pattern", &linear.form, linear.simple.as_ref())?;
                 }
                 let key = operands.pattern(reading);
                 kept.read.insert(source, key.clone());
@@ -784,7 +807,7 @@ fn patterns<'a>(
             while names.contains_key(&form) {
                 form.push_str("(?:)");
             }
-            count("patternProperties", &form, true)?;
+            count("patternProperties", &form, None)?;
             form.shrink_to_fit();
             names.insert(form, subschema);
         }
@@ -799,6 +822,8 @@ struct Kept<'a> {
     // The forms to be compiled: each distinct `pattern` form without a run
     // matcher and each `patternProperties` name.
     compiled: usize,
+    // The bytes the run matchers of the other distinct `pattern` forms hold.
+    matched: usize,
     // The value written for each `pattern` already read, by its source, so a
     // repeated pattern is read once.
     read: HashMap<std::borrow::Cow<'a, str>, String>,
@@ -865,13 +890,44 @@ fn pattern_memory_limit(shortfall: pattern::Shortfall) -> NoVerdict {
     const RAISE: &str = "raise total_pattern_memory (totalPatternMemory in TypeScript)";
     let first = bytes(pattern::FIRST);
     let message = match shortfall {
-        pattern::Shortfall::Count { most, total } => format!(
-            "this value contract compiles more than {most} regular expressions, as many as \
-             its {} total_pattern_memory holds at {first} each once their search caches take \
-             a quarter; {RAISE}",
-            bytes(total),
-        ),
+        pattern::Shortfall::Count {
+            matched,
+            compiled,
+            total,
+        } => {
+            let most = pattern::Memory::most_patterns(total, 0)
+                .expect("any pattern memory holds no run matcher");
+            // Compiled patterns past the count without the run matchers refuse
+            // where and as they do without them; otherwise the run matchers'
+            // bytes are why the value contract refuses.
+            if matched == 0 || compiled > most {
+                format!(
+                    "this value contract compiles more than {most} regular expressions, as \
+                     many as its {} total_pattern_memory holds at {first} each once their \
+                     search caches take a quarter; {RAISE}",
+                    bytes(total),
+                )
+            } else {
+                let compiled = match compiled {
+                    0 => String::new(),
+                    1 => format!(" and its one compiled regular expression {first}"),
+                    compiled => {
+                        format!(" and its {compiled} compiled regular expressions {first} each")
+                    }
+                };
+                format!(
+                    "this value contract's run matchers hold {}{compiled}, more {}than the {} \
+                     its {} total_pattern_memory holds for them once search caches take a \
+                     quarter; {RAISE}",
+                    bytes_up(matched),
+                    if compiled.is_empty() { "" } else { "together " },
+                    bytes(pattern::Memory::held(total)),
+                    bytes(total),
+                )
+            }
+        }
         pattern::Shortfall::Pattern {
+            matched,
             patterns,
             total,
             cache,
@@ -880,21 +936,35 @@ fn pattern_memory_limit(shortfall: pattern::Shortfall) -> NoVerdict {
             sharing,
             compiled,
         } => {
-            let holding = if patterns == 1 {
-                format!(
+            let holding = match (matched, patterns) {
+                (0, 1) => format!(
                     "this value contract's one compiled regular expression holds {first} of \
                      its {} total_pattern_memory and {} for its search cache",
                     bytes(total),
                     bytes(cache),
-                )
-            } else {
-                format!(
+                ),
+                (0, _) => format!(
                     "this value contract's {patterns} compiled regular expressions hold \
                      {first} each of its {} total_pattern_memory and {} each for their search \
                      caches",
                     bytes(total),
                     bytes(cache),
-                )
+                ),
+                (_, 1) => format!(
+                    "this value contract's run matchers hold {} of its {} total_pattern_memory, \
+                     and its one compiled regular expression {first} and {} for its search cache",
+                    bytes(matched),
+                    bytes(total),
+                    bytes(cache),
+                ),
+                _ => format!(
+                    "this value contract's run matchers hold {} of its {} total_pattern_memory, \
+                     and its {patterns} compiled regular expressions {first} each and {} each \
+                     for their search caches",
+                    bytes(matched),
+                    bytes(total),
+                    bytes(cache),
+                ),
             };
             let sharing = match (sharing, kept) {
                 (1, 0) => "this one, which needs more, may take it all, but".to_owned(),
@@ -945,6 +1015,18 @@ fn specialization_limit(growth: bundle::Growth) -> NoVerdict {
             bytes(growth.budget),
         ),
     )
+}
+// A count of bytes as a message states it, rounded up in the units `bytes`
+// uses, so a count past a limit `bytes` states never reads as within it.
+fn bytes_up(count: usize) -> String {
+    let unit = if count >= 1024 * 1024 {
+        1024 * 1024 / 10
+    } else if count >= 1024 {
+        1024
+    } else {
+        1
+    };
+    bytes(count.div_ceil(unit).saturating_mul(unit))
 }
 // A count of bytes as a message states it, rounded down: whole KiB below a
 // MiB, MiB to a tenth above.

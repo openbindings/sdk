@@ -272,9 +272,12 @@ value contract's deepest admitted value overflowed the engine's stack. Also on b
 default: `compileJsonDepth` (512), the projected JSON nesting compiled;
 `patternBytes` (1 MiB), `patternDepth` (32) and `totalPatternBytes`
 (4 MiB of the forms kept for a value contract's patterns);
-`totalPatternMemory` (64 MiB) for a value contract's compiled patterns, a quarter of
-it for their search caches in equal parts and the rest for their compiled
-forms, each first within 48 KiB while those that need more share what is
+`totalPatternMemory` (64 MiB) for a value contract's patterns: the run matchers
+that match anchored sequences of single-character runs, which hold a few bytes
+for each step and set and a byte for each byte of literal text, and the
+compiled patterns, a quarter of it for their search caches in equal parts and
+the rest for their compiled forms beside the run matchers, each first within
+48 KiB while those that need more share what is
 left, so `^.{1,10000}$` (about 13 MiB) compiles beside up to 743 small
 patterns and four such counted repetitions compile together, while 40
 `patternProperties` names of the form `^.{1,10000}N$` refuse with

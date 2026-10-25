@@ -61,17 +61,24 @@ pub(crate) enum Unsupported {
 /// How a value contract's pattern memory fell short, for the refusal to state.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Shortfall {
-    /// The value contract compiles more patterns than its `total` bytes hold first
-    /// allowances for, `most`.
-    Count { most: usize, total: usize },
-    /// One pattern needs a larger compiled size than it is given. Each of the
-    /// value contract's `patterns` compiled patterns holds [`FIRST`] for its form
-    /// and `cache` for its search cache, which leaves `left` of the `total`;
-    /// those that need more share it, and those of them that need less than
-    /// an equal part keep only what they need, `kept` in all. The `sharing`
-    /// patterns that need more than that share the rest equally, and this one
-    /// does not compile within the `compiled` size that gives it.
+    /// The value contract's run matchers, holding `matched` bytes, and its
+    /// `compiled` patterns' first allowances need more than its `total` bytes
+    /// hold for them ([`Memory::most_patterns`]).
+    Count {
+        matched: usize,
+        compiled: usize,
+        total: usize,
+    },
+    /// One pattern needs a larger compiled size than it is given. The value
+    /// contract's run matchers hold `matched` bytes, and each of its
+    /// `patterns` compiled patterns holds [`FIRST`] for its form and `cache`
+    /// for its search cache, which leaves `left` of the `total`; those that
+    /// need more share it, and those of them that need less than an equal part
+    /// keep only what they need, `kept` in all. The `sharing` patterns that
+    /// need more than that share the rest equally, and this one does not
+    /// compile within the `compiled` size that gives it.
     Pattern {
+        matched: usize,
         patterns: usize,
         total: usize,
         cache: usize,
@@ -126,13 +133,16 @@ pub(crate) fn compile(form: &str, allowance: Allowance) -> Option<regex::Regex> 
 /// A value contract's pattern memory (`Limits::total_pattern_memory`) and how it is
 /// divided. A quarter of it, up to [`SEARCH_CACHE`] for each, is the compiled
 /// patterns' search caches, in equal parts, which bound only how fast a search
-/// runs. Each pattern's form first compiles within [`FIRST`]; the patterns
-/// whose forms do not share what that leaves.
+/// runs. The run matchers hold the bytes they take, and each compiled
+/// pattern's form first compiles within [`FIRST`]; the patterns whose forms do
+/// not share what that leaves.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Memory {
     total: usize,
     patterns: usize,
     cache: usize,
+    // The bytes the run matchers hold.
+    matched: usize,
 }
 /// What a pattern that does not fit its first allowance is given.
 #[derive(Debug)]
@@ -147,18 +157,28 @@ pub(crate) enum Given {
     Refused(Unsupported),
 }
 impl Memory {
-    /// The most patterns `total` bytes hold first allowances for: the
-    /// search caches take at most a quarter, and each form [`FIRST`].
-    pub(crate) fn most_patterns(total: usize) -> usize {
-        (total - total / 4) / FIRST
+    /// What `total` bytes hold for the run matchers and the first
+    /// allowances: the search caches take at most a quarter.
+    pub(crate) fn held(total: usize) -> usize {
+        total - total / 4
     }
-    /// The memory of a value contract compiling `patterns` patterns, at most
+    /// The most patterns `total` bytes hold first allowances for, [`FIRST`]
+    /// each, beside run matchers holding `matched` bytes; `None` when the run
+    /// matchers alone need more than [`Self::held`].
+    pub(crate) fn most_patterns(total: usize, matched: usize) -> Option<usize> {
+        Self::held(total)
+            .checked_sub(matched)
+            .map(|rest| rest / FIRST)
+    }
+    /// The memory of a value contract compiling `patterns` patterns beside
+    /// run matchers holding `matched` bytes, at most
     /// [`Self::most_patterns`].
-    pub(crate) fn new(total: usize, patterns: usize) -> Self {
+    pub(crate) fn new(total: usize, patterns: usize, matched: usize) -> Self {
         Self {
             total,
             patterns,
             cache: (total / 4 / patterns.max(1)).min(SEARCH_CACHE),
+            matched,
         }
     }
     /// The allowance every compiled pattern first compiles within.
@@ -168,11 +188,12 @@ impl Memory {
             cache: self.cache,
         }
     }
-    /// What the first allowances and the search caches leave for the forms
-    /// that need more.
+    /// What the run matchers, the first allowances and the search caches
+    /// leave for the forms that need more.
     fn left(&self) -> usize {
         self.total
             .saturating_sub(self.patterns.saturating_mul(FIRST + self.cache))
+            .saturating_sub(self.matched)
     }
     /// Share what the first allowances leave among `forms`, none of which
     /// fits its first allowance. The first `names` are `patternProperties`
@@ -236,6 +257,7 @@ impl Memory {
             }
             if short.is_empty() || fitted.is_empty() || last {
                 let shortfall = Shortfall::Pattern {
+                    matched: self.matched,
                     patterns: self.patterns,
                     total: self.total,
                     cache: self.cache,
@@ -1039,6 +1061,15 @@ struct Set {
     wide: (u32, u32),
 }
 impl Simple {
+    /// The heap bytes the matcher holds, which a value contract's pattern
+    /// memory counts: 12 for each step, 24 for each set, 8 for each range of
+    /// members past ASCII and a byte for each byte of text, on every host.
+    pub(crate) fn heap_bytes(&self) -> usize {
+        size_of_val(&*self.steps)
+            + self.text.len()
+            + size_of_val(&*self.sets)
+            + size_of_val(&*self.ranges)
+    }
     // The members of the set at `at`, read once for a run.
     fn members(&self, at: u32) -> Members<'_> {
         let set = &self.sets[at as usize];
@@ -1323,6 +1354,11 @@ mod tests {
         assert_eq!(*matcher.steps, [Step::Text(10_000)]);
         assert_eq!(matcher.last, None);
         assert!(matcher.sets.is_empty() && matcher.ranges.is_empty());
+        assert_eq!(
+            (size_of::<Step>(), size_of::<Set>(), size_of::<(u32, u32)>()),
+            (12, 24, 8)
+        );
+        assert_eq!(matcher.heap_bytes(), 12 + 10_000);
         assert!(matcher.is_match(&literal[1..literal.len() - 1]));
         assert!(!matcher.is_match(&literal[1..literal.len() - 2]));
         let date = simple(r"^\d\d\d\d-\d{2}-[0-9][0-9]$").unwrap();
@@ -1594,23 +1630,41 @@ mod tests {
     fn the_pattern_memory_is_divided_between_caches_and_forms() {
         const KIB: usize = 1024;
         const MIB: usize = 1024 * KIB;
-        assert_eq!(Memory::most_patterns(64 * MIB), 1024);
-        assert_eq!(Memory::most_patterns(0), 0);
-        let first = |total, patterns| Memory::new(total, patterns).first();
+        assert_eq!(Memory::most_patterns(64 * MIB, 0), Some(1024));
+        assert_eq!(Memory::most_patterns(0, 0), Some(0));
+        // Run matchers hold their bytes of the three quarters the search
+        // caches leave, so any bytes they hold take a first allowance's
+        // place at the default, and more than the three quarters admit none.
+        assert_eq!(Memory::most_patterns(64 * MIB, 1), Some(1023));
+        assert_eq!(Memory::most_patterns(64 * MIB, 48 * KIB), Some(1023));
+        assert_eq!(Memory::most_patterns(64 * MIB, 48 * KIB + 1), Some(1022));
+        assert_eq!(Memory::most_patterns(64 * MIB, 48 * MIB), Some(0));
+        assert_eq!(Memory::most_patterns(64 * MIB, 48 * MIB + 1), None);
+        assert_eq!(Memory::most_patterns(0, 1), None);
+        let first = |total, patterns| Memory::new(total, patterns, 0).first();
         let allowance = |compiled, cache| Allowance { compiled, cache };
         // A quarter of the memory for the search caches, up to 2 MiB each.
         assert_eq!(first(64 * MIB, 1), allowance(48 * KIB, 2 * MIB));
         assert_eq!(first(64 * MIB, 8), allowance(48 * KIB, 2 * MIB));
         assert_eq!(first(64 * MIB, 64), allowance(48 * KIB, 256 * KIB));
         assert_eq!(first(64 * MIB, 1024), allowance(48 * KIB, 16 * KIB));
-        assert_eq!(Memory::new(64 * MIB, 1024).left(), 0);
-        assert_eq!(Memory::new(64 * MIB, 4).left(), 56 * MIB - 4 * 48 * KIB);
-        for patterns in 1..=Memory::most_patterns(64 * MIB) {
-            let memory = Memory::new(64 * MIB, patterns);
-            assert!(
-                patterns * (FIRST + memory.cache) + memory.left() <= 64 * MIB,
-                "{patterns}"
-            );
+        // The run matchers take nothing from the search caches.
+        assert_eq!(Memory::new(64 * MIB, 64, MIB).first(), first(64 * MIB, 64));
+        assert_eq!(Memory::new(64 * MIB, 1024, 0).left(), 0);
+        assert_eq!(Memory::new(64 * MIB, 4, 0).left(), 56 * MIB - 4 * 48 * KIB);
+        assert_eq!(
+            Memory::new(64 * MIB, 4, MIB).left(),
+            55 * MIB - 4 * 48 * KIB
+        );
+        for matched in [0, 1, 100 * KIB, 47 * MIB] {
+            let most = Memory::most_patterns(64 * MIB, matched).unwrap();
+            for patterns in 1..=most {
+                let memory = Memory::new(64 * MIB, patterns, matched);
+                assert!(
+                    matched + patterns * (FIRST + memory.cache) + memory.left() <= 64 * MIB,
+                    "{matched} {patterns}"
+                );
+            }
         }
     }
     // A form that does not fit its first allowance is given the least size
@@ -1644,7 +1698,7 @@ mod tests {
         // larger, which takes what the smaller leaves of its part.
         let small = "^.{1,1000}x$";
         let large = "^.{1,10000}x$";
-        let memory = Memory::new(16 * MIB, 2);
+        let memory = Memory::new(16 * MIB, 2, 0);
         let given = memory.share(&[large, small], 2, &mut |_| false);
         let large_size = compiled(&given[0]).expect("the larger fits what the smaller leaves");
         let small_size = compiled(&given[1]).expect("the smaller fits its part");
@@ -1665,7 +1719,8 @@ mod tests {
         }
         // A form needing more than any one pattern is given is refused for
         // its size.
-        let given = Memory::new(256 * MIB, 1).share(&["^.{1,40000}x$"], 0, &mut |_| unreachable!());
+        let given =
+            Memory::new(256 * MIB, 1, 0).share(&["^.{1,40000}x$"], 0, &mut |_| unreachable!());
         assert!(matches!(given[0], Given::Refused(Unsupported::Size)));
     }
     #[test]
