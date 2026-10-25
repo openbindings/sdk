@@ -202,19 +202,34 @@ test("a contract's compiled patterns share its pattern memory", () => {
   );
   assert.equal(among.validateJson('{"a0":1}').status, "fails");
   among.dispose();
-  // Three patterns' 48 KiB admit three compiled patterns; run matchers do
-  // not count.
+  // Three patterns' 48 KiB admit three compiled patterns; a run matcher
+  // holds its bytes of the same memory, so it fits beside two and not three.
   const three = { totalPatternMemory: 3 * 64 * 1024 };
   const compiled = (count) =>
     Array.from({ length: count }, (_, i) => ({ pattern: `a${i}|b` }));
   ready(
     preparation(
-      document({}, { prefixItems: [...compiled(3), { pattern: "^a+$" }] }),
+      document({}, { prefixItems: [...compiled(2), { pattern: "^a+$" }] }),
       undefined,
       null,
       three,
     ),
   ).dispose();
+  assert.equal(
+    assertMemoryRefusal(
+      preparation(
+        document({}, { prefixItems: [...compiled(3), { pattern: "^a+$" }] }),
+        undefined,
+        null,
+        three,
+      ),
+      new RegExp(`^${at}/prefixItems/[0-9]+/pattern$`),
+    ),
+    "this value contract's run matchers hold 104 bytes and its 3 compiled regular " +
+      "expressions 48 KiB each, more together than the 144 KiB its 192 KiB " +
+      "total_pattern_memory holds for them once search caches take a quarter; " +
+      raise,
+  );
   assert.equal(
     assertMemoryRefusal(
       preparation(

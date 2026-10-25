@@ -61,17 +61,24 @@ pub(crate) enum Unsupported {
 /// How a value contract's pattern memory fell short, for the refusal to state.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Shortfall {
-    /// The value contract compiles more patterns than its `total` bytes hold first
-    /// allowances for, `most`.
-    Count { most: usize, total: usize },
-    /// One pattern needs a larger compiled size than it is given. Each of the
-    /// value contract's `patterns` compiled patterns holds [`FIRST`] for its form
-    /// and `cache` for its search cache, which leaves `left` of the `total`;
-    /// those that need more share it, and those of them that need less than
-    /// an equal part keep only what they need, `kept` in all. The `sharing`
-    /// patterns that need more than that share the rest equally, and this one
-    /// does not compile within the `compiled` size that gives it.
+    /// The value contract's run matchers, holding `matched` bytes, and its
+    /// `compiled` patterns' first allowances need more than its `total` bytes
+    /// hold for them ([`Memory::most_patterns`]).
+    Count {
+        matched: usize,
+        compiled: usize,
+        total: usize,
+    },
+    /// One pattern needs a larger compiled size than it is given. The value
+    /// contract's run matchers hold `matched` bytes, and each of its
+    /// `patterns` compiled patterns holds [`FIRST`] for its form and `cache`
+    /// for its search cache, which leaves `left` of the `total`; those that
+    /// need more share it, and those of them that need less than an equal part
+    /// keep only what they need, `kept` in all. The `sharing` patterns that
+    /// need more than that share the rest equally, and this one does not
+    /// compile within the `compiled` size that gives it.
     Pattern {
+        matched: usize,
         patterns: usize,
         total: usize,
         cache: usize,
@@ -126,13 +133,16 @@ pub(crate) fn compile(form: &str, allowance: Allowance) -> Option<regex::Regex> 
 /// A value contract's pattern memory (`Limits::total_pattern_memory`) and how it is
 /// divided. A quarter of it, up to [`SEARCH_CACHE`] for each, is the compiled
 /// patterns' search caches, in equal parts, which bound only how fast a search
-/// runs. Each pattern's form first compiles within [`FIRST`]; the patterns
-/// whose forms do not share what that leaves.
+/// runs. The run matchers hold the bytes they take, and each compiled
+/// pattern's form first compiles within [`FIRST`]; the patterns whose forms do
+/// not share what that leaves.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Memory {
     total: usize,
     patterns: usize,
     cache: usize,
+    // The bytes the run matchers hold.
+    matched: usize,
 }
 /// What a pattern that does not fit its first allowance is given.
 #[derive(Debug)]
@@ -147,18 +157,28 @@ pub(crate) enum Given {
     Refused(Unsupported),
 }
 impl Memory {
-    /// The most patterns `total` bytes hold first allowances for: the
-    /// search caches take at most a quarter, and each form [`FIRST`].
-    pub(crate) fn most_patterns(total: usize) -> usize {
-        (total - total / 4) / FIRST
+    /// What `total` bytes hold for the run matchers and the first
+    /// allowances: the search caches take at most a quarter.
+    pub(crate) fn held(total: usize) -> usize {
+        total - total / 4
     }
-    /// The memory of a value contract compiling `patterns` patterns, at most
+    /// The most patterns `total` bytes hold first allowances for, [`FIRST`]
+    /// each, beside run matchers holding `matched` bytes; `None` when the run
+    /// matchers alone need more than [`Self::held`].
+    pub(crate) fn most_patterns(total: usize, matched: usize) -> Option<usize> {
+        Self::held(total)
+            .checked_sub(matched)
+            .map(|rest| rest / FIRST)
+    }
+    /// The memory of a value contract compiling `patterns` patterns beside
+    /// run matchers holding `matched` bytes, at most
     /// [`Self::most_patterns`].
-    pub(crate) fn new(total: usize, patterns: usize) -> Self {
+    pub(crate) fn new(total: usize, patterns: usize, matched: usize) -> Self {
         Self {
             total,
             patterns,
             cache: (total / 4 / patterns.max(1)).min(SEARCH_CACHE),
+            matched,
         }
     }
     /// The allowance every compiled pattern first compiles within.
@@ -168,11 +188,12 @@ impl Memory {
             cache: self.cache,
         }
     }
-    /// What the first allowances and the search caches leave for the forms
-    /// that need more.
+    /// What the run matchers, the first allowances and the search caches
+    /// leave for the forms that need more.
     fn left(&self) -> usize {
         self.total
             .saturating_sub(self.patterns.saturating_mul(FIRST + self.cache))
+            .saturating_sub(self.matched)
     }
     /// Share what the first allowances leave among `forms`, none of which
     /// fits its first allowance. The first `names` are `patternProperties`
@@ -236,6 +257,7 @@ impl Memory {
             }
             if short.is_empty() || fitted.is_empty() || last {
                 let shortfall = Shortfall::Pattern {
+                    matched: self.matched,
                     patterns: self.patterns,
                     total: self.total,
                     cache: self.cache,
@@ -323,7 +345,7 @@ pub(crate) fn read(pattern: &str, max_depth: usize, max_form: usize) -> Result<R
         max_form,
         out: String::with_capacity(pattern.len() + 8),
         unsupported: None,
-        shape: Some(Vec::new()),
+        shape: Some(Shape::default()),
     };
     parser.disjunction(0)?;
     if parser.at != chars.len() {
@@ -336,7 +358,7 @@ pub(crate) fn read(pattern: &str, max_depth: usize, max_form: usize) -> Result<R
     Ok(match parser.unsupported {
         Some(unsupported) => Reading::Unsupported(unsupported),
         None => Reading::Linear(Linear {
-            simple: parser.shape.and_then(Simple::new),
+            simple: parser.shape.and_then(Shape::finish),
             form: parser.out,
         }),
     })
@@ -532,16 +554,10 @@ struct Parser<'a> {
     max_form: usize,
     out: String,
     unsupported: Option<Unsupported>,
-    // The top-level terms while the pattern is one sequence of anchors and
-    // single-character atoms with simple quantifiers.
-    shape: Option<Vec<Term>>,
-}
-// One top-level term of a simple pattern.
-#[derive(Clone, Debug, PartialEq, Eq)]
-enum Term {
-    Start,
-    End,
-    Run(Run),
+    // The run matcher while the top-level terms are one sequence of anchors
+    // and single-character atoms with simple quantifiers, and the pattern is
+    // one the evaluator matches.
+    shape: Option<Shape>,
 }
 impl Parser<'_> {
     fn peek(&self) -> Option<char> {
@@ -564,11 +580,13 @@ impl Parser<'_> {
         }
     }
     // A backtracking construct takes precedence over a property escape: it
-    // would stay unmatched even with property tables.
+    // would stay unmatched even with property tables. A pattern the evaluator
+    // does not match has no run matcher.
     fn unsupported(&mut self, kind: Unsupported) {
         if self.unsupported != Some(Unsupported::Backtracking) {
             self.unsupported = Some(kind);
         }
+        self.shape = None;
     }
     fn disjunction(&mut self, depth: usize) -> Result<(), Refusal> {
         self.alternative(depth)?;
@@ -597,7 +615,7 @@ impl Parser<'_> {
                 self.at += 1;
                 self.out.push(c);
                 if depth == 0 {
-                    self.record(if c == '^' { Term::Start } else { Term::End });
+                    self.record(|shape| if c == '^' { shape.start() } else { shape.end() });
                 }
                 return Ok(());
             }
@@ -630,15 +648,17 @@ impl Parser<'_> {
         let count = self.quantifier()?;
         if depth == 0 {
             match (set, count) {
-                (Some(set), Some((min, max))) => self.record(Term::Run(Run::new(set, min, max))),
+                (Some(set), Some((min, max))) => self.record(|shape| shape.run(set, min, max)),
                 _ => self.shape = None,
             }
         }
         Ok(())
     }
-    fn record(&mut self, term: Term) {
-        if let Some(shape) = &mut self.shape {
-            shape.push(term);
+    fn record(&mut self, term: impl FnOnce(&mut Shape) -> Option<()>) {
+        if let Some(shape) = &mut self.shape
+            && term(shape).is_none()
+        {
+            self.shape = None;
         }
     }
     fn lookaround(&mut self, depth: usize) -> Result<(), Refusal> {
@@ -995,103 +1015,398 @@ fn complement(ranges: &[(u32, u32)]) -> Vec<(u32, u32)> {
     scalar(&out)
 }
 
-/// A run of characters from one set, between `min` and `max` of them.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct Run {
-    set: Vec<(u32, u32)>,
-    // The set's ASCII members, one bit each, read without a search; in two
-    // words, so that a test shifts one machine word.
-    ascii: [u64; 2],
-    min: u32,
-    max: Option<u32>,
-}
-impl Run {
-    fn new(set: Vec<(u32, u32)>, min: u32, max: Option<u32>) -> Self {
-        let mut ascii = [0u64; 2];
-        for &(first, last) in &set {
-            for c in first..=last.min(127) {
-                ascii[c as usize >> 6] |= 1 << (c & 63);
-            }
-        }
-        Self {
-            set,
-            ascii,
-            min,
-            max,
-        }
-    }
-    fn contains(&self, c: char) -> bool {
-        let c = c as u32;
-        if c < 128 {
-            return self.ascii[c as usize >> 6] >> (c & 63) & 1 == 1;
-        }
-        self.set
-            .binary_search_by(|&(first, last)| {
-                if last < c {
-                    std::cmp::Ordering::Less
-                } else if first > c {
-                    std::cmp::Ordering::Greater
-                } else {
-                    std::cmp::Ordering::Equal
-                }
-            })
-            .is_ok()
-    }
-}
-/// An anchored sequence of runs that matches without an automaton: every run
-/// but the last has a fixed count, so each character's run is known from its
-/// position.
+/// An anchored sequence of single-character runs that matches without an
+/// automaton: every run but the last has a fixed count, so each character's
+/// run is known from its position. The fixed runs are steps: a character
+/// matched once is literal text, adjacent literal characters share one step
+/// and are compared as bytes, and adjacent runs of one set share one step.
+/// The last run is a step too when its count is fixed. A run carries its
+/// set's ASCII members as a bitmap, so an ASCII character is tested by its
+/// byte alone, and its members past ASCII, if any, are its share of
+/// `ranges`, which a match walks in order. A short fixed part of ASCII is a
+/// table of the members each of its characters may be.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Simple {
     // Whether the match must reach the end of the string.
     end: bool,
-    runs: Vec<Run>,
+    // The ASCII members each character of the fixed part may be, when every
+    // step is ASCII text or a run of a set without members past ASCII, they
+    // cover at most [`TABLE`] characters and two at least are runs;
+    // otherwise empty, and the steps hold the fixed part.
+    table: Box<[[u64; 2]]>,
+    steps: Box<[Step]>,
+    // The last run when its count is not fixed.
+    last: Option<Last>,
+    // The literal steps' text, one after another.
+    text: Box<str>,
+    // The members past ASCII of each step's set, one step after another,
+    // then the last run's.
+    ranges: Box<[(u32, u32)]>,
 }
+/// One fixed step of a run matcher: `count` characters of a set, whose ASCII
+/// members are `ascii`, one bit each in two words so that a test shifts one
+/// machine word, and whose members past ASCII are its next `wide` ranges; or,
+/// when `wide` is [`TEXT`], the next `count` bytes of the matcher's text.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Step {
+    ascii: [u64; 2],
+    wide: u32,
+    count: u32,
+}
+/// The last run of a run matcher, between `min` and `max` characters of the
+/// set whose ASCII members are `ascii` and whose wider ones are the ranges
+/// the steps leave.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Last {
+    ascii: [u64; 2],
+    min: u32,
+    max: Option<u32>,
+}
+// A step's `wide` for literal text.
+const TEXT: u32 = u32::MAX;
+// The most characters a run matcher's fixed part is tabled for.
+const TABLE: usize = 64;
 impl Simple {
-    fn new(terms: Vec<Term>) -> Option<Self> {
-        let mut terms = terms.into_iter().peekable();
-        terms.next_if_eq(&Term::Start)?;
-        let mut runs = Vec::new();
-        let mut end = false;
-        for term in terms {
-            match term {
-                Term::Run(run) if !end => runs.push(run),
-                Term::End if !end => end = true,
-                _ => return None,
-            }
-        }
-        let (_, fixed) = runs.split_last()?;
-        if fixed.iter().any(|run| run.max != Some(run.min)) {
-            return None;
-        }
-        Some(Self { end, runs })
+    /// The heap bytes the matcher holds, which a value contract's pattern
+    /// memory counts: 16 for each character of its table, 24 for each step,
+    /// 8 for each range of members past ASCII and a byte for each byte of
+    /// text, on every host.
+    pub(crate) fn heap_bytes(&self) -> usize {
+        size_of_val(&*self.table)
+            + size_of_val(&*self.steps)
+            + self.text.len()
+            + size_of_val(&*self.ranges)
     }
-    /// Whether `text` matches, as the pattern's form would.
+    /// Whether `text` matches, as the pattern's form would. A matcher that
+    /// is its last run alone and one with a fixed part each match through a
+    /// body of their own, which compiles each one's loops apart.
+    #[inline]
     pub(crate) fn is_match(&self, text: &str) -> bool {
-        let mut chars = text.chars();
-        let (last, fixed) = self.runs.split_last().expect("a simple pattern has a run");
-        for run in fixed {
-            for _ in 0..run.min {
+        if self.table.is_empty() && self.steps.is_empty() {
+            self.last_alone(text)
+        } else {
+            self.after_fixed(text)
+        }
+    }
+    #[inline(never)]
+    fn last_alone(&self, text: &str) -> bool {
+        self.last_run(text, &self.ranges)
+    }
+    #[inline(never)]
+    fn after_fixed(&self, text: &str) -> bool {
+        let mut rest = text;
+        if !self.table.is_empty() {
+            let Some(head) = rest.as_bytes().get(..self.table.len()) else {
+                return false;
+            };
+            for (&byte, ascii) in head.iter().zip(&self.table) {
+                if byte >= 0x80 || !holds(ascii, byte) {
+                    return false;
+                }
+            }
+            // The table's characters are ASCII, so the rest starts one.
+            rest = &rest[head.len()..];
+        }
+        // Steps without text match through a loop that never tests for it.
+        if self.text.is_empty() {
+            self.steps::<false>(rest)
+        } else {
+            self.steps::<true>(rest)
+        }
+    }
+    // Whether `rest` matches the steps and then the last run, the steps
+    // holding text only when `TEXT_STEPS` holds.
+    #[inline(always)]
+    fn steps<const TEXT_STEPS: bool>(&self, rest: &str) -> bool {
+        let (mut literal, mut ranges) = (0, &*self.ranges);
+        let mut chars = rest.chars();
+        for step in &self.steps {
+            if TEXT_STEPS && step.wide == TEXT {
+                let length = step.count as usize;
+                let expected = &self.text.as_bytes()[literal..literal + length];
+                literal += length;
+                let rest = chars.as_str();
+                match rest.as_bytes().get(..length) {
+                    // The text is whole characters, so the rest starts one.
+                    Some(found) if same(found, expected) => chars = rest[length..].chars(),
+                    _ => return false,
+                }
+                continue;
+            }
+            let (wide, after) = ranges.split_at(step.wide as usize);
+            ranges = after;
+            for _ in 0..step.count {
                 match chars.next() {
-                    Some(c) if run.contains(c) => {}
+                    Some(c) if member(&step.ascii, wide, c) => {}
                     _ => return false,
                 }
             }
         }
-        let mut count: u64 = 0;
-        for c in chars.by_ref() {
-            if !self.end && count >= u64::from(last.min) {
-                return true;
+        let rest = chars.as_str();
+        self.last_run(rest, ranges)
+    }
+    // Whether `rest`, after the fixed part, matches the last run, whose
+    // members past ASCII are `ranges`.
+    #[inline(always)]
+    fn last_run(&self, rest: &str, ranges: &[(u32, u32)]) -> bool {
+        let Some(last) = &self.last else {
+            return !self.end || rest.is_empty();
+        };
+        // Held as an `Option`, for which the loop past ASCII below compiles
+        // to faster code than for the slice itself.
+        let wide = (!ranges.is_empty()).then_some(ranges);
+        if !self.end {
+            // The match need not reach the end, so the run's least count
+            // decides it.
+            let mut chars = rest.chars();
+            return (0..last.min)
+                .all(|_| chars.next().is_some_and(|c| member(&last.ascii, ranges, c)));
+        }
+        let max = last.max.map_or(u64::MAX, u64::from);
+        let (bytes, mut at, mut count) = (rest.as_bytes(), 0, 0u64);
+        // ASCII characters are tested by their bytes; from the first
+        // character past ASCII, the rest are read as characters.
+        while let Some(&byte) = bytes.get(at) {
+            if byte >= 0x80 {
+                break;
             }
-            if !last.contains(c) {
-                return !self.end && count >= u64::from(last.min);
-            }
+            at += 1;
             count += 1;
-            if last.max.is_some_and(|max| count > u64::from(max)) {
-                return !self.end;
+            if !holds(&last.ascii, byte) || count > max {
+                return false;
+            }
+        }
+        for c in rest[at..].chars() {
+            count += 1;
+            let c = c as u32;
+            let member = if c < 0x80 {
+                holds(&last.ascii, c as u8)
+            } else {
+                wide.is_some_and(|wide| among(wide, c))
+            };
+            if !member || count > max {
+                return false;
             }
         }
         count >= u64::from(last.min)
+    }
+}
+// Whether the ASCII character `byte` is among the members `ascii`.
+#[inline(always)]
+fn holds(ascii: &[u64; 2], byte: u8) -> bool {
+    ascii[usize::from(byte >> 6)] >> (byte & 63) & 1 == 1
+}
+// Whether `c` is in the set whose ASCII members are `ascii` and whose wider
+// ones are `wide`.
+#[inline(always)]
+fn member(ascii: &[u64; 2], wide: &[(u32, u32)], c: char) -> bool {
+    let c = c as u32;
+    if c < 0x80 {
+        holds(ascii, c as u8)
+    } else {
+        among(wide, c)
+    }
+}
+// Whether the scalar value `c` is among the sorted, disjoint `ranges`.
+#[inline(always)]
+fn among(ranges: &[(u32, u32)], c: u32) -> bool {
+    ranges
+        .binary_search_by(|&(first, last)| {
+            if last < c {
+                std::cmp::Ordering::Less
+            } else if first > c {
+                std::cmp::Ordering::Greater
+            } else {
+                std::cmp::Ordering::Equal
+            }
+        })
+        .is_ok()
+}
+// Whether two equally long byte strings are equal. Short ones, as literal
+// steps between runs mostly are, compare in a loop rather than a call.
+fn same(found: &[u8], expected: &[u8]) -> bool {
+    if expected.len() <= 16 {
+        found.iter().zip(expected).all(|(a, b)| a == b)
+    } else {
+        found == expected
+    }
+}
+/// `items` in an allocation of exactly their size. A vector shrunk in place
+/// can keep its larger block, as macOS's allocator does, so one that has
+/// spare capacity is moved into a new one.
+pub(crate) fn exact<T>(items: Vec<T>) -> Box<[T]> {
+    if items.len() == items.capacity() {
+        return items.into_boxed_slice();
+    }
+    let mut moved = Vec::with_capacity(items.len());
+    moved.extend(items);
+    moved.into_boxed_slice()
+}
+/// A run matcher being read, while the pattern is one anchored sequence of
+/// single-character runs.
+#[derive(Default)]
+struct Shape {
+    // Whether the start anchor has been read, and the end anchor.
+    start: bool,
+    end: bool,
+    steps: Vec<Step>,
+    text: String,
+    ranges: Vec<(u32, u32)>,
+    // The run read last, which is the last run unless another follows.
+    pending: Option<Pending>,
+}
+// A run as the parser reads it: its set's members and its counts.
+struct Pending {
+    members: Vec<(u32, u32)>,
+    min: u32,
+    max: Option<u32>,
+}
+impl Shape {
+    // Each method answers `None` when the pattern is not such a sequence: it
+    // starts with the start anchor, then holds runs, at least one, and then
+    // at most the end anchor, and every run but the last has a fixed count.
+    fn start(&mut self) -> Option<()> {
+        (!self.start).then(|| self.start = true)
+    }
+    fn end(&mut self) -> Option<()> {
+        (self.start && !self.end).then(|| self.end = true)
+    }
+    fn run(&mut self, set: Vec<(u32, u32)>, min: u32, max: Option<u32>) -> Option<()> {
+        if !self.start || self.end {
+            return None;
+        }
+        if let Some(run) = self.pending.take() {
+            if run.max != Some(run.min) {
+                return None;
+            }
+            self.fixed(&run.members, run.min)?;
+        }
+        self.pending = Some(Pending {
+            members: set,
+            min,
+            max,
+        });
+        Some(())
+    }
+    fn fixed(&mut self, members: &[(u32, u32)], count: u32) -> Option<()> {
+        if count == 0 {
+            return Some(());
+        }
+        if let (1, &[(first, last)]) = (count, members)
+            && first == last
+            && let Some(c) = char::from_u32(first)
+        {
+            let length = c.len_utf8() as u32;
+            match self.steps.last_mut() {
+                Some(step) if step.wide == TEXT && step.count <= u32::MAX - length => {
+                    step.count += length;
+                }
+                _ => self.steps.push(Step {
+                    ascii: [0; 2],
+                    wide: TEXT,
+                    count: length,
+                }),
+            }
+            self.text.push(c);
+            return Some(());
+        }
+        let start = self.ranges.len();
+        let ascii = self.set(members);
+        let wide = u32::try_from(self.ranges.len() - start)
+            .ok()
+            .filter(|&wide| wide < TEXT)?;
+        // A run of the set the step before is a run of, whose ranges are
+        // the ones just before these, joins it.
+        if let Some(step) = self.steps.last_mut()
+            && step.wide == wide
+            && step.ascii == ascii
+            && step.count <= u32::MAX - count
+            && self.ranges[..start].ends_with(&self.ranges[start..])
+        {
+            step.count += count;
+            self.ranges.truncate(start);
+            return Some(());
+        }
+        self.steps.push(Step { ascii, wide, count });
+        Some(())
+    }
+    // The ASCII members of the set of `members`, which are sorted and
+    // disjoint, adding its members past ASCII to the ranges.
+    fn set(&mut self, members: &[(u32, u32)]) -> [u64; 2] {
+        let mut ascii = [0u64; 2];
+        for &(first, last) in members {
+            for c in first..=last.min(127) {
+                ascii[c as usize >> 6] |= 1 << (c & 63);
+            }
+        }
+        self.ranges.extend(
+            members
+                .iter()
+                .filter(|&&(_, last)| last >= 128)
+                .map(|&(first, last)| (first.max(128), last)),
+        );
+        ascii
+    }
+    // The fixed part as one ASCII set for each character, when every step
+    // is ASCII text or a run of a set without members past ASCII, they cover
+    // at most [`TABLE`] characters and two at least are runs; otherwise
+    // empty. One run, and text alone, match as fast as steps.
+    fn table(&self) -> Box<[[u64; 2]]> {
+        let (mut characters, mut runs) = (0, 0);
+        for step in &self.steps {
+            characters += step.count as usize;
+            runs += usize::from(step.wide == 0);
+            if characters > TABLE || !matches!(step.wide, TEXT | 0) {
+                return Box::default();
+            }
+        }
+        if runs < 2 || !self.text.is_ascii() {
+            return Box::default();
+        }
+        let mut table = Vec::with_capacity(characters);
+        let mut text = self.text.bytes();
+        for step in &self.steps {
+            for _ in 0..step.count {
+                let ascii = if step.wide == TEXT {
+                    let byte = text.next().expect("a text step's bytes are the text's");
+                    let mut ascii = [0; 2];
+                    ascii[usize::from(byte >> 6)] = 1 << (byte & 63);
+                    ascii
+                } else {
+                    step.ascii
+                };
+                table.push(ascii);
+            }
+        }
+        table.into_boxed_slice()
+    }
+    fn finish(mut self) -> Option<Simple> {
+        let run = self.pending.take()?;
+        let last = if run.max == Some(run.min) {
+            self.fixed(&run.members, run.min)?;
+            None
+        } else {
+            Some(Last {
+                ascii: self.set(&run.members),
+                min: run.min,
+                max: run.max,
+            })
+        };
+        let table = self.table();
+        if !table.is_empty() {
+            self.steps.clear();
+            self.text.clear();
+        }
+        let mut text = String::with_capacity(self.text.len());
+        text.push_str(&self.text);
+        Some(Simple {
+            end: self.end,
+            table,
+            steps: exact(self.steps),
+            last,
+            text: text.into_boxed_str(),
+            ranges: exact(self.ranges),
+        })
     }
 }
 
@@ -1109,15 +1424,194 @@ mod tests {
             vec![(0x64, 0xc8), (0x1f600, 0x1f64f)],
             vec![(0, 0x10ffff)],
         ] {
-            let run = Run::new(set.clone(), 1, None);
+            let mut shape = Shape::default();
+            shape.start().unwrap();
+            shape.run(set.clone(), 1, None).unwrap();
+            let simple = shape.finish().unwrap();
+            let last = simple.last.unwrap();
+            let holds = |c: char| member(&last.ascii, &simple.ranges, c);
             for c in (0..0x300).chain([0x1f5ff, 0x1f600, 0x1f64f, 0x1f650, 0x10ffff]) {
                 let Some(c) = char::from_u32(c) else { continue };
                 let member = set
                     .iter()
                     .any(|&(first, last)| (first..=last).contains(&(c as u32)));
-                assert_eq!(run.contains(c), member, "{set:?} {c:?}");
+                assert_eq!(holds(c), member, "{set:?} {c:?}");
             }
         }
+    }
+    fn simple(pattern: &str) -> Option<Simple> {
+        match read(pattern, 32, 1 << 20) {
+            Ok(Reading::Linear(linear)) => linear.simple,
+            other => panic!("{pattern}: {other:?}"),
+        }
+    }
+    // Literal characters share one step of text, adjacent runs of one set
+    // share one step, a fixed last run is a step, each run's members past
+    // ASCII follow the step before's, and a short fixed part of ASCII sets
+    // and text is a table of a set for each character.
+    #[test]
+    fn a_run_matcher_holds_a_step_for_each_change_of_set() {
+        let shape = |matcher: &Simple| -> Vec<(u32, u32)> {
+            matcher
+                .steps
+                .iter()
+                .map(|step| (step.wide, step.count))
+                .collect()
+        };
+        let literal = format!("^t0x{}$", "a".repeat(9_997));
+        let matcher = simple(&literal).unwrap();
+        assert_eq!(shape(&matcher), [(TEXT, 10_000)]);
+        assert!(matcher.table.is_empty() && matcher.ranges.is_empty());
+        assert_eq!(matcher.last, None);
+        assert_eq!(
+            (
+                size_of::<Step>(),
+                size_of::<[u64; 2]>(),
+                size_of::<(u32, u32)>()
+            ),
+            (24, 16, 8)
+        );
+        assert_eq!(matcher.heap_bytes(), 24 + 10_000);
+        assert!(matcher.is_match(&literal[1..literal.len() - 1]));
+        assert!(!matcher.is_match(&literal[1..literal.len() - 2]));
+        // Three runs and text of ten ASCII characters are a table.
+        let date = simple(r"^\d\d\d\d-\d{2}-[0-9][0-9]$").unwrap();
+        assert!(date.steps.is_empty() && date.text.is_empty());
+        assert_eq!((date.table.len(), date.heap_bytes()), (10, 160));
+        assert!(date.is_match("2026-10-25") && !date.is_match("2026-10-2x"));
+        assert!(!date.is_match("2026-10-2") && !date.is_match("2026-10-2é"));
+        // Past the table's characters, and with one run, they are steps.
+        let long = simple(r"^\d{40}-\d{40}$").unwrap();
+        assert_eq!(shape(&long), [(0, 40), (TEXT, 1), (0, 40)]);
+        let one = simple(r"^\d\d\d\d$").unwrap();
+        assert_eq!(shape(&one), [(0, 4)]);
+        let open = simple(r"^é\d{3}é[a-zé]{2,}").unwrap();
+        assert_eq!(shape(&open), [(TEXT, 2), (0, 3), (TEXT, 2)]);
+        assert_eq!(open.last.map(|last| (last.min, last.max)), Some((2, None)));
+        assert_eq!(open.ranges.len(), 1);
+        assert!(open.is_match("é123éabé!") && !open.is_match("é123éa!"));
+        // `.` holds three ranges past ASCII; adjacent runs of it share them.
+        let dots = simple("^..a.$").unwrap();
+        assert_eq!(shape(&dots), [(3, 2), (TEXT, 1), (3, 1)]);
+        assert_eq!(dots.ranges.len(), 6);
+        assert!(!dots.is_match("é😀a\u{2028}") && dots.is_match("é😀a中"));
+        // A pattern whose runs vary before its last, or that is not one
+        // anchored sequence, has no run matcher.
+        for pattern in [
+            "^a*b", "a", "^", "^$", "^a|b", "^(a)", "^a$b", "^^a", r"^a\b",
+        ] {
+            assert!(simple(pattern).is_none(), "{pattern}");
+        }
+    }
+    // A small deterministic generator, so the differential needs no crate.
+    struct Generator(u64);
+    impl Generator {
+        fn below(&mut self, bound: usize) -> usize {
+            self.0 ^= self.0 << 13;
+            self.0 ^= self.0 >> 7;
+            self.0 ^= self.0 << 17;
+            (self.0 % bound as u64) as usize
+        }
+        fn pick<'a>(&mut self, items: &[&'a str]) -> &'a str {
+            items[self.below(items.len())]
+        }
+    }
+    // Run matchers decide as their forms do in the regex crate, for generated
+    // anchored sequences of literals and sets with every kind of count, on
+    // strings built from members of the patterns' sets, some changed by one
+    // character, and on strings of characters drawn at random.
+    #[test]
+    fn run_matchers_match_as_their_forms_do() {
+        // Each atom with characters it matches, if any.
+        const ATOMS: &[(&str, &[&str])] = &[
+            ("a", &["a"]),
+            ("b", &["b"]),
+            ("é", &["é"]),
+            ("😀", &["😀"]),
+            ("-", &["-"]),
+            (r"\.", &["."]),
+            (r"\d", &["1", "9"]),
+            (r"\w", &["a", "_", "1"]),
+            (r"\s", &[" ", "\n", "\u{3000}"]),
+            (r"\S", &["a", "é"]),
+            (".", &["a", "é", "😀"]),
+            ("[ab]", &["a", "b"]),
+            ("[^a]", &["b", "é", "\n"]),
+            ("[a-zé]", &["c", "é"]),
+            ("[😀-😂]", &["😁"]),
+            (r"[à-ÿ]", &["é", "è"]),
+            (r"\ud800", &[]),
+            ("[]", &[]),
+        ];
+        const COUNTS: &[&str] = &["", "", "", "{2}", "{0}", "{1,3}", "{2,}", "*", "+", "?"];
+        const FIXED: &[&str] = &["", "", "{2}", "{0}", "{1}", "{3}"];
+        const OTHERS: &[&str] = &[
+            "a", "c", "é", "è", "😀", "😁", "-", ".", "1", " ", "\n", "_",
+        ];
+        let mut generator = Generator(0x9E37_79B9_7F4A_7C15);
+        let (mut matched, mut unmatched) = (0, 0);
+        for _ in 0..4_000 {
+            let mut pattern = String::from("^");
+            let mut runs = Vec::new();
+            let count = 1 + generator.below(6);
+            for at in 0..count {
+                let (atom, members) = ATOMS[generator.below(ATOMS.len())];
+                let quantifier = generator.pick(if at + 1 == count { COUNTS } else { FIXED });
+                pattern.push_str(atom);
+                pattern.push_str(quantifier);
+                runs.push((members, quantifier));
+            }
+            if generator.below(2) == 0 {
+                pattern.push('$');
+            }
+            let Ok(Reading::Linear(linear)) = read(&pattern, 32, 1 << 20) else {
+                panic!("{pattern}")
+            };
+            let matcher = linear.simple.expect(&pattern);
+            let regex = regex::Regex::new(&linear.form).expect(&pattern);
+            for attempt in 0..40 {
+                let mut text = String::new();
+                if attempt % 2 == 0 {
+                    for &(members, quantifier) in &runs {
+                        let times = match quantifier {
+                            "" | "{1}" => 1,
+                            "{0}" => 0,
+                            "{2}" => 2,
+                            "{3}" => 3,
+                            _ => generator.below(5),
+                        };
+                        for _ in 0..times {
+                            text.push_str(match members {
+                                [] => generator.pick(OTHERS),
+                                members => generator.pick(members),
+                            });
+                        }
+                    }
+                    if attempt % 4 == 0 {
+                        text.push_str(generator.pick(OTHERS));
+                    }
+                    if attempt % 8 == 2 && !text.is_empty() {
+                        let mut chars: Vec<char> = text.chars().collect();
+                        let at = generator.below(chars.len());
+                        chars[at] = generator.pick(OTHERS).chars().next().unwrap();
+                        text = chars.into_iter().collect();
+                    }
+                } else {
+                    for _ in 0..generator.below(9) {
+                        text.push_str(generator.pick(OTHERS));
+                    }
+                }
+                let expected = regex.is_match(&text);
+                assert_eq!(matcher.is_match(&text), expected, "{pattern} on {text:?}");
+                if expected {
+                    matched += 1;
+                } else {
+                    unmatched += 1;
+                }
+            }
+        }
+        // 4,000 patterns with 40 strings each.
+        assert_eq!((matched, unmatched), (38_142, 121_858));
     }
     fn linear(pattern: &str) -> String {
         match read(pattern, 32, 1 << 20) {
@@ -1252,23 +1746,41 @@ mod tests {
     fn the_pattern_memory_is_divided_between_caches_and_forms() {
         const KIB: usize = 1024;
         const MIB: usize = 1024 * KIB;
-        assert_eq!(Memory::most_patterns(64 * MIB), 1024);
-        assert_eq!(Memory::most_patterns(0), 0);
-        let first = |total, patterns| Memory::new(total, patterns).first();
+        assert_eq!(Memory::most_patterns(64 * MIB, 0), Some(1024));
+        assert_eq!(Memory::most_patterns(0, 0), Some(0));
+        // Run matchers hold their bytes of the three quarters the search
+        // caches leave, so any bytes they hold take a first allowance's
+        // place at the default, and more than the three quarters admit none.
+        assert_eq!(Memory::most_patterns(64 * MIB, 1), Some(1023));
+        assert_eq!(Memory::most_patterns(64 * MIB, 48 * KIB), Some(1023));
+        assert_eq!(Memory::most_patterns(64 * MIB, 48 * KIB + 1), Some(1022));
+        assert_eq!(Memory::most_patterns(64 * MIB, 48 * MIB), Some(0));
+        assert_eq!(Memory::most_patterns(64 * MIB, 48 * MIB + 1), None);
+        assert_eq!(Memory::most_patterns(0, 1), None);
+        let first = |total, patterns| Memory::new(total, patterns, 0).first();
         let allowance = |compiled, cache| Allowance { compiled, cache };
         // A quarter of the memory for the search caches, up to 2 MiB each.
         assert_eq!(first(64 * MIB, 1), allowance(48 * KIB, 2 * MIB));
         assert_eq!(first(64 * MIB, 8), allowance(48 * KIB, 2 * MIB));
         assert_eq!(first(64 * MIB, 64), allowance(48 * KIB, 256 * KIB));
         assert_eq!(first(64 * MIB, 1024), allowance(48 * KIB, 16 * KIB));
-        assert_eq!(Memory::new(64 * MIB, 1024).left(), 0);
-        assert_eq!(Memory::new(64 * MIB, 4).left(), 56 * MIB - 4 * 48 * KIB);
-        for patterns in 1..=Memory::most_patterns(64 * MIB) {
-            let memory = Memory::new(64 * MIB, patterns);
-            assert!(
-                patterns * (FIRST + memory.cache) + memory.left() <= 64 * MIB,
-                "{patterns}"
-            );
+        // The run matchers take nothing from the search caches.
+        assert_eq!(Memory::new(64 * MIB, 64, MIB).first(), first(64 * MIB, 64));
+        assert_eq!(Memory::new(64 * MIB, 1024, 0).left(), 0);
+        assert_eq!(Memory::new(64 * MIB, 4, 0).left(), 56 * MIB - 4 * 48 * KIB);
+        assert_eq!(
+            Memory::new(64 * MIB, 4, MIB).left(),
+            55 * MIB - 4 * 48 * KIB
+        );
+        for matched in [0, 1, 100 * KIB, 47 * MIB] {
+            let most = Memory::most_patterns(64 * MIB, matched).unwrap();
+            for patterns in 1..=most {
+                let memory = Memory::new(64 * MIB, patterns, matched);
+                assert!(
+                    matched + patterns * (FIRST + memory.cache) + memory.left() <= 64 * MIB,
+                    "{matched} {patterns}"
+                );
+            }
         }
     }
     // A form that does not fit its first allowance is given the least size
@@ -1302,7 +1814,7 @@ mod tests {
         // larger, which takes what the smaller leaves of its part.
         let small = "^.{1,1000}x$";
         let large = "^.{1,10000}x$";
-        let memory = Memory::new(16 * MIB, 2);
+        let memory = Memory::new(16 * MIB, 2, 0);
         let given = memory.share(&[large, small], 2, &mut |_| false);
         let large_size = compiled(&given[0]).expect("the larger fits what the smaller leaves");
         let small_size = compiled(&given[1]).expect("the smaller fits its part");
@@ -1323,7 +1835,8 @@ mod tests {
         }
         // A form needing more than any one pattern is given is refused for
         // its size.
-        let given = Memory::new(256 * MIB, 1).share(&["^.{1,40000}x$"], 0, &mut |_| unreachable!());
+        let given =
+            Memory::new(256 * MIB, 1, 0).share(&["^.{1,40000}x$"], 0, &mut |_| unreachable!());
         assert!(matches!(given[0], Given::Refused(Unsupported::Size)));
     }
     #[test]

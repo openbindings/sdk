@@ -156,6 +156,70 @@ pub fn run() {
         }
     }
     compiled();
+    run_matchers();
+}
+
+// A run matcher holds its own bytes of the pattern memory: 104 bytes, a step
+// for each change of set and a byte for each byte of literal text. 380
+// distinct literal patterns of 10,002 bytes, 3.8 MB within the default
+// total_pattern_bytes, once held about 1 MB each (a 56-byte run and an 8-byte
+// set for every character, in a vector of doubling capacity), 380 MB in all,
+// which the pattern memory did not count; each now holds the 10,128 bytes it
+// counts.
+// Preparing them must keep no more than the same document with the patterns
+// as annotations, those bytes and 512 bytes for each `pattern` keyword's
+// compiled node and site (about 400 measured), and peak within that and the
+// forms preparation keeps while it reads them, the default
+// total_pattern_bytes.
+fn run_matchers() {
+    let count = 380;
+    let literal = |i: usize| format!("^t{i:03}x{}$", "a".repeat(9_995));
+    let input = properties((0..count).map(literal));
+    let matchers = count * (104 + 24 + 10_000);
+    let keywords = count * 512;
+    let value = JsonValue::parse(format!(r#"{{"p7":"t007x{}"}}"#, "a".repeat(9_995))).unwrap();
+    let proof = conformant(&input);
+    let control = conformant(&input.replace(r#""pattern""#, r#""description""#));
+    let before = super::LIVE.load(std::sync::atomic::Ordering::Relaxed);
+    let (control_kept, control_bytes, _) = measured(|| {
+        let contract = prepare(&control, Limits::default()).unwrap();
+        let kept = super::LIVE
+            .load(std::sync::atomic::Ordering::Relaxed)
+            .saturating_sub(before);
+        drop(contract);
+        kept
+    });
+    for repetition in 0..3 {
+        let before = super::LIVE.load(std::sync::atomic::Ordering::Relaxed);
+        let ((outcome, kept), bytes, nanos) = measured(|| {
+            let contract = prepare(&proof, Limits::default()).unwrap();
+            let kept = super::LIVE
+                .load(std::sync::atomic::Ordering::Relaxed)
+                .saturating_sub(before);
+            let outcome = match contract.validate(&value) {
+                ValueOutcome::Satisfies => "satisfies".to_owned(),
+                other => format!("{other:?}"),
+            };
+            (outcome, kept)
+        });
+        assert_eq!(outcome, "satisfies", "run matchers");
+        println!(
+            "{}",
+            json!({"phase":"run-matchers","case":"literal-patterns","patterns":count,
+            "source_bytes":input.len(),"repetition":repetition,"peak_bytes":bytes,
+            "kept_bytes":kept,"nanos":nanos,"outcome":outcome,"matcher_bytes":matchers,
+            "control_kept_bytes":control_kept,"control_peak_bytes":control_bytes})
+        );
+        assert!(
+            kept <= control_kept + matchers + keywords,
+            "run matchers: keeps {kept} bytes"
+        );
+        let ceiling = control_bytes + matchers + keywords + Limits::default().total_pattern_bytes;
+        assert!(
+            bytes <= ceiling,
+            "run matchers: {bytes} exceeds {ceiling} bytes"
+        );
+    }
 }
 
 // A contract's compiled patterns share its pattern memory

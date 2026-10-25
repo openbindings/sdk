@@ -120,16 +120,20 @@ builds on Linux, macOS and Windows prepare, check and explain the 39 recursive
 shapes the stack test covers on threads of 192 KiB, 256 KiB and 1 MiB with the
 evaluator sized for each; each pattern's bytes, form and nesting (1 MiB,
 32 groups) and the forms kept for all of a value contract's patterns together (4 MiB,
-`totalPatternBytes` in TypeScript); the regex crate's memory for all of a
-value contract's compiled patterns together (`total_pattern_memory`, 64 MiB,
-`totalPatternMemory` in TypeScript, `pattern-total-memory-limit`, with a
-message that states the arithmetic), spent through the crate's lazy-DFA cache
-setting, a quarter of it in equal parts, and its compiled-size setting, within
-which each pattern first compiles in 48 KiB while those that need more share
-the rest, so small patterns beside a large one change its outcome only through
-their 48 KiB each: `^.{1,10000}$` compiles beside up to 743 small patterns and
-four such counted repetitions of about 13 MiB compile together, while 40
-refuse in about 0.2 s; the
+`totalPatternBytes` in TypeScript); the memory of all of a value contract's
+patterns together (`total_pattern_memory`, 64 MiB, `totalPatternMemory` in
+TypeScript, `pattern-total-memory-limit`, with a message that states the
+arithmetic): the SDK's run matchers, which match anchored sequences of
+single-character runs without an automaton and hold a few bytes for each step
+and each range of members past ASCII and a byte for each byte of literal text,
+and the regex crate's memory
+for the compiled patterns, spent through the crate's lazy-DFA cache setting, a
+quarter of it in equal parts, and its compiled-size setting, within which each
+pattern first compiles in 48 KiB beside the run matchers while those that need
+more share the rest, so small patterns beside a large one change its outcome
+only through what they hold: `^.{1,10000}$` compiles beside up to 743 small
+patterns and four such counted repetitions of about 13 MiB compile together,
+while 40 refuse in about 0.2 s; the
 memory dynamic specialization adds to a value contract's program, estimated for the
 SDK's own copies and dynamic contexts (`program_bytes`, 48 MiB, `programBytes`
 in TypeScript, `program-specialization-limit`); and an unevaluated keyword's

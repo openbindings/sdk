@@ -101,6 +101,15 @@ impl<'i> Keyword<'i, FlatJson> for Missing {
         Ok(())
     }
 }
+/// The bytes a run matcher's place among a value contract's matchers takes,
+/// as 64-bit hosts lay a matcher out. A 32-bit host takes less, and the
+/// pattern memory counts this on every host, so no outcome depends on it.
+const MATCHER: usize = 104;
+/// The bytes a value contract holds for a run matcher: its place among the
+/// contract's matchers and the heap bytes it holds.
+pub(crate) fn run_matcher_bytes(matcher: &crate::pattern::Simple) -> usize {
+    MATCHER + matcher.heap_bytes()
+}
 /// How the SDK's `pattern` keyword matches one pattern.
 enum Matcher {
     Simple(crate::pattern::Simple),
@@ -125,7 +134,7 @@ enum Compiled {
 /// once, so whether a pattern compiles does not depend on the order strings
 /// reach the value contract's patterns.
 pub(crate) struct Patterns {
-    matchers: Vec<Matcher>,
+    matchers: Box<[Matcher]>,
     memory: Memory,
     // Whether the memory has been shared.
     shared: Mutex<bool>,
@@ -675,7 +684,7 @@ impl Operands {
         drop(self.indices);
         let matched = !self.patterns.is_empty();
         let patterns = Arc::new(Patterns {
-            matchers: self.patterns,
+            matchers: crate::pattern::exact(self.patterns),
             memory,
             shared: Mutex::new(false),
             sites: Mutex::new(Vec::new()),
@@ -827,4 +836,15 @@ fn direct(value: JsonRef<'_>) -> Option<Value> {
             Value::Object(object)
         }
     })
+}
+#[cfg(test)]
+mod tests {
+    // A run matcher's place is counted as 64-bit hosts lay it out; no host
+    // takes more.
+    #[test]
+    fn a_matcher_takes_the_place_counted_for_it() {
+        assert!(size_of::<super::Matcher>() <= super::MATCHER);
+        #[cfg(target_pointer_width = "64")]
+        assert_eq!(size_of::<super::Matcher>(), super::MATCHER);
+    }
 }
