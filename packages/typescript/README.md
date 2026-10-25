@@ -212,21 +212,26 @@ defaults, parse it with `parseJson` and larger limits and pass the `ExactJson`
 to `validate`.
 
 Schema resources are explicit and immutable. Pass `SchemaResources` to
-`prepare({ resources })`; the SDK never fetches a missing reference. A
-value contract that reaches a resource that was not supplied still prepares, and a
-value whose evaluation reaches that resource gets a `resource-unavailable`
-no-verdict naming it. Preparation refuses a value contract in which an
-`unevaluatedProperties` or `unevaluatedItems` keyword's annotation sources
-reach a missing resource, a reference to a fragment of a missing resource, or
-a reference that identifies no schema.
-As conservative preparation, it also refuses a value contract that reaches a pattern
-invalid as an ECMA-262 11th edition (ES2020) regular expression with Unicode semantics, the dialect JSON Schema 2020-12 cites
-(`schema-pattern-compilation`), or a schema that could apply again without
-consuming the instance, such as one whose `$ref` names itself (`in-place-cycle`).
+`prepare({ resources })`; the SDK never fetches a missing reference. A value
+contract prepares with a stand-in for what the evaluator cannot evaluate: a
+resource that was not supplied, a schema that could apply again without
+consuming the instance, such as one whose `$ref` names itself, and a pattern
+(in `pattern` or as a `patternProperties` name) invalid as an ECMA-262 11th
+edition (ES2020) regular expression with Unicode semantics, the dialect JSON
+Schema 2020-12 cites, or one that needs a backtracking engine, applies a
+Unicode property escape or holds the non-word boundary `\B`. A value whose
+verdict depends on how a stand-in comes out gets a no-verdict naming it
+(`resource-unavailable`, `in-place-cycle`, `schema-pattern-compilation`,
+`pattern-backtracking`, `unicode-property-matching` or
+`pattern-non-word-boundary`); every other value keeps the verdict that holds
+however each stand-in comes out, whatever order the keywords are in.
+Preparation refuses a value contract in which an `unevaluatedProperties` or
+`unevaluatedItems` keyword's annotation sources reach a stand-in for a
+missing resource, a cycle or `patternProperties` names, a reference to a
+fragment of a missing resource, or a reference that identifies no schema.
 Retain a prepared value contract for repeated validation. Ready
-does not promise a verdict for every value: a missing resource, a pattern that
-needs a backtracking engine, applies a Unicode property escape or holds the
-non-word boundary `\B`, and an exhausted limit can produce no-verdict. Two
+does not promise a verdict for every value: a stand-in and an exhausted limit
+can produce no-verdict. Two
 further cases give no verdict whatever `limits` sets. Exact `multipleOf`
 divides within a fixed arithmetic bound: when the value or the divisor has more
 than 4,096 significant digits, or an exponent beyond ±20,000 once the trailing

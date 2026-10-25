@@ -176,19 +176,27 @@ while a keyword that reads a string or member name as Unicode text, such as
 `propertyNames`, gives no verdict (`lone-surrogate-instance`) when it reaches
 one.
 
-A value contract that reaches a resource that was not supplied prepares with an
-empty stand-in for it: a pass that reaches the stand-in gives no verdict
-(`resource-unavailable`) naming the resource, and other values keep their
-verdicts. Preparation refuses a value contract in which an `unevaluatedProperties`
-or `unevaluatedItems` keyword's annotation sources reach a stand-in, since the
-library reads those sources rather than evaluating them, and a reference to a
-fragment of a missing resource or one that identifies no schema.
-As conservative preparation, it also refuses a value contract that reaches a pattern
-invalid as an ECMA-262 11th edition (ES2020) regular expression with Unicode semantics, the dialect JSON Schema 2020-12 cites
-(`schema-pattern-compilation`), or a schema that could apply again without
-consuming the instance, such as one whose `$ref` names itself (`in-place-cycle`). An established
-undefined result has its own `Undefined` outcome, separate from no-verdict,
-which a custom evaluator may return; the default evaluator never does.
+A value contract prepares with a stand-in for what the evaluator cannot evaluate:
+a resource that was not supplied, a schema that could apply again without
+consuming the instance (an in-place cycle, such as one whose `$ref` names
+itself), and a pattern, in `pattern` or as a `patternProperties` name, that is
+invalid as an ECMA-262 11th edition (ES2020) regular expression with Unicode
+semantics, the dialect JSON Schema 2020-12 cites, or that its linear-time
+engine does not match. A value whose verdict depends on how a stand-in comes
+out gives no verdict naming it (`resource-unavailable`, `in-place-cycle`,
+`schema-pattern-compilation`, `pattern-backtracking`,
+`unicode-property-matching` or `pattern-non-word-boundary`); every other value
+keeps the verdict that holds however each stand-in comes out, independently at
+each place evaluation reaches it, whatever order the keywords are in. A pass
+that reaches a stand-in is decided by a second program the value contract
+compiles for its stand-ins, which bounds its validity from below and above.
+Preparation refuses a value contract in which an `unevaluatedProperties` or
+`unevaluatedItems` keyword's annotation sources reach a stand-in for a missing
+resource, a cycle or `patternProperties` names, since the library reads those
+sources rather than evaluating them, and a reference to a fragment of a
+missing resource or one that identifies no schema. An established undefined
+result has its own `Undefined` outcome, separate from no-verdict, which a
+custom evaluator may return; the default evaluator never does.
 Unsupported capabilities and exhausted limits produce no-verdict. Handle
 no-verdict in both preparation and validation.
 

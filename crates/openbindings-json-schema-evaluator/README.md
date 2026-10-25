@@ -76,26 +76,36 @@ keeps old work usable while installing a new document and resource set.
 ## Limits
 
 The evaluator never fetches references. Supply resources through `ResourceSet`;
-new resources require a new preparation. A value contract that reaches a resource that
-was not supplied still prepares, with an empty stand-in for it: a pass that
-reaches the stand-in gives no verdict (`resource-unavailable`) naming the
-missing resource, and a value whose evaluation never reaches it keeps its
-verdict, which then cannot depend on the missing content. One keyword decides
-without evaluating its sources: `unevaluatedProperties` and `unevaluatedItems`
-read the structure of the schemas that apply to the same instance to collect
-their annotations, so a value contract in which those sources can reach a stand-in
-refuses preparation (`resource-unavailable`, naming the missing resource).
-Preparation also refuses a reference to a fragment of a resource that was not
-supplied, or a reference that identifies no schema (an absent pointer target or
-plain-name anchor, or a malformed fragment), with a `NoVerdict` that names the
-schema holding the reference.
-As conservative preparation, it also refuses a value contract that reaches a pattern
-invalid as an ECMA-262 11th edition (ES2020) regular expression with Unicode semantics, the dialect JSON Schema 2020-12 cites
-(`schema-pattern-compilation`), or a schema that could apply again without
-consuming the instance, such as one whose `$ref` names itself (`in-place-cycle`). The default evaluator never returns
-`ValueOutcome::Undefined`, which custom evaluators may establish. A prepared
-value contract does not promise a verdict for every value. Handle no-verdict
-during both preparation and validation.
+new resources require a new preparation. A value contract prepares despite what
+the evaluator cannot evaluate, with a stand-in in its place: a resource that was
+not supplied, a schema that could apply again without consuming the instance
+(an in-place cycle, such as a schema whose `$ref` names itself), and a pattern
+the evaluator does not match, in `pattern` or as a `patternProperties` name:
+one invalid as an ECMA-262 11th edition (ES2020) regular expression with
+Unicode semantics, the dialect JSON Schema 2020-12 cites, or one its
+linear-time engine does not match (described below). A value whose
+verdict depends on how a stand-in comes out gives no verdict naming it:
+`resource-unavailable` with the missing resource, `in-place-cycle`
+(`ConservativePreparation`) with the schema that would apply again, and
+`schema-pattern-compilation` (`ConservativePreparation`), `pattern-backtracking`,
+`unicode-property-matching` or `pattern-non-word-boundary` with the `pattern`
+or `patternProperties` keyword. Every other value keeps the verdict that holds
+however each stand-in comes out, whatever order the keywords around it are in:
+a value that satisfies one `anyOf` branch satisfies it whatever another branch
+holds, and one that fails an `allOf` branch fails it (see
+[stand-ins](#stand-ins) for what this decides). `unevaluatedProperties` and
+`unevaluatedItems` read the structure of the schemas that apply to the same
+instance to collect their annotations, rather than evaluating them, so a value
+contract in which those sources can reach a missing resource, an in-place cycle
+or a `patternProperties` name the evaluator does not match still refuses
+preparation, with that stand-in's code and location. Preparation also refuses a
+reference to a fragment of a resource that was not supplied, or a reference
+that identifies no schema (an absent pointer target or plain-name anchor, or a
+malformed fragment), with a `NoVerdict` that names the schema holding the
+reference. The default evaluator never returns `ValueOutcome::Undefined`,
+which custom evaluators may establish. A prepared value contract does not
+promise a verdict for every value. Handle no-verdict during both preparation
+and validation.
 
 The evaluator bounds what the SDK itself reads, writes and recurses through.
 It does not estimate the memory the JSON Schema library's compiled program
@@ -212,8 +222,12 @@ resources:
   and each context (64 bytes and 8 for each dynamic-scope entry), and refuses a
   value contract whose copies and contexts would pass the projected schemas' own
   estimate by more than `program_bytes` with `program-specialization-limit`,
-  whose message states the arithmetic. It counts the SDK's own program, not the
-  memory of the library's compiled program.
+  whose message states the arithmetic. The copies an in-place cycle's
+  unfolding and a stand-in's bounds program make (see [stand-ins](#stand-ins))
+  are estimated the same way within what specialization leaves: past it, a
+  cycle stands in at each of its references instead and a value contract keeps
+  no bounds program. It counts the SDK's own program, not the memory of the
+  library's compiled program.
 - `schema_resources` sets no cap by default; `Some(n)` refuses a value contract
   reaching more than `n` schema resources (the document resource holding its
   schema and each embedded `$id`, supplied and packaged meta-schema resource)
@@ -284,16 +298,21 @@ as Unicode text, such as `minLength`, `maxLength`, `pattern`, `properties`,
 Patterns are read in the dialect JSON Schema 2020-12 cites, ECMA-262 11th
 edition (ES2020) section 21.2.1 with Unicode semantics; syntax later editions
 added, such as ES2025's modifiers `(?i:a)` and duplicate named groups, is
-invalid there and refuses preparation (`schema-pattern-compilation`). They are
-matched by a linear-time engine, so a match takes time linear in the string. The word boundary `\b`
-matches against ECMA-262's ASCII word characters. A pattern that needs a
-backtracking engine (lookaround or a backreference), has a Unicode property
-escape, or holds the non-word boundary `\B` (which the engine's `is_match` can
-answer wrongly beside multi-byte characters) is not matched: a string that
-reaches it in `pattern` gives no verdict (`pattern-backtracking`,
-`unicode-property-matching` or `pattern-non-word-boundary`) located at that
-`pattern` keyword's original schema location, and as a `patternProperties` name
-it refuses preparation. A pattern whose form needs
+invalid there, so whether a string matches such a pattern is undefined and the
+pattern is a stand-in (`schema-pattern-compilation`). Patterns are matched by
+a linear-time engine, so a match takes time linear in the string. The word
+boundary `\b` matches against ECMA-262's ASCII word characters. A pattern that
+needs a backtracking engine (lookaround or a backreference), has a Unicode
+property escape, or holds the non-word boundary `\B` (which the engine's
+`is_match` can answer wrongly beside multi-byte characters) is not matched, and
+is a stand-in too (`pattern-backtracking`, `unicode-property-matching` or
+`pattern-non-word-boundary`). In `pattern`, a string whose verdict depends on
+such a pattern's match gives no verdict located at that `pattern` keyword's
+original schema location. As a `patternProperties` name it is left out of the
+names the library matches: any member could match it, so an object the schema
+applies to with at least one member, which `additionalProperties` may then
+reach, gives no verdict located at that `patternProperties` keyword unless its
+verdict holds whether each member matches or not. A pattern whose form needs
 more of `total_pattern_memory` than it is given gives
 `pattern-total-memory-limit`, or `pattern-size-limit` past 32 MiB. The
 reading is meant to match as
@@ -338,6 +357,75 @@ This unpublished package requires Rust 1.88. See
 [support](https://github.com/openbindings/sdk/blob/main/docs/support.md) for stack
 qualifications and [custom evaluators](https://github.com/openbindings/sdk/blob/main/docs/schema-evaluators.md)
 for the integration contract.
+
+## Stand-ins
+
+A verdict pass answers as if each stand-in it reaches held, and records the
+first it reaches. When it reached one, its verdict stands only where no way the
+stand-ins could come out changes it. A stand-in's answer can differ at every
+place evaluation reaches it, at each instance and along each path, so the
+evaluator decides only what holds however each of those answers comes out,
+independently of the others. A value contract with a stand-in compiles a
+second program for that, its bounds program: two copies of each schema that
+can reach a stand-in, one giving the least validity the stand-ins' answers can
+give it and one the most, beside every other schema shared with the value
+contract's own program. A stand-in holds nowhere in the first copy (a pattern:
+for no string) and everywhere in the second, `not` applies the other copy, and
+`oneOf`, an `if` that can reach a stand-in, and a `contains` with a
+`maxContains` are written from both copies of their subschemas. A schema whose
+`patternProperties` names the evaluator does not match applies their
+subschemas to every member in the first copy, beside its own
+`additionalProperties`, and in the second lets a member its other names and
+properties leave out satisfy `additionalProperties` or any of those
+subschemas. A pass that held is decided when the least validity holds
+too, and one that failed when the most fails too. An explanation of a decided
+failure reports the first of the library's errors for the copy giving the most
+validity, which fails however the stand-ins come out, at its keyword's original
+location. The second pass meets the first pass's limits: a work cap, the depth
+limit, the stack guard, arithmetic and patterns past their limits stop it, and
+the value then gives the stand-in's no-verdict.
+
+Independent answers are what this decides. It does not see that two places
+answer alike: `{"anyOf": [S, {"not": S}]}` holds for every value but gives no
+verdict where a value reaches the stand-in `S`, as does
+`{"oneOf": [{"items": S}, {"contains": S}]}` for a one-item array. A
+`contains` whose `minContains` exceeds its `maxContains`, which no array
+satisfies, gives no verdict where a stand-in decides how many items match. And
+an `unevaluatedProperties` or `unevaluatedItems` keyword whose annotation
+sources hold a `oneOf`, an `if` with a branch, or a `contains` with a
+`maxContains` that can reach a stand-in, or reach another such holder, is
+bounded only by `false` and `true`: a value whose verdict turns on it gives no
+verdict where its pass reaches a stand-in. A verdict this decides never depends
+on keyword order. Where these cases, or a value contract without a bounds
+program, leave a value undecided, whether it gets a verdict can: the library
+may settle it before reaching the stand-in in one order and reach the stand-in
+first in another.
+
+The bounds program is kept only within what the value contract's own program
+leaves: its copies share `program_bytes` with dynamic specialization, its
+depth bound and annotation walks must fit `stack_bytes`, and its
+`patternProperties` names, which the library compiles once more, must fit in
+what the value contract's own patterns leave of `total_pattern_memory` and can
+never ask for (when it has such names, preparation compiles the value
+contract's `pattern` matchers to find out). A value contract whose schema
+applies nothing but stand-ins, through `$ref` and `allOf`, keeps none, since
+no value of it could be decided. A value contract without one gives every
+value whose pass reaches a stand-in the stand-in's no-verdict. So preparing
+any other value contract with a stand-in takes a second compilation, and a
+pass that reaches a stand-in a second pass; a value contract without a
+stand-in compiles and checks as before.
+
+An in-place cycle unfolds from each schema of it that evaluation enters from
+elsewhere: each path through the cycle that does not return to a schema already
+on it copies the schemas it passes, and a reference back to a schema on the
+path is the stand-in for that schema, so the stand-in is exactly where a
+schema would apply again to the instance it is already applied to. A dense
+cycle has many such paths: once the copies of the cycles unfolded so far would
+pass the larger of 1,024 and the value contract's bundled schemas, or what
+dynamic specialization leaves of `program_bytes` (estimated as its copies
+are), each further cycle stands in at each of its references that apply to
+the same instance, which is as sound and decides fewer values. The bounds
+program takes what the unfolding leaves.
 
 ## Reference
 

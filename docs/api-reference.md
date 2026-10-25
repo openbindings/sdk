@@ -554,7 +554,10 @@ false`. TypeScript's `validate` returns `message`, no problems and
 
 `explain` (and `explain_with_control`; TypeScript `explain`) returns the same
 verdict and, for a failure, the default evaluator's report of the library's own
-first error. Messages remain value-free, and paths map to original locations.
+first error; for a failure its bounds program decided where a pass reached a
+stand-in, the first of the library's errors for the bound that fails however
+the stand-ins come out. Messages remain value-free, and paths map to original
+locations.
 An explanation is **library-bounded**: building it allocates in proportion to
 inputs, and the default evaluator explains only values within half its
 evaluation depth limit. The SDK promises nothing stronger than the library, so

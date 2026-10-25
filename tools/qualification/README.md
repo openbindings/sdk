@@ -61,7 +61,13 @@ stand-in whose no-verdict names it. Against the earlier evaluator, 194 defect
 cases that were decided or undefined now refuse preparation, 8 values that reach
 a stand-in give no verdict, 34 no-verdicts now name the missing resource, 2
 preparation refusals are decided, 5 refusals name a different first defect or
-limit, and no case changes between satisfies and fails. Additional controls
+limit, and no case changes between satisfies and fails. Since in-place cycles
+and patterns the evaluator does not match became stand-ins too, the 26 cases of
+the cycle, pattern and `patternProperties` families and their controls that
+refused preparation prepare, each giving the case's specification answer where
+it does not depend on the stand-in and the stand-in's no-verdict where it does,
+and 8 values that reached a missing resource's stand-in are decided, each as
+every completion of the resource decides it. Additional controls
 preserve siblings and identities while replacing individual defective
 invocations with concrete schemas, and keep the complete-fragment oracle's
 verdicts. The oracle, completion comparisons, and injected false results run
