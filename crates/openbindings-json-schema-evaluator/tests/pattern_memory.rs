@@ -272,7 +272,7 @@ fn the_compiled_patterns_are_bounded_in_number() {
          raise total_pattern_memory (totalPatternMemory in TypeScript)"
     );
     // Run matchers compile nothing, but they hold their bytes of the same
-    // memory: 100 of them, 13,941 bytes, fit beside two compiled patterns,
+    // memory: 100 of them, 12,777 bytes, fit beside two compiled patterns,
     // and one holds more than three leave.
     let run_matched: Vec<Value> = (0..100)
         .map(|i| json!({"pattern": format!("^a{{{i}}}$")}))
@@ -350,7 +350,7 @@ fn a_small_pattern_memory_refuses_a_pattern_beyond_what_it_leaves() {
     assert_memory_refusal(&refused, "/pattern");
     assert_eq!(
         refused.message,
-        "this value contract's run matchers hold 128 bytes, more than the 0 bytes its \
+        "this value contract's run matchers hold 104 bytes, more than the 0 bytes its \
          0 bytes total_pattern_memory holds for them once search caches take a quarter; \
          raise total_pattern_memory (totalPatternMemory in TypeScript)"
     );
@@ -365,7 +365,7 @@ fn a_small_pattern_memory_refuses_a_pattern_beyond_what_it_leaves() {
 // A run matcher holds a step for each change of set and a byte for each byte
 // of literal text, so a long literal pattern holds about its own length, and
 // the pattern memory counts it. 380 distinct literal patterns of 10,002 bytes,
-// 3.8 MB within the default total_pattern_bytes, each hold 10,116 bytes:
+// 3.8 MB within the default total_pattern_bytes, each hold 10,128 bytes:
 // 3.7 MiB, within the default memory, where they once held about 1 MB each.
 #[test]
 fn run_matchers_hold_about_their_text_of_the_pattern_memory() {

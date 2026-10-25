@@ -164,7 +164,7 @@ pub fn run() {
 // distinct literal patterns of 10,002 bytes, 3.8 MB within the default
 // total_pattern_bytes, once held about 1 MB each (a 56-byte run and an 8-byte
 // set for every character, in a vector of doubling capacity), 380 MB in all,
-// which the pattern memory did not count; each now holds the 10,116 bytes it
+// which the pattern memory did not count; each now holds the 10,128 bytes it
 // counts.
 // Preparing them must keep no more than the same document with the patterns
 // as annotations, those bytes and 512 bytes for each `pattern` keyword's
@@ -175,7 +175,7 @@ fn run_matchers() {
     let count = 380;
     let literal = |i: usize| format!("^t{i:03}x{}$", "a".repeat(9_995));
     let input = properties((0..count).map(literal));
-    let matchers = count * (104 + 12 + 10_000);
+    let matchers = count * (104 + 24 + 10_000);
     let keywords = count * 512;
     let value = JsonValue::parse(format!(r#"{{"p7":"t007x{}"}}"#, "a".repeat(9_995))).unwrap();
     let proof = conformant(&input);

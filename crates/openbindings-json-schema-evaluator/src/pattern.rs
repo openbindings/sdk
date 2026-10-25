@@ -1020,107 +1020,170 @@ fn complement(ranges: &[(u32, u32)]) -> Vec<(u32, u32)> {
 /// run is known from its position. The fixed runs are steps: a character
 /// matched once is literal text, adjacent literal characters share one step
 /// and are compared as bytes, and adjacent runs of one set share one step.
-/// The last run is a step too when its count is fixed. Each distinct set is
-/// held once, so the matcher holds a few bytes for each step and each set,
-/// and a byte for each literal byte.
+/// The last run is a step too when its count is fixed. A run carries its
+/// set's ASCII members as a bitmap, so an ASCII character is tested by its
+/// byte alone, and its members past ASCII, if any, are its share of
+/// `ranges`, which a match walks in order. A short fixed part of ASCII is a
+/// table of the members each of its characters may be.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Simple {
     // Whether the match must reach the end of the string.
     end: bool,
+    // The ASCII members each character of the fixed part may be, when every
+    // step is ASCII text or a run of a set without members past ASCII, they
+    // cover at most [`TABLE`] characters and two at least are runs;
+    // otherwise empty, and the steps hold the fixed part.
+    table: Box<[[u64; 2]]>,
     steps: Box<[Step]>,
     // The last run when its count is not fixed.
     last: Option<Last>,
     // The literal steps' text, one after another.
     text: Box<str>,
-    sets: Box<[Set]>,
-    // The members past ASCII of every set, each set's in order.
+    // The members past ASCII of each step's set, one step after another,
+    // then the last run's.
     ranges: Box<[(u32, u32)]>,
 }
-/// One fixed step of a run matcher.
+/// One fixed step of a run matcher: `count` characters of a set, whose ASCII
+/// members are `ascii`, one bit each in two words so that a test shifts one
+/// machine word, and whose members past ASCII are its next `wide` ranges; or,
+/// when `wide` is [`TEXT`], the next `count` bytes of the matcher's text.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Step {
-    /// The next this many bytes of the matcher's text.
-    Text(u32),
-    /// `count` characters of the set at `set`.
-    Run { set: u32, count: u32 },
+struct Step {
+    ascii: [u64; 2],
+    wide: u32,
+    count: u32,
 }
 /// The last run of a run matcher, between `min` and `max` characters of the
-/// set at `set`.
+/// set whose ASCII members are `ascii` and whose wider ones are the ranges
+/// the steps leave.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct Last {
-    set: u32,
+    ascii: [u64; 2],
     min: u32,
     max: Option<u32>,
 }
-/// A set a run tests: its ASCII members, one bit each, read without a search,
-/// in two words so that a test shifts one machine word; and its members past
-/// ASCII, the matcher's `ranges` from `wide.0` to `wide.1`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct Set {
-    ascii: [u64; 2],
-    wide: (u32, u32),
-}
+// A step's `wide` for literal text.
+const TEXT: u32 = u32::MAX;
+// The most characters a run matcher's fixed part is tabled for.
+const TABLE: usize = 64;
 impl Simple {
     /// The heap bytes the matcher holds, which a value contract's pattern
-    /// memory counts: 12 for each step, 24 for each set, 8 for each range of
-    /// members past ASCII and a byte for each byte of text, on every host.
+    /// memory counts: 16 for each character of its table, 24 for each step,
+    /// 8 for each range of members past ASCII and a byte for each byte of
+    /// text, on every host.
     pub(crate) fn heap_bytes(&self) -> usize {
-        size_of_val(&*self.steps)
+        size_of_val(&*self.table)
+            + size_of_val(&*self.steps)
             + self.text.len()
-            + size_of_val(&*self.sets)
             + size_of_val(&*self.ranges)
     }
-    // The members of the set at `at`, read once for a run.
-    fn members(&self, at: u32) -> Members<'_> {
-        let set = &self.sets[at as usize];
-        Members {
-            ascii: set.ascii,
-            wide: &self.ranges[set.wide.0 as usize..set.wide.1 as usize],
+    /// Whether `text` matches, as the pattern's form would. A matcher that
+    /// is its last run alone and one with a fixed part each match through a
+    /// body of their own, which compiles each one's loops apart.
+    #[inline]
+    pub(crate) fn is_match(&self, text: &str) -> bool {
+        if self.table.is_empty() && self.steps.is_empty() {
+            self.last_alone(text)
+        } else {
+            self.after_fixed(text)
         }
     }
-    /// Whether `text` matches, as the pattern's form would.
-    pub(crate) fn is_match(&self, text: &str) -> bool {
-        let bytes = text.as_bytes();
-        let (mut at, mut literal) = (0, 0);
-        for step in &self.steps {
-            match *step {
-                Step::Text(length) => {
-                    let length = length as usize;
-                    let expected = &self.text.as_bytes()[literal..literal + length];
-                    literal += length;
-                    match bytes.get(at..at + length) {
-                        Some(found) if same(found, expected) => at += length,
-                        _ => return false,
-                    }
-                }
-                Step::Run { set, count } => {
-                    let members = self.members(set);
-                    for _ in 0..count {
-                        if members.next(bytes, &mut at) != Some(true) {
-                            return false;
-                        }
-                    }
-                }
-            }
-        }
-        let Some(last) = &self.last else {
-            return !self.end || at == bytes.len();
-        };
-        let members = self.members(last.set);
-        if !self.end {
-            // The match need not reach the end, so the run's least count
-            // decides it.
-            for _ in 0..last.min {
-                if members.next(bytes, &mut at) != Some(true) {
+    #[inline(never)]
+    fn last_alone(&self, text: &str) -> bool {
+        self.last_run(text, &self.ranges)
+    }
+    #[inline(never)]
+    fn after_fixed(&self, text: &str) -> bool {
+        let mut rest = text;
+        if !self.table.is_empty() {
+            let Some(head) = rest.as_bytes().get(..self.table.len()) else {
+                return false;
+            };
+            for (&byte, ascii) in head.iter().zip(&self.table) {
+                if byte >= 0x80 || !holds(ascii, byte) {
                     return false;
                 }
             }
-            return true;
+            // The table's characters are ASCII, so the rest starts one.
+            rest = &rest[head.len()..];
+        }
+        // Steps without text match through a loop that never tests for it.
+        if self.text.is_empty() {
+            self.steps::<false>(rest)
+        } else {
+            self.steps::<true>(rest)
+        }
+    }
+    // Whether `rest` matches the steps and then the last run, the steps
+    // holding text only when `TEXT_STEPS` holds.
+    #[inline(always)]
+    fn steps<const TEXT_STEPS: bool>(&self, rest: &str) -> bool {
+        let (mut literal, mut ranges) = (0, &*self.ranges);
+        let mut chars = rest.chars();
+        for step in &self.steps {
+            if TEXT_STEPS && step.wide == TEXT {
+                let length = step.count as usize;
+                let expected = &self.text.as_bytes()[literal..literal + length];
+                literal += length;
+                let rest = chars.as_str();
+                match rest.as_bytes().get(..length) {
+                    // The text is whole characters, so the rest starts one.
+                    Some(found) if same(found, expected) => chars = rest[length..].chars(),
+                    _ => return false,
+                }
+                continue;
+            }
+            let (wide, after) = ranges.split_at(step.wide as usize);
+            ranges = after;
+            for _ in 0..step.count {
+                match chars.next() {
+                    Some(c) if member(&step.ascii, wide, c) => {}
+                    _ => return false,
+                }
+            }
+        }
+        let rest = chars.as_str();
+        self.last_run(rest, ranges)
+    }
+    // Whether `rest`, after the fixed part, matches the last run, whose
+    // members past ASCII are `ranges`.
+    #[inline(always)]
+    fn last_run(&self, rest: &str, ranges: &[(u32, u32)]) -> bool {
+        let Some(last) = &self.last else {
+            return !self.end || rest.is_empty();
+        };
+        // Held as an `Option`, for which the loop past ASCII below compiles
+        // to faster code than for the slice itself.
+        let wide = (!ranges.is_empty()).then_some(ranges);
+        if !self.end {
+            // The match need not reach the end, so the run's least count
+            // decides it.
+            let mut chars = rest.chars();
+            return (0..last.min)
+                .all(|_| chars.next().is_some_and(|c| member(&last.ascii, ranges, c)));
         }
         let max = last.max.map_or(u64::MAX, u64::from);
-        let mut count: u64 = 0;
-        while let Some(member) = members.next(bytes, &mut at) {
+        let (bytes, mut at, mut count) = (rest.as_bytes(), 0, 0u64);
+        // ASCII characters are tested by their bytes; from the first
+        // character past ASCII, the rest are read as characters.
+        while let Some(&byte) = bytes.get(at) {
+            if byte >= 0x80 {
+                break;
+            }
+            at += 1;
             count += 1;
+            if !holds(&last.ascii, byte) || count > max {
+                return false;
+            }
+        }
+        for c in rest[at..].chars() {
+            count += 1;
+            let c = c as u32;
+            let member = if c < 0x80 {
+                holds(&last.ascii, c as u8)
+            } else {
+                wide.is_some_and(|wide| among(wide, c))
+            };
             if !member || count > max {
                 return false;
             }
@@ -1128,52 +1191,36 @@ impl Simple {
         count >= u64::from(last.min)
     }
 }
-// A set's members as a run tests them.
-struct Members<'a> {
-    ascii: [u64; 2],
-    wide: &'a [(u32, u32)],
+// Whether the ASCII character `byte` is among the members `ascii`.
+#[inline(always)]
+fn holds(ascii: &[u64; 2], byte: u8) -> bool {
+    ascii[usize::from(byte >> 6)] >> (byte & 63) & 1 == 1
 }
-impl Members<'_> {
-    #[cfg(test)]
-    fn contains(&self, c: char) -> bool {
-        let mut buffer = [0; 4];
-        self.next(c.encode_utf8(&mut buffer).as_bytes(), &mut 0) == Some(true)
+// Whether `c` is in the set whose ASCII members are `ascii` and whose wider
+// ones are `wide`.
+#[inline(always)]
+fn member(ascii: &[u64; 2], wide: &[(u32, u32)], c: char) -> bool {
+    let c = c as u32;
+    if c < 0x80 {
+        holds(ascii, c as u8)
+    } else {
+        among(wide, c)
     }
-    // Whether the character of `text` at byte `at`, where a character
-    // starts, is a member, moving `at` past it; `None` at the end of `text`.
-    // An ASCII character is its byte; any other is decoded from its UTF-8
-    // bytes, which a `str` holds well formed.
-    #[inline(always)]
-    fn next(&self, text: &[u8], at: &mut usize) -> Option<bool> {
-        let lead = *text.get(*at)?;
-        if lead < 0x80 {
-            *at += 1;
-            return Some(self.ascii[usize::from(lead >> 6)] >> (lead & 63) & 1 == 1);
-        }
-        let next = |offset: usize| text.get(*at + offset).map(|&byte| u32::from(byte & 0x3F));
-        let (width, c) = match lead {
-            0xC0..=0xDF => (2, u32::from(lead & 0x1F) << 6 | next(1)?),
-            0xE0..=0xEF => (3, u32::from(lead & 0x0F) << 12 | next(1)? << 6 | next(2)?),
-            _ => (
-                4,
-                u32::from(lead & 0x07) << 18 | next(1)? << 12 | next(2)? << 6 | next(3)?,
-            ),
-        };
-        *at += width;
-        Some(
-            self.wide
-                .binary_search_by(|&(first, last)| {
-                    if last < c {
-                        std::cmp::Ordering::Less
-                    } else if first > c {
-                        std::cmp::Ordering::Greater
-                    } else {
-                        std::cmp::Ordering::Equal
-                    }
-                })
-                .is_ok(),
-        )
-    }
+}
+// Whether the scalar value `c` is among the sorted, disjoint `ranges`.
+#[inline(always)]
+fn among(ranges: &[(u32, u32)], c: u32) -> bool {
+    ranges
+        .binary_search_by(|&(first, last)| {
+            if last < c {
+                std::cmp::Ordering::Less
+            } else if first > c {
+                std::cmp::Ordering::Greater
+            } else {
+                std::cmp::Ordering::Equal
+            }
+        })
+        .is_ok()
 }
 // Whether two equally long byte strings are equal. Short ones, as literal
 // steps between runs mostly are, compare in a loop rather than a call.
@@ -1184,6 +1231,17 @@ fn same(found: &[u8], expected: &[u8]) -> bool {
         found == expected
     }
 }
+/// `items` in an allocation of exactly their size. A vector shrunk in place
+/// can keep its larger block, as macOS's allocator does, so one that has
+/// spare capacity is moved into a new one.
+pub(crate) fn exact<T>(items: Vec<T>) -> Box<[T]> {
+    if items.len() == items.capacity() {
+        return items.into_boxed_slice();
+    }
+    let mut moved = Vec::with_capacity(items.len());
+    moved.extend(items);
+    moved.into_boxed_slice()
+}
 /// A run matcher being read, while the pattern is one anchored sequence of
 /// single-character runs.
 #[derive(Default)]
@@ -1193,10 +1251,7 @@ struct Shape {
     end: bool,
     steps: Vec<Step>,
     text: String,
-    sets: Vec<Set>,
     ranges: Vec<(u32, u32)>,
-    // Each set's index, by its members.
-    index: std::collections::HashMap<Vec<(u32, u32)>, u32>,
     // The run read last, which is the last run unless another follows.
     pending: Option<Pending>,
 }
@@ -1224,7 +1279,7 @@ impl Shape {
             if run.max != Some(run.min) {
                 return None;
             }
-            self.fixed(run.members, run.min)?;
+            self.fixed(&run.members, run.min)?;
         }
         self.pending = Some(Pending {
             members: set,
@@ -1233,80 +1288,124 @@ impl Shape {
         });
         Some(())
     }
-    fn fixed(&mut self, set: Vec<(u32, u32)>, count: u32) -> Option<()> {
+    fn fixed(&mut self, members: &[(u32, u32)], count: u32) -> Option<()> {
         if count == 0 {
             return Some(());
         }
-        if let (1, &[(first, last)]) = (count, set.as_slice())
+        if let (1, &[(first, last)]) = (count, members)
             && first == last
             && let Some(c) = char::from_u32(first)
         {
             let length = c.len_utf8() as u32;
             match self.steps.last_mut() {
-                Some(Step::Text(held)) if *held <= u32::MAX - length => *held += length,
-                _ => self.steps.push(Step::Text(length)),
+                Some(step) if step.wide == TEXT && step.count <= u32::MAX - length => {
+                    step.count += length;
+                }
+                _ => self.steps.push(Step {
+                    ascii: [0; 2],
+                    wide: TEXT,
+                    count: length,
+                }),
             }
             self.text.push(c);
             return Some(());
         }
-        let set = self.set(set)?;
-        match self.steps.last_mut() {
-            Some(Step::Run {
-                set: held,
-                count: n,
-            }) if *held == set && *n <= u32::MAX - count => {
-                *n += count;
-            }
-            _ => self.steps.push(Step::Run { set, count }),
+        let start = self.ranges.len();
+        let ascii = self.set(members);
+        let wide = u32::try_from(self.ranges.len() - start)
+            .ok()
+            .filter(|&wide| wide < TEXT)?;
+        // A run of the set the step before is a run of, whose ranges are
+        // the ones just before these, joins it.
+        if let Some(step) = self.steps.last_mut()
+            && step.wide == wide
+            && step.ascii == ascii
+            && step.count <= u32::MAX - count
+            && self.ranges[..start].ends_with(&self.ranges[start..])
+        {
+            step.count += count;
+            self.ranges.truncate(start);
+            return Some(());
         }
+        self.steps.push(Step { ascii, wide, count });
         Some(())
     }
-    // The index of the set of `members`, which are sorted and disjoint.
-    fn set(&mut self, members: Vec<(u32, u32)>) -> Option<u32> {
-        if let Some(&at) = self.index.get(&members) {
-            return Some(at);
-        }
+    // The ASCII members of the set of `members`, which are sorted and
+    // disjoint, adding its members past ASCII to the ranges.
+    fn set(&mut self, members: &[(u32, u32)]) -> [u64; 2] {
         let mut ascii = [0u64; 2];
-        for &(first, last) in &members {
+        for &(first, last) in members {
             for c in first..=last.min(127) {
                 ascii[c as usize >> 6] |= 1 << (c & 63);
             }
         }
-        let start = u32::try_from(self.ranges.len()).ok()?;
         self.ranges.extend(
             members
                 .iter()
                 .filter(|&&(_, last)| last >= 128)
                 .map(|&(first, last)| (first.max(128), last)),
         );
-        let end = u32::try_from(self.ranges.len()).ok()?;
-        let at = u32::try_from(self.sets.len()).ok()?;
-        self.sets.push(Set {
-            ascii,
-            wide: (start, end),
-        });
-        self.index.insert(members, at);
-        Some(at)
+        ascii
+    }
+    // The fixed part as one ASCII set for each character, when every step
+    // is ASCII text or a run of a set without members past ASCII, they cover
+    // at most [`TABLE`] characters and two at least are runs; otherwise
+    // empty. One run, and text alone, match as fast as steps.
+    fn table(&self) -> Box<[[u64; 2]]> {
+        let (mut characters, mut runs) = (0, 0);
+        for step in &self.steps {
+            characters += step.count as usize;
+            runs += usize::from(step.wide == 0);
+            if characters > TABLE || !matches!(step.wide, TEXT | 0) {
+                return Box::default();
+            }
+        }
+        if runs < 2 || !self.text.is_ascii() {
+            return Box::default();
+        }
+        let mut table = Vec::with_capacity(characters);
+        let mut text = self.text.bytes();
+        for step in &self.steps {
+            for _ in 0..step.count {
+                let ascii = if step.wide == TEXT {
+                    let byte = text.next().expect("a text step's bytes are the text's");
+                    let mut ascii = [0; 2];
+                    ascii[usize::from(byte >> 6)] = 1 << (byte & 63);
+                    ascii
+                } else {
+                    step.ascii
+                };
+                table.push(ascii);
+            }
+        }
+        table.into_boxed_slice()
     }
     fn finish(mut self) -> Option<Simple> {
         let run = self.pending.take()?;
         let last = if run.max == Some(run.min) {
-            self.fixed(run.members, run.min)?;
+            self.fixed(&run.members, run.min)?;
             None
         } else {
             Some(Last {
-                set: self.set(run.members)?,
+                ascii: self.set(&run.members),
                 min: run.min,
                 max: run.max,
             })
         };
+        let table = self.table();
+        if !table.is_empty() {
+            self.steps.clear();
+            self.text.clear();
+        }
+        let mut text = String::with_capacity(self.text.len());
+        text.push_str(&self.text);
         Some(Simple {
             end: self.end,
-            steps: self.steps.into_boxed_slice(),
+            table,
+            steps: exact(self.steps),
             last,
-            text: self.text.into_boxed_str(),
-            sets: self.sets.into_boxed_slice(),
-            ranges: self.ranges.into_boxed_slice(),
+            text: text.into_boxed_str(),
+            ranges: exact(self.ranges),
         })
     }
 }
@@ -1329,13 +1428,14 @@ mod tests {
             shape.start().unwrap();
             shape.run(set.clone(), 1, None).unwrap();
             let simple = shape.finish().unwrap();
-            let held = simple.members(simple.last.unwrap().set);
+            let last = simple.last.unwrap();
+            let holds = |c: char| member(&last.ascii, &simple.ranges, c);
             for c in (0..0x300).chain([0x1f5ff, 0x1f600, 0x1f64f, 0x1f650, 0x10ffff]) {
                 let Some(c) = char::from_u32(c) else { continue };
                 let member = set
                     .iter()
                     .any(|&(first, last)| (first..=last).contains(&(c as u32)));
-                assert_eq!(held.contains(c), member, "{set:?} {c:?}");
+                assert_eq!(holds(c), member, "{set:?} {c:?}");
             }
         }
     }
@@ -1346,39 +1446,55 @@ mod tests {
         }
     }
     // Literal characters share one step of text, adjacent runs of one set
-    // share one step, a fixed last run is a step, and each set is held once.
+    // share one step, a fixed last run is a step, each run's members past
+    // ASCII follow the step before's, and a short fixed part of ASCII sets
+    // and text is a table of a set for each character.
     #[test]
     fn a_run_matcher_holds_a_step_for_each_change_of_set() {
+        let shape = |matcher: &Simple| -> Vec<(u32, u32)> {
+            matcher
+                .steps
+                .iter()
+                .map(|step| (step.wide, step.count))
+                .collect()
+        };
         let literal = format!("^t0x{}$", "a".repeat(9_997));
         let matcher = simple(&literal).unwrap();
-        assert_eq!(*matcher.steps, [Step::Text(10_000)]);
+        assert_eq!(shape(&matcher), [(TEXT, 10_000)]);
+        assert!(matcher.table.is_empty() && matcher.ranges.is_empty());
         assert_eq!(matcher.last, None);
-        assert!(matcher.sets.is_empty() && matcher.ranges.is_empty());
         assert_eq!(
-            (size_of::<Step>(), size_of::<Set>(), size_of::<(u32, u32)>()),
-            (12, 24, 8)
+            (
+                size_of::<Step>(),
+                size_of::<[u64; 2]>(),
+                size_of::<(u32, u32)>()
+            ),
+            (24, 16, 8)
         );
-        assert_eq!(matcher.heap_bytes(), 12 + 10_000);
+        assert_eq!(matcher.heap_bytes(), 24 + 10_000);
         assert!(matcher.is_match(&literal[1..literal.len() - 1]));
         assert!(!matcher.is_match(&literal[1..literal.len() - 2]));
+        // Three runs and text of ten ASCII characters are a table.
         let date = simple(r"^\d\d\d\d-\d{2}-[0-9][0-9]$").unwrap();
-        assert_eq!(
-            *date.steps,
-            [
-                Step::Run { set: 0, count: 4 },
-                Step::Text(1),
-                Step::Run { set: 0, count: 2 },
-                Step::Text(1),
-                Step::Run { set: 0, count: 2 },
-            ]
-        );
-        assert_eq!(date.sets.len(), 1);
+        assert!(date.steps.is_empty() && date.text.is_empty());
+        assert_eq!((date.table.len(), date.heap_bytes()), (10, 160));
         assert!(date.is_match("2026-10-25") && !date.is_match("2026-10-2x"));
+        assert!(!date.is_match("2026-10-2") && !date.is_match("2026-10-2é"));
+        // Past the table's characters, and with one run, they are steps.
+        let long = simple(r"^\d{40}-\d{40}$").unwrap();
+        assert_eq!(shape(&long), [(0, 40), (TEXT, 1), (0, 40)]);
+        let one = simple(r"^\d\d\d\d$").unwrap();
+        assert_eq!(shape(&one), [(0, 4)]);
         let open = simple(r"^é\d{3}é[a-zé]{2,}").unwrap();
-        assert_eq!(open.steps.len(), 3);
+        assert_eq!(shape(&open), [(TEXT, 2), (0, 3), (TEXT, 2)]);
         assert_eq!(open.last.map(|last| (last.min, last.max)), Some((2, None)));
         assert_eq!(open.ranges.len(), 1);
         assert!(open.is_match("é123éabé!") && !open.is_match("é123éa!"));
+        // `.` holds three ranges past ASCII; adjacent runs of it share them.
+        let dots = simple("^..a.$").unwrap();
+        assert_eq!(shape(&dots), [(3, 2), (TEXT, 1), (3, 1)]);
+        assert_eq!(dots.ranges.len(), 6);
+        assert!(!dots.is_match("é😀a\u{2028}") && dots.is_match("é😀a中"));
         // A pattern whose runs vary before its last, or that is not one
         // anchored sequence, has no run matcher.
         for pattern in [

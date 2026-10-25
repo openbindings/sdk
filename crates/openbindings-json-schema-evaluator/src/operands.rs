@@ -684,7 +684,7 @@ impl Operands {
         drop(self.indices);
         let matched = !self.patterns.is_empty();
         let patterns = Arc::new(Patterns {
-            matchers: self.patterns.into_boxed_slice(),
+            matchers: crate::pattern::exact(self.patterns),
             memory,
             shared: Mutex::new(false),
             sites: Mutex::new(Vec::new()),

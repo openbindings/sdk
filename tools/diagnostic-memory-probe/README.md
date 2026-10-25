@@ -93,7 +93,7 @@ random bits, must add no more than the pattern memory at their peak.
 The same phase prepares 380 distinct literal patterns of 10,002 bytes
 (`^tNNNx` and 9,995 `a`, 3.8 MB), which the run matcher matches without an
 automaton. A run matcher holds 104 bytes, a step for each change of set and a
-byte for each byte of literal text, 10,116 bytes here, and
+byte for each byte of literal text, 10,128 bytes here, and
 `Limits::total_pattern_memory` counts them. Preparing the patterns must keep no
 more than the same document with the patterns as annotations, those bytes and
 512 bytes for each `pattern` keyword's compiled node and site (about 400

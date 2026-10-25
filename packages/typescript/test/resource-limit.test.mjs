@@ -225,7 +225,7 @@ test("a contract's compiled patterns share its pattern memory", () => {
       ),
       new RegExp(`^${at}/prefixItems/[0-9]+/pattern$`),
     ),
-    "this value contract's run matchers hold 128 bytes and its 3 compiled regular " +
+    "this value contract's run matchers hold 104 bytes and its 3 compiled regular " +
       "expressions 48 KiB each, more together than the 144 KiB its 192 KiB " +
       "total_pattern_memory holds for them once search caches take a quarter; " +
       raise,
