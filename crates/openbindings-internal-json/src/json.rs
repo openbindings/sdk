@@ -26,7 +26,7 @@ impl Default for JsonLimits {
 }
 /// Why an exact input could not be represented. Later versions may add kinds,
 /// so a `match` needs a fallback arm.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum InputErrorKind {
     /// Input bytes are not valid UTF-8.
@@ -44,18 +44,27 @@ pub enum InputErrorKind {
 /// `Display` writes what the parser expected or found and the byte where, such as
 /// `expected a colon after the member name at byte 5`, and for an exceeded limit
 /// how to admit the input with the [`JsonLimits`] field that raises it; branch on
-/// `code` and `byte_offset`, which do not change with that wording. Equality
-/// compares those public fields.
-/// Later versions may add fields: read them by name and match with `..`.
-#[non_exhaustive]
+/// [`Self::code`] and [`Self::byte_offset`], which do not change with that
+/// wording. Equality compares the kind, byte offset and code.
 pub struct InputError {
-    /// Broad admission failure category.
-    pub kind: InputErrorKind,
-    /// Zero-based original-input byte offset; an end-of-input failure may equal the input length.
-    pub byte_offset: usize,
-    /// Stable detailed parse/admission code, suitable for branching.
-    pub code: &'static str,
+    pub(crate) kind: InputErrorKind,
+    pub(crate) byte_offset: usize,
+    pub(crate) code: &'static str,
     pub(crate) route: Route,
+}
+impl InputError {
+    /// Broad admission failure category.
+    pub fn kind(&self) -> InputErrorKind {
+        self.kind
+    }
+    /// Zero-based original-input byte offset; an end-of-input failure may equal the input length.
+    pub fn byte_offset(&self) -> usize {
+        self.byte_offset
+    }
+    /// Stable detailed parse/admission code, suitable for branching.
+    pub fn code(&self) -> &'static str {
+        self.code
+    }
 }
 /// The call an exceeded limit is raised through, as its refusal names it.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -78,7 +87,8 @@ impl PartialEq for InputError {
 impl Eq for InputError {}
 impl std::fmt::Debug for InputError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // Only fixed parser/admission reasons are safe; the public code can be reassigned.
+        // Only fixed parser/admission reasons are safe; `backend::input_error`
+        // accepts any code.
         let code = match self.code {
             "bom"
             | "byte-limit"

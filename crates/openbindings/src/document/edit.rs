@@ -134,7 +134,7 @@ impl EditError {
     /// Stable kebab-case identifier; branch on this rather than display text.
     pub fn code(&self) -> &'static str {
         match self {
-            Self::Input(error) => error.code,
+            Self::Input(error) => error.code(),
             Self::FieldCollision { .. } => "field-collision",
             Self::Serialization => "serialization",
             Self::InvalidPointer => "invalid-pointer",
@@ -169,9 +169,9 @@ impl fmt::Display for EditError {
         // An exceeded limit is the document's: name the setting it was
         // admitted with.
         if let Self::Input(error) = self
-            && let Some((rust, typescript)) = backend::limit_setting(error.code)
+            && let Some((rust, typescript)) = backend::limit_setting(error.code())
         {
-            let limit = match error.code {
+            let limit = match error.code() {
                 "byte-limit" => "byte",
                 "node-limit" => "node",
                 _ => "nesting",
@@ -1108,7 +1108,7 @@ mod tests {
             .unwrap_err();
         assert_eq!(error.code(), "byte-limit");
         // A typed part over budget is the same admission limit as any other edit.
-        assert!(matches!(&error, EditError::Input(input) if input.kind == InputErrorKind::Limit));
+        assert!(matches!(&error, EditError::Input(input) if input.kind() == InputErrorKind::Limit));
         assert_eq!(witness.calls.get(), 1);
         assert!(witness.fields.get() < 10);
         assert_eq!(document.as_bytes(), before);

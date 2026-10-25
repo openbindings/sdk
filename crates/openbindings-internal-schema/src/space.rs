@@ -1007,12 +1007,12 @@ impl SchemaSpace {
                     .map_err(|e| {
                         // A fixed bound: no admission setting raises it.
                         let what =
-                            openbindings_internal_json::backend::input_error_description(e.code)
-                                .unwrap_or(e.code);
+                            openbindings_internal_json::backend::input_error_description(e.code())
+                                .unwrap_or(e.code());
                         Failure::new(
                             FailureReason::LimitExceeded,
                             "program-json-limit",
-                            format!("{what} at byte {}", e.byte_offset),
+                            format!("{what} at byte {}", e.byte_offset()),
                         )
                     })
             })

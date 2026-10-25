@@ -273,5 +273,12 @@
 - Runnable first-use and lifecycle examples, legacy Go and TypeScript migration
   guidance, API reference documentation and reproducible performance measurements.
 
+### Changed
+
+- `InputError` is read through methods, as `EditError` is through `code()`:
+  `kind()`, `byte_offset()` and `code()` return its kind, zero-based byte offset
+  and stable code, and its fields are private. `InputErrorKind` is `Copy`, so
+  `kind()` returns it by value. Equality compares the kind, byte offset and code.
+
 This first release remains unpublished. Package and specification versions are
 independent.

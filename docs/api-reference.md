@@ -54,8 +54,10 @@ SDK they cannot be built with a struct literal, and a destructuring pattern need
 `..`. The exception is `JsonMember`, which `JsonRef::members` yields and only
 the SDK builds. It stays exhaustive: a JSON member is exactly a name and a value,
 so it has no field to gain, and `let JsonMember { name, value } = member;` stays
-valid. Records an evaluator, provider or transport must build have a constructor
-for their required fields and `with_*` methods for optional ones:
+valid. An `InputError` keeps private state and is read through `kind()`,
+`byte_offset()` and `code()`, as `EditError` is through `code()`. Records an
+evaluator, provider or transport must build have a constructor for their
+required fields and `with_*` methods for optional ones:
 
 | Builder | Records |
 | --- | --- |

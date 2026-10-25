@@ -116,7 +116,7 @@ fn main() {
             Err(error) => {
                 println!(
                     "{}",
-                    json!({"id":case["id"],"phase":"parse-refusal","code":error.code})
+                    json!({"id":case["id"],"phase":"parse-refusal","code":error.code()})
                 );
                 continue;
             }

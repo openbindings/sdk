@@ -245,7 +245,7 @@ fn a_raised_byte_limit_admits_documents_to_it_and_they_keep_it_for_edits() {
     assert_eq!(parsed.limits(), raised);
     let error = Document::parse_with_limits(&over, raised).unwrap_err();
     assert_eq!(
-        (error.code, error.byte_offset),
+        (error.code(), error.byte_offset()),
         ("byte-limit", raised.max_bytes)
     );
     assert!(
