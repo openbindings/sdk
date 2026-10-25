@@ -21,8 +21,9 @@ fn prepare(schema: Value, resources: ResourceSet) -> Result<PreparedValueContrac
 
 // Patterns with lone surrogate escapes, matched as Node's `RegExp` with the `u`
 // flag matches them, through both pattern keywords. A lookbehind needs a
-// backtracking engine: a string that reaches one gives no verdict, and a
-// `patternProperties` name holding one refuses preparation.
+// backtracking engine: a string that reaches one gives no verdict, and so
+// does an object whose verdict depends on a `patternProperties` name holding
+// one.
 #[test]
 fn node_surrogate_differential_for_both_pattern_keywords() {
     let mut refused = 0;
@@ -42,11 +43,6 @@ fn node_surrogate_differential_for_both_pattern_keywords() {
         ] {
             let contract = match prepare(schema, ResourceSet::default()) {
                 Ok(contract) => contract,
-                Err(detail) if backtracking && keyword == "patternProperties" => {
-                    assert_eq!(detail.code, "pattern-backtracking", "{id}/{keyword}");
-                    refused += 1;
-                    continue;
-                }
                 Err(detail) => panic!("{id}/{keyword}: {detail:?}"),
             };
             let value = JsonValue::parse(value.to_string()).unwrap();
@@ -61,18 +57,21 @@ fn node_surrogate_differential_for_both_pattern_keywords() {
             }
         }
     }
-    // Four lookbehind patterns, five strings each, refused through each keyword.
+    // Four lookbehind patterns, five strings each, unmatched through each
+    // keyword.
     assert_eq!(refused, 40);
 }
 
 #[test]
-fn compilation_refusals_locate_authored_keywords_in_document_and_supplied_resources() {
+fn invalid_patterns_locate_authored_keywords_in_document_and_supplied_resources() {
     const URI: &str = "https://patterns.invalid/supplied";
-    for (keyword, invalid) in [
-        ("pattern", json!({"pattern":"[SECRET/~%"})),
+    // Each value's verdict depends on the invalid pattern's match.
+    for (keyword, invalid, reaching) in [
+        ("pattern", json!({"pattern":"[SECRET/~%"}), json!("x")),
         (
             "patternProperties",
-            json!({"patternProperties":{"[SECRET/~%":true}}),
+            json!({"patternProperties":{"[SECRET/~%":false}}),
+            json!({"k":1}),
         ),
     ] {
         for supplied in [false, true] {
@@ -91,7 +90,9 @@ fn compilation_refusals_locate_authored_keywords_in_document_and_supplied_resour
             } else {
                 (schema, ResourceSet::default(), None, "/operations/op/input")
             };
-            let Err(detail) = prepare(entry, resources) else {
+            let contract = prepare(entry, resources).unwrap_or_else(|d| panic!("{d:?}"));
+            let value = JsonValue::parse(json!({ "a/b~c": reaching }).to_string()).unwrap();
+            let ValueOutcome::NoVerdict { detail } = contract.validate(&value) else {
                 panic!("{keyword}/{supplied}")
             };
             assert_eq!(detail.reason, NoVerdictReason::ConservativePreparation);
@@ -165,49 +166,23 @@ const UNMATCHED: [&str; 3] = [
 fn member(index: usize) -> String {
     format!("p{index}")
 }
-// Prepare one contract holding each row's schema under its member, leaving out
-// each row whose pattern preparation refuses as invalid; `refused` checks that
-// refusal. Returns the contract and the rows left out.
-fn combined(
-    rows: &[(usize, &EcmaRow)],
-    schema: impl Fn(&str) -> Value,
-    keyword: &str,
-    mut refused: impl FnMut(usize),
-) -> (PreparedValueContract, std::collections::BTreeSet<usize>) {
-    let mut excluded = std::collections::BTreeSet::new();
-    loop {
-        let properties: serde_json::Map<String, Value> = rows
-            .iter()
-            .filter(|(index, _)| !excluded.contains(index))
-            .map(|(index, row)| (member(*index), schema(&row.pattern)))
-            .collect();
-        match prepare(json!({ "properties": properties }), ResourceSet::default()) {
-            Ok(contract) => return (contract, excluded),
-            Err(detail) => {
-                assert_eq!(detail.code, "schema-pattern-compilation", "{detail:?}");
-                let pointer = detail
-                    .location
-                    .expect("located refusal")
-                    .pointer
-                    .to_string();
-                let index: usize = pointer
-                    .strip_prefix("/operations/op/input/properties/p")
-                    .and_then(|rest| rest.strip_suffix(&format!("/{keyword}")))
-                    .and_then(|index| index.parse().ok())
-                    .unwrap_or_else(|| panic!("{pointer}"));
-                assert!(excluded.insert(index), "{pointer}");
-                refused(index);
-            }
-        }
-    }
+// Prepare one contract holding each row's schema under its member.
+fn combined(rows: &[(usize, &EcmaRow)], schema: impl Fn(&str) -> Value) -> PreparedValueContract {
+    let properties: serde_json::Map<String, Value> = rows
+        .iter()
+        .map(|(index, row)| (member(*index), schema(&row.pattern)))
+        .collect();
+    prepare(json!({ "properties": properties }), ResourceSet::default())
+        .unwrap_or_else(|detail| panic!("{detail:?}"))
 }
 
 // Generated patterns, matched as V8's `RegExp` with the `u` flag matches them,
 // through both pattern keywords and the names an `unevaluatedProperties`
 // keyword reads as evaluated. The evaluator reads ECMA-262 11th edition, so a
-// pattern V8 accepts may be refused as invalid only for a property escape
-// whose name or value that edition lacks; it declines to match only the
-// constructs that need a backtracking engine, property escapes and `\B`.
+// pattern V8 accepts may be read as invalid only for a property escape whose
+// name or value that edition lacks; it declines to match only the constructs
+// that need a backtracking engine, property escapes and `\B`, and a string
+// whose verdict depends on an invalid pattern gives no verdict.
 #[test]
 fn generated_patterns_match_as_ecmascript_does_through_both_keywords() {
     let rows = ecma_rows();
@@ -218,11 +193,17 @@ fn generated_patterns_match_as_ecmascript_does_through_both_keywords() {
             valid.push((index, row));
             continue;
         }
-        for schema in [
-            json!({"pattern": row.pattern}),
-            json!({"patternProperties": {row.pattern.as_str(): false}}),
+        for (schema, value) in [
+            (json!({"pattern": row.pattern}), json!("x")),
+            (
+                json!({"patternProperties": {row.pattern.as_str(): false}}),
+                json!({"x": 0}),
+            ),
         ] {
-            let Err(detail) = prepare(schema, ResourceSet::default()) else {
+            let contract = prepare(schema, ResourceSet::default())
+                .unwrap_or_else(|detail| panic!("{:?}: {detail:?}", row.pattern));
+            let value = JsonValue::parse(value.to_string()).unwrap();
+            let ValueOutcome::NoVerdict { detail } = contract.validate(&value) else {
                 panic!("V8 refuses {:?}", row.pattern)
             };
             assert_eq!(
@@ -230,7 +211,7 @@ fn generated_patterns_match_as_ecmascript_does_through_both_keywords() {
                 "{:?}",
                 row.pattern
             );
-            *counts.entry("invalid refused").or_default() += 1;
+            *counts.entry("invalid stands in").or_default() += 1;
         }
     }
     // V8 is not an oracle only for `\B`, which the evaluator never matches,
@@ -246,25 +227,11 @@ fn generated_patterns_match_as_ecmascript_does_through_both_keywords() {
         b'0' => false,
         _ => unreachable!("{:?} has no oracle at {at}", row.pattern),
     };
-    let mut invalid_property = |index: usize| {
-        let pattern = &rows[index].pattern;
-        assert!(
-            pattern.contains("\\p") || pattern.contains("\\P"),
-            "{pattern:?}"
-        );
-        *counts
-            .entry("property escape outside the edition")
-            .or_default() += 1;
-    };
     // `pattern`: a pattern the evaluator does not match gives no verdict for a
     // string that reaches it.
-    let (contract, excluded) = combined(
-        &valid,
-        |p| json!({"pattern": p}),
-        "pattern",
-        &mut invalid_property,
-    );
-    for &(index, row) in valid.iter().filter(|(index, _)| !excluded.contains(index)) {
+    let contract = combined(&valid, |p| json!({"pattern": p}));
+    let mut excluded = std::collections::BTreeSet::new();
+    for &(index, row) in &valid {
         for (at, string) in row.strings.iter().enumerate() {
             let value = JsonValue::parse(json!({ member(index): string }).to_string()).unwrap();
             match contract.validate(&value) {
@@ -277,43 +244,61 @@ fn generated_patterns_match_as_ecmascript_does_through_both_keywords() {
                     *counts.entry("pattern unmatched").or_default() += 1;
                     continue;
                 }
+                ValueOutcome::NoVerdict { detail }
+                    if detail.code == "schema-pattern-compilation"
+                        && (row.pattern.contains("\\p") || row.pattern.contains("\\P")) =>
+                {
+                    if excluded.insert(index) {
+                        *counts
+                            .entry("property escape outside the edition")
+                            .or_default() += 1;
+                    }
+                    continue;
+                }
                 other => panic!("pattern {:?} on {string:?}: {other:?}", row.pattern),
             }
             *counts.entry("pattern agrees").or_default() += 1;
         }
     }
-    // `patternProperties`: a name the evaluator does not match refuses
-    // preparation, so those rows are prepared alone.
+    // `patternProperties`: an object whose verdict depends on a name the
+    // evaluator does not match gives no verdict, so those rows are prepared
+    // alone.
     let (alone, together): (Vec<_>, Vec<_>) = valid
         .iter()
         .filter(|(index, _)| !excluded.contains(index))
         .copied()
         .partition(|(_, row)| may_be_unmatched(&row.pattern));
     for (_, row) in alone {
-        match prepare(
+        let contract = prepare(
             json!({"patternProperties": {row.pattern.as_str(): false}}),
             ResourceSet::default(),
-        ) {
-            Err(detail) if UNMATCHED.contains(&detail.code.as_str()) => {
-                *counts.entry("patternProperties unmatched").or_default() += 1;
-            }
-            Err(detail) => panic!("{:?}: {detail:?}", row.pattern),
-            Ok(contract) => {
-                for (at, string) in row.strings.iter().enumerate() {
-                    let value = JsonValue::parse(json!({ string: 0 }).to_string()).unwrap();
-                    let fails = matches!(contract.validate(&value), ValueOutcome::Fails { .. });
+        )
+        .unwrap_or_else(|detail| panic!("{:?}: {detail:?}", row.pattern));
+        let mut unmatched = 0;
+        for (at, string) in row.strings.iter().enumerate() {
+            let value = JsonValue::parse(json!({ string: 0 }).to_string()).unwrap();
+            match contract.validate(&value) {
+                ValueOutcome::NoVerdict { detail } if UNMATCHED.contains(&detail.code.as_str()) => {
+                    unmatched += 1;
+                }
+                outcome => {
+                    let fails = matches!(outcome, ValueOutcome::Fails { .. });
                     assert_eq!(fails, expected(row, at), "{:?} on {string:?}", row.pattern);
                     *counts.entry("patternProperties agrees").or_default() += 1;
                 }
             }
         }
+        // A name the evaluator does not match leaves every string undecided.
+        assert!(
+            unmatched == 0 || unmatched == row.strings.len(),
+            "{:?}",
+            row.pattern
+        );
+        if unmatched > 0 {
+            *counts.entry("patternProperties unmatched").or_default() += 1;
+        }
     }
-    let (contract, _) = combined(
-        &together,
-        |p| json!({"patternProperties": {p: false}}),
-        "patternProperties",
-        |index| panic!("{:?} refused as invalid", rows[index].pattern),
-    );
+    let contract = combined(&together, |p| json!({"patternProperties": {p: false}}));
     for &(index, row) in &together {
         for (at, string) in row.strings.iter().enumerate() {
             let value =
@@ -325,11 +310,9 @@ fn generated_patterns_match_as_ecmascript_does_through_both_keywords() {
     }
     // An `unevaluatedProperties` keyword reads the same names as evaluated
     // when they match.
-    let (contract, _) = combined(
+    let contract = combined(
         &together,
         |p| json!({"patternProperties": {p: true}, "unevaluatedProperties": false}),
-        "patternProperties",
-        |index| panic!("{:?} refused as invalid", rows[index].pattern),
     );
     for &(index, row) in &together {
         for (at, string) in row.strings.iter().enumerate() {
@@ -353,7 +336,7 @@ fn generated_patterns_match_as_ecmascript_does_through_both_keywords() {
     assert_eq!(
         counts,
         [
-            ("invalid refused", 610),
+            ("invalid stands in", 610),
             ("pattern agrees", 9_106),
             ("pattern unmatched", 2_040),
             ("patternProperties agrees", 9_106),
@@ -367,8 +350,9 @@ fn generated_patterns_match_as_ecmascript_does_through_both_keywords() {
 // The regex crate's `is_match` answers no for `\x{E9}|(?-u:\B)` on "aéa",
 // whose first branch matches, because the non-word boundary can hold inside a
 // multi-byte character. So `\B` is not matched: a string that reaches it gives
-// no verdict, and a `patternProperties` name holding it refuses preparation.
-// `\b` keeps its verdicts.
+// no verdict, as does an object with a member that a `patternProperties` name
+// holding it applies to, and an `unevaluatedProperties` keyword reading such a
+// name refuses preparation. `\b` keeps its verdicts.
 #[test]
 fn a_non_word_boundary_is_not_matched_and_a_word_boundary_is() {
     for (pattern, value) in [
@@ -378,21 +362,30 @@ fn a_non_word_boundary_is_not_matched_and_a_word_boundary_is() {
         ("\\B", "abc"),
     ] {
         let contract = prepare(json!({"pattern": pattern}), ResourceSet::default()).unwrap();
-        let value = JsonValue::parse(json!(value).to_string()).unwrap();
+        let text = value;
+        let value = JsonValue::parse(json!(text).to_string()).unwrap();
         let ValueOutcome::NoVerdict { detail } = contract.validate(&value) else {
             panic!("{pattern}")
         };
         assert_eq!(detail.code, "pattern-non-word-boundary", "{pattern}");
         assert_eq!(detail.reason, NoVerdictReason::UnsupportedCapability);
-        for schema in [
+        let contract = prepare(
             json!({"patternProperties": {pattern: {"type": "integer"}}}),
+            ResourceSet::default(),
+        )
+        .unwrap();
+        let object = JsonValue::parse(json!({ text: "s" }).to_string()).unwrap();
+        let ValueOutcome::NoVerdict { detail } = contract.validate(&object) else {
+            panic!("{pattern}")
+        };
+        assert_eq!(detail.code, "pattern-non-word-boundary", "{pattern}");
+        let Err(detail) = prepare(
             json!({"patternProperties": {pattern: true}, "unevaluatedProperties": false}),
-        ] {
-            let Err(detail) = prepare(schema, ResourceSet::default()) else {
-                panic!("{pattern}")
-            };
-            assert_eq!(detail.code, "pattern-non-word-boundary", "{pattern}");
-        }
+            ResourceSet::default(),
+        ) else {
+            panic!("{pattern}")
+        };
+        assert_eq!(detail.code, "pattern-non-word-boundary", "{pattern}");
     }
     for (pattern, value, satisfies) in [
         ("^a\\b", "a", true),

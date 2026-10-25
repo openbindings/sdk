@@ -7,11 +7,11 @@
 //! checked against the evaluator's depth limit before evaluation, in constant
 //! time, so evaluation itself carries no depth accounting.
 //!
-//! References that apply to the same instance never form a cycle: the
-//! projection refuses a schema that could recurse without consuming the
-//! instance. Every cycle therefore passes a keyword that applies to a child
-//! instance, and a path can pass such keywords at most as many times as the
-//! value is deep. With the strongly connected components of the references,
+//! References that apply to the same instance never form a cycle: preparation
+//! unfolds each such cycle so that a schema applying again is a stand-in
+//! (`crate::cycles`). Every cycle therefore passes a keyword that applies to a
+//! child instance, and a path can pass such keywords at most as many times as
+//! the value is deep. With the strongly connected components of the references,
 //! a path stays in each component for some descents, entering at most the
 //! component's longest same-instance run of objects between them. So the
 //! objects a path holds are at most `base + per_level * depth`, where
@@ -140,7 +140,7 @@ pub(crate) fn bound(
     entry_weight: u32,
 ) -> Result<Bound, Cycle> {
     let weight = |edge: &crate::bundle::Edge| u64::from(edge.weight);
-    let components = components(definitions);
+    let components = components(definitions, |_| true);
     let count = components.count;
     // Each component's longest same-instance run and longest descending
     // reference within it.
@@ -275,16 +275,20 @@ pub(crate) fn bound(
     })
 }
 
-// Strongly connected components, numbered in the order Tarjan's algorithm
-// completes them: every reference out of a component reaches an earlier one.
-struct Components {
-    count: usize,
-    of: Vec<u32>,
-    // Definitions by component, `starts[c]..starts[c + 1]`.
-    members: Vec<u32>,
-    starts: Vec<usize>,
+/// Strongly connected components of the references `follows` admits,
+/// numbered in the order Tarjan's algorithm completes them: every such
+/// reference out of a component reaches an earlier one.
+pub(crate) struct Components {
+    pub(crate) count: usize,
+    pub(crate) of: Vec<u32>,
+    /// Definitions by component, `starts[c]..starts[c + 1]`.
+    pub(crate) members: Vec<u32>,
+    pub(crate) starts: Vec<usize>,
 }
-fn components(definitions: &[Definition]) -> Components {
+pub(crate) fn components(
+    definitions: &[Definition],
+    follows: impl Fn(&crate::bundle::Edge) -> bool,
+) -> Components {
     const NONE: u32 = u32::MAX;
     let n = definitions.len();
     let mut index = vec![NONE; n];
@@ -311,6 +315,9 @@ fn components(definitions: &[Definition]) -> Components {
             let edges = &definitions[node as usize].edges;
             if let Some(edge) = edges.get(*position) {
                 *position += 1;
+                if !follows(edge) {
+                    continue;
+                }
                 let target = edge.to;
                 if index[target as usize] == NONE {
                     index[target as usize] = next;

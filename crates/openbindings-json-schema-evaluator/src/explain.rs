@@ -6,17 +6,15 @@
 //! definition, the original location of the schema it was projected from, and
 //! nothing else of the document: the error maps back to that location and the
 //! keyword. Every subschema position is a definition of its own, so the
-//! keyword is the first segment of the suffix. A definition a schema transform
-//! adds stands for one keyword of a projected definition, and maps to that
-//! keyword.
+//! keyword is the first segment of the suffix. A copy of a definition, which
+//! an in-place cycle's unfolding makes, maps to the definition it copies. A
+//! definition a schema transform adds stands for one keyword of a projected
+//! definition, and maps to that keyword.
 use crate::bundle;
 use openbindings::*;
 use openbindings_internal_json::backend;
 use openbindings_internal_schema::SchemaSpace;
 use std::collections::HashMap;
-
-/// The keyword the unevaluated-walk transform's definitions stand for.
-const TRANSFORMED: &str = "patternProperties";
 
 /// The original schema locations a prepared value contract's explanations name.
 pub(crate) struct Locations {
@@ -99,7 +97,7 @@ impl Locations {
         };
         let rest = fragment.strip_prefix("/$defs/")?;
         let (name, suffix) = rest.split_at(rest.find('/').unwrap_or(rest.len()));
-        let (number, added) = bundle::parse_name(name)?;
+        let (number, keyword) = bundle::parse_name(name)?;
         let at = self
             .projected
             .binary_search_by_key(&number, |(number, _)| *number)
@@ -117,7 +115,6 @@ impl Locations {
         };
         // A projected definition holds its original keywords, so the first
         // segment names one; a transform's definition stands for its keyword.
-        let keyword = added.then_some(TRANSFORMED);
         let first = suffix
             .strip_prefix('/')
             .map(|rest| rest.split('/').next().unwrap_or(rest))

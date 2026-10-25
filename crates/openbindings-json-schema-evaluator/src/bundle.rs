@@ -36,7 +36,10 @@ pub(crate) struct Bundle {
     /// The schema objects evaluation holds on reaching the entry definition:
     /// the root, the work marker's wrapper under markers, and the entry.
     pub(crate) entry_weight: u32,
-    markers: bool,
+    pub(crate) markers: bool,
+    /// What dynamic specialization grew the program by beyond the projected
+    /// definitions' estimate, in bytes as [`definition_charge`] counts them.
+    pub(crate) grown: usize,
 }
 /// One bundled definition: the projected definition it copies and what its
 /// references reach.
@@ -207,6 +210,7 @@ pub(crate) fn bundle(
         definitions: Vec::new(),
         out: Vec::new(),
         markers: options.markers,
+        grown: 0,
     };
     let entry = if dynamic {
         Specializer::new(&resources, options).run(&mut bundler, entry)?
@@ -217,6 +221,7 @@ pub(crate) fn bundle(
         names,
         definitions,
         out,
+        grown,
         ..
     } = bundler;
     Ok(Bundle {
@@ -226,6 +231,7 @@ pub(crate) fn bundle(
         entry,
         entry_weight: if options.markers { 3 } else { 2 },
         markers: options.markers,
+        grown,
     })
 }
 impl Bundle {
@@ -254,16 +260,26 @@ impl Bundle {
 }
 // Projected definitions keep their names (`n<number>`), specialized copies add
 // their context (`n<number>-<context>`), and a definition a schema transform
-// adds for one keyword of definition `n<number>` is `n<number>-p<index>`.
+// adds for one keyword of definition `n<number>` is `n<number>-p<index>`. An
+// in-place cycle's unfolding adds `-c<index>` to the name of each schema it
+// copies and `-r` to the stand-in for a schema applying again.
 /// A bundled definition name read back: the projected definition number it
-/// holds, and whether a schema transform added it.
-pub(crate) fn parse_name(name: &str) -> Option<(u32, bool)> {
+/// holds, and the keyword a schema transform's definition stands for.
+pub(crate) fn parse_name(name: &str) -> Option<(u32, Option<&'static str>)> {
     let projected = name.strip_prefix('n')?;
-    let (number, added) = match projected.split_once('-') {
-        Some((number, suffix)) => (number, suffix.starts_with('p')),
-        None => (projected, false),
+    let Some((number, suffix)) = projected.split_once('-') else {
+        return Some((projected.parse().ok()?, None));
     };
-    Some((number.parse().ok()?, added))
+    let mut keyword = None;
+    for segment in suffix.split('-') {
+        if let Some(index) = segment.strip_prefix('p')
+            && !index.is_empty()
+            && index.bytes().all(|byte| byte.is_ascii_digit())
+        {
+            keyword = Some("patternProperties");
+        }
+    }
+    Some((number.parse().ok()?, keyword))
 }
 /// The name of the definition a schema transform adds at `index` for a
 /// keyword of projected definition `number`.
@@ -282,6 +298,8 @@ struct Bundler {
     definitions: Vec<Definition>,
     out: Vec<Value>,
     markers: bool,
+    // What specialization grew the program by.
+    grown: usize,
 }
 impl Bundler {
     // The new definition's index; `None` past the most a `u32` numbers.
@@ -435,6 +453,26 @@ fn walk(
     Ok(())
 }
 
+/// Visit every reference below a bundled schema, with whether the path to it
+/// passes a keyword that applies to a child instance.
+pub(crate) fn references(
+    value: &mut Value,
+    descends: bool,
+    visit: &mut dyn FnMut(&mut String, bool),
+) {
+    let Value::Object(schema) = value else {
+        return;
+    };
+    for (keyword, child) in schema.iter_mut() {
+        let inner = descends || descending(keyword);
+        for subschema in subschemas(keyword, child) {
+            references(subschema, inner, visit);
+        }
+    }
+    if let Some(Value::String(reference)) = schema.get_mut("$ref") {
+        visit(reference, descends);
+    }
+}
 /// The edges of a bundled schema, whose references `resolve` maps to their
 /// targets' indices.
 pub(crate) fn edges(schema: &mut Value, resolve: &mut dyn FnMut(&str) -> Option<u32>) -> Vec<Edge> {
@@ -507,8 +545,8 @@ fn content(value: &Value) -> usize {
         _ => 0,
     }
 }
-// What a bundled definition holding `schema` is charged.
-fn definition_charge(schema: &Value) -> usize {
+/// What a bundled definition holding `schema` is charged.
+pub(crate) fn definition_charge(schema: &Value) -> usize {
     DEFINITION_BYTES.saturating_add(content(schema))
 }
 // The anchor names `value` looks up through `$dynamicRef` fragments.
@@ -735,6 +773,11 @@ impl<'a> Specializer<'a> {
             bundler.definitions[index as usize].edges = edges;
             bundler.out[index as usize] = schema;
         }
+        let growth = self.growth;
+        bundler.grown = growth
+            .definition_bytes
+            .saturating_add(growth.context_bytes)
+            .saturating_sub(growth.projected);
         Ok(entry)
     }
 }

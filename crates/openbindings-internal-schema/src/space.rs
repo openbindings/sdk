@@ -144,6 +144,9 @@ pub struct Definitions<'s> {
     pub entry_uri: String,
     pub resources: Vec<DefinedResource<'s>>,
     pub literals: Vec<JsonValue>,
+    /// Whether the reached schemas' in-place applicators and references form
+    /// a cycle, which [`SchemaSpace::program`] refuses (`in-place-cycle`).
+    pub in_place_cycle: bool,
 }
 // Debug is structural: no projected name, address or value is written.
 macro_rules! structural_debug {
@@ -854,13 +857,17 @@ impl SchemaSpace {
     /// those values, and the program holds its index in the value's place. The
     /// copy is parsed instead of the text the program would hold, so a caller
     /// can keep literals without keeping the program.
+    ///
+    /// Unlike [`Self::program`], it projects reached schemas whose in-place
+    /// applicators and references form a cycle, for an evaluator that stands
+    /// in for the schema applying again.
     pub fn program_unmapped(
         &self,
         entry: usize,
         control: &dyn Control,
     ) -> Result<UnmappedProgram, Failure> {
         control.check()?;
-        let reach = self.reach(entry, control)?;
+        let reach = self.reach_unchecked(entry, control)?;
         let mut literals = Vec::new();
         let (program, definitions) = self.projection(
             entry,
@@ -1164,14 +1171,20 @@ impl SchemaSpace {
     /// with its definitions in `$defs` order, each schema object's keywords in
     /// the order the program's text holds them, and each `const` and `enum`
     /// value copied into the same literal arena. It refuses exactly as
-    /// [`Self::program_unmapped`] does.
+    /// [`Self::program_unmapped`] does, and reports whether the reached
+    /// schemas form an in-place cycle.
     pub fn program_definitions(
         &self,
         entry: usize,
         control: &dyn Control,
     ) -> Result<Definitions<'_>, Failure> {
         control.check()?;
-        let reach = self.reach(entry, control)?;
+        let reach = self.reach_unchecked(entry, control)?;
+        let in_place_cycle = match self.check_cycles(&reach, control) {
+            Ok(()) => false,
+            Err(failure) if failure.reason == FailureReason::ConservativePreparation => true,
+            Err(failure) => return Err(failure),
+        };
         let namespace = PROGRAM_NAMESPACE;
         // The text's fixed bounds refuse with byte offsets in the text. The
         // definitions carry a bound on the bytes of text each definition and
@@ -1312,6 +1325,7 @@ impl SchemaSpace {
             entry_uri,
             resources: projected,
             literals: openbindings_internal_json::backend::standalone_list(&values),
+            in_place_cycle,
         })
     }
     pub fn check_known_node(&self, id: usize) -> Result<(), Failure> {
@@ -1384,6 +1398,12 @@ impl SchemaSpace {
         Ok(())
     }
     pub fn reach(&self, entry: usize, control: &dyn Control) -> Result<Reach, Failure> {
+        let out = self.reach_unchecked(entry, control)?;
+        self.check_cycles(&out, control)?;
+        Ok(out)
+    }
+    /// What [`Self::reach`] reaches, without refusing an in-place cycle.
+    pub fn reach_unchecked(&self, entry: usize, control: &dyn Control) -> Result<Reach, Failure> {
         let mut out = Reach::default();
         let mut queue = VecDeque::from([entry]);
         while let Some(id) = queue.pop_front() {
@@ -1499,7 +1519,6 @@ impl SchemaSpace {
                 }
             }
         }
-        self.check_cycles(&out, control)?;
         Ok(out)
     }
     pub fn check_cycles(&self, reach: &Reach, control: &dyn Control) -> Result<(), Failure> {

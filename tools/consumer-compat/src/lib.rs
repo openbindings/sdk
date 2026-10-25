@@ -96,8 +96,12 @@ mod tests {
     // Preparation and every verdict and explanation are the same whatever
     // order the consumer's serde_json maps keep: these outcomes were taken
     // from the SDK before projected definitions, whose text always held
-    // keywords and subschemas by name. The `po` configuration keeps insertion
-    // order, and with `check` each preparation also checks its conversion.
+    // keywords and subschemas by name. The `patternProperties` reason case's
+    // were taken again once a name the evaluator does not match became a
+    // stand-in: the first such name by name gives a value's no-verdict its
+    // reason, as it gave the refusal before. The `po` configuration keeps
+    // insertion order, and with `check` each preparation also checks its
+    // conversion.
     #[cfg(feature = "evaluator")]
     #[test]
     fn serde_json_member_order_never_changes_preparation_or_verdicts() {

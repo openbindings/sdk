@@ -1,6 +1,7 @@
 //! What one evaluation pass met that the SDK's own keywords report: a string
-//! that reached a pattern the evaluator does not match, or exact arithmetic
-//! too large to decide. Either ends the pass with no verdict.
+//! that reached a pattern the evaluator does not match, a stand-in for a
+//! problem preparation set aside, or exact arithmetic too large to decide.
+//! Any of them ends the pass with no verdict.
 use crate::pattern::Unsupported;
 use std::cell::Cell;
 
@@ -15,6 +16,12 @@ pub(crate) enum Stop {
     Unmatched(Unsupported, u32),
     /// The stand-in for a schema resource that was not supplied, by index.
     Missing(u32),
+    /// The stand-in for a schema that would apply again to the same
+    /// instance, by index.
+    Cycle(u32),
+    /// The stand-in for the `patternProperties` names of one schema that the
+    /// evaluator does not match, reached by a nonempty object, by index.
+    Names(u32),
 }
 
 thread_local! {
@@ -40,11 +47,12 @@ pub(crate) fn unmatched(unsupported: Unsupported, site: u32) {
         STOP.set(Some(Stop::Unmatched(unsupported, site)));
     }
 }
-/// Record that the pass reached the stand-in for a resource that was not
-/// supplied.
-pub(crate) fn missing(at: u32) {
+/// Record that the pass reached a stand-in: for a resource that was not
+/// supplied, a schema that would apply again, or names the evaluator does not
+/// match.
+pub(crate) fn stand_in(stop: Stop) {
     if STOP.get().is_none() {
-        STOP.set(Some(Stop::Missing(at)));
+        STOP.set(Some(stop));
     }
 }
 /// Record that the pass met arithmetic it cannot decide; this takes precedence
@@ -63,7 +71,7 @@ mod tests {
             let inner = scope(arithmetic);
             assert_eq!(inner.1, Some(Stop::Arithmetic));
             unmatched(Unsupported::PropertyEscape, 2);
-            missing(3);
+            stand_in(Stop::Missing(3));
             7
         });
         assert_eq!(outer, 7);
@@ -75,10 +83,15 @@ mod tests {
         });
         assert_eq!(stop, Some(Stop::Arithmetic));
         let (_, stop) = scope(|| {
-            missing(3);
+            stand_in(Stop::Missing(3));
             unmatched(Unsupported::Backtracking, 1);
         });
         assert_eq!(stop, Some(Stop::Missing(3)));
+        let (_, stop) = scope(|| {
+            stand_in(Stop::Cycle(4));
+            stand_in(Stop::Names(5));
+        });
+        assert_eq!(stop, Some(Stop::Cycle(4)));
     }
     #[test]
     fn a_pass_left_by_unwinding_restores_the_enclosing_pass() {

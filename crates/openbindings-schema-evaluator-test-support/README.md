@@ -12,12 +12,19 @@ separately.
 ```rust
 use openbindings_schema_evaluator_test_support::{run, Options};
 let evaluator = openbindings_json_schema_evaluator::DefaultEvaluator::new();
-// The default evaluator's qualified limitations.
-let options = Options::without(&[
+// The default evaluator's qualified limitations. It decides the two cases of
+// those capabilities whose values never reach a property escape.
+let mut options = Options::without(&[
     "unicode-property-matching",
     "backtracking-pattern-matching",
     "undefined-results",
 ]);
+options.permitted_refusals.retain(|id, _| {
+    !matches!(
+        id.as_str(),
+        "adversarial/lazy-pattern-properties/0" | "adversarial/lazy-pattern-properties/1"
+    )
+});
 let report = run(&evaluator, &options);
 assert!(report.is_success());
 ```

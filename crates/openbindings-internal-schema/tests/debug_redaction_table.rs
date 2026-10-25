@@ -122,6 +122,7 @@ fn internal_rows(context: &JsonValue) -> Vec<Row> {
                     nodes: 0,
                 }],
                 literals: vec![context.clone()],
+                in_place_cycle: false,
             },
         ),
     ]

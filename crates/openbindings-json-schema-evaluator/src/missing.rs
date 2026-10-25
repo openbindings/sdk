@@ -18,7 +18,8 @@
 //! would read a stand-in as annotating nothing and decide without reaching
 //! it. A value contract in which such a keyword's annotation sources can reach a
 //! stand-in therefore refuses preparation, whatever order the library
-//! evaluates keywords in.
+//! evaluates keywords in. The same holds for the stand-in for an in-place
+//! cycle and for `patternProperties` names the evaluator does not match.
 use crate::bundle::Bundle;
 use openbindings::JsonValue;
 use openbindings_internal_schema::{ProjectedResource, SchemaSpace};
@@ -53,15 +54,15 @@ pub(crate) fn stand_ins(uris: &[String]) -> impl Iterator<Item = ProjectedResour
     })
 }
 
-/// The missing resource, by its stand-in's index, that an
+/// The stand-in, by the index its `keyword` holds, that an
 /// `unevaluatedProperties` or `unevaluatedItems` keyword's annotation sources
 /// reach, if any: every schema reached from the keyword's own schema through
 /// the in-place applicators the library's walk follows (`$ref`, `$dynamicRef`,
 /// `allOf`, `anyOf`, `oneOf`, `if`, `then`, `else` and `dependentSchemas`).
-pub(crate) fn behind_unevaluated(bundle: &Bundle) -> Option<u32> {
+pub(crate) fn behind_unevaluated(bundle: &Bundle, keyword: &str) -> Option<u32> {
     let stand_in = |index: usize| {
         bundle.schemas[index]
-            .get(KEYWORD)
+            .get(keyword)
             .and_then(serde_json::Value::as_u64)
             .and_then(|at| u32::try_from(at).ok())
     };

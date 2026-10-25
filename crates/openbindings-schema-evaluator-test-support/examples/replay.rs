@@ -27,15 +27,20 @@ impl SchemaEvaluator for OriginalContext {
     }
 }
 fn main() {
-    // The default evaluator's qualified limitations.
-    let report = run(
-        &OriginalContext,
-        &Options::without(&[
-            "unicode-property-matching",
-            "backtracking-pattern-matching",
-            "undefined-results",
-        ]),
-    );
+    // The default evaluator's qualified limitations. It decides the two cases
+    // of those capabilities whose values never reach a property escape.
+    let mut options = Options::without(&[
+        "unicode-property-matching",
+        "backtracking-pattern-matching",
+        "undefined-results",
+    ]);
+    options.permitted_refusals.retain(|id, _| {
+        !matches!(
+            id.as_str(),
+            "adversarial/lazy-pattern-properties/0" | "adversarial/lazy-pattern-properties/1"
+        )
+    });
+    let report = run(&OriginalContext, &options);
     // The receipt is written as JSON text: a report can carry an exact pointer
     // through a member name with an unpaired unit, which no `Value` holds.
     #[derive(serde::Serialize)]

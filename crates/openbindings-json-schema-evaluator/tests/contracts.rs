@@ -344,7 +344,10 @@ fn cancellation_during_preparation_allows_independent_retries() {
 }
 #[test]
 fn conservative_preparation_is_not_semantic_undefinedness() {
-    let result = prepare(r#"{"anyOf":[true,{"pattern":"["}]}"#).explain(&value(r#""secret""#));
+    // A string whose verdict depends on an invalid pattern's match gives no
+    // verdict, conservatively, rather than establishing an undefined result;
+    // one a true branch decides before the pattern keeps its verdict.
+    let result = prepare(r#"{"anyOf":[false,{"pattern":"["}]}"#).explain(&value(r#""secret""#));
     assert!(matches!(
         result,
         ValueOutcome::NoVerdict {
@@ -354,6 +357,14 @@ fn conservative_preparation_is_not_semantic_undefinedness() {
             }
         }
     ));
+    for schema in [r#"{"anyOf":[true,{"pattern":"["}]}"#] {
+        for value in [value(r#""secret""#), value("1")] {
+            assert!(matches!(
+                prepare(schema).explain(&value),
+                ValueOutcome::Satisfies
+            ));
+        }
+    }
     // Passing anyOf annotations still matter despite a true branch.
     let prepared = prepare(
         r#"{"anyOf":[{"properties":{"x":{"type":"string"}}},true],"unevaluatedProperties":false}"#,
