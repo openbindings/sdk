@@ -84,6 +84,27 @@ impl Locations {
         locations
     }
 
+    /// The original location of the keyword the library names by `uri` in a
+    /// bounds program, whose copies hold their keywords below a guard's `then`
+    /// (`bundle::guard_definition`), and the keyword a transform's definition
+    /// stands for.
+    pub(crate) fn locate_bounds(
+        &self,
+        uri: &str,
+    ) -> Option<(SchemaLocation, Option<&'static str>)> {
+        let rest = uri
+            .strip_prefix(bundle::BOUNDS_URI)?
+            .strip_prefix("#/$defs/")?;
+        let (name, suffix) = rest.split_at(rest.find('/').unwrap_or(rest.len()));
+        let suffix = if bundle::is_bounds_copy(name) {
+            suffix
+                .strip_prefix("/then")
+                .filter(|keywords| keywords.is_empty() || keywords.starts_with('/'))?
+        } else {
+            suffix
+        };
+        self.locate(&format!("{}#/$defs/{name}{suffix}", bundle::URI))
+    }
     /// The original location of the keyword the library names by `uri`, and
     /// the keyword a transform's definition stands for.
     pub(crate) fn locate(&self, uri: &str) -> Option<(SchemaLocation, Option<&'static str>)> {

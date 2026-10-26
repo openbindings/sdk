@@ -211,7 +211,9 @@ impl Default for Limits {
 /// escape or holds the non-word boundary `\B`. A value whose verdict depends
 /// on how a stand-in comes out gives no verdict naming it; every other value
 /// keeps the verdict that holds however the stand-ins come out, which a
-/// second program decides for a pass that reaches one. A value contract in
+/// second program decides for a pass that reaches one, within eight times
+/// that pass's work and 64 units more, counted as [`Limits::evaluation_steps`]
+/// counts work. A value contract in
 /// which an `unevaluatedProperties` or `unevaluatedItems` keyword's
 /// annotation sources reach a stand-in for a missing resource, a cycle or
 /// `patternProperties` names, a reference to a fragment of a missing
@@ -769,7 +771,7 @@ impl DefaultEvaluator {
             missing: !missing.is_empty(),
             cycles: !cycles.is_empty(),
             names: !names.is_empty(),
-            lower: false,
+            phase: false,
         };
         let document = bundle.document();
         let first = memory.first();
@@ -802,7 +804,7 @@ impl DefaultEvaluator {
         drop(document);
         control.check()?;
         let bounds = match program {
-            Some(program) => self.bounds(program, &keywords, host, control)?,
+            Some(program) => self.bounds(program, &keywords, registered, host, control)?,
             None => None,
         };
         let stand_ins = standing.then(|| {
@@ -832,6 +834,7 @@ impl DefaultEvaluator {
         &self,
         program: bounds::Program,
         keywords: &operands::Keywords,
+        registered: operands::Registered,
         host: stack::Stack,
         control: &dyn WorkControl,
     ) -> Result<Option<Bounds>, NoVerdict> {
@@ -839,11 +842,13 @@ impl DefaultEvaluator {
             bundle,
             lower,
             upper,
+            original,
         } = program;
-        let weight = bundle::bounds_entry_weight(bundle.markers);
-        let (Ok(lower_bound), Ok(upper_bound)) = (
+        let weight = bundle::BOUNDS_ENTRY_WEIGHT;
+        let (Ok(lower_bound), Ok(upper_bound), Ok(original_bound)) = (
             depth::bound(&bundle.definitions, lower, weight),
             depth::bound(&bundle.definitions, upper, weight),
+            depth::bound(&bundle.definitions, original, weight),
         ) else {
             return Ok(None);
         };
@@ -878,12 +883,12 @@ impl DefaultEvaluator {
             }
         };
         control.check()?;
-        let markers = bundle.markers;
-        let document = bundle.document_with_bounds(lower, upper);
+        let document = bundle.document_with_bounds(lower, upper, original);
+        // The value contract's own schemas hold its stand-ins' keywords.
         let registered = operands::Registered {
-            markers,
-            lower: true,
-            ..operands::Registered::default()
+            markers: true,
+            phase: true,
+            ..registered
         };
         let options = keywords
             .register(jsonschema::options_for::<FlatJson>(), registered)
@@ -899,11 +904,12 @@ impl DefaultEvaluator {
         let depth = host.evaluation_depth();
         Ok(Some(Bounds {
             validator,
-            deepest: [lower_bound.deepest(depth), upper_bound.deepest(depth)],
-            deepest_explained: [
-                lower_bound.deepest(depth / 2),
-                upper_bound.deepest(depth / 2),
+            deepest: [
+                lower_bound.deepest(depth),
+                upper_bound.deepest(depth),
+                original_bound.deepest(depth),
             ],
+            deepest_explained: upper_bound.deepest(depth / 2),
         }))
     }
 }
@@ -1453,27 +1459,46 @@ struct StandIns {
     names: Vec<UnmatchedNames>,
     bounds: Option<Bounds>,
 }
-// A compiled bounds program (`crate::bounds`), and the deepest values its
-// lower and upper entries admit, as `Compiled` holds its own.
+/// How many times the work of a verdict pass that reached a stand-in the pass
+/// over a bound may do, as the evaluation work allowance counts work.
+const BOUNDS_WORK: usize = 8;
+/// How many times the work of collecting the value contract's own errors the
+/// collection that explains a failure through a bound may do.
+const EXPLANATION_WORK: usize = 64;
+/// The work a pass over a bound may do beyond that, for the program's own
+/// root and entries.
+const BOUNDS_SLACK: usize = 64;
+// A compiled bounds program (`crate::bounds`), the deepest values its entries
+// admit, by phase, as `Compiled` holds its own, and the deepest its upper
+// entry explains.
 struct Bounds {
     validator: jsonschema::Validator<FlatJson>,
-    deepest: [Option<usize>; 2],
-    deepest_explained: [Option<usize>; 2],
+    deepest: [Option<usize>; 3],
+    deepest_explained: Option<usize>,
 }
 impl Bounds {
-    // The first of the library's errors for `value` against the lower or the
-    // upper bound, which reaches the same verdict as its validity test. Every
-    // use of the program goes through this one call to the library's error
+    // The deepest values the entry for `phase` admits.
+    fn deepest(&self, phase: pass::Phase) -> Option<usize> {
+        self.deepest[match phase {
+            pass::Phase::Lower => 0,
+            pass::Phase::Upper | pass::Phase::UpperErrors => 1,
+            pass::Phase::Original | pass::Phase::OriginalErrors => 2,
+        }]
+    }
+    // The first of the library's errors for `value` against the entry for
+    // `phase`, which reaches the same verdict as its validity test. Every use
+    // of the program goes through this one call to the library's error
     // collection, which the value contract's own passes never call, so its
     // verdict passes and explanations are compiled as they would be without
-    // the program.
+    // the program. A verdict phase's root makes the library check its entry
+    // by its validity test.
     #[inline(never)]
     fn first_error<'v>(
         &'v self,
-        lower: bool,
+        phase: pass::Phase,
         value: &'v JsonValue,
     ) -> Result<(), jsonschema::ValidationError<'v>> {
-        pass::bound(lower, || {
+        pass::bound(phase, || {
             match self.validator.iter_errors(backend::view(value)).next() {
                 Some(error) => Err(error),
                 None => Ok(()),
@@ -1560,17 +1585,56 @@ impl Compiled {
             return None;
         }
         let bounds = self.stand_ins.as_ref()?.bounds.as_ref()?;
-        if !self.nests_within(value, bounds.deepest[usize::from(!valid)]) {
+        let phase = if valid {
+            pass::Phase::Lower
+        } else {
+            pass::Phase::Upper
+        };
+        if !self.nests_within(value, bounds.deepest(phase)) {
             return None;
         }
+        let allowance = self.allowance(bounds, pass::Phase::Original, BOUNDS_WORK, value)?;
         let bound = self.run(
-            || bounds.first_error(valid, value).is_ok(),
+            || {
+                openbindings_internal_json::work::scope(allowance, || {
+                    bounds.first_error(phase, value).is_ok()
+                })
+            },
             |holds, stop| Ok((holds, stop)),
         );
         match bound {
-            Ok((holds, None)) if holds == valid => Some(bounds),
+            Ok((Ok(holds), None)) if holds == valid => Some(bounds),
             _ => None,
         }
+    }
+    // The work a pass over `bounds` for `value` may do: `times` the work of
+    // the value contract's own pass, which the program's own entry measures
+    // in `phase`, checking validity or collecting errors, and `BOUNDS_SLACK`
+    // more. Past that, a pass gives up, so deciding or explaining a value
+    // never costs more than a multiple of checking or explaining it. `None`
+    // when that pass cannot be measured within the contract's limits.
+    fn allowance(
+        &self,
+        bounds: &Bounds,
+        phase: pass::Phase,
+        times: usize,
+        value: &JsonValue,
+    ) -> Option<usize> {
+        if !self.nests_within(value, bounds.deepest(phase)) {
+            return None;
+        }
+        let measured = self.run(
+            || {
+                openbindings_internal_json::work::measure(|| {
+                    bounds.first_error(phase, value).is_ok()
+                })
+            },
+            |measured, _| Ok(measured),
+        );
+        let Ok(Ok((_, work))) = measured else {
+            return None;
+        };
+        Some(work.saturating_mul(times).saturating_add(BOUNDS_SLACK))
     }
     // One verdict or diagnostic pass, and what it evaluated unless it met a
     // reason to give no verdict. The pass carries only `evaluate`'s own
@@ -1738,10 +1802,12 @@ impl Compiled {
             problems_complete: false,
         }
     }
-    // The explanation of a value the bounds program decided fails: the first
-    // of the library's errors for its upper bound, which fails however the
-    // stand-ins come out. It is a function of its own, beside the value
-    // contract's own explanation, which then compiles as it would without it.
+    // The explanation of a value whose failure the bounds program shows: the
+    // library's first error for its upper bound, which fails however the
+    // stand-ins come out, within a multiple of the work of collecting the
+    // value contract's own errors. It is a function of its own, beside the
+    // value contract's own explanation, which then compiles as it would
+    // without it.
     #[inline(never)]
     fn bounds_diagnostics(
         &self,
@@ -1749,16 +1815,21 @@ impl Compiled {
         value: &JsonValue,
         control: &dyn WorkControl,
     ) -> ValueOutcome {
-        let explains = self.nests_within(value, bounds.deepest_explained[1]);
-        let problem = (explains).then(|| {
+        let explains = self.nests_within(value, bounds.deepest_explained);
+        let allowance = explains
+            .then(|| self.allowance(bounds, pass::Phase::OriginalErrors, EXPLANATION_WORK, value))
+            .flatten();
+        let problem = allowance.map(|allowance| {
             self.pass(|| -> Result<_, NoVerdict> {
                 control.check()?;
-                let Err(error) = bounds.first_error(false, value) else {
+                let Ok(Err(error)) = openbindings_internal_json::work::scope(allowance, || {
+                    bounds.first_error(pass::Phase::UpperErrors, value)
+                }) else {
                     return Ok(None);
                 };
                 let Some((schema, keyword)) = error
                     .absolute_keyword_location()
-                    .and_then(|uri| self.locations.locate(uri.as_str()))
+                    .and_then(|uri| self.locations.locate_bounds(uri.as_str()))
                 else {
                     return Ok(None);
                 };

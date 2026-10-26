@@ -11,8 +11,10 @@
 //!
 //! A bounds program computes that. It holds two copies of each schema that can
 //! reach a stand-in, one for the least validity its answers can give the
-//! schema (the lower bound) and one for the most (the upper bound), and shares
-//! every other schema with the value contract's own program. A stand-in is
+//! schema (the lower bound) and one for the most (the upper bound), beside
+//! every schema of the value contract's own program, and its root applies the
+//! lower copy of the entry, the upper copy or the entry itself, as the pass's
+//! phase (`crate::pass::Phase`) asks. A stand-in is
 //! `false` in a lower copy and `true` in an upper one. A keyword whose validity
 //! only grows with its subschemas' (`allOf`, `anyOf`, `$ref`, `properties`,
 //! `items`, `contains` without `maxContains` and the rest) applies the same
@@ -53,6 +55,18 @@
 //! `$ref` and `allOf`, has no bounds program: its copies are `false` and
 //! `true`, which decide nothing.
 //!
+//! A copy refers to both copies of a subschema where its keyword is written
+//! from both bounds, so nested `oneOf`, `if` and counted `contains` keywords
+//! multiply the work of a pass over the copies. Every definition that can
+//! reach a stand-in, copies and the value contract's own alike, is therefore
+//! guarded by a work marker (`bundle::guard_definition`), and a pass over a
+//! bound may do only a multiple of the work of the value contract's own entry,
+//! which a pass over it in this program measures in the same units: past
+//! that, a guard fails, the pass enters none of them more, and the value is
+//! not decided. A schema that reaches no stand-in reads as the value
+//! contract's own program writes it: no copy duplicates it, and a pass stops
+//! reading the instance once its allowance is spent.
+//!
 //! An `unevaluatedProperties` or `unevaluatedItems` keyword reads annotations
 //! of the schemas that apply to the same instance, and a schema's annotations
 //! are kept only while it holds: a lower copy's are a subset of what any way
@@ -68,11 +82,13 @@ use crate::bundle::{self, Bundle, Definition};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 
-/// A bounds program, with the bundled indices of its two entries.
+/// A bounds program, with the bundled indices of its entries: the lower and
+/// upper copies of the value contract's entry and the entry itself.
 pub(crate) struct Program {
     pub(crate) bundle: Bundle,
     pub(crate) lower: u32,
     pub(crate) upper: u32,
+    pub(crate) original: u32,
 }
 
 /// The bounds program of `source`, a bundled value contract whose stand-in
@@ -114,8 +130,6 @@ struct Bounds<'s> {
     // Whether each source definition holds an unevaluated keyword whose
     // copies are `false` and `true`.
     unknown: Vec<bool>,
-    // Whether the program shares each source definition.
-    shared: Vec<bool>,
     // The definitions the program adds: name, projected number, the source
     // definition a copy copies, and schema.
     added: Vec<(String, u32, u32, Value)>,
@@ -196,7 +210,6 @@ impl<'s> Bounds<'s> {
             stand_ins,
             tainted: vec![false; count],
             unknown: vec![false; count],
-            shared: vec![false; count],
             added: Vec::new(),
             copies: HashMap::new(),
             queue: Vec::new(),
@@ -349,7 +362,6 @@ impl<'s> Bounds<'s> {
     // and the shared definition otherwise.
     fn copy(&mut self, at: u32, upper: bool) -> u32 {
         if !self.tainted[at as usize] {
-            self.shared[at as usize] = true;
             return at;
         }
         if let Some(&index) = self.copies.get(&(at, upper)) {
@@ -584,78 +596,56 @@ impl<'s> Bounds<'s> {
         }
         out
     }
-    // The program: every source definition it shares, then every one it adds.
+    // The program: every source definition, then every one it adds. Those
+    // that can reach a stand-in, copies and the value contract's own alike,
+    // are guarded by a work marker, which counts each entry and enters none
+    // once a pass's work allowance is spent; every other definition reads as
+    // the value contract's own program writes it.
     fn finish(mut self, lower: u32, upper: u32) -> Program {
         let source = self.source;
-        // A shared definition's references reach only definitions that reach
-        // no stand-in, which the program shares too.
-        let mut pending: Vec<u32> = (0..source.schemas.len() as u32)
-            .filter(|&at| self.shared[at as usize])
-            .collect();
-        while let Some(at) = pending.pop() {
-            for edge in &source.definitions[at as usize].edges {
-                if !self.shared[edge.to as usize] {
-                    self.shared[edge.to as usize] = true;
-                    pending.push(edge.to);
-                }
-            }
-        }
         let count = source.schemas.len();
-        let mut renumbered = vec![u32::MAX; count + self.added.len()];
-        let mut names = Vec::new();
-        let mut schemas = Vec::new();
-        let mut definitions = Vec::new();
-        for at in (0..count).filter(|&at| self.shared[at]) {
-            renumbered[at] = names.len() as u32;
-            names.push(source.names[at].clone());
-            schemas.push(source.schemas[at].clone());
-        }
-        let first_added = names.len();
+        let mut names = source.names.clone();
+        let mut schemas = source.schemas.clone();
         let mut numbers = Vec::with_capacity(self.added.len());
-        for (at, (name, number, _, schema)) in
-            std::mem::take(&mut self.added).into_iter().enumerate()
-        {
-            renumbered[count + at] = names.len() as u32;
+        for (name, number, _, schema) in std::mem::take(&mut self.added) {
             names.push(name);
             schemas.push(schema);
             numbers.push(number);
-        }
-        for at in (0..count).filter(|&at| self.shared[at]) {
-            let definition = &source.definitions[at];
-            definitions.push(Definition {
-                number: definition.number,
-                edges: definition
-                    .edges
-                    .iter()
-                    .map(|edge| bundle::Edge {
-                        to: renumbered[edge.to as usize],
-                        ..*edge
-                    })
-                    .collect(),
-            });
         }
         let indices: HashMap<&str, u32> = names
             .iter()
             .enumerate()
             .map(|(index, name)| (name.as_str(), index as u32))
             .collect();
-        for (schema, number) in schemas[first_added..].iter_mut().zip(numbers) {
+        let mut definitions = Vec::with_capacity(schemas.len());
+        for (at, schema) in schemas.iter_mut().enumerate() {
+            if at < count && !self.tainted[at] {
+                definitions.push(Definition {
+                    number: source.definitions[at].number,
+                    edges: source.definitions[at].edges.clone(),
+                });
+                continue;
+            }
+            let number = match at.checked_sub(count) {
+                Some(added) => numbers[added],
+                None => source.definitions[at].number,
+            };
             let mut resolve = |reference: &str| {
                 reference
                     .strip_prefix("#/$defs/")
                     .and_then(|name| indices.get(name))
                     .copied()
             };
+            bundle::guard_definition(schema);
             let edges = bundle::edges(schema, &mut resolve);
             definitions.push(Definition { number, edges });
         }
         drop(indices);
-        let lower = renumbered[lower as usize];
-        let upper = renumbered[upper as usize];
         Program {
-            bundle: Bundle::assembled(names, schemas, definitions, lower, source.markers),
+            bundle: Bundle::assembled(names, schemas, definitions, source.entry, source.markers),
             lower,
             upper,
+            original: source.entry,
         }
     }
 }

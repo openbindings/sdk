@@ -260,32 +260,34 @@ impl Bundle {
         root.insert("$defs".into(), Value::Object(definitions));
         Value::Object(root)
     }
-    /// The bundle of a bounds program: its two entries are reached from a
-    /// root that asks which bound a pass computes.
-    pub(crate) fn document_with_bounds(self, lower: u32, upper: u32) -> Value {
-        let markers = self.markers;
-        let entry = |index: u32| {
-            let reference =
-                serde_json::json!({ "$ref": format!("#/$defs/{}", self.names[index as usize]) });
-            if markers {
-                serde_json::json!({ "allOf": [{ MARKER: 0 }, reference] })
-            } else {
-                reference
-            }
-        };
-        let (lower, upper) = (entry(lower), entry(upper));
+    /// The bundle of a bounds program, whose definitions `guard_definition`
+    /// guards: its entries are reached from a root whose `allOf` items each
+    /// apply one where the pass's phase is theirs. A verdict phase applies its
+    /// entry under `not` twice, which the library checks by its validity test
+    /// even while it collects errors, so such a pass reports at most that one
+    /// error and takes no longer than a validity test; the phases for errors
+    /// apply the upper entry and the value contract's own entry as they are.
+    pub(crate) fn document_with_bounds(self, lower: u32, upper: u32, original: u32) -> Value {
+        use crate::pass::Phase;
+        let entry = |index: u32| serde_json::json!({ "$ref": format!("#/$defs/{}", self.names[index as usize]) });
+        let verdict = |index: u32| serde_json::json!({ "not": { "not": entry(index) } });
+        let phase = |phase: Phase, then: Value| serde_json::json!({ "if": { crate::operands::PHASE: phase.index() }, "then": then });
         let mut root = Map::new();
-        root.insert("$id".into(), Value::String(URI.into()));
+        root.insert("$id".into(), Value::String(BOUNDS_URI.into()));
         root.insert(
             "$schema".into(),
             Value::String("https://json-schema.org/draft/2020-12/schema".into()),
         );
         root.insert(
-            "if".into(),
-            serde_json::json!({ crate::operands::LOWER: 0 }),
+            "allOf".into(),
+            serde_json::json!([
+                phase(Phase::Lower, verdict(lower)),
+                phase(Phase::Upper, verdict(upper)),
+                phase(Phase::Original, verdict(original)),
+                phase(Phase::UpperErrors, entry(upper)),
+                phase(Phase::OriginalErrors, entry(original)),
+            ]),
         );
-        root.insert("then".into(), lower);
-        root.insert("else".into(), upper);
         let definitions: Map<String, Value> = self.names.into_iter().zip(self.schemas).collect();
         root.insert("$defs".into(), Value::Object(definitions));
         Value::Object(root)
@@ -310,12 +312,10 @@ impl Bundle {
         }
     }
 }
-/// The schema objects a bounds program's pass holds on reaching either entry:
-/// the root, the branch its condition selects, the work marker's wrapper
-/// under markers, and the entry.
-pub(crate) fn bounds_entry_weight(markers: bool) -> u32 {
-    if markers { 4 } else { 3 }
-}
+/// The schema objects a bounds program's pass holds on reaching any entry, at
+/// most: the root, its phase's `allOf` item and `then`, a verdict phase's two
+/// `not` subschemas and the entry.
+pub(crate) const BOUNDS_ENTRY_WEIGHT: u32 = 6;
 // Projected definitions keep their names (`n<number>`), specialized copies add
 // their context (`n<number>-<context>`), and a definition a schema transform
 // adds for one keyword of definition `n<number>` is `n<number>-p<index>`. An
@@ -343,6 +343,14 @@ pub(crate) fn parse_name(name: &str) -> Option<(u32, Option<&'static str>)> {
         }
     }
     Some((number.parse().ok()?, keyword))
+}
+/// Whether a bundled definition's name is one a bounds program adds: a copy
+/// for a lower or upper bound, or a definition standing for one of its
+/// keywords.
+pub(crate) fn is_bounds_copy(name: &str) -> bool {
+    name.split('-')
+        .skip(1)
+        .any(|segment| segment == "l" || segment == "u" || segment.starts_with('k'))
 }
 /// The keywords a bounds program's added definitions stand for.
 const STANDS_FOR: [&str; 5] = [
@@ -603,6 +611,20 @@ pub(crate) fn edges(schema: &mut Value, resolve: &mut dyn FnMut(&str) -> Option<
     );
     edges
 }
+/// Guard a bounds program's definition by a work marker: its keywords apply
+/// under `{"if": {MARKER: 0}, "then": ...}`, so a pass whose work allowance
+/// is spent enters nothing more of it, whether it checks validity or collects
+/// errors. The library collects every `allOf` item's errors, even after one
+/// fails, but applies `then` only where `if` holds.
+pub(crate) fn guard_definition(schema: &mut Value) {
+    if let Value::Object(_) = schema {
+        let keywords = std::mem::take(schema);
+        *schema = serde_json::json!({ "if": { MARKER: 0 }, "then": keywords });
+    }
+}
+/// A bounds program's resource URI, under which its errors' locations hold a
+/// guarded definition's keywords below the guard's `then`.
+pub(crate) const BOUNDS_URI: &str = "urn:openbindings:bounds";
 
 // Dynamic specialization. A context assigns each looked-up anchor name the
 // resource that declares it outermost on the evaluation path, if any. Only the

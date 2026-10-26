@@ -122,18 +122,18 @@ impl<'i> Keyword<'i, FlatJson> for Names {
         Ok(())
     }
 }
-/// The keyword a bounds program's root asks which bound a pass computes:
-/// it holds in a pass for the lower bound.
-struct Lower;
-impl<'i> Keyword<'i, FlatJson> for Lower {
+/// The keyword a bounds program's root asks which entry a pass evaluates:
+/// it holds in a pass for its phase.
+struct Phase(crate::pass::Phase);
+impl<'i> Keyword<'i, FlatJson> for Phase {
     fn is_valid(&self, _: View<'i>) -> bool {
-        crate::pass::lower()
+        crate::pass::phase() == self.0
     }
     fn validate(&self, instance: View<'i>) -> Result<(), ValidationError<'i>> {
         if <Self as Keyword<'i, FlatJson>>::is_valid(self, instance) {
             Ok(())
         } else {
-            Err(ValidationError::custom("not the lower bound"))
+            Err(ValidationError::custom("another bounds phase"))
         }
     }
 }
@@ -149,8 +149,9 @@ pub(crate) const NAME_SCHEMAS: &str = "$obNameSchemas";
 /// The keyword the same schema's `additionalProperties` applies with each
 /// member it reaches, which might match one of those names.
 pub(crate) const NAME_MEMBER: &str = "$obNameMember";
-/// The keyword a bounds program's root asks which bound a pass computes.
-pub(crate) const LOWER: &str = "$obLower";
+/// The keyword a bounds program's root asks which entry a pass evaluates;
+/// its value is the phase's index.
+pub(crate) const PHASE: &str = "$obPhase";
 /// The bytes a run matcher's place among a value contract's matchers takes,
 /// as 64-bit hosts lay a matcher out. A 32-bit host takes less, and the
 /// pattern memory counts this on every host, so no outcome depends on it.
@@ -788,7 +789,7 @@ pub(crate) struct Registered {
     /// The unmatched-names stand-in.
     pub(crate) names: bool,
     /// The bounds program's root.
-    pub(crate) lower: bool,
+    pub(crate) phase: bool,
 }
 impl Keywords {
     /// The value contract's `pattern` matchers.
@@ -831,8 +832,14 @@ impl Keywords {
                 Ok(Box::new(StandIn(crate::pass::Stop::Names(index(value)?))))
             });
         }
-        if registered.lower {
-            options = options.with_keyword(LOWER, |_, _, _| Ok(Box::new(Lower)));
+        if registered.phase {
+            options = options.with_keyword(PHASE, |_, value, _| {
+                let phase = value
+                    .as_u64()
+                    .and_then(crate::pass::Phase::from_index)
+                    .ok_or_else(|| ValidationError::custom("invalid internal bounds phase"))?;
+                Ok(Box::new(Phase(phase)))
+            });
         }
         if self.matched {
             let keyword = self.patterns.clone();

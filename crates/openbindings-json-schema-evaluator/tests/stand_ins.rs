@@ -445,3 +445,47 @@ fn additional_properties_beside_an_unmatched_name() {
         assert_eq!(verdict(&contract.explain(&value)), expected);
     }
 }
+
+// A copy written from both bounds of its subschemas refers to both copies of
+// each, so nested `oneOf`, `if` and counted `contains` keywords would double a
+// bound's work at every level. A bound's pass does at most a multiple of the
+// verdict pass's work, so thirty nested levels over a stand-in give its
+// no-verdict as quickly as the verdict pass does, where doubling would take
+// days.
+#[test]
+fn nested_keywords_written_from_both_bounds_cost_a_multiple_of_the_verdict_pass() {
+    let leaves = [
+        (json!({"$ref": MISSING}), "resource-unavailable"),
+        (json!({"pattern": "(?=a)"}), "pattern-backtracking"),
+        (json!({"$ref": "#/operations/op/input"}), "in-place-cycle"),
+    ];
+    let wraps: [fn(Value) -> Value; 3] = [
+        |inner| json!({"oneOf": [inner, {"type": "null"}]}),
+        |inner| json!({"if": inner, "then": {"type": "string"}, "else": {"type": "integer"}}),
+        |inner| json!({"anyOf": [{"type": "string"}, {"contains": inner, "maxContains": 1}]}),
+    ];
+    let (sent, received) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        for (leaf, code) in leaves {
+            for wrap in wraps {
+                let mut schema = leaf.clone();
+                for _ in 0..30 {
+                    schema = wrap(schema);
+                }
+                let contract = prepare(&schema, &[]).unwrap();
+                for value in [r#""a""#, r#"["a"]"#] {
+                    let value = JsonValue::parse(value).unwrap();
+                    for outcome in [contract.validate(&value), contract.explain(&value)] {
+                        if let ValueOutcome::NoVerdict { detail } = outcome {
+                            assert_eq!(detail.code, code, "{schema}");
+                        }
+                    }
+                }
+            }
+        }
+        sent.send(()).unwrap();
+    });
+    received
+        .recv_timeout(std::time::Duration::from_secs(120))
+        .expect("bounded bound passes");
+}

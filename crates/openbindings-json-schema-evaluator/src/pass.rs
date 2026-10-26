@@ -39,7 +39,7 @@ impl Stop {
 
 thread_local! {
     static STOP: Cell<Option<Stop>> = const { Cell::new(None) };
-    static LOWER: Cell<bool> = const { Cell::new(false) };
+    static PHASE: Cell<Phase> = const { Cell::new(Phase::Original) };
 }
 // Restores an enclosing pass's state, also on unwinding.
 struct Restore(Option<Stop>);
@@ -74,20 +74,57 @@ pub(crate) fn stand_in(stop: Stop) {
 pub(crate) fn arithmetic() {
     STOP.set(Some(Stop::Arithmetic));
 }
-/// Run `evaluate` as a bounds pass, the lower bound's when `lower` holds.
-pub(crate) fn bound<T>(lower: bool, evaluate: impl FnOnce() -> T) -> T {
-    struct Restore(bool);
-    impl Drop for Restore {
-        fn drop(&mut self) {
-            LOWER.set(self.0);
+/// Which entry of a bounds program (`crate::bounds`) a pass evaluates.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Phase {
+    /// The least validity the stand-ins' answers can give.
+    Lower,
+    /// The most validity the stand-ins' answers can give.
+    Upper,
+    /// The value contract's own schemas, as its verdict pass evaluates them.
+    Original,
+    /// The upper bound, for the errors that explain a failure.
+    UpperErrors,
+    /// The value contract's own schemas, for their errors.
+    OriginalErrors,
+}
+impl Phase {
+    /// The phase a bounds program's root names by `index`.
+    pub(crate) fn from_index(index: u64) -> Option<Phase> {
+        match index {
+            0 => Some(Phase::Lower),
+            1 => Some(Phase::Upper),
+            2 => Some(Phase::Original),
+            3 => Some(Phase::UpperErrors),
+            4 => Some(Phase::OriginalErrors),
+            _ => None,
         }
     }
-    let _restore = Restore(LOWER.replace(lower));
+    /// The index a bounds program's root names this phase by.
+    pub(crate) fn index(self) -> u64 {
+        match self {
+            Phase::Lower => 0,
+            Phase::Upper => 1,
+            Phase::Original => 2,
+            Phase::UpperErrors => 3,
+            Phase::OriginalErrors => 4,
+        }
+    }
+}
+/// Run `evaluate` as a pass over a bounds program's entry for `phase`.
+pub(crate) fn bound<T>(phase: Phase, evaluate: impl FnOnce() -> T) -> T {
+    struct Restore(Phase);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            PHASE.set(self.0);
+        }
+    }
+    let _restore = Restore(PHASE.replace(phase));
     evaluate()
 }
-/// Whether the current pass is a bounds pass for the lower bound.
-pub(crate) fn lower() -> bool {
-    LOWER.get()
+/// The bounds program entry the current pass evaluates.
+pub(crate) fn phase() -> Phase {
+    PHASE.get()
 }
 
 #[cfg(test)]
@@ -121,9 +158,22 @@ mod tests {
             stand_in(Stop::Names(5));
         });
         assert_eq!(stop, Some(Stop::Cycle(4)));
-        assert!(!lower());
-        assert!(bound(true, || bound(false, lower) || lower()));
-        assert!(!lower());
+        assert_eq!(phase(), Phase::Original);
+        assert_eq!(
+            bound(Phase::Lower, || (bound(Phase::Upper, phase), phase())),
+            (Phase::Upper, Phase::Lower)
+        );
+        assert_eq!(phase(), Phase::Original);
+        for phase in [
+            Phase::Lower,
+            Phase::Upper,
+            Phase::Original,
+            Phase::UpperErrors,
+            Phase::OriginalErrors,
+        ] {
+            assert_eq!(Phase::from_index(phase.index()), Some(phase));
+        }
+        assert_eq!(Phase::from_index(5), None);
     }
     #[test]
     fn a_pass_left_by_unwinding_restores_the_enclosing_pass() {
