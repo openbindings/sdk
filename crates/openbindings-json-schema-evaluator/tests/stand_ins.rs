@@ -489,3 +489,40 @@ fn nested_keywords_written_from_both_bounds_cost_a_multiple_of_the_verdict_pass(
         .recv_timeout(std::time::Duration::from_secs(120))
         .expect("bounded bound passes");
 }
+
+// A failure the verdict pass establishes without reaching a stand-in is
+// explained by the value contract's own first error. Where collecting that
+// error reaches a stand-in, a value contract holding a stand-in for a cycle,
+// an invalid pattern or `patternProperties` names explains the failure
+// through its upper bound instead; one holding only stand-ins for missing
+// resources and unmatched `pattern` values names no problem.
+#[test]
+fn an_explanation_that_reaches_a_stand_in_falls_back_to_the_upper_bound() {
+    let value = JsonValue::parse(r#""a""#).unwrap();
+    for (third, explained) in [
+        (json!({"pattern": "["}), true),
+        (json!({"$ref": "#/operations/op/input"}), true),
+        (json!({"$ref": MISSING}), false),
+        (json!({"pattern": "(?=a)"}), false),
+    ] {
+        let schema = json!({"oneOf": [{"type": "string"}, {"type": "string"}, third]});
+        let contract = prepare(&schema, &[]).unwrap();
+        assert!(matches!(
+            contract.validate(&value),
+            ValueOutcome::Fails { .. }
+        ));
+        let ValueOutcome::Fails { problems, .. } = contract.explain(&value) else {
+            panic!("{schema}")
+        };
+        if explained {
+            assert_eq!(problems.len(), 1, "{schema}");
+            assert_eq!(
+                problems[0].schema,
+                SchemaLocation::new(None, "/operations/op/input/oneOf".parse().unwrap()),
+                "{schema}"
+            );
+        } else {
+            assert!(problems.is_empty(), "{schema}");
+        }
+    }
+}

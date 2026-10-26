@@ -756,6 +756,7 @@ impl DefaultEvaluator {
         // answer of the stand-ins can change their verdict. It takes what is
         // left of the program budget.
         let stand_in_patterns = operands.stand_in_patterns();
+        let explains = !cycles.is_empty() || !names.is_empty() || operands.holds_invalid_pattern();
         let standing = !missing.is_empty()
             || !cycles.is_empty()
             || !names.is_empty()
@@ -813,6 +814,7 @@ impl DefaultEvaluator {
                 cycles,
                 names,
                 bounds,
+                explains,
             })
         });
         Ok(Compiled {
@@ -1458,6 +1460,10 @@ struct StandIns {
     // Each schema's unmatched `patternProperties` names, likewise.
     names: Vec<UnmatchedNames>,
     bounds: Option<Bounds>,
+    // Whether the contract holds a stand-in for an in-place cycle, an invalid
+    // pattern or `patternProperties` names, and so explains a failure its own
+    // explanation names no problem for through `bounds`.
+    explains: bool,
 }
 /// How many times the work of a verdict pass that reached a stand-in the pass
 /// over a bound may do, as the evaluation work allowance counts work.
@@ -1554,7 +1560,7 @@ impl PreparedSchema for Compiled {
             false if detail == Detail::Outcome => verdict_only_failure(),
             // An established failure survives interruption of optional diagnostics.
             false => match decided {
-                None => self.diagnostics(value, control),
+                None => self.explained(value, control),
                 Some(bounds) => self.bounds_diagnostics(bounds, value, control),
             },
         }
@@ -1801,6 +1807,26 @@ impl Compiled {
             // A first error never claims exhaustive diagnostics.
             problems_complete: false,
         }
+    }
+    // The explanation of a failure the verdict pass established without
+    // reaching a stand-in: the value contract's own. Where that names no
+    // problem, a value contract holding a stand-in for an in-place cycle, an
+    // invalid pattern or `patternProperties` names explains the failure
+    // through its bounds program, whose upper bound fails too.
+    fn explained(&self, value: &JsonValue, control: &dyn WorkControl) -> ValueOutcome {
+        let outcome = self.diagnostics(value, control);
+        if !matches!(&outcome, ValueOutcome::Fails { problems, .. } if problems.is_empty()) {
+            return outcome;
+        }
+        let Some(bounds) = self
+            .stand_ins
+            .as_deref()
+            .filter(|stand_ins| stand_ins.explains)
+            .and_then(|stand_ins| stand_ins.bounds.as_ref())
+        else {
+            return outcome;
+        };
+        self.bounds_diagnostics(bounds, value, control)
     }
     // The explanation of a value whose failure the bounds program shows: the
     // library's first error for its upper bound, which fails however the

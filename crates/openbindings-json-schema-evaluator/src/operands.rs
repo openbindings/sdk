@@ -736,6 +736,12 @@ impl Operands {
             .map(|matcher| matches!(matcher, Matcher::Unmatched(unsupported) if unsupported.stands_in()))
             .collect()
     }
+    /// Whether a `pattern` matcher is for a pattern that is not valid.
+    pub(crate) fn holds_invalid_pattern(&self) -> bool {
+        self.patterns
+            .iter()
+            .any(|matcher| matches!(matcher, Matcher::Unmatched(Unsupported::Invalid)))
+    }
     /// The SDK's keywords for this value contract, and the `pattern` keyword's
     /// matchers, which compile within the value contract's `memory`.
     pub(crate) fn keywords(self, memory: Memory) -> Keywords {
