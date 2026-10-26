@@ -19,16 +19,26 @@
 //! the stand-in for that schema. So the stand-in is exactly where a schema
 //! would apply again to the instance it is already being applied to, whatever
 //! order keywords are evaluated in. A component has as many such copies as
-//! paths, which grows quickly in a dense component: once the copies of the
-//! components unfolded so far would pass the larger of 1,024 and the bundle's
-//! definitions, or the bytes the program budget leaves, each further
-//! component stands in at each of its same-instance references instead, which
-//! is coarser and as sound.
+//! paths, which grows quickly in a dense component. The unfolding of all
+//! components together may enumerate at most 1,024 copies, holding at most
+//! the larger of 2 MiB and four times the bytes of the components' own
+//! schemas and no more than the program budget leaves; the copies a component
+//! enumerates count whether or not it unfolds. A component whose unfolding would pass that stands in at
+//! each of its same-instance references instead, which is coarser and as
+//! sound.
 use crate::bundle::{self, Bundle, Definition};
+use openbindings::{NoVerdict, WorkControl};
 use std::collections::HashMap;
 
-/// The least copies the unfolding of all components may hold.
+/// The copies the unfolding of all components may enumerate.
 const COPIES: usize = 1024;
+/// How many times the bytes of the components' own schemas their copies may
+/// hold.
+const COPY_BYTES: usize = 4;
+/// The bytes the copies may hold whatever the components hold.
+const COPY_BYTES_FLOOR: usize = 2 * 1024 * 1024;
+/// The unfolding steps between checks for cancellation.
+const CHECK_EVERY: usize = 1024;
 
 /// How a unit of the unfolding reaches a schema of its component.
 #[derive(Clone, Copy)]
@@ -52,8 +62,12 @@ struct Unit {
 /// Unfold every in-place cycle of `bundle`, within `bytes` of copies as
 /// [`bundle::definition_charge`] counts them. Returns, by each cycle
 /// stand-in's index, the projected number of the schema it stands for, and
-/// the bytes the copies were charged.
-pub(crate) fn unfold(bundle: &mut Bundle, bytes: usize) -> (Vec<u32>, usize) {
+/// the bytes the copies were charged; an error once `control` cancels.
+pub(crate) fn unfold(
+    bundle: &mut Bundle,
+    bytes: usize,
+    control: &dyn WorkControl,
+) -> Result<(Vec<u32>, usize), NoVerdict> {
     let components = crate::depth::components(&bundle.definitions, |edge| !edge.descends);
     let count = bundle.definitions.len();
     // Components holding a same-instance cycle: more than one schema, or one
@@ -72,7 +86,7 @@ pub(crate) fn unfold(bundle: &mut Bundle, bytes: usize) -> (Vec<u32>, usize) {
         }
     }
     if !cyclic.iter().any(|&cyclic| cyclic) {
-        return (Vec::new(), 0);
+        return Ok((Vec::new(), 0));
     }
     let mut entry = vec![false; count];
     entry[bundle.entry as usize] = true;
@@ -91,12 +105,29 @@ pub(crate) fn unfold(bundle: &mut Bundle, bytes: usize) -> (Vec<u32>, usize) {
         numbers: Vec::new(),
         added: Vec::new(),
         rewritten: Vec::new(),
-        budget: COPIES.max(count),
+        budget: COPIES,
         copies: 0,
-        bytes,
+        bytes: 0,
         charged: 0,
         charges: HashMap::new(),
+        control,
+        steps: 0,
     };
+    // The copies may hold a multiple of the cyclic components' own bytes, or
+    // a fixed allowance for small components, within what the program budget
+    // leaves.
+    let mut own = 0usize;
+    for component in (0..components.count).filter(|&component| cyclic[component]) {
+        for &member in
+            &components.members[components.starts[component]..components.starts[component + 1]]
+        {
+            own = own.saturating_add(unfolding.charge(member));
+        }
+    }
+    unfolding.bytes = own
+        .saturating_mul(COPY_BYTES)
+        .max(COPY_BYTES_FLOOR)
+        .min(bytes);
     for component in (0..components.count).filter(|&component| cyclic[component]) {
         let members =
             &components.members[components.starts[component]..components.starts[component + 1]];
@@ -106,9 +137,9 @@ pub(crate) fn unfold(bundle: &mut Bundle, bytes: usize) -> (Vec<u32>, usize) {
             .filter(|&member| entry[member as usize])
             .collect();
         entries.sort_unstable();
-        unfolding.component(component as u32, members, &entries);
+        unfolding.component(component as u32, members, &entries)?;
     }
-    unfolding.finish()
+    Ok(unfolding.finish())
 }
 
 struct Unfolding<'b> {
@@ -132,6 +163,9 @@ struct Unfolding<'b> {
     bytes: usize,
     charged: usize,
     charges: HashMap<u32, usize>,
+    control: &'b dyn WorkControl,
+    // The enumeration steps taken since the last check for cancellation.
+    steps: usize,
 }
 impl Unfolding<'_> {
     // The stand-in for `node`, added once.
@@ -176,8 +210,14 @@ impl Unfolding<'_> {
         }
         targets
     }
-    fn component(&mut self, component: u32, members: &[u32], entries: &[u32]) {
-        match self.units(component, entries) {
+    fn component(
+        &mut self,
+        component: u32,
+        members: &[u32],
+        entries: &[u32],
+    ) -> Result<(), NoVerdict> {
+        self.control.check()?;
+        match self.units(component, entries)? {
             Some(mut units) => {
                 // Every copy is added before any reference is rewritten, so
                 // each copies its schema as projected.
@@ -228,11 +268,13 @@ impl Unfolding<'_> {
                 }
             }
         }
+        Ok(())
     }
     // The units of the component's unfolding from each entry, depth first;
-    // `None` when they would pass the budget. Each copy unit's `index` holds
-    // `Some(0)` until it is added.
-    fn units(&mut self, component: u32, entries: &[u32]) -> Option<Vec<Unit>> {
+    // `None` when they would pass the budget, which the copies enumerated
+    // spend either way. Each copy unit's `index` holds `Some(0)` until it is
+    // added.
+    fn units(&mut self, component: u32, entries: &[u32]) -> Result<Option<Vec<Unit>>, NoVerdict> {
         let mut units: Vec<Unit> = Vec::new();
         let mut on_path = std::collections::HashSet::new();
         let (mut copies, mut charged) = (0usize, 0usize);
@@ -247,6 +289,11 @@ impl Unfolding<'_> {
             let mut stack = vec![(root, self.within(entry, component), 0usize)];
             on_path.insert(entry);
             while let Some((unit, targets, next)) = stack.last_mut() {
+                self.steps += 1;
+                if self.steps == CHECK_EVERY {
+                    self.steps = 0;
+                    self.control.check()?;
+                }
                 let unit = *unit;
                 let Some(&target) = targets.get(*next) else {
                     on_path.remove(&units[unit].node);
@@ -261,7 +308,9 @@ impl Unfolding<'_> {
                 copies += 1;
                 charged = charged.saturating_add(self.charge(target));
                 if copies > self.budget || charged > self.bytes {
-                    return None;
+                    self.budget = 0;
+                    self.bytes = 0;
+                    return Ok(None);
                 }
                 let child = units.len();
                 units.push(Unit {
@@ -278,7 +327,7 @@ impl Unfolding<'_> {
         self.budget -= copies;
         self.bytes -= charged;
         self.charged = self.charged.saturating_add(charged);
-        Some(units)
+        Ok(Some(units))
     }
     // What a copy of definition `node` is charged, as specialization charges
     // its copies.
@@ -354,5 +403,94 @@ impl Unfolding<'_> {
                 bundle::edges(&mut bundle.schemas[index as usize], &mut resolve);
         }
         (numbers, charged)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::{Value, json};
+
+    struct Control(bool);
+    impl WorkControl for Control {
+        fn is_cancelled(&self) -> bool {
+            self.0
+        }
+    }
+
+    // A bundle of `components` disjoint components of `size` schemas, each
+    // naming every schema of its component in an `anyOf`, entered from a root
+    // that names the first schema of each.
+    fn dense(components: usize, size: usize) -> Bundle {
+        let mut names = vec!["n0".to_owned()];
+        let mut schemas = vec![json!({"allOf": (0..components)
+            .map(|c| json!({"$ref": format!("#/$defs/n{}", 1 + c * size)}))
+            .collect::<Vec<_>>()})];
+        for c in 0..components {
+            for i in 0..size {
+                names.push(format!("n{}", 1 + c * size + i));
+                let branches: Vec<Value> = (0..size)
+                    .map(|j| json!({"$ref": format!("#/$defs/n{}", 1 + c * size + j)}))
+                    .collect();
+                schemas.push(json!({"anyOf": branches}));
+            }
+        }
+        let index: HashMap<String, u32> = names
+            .iter()
+            .enumerate()
+            .map(|(at, name)| (name.clone(), at as u32))
+            .collect();
+        let definitions = schemas
+            .iter_mut()
+            .enumerate()
+            .map(|(at, schema)| Definition {
+                number: at as u32,
+                edges: bundle::edges(schema, &mut |reference| {
+                    reference
+                        .strip_prefix("#/$defs/")
+                        .and_then(|name| index.get(name))
+                        .copied()
+                }),
+            })
+            .collect();
+        Bundle::assembled(names, schemas, definitions, 0, false)
+    }
+
+    // Dense components that pass the budget spend it: once one has, every
+    // further component stands in at its references without enumerating its
+    // paths again, so the unfolding adds at most the budget's copies.
+    #[test]
+    fn components_past_the_budget_spend_it_once() {
+        let mut bundle = dense(200, 4);
+        let before = bundle.definitions.len();
+        let (stand_ins, charged) = unfold(&mut bundle, usize::MAX, &Control(false)).unwrap();
+        let added = bundle.definitions.len() - before;
+        assert!(
+            added - stand_ins.len() <= COPIES,
+            "{added} definitions added"
+        );
+        assert!(stand_ins.len() <= 200 * 4);
+        assert!(charged > 0);
+    }
+
+    // The unfolding checks for cancellation before each component and while
+    // it enumerates a component's paths.
+    #[test]
+    fn cancellation_interrupts_the_unfolding() {
+        let mut bundle = dense(1, 8);
+        assert!(unfold(&mut bundle, usize::MAX, &Control(true)).is_err());
+        let mut bundle = dense(1, 8);
+        assert!(unfold(&mut bundle, usize::MAX, &Control(false)).is_ok());
+        // Once the first check passes, one component's enumeration checks
+        // again after `CHECK_EVERY` steps.
+        struct After(std::sync::atomic::AtomicUsize);
+        impl WorkControl for After {
+            fn is_cancelled(&self) -> bool {
+                self.0.fetch_add(1, std::sync::atomic::Ordering::Relaxed) > 0
+            }
+        }
+        let mut bundle = dense(1, 24);
+        let control = After(std::sync::atomic::AtomicUsize::new(0));
+        assert!(unfold(&mut bundle, usize::MAX, &control).is_err());
     }
 }

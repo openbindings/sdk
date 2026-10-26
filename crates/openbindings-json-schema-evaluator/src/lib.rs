@@ -158,7 +158,10 @@ pub struct Limits {
     /// unfolding and a stand-in's bounds program make are estimated the same
     /// way, within what specialization leaves: past it, a cycle stands in at
     /// each of its references instead and the value contract keeps no bounds
-    /// program. The projected schemas themselves
+    /// program. An unfolding also enumerates at most 1,024 copies, holding at
+    /// most the larger of 2 MiB and four times the bytes of the cycles' own
+    /// schemas, before every further cycle stands in at its references. The
+    /// projected schemas themselves
     /// are bounded by core's admission limits and its 100,000 schema positions
     /// per value contract. This counts the SDK's own program, not the memory the
     /// library's compiled program takes.
@@ -648,7 +651,7 @@ impl DefaultEvaluator {
         // Its copies share what specialization leaves of the program budget.
         let mut budget = self.limits.program_bytes.saturating_sub(bundle.grown);
         let cycles: Vec<Option<SchemaLocation>> = if cyclic {
-            let (stand_ins, charged) = cycles::unfold(&mut bundle, budget);
+            let (stand_ins, charged) = cycles::unfold(&mut bundle, budget, control)?;
             budget = budget.saturating_sub(charged);
             stand_ins
                 .into_iter()
