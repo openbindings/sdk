@@ -109,20 +109,34 @@ APIs:
   unfolds each cycle of the bundled same-instance references from each of its
   entries, so that a reference back to a schema on the current path is a
   definition holding the SDK's `$obCycle` keyword, which records the stand-in
-  as `$obMissing` does.
+  as `$obMissing` does. The unfolding enumerates at most 1,024 copies in all,
+  charging a cycle that passes the budget for what it enumerated, and checks
+  the preparation's cancellation as it goes.
 - `bounds.rs` writes the bounds program that decides a pass reaching a
   stand-in: two copies of every definition that can reach one, for the least
   and the most validity the stand-ins' answers can give it, with each stand-in
   `false` or `true`, `not` crossing to the other copy, and `oneOf`, an `if`
   whose condition reaches a stand-in and a `contains` with a `maxContains`
-  written in ordinary keywords from both copies. The library compiles it as
-  any bundle, behind a root whose `if` asks the SDK's `$obLower` keyword which
-  bound a pass computes. It relies only on the keywords' 2020-12 semantics: an
-  annotation-reading keyword keeps copies of its sources in the same keywords,
-  and a holder whose sources would need others is `false` and `true`. A bounds
-  pass calls the library's error collection (`iter_errors`) through one
-  non-inlined function, which the contract's own passes never call, so the
-  contract's verdict passes and explanations compile as they would without it.
+  written in ordinary keywords from both copies, beside the contract's own
+  definitions. The library compiles it as any bundle under its own resource URI,
+  behind a root whose `if` keywords ask the SDK's `$obPhase` keyword which entry
+  a pass evaluates: the lower copy, the upper copy or the contract's own entry,
+  each under `not` twice so that the library checks it by its validity test
+  while it collects errors, or the upper copy as it is, for an explanation. It
+  relies only on the keywords' 2020-12 semantics: an annotation-reading keyword
+  keeps copies of its sources in the same keywords, and a holder whose sources
+  would need others is `false` and `true`. A bounds pass calls the library's
+  error collection (`iter_errors`) through one non-inlined function, which the
+  contract's own passes never call, so the contract's verdict passes and
+  explanations compile as they would without it. Every definition that can reach
+  a stand-in, copies and the contract's own, applies its keywords under
+  `{"if": {"$obWork": 0}, "then": ...}`, and each pass runs within a work
+  allowance a multiple of what the contract's own entry measures there: this
+  relies on the library applying `then` only where `if` holds, in its validity
+  test and its error collection alike, since collection reaches every `allOf`
+  item even after one fails, and on `not` checking its subschema by the validity
+  test. `tests/stand_ins.rs` checks that thirty nested levels of keywords
+  written from both copies finish within it.
 - `bundle.rs` bundles the projected definitions into the `$defs` of one
   resource (JSON Schema Core §9.3), so the library compiles each definition once,
   whatever path reaches it. It resolves `$dynamicRef` itself: a definition is
@@ -142,9 +156,10 @@ APIs:
   `pattern`, the `$obMissing`, `$obCycle` and `$obNames` stand-ins (the last
   held by a schema whose `patternProperties` names the evaluator does not
   match, recording the stand-in for a nonempty object and for each member its
-  `additionalProperties` reaches), the bounds program's `$obLower`, and, only
-  when the application sets an evaluation work cap, the `$obWork` marker the
-  bundle places before each reference.
+  `additionalProperties` reaches), the bounds program's `$obPhase`, and the
+  `$obWork` marker, which the bundle places before each reference when the
+  application sets an evaluation work cap and the bounds program places in its
+  guards.
 - `pattern.rs` reads every pattern as an ECMA-262 11th edition `u`-mode pattern
   and writes a form in the regex crate's syntax meant to have the same matches,
   spelling each character set out as the positive class of the scalar values

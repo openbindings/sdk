@@ -368,8 +368,8 @@ evaluator decides only what holds however each of those answers comes out,
 independently of the others. A value contract with a stand-in compiles a
 second program for that, its bounds program: two copies of each schema that
 can reach a stand-in, one giving the least validity the stand-ins' answers can
-give it and one the most, beside every other schema shared with the value
-contract's own program. A stand-in holds nowhere in the first copy (a pattern:
+give it and one the most, beside the value contract's own schemas. A stand-in
+holds nowhere in the first copy (a pattern:
 for no string) and everywhere in the second, `not` applies the other copy, and
 `oneOf`, an `if` that can reach a stand-in, and a `contains` with a
 `maxContains` are written from both copies of their subschemas. A schema whose
@@ -381,9 +381,27 @@ subschemas. A pass that held is decided when the least validity holds
 too, and one that failed when the most fails too. An explanation of a decided
 failure reports the first of the library's errors for the copy giving the most
 validity, which fails however the stand-ins come out, at its keyword's original
-location. The second pass meets the first pass's limits: a work cap, the depth
-limit, the stack guard, arithmetic and patterns past their limits stop it, and
-the value then gives the stand-in's no-verdict.
+location. So does the explanation of a failure the first pass decided without
+reaching a stand-in, in a value contract holding a stand-in for an in-place
+cycle, an invalid pattern or `patternProperties` names, when collecting the
+value contract's own first error reaches a stand-in; elsewhere such an
+explanation names no problem.
+
+The second pass meets the first pass's limits: a work cap, the depth limit, the
+stack guard, arithmetic and patterns past their limits stop it, and the value
+then gives the stand-in's no-verdict. Its work is bounded too. A copy written
+from both copies of its subschemas makes nested `oneOf`, `if` and counted
+`contains` keywords double the work at each level, so every schema of the
+bounds program that can reach a stand-in is guarded by a work marker, its
+passes over a bound may do eight times the work of the value contract's own
+pass and 64 units more, as `evaluation_steps` counts work, and the collection
+that explains a decided failure 64 times the work of collecting the value
+contract's own errors. The bounds program measures that work by evaluating the
+value contract's own entry, which it holds too; past the allowance, a guarded
+schema is not entered and the value gives the stand-in's no-verdict. The
+measuring pass and a bound's pass check validity as the first pass does, and
+only a decided failure's explanation collects errors. Deciding a value whose
+pass reaches a stand-in so costs at most a fixed multiple of checking it.
 
 Independent answers are what this decides. It does not see that two places
 answer alike: `{"anyOf": [S, {"not": S}]}` holds for every value but gives no
@@ -418,14 +436,16 @@ stand-in compiles and checks as before.
 An in-place cycle unfolds from each schema of it that evaluation enters from
 elsewhere: each path through the cycle that does not return to a schema already
 on it copies the schemas it passes, and a reference back to a schema on the
-path is the stand-in for that schema, so the stand-in is exactly where a
-schema would apply again to the instance it is already applied to. A dense
-cycle has many such paths: once the copies of the cycles unfolded so far would
-pass the larger of 1,024 and the value contract's bundled schemas, or what
-dynamic specialization leaves of `program_bytes` (estimated as its copies
-are), each further cycle stands in at each of its references that apply to
-the same instance, which is as sound and decides fewer values. The bounds
-program takes what the unfolding leaves.
+path is the stand-in for that schema, so the stand-in is exactly where a schema
+would apply again to the instance it is already applied to. A dense cycle has
+many such paths. The unfolding of all cycles together enumerates at most 1,024
+copies, holding at most the larger of 2 MiB and four times the bytes of the
+cycles' own schemas and no more than what dynamic specialization leaves of
+`program_bytes` (estimated as its copies are), and a cycle's enumeration spends
+that budget whether or not it unfolds. A cycle that would pass it, and every
+cycle after it, stands in at each of its references that apply to the same
+instance, which is as sound and decides fewer values. The enumeration observes
+cancellation. The bounds program takes what the unfolding leaves.
 
 ## Reference
 

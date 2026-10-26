@@ -322,7 +322,18 @@
   reach a stand-in for a missing resource, a cycle or `patternProperties` names.
   The evaluator test kit's declared limitations for the default evaluator leave
   out the four cases whose verdicts do not depend on a property escape's match,
-  which it now decides.
+  which it now decides. Deciding costs at most a multiple of checking: a pass
+  over the bounds program does at most eight times the work of the value
+  contract's own pass, which the program measures, and 64 units more, as
+  `evaluation_steps` counts work, and an explanation through it 64 times the
+  work of collecting the value contract's own errors, so nested `oneOf`, `if`
+  and counted `contains` keywords cannot multiply it level by level. An in-place
+  cycle's unfolding enumerates at most 1,024 copies in all, holding at most the
+  larger of 2 MiB and four times the bytes of the cycles' own schemas, and
+  observes cancellation. A failure the first pass decided without reaching a
+  stand-in is explained through the bounds program where the value contract's
+  own explanation reaches one, in a value contract holding a stand-in for an
+  in-place cycle, an invalid pattern or `patternProperties` names.
 
 This first release remains unpublished. Package and specification versions are
 independent.
