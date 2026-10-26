@@ -1,13 +1,22 @@
 use openbindings::*;
 use openbindings_schema_evaluator_test_support::*;
 use std::sync::Arc;
-// The default evaluator's qualified limitations.
+// The default evaluator's qualified limitations. It decides the four cases of
+// those capabilities whose verdicts do not depend on a property escape's match.
 fn default_options() -> Options {
-    Options::without(&[
+    let mut options = Options::without(&[
         "unicode-property-matching",
         "backtracking-pattern-matching",
         "undefined-results",
-    ])
+    ]);
+    options.permitted_refusals.retain(|id, _| {
+        !id.starts_with("suite/draft2020-12/patternProperties.json#5/")
+            && !matches!(
+                id.as_str(),
+                "adversarial/lazy-pattern-properties/0" | "adversarial/lazy-pattern-properties/1"
+            )
+    });
+    options
 }
 #[test]
 fn pinned_suite_and_adversarial_contracts() {
@@ -25,10 +34,11 @@ fn pinned_suite_and_adversarial_contracts() {
     }
     assert!(report.is_success(), "{:?}", report.configuration_failures);
     assert_eq!(report.observations.len(), 1564);
-    // 32 permitted refusals, with 13 more for its pattern engine and its
-    // undefined results: 10 undefined results, one lookahead and two values a
-    // property-escape `patternProperties` name does not reach.
-    assert_eq!(report.refusal_count(), 45);
+    // 30 permitted refusals, with 11 more for its pattern engine and its
+    // undefined results: 10 undefined results and one lookahead. The values a
+    // property-escape `patternProperties` name does not reach, and those
+    // whose verdict holds whether the name matches or not, are decided.
+    assert_eq!(report.refusal_count(), 41);
     assert_eq!(
         report
             .observations

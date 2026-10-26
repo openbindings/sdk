@@ -53,20 +53,23 @@ in proportion to inputs and explains only values within half the depth limit.
 An empty problem list never turns an established failure into success.
 See the [evaluator policy](../crates/openbindings-json-schema-evaluator/README.md).
 
-The default evaluator prepares a value contract that reaches a missing resource with
-an empty stand-in for it; a pass that reaches the stand-in gives no verdict
-naming it. It refuses preparation for a value contract in which an
-`unevaluatedProperties` or `unevaluatedItems` keyword's annotation sources
-reach a stand-in, a reference to a fragment of a missing resource, or a static
-reference defect (an absent pointer target or anchor, or a malformed
-fragment). As conservative preparation, it also refuses a value contract that reaches
-a pattern invalid as an ECMA-262 11th edition (ES2020) regular expression with Unicode semantics, the dialect JSON Schema 2020-12 cites
-(`schema-pattern-compilation`), or a schema that could apply again without
+The default evaluator prepares a value contract with a stand-in for what it
+cannot evaluate: a missing resource, a schema that could apply again without
 consuming the instance, such as one whose `$ref` names itself
-(`in-place-cycle`). A preparation refusal withholds a verdict for every value,
-including one whose validity does not depend on the refused part. The default
-evaluator never produces Undefined. Missing resources, unsupported features and
-exhausted limits keep their distinct refusal reasons.
+(`in-place-cycle`), and a pattern invalid as an ECMA-262 11th edition (ES2020)
+regular expression with Unicode semantics, the dialect JSON Schema 2020-12
+cites (`schema-pattern-compilation`), or one its linear-time engine does not
+match. A value gives no verdict naming a stand-in only when its verdict depends
+on how the stand-in comes out; a value that satisfies one `anyOf` branch
+satisfies it whatever another branch holds. The evaluator refuses preparation
+for a value contract in which an `unevaluatedProperties` or
+`unevaluatedItems` keyword's annotation sources reach a stand-in for a missing
+resource, a cycle or `patternProperties` names, a reference to a fragment of a
+missing resource, or a static reference defect (an absent pointer target or
+anchor, or a malformed fragment). A preparation refusal withholds a verdict
+for every value. The default evaluator never produces Undefined. Missing
+resources, unsupported features and exhausted limits keep their distinct
+refusal reasons.
 
 Preparing a schema from an untrusted party can take more memory than a host
 may want, as with any JSON Schema library: the evaluator bounds what the SDK

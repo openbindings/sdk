@@ -715,6 +715,31 @@ an operating-system memory limit, as it would with any JSON Schema library.
 Values checked against trusted schemas stay bounded by `stack_bytes`
 and, when the host sets one, `evaluation_steps`.
 
+## Stand-ins
+
+A value contract with a stand-in compiles a bounds program beside its own
+program (see the evaluator's [stand-ins](../crates/openbindings-json-schema-evaluator/README.md#stand-ins)),
+so preparing it takes a second compilation, and a pass that reaches a stand-in
+takes two more: one over the contract's own entry in the bounds program, which
+measures the pass's work, and one over a bound, within eight times that work
+and 64 units more. On 2026-10-26, release builds of this revision and of
+`c7f79d9` on macOS arm64 / Rust 1.99.0 measured these per-value checks,
+the stand-in contract against the base build's no-verdict for the same value:
+
+| Shapes | Values per shape | Median ratio | Worst ratio |
+| --- | ---: | ---: | --- |
+| 40 nests of 4 to 40 levels of `oneOf`, `if`, counted `contains` or a mix over a missing resource or a lookahead pattern, and 24 random nests 4 to 8 deep | 200 to 400 | 2.6 | 11.8 (2.2 → 26 µs, 40 nested `oneOf`) |
+| 33 random nests 10 to 14 deep over missing resources and lookaheads | 200 | 1.1 | 13.1 (6.8 → 90 µs) |
+
+Twenty-two nested `oneOf` keywords over a missing resource, whose bounds would
+double a pass's work at every level, give the stand-in's no-verdict in 18 µs,
+where the base build takes 4 µs. Preparing a value contract of 20,000 `oneOf`
+branches beside a missing resource takes 409 ms and peaks at 259 MiB, where the
+same contract with `null` in its place takes 224 ms and 226 MiB. An in-place
+cycle's unfolding enumerates at most 1,024 copies in all: 900 disjoint dense
+cycles of 10 schemas prepare in 0.58 s at every `program_bytes` from 48 MiB up,
+and in 0.35 s below, where the bounds program does not fit.
+
 ## Document validation
 
 Run from the repository root with no concurrent compilation:

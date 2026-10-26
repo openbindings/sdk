@@ -3,9 +3,11 @@
 #![warn(clippy::return_self_not_must_use)]
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
+mod bounds;
 mod bundle;
 #[cfg(test)]
 extern crate self as openbindings_json_schema_evaluator;
+mod cycles;
 mod depth;
 mod es2020_properties;
 mod explain;
@@ -152,7 +154,14 @@ pub struct Limits {
     /// context (64 bytes and 8 for each dynamic-scope entry), and refuses a
     /// value contract whose copies and contexts would pass the projected schemas'
     /// own estimate by more than this with `program-specialization-limit`,
-    /// whose message states the arithmetic. The projected schemas themselves
+    /// whose message states the arithmetic. The copies an in-place cycle's
+    /// unfolding and a stand-in's bounds program make are estimated the same
+    /// way, within what specialization leaves: past it, a cycle stands in at
+    /// each of its references instead and the value contract keeps no bounds
+    /// program. An unfolding also enumerates at most 1,024 copies, holding at
+    /// most the larger of 2 MiB and four times the bytes of the cycles' own
+    /// schemas, before every further cycle stands in at its references. The
+    /// projected schemas themselves
     /// are bounded by core's admission limits and its 100,000 schema positions
     /// per value contract. This counts the SDK's own program, not the memory the
     /// library's compiled program takes.
@@ -192,15 +201,25 @@ impl Default for Limits {
 /// Optional JSON Schema 2020-12 companion with exact numeric semantics and
 /// explicit resources only, composed over the unmodified `jsonschema` library.
 /// It performs no network or filesystem acquisition. `format` is an
-/// annotation. Patterns run on a linear-time engine, so one that needs a
+/// annotation. Patterns run on a linear-time engine.
+///
+/// A value contract prepares with a stand-in for what the evaluator cannot
+/// evaluate: a resource that was not supplied, a schema that could apply
+/// again without consuming the instance, and a pattern, in `pattern` or as a
+/// `patternProperties` name, that is invalid with Unicode semantics, needs a
 /// backtracking engine (lookaround or backreferences), has a Unicode property
-/// escape or holds the non-word boundary `\B` gives no verdict. A value contract that reaches a resource that
-/// was not supplied prepares with an empty stand-in for it, and a pass that
-/// reaches the stand-in gives no verdict naming the resource. A value contract in
+/// escape or holds the non-word boundary `\B`. A value whose verdict depends
+/// on how a stand-in comes out gives no verdict naming it; every other value
+/// keeps the verdict that holds however the stand-ins come out, which a
+/// second program decides for a pass that reaches one, within eight times
+/// that pass's work and 64 units more, counted as [`Limits::evaluation_steps`]
+/// counts work. A value contract in
 /// which an `unevaluatedProperties` or `unevaluatedItems` keyword's
-/// annotation sources reach a stand-in, a reference to a fragment of a missing
-/// resource, or one that identifies no schema refuses preparation. Use a custom
-/// [`SchemaEvaluator`] when different qualified capabilities are required.
+/// annotation sources reach a stand-in for a missing resource, a cycle or
+/// `patternProperties` names, a reference to a fragment of a missing
+/// resource, or one that identifies no schema refuses preparation. Use a
+/// custom [`SchemaEvaluator`] when different qualified capabilities are
+/// required.
 ///
 /// A cheap check ([`Detail::Outcome`]) decides with the library's validity test
 /// and reports a failure with a fixed message and no problems. An explanation
@@ -338,6 +357,7 @@ impl DefaultEvaluator {
             .iter()
             .map(|resource| (resource.bytes, resource.nodes))
             .collect();
+        let cyclic = projected.in_place_cycle;
         let converted = self.defined(projected, &mut operands, space, &missing, control)?;
         // The SDK's own tests and tools (`conversion-check`) check that the
         // definitions convert as the program's text does.
@@ -345,9 +365,9 @@ impl DefaultEvaluator {
         self.check_conversion(&converted, &operands, space, entry, &missing, &bounds);
         #[cfg(not(feature = "conversion-check"))]
         let _ = entry;
-        Ok(Arc::new(
-            self.compile(converted, operands, space, missing, control)?,
-        ))
+        Ok(Arc::new(self.compile(
+            converted, operands, space, missing, cyclic, control,
+        )?))
     }
     // Convert a projection's definitions as the evaluator converted the
     // program's text, which `conversion-check` still checks (`parsed`).
@@ -534,12 +554,14 @@ impl DefaultEvaluator {
         }
         assert!(text_operands.same_literals(operands));
     }
+    #[allow(clippy::too_many_arguments)]
     fn compile(
         &self,
         converted: Converted,
         mut operands: operands::Operands,
         space: &SchemaSpace,
         missing: Vec<String>,
+        cyclic: bool,
         control: &dyn WorkControl,
     ) -> Result<Compiled, NoVerdict> {
         let Converted {
@@ -549,8 +571,11 @@ impl DefaultEvaluator {
             mut sources,
         } = converted;
         // Read every pattern while the schemas still have their original
-        // locations, counting the forms kept for them together.
+        // locations, counting the forms kept for them together. A schema's
+        // `patternProperties` names that the evaluator does not match are
+        // left out, and a stand-in takes their place.
         let mut kept = Kept::default();
+        let mut names = Vec::new();
         for resource in &mut resources {
             for (name, schema) in resource.definitions.iter_mut() {
                 control.check()?;
@@ -560,14 +585,36 @@ impl DefaultEvaluator {
                 } else {
                     sources.remove(&number)
                 };
-                patterns(schema, source, &self.limits, &mut operands, &mut kept).map_err(
-                    |(keyword, mut detail)| {
-                        detail.location = numbers
-                            .get(&number)
-                            .map(|&node| keyword_location(space, node, keyword));
+                let located = |keyword| {
+                    numbers
+                        .get(&number)
+                        .map(|&node| keyword_location(space, node, keyword))
+                };
+                let unmatched = patterns(schema, source, &self.limits, &mut operands, &mut kept)
+                    .map_err(|(keyword, mut detail)| {
+                        detail.location = located(keyword);
                         detail
-                    },
-                )?;
+                    })?;
+                if let Some(unsupported) = unmatched {
+                    if let Value::Object(schema) = schema {
+                        let at = Value::from(names.len());
+                        // A member `additionalProperties` reaches might match
+                        // one of the names, so it reaches the stand-in too.
+                        if let Some(additional) = schema.remove("additionalProperties") {
+                            let mut member = serde_json::Map::new();
+                            member.insert(operands::NAME_MEMBER.into(), at.clone());
+                            schema.insert(
+                                "additionalProperties".into(),
+                                serde_json::json!({ "allOf": [Value::Object(member), additional] }),
+                            );
+                        }
+                        schema.insert(operands::NAMES.into(), at);
+                    }
+                    names.push(UnmatchedNames {
+                        unsupported,
+                        location: located("patternProperties"),
+                    });
+                }
             }
         }
         // Each pattern the contract compiles holds its first allowance of the
@@ -601,7 +648,45 @@ impl DefaultEvaluator {
             bundle::Refusal::Budget(growth) => specialization_limit(growth),
             bundle::Refusal::Shape => program_failure(),
         })?;
-        if guarded && let Some(at) = missing::behind_unevaluated(&bundle) {
+        // Each schema that would apply again without consuming the instance
+        // is a stand-in, which names that schema's original location.
+        // Its copies share what specialization leaves of the program budget.
+        let mut budget = self.limits.program_bytes.saturating_sub(bundle.grown);
+        let cycles: Vec<Option<SchemaLocation>> = if cyclic {
+            let (stand_ins, charged) = cycles::unfold(&mut bundle, budget, control)?;
+            budget = budget.saturating_sub(charged);
+            stand_ins
+                .into_iter()
+                .map(|number| {
+                    numbers
+                        .get(&number)
+                        .map(|&node| original_location(space.location(node)))
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
+        // An unevaluated keyword reads its annotation sources' structure, so
+        // a stand-in among them refuses preparation.
+        if guarded
+            && !cycles.is_empty()
+            && let Some(at) = missing::behind_unevaluated(&bundle, operands::CYCLE)
+        {
+            let mut detail =
+                in_place_cycle("static preparation found a potentially evaluated in-place cycle");
+            detail.location = cycles.get(at as usize).cloned().flatten();
+            return Err(detail);
+        }
+        if guarded
+            && !names.is_empty()
+            && let Some(at) = missing::behind_unevaluated(&bundle, operands::NAMES)
+        {
+            let names = &names[at as usize];
+            let mut detail = unsupported_pattern(names.unsupported, "patternProperties");
+            detail.location = names.location.clone();
+            return Err(detail);
+        }
+        if guarded && let Some(at) = missing::behind_unevaluated(&bundle, missing::KEYWORD) {
             let mut detail = no_verdict(
                 NoVerdictReason::ResourceUnavailable,
                 "resource-unavailable",
@@ -666,15 +751,34 @@ impl DefaultEvaluator {
                 .map(|(location, _)| location);
             return Err(detail);
         }
+        // A value contract with a stand-in has a bounds program, which decides
+        // the values a pass that reaches a stand-in leaves undecided when no
+        // answer of the stand-ins can change their verdict. It takes what is
+        // left of the program budget.
+        let stand_in_patterns = operands.stand_in_patterns();
+        let explains = !cycles.is_empty() || !names.is_empty() || operands.holds_invalid_pattern();
+        let standing = !missing.is_empty()
+            || !cycles.is_empty()
+            || !names.is_empty()
+            || stand_in_patterns.contains(&true);
+        let program = if standing {
+            bounds::program(&bundle, &stand_in_patterns, budget)
+        } else {
+            None
+        };
+        drop(stand_in_patterns);
+        let registered = operands::Registered {
+            markers: self.limits.evaluation_steps.is_some(),
+            missing: !missing.is_empty(),
+            cycles: !cycles.is_empty(),
+            names: !names.is_empty(),
+            phase: false,
+        };
         let document = bundle.document();
         let first = memory.first();
-        let (options, patterns) = operands.apply(
-            jsonschema::options_for::<FlatJson>(),
-            memory,
-            self.limits.evaluation_steps.is_some(),
-            !missing.is_empty(),
-        );
-        let options = options
+        let keywords = operands.keywords(memory);
+        let options = keywords
+            .register(jsonschema::options_for::<FlatJson>(), registered)
             .with_draft(jsonschema::Draft::Draft202012)
             .with_retriever(NoRetrieval)
             .should_validate_formats(false)
@@ -688,24 +792,166 @@ impl DefaultEvaluator {
         // it fits.
         let validator = match options.build(&document) {
             Ok(validator) => validator,
-            Err(error) if exceeds_size(&error) => {
-                share_names(options, first, &document, &patterns, &locations, control)?
-            }
+            Err(error) if exceeds_size(&error) => share_names(
+                options,
+                first,
+                &document,
+                keywords.patterns(),
+                &locations,
+                control,
+            )?,
             Err(error) => return Err(preparation_error(&error, &locations)),
         };
+        drop(document);
         control.check()?;
+        let bounds = match program {
+            Some(program) => self.bounds(program, &keywords, registered, host, control)?,
+            None => None,
+        };
+        let stand_ins = standing.then(|| {
+            Box::new(StandIns {
+                missing,
+                cycles,
+                names,
+                bounds,
+                explains,
+            })
+        });
         Ok(Compiled {
             validator,
-            patterns,
+            patterns: keywords.patterns().clone(),
             locations,
             deepest: bound.deepest(host.evaluation_depth()),
             deepest_explained: bound.deepest(host.evaluation_depth() / 2),
             host,
             guard,
             limits: self.limits.clone(),
-            missing,
+            stand_ins,
         })
     }
+    // Compile a bounds program, unless its depth bound, its unevaluated
+    // keywords' walks or its `patternProperties` names do not fit what the
+    // value contract's own program leaves: then the contract has none.
+    fn bounds(
+        &self,
+        program: bounds::Program,
+        keywords: &operands::Keywords,
+        registered: operands::Registered,
+        host: stack::Stack,
+        control: &dyn WorkControl,
+    ) -> Result<Option<Bounds>, NoVerdict> {
+        let bounds::Program {
+            bundle,
+            lower,
+            upper,
+            original,
+        } = program;
+        let weight = bundle::BOUNDS_ENTRY_WEIGHT;
+        let (Ok(lower_bound), Ok(upper_bound), Ok(original_bound)) = (
+            depth::bound(&bundle.definitions, lower, weight),
+            depth::bound(&bundle.definitions, upper, weight),
+            depth::bound(&bundle.definitions, original, weight),
+        ) else {
+            return Ok(None);
+        };
+        let holders: Vec<bool> = bundle
+            .schemas
+            .iter()
+            .map(|schema| {
+                schema.get("unevaluatedProperties").is_some()
+                    || schema.get("unevaluatedItems").is_some()
+            })
+            .collect();
+        if holders.contains(&true)
+            && depth::longest_walk(&bundle.definitions, &holders)
+                .is_some_and(|(length, _)| length > host.walk())
+        {
+            return Ok(None);
+        }
+        // The library compiles the program's `patternProperties` names again,
+        // each distinct form once, so they must fit in what the contract's
+        // own patterns leave of the pattern memory and can never ask for.
+        let names = distinct_names(&bundle.schemas);
+        let first = if names == 0 {
+            keywords.patterns().first()
+        } else {
+            match keywords.patterns().spare() {
+                Some((left, first))
+                    if names.saturating_mul(first.compiled.saturating_add(first.cache)) <= left =>
+                {
+                    first
+                }
+                _ => return Ok(None),
+            }
+        };
+        control.check()?;
+        let document = bundle.document_with_bounds(lower, upper, original);
+        // The value contract's own schemas hold its stand-ins' keywords.
+        let registered = operands::Registered {
+            markers: true,
+            phase: true,
+            ..registered
+        };
+        let options = keywords
+            .register(jsonschema::options_for::<FlatJson>(), registered)
+            .with_draft(jsonschema::Draft::Draft202012)
+            .with_retriever(NoRetrieval)
+            .should_validate_formats(false)
+            .with_pattern_options(pattern_options(first));
+        let Ok(validator) = options.build(&document) else {
+            return Ok(None);
+        };
+        drop(document);
+        control.check()?;
+        let depth = host.evaluation_depth();
+        Ok(Some(Bounds {
+            validator,
+            deepest: [
+                lower_bound.deepest(depth),
+                upper_bound.deepest(depth),
+                original_bound.deepest(depth),
+            ],
+            deepest_explained: upper_bound.deepest(depth / 2),
+        }))
+    }
+}
+// The distinct `patternProperties` names a bundle's schemas hold.
+fn distinct_names(schemas: &[Value]) -> usize {
+    fn collect<'v>(value: &'v Value, names: &mut std::collections::HashSet<&'v str>) {
+        match value {
+            Value::Object(members) => {
+                for (keyword, member) in members {
+                    if keyword == "patternProperties"
+                        && let Value::Object(patterns) = member
+                    {
+                        names.extend(patterns.keys().map(String::as_str));
+                    }
+                    collect(member, names);
+                }
+            }
+            Value::Array(items) => items.iter().for_each(|item| collect(item, names)),
+            _ => {}
+        }
+    }
+    let mut names = std::collections::HashSet::new();
+    for schema in schemas {
+        collect(schema, &mut names);
+    }
+    names.len()
+}
+// The stand-in for one schema's `patternProperties` names the evaluator does
+// not match: why the first of them is not matched, and the keyword's original
+// location.
+struct UnmatchedNames {
+    unsupported: pattern::Unsupported,
+    location: Option<SchemaLocation>,
+}
+fn in_place_cycle(message: &str) -> NoVerdict {
+    no_verdict(
+        NoVerdictReason::ConservativePreparation,
+        "in-place-cycle",
+        message,
+    )
 }
 fn program_failure() -> NoVerdict {
     no_verdict(
@@ -722,19 +968,21 @@ fn keyword_location(space: &SchemaSpace, node: usize, keyword: &str) -> SchemaLo
 
 // Read each `pattern`, from its `source`, and `patternProperties` name of one
 // schema, or refuse it, naming the keyword. The SDK's `pattern` keyword
-// matches a pattern through its reading, and answers no verdict when a string
-// reaches one the evaluator does not match. The library matches `patternProperties` names
-// itself, so each is written in its linear form, and one without such a form
-// refuses the contract.
+// matches a pattern through its reading, and stands in when a string reaches
+// one the evaluator does not match. The library matches `patternProperties`
+// names itself, so each is written in its linear form. A name the evaluator
+// does not match for its syntax is left out, its subschema set aside, and the
+// first such name's reason is returned, so a stand-in can take their place; a
+// name without a form for a limit refuses the contract.
 fn patterns<'a>(
     schema: &mut Value,
     source: Option<std::borrow::Cow<'a, str>>,
     limits: &Limits,
     operands: &mut operands::Operands,
     kept: &mut Kept<'a>,
-) -> Result<(), (&'static str, NoVerdict)> {
+) -> Result<Option<pattern::Unsupported>, (&'static str, NoVerdict)> {
     let Value::Object(schema) = schema else {
-        return Ok(());
+        return Ok(None);
     };
     // Count each form the evaluator keeps as it is written, and the memory
     // of each it compiles or matches with a run matcher, so preparation stops
@@ -780,8 +1028,8 @@ fn patterns<'a>(
         let key = match kept.read.get(&*source) {
             Some(key) => key.clone(),
             None => {
-                let reading = read_pattern(&source, "pattern", limits)
-                    .map_err(|detail| ("pattern", detail))?;
+                let reading =
+                    read_pattern(&source, limits).map_err(|detail| ("pattern", detail))?;
                 // Patterns with the same form share one matcher, which keeps
                 // the form and compiles it unless the run matcher matches it.
                 if let pattern::Reading::Linear(linear) = &reading
@@ -797,17 +1045,26 @@ fn patterns<'a>(
         *slot = Value::String(key);
     }
     // The library matches these names itself, so the bundle keeps each form.
+    let mut unmatched = None;
+    let mut set_aside = Vec::new();
     if let Some(Value::Object(names)) = schema.get_mut("patternProperties") {
         let original = std::mem::take(names);
         for (source, subschema) in original {
             let refuse = |detail| ("patternProperties", detail);
-            let mut form =
-                match read_pattern(&source, "patternProperties", limits).map_err(refuse)? {
-                    pattern::Reading::Linear(linear) => linear.form,
-                    pattern::Reading::Unsupported(unsupported) => {
-                        return Err(refuse(unsupported_pattern(unsupported)));
-                    }
-                };
+            let mut form = match read_pattern(&source, limits).map_err(refuse)? {
+                pattern::Reading::Linear(linear) => linear.form,
+                pattern::Reading::Unsupported(unsupported) if unsupported.stands_in() => {
+                    unmatched.get_or_insert(unsupported);
+                    set_aside.push(subschema);
+                    continue;
+                }
+                pattern::Reading::Unsupported(unsupported) => {
+                    return Err(refuse(unsupported_pattern(
+                        unsupported,
+                        "patternProperties",
+                    )));
+                }
+            };
             // Two names may share a form; an empty group keeps them apart.
             while names.contains_key(&form) {
                 form.push_str("(?:)");
@@ -817,7 +1074,10 @@ fn patterns<'a>(
             names.insert(form, subschema);
         }
     }
-    Ok(())
+    if !set_aside.is_empty() {
+        schema.insert(operands::NAME_SCHEMAS.into(), Value::Array(set_aside));
+    }
+    Ok(unmatched)
 }
 // What preparation has kept for a contract's patterns so far.
 #[derive(Default)]
@@ -833,11 +1093,9 @@ struct Kept<'a> {
     // repeated pattern is read once.
     read: HashMap<std::borrow::Cow<'a, str>, String>,
 }
-fn read_pattern(
-    source: &str,
-    keyword: &str,
-    limits: &Limits,
-) -> Result<pattern::Reading, NoVerdict> {
+// A pattern's reading: an invalid pattern is read as one the evaluator does
+// not match, whose match is undefined.
+fn read_pattern(source: &str, limits: &Limits) -> Result<pattern::Reading, NoVerdict> {
     if source.len() > limits.pattern_bytes {
         return Err(no_verdict(
             NoVerdictReason::LimitExceeded,
@@ -845,28 +1103,29 @@ fn read_pattern(
             "pattern exceeds the admitted byte limit",
         ));
     }
-    let reading =
-        pattern::read(source, limits.pattern_depth, limits.pattern_bytes).map_err(|refusal| {
-            match refusal {
-                pattern::Refusal::Depth => no_verdict(
-                    NoVerdictReason::LimitExceeded,
-                    "pattern-depth-limit",
-                    "pattern nesting exceeds the admitted limit",
-                ),
-                pattern::Refusal::Invalid => no_verdict(
-                    NoVerdictReason::ConservativePreparation,
-                    "schema-pattern-compilation",
-                    format!("the schema {keyword} regular expression could not be compiled"),
-                ),
-            }
-        })?;
     // A form longer than the pattern byte limit is neither written out nor
     // compiled: its parse alone could take memory far beyond the engine's
     // compiled size limit.
-    Ok(reading)
+    match pattern::read(source, limits.pattern_depth, limits.pattern_bytes) {
+        Ok(reading) => Ok(reading),
+        Err(pattern::Refusal::Invalid) => {
+            Ok(pattern::Reading::Unsupported(pattern::Unsupported::Invalid))
+        }
+        Err(pattern::Refusal::Depth) => Err(no_verdict(
+            NoVerdictReason::LimitExceeded,
+            "pattern-depth-limit",
+            "pattern nesting exceeds the admitted limit",
+        )),
+    }
 }
-fn unsupported_pattern(unsupported: pattern::Unsupported) -> NoVerdict {
+// Why a pattern `keyword` holds is not matched.
+fn unsupported_pattern(unsupported: pattern::Unsupported, keyword: &str) -> NoVerdict {
     match unsupported {
+        pattern::Unsupported::Invalid => no_verdict(
+            NoVerdictReason::ConservativePreparation,
+            "schema-pattern-compilation",
+            format!("the schema {keyword} regular expression could not be compiled"),
+        ),
         pattern::Unsupported::Backtracking => no_verdict(
             NoVerdictReason::UnsupportedCapability,
             "pattern-backtracking",
@@ -1119,7 +1378,7 @@ fn share_names(
         match given {
             Ok(compiled) => largest = largest.max(compiled),
             Err(unsupported) => {
-                let mut detail = unsupported_pattern(unsupported);
+                let mut detail = unsupported_pattern(unsupported, "patternProperties");
                 detail.location = locations
                     .locate(&format!(
                         "{}#/$defs/{definition}/patternProperties",
@@ -1159,7 +1418,7 @@ fn preparation_error(
     // Read only trusted kind metadata, never dependency Display text or schema
     // values.
     if exceeds_size(error) {
-        let mut detail = unsupported_pattern(pattern::Unsupported::Size);
+        let mut detail = unsupported_pattern(pattern::Unsupported::Size, "patternProperties");
         detail.location = locations
             .locate(&format!("{}#{}", bundle::URI, error.schema_path().as_str()))
             .map(|(location, _)| location);
@@ -1187,9 +1446,71 @@ struct Compiled {
     host: stack::Stack,
     guard: Option<usize>,
     limits: Limits,
+    // What the contract's stand-ins stand for, and its bounds program, when
+    // it has any.
+    stand_ins: Option<Box<StandIns>>,
+}
+struct StandIns {
     // The resources the contract reaches but the request did not supply, by
     // the index their stand-ins' keyword holds.
     missing: Vec<String>,
+    // The original location of each schema that would apply again, by the
+    // index its stand-in's keyword holds.
+    cycles: Vec<Option<SchemaLocation>>,
+    // Each schema's unmatched `patternProperties` names, likewise.
+    names: Vec<UnmatchedNames>,
+    bounds: Option<Bounds>,
+    // Whether the contract holds a stand-in for an in-place cycle, an invalid
+    // pattern or `patternProperties` names, and so explains a failure its own
+    // explanation names no problem for through `bounds`.
+    explains: bool,
+}
+/// How many times the work of a verdict pass that reached a stand-in the pass
+/// over a bound may do, as the evaluation work allowance counts work.
+const BOUNDS_WORK: usize = 8;
+/// How many times the work of collecting the value contract's own errors the
+/// collection that explains a failure through a bound may do.
+const EXPLANATION_WORK: usize = 64;
+/// The work a pass over a bound may do beyond that, for the program's own
+/// root and entries.
+const BOUNDS_SLACK: usize = 64;
+// A compiled bounds program (`crate::bounds`), the deepest values its entries
+// admit, by phase, as `Compiled` holds its own, and the deepest its upper
+// entry explains.
+struct Bounds {
+    validator: jsonschema::Validator<FlatJson>,
+    deepest: [Option<usize>; 3],
+    deepest_explained: Option<usize>,
+}
+impl Bounds {
+    // The deepest values the entry for `phase` admits.
+    fn deepest(&self, phase: pass::Phase) -> Option<usize> {
+        self.deepest[match phase {
+            pass::Phase::Lower => 0,
+            pass::Phase::Upper | pass::Phase::UpperErrors => 1,
+            pass::Phase::Original | pass::Phase::OriginalErrors => 2,
+        }]
+    }
+    // The first of the library's errors for `value` against the entry for
+    // `phase`, which reaches the same verdict as its validity test. Every use
+    // of the program goes through this one call to the library's error
+    // collection, which the value contract's own passes never call, so its
+    // verdict passes and explanations are compiled as they would be without
+    // the program. A verdict phase's root makes the library check its entry
+    // by its validity test.
+    #[inline(never)]
+    fn first_error<'v>(
+        &'v self,
+        phase: pass::Phase,
+        value: &'v JsonValue,
+    ) -> Result<(), jsonschema::ValidationError<'v>> {
+        pass::bound(phase, || {
+            match self.validator.iter_errors(backend::view(value)).next() {
+                Some(error) => Err(error),
+                None => Ok(()),
+            }
+        })
+    }
 }
 fn verdict_only_failure() -> ValueOutcome {
     ValueOutcome::Fails {
@@ -1214,15 +1535,34 @@ impl PreparedSchema for Compiled {
                 detail: self.host.too_deep(self.deepest),
             };
         }
-        let valid = self.pass(|| self.validator.is_valid(backend::view(value)));
+        // A pass that reached a stand-in keeps its verdict only where its
+        // bounds program decides it.
+        let verdict = self.run(
+            || self.validator.is_valid(backend::view(value)),
+            |valid, stop| Ok((valid, stop)),
+        );
+        let (valid, decided) = match verdict {
+            Err(detail) => return ValueOutcome::NoVerdict { detail },
+            Ok((valid, None)) => (valid, None),
+            Ok((valid, Some(stop))) => match self.decided(value, valid, stop) {
+                Some(bounds) => (valid, Some(bounds)),
+                None => {
+                    return ValueOutcome::NoVerdict {
+                        detail: self.stopped(stop),
+                    };
+                }
+            },
+        };
         // A completed verdict pass establishes its verdict: cancellation
         // observed later never discards it.
         match valid {
-            Err(detail) => ValueOutcome::NoVerdict { detail },
-            Ok(true) => ValueOutcome::Satisfies,
-            Ok(false) if detail == Detail::Outcome => verdict_only_failure(),
+            true => ValueOutcome::Satisfies,
+            false if detail == Detail::Outcome => verdict_only_failure(),
             // An established failure survives interruption of optional diagnostics.
-            Ok(false) => self.diagnostics(value, control),
+            false => match decided {
+                None => self.explained(value, control),
+                Some(bounds) => self.bounds_diagnostics(bounds, value, control),
+            },
         }
     }
 }
@@ -1241,10 +1581,85 @@ impl Compiled {
             }
         }
     }
+    // Whether the bounds program decides `value`, whose verdict pass stopped
+    // at `stop` with the verdict `valid`: the pass's answers are one way the
+    // stand-ins can come out, so a pass that holds is decided when the lower
+    // bound holds too, and one that fails when the upper bound fails too.
+    // Gives the program that decided it.
+    fn decided(&self, value: &JsonValue, valid: bool, stop: pass::Stop) -> Option<&Bounds> {
+        if !stop.stands_in() {
+            return None;
+        }
+        let bounds = self.stand_ins.as_ref()?.bounds.as_ref()?;
+        let phase = if valid {
+            pass::Phase::Lower
+        } else {
+            pass::Phase::Upper
+        };
+        if !self.nests_within(value, bounds.deepest(phase)) {
+            return None;
+        }
+        let allowance = self.allowance(bounds, pass::Phase::Original, BOUNDS_WORK, value)?;
+        let bound = self.run(
+            || {
+                openbindings_internal_json::work::scope(allowance, || {
+                    bounds.first_error(phase, value).is_ok()
+                })
+            },
+            |holds, stop| Ok((holds, stop)),
+        );
+        match bound {
+            Ok((Ok(holds), None)) if holds == valid => Some(bounds),
+            _ => None,
+        }
+    }
+    // The work a pass over `bounds` for `value` may do: `times` the work of
+    // the value contract's own pass, which the program's own entry measures
+    // in `phase`, checking validity or collecting errors, and `BOUNDS_SLACK`
+    // more. Past that, a pass gives up, so deciding or explaining a value
+    // never costs more than a multiple of checking or explaining it. `None`
+    // when that pass cannot be measured within the contract's limits.
+    fn allowance(
+        &self,
+        bounds: &Bounds,
+        phase: pass::Phase,
+        times: usize,
+        value: &JsonValue,
+    ) -> Option<usize> {
+        if !self.nests_within(value, bounds.deepest(phase)) {
+            return None;
+        }
+        let measured = self.run(
+            || {
+                openbindings_internal_json::work::measure(|| {
+                    bounds.first_error(phase, value).is_ok()
+                })
+            },
+            |measured, _| Ok(measured),
+        );
+        let Ok(Ok((_, work))) = measured else {
+            return None;
+        };
+        Some(work.saturating_mul(times).saturating_add(BOUNDS_SLACK))
+    }
     // One verdict or diagnostic pass, and what it evaluated unless it met a
     // reason to give no verdict. The pass carries only `evaluate`'s own
     // result, so a verdict pass moves a `bool` rather than a no-verdict.
     fn pass<T>(&self, evaluate: impl FnOnce() -> T) -> Result<T, NoVerdict> {
+        self.run(evaluate, |result, stop| match stop {
+            None => Ok(result),
+            Some(stop) => Err(self.stopped(stop)),
+        })
+    }
+    // One pass, whose result `then` answers from with the stand-in or
+    // pattern it stopped at, if any; any other reason to give no verdict is
+    // an error. `then` takes the result where the pass leaves it, so a
+    // diagnostic pass moves its problem once.
+    fn run<T, R>(
+        &self,
+        evaluate: impl FnOnce() -> T,
+        then: impl FnOnce(T, Option<pass::Stop>) -> Result<R, NoVerdict>,
+    ) -> Result<R, NoVerdict> {
         let run = || pass::scope(evaluate);
         let allowed = || match self.limits.evaluation_steps {
             Some(steps) => openbindings_internal_json::work::scope(steps, run),
@@ -1284,33 +1699,67 @@ impl Compiled {
                 "numeric-arithmetic-limit",
                 "numeric arithmetic exceeds the admitted evaluation limit",
             )),
-            Ok((_, Some(pass::Stop::Unmatched(unsupported, site)))) => {
+            Ok((result, stop)) => then(result, stop),
+        }
+    }
+    // The no-verdict a pass that stopped at `stop` gives, naming where.
+    fn stopped(&self, stop: pass::Stop) -> NoVerdict {
+        let stand_ins = self.stand_ins.as_deref();
+        match stop {
+            pass::Stop::Unmatched(unsupported, site) => {
                 // The `pattern` keyword that holds it, at its original location.
-                let mut detail = unsupported_pattern(unsupported);
+                let mut detail = unsupported_pattern(unsupported, "pattern");
                 detail.location = self.patterns.site(site).and_then(|at| {
                     self.locations
                         .locate(&format!("{}#{}", bundle::URI, at.as_str()))
                         .map(|(location, _)| location)
                 });
-                Err(detail)
+                detail
             }
-            Ok((_, Some(pass::Stop::Missing(at)))) => {
+            pass::Stop::Missing(at) => {
                 let mut detail = no_verdict(
                     NoVerdictReason::ResourceUnavailable,
                     "resource-unavailable",
                     "evaluation reached a resource that was not supplied",
                 );
-                detail.location = self.missing.get(at as usize).map(|uri| {
-                    SchemaLocation::new(
-                        Some(uri.clone()),
-                        Pointer::from_utf16(&[]).expect("the root pointer"),
-                    )
-                });
-                Err(detail)
+                detail.location = stand_ins
+                    .and_then(|stand_ins| stand_ins.missing.get(at as usize))
+                    .map(|uri| {
+                        SchemaLocation::new(
+                            Some(uri.clone()),
+                            Pointer::from_utf16(&[]).expect("the root pointer"),
+                        )
+                    });
+                detail
             }
-            Ok((result, None)) => Ok(result),
+            pass::Stop::Cycle(at) => {
+                let mut detail = in_place_cycle(
+                    "evaluation reached a schema that would apply again without consuming the instance",
+                );
+                detail.location = stand_ins
+                    .and_then(|stand_ins| stand_ins.cycles.get(at as usize))
+                    .cloned()
+                    .flatten();
+                detail
+            }
+            pass::Stop::Names(at) => {
+                let names = stand_ins.and_then(|stand_ins| stand_ins.names.get(at as usize));
+                let mut detail = unsupported_pattern(
+                    names.map_or(pattern::Unsupported::Invalid, |names| names.unsupported),
+                    "patternProperties",
+                );
+                detail.location = names.and_then(|names| names.location.clone());
+                detail
+            }
+            pass::Stop::Arithmetic => no_verdict(
+                NoVerdictReason::LimitExceeded,
+                "numeric-arithmetic-limit",
+                "numeric arithmetic exceeds the admitted evaluation limit",
+            ),
         }
     }
+    // The library's first error for `value`, which the value contract fails,
+    // at its keyword's original location.
     fn diagnostics(&self, value: &JsonValue, control: &dyn WorkControl) -> ValueOutcome {
         // Validity is already established. Failure to obtain detail (including
         // cancellation or exhausted work) must never turn it into no-verdict.
@@ -1358,6 +1807,93 @@ impl Compiled {
             // A first error never claims exhaustive diagnostics.
             problems_complete: false,
         }
+    }
+    // The explanation of a failure the verdict pass established without
+    // reaching a stand-in: the value contract's own. Where that names no
+    // problem, a value contract holding a stand-in for an in-place cycle, an
+    // invalid pattern or `patternProperties` names explains the failure
+    // through its bounds program, whose upper bound fails too.
+    fn explained(&self, value: &JsonValue, control: &dyn WorkControl) -> ValueOutcome {
+        let outcome = self.diagnostics(value, control);
+        if !matches!(&outcome, ValueOutcome::Fails { problems, .. } if problems.is_empty()) {
+            return outcome;
+        }
+        let Some(bounds) = self
+            .stand_ins
+            .as_deref()
+            .filter(|stand_ins| stand_ins.explains)
+            .and_then(|stand_ins| stand_ins.bounds.as_ref())
+        else {
+            return outcome;
+        };
+        self.bounds_diagnostics(bounds, value, control)
+    }
+    // The explanation of a value whose failure the bounds program shows: the
+    // library's first error for its upper bound, which fails however the
+    // stand-ins come out, within a multiple of the work of collecting the
+    // value contract's own errors. It is a function of its own, beside the
+    // value contract's own explanation, which then compiles as it would
+    // without it.
+    #[inline(never)]
+    fn bounds_diagnostics(
+        &self,
+        bounds: &Bounds,
+        value: &JsonValue,
+        control: &dyn WorkControl,
+    ) -> ValueOutcome {
+        let explains = self.nests_within(value, bounds.deepest_explained);
+        let allowance = explains
+            .then(|| self.allowance(bounds, pass::Phase::OriginalErrors, EXPLANATION_WORK, value))
+            .flatten();
+        let problem = allowance.map(|allowance| {
+            self.pass(|| -> Result<_, NoVerdict> {
+                control.check()?;
+                let Ok(Err(error)) = openbindings_internal_json::work::scope(allowance, || {
+                    bounds.first_error(pass::Phase::UpperErrors, value)
+                }) else {
+                    return Ok(None);
+                };
+                let Some((schema, keyword)) = error
+                    .absolute_keyword_location()
+                    .and_then(|uri| self.locations.locate_bounds(uri.as_str()))
+                else {
+                    return Ok(None);
+                };
+                control.check()?;
+                let instance = instance_pointer(error.instance_path().as_str());
+                let (code, message) = match keyword {
+                    // The program's own definitions stand for the keyword
+                    // they are written for.
+                    Some(keyword) => (keyword.to_owned(), standing_message(keyword).to_owned()),
+                    None => (
+                        error.kind().keyword().to_owned(),
+                        diagnostic_message(error.kind()),
+                    ),
+                };
+                Ok(Some(ValueProblem::new(instance, schema, code, message)))
+            })
+            .and_then(|problem| problem)
+        });
+        let problems = match problem {
+            Some(Ok(Some(problem))) => {
+                debug_assert!(value.at_pointer(&problem.instance).is_some());
+                vec![problem]
+            }
+            _ => Vec::new(),
+        };
+        ValueOutcome::Fails {
+            message: "value does not satisfy the value contract".into(),
+            problems,
+            problems_complete: false,
+        }
+    }
+}
+// The message of a problem at a keyword a transform's definition stands for.
+fn standing_message(keyword: &str) -> &'static str {
+    match keyword {
+        "patternProperties" => PATTERN_MEMBER,
+        "additionalProperties" => "this member is not permitted by the schema",
+        _ => "value does not satisfy the constraint at the schema location",
     }
 }
 

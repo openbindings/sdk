@@ -1242,15 +1242,18 @@ fn standard_identity_claims_are_ambiguous_not_completions() {
     let standard = "https://json-schema.org/draft/2020-12/meta/validation";
     // A supplied claim to a packaged meta-schema identity is ambiguous with
     // it; without the claim the reference to `U` is missing.
-    for (keyword, replacement) in [("anyOf", false), ("allOf", true)] {
+    // A value whose verdict depends on `U` under each keyword: one the other
+    // branch fails under `anyOf`, and one it accepts under `allOf`.
+    for (keyword, replacement, depends) in [("anyOf", false, "-1"), ("allOf", true, "1")] {
         let doc = one(
             json!({}),
             json!({keyword:[{"$ref":U},{"$ref":format!("{standard}#/$defs/nonNegativeInteger")}]}),
         );
-        // Without the claim `U` is missing: a value reaching it gives no verdict.
+        // Without the claim `U` is missing: a value whose verdict depends on
+        // it gives no verdict.
         let contract = prepare(&conformant(&doc), &ResourceSet::default(), "op").unwrap();
         assert!(matches!(
-            contract.validate(&value("1")),
+            contract.validate(&value(depends)),
             ValueOutcome::NoVerdict { detail } if detail.reason == NoVerdictReason::ResourceUnavailable
         ));
         let claim = json!({"$id":standard,"$defs":{"nonNegativeInteger":replacement}});

@@ -128,34 +128,61 @@ fn draft_metadata_and_semantic_setup_partitions_remain_distinct() {
     assert_eq!(serde_json::to_value(outcome).unwrap()["status"], "fails");
 }
 #[test]
-fn cycles_are_conservative_even_with_a_dominating_success_branch() {
-    for schema in [
+fn a_cycle_costs_only_values_whose_verdict_depends_on_it() {
+    // A schema applying again without consuming the instance is a stand-in:
+    // a value whose verdict depends on it gives no verdict naming the schema,
+    // and a dominating success branch decides in either order.
+    let contract = ready(&document(
         serde_json::json!({"$ref":"#/operations/op/input"}),
-        serde_json::json!({"anyOf":[true,{"$ref":"#/operations/op/input"}]}),
+    ));
+    for outcome in [
+        contract.validate(&JsonValue::parse("1").unwrap()),
+        contract.explain(&JsonValue::parse("1").unwrap()),
     ] {
-        let Err(detail) = prepare(&document(schema), &ResourceSet::default()) else {
-            panic!()
+        let ValueOutcome::NoVerdict { detail } = outcome else {
+            panic!("{outcome:?}")
         };
         assert_eq!(detail.reason, NoVerdictReason::ConservativePreparation);
         assert_eq!(detail.code, "in-place-cycle");
+        assert_eq!(
+            detail.location,
+            Some(SchemaLocation::new(
+                None,
+                "/operations/op/input".parse().unwrap()
+            ))
+        );
         safe(&detail.message);
+    }
+    for schema in [
+        serde_json::json!({"anyOf":[true,{"$ref":"#/operations/op/input"}]}),
+        serde_json::json!({"anyOf":[{"$ref":"#/operations/op/input"},true]}),
+    ] {
+        let contract = ready(&document(schema));
+        for value in ["1", "{}", r#""s""#] {
+            let value = JsonValue::parse(value).unwrap();
+            assert!(matches!(contract.validate(&value), ValueOutcome::Satisfies));
+            assert!(matches!(contract.explain(&value), ValueOutcome::Satisfies));
+        }
     }
 }
 #[test]
-fn pattern_preparation_failures_use_original_locations_and_safe_messages() {
+fn invalid_patterns_use_original_locations_and_safe_messages() {
     const URI: &str = "https://SECRET-user:SECRET-password@example.invalid/SECRET-resource";
     for pattern in [
         "[".to_owned(),
         format!("[{}", "SECRET-pattern".repeat(2000)),
     ] {
-        for (keyword, schema) in [
+        // Each value's verdict depends on the pattern's undefined match.
+        for (keyword, schema, reaching) in [
             (
                 "pattern",
                 serde_json::json!({"type":"string", "pattern":pattern}),
+                r#""x""#,
             ),
             (
                 "patternProperties",
-                serde_json::json!({"patternProperties":{pattern:true}}),
+                serde_json::json!({"patternProperties":{pattern:false}}),
+                r#"{"x":1}"#,
             ),
         ] {
             for (entry, resources, resource, pointer) in [
@@ -182,8 +209,19 @@ fn pattern_preparation_failures_use_original_locations_and_safe_messages() {
                     "",
                 ),
             ] {
-                let Err(detail) = prepare(&document(entry), &resources) else {
-                    panic!("an uncompilable pattern must refuse preparation")
+                let contract = match prepare(&document(entry), &resources) {
+                    Ok(contract) => contract,
+                    Err(detail) => panic!("an invalid pattern stands in: {detail:?}"),
+                };
+                // A value that never reaches the pattern keeps its verdict.
+                assert!(matches!(
+                    contract.validate(&JsonValue::parse("null").unwrap()),
+                    ValueOutcome::Satisfies | ValueOutcome::Fails { .. }
+                ));
+                let ValueOutcome::NoVerdict { detail } =
+                    contract.explain(&JsonValue::parse(reaching).unwrap())
+                else {
+                    panic!("a value whose verdict depends on the pattern was decided")
                 };
                 assert_eq!(detail.reason, NoVerdictReason::ConservativePreparation);
                 assert_eq!(detail.code, "schema-pattern-compilation");

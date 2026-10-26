@@ -3,19 +3,21 @@
 //! `pattern` values and `patternProperties` names alike.
 //!
 //! Every pattern is parsed here before the JSON Schema library sees it. A
-//! pattern that is not valid with Unicode semantics is refused. A valid pattern
-//! is matched by a linear-time engine (the `regex` crate) when it has a form in
-//! that engine's syntax with the same meaning: [`Reading::Linear`] holds that
-//! form, which spells every character set out as code points so the two
-//! dialects read it alike. Three kinds of valid pattern are not matched: one
-//! that only a backtracking engine can match (lookaround and backreferences),
-//! one with a Unicode property escape, whose character tables the evaluator
-//! does not qualify, and one with a non-word-boundary assertion `\B`. The word
-//! boundary `\b` has a form: ECMA-262 reads it with `\w` as `[A-Za-z0-9_]`, as
-//! the regex crate's ASCII word boundary does, and an ASCII word boundary never
-//! falls inside a multi-byte character. Its complement `(?-u:\B)` does, and
-//! the regex crate's `is_match` then answers no for a pattern that another
-//! branch matches (`\x{E9}|(?-u:\B)` on "aéa"), so `\B` is not matched.
+//! pattern that is not valid with Unicode semantics has no reading, and the
+//! evaluator does not match it: whether a string matches it is undefined. A
+//! valid pattern is matched by a linear-time engine (the `regex` crate) when it
+//! has a form in that engine's syntax with the same meaning:
+//! [`Reading::Linear`] holds that form, which spells every character set out as
+//! code points so the two dialects read it alike. Three kinds of valid pattern
+//! are not matched: one that only a backtracking engine can match (lookaround
+//! and backreferences), one with a Unicode property escape, whose character
+//! tables the evaluator does not qualify, and one with a non-word-boundary
+//! assertion `\B`. The word boundary `\b` has a form: ECMA-262 reads it with
+//! `\w` as `[A-Za-z0-9_]`, as the regex crate's ASCII word boundary does, and
+//! an ASCII word boundary never falls inside a multi-byte character. Its
+//! complement `(?-u:\B)` does, and the regex crate's `is_match` then answers no
+//! for a pattern that another branch matches (`\x{E9}|(?-u:\B)` on "aéa"), so
+//! `\B` is not matched.
 //!
 //! The values the evaluator checks are strings of Unicode scalar values: a
 //! string with an unpaired surrogate is refused before any pattern reads it. A
@@ -41,9 +43,12 @@ pub(crate) struct Linear {
     /// one anchored sequence of single-character runs.
     pub(crate) simple: Option<Simple>,
 }
-/// Why a valid pattern is not matched.
+/// Why a pattern is not matched.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Unsupported {
+    /// It is not a valid pattern with Unicode semantics, so whether a string
+    /// matches it is undefined.
+    Invalid,
     /// It needs a backtracking engine.
     Backtracking,
     /// It has a Unicode property escape.
@@ -57,6 +62,22 @@ pub(crate) enum Unsupported {
     /// Its form does not compile within what the value contract's pattern memory
     /// gives it, found when the pattern is first compiled.
     Memory(Shortfall),
+}
+impl Unsupported {
+    /// Whether the pattern is not matched for what it says rather than for a
+    /// limit: its match is then a stand-in, which a value's verdict need not
+    /// depend on. A pattern a limit leaves unmatched is no stand-in: as a
+    /// `pattern`, it gives no verdict wherever a string reaches it, and as a
+    /// `patternProperties` name, it refuses the value contract.
+    pub(crate) fn stands_in(self) -> bool {
+        matches!(
+            self,
+            Unsupported::Invalid
+                | Unsupported::Backtracking
+                | Unsupported::PropertyEscape
+                | Unsupported::NonWordBoundary
+        )
+    }
 }
 /// How a value contract's pattern memory fell short, for the refusal to state.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -190,7 +211,7 @@ impl Memory {
     }
     /// What the run matchers, the first allowances and the search caches
     /// leave for the forms that need more.
-    fn left(&self) -> usize {
+    pub(crate) fn left(&self) -> usize {
         self.total
             .saturating_sub(self.patterns.saturating_mul(FIRST + self.cache))
             .saturating_sub(self.matched)

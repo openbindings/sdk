@@ -136,6 +136,18 @@ pub fn scope<T>(units: usize, evaluate: impl FnOnce() -> T) -> Result<T, Spent> 
     }
 }
 
+/// Run `evaluate` within whatever allowance an enclosing [`scope`] leaves, or
+/// without a limit outside one, also returning the units it charged;
+/// [`Spent`] if a charge exceeded that allowance.
+pub fn measure<T>(evaluate: impl FnOnce() -> T) -> Result<(T, usize), Spent> {
+    let remaining = || STATE.with(|state| state.allowance.get().remaining);
+    scope(usize::MAX, || {
+        let granted = remaining();
+        let result = evaluate();
+        (result, granted - remaining())
+    })
+}
+
 /// Whether an allowance or a guard is active, so that a [`charge`] counts or
 /// checks anything. Outside both every charge returns `true` and changes
 /// nothing; this holds until the enclosing [`scope`] or [`guard`] ends.
@@ -191,6 +203,22 @@ mod tests {
         assert_eq!(scope(3, || (charge(2), charge(2))), Err(Spent));
         assert_eq!(scope(0, || charge(1)), Err(Spent));
         assert_eq!(scope(0, || 7), Ok(7));
+        assert!(charge(usize::MAX));
+    }
+    #[test]
+    fn a_measured_pass_counts_its_charges_within_the_enclosing_allowance() {
+        assert_eq!(measure(|| (charge(2), charge(3))), Ok(((true, true), 5)));
+        assert_eq!(measure(|| 7), Ok((7, 0)));
+        let outcome = scope(10, || {
+            let inner = measure(|| charge(4));
+            (inner, charge(6), charge(1))
+        });
+        assert_eq!(outcome, Err(Spent));
+        assert_eq!(scope(10, || measure(|| charge(11))), Err(Spent));
+        assert_eq!(
+            scope(10, || measure(|| charge(4)).map(|(_, used)| used)),
+            Ok(Ok(4))
+        );
         assert!(charge(usize::MAX));
     }
     #[test]

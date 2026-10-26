@@ -236,14 +236,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     assert!(matches!(result.outcome, DiscoveryOutcome::BodyLimit { .. }));
     assert_eq!(result.metadata.unwrap().status, 200);
     server.join().expect("example server")?;
-    let report = openbindings_schema_evaluator_test_support::run(
-        &DefaultEvaluator::new(),
-        &openbindings_schema_evaluator_test_support::Options::without(&[
-            "unicode-property-matching",
-            "backtracking-pattern-matching",
-            "undefined-results",
-        ]),
-    );
+    // The default evaluator's qualified limitations. It decides the four cases
+    // of those capabilities whose verdicts do not depend on a property escape's
+    // match.
+    let mut options = openbindings_schema_evaluator_test_support::Options::without(&[
+        "unicode-property-matching",
+        "backtracking-pattern-matching",
+        "undefined-results",
+    ]);
+    options.permitted_refusals.retain(|id, _| {
+        !id.starts_with("suite/draft2020-12/patternProperties.json#5/")
+            && !matches!(
+                id.as_str(),
+                "adversarial/lazy-pattern-properties/0" | "adversarial/lazy-pattern-properties/1"
+            )
+    });
+    let report = openbindings_schema_evaluator_test_support::run(&DefaultEvaluator::new(), &options);
     assert!(report.is_success());
     println!(
         "six public workflows and {} evaluator cases passed",

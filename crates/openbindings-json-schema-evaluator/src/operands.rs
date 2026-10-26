@@ -88,19 +88,70 @@ impl<'i> Keyword<'i, FlatJson> for ExactBound {
         }
     }
 }
-/// The keyword a stand-in for a resource that was not supplied compiles to. A
-/// pass that reaches it gives no verdict.
-struct Missing(u32);
-impl<'i> Keyword<'i, FlatJson> for Missing {
+/// The keyword a stand-in for a resource that was not supplied, or for a
+/// schema that would apply again without consuming the instance, compiles to.
+/// A pass that reaches it records the stand-in and goes on as if it held.
+struct StandIn(crate::pass::Stop);
+impl<'i> Keyword<'i, FlatJson> for StandIn {
     fn is_valid(&self, _: View<'i>) -> bool {
-        crate::pass::missing(self.0);
+        crate::pass::stand_in(self.0);
         true
     }
     fn validate(&self, _: View<'i>) -> Result<(), ValidationError<'i>> {
-        crate::pass::missing(self.0);
+        crate::pass::stand_in(self.0);
         Ok(())
     }
 }
+/// The keyword a schema holds for its `patternProperties` names that the
+/// evaluator does not match, which preparation leaves out: any member's name
+/// might match one, so a nonempty object that reaches it records the stand-in.
+struct Names(u32);
+impl<'i> Keyword<'i, FlatJson> for Names {
+    fn is_valid(&self, instance: View<'i>) -> bool {
+        use jsonschema::json::Object;
+        if instance
+            .as_object()
+            .is_some_and(|object| !object.is_empty())
+        {
+            crate::pass::stand_in(crate::pass::Stop::Names(self.0));
+        }
+        true
+    }
+    fn validate(&self, instance: View<'i>) -> Result<(), ValidationError<'i>> {
+        let _ = <Self as Keyword<'i, FlatJson>>::is_valid(self, instance);
+        Ok(())
+    }
+}
+/// The keyword a bounds program's root asks which entry a pass evaluates:
+/// it holds in a pass for its phase.
+struct Phase(crate::pass::Phase);
+impl<'i> Keyword<'i, FlatJson> for Phase {
+    fn is_valid(&self, _: View<'i>) -> bool {
+        crate::pass::phase() == self.0
+    }
+    fn validate(&self, instance: View<'i>) -> Result<(), ValidationError<'i>> {
+        if <Self as Keyword<'i, FlatJson>>::is_valid(self, instance) {
+            Ok(())
+        } else {
+            Err(ValidationError::custom("another bounds phase"))
+        }
+    }
+}
+/// The SDK keyword the stand-in for a schema that would apply again compiles
+/// to; its value is the stand-in's index.
+pub(crate) const CYCLE: &str = "$obCycle";
+/// The SDK keyword a schema holds for its `patternProperties` names that the
+/// evaluator does not match; its value is the stand-in's index.
+pub(crate) const NAMES: &str = "$obNames";
+/// The subschemas of the names [`NAMES`] stands in for, which the library
+/// never compiles: only a bounds program applies them.
+pub(crate) const NAME_SCHEMAS: &str = "$obNameSchemas";
+/// The keyword the same schema's `additionalProperties` applies with each
+/// member it reaches, which might match one of those names.
+pub(crate) const NAME_MEMBER: &str = "$obNameMember";
+/// The keyword a bounds program's root asks which entry a pass evaluates;
+/// its value is the phase's index.
+pub(crate) const PHASE: &str = "$obPhase";
 /// The bytes a run matcher's place among a value contract's matchers takes,
 /// as 64-bit hosts lay a matcher out. A 32-bit host takes less, and the
 /// pattern memory counts this on every host, so no outcome depends on it.
@@ -223,6 +274,27 @@ impl Patterns {
         *shared = true;
         given
     }
+    /// The allowance every compiled pattern first compiles within.
+    pub(crate) fn first(&self) -> Allowance {
+        self.memory.first()
+    }
+    /// What the pattern memory leaves once every compiled pattern holds its
+    /// first allowance and search cache, with that allowance, provided no
+    /// pattern ever needs more: every matcher not compiled yet is compiled now,
+    /// as its first use would compile it, and when one does not fit, or a
+    /// `patternProperties` name did not, the memory is shared as it is then,
+    /// and nothing is left.
+    pub(crate) fn spare(&self) -> Option<(usize, Allowance)> {
+        for (index, matcher) in self.matchers.iter().enumerate() {
+            if let Matcher::Regex { compiled, .. } = matcher
+                && compiled.get().is_none()
+            {
+                self.compile(index);
+            }
+        }
+        let shared = *self.shared.lock().unwrap_or_else(PoisonError::into_inner);
+        (!shared).then(|| (self.memory.left(), self.memory.first()))
+    }
     /// The bundle location of the `pattern` keyword at `site`.
     pub(crate) fn site(&self, site: u32) -> Option<Location> {
         let sites = self.sites.lock().unwrap_or_else(PoisonError::into_inner);
@@ -267,6 +339,7 @@ impl Patterns {
 }
 // The forms by which patterns the evaluator does not match share a matcher; no
 // linear form holds a control character.
+const INVALID: &str = "\u{1}invalid";
 const BACKTRACKING: &str = "\u{1}backtracking";
 const PROPERTY_ESCAPE: &str = "\u{1}property-escape";
 const NON_WORD_BOUNDARY: &str = "\u{1}non-word-boundary";
@@ -624,6 +697,7 @@ impl Operands {
         let key = match &reading {
             Reading::Linear(linear) => linear.form.as_str(),
             Reading::Unsupported(unsupported) => match unsupported {
+                Unsupported::Invalid => INVALID,
                 Unsupported::Backtracking => BACKTRACKING,
                 Unsupported::PropertyEscape => PROPERTY_ESCAPE,
                 Unsupported::NonWordBoundary => NON_WORD_BOUNDARY,
@@ -654,32 +728,23 @@ impl Operands {
         };
         index.to_string()
     }
-    /// The library's options with the SDK's keywords, and the `pattern`
-    /// keyword's matchers, which compile within the value contract's `memory`.
-    /// Only the keywords the bundle can hold are registered: the work marker
-    /// with `markers`, the missing keyword with `missing`, and the literal,
-    /// numeric and `pattern` keywords this value contract's schemas hold. The
-    /// library compiles a keyword the bundle does not hold the same whether
-    /// it is registered or not: it never meets it.
-    pub(crate) fn apply<R>(
-        self,
-        mut options: ValidationOptions<'_, R, FlatJson>,
-        memory: Memory,
-        markers: bool,
-        missing: bool,
-    ) -> (ValidationOptions<'_, R, FlatJson>, Arc<Patterns>) {
-        if markers {
-            options = options.with_keyword(crate::bundle::MARKER, |_, _, _| Ok(Box::new(Work)));
-        }
-        if missing {
-            options = options.with_keyword(crate::missing::KEYWORD, |_, value, _| {
-                let at = value
-                    .as_u64()
-                    .and_then(|at| u32::try_from(at).ok())
-                    .ok_or_else(|| ValidationError::custom("invalid internal stand-in index"))?;
-                Ok(Box::new(Missing(at)))
-            });
-        }
+    /// Which `pattern` matchers stand in, by matcher index: those for patterns
+    /// the evaluator does not match for their syntax rather than for a limit.
+    pub(crate) fn stand_in_patterns(&self) -> Vec<bool> {
+        self.patterns
+            .iter()
+            .map(|matcher| matches!(matcher, Matcher::Unmatched(unsupported) if unsupported.stands_in()))
+            .collect()
+    }
+    /// Whether a `pattern` matcher is for a pattern that is not valid.
+    pub(crate) fn holds_invalid_pattern(&self) -> bool {
+        self.patterns
+            .iter()
+            .any(|matcher| matches!(matcher, Matcher::Unmatched(Unsupported::Invalid)))
+    }
+    /// The SDK's keywords for this value contract, and the `pattern` keyword's
+    /// matchers, which compile within the value contract's `memory`.
+    pub(crate) fn keywords(self, memory: Memory) -> Keywords {
         // Only the matchers outlive preparation; their index by form does not.
         drop(self.indices);
         let matched = !self.patterns.is_empty();
@@ -689,8 +754,101 @@ impl Operands {
             shared: Mutex::new(false),
             sites: Mutex::new(Vec::new()),
         });
-        let keyword = patterns.clone();
-        if matched {
+        let held = |choices: bool| {
+            self.literals
+                .iter()
+                .any(|literal| matches!(literal, Literal::Choices(_)) == choices)
+        };
+        let literals = [held(false), held(true)];
+        Keywords {
+            patterns,
+            matched,
+            numbers: Arc::new(self.numbers),
+            numeric: self.numeric,
+            literals: Arc::new(self.literals),
+            held: literals,
+        }
+    }
+}
+/// The SDK's keywords a value contract's validators compile, which share its
+/// literals, numeric operands and `pattern` matchers.
+pub(crate) struct Keywords {
+    patterns: Arc<Patterns>,
+    // Whether the value contract holds a `pattern` matcher.
+    matched: bool,
+    numbers: Arc<numeric::Operands>,
+    numeric: [bool; numeric::KEYWORDS.len()],
+    literals: Arc<Vec<Literal>>,
+    // Whether the value contract holds a `const` and an `enum` literal.
+    held: [bool; 2],
+}
+/// Which of the SDK's own keywords a validator's bundle can hold besides the
+/// literal, numeric and `pattern` keywords.
+#[derive(Clone, Copy, Default)]
+pub(crate) struct Registered {
+    /// The work marker.
+    pub(crate) markers: bool,
+    /// The missing-resource stand-in.
+    pub(crate) missing: bool,
+    /// The in-place cycle stand-in.
+    pub(crate) cycles: bool,
+    /// The unmatched-names stand-in.
+    pub(crate) names: bool,
+    /// The bounds program's root.
+    pub(crate) phase: bool,
+}
+impl Keywords {
+    /// The value contract's `pattern` matchers.
+    pub(crate) fn patterns(&self) -> &Arc<Patterns> {
+        &self.patterns
+    }
+    /// The library's options with the SDK's keywords. Only the keywords the
+    /// bundle can hold are registered: those `registered` names, and the
+    /// literal, numeric and `pattern` keywords this value contract's schemas
+    /// hold. The library compiles a keyword the bundle does not hold the same
+    /// whether it is registered or not: it never meets it.
+    pub(crate) fn register<'o, R>(
+        &self,
+        mut options: ValidationOptions<'o, R, FlatJson>,
+        registered: Registered,
+    ) -> ValidationOptions<'o, R, FlatJson> {
+        // A stand-in's index, which its keyword holds.
+        fn index(value: &Value) -> Result<u32, ValidationError<'static>> {
+            value
+                .as_u64()
+                .and_then(|at| u32::try_from(at).ok())
+                .ok_or_else(|| ValidationError::custom("invalid internal stand-in index"))
+        }
+        if registered.markers {
+            options = options.with_keyword(crate::bundle::MARKER, |_, _, _| Ok(Box::new(Work)));
+        }
+        if registered.missing {
+            options = options.with_keyword(crate::missing::KEYWORD, |_, value, _| {
+                Ok(Box::new(StandIn(crate::pass::Stop::Missing(index(value)?))))
+            });
+        }
+        if registered.cycles {
+            options = options.with_keyword(CYCLE, |_, value, _| {
+                Ok(Box::new(StandIn(crate::pass::Stop::Cycle(index(value)?))))
+            });
+        }
+        if registered.names {
+            options = options.with_keyword(NAMES, |_, value, _| Ok(Box::new(Names(index(value)?))));
+            options = options.with_keyword(NAME_MEMBER, |_, value, _| {
+                Ok(Box::new(StandIn(crate::pass::Stop::Names(index(value)?))))
+            });
+        }
+        if registered.phase {
+            options = options.with_keyword(PHASE, |_, value, _| {
+                let phase = value
+                    .as_u64()
+                    .and_then(crate::pass::Phase::from_index)
+                    .ok_or_else(|| ValidationError::custom("invalid internal bounds phase"))?;
+                Ok(Box::new(Phase(phase)))
+            });
+        }
+        if self.matched {
+            let keyword = self.patterns.clone();
             options = options.with_keyword("pattern", move |_, value, at| {
                 let index = value
                     .as_str()
@@ -707,13 +865,12 @@ impl Operands {
                 Ok(Box::new(Pattern(keyword.clone(), index, site)))
             });
         }
-        let numbers = Arc::new(self.numbers);
         for (keyword, _) in numeric::KEYWORDS
             .into_iter()
             .zip(self.numeric)
             .filter(|&(_, held)| held)
         {
-            let numbers = numbers.clone();
+            let numbers = self.numbers.clone();
             options = options.with_keyword(keyword, move |_, value, _| {
                 if value.as_number().is_none() {
                     return Err(ValidationError::custom("numeric keyword requires a number"));
@@ -724,15 +881,9 @@ impl Operands {
                 Ok(Box::new(ExactBound(bound)))
             });
         }
-        let held = |choices: bool| {
-            self.literals
-                .iter()
-                .any(|literal| matches!(literal, Literal::Choices(_)) == choices)
-        };
-        let keywords = [("const", held(false)), ("enum", held(true))];
-        let literals = Arc::new(self.literals);
+        let keywords = [("const", self.held[0]), ("enum", self.held[1])];
         for (keyword, _) in keywords.into_iter().filter(|&(_, held)| held) {
-            let literals = literals.clone();
+            let literals = self.literals.clone();
             options = options.with_keyword(keyword, move |_, value, _| {
                 let id = if keyword == "enum" {
                     value
@@ -748,7 +899,7 @@ impl Operands {
                 Ok(Box::new(Constraint(literal.clone())))
             });
         }
-        (options, patterns)
+        options
     }
 }
 /// The separated literal at `index`.

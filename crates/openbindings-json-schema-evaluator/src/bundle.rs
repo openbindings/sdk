@@ -36,7 +36,10 @@ pub(crate) struct Bundle {
     /// The schema objects evaluation holds on reaching the entry definition:
     /// the root, the work marker's wrapper under markers, and the entry.
     pub(crate) entry_weight: u32,
-    markers: bool,
+    pub(crate) markers: bool,
+    /// What dynamic specialization grew the program by beyond the projected
+    /// definitions' estimate, in bytes as [`definition_charge`] counts them.
+    pub(crate) grown: usize,
 }
 /// One bundled definition: the projected definition it copies and what its
 /// references reach.
@@ -108,7 +111,8 @@ pub(crate) struct Options {
 pub(crate) const MARKER: &str = "$obWork";
 
 /// Keywords whose subschemas apply to child instances: members, member names
-/// and items.
+/// and items, and the subschemas of `patternProperties` names the evaluator
+/// does not match, which only a bounds program applies, to members.
 pub(crate) fn descending(keyword: &str) -> bool {
     matches!(
         keyword,
@@ -121,6 +125,7 @@ pub(crate) fn descending(keyword: &str) -> bool {
             | "contains"
             | "unevaluatedItems"
             | "unevaluatedProperties"
+            | crate::operands::NAME_SCHEMAS
     )
 }
 /// What a reference adds to an annotation walk. With the weights below, each
@@ -160,9 +165,10 @@ pub(crate) fn subschemas<'a>(
         ("properties" | "patternProperties" | "dependentSchemas", Value::Object(members)) => {
             Box::new(members.values_mut())
         }
-        ("allOf" | "anyOf" | "oneOf" | "prefixItems", Value::Array(items)) => {
-            Box::new(items.iter_mut())
-        }
+        (
+            "allOf" | "anyOf" | "oneOf" | "prefixItems" | crate::operands::NAME_SCHEMAS,
+            Value::Array(items),
+        ) => Box::new(items.iter_mut()),
         (
             "additionalProperties"
             | "propertyNames"
@@ -207,6 +213,7 @@ pub(crate) fn bundle(
         definitions: Vec::new(),
         out: Vec::new(),
         markers: options.markers,
+        grown: 0,
     };
     let entry = if dynamic {
         Specializer::new(&resources, options).run(&mut bundler, entry)?
@@ -217,6 +224,7 @@ pub(crate) fn bundle(
         names,
         definitions,
         out,
+        grown,
         ..
     } = bundler;
     Ok(Bundle {
@@ -226,6 +234,7 @@ pub(crate) fn bundle(
         entry,
         entry_weight: if options.markers { 3 } else { 2 },
         markers: options.markers,
+        grown,
     })
 }
 impl Bundle {
@@ -251,19 +260,111 @@ impl Bundle {
         root.insert("$defs".into(), Value::Object(definitions));
         Value::Object(root)
     }
+    /// The bundle of a bounds program, whose definitions `guard_definition`
+    /// guards: its entries are reached from a root whose `allOf` items each
+    /// apply one where the pass's phase is theirs. A verdict phase applies its
+    /// entry under `not` twice, which the library checks by its validity test
+    /// even while it collects errors, so such a pass reports at most that one
+    /// error and takes no longer than a validity test; the phases for errors
+    /// apply the upper entry and the value contract's own entry as they are.
+    pub(crate) fn document_with_bounds(self, lower: u32, upper: u32, original: u32) -> Value {
+        use crate::pass::Phase;
+        let entry = |index: u32| serde_json::json!({ "$ref": format!("#/$defs/{}", self.names[index as usize]) });
+        let verdict = |index: u32| serde_json::json!({ "not": { "not": entry(index) } });
+        let phase = |phase: Phase, then: Value| serde_json::json!({ "if": { crate::operands::PHASE: phase.index() }, "then": then });
+        let mut root = Map::new();
+        root.insert("$id".into(), Value::String(BOUNDS_URI.into()));
+        root.insert(
+            "$schema".into(),
+            Value::String("https://json-schema.org/draft/2020-12/schema".into()),
+        );
+        root.insert(
+            "allOf".into(),
+            serde_json::json!([
+                phase(Phase::Lower, verdict(lower)),
+                phase(Phase::Upper, verdict(upper)),
+                phase(Phase::Original, verdict(original)),
+                phase(Phase::UpperErrors, entry(upper)),
+                phase(Phase::OriginalErrors, entry(original)),
+            ]),
+        );
+        let definitions: Map<String, Value> = self.names.into_iter().zip(self.schemas).collect();
+        root.insert("$defs".into(), Value::Object(definitions));
+        Value::Object(root)
+    }
+    /// A bundle assembled from `names`, `schemas` and `definitions` by a
+    /// transform of another bundled with `markers`.
+    pub(crate) fn assembled(
+        names: Vec<String>,
+        schemas: Vec<Value>,
+        definitions: Vec<Definition>,
+        entry: u32,
+        markers: bool,
+    ) -> Self {
+        Self {
+            names,
+            schemas,
+            definitions,
+            entry,
+            entry_weight: if markers { 3 } else { 2 },
+            markers,
+            grown: 0,
+        }
+    }
 }
+/// The schema objects a bounds program's pass holds on reaching any entry, at
+/// most: the root, its phase's `allOf` item and `then`, a verdict phase's two
+/// `not` subschemas and the entry.
+pub(crate) const BOUNDS_ENTRY_WEIGHT: u32 = 6;
 // Projected definitions keep their names (`n<number>`), specialized copies add
 // their context (`n<number>-<context>`), and a definition a schema transform
-// adds for one keyword of definition `n<number>` is `n<number>-p<index>`.
+// adds for one keyword of definition `n<number>` is `n<number>-p<index>`. An
+// in-place cycle's unfolding adds `-c<index>` to the name of each schema it
+// copies and `-r` to the stand-in for a schema applying again, and a bounds
+// program adds `-l` or `-u` to the name of each schema it copies for its lower
+// or upper bound and `-k<keyword>` to a definition that stands for one of
+// that copy's keywords.
 /// A bundled definition name read back: the projected definition number it
-/// holds, and whether a schema transform added it.
-pub(crate) fn parse_name(name: &str) -> Option<(u32, bool)> {
+/// holds, and the keyword a schema transform's definition stands for.
+pub(crate) fn parse_name(name: &str) -> Option<(u32, Option<&'static str>)> {
     let projected = name.strip_prefix('n')?;
-    let (number, added) = match projected.split_once('-') {
-        Some((number, suffix)) => (number, suffix.starts_with('p')),
-        None => (projected, false),
+    let Some((number, suffix)) = projected.split_once('-') else {
+        return Some((projected.parse().ok()?, None));
     };
-    Some((number.parse().ok()?, added))
+    let mut keyword = None;
+    for segment in suffix.split('-') {
+        if let Some(index) = segment.strip_prefix('p')
+            && !index.is_empty()
+            && index.bytes().all(|byte| byte.is_ascii_digit())
+        {
+            keyword = Some("patternProperties");
+        } else if let Some(stands) = segment.strip_prefix('k') {
+            keyword = STANDS_FOR.iter().copied().find(|known| *known == stands);
+        }
+    }
+    Some((number.parse().ok()?, keyword))
+}
+/// Whether a bundled definition's name is one a bounds program adds: a copy
+/// for a lower or upper bound, or a definition standing for one of its
+/// keywords.
+pub(crate) fn is_bounds_copy(name: &str) -> bool {
+    name.split('-')
+        .skip(1)
+        .any(|segment| segment == "l" || segment == "u" || segment.starts_with('k'))
+}
+/// The keywords a bounds program's added definitions stand for.
+const STANDS_FOR: [&str; 5] = [
+    "oneOf",
+    "if",
+    "contains",
+    "patternProperties",
+    "additionalProperties",
+];
+/// The name of the definition a bounds program adds for `keyword` of the copy
+/// named `copy`.
+pub(crate) fn standing_name(copy: &str, keyword: &str) -> String {
+    debug_assert!(STANDS_FOR.contains(&keyword));
+    format!("{copy}-k{keyword}")
 }
 /// The name of the definition a schema transform adds at `index` for a
 /// keyword of projected definition `number`.
@@ -282,6 +383,8 @@ struct Bundler {
     definitions: Vec<Definition>,
     out: Vec<Value>,
     markers: bool,
+    // What specialization grew the program by.
+    grown: usize,
 }
 impl Bundler {
     // The new definition's index; `None` past the most a `u32` numbers.
@@ -435,6 +538,66 @@ fn walk(
     Ok(())
 }
 
+/// Each subschema of an applicator keyword's value, read only.
+fn subschemas_of<'a>(keyword: &str, value: &'a Value) -> Box<dyn Iterator<Item = &'a Value> + 'a> {
+    match (keyword, value) {
+        ("properties" | "patternProperties" | "dependentSchemas", Value::Object(members)) => {
+            Box::new(members.values())
+        }
+        (
+            "allOf" | "anyOf" | "oneOf" | "prefixItems" | crate::operands::NAME_SCHEMAS,
+            Value::Array(items),
+        ) => Box::new(items.iter()),
+        (
+            "additionalProperties"
+            | "propertyNames"
+            | "items"
+            | "contains"
+            | "unevaluatedItems"
+            | "unevaluatedProperties"
+            | "not"
+            | "if"
+            | "then"
+            | "else",
+            value,
+        ) => Box::new(std::iter::once(value)),
+        _ => Box::new(std::iter::empty()),
+    }
+}
+/// Whether any reference below a bundled schema satisfies `reaches`.
+pub(crate) fn any_reference(value: &Value, reaches: &mut dyn FnMut(&str) -> bool) -> bool {
+    let Value::Object(schema) = value else {
+        return false;
+    };
+    if let Some(Value::String(reference)) = schema.get("$ref")
+        && reaches(reference)
+    {
+        return true;
+    }
+    schema.iter().any(|(keyword, child)| {
+        subschemas_of(keyword, child).any(|subschema| any_reference(subschema, reaches))
+    })
+}
+/// Visit every reference below a bundled schema, with whether the path to it
+/// passes a keyword that applies to a child instance.
+pub(crate) fn references(
+    value: &mut Value,
+    descends: bool,
+    visit: &mut dyn FnMut(&mut String, bool),
+) {
+    let Value::Object(schema) = value else {
+        return;
+    };
+    for (keyword, child) in schema.iter_mut() {
+        let inner = descends || descending(keyword);
+        for subschema in subschemas(keyword, child) {
+            references(subschema, inner, visit);
+        }
+    }
+    if let Some(Value::String(reference)) = schema.get_mut("$ref") {
+        visit(reference, descends);
+    }
+}
 /// The edges of a bundled schema, whose references `resolve` maps to their
 /// targets' indices.
 pub(crate) fn edges(schema: &mut Value, resolve: &mut dyn FnMut(&str) -> Option<u32>) -> Vec<Edge> {
@@ -448,6 +611,20 @@ pub(crate) fn edges(schema: &mut Value, resolve: &mut dyn FnMut(&str) -> Option<
     );
     edges
 }
+/// Guard a bounds program's definition by a work marker: its keywords apply
+/// under `{"if": {MARKER: 0}, "then": ...}`, so a pass whose work allowance
+/// is spent enters nothing more of it, whether it checks validity or collects
+/// errors. The library collects every `allOf` item's errors, even after one
+/// fails, but applies `then` only where `if` holds.
+pub(crate) fn guard_definition(schema: &mut Value) {
+    if let Value::Object(_) = schema {
+        let keywords = std::mem::take(schema);
+        *schema = serde_json::json!({ "if": { MARKER: 0 }, "then": keywords });
+    }
+}
+/// A bounds program's resource URI, under which its errors' locations hold a
+/// guarded definition's keywords below the guard's `then`.
+pub(crate) const BOUNDS_URI: &str = "urn:openbindings:bounds";
 
 // Dynamic specialization. A context assigns each looked-up anchor name the
 // resource that declares it outermost on the evaluation path, if any. Only the
@@ -507,8 +684,8 @@ fn content(value: &Value) -> usize {
         _ => 0,
     }
 }
-// What a bundled definition holding `schema` is charged.
-fn definition_charge(schema: &Value) -> usize {
+/// What a bundled definition holding `schema` is charged.
+pub(crate) fn definition_charge(schema: &Value) -> usize {
     DEFINITION_BYTES.saturating_add(content(schema))
 }
 // The anchor names `value` looks up through `$dynamicRef` fragments.
@@ -735,6 +912,11 @@ impl<'a> Specializer<'a> {
             bundler.definitions[index as usize].edges = edges;
             bundler.out[index as usize] = schema;
         }
+        let growth = self.growth;
+        bundler.grown = growth
+            .definition_bytes
+            .saturating_add(growth.context_bytes)
+            .saturating_sub(growth.projected);
         Ok(entry)
     }
 }

@@ -90,18 +90,53 @@ APIs:
 - `missing.rs` stands in for resources the request does not supply. When the
   projection fails for want of one, preparation adds an empty resource at each
   missing URI and projects again, and every definition projected from a
-  stand-in compiles to the SDK's `$obMissing` keyword, which stops the pass
-  with no verdict naming the missing resource. A value whose evaluation never
-  reaches a stand-in keeps the library's verdict, which cannot depend on the
-  missing content where keywords decide by evaluating their subschemas. The
-  library's `unevaluatedProperties` and `unevaluatedItems` validators do not:
-  they read the structure of the schemas applying to the same instance to
-  collect annotations, and would read a stand-in as annotating nothing. So a
-  contract in which such a keyword's walk (through `$ref`, `$dynamicRef`,
-  `allOf`, `anyOf`, `oneOf`, `if`, `then`, `else` or `dependentSchemas`)
-  reaches a stand-in refuses preparation, whatever order the library
-  evaluates keywords in. A reference to a fragment of a missing resource has
-  no stand-in, and preparation refuses as before.
+  stand-in compiles to the SDK's `$obMissing` keyword, which records the
+  stand-in and answers as if it held. A value whose evaluation never reaches a
+  stand-in keeps the library's verdict, which cannot depend on the missing
+  content where keywords decide by evaluating their subschemas. The library's
+  `unevaluatedProperties` and `unevaluatedItems` validators do not: they read
+  the structure of the schemas applying to the same instance to collect
+  annotations, and would read a stand-in as annotating nothing. So a contract
+  in which such a keyword's walk (through `$ref`, `$dynamicRef`, `allOf`,
+  `anyOf`, `oneOf`, `if`, `then`, `else` or `dependentSchemas`) reaches a
+  stand-in for a missing resource, a cycle or `patternProperties` names
+  refuses preparation, whatever order the library evaluates keywords in. A
+  reference to a fragment of a missing resource has no stand-in, and
+  preparation refuses as before.
+- `cycles.rs` stands in for in-place cycles. Core projects a contract whose
+  in-place applicators and references form a cycle for the evaluator (its own
+  `evaluation_program` still refuses it, `in-place-cycle`), and preparation
+  unfolds each cycle of the bundled same-instance references from each of its
+  entries, so that a reference back to a schema on the current path is a
+  definition holding the SDK's `$obCycle` keyword, which records the stand-in
+  as `$obMissing` does. The unfolding enumerates at most 1,024 copies in all,
+  charging a cycle that passes the budget for what it enumerated, and checks
+  the preparation's cancellation as it goes.
+- `bounds.rs` writes the bounds program that decides a pass reaching a
+  stand-in: two copies of every definition that can reach one, for the least
+  and the most validity the stand-ins' answers can give it, with each stand-in
+  `false` or `true`, `not` crossing to the other copy, and `oneOf`, an `if`
+  whose condition reaches a stand-in and a `contains` with a `maxContains`
+  written in ordinary keywords from both copies, beside the contract's own
+  definitions. The library compiles it as any bundle under its own resource URI,
+  behind a root whose `if` keywords ask the SDK's `$obPhase` keyword which entry
+  a pass evaluates: the lower copy, the upper copy or the contract's own entry,
+  each under `not` twice so that the library checks it by its validity test
+  while it collects errors, or the upper copy as it is, for an explanation. It
+  relies only on the keywords' 2020-12 semantics: an annotation-reading keyword
+  keeps copies of its sources in the same keywords, and a holder whose sources
+  would need others is `false` and `true`. A bounds pass calls the library's
+  error collection (`iter_errors`) through one non-inlined function, which the
+  contract's own passes never call, so the contract's verdict passes and
+  explanations compile as they would without it. Every definition that can reach
+  a stand-in, copies and the contract's own, applies its keywords under
+  `{"if": {"$obWork": 0}, "then": ...}`, and each pass runs within a work
+  allowance a multiple of what the contract's own entry measures there: this
+  relies on the library applying `then` only where `if` holds, in its validity
+  test and its error collection alike, since collection reaches every `allOf`
+  item even after one fails, and on `not` checking its subschema by the validity
+  test. `tests/stand_ins.rs` checks that thirty nested levels of keywords
+  written from both copies finish within it.
 - `bundle.rs` bundles the projected definitions into the `$defs` of one
   resource (JSON Schema Core §9.3), so the library compiles each definition once,
   whatever path reaches it. It resolves `$dynamicRef` itself: a definition is
@@ -118,9 +153,13 @@ APIs:
   not estimate the library's compiled memory.
 - `operands.rs` registers the SDK's keywords: exact numeric bounds and
   `multipleOf`, `const` and `enum` as handles into the exact literal arena,
-  `pattern`, the `$obMissing` stand-in, and, only when the application sets an
-  evaluation work cap, the `$obWork` marker the bundle places before each
-  reference.
+  `pattern`, the `$obMissing`, `$obCycle` and `$obNames` stand-ins (the last
+  held by a schema whose `patternProperties` names the evaluator does not
+  match, recording the stand-in for a nonempty object and for each member its
+  `additionalProperties` reaches), the bounds program's `$obPhase`, and the
+  `$obWork` marker, which the bundle places before each reference when the
+  application sets an evaluation work cap and the bounds program places in its
+  guards.
 - `pattern.rs` reads every pattern as an ECMA-262 11th edition `u`-mode pattern
   and writes a form in the regex crate's syntax meant to have the same matches,
   spelling each character set out as the positive class of the scalar values
@@ -148,9 +187,10 @@ APIs:
   answers no for a pattern another branch matches (`\x{E9}|(?-u:\B)` on
   "aéa", where `find` matches), so `\B` is not matched. A pattern holding
   `\B`, one that only a backtracking engine can match (lookaround or a
-  backreference) or one with a Unicode property escape has no form: a string
-  that reaches it in `pattern` gives no verdict, and as a `patternProperties`
-  name it refuses preparation. Each keeps its own reason.
+  backreference), one with a Unicode property escape and one invalid with
+  Unicode semantics have no form: each is a stand-in, as the `pattern`
+  keyword's matcher and as a `patternProperties` name left out of the names the
+  library compiles. Each keeps its own reason.
 - `depth.rs` bounds the schema objects any evaluation path can hold at once,
   from the bundle's reference graph, as the lesser of two linear bounds in
   the value's depth. Before evaluating a value, the evaluator compares that
@@ -162,8 +202,9 @@ APIs:
   instance, the stack the pass has used since it started, and fails every read
   once it is more than half of `stack_bytes`, so the library stops descending;
   `tests/evaluation_stack.rs` checks 39 shapes on threads of 192 KiB, 256 KiB
-  and 1 MiB, and a library upgrade reruns it. A contract that could recurse
-  without consuming the instance refuses (`evaluation-cycle`), and one whose
+  and 1 MiB, and a library upgrade reruns it. A bundle that could still
+  recurse without consuming the instance after `cycles.rs` unfolds its cycles
+  refuses (`evaluation-cycle`), and one whose
   unevaluated keyword's walk weighs more than `stack_bytes` admits refuses
   (`unevaluated-walk-limit`), since the library compiles the walk by
   recursion: `bundle.rs` weighs each reference by the keywords on its path,
@@ -348,8 +389,8 @@ upgrade until it is reviewed. Before adopting one:
    the depth bound's frame model, the stack guard's headroom and the walk
    limit that keeps preparation on a 256 KiB thread: a library whose frames
    grow fails it, and the guard's budget or the walk limit changes with the
-   library. The missing-resource tests check stand-in verdicts against every
-   completion.
+   library. The missing-resource and stand-in tests check stand-in verdicts
+   against every completion.
 4. Repeat the frozen representative performance and memory series
    (`tools/evaluator-bench`, `tools/verify-diagnostics.py`) and the packed
    consumer tests. A verdict becoming a refusal is a regression unless the

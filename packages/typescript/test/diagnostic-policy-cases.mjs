@@ -162,26 +162,56 @@ export function diagnosticPolicyCases(sdk) {
         error.interpretationCode === undefined,
       "non-interpretation errors retain broad code only",
     );
+    // A schema applying again without consuming the instance is a stand-in:
+    // a value whose verdict depends on it gives no verdict naming the
+    // schema, and a dominating success branch decides in either order.
+    const cycle = prepareInput(
+      withSchema({ $ref: "#/operations/op/input" }),
+      "op",
+    );
+    check(cycle.status === "ready", "an in-place cycle prepares");
+    for (const result of [
+      own(cycle.valueContract).validate(1),
+      own(cycle.valueContract).explain(1),
+    ]) {
+      check(
+        result.status === "no-verdict" &&
+          result.detail.reason === "conservative-preparation" &&
+          result.detail.code === "in-place-cycle" &&
+          result.detail.location?.resource === null &&
+          result.detail.location?.pointer === "/operations/op/input",
+        "a value depending on the cycle names the schema applying again",
+      );
+      safe(result.detail.message);
+    }
     for (const schema of [
-      { $ref: "#/operations/op/input" },
       { anyOf: [true, { $ref: "#/operations/op/input" }] },
+      { anyOf: [{ $ref: "#/operations/op/input" }, true] },
     ]) {
       const state = prepareInput(withSchema(schema), "op");
-      check(
-        state.status === "no-verdict" &&
-          state.detail.reason === "conservative-preparation" &&
-          state.detail.code === "in-place-cycle",
-        "potential cycles remain conservative",
-      );
+      check(state.status === "ready", "a cycle beside a true branch prepares");
+      const contract = own(state.valueContract);
+      for (const value of [1, {}, "s"]) {
+        check(
+          contract.validate(value).status === "satisfies" &&
+            contract.explain(value).status === "satisfies",
+          "a dominating success branch decides in either order",
+        );
+      }
     }
     const secret =
       "https://SECRET-user:SECRET-password@example.invalid/SECRET-path?token=SECRET-query#SECRET-fragment";
     const patternUri =
       "https://SECRET-user:SECRET-password@example.invalid/SECRET-resource";
     for (const pattern of ["[", "[" + "SECRET-pattern".repeat(2000)]) {
-      for (const [keyword, schema] of [
-        ["pattern", { type: "string", pattern }],
-        ["patternProperties", { patternProperties: { [pattern]: true } }],
+      // Each value's verdict depends on the invalid pattern's match.
+      for (const [keyword, schema, reaching] of [
+        ["pattern", { type: "string", pattern }, "x"],
+        [
+          "patternProperties",
+          { patternProperties: { [pattern]: false } },
+          { x: 1 },
+        ],
       ]) {
         const parsed = sdk.parseJson(JSON.stringify(schema));
         check(parsed.status === "parsed", "pattern resource admitted");
@@ -201,24 +231,31 @@ export function diagnosticPolicyCases(sdk) {
           ],
           [{ $ref: patternUri }, { resources }, patternUri, ""],
         ]) {
-          const state = prepareInput(withSchema(entry), "op", options);
+          const setup = prepareInput(withSchema(entry), "op", options);
+          check(setup.status === "ready", "an invalid pattern stands in");
+          const contract = own(setup.valueContract);
+          check(
+            ["satisfies", "fails"].includes(contract.validate(null).status),
+            "a value that never reaches the pattern keeps its verdict",
+          );
+          const state = contract.explain(reaching);
           check(
             state.status === "no-verdict" &&
               state.detail.reason === "conservative-preparation" &&
               state.detail.code === "schema-pattern-compilation" &&
               state.detail.message ===
                 `the schema ${keyword} regular expression could not be compiled`,
-            "pattern refusal provides safe actionable classification",
+            "an invalid pattern's no-verdict provides safe actionable classification",
           );
           check(
             state.detail.location?.resource === resource &&
               state.detail.location?.pointer === `${pointer}/${keyword}`,
-            "pattern refusal maps the authored keyword location",
+            "an invalid pattern's no-verdict maps the authored keyword location",
           );
           safe(state.detail.message);
           check(
             !JSON.stringify(state.detail).includes("SECRET-pattern"),
-            "pattern refusal never exposes the source pattern",
+            "an invalid pattern's no-verdict never exposes the source pattern",
           );
         }
       }

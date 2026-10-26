@@ -116,16 +116,20 @@
   path's dynamic scope, and cooperative cancellation. It bundles each value contract
   into one resource, so every reached schema compiles once, and reuses a
   resource set's identity index instead of indexing its resources again. A
-  value contract that reaches a resource that was not supplied prepares with an empty
-  stand-in for it, and a pass that reaches the stand-in gives no verdict
-  (`resource-unavailable`) naming it. A value contract in which an
-  `unevaluatedProperties` or `unevaluatedItems` keyword's annotation sources
-  reach a stand-in, a reference to a fragment of a missing resource, or one that
-  identifies no schema refuses preparation. Patterns, including the word
-  boundary `\b`, are translated for a linear-time engine and match in time
-  linear in the string, so there is no pattern work cap; one that needs a
-  backtracking engine (lookaround or backreferences), applies a Unicode property
-  escape or holds the non-word boundary `\B` gives no verdict. The evaluator
+  value contract prepares with a stand-in for what the evaluator cannot
+  evaluate: a resource that was not supplied, a schema that could apply again
+  without consuming the instance, and a pattern it does not match. A value
+  whose verdict depends on how a stand-in comes out gives no verdict naming it,
+  and every other value keeps the verdict that holds however the stand-ins come
+  out. A value contract in which an `unevaluatedProperties` or
+  `unevaluatedItems` keyword's annotation sources reach a stand-in for a
+  missing resource, a cycle or `patternProperties` names, a reference to a
+  fragment of a missing resource, or one that identifies no schema refuses
+  preparation. Patterns, including the word boundary `\b`, are translated for a
+  linear-time engine and match in time linear in the string, so there is no
+  pattern work cap; one that is invalid with Unicode semantics, needs a
+  backtracking engine (lookaround or backreferences), applies a Unicode
+  property escape or holds the non-word boundary `\B` is a stand-in. The evaluator
   bounds what the SDK itself reads, writes and recurses through, and does not
   estimate the library's compiled memory. Limits that protect the process have
   defaults, and those that encode an assumption about the host are expressed as
@@ -260,7 +264,7 @@
   `body-error`. CI pins Node 22.23.0 and runs the TypeScript tests at 24.17.0 and 26.2.0 too.
 - The documentation names the pattern dialect: ECMA-262 11th edition (ES2020) with
   Unicode semantics, as JSON Schema 2020-12 cites it, so syntax later editions added,
-  such as ES2025's modifiers `(?i:a)` and duplicate named groups, refuses preparation
+  such as ES2025's modifiers `(?i:a)` and duplicate named groups, is invalid
   (`schema-pattern-compilation`) even where the host's own RegExp accepts it.
 - A bundled Wasm module whose bytes do not depend on where it was built. The
   build gives the builder's Cargo home, toolchain, target directory and checkout
@@ -298,6 +302,38 @@
   serialized `ValueOutcome` or `ReferenceResolution` names its variant in
   `status`, so the JSON a Rust caller writes and the object TypeScript returns
   carry the same discriminant and values.
+- A problem the default evaluator cannot evaluate costs only the values whose
+  verdict depends on it, and a decided answer wins. A pattern invalid with
+  Unicode semantics and a schema that could apply again without consuming the
+  instance no longer refuse preparation: like a missing resource, each is a
+  stand-in, and a value whose verdict depends on how it comes out gives no
+  verdict (`schema-pattern-compilation` or `in-place-cycle`, at the pattern's
+  keyword or the schema that would apply again). A `patternProperties` name the
+  evaluator does not match (invalid, needing a backtracking engine, holding a
+  property escape or `\B`) is a stand-in too, as a `pattern` value already was,
+  instead of refusing preparation. A pass that reaches a stand-in no longer
+  withholds an answer the stand-in cannot change: a bounds program compiled with
+  the value contract checks the least and the most validity the stand-ins'
+  answers can give it, and the value satisfies or fails when they agree,
+  whatever order the keywords are in: `"a"` fails an `allOf` that names a
+  missing resource before `{"type": "integer"}`, and `1` satisfies an `anyOf`
+  whose first branch names the schema itself. Preparation still refuses where an
+  `unevaluatedProperties` or `unevaluatedItems` keyword's annotation sources
+  reach a stand-in for a missing resource, a cycle or `patternProperties` names.
+  The evaluator test kit's declared limitations for the default evaluator leave
+  out the four cases whose verdicts do not depend on a property escape's match,
+  which it now decides. Deciding costs at most a multiple of checking: a pass
+  over the bounds program does at most eight times the work of the value
+  contract's own pass, which the program measures, and 64 units more, as
+  `evaluation_steps` counts work, and an explanation through it 64 times the
+  work of collecting the value contract's own errors, so nested `oneOf`, `if`
+  and counted `contains` keywords cannot multiply it level by level. An in-place
+  cycle's unfolding enumerates at most 1,024 copies in all, holding at most the
+  larger of 2 MiB and four times the bytes of the cycles' own schemas, and
+  observes cancellation. A failure the first pass decided without reaching a
+  stand-in is explained through the bounds program where the value contract's
+  own explanation reaches one, in a value contract holding a stand-in for an
+  in-place cycle, an invalid pattern or `patternProperties` names.
 
 This first release remains unpublished. Package and specification versions are
 independent.
