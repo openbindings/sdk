@@ -38,7 +38,7 @@ fn states_do_not_confuse_empty_findings_with_conformance() {
     let checked = parsed.validate().unwrap();
     assert_eq!(checked.report().conclusion, Conformance::NonConformant);
     assert!(checked.conformant().is_none());
-    assert_eq!(checked.report().evidence.len(), 13);
+    assert_eq!(checked.report().evidence.len(), DOCUMENT_RULES.len());
     let invalid = validate_document(b"{broken").unwrap();
     assert!(invalid.document().is_none());
     assert_eq!(invalid.report().evidence["OBI-01"], Evidence::Violated);
@@ -86,11 +86,11 @@ fn lone_surrogates_remain_exact_but_violate_document_conformance() {
     assert_eq!(duplicate.report().evidence["OBI-01"], Evidence::Violated);
 }
 #[test]
-fn opaque_data_and_resource_boundaries_are_not_schema_positions() {
+fn opaque_data_is_not_a_schema_but_document_pointers_cross_resource_boundaries() {
     let text = r##"{"openbindings":"0.2.0","operations":{"op":{"input":{"$ref":"#/schemas/root/properties/x"}}},"schemas":{"root":{"$id":7,"properties":{"x":true}}},"x-data":{"$ref":"relative"}}"##;
     let r = validation(text);
     assert_eq!(r.report().evidence["OBI-11"], Evidence::Violated);
-    assert_eq!(r.report().evidence["OBI-12"], Evidence::Violated);
+    assert_eq!(r.report().evidence["OBI-12"], Evidence::Met);
     let text = r##"{"openbindings":"0.2.0","operations":{},"schemas":{"s":{"properties":{"$dynamicRef":{"type":"string"}},"x-opaque":{"$schema":"unknown","$id":"relative"}}}}"##;
     assert_eq!(
         validation(text).report().conclusion,

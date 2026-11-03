@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://openbindings.com/schema/openbindings-0.2.json",
+  "$id": "https://openbindings.com/schema/openbindings-0.2.0.json",
   "title": "OpenBindings Interface Document (v0.2.0)",
   "description": "Derived JSON Schema for the OpenBindings interface document; OBI-02 applies it (§10).",
   "type": "object",
@@ -24,16 +24,6 @@
       "type": "string",
       "description": "Human-friendly description (§5)."
     },
-    "schemas": {
-      "type": "object",
-      "description": "Map of schema names to JSON Schemas (§5).",
-      "propertyNames": {
-        "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]*$"
-      },
-      "additionalProperties": {
-        "$ref": "#/$defs/JSONSchema"
-      }
-    },
     "operations": {
       "type": "object",
       "description": "Map of operation keys to operation objects (§5.1).",
@@ -44,24 +34,14 @@
         "$ref": "#/$defs/Operation"
       }
     },
-    "dependencies": {
-      "type": "object",
-      "description": "Map of dependency keys to dependency objects (§5.5).",
-      "propertyNames": {
-        "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]*$"
-      },
-      "additionalProperties": {
-        "$ref": "#/$defs/DependencyEntry"
-      }
-    },
     "sources": {
       "type": "object",
-      "description": "Map of source keys to source objects (§5.4).",
+      "description": "Map of source keys to source objects (§5.2).",
       "propertyNames": {
         "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]*$"
       },
       "additionalProperties": {
-        "$ref": "#/$defs/Source"
+        "$ref": "#/$defs/SourceEntry"
       }
     },
     "bindings": {
@@ -73,13 +53,33 @@
       "additionalProperties": {
         "$ref": "#/$defs/BindingEntry"
       }
+    },
+    "dependencies": {
+      "type": "object",
+      "description": "Map of dependency keys to dependency objects (§5.4).",
+      "propertyNames": {
+        "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]*$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/DependencyEntry"
+      }
+    },
+    "schemas": {
+      "type": "object",
+      "description": "Map of schema keys to JSON Schemas (§5.5).",
+      "propertyNames": {
+        "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]*$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/JSONSchema"
+      }
     }
   },
   "patternProperties": { "^x-": true },
   "additionalProperties": false,
   "$defs": {
     "JSONSchema": {
-      "description": "A JSON Schema 2020-12 schema, object or boolean (§5.2).",
+      "description": "A JSON Schema 2020-12 schema, object or boolean (§5.5).",
       "anyOf": [
         {
           "type": "object",
@@ -127,11 +127,11 @@
         },
         "input": {
           "$ref": "#/$defs/JSONSchema",
-          "description": "States the input contract (§5.1)."
+          "description": "Schema governing each caller-facing input value (§5.1)."
         },
         "output": {
           "$ref": "#/$defs/JSONSchema",
-          "description": "States the output contract (§5.1)."
+          "description": "Schema governing each caller-facing output value (§5.1)."
         },
         "examples": {
           "type": "object",
@@ -172,7 +172,7 @@
         "operation": {
           "type": "string",
           "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]*$",
-          "description": "Key into the document's operations map (§5.5)."
+          "description": "Key into the document's operations map (§5.4)."
         },
         "kinds": {
           "type": "array",
@@ -182,27 +182,7 @@
             "type": "string",
             "minLength": 1
           },
-          "description": "Kinds acceptable at this consumption point (§5.5)."
-        },
-        "description": {
-          "type": "string",
-          "description": "Human-readable description (§5.5)."
-        }
-      },
-      "patternProperties": { "^x-": true },
-      "additionalProperties": false
-    },
-    "Source": {
-      "type": "object",
-      "required": ["kind"],
-      "properties": {
-        "kind": {
-          "type": "string",
-          "minLength": 1,
-          "description": "The source's kind (§6)."
-        },
-        "content": {
-          "description": "Content read under the source's kind (§5.4)."
+          "description": "Kinds acceptable at this consumption point (§5.4)."
         },
         "description": {
           "type": "string",
@@ -226,8 +206,8 @@
           "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]*$",
           "description": "Key into the document's sources map (§5.3)."
         },
-        "content": {
-          "description": "Content read under the source's kind (§5.3)."
+        "data": {
+          "description": "Binding data, read under the source's kind (§5.3)."
         },
         "idempotent": {
           "type": "boolean",
@@ -246,6 +226,26 @@
         "deprecated": {
           "type": "boolean",
           "description": "Author recommends migration away from this binding (§5.3)."
+        }
+      },
+      "patternProperties": { "^x-": true },
+      "additionalProperties": false
+    },
+    "SourceEntry": {
+      "type": "object",
+      "required": ["kind"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Exact, opaque name of how this source's data and its bindings' data are read (§6)."
+        },
+        "data": {
+          "description": "Source data, read under the source's kind (§5.2)."
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description (§5.2)."
         }
       },
       "patternProperties": { "^x-": true },

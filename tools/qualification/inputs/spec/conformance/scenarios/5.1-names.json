@@ -1,5 +1,5 @@
 {
-  "format": "openbindings.core-scenarios@3",
+  "format": "openbindings.core-scenarios@4",
   "section": "5.1",
   "description": "Which operation a string identifies, and that operation's bindings: a string identifies an operation exactly when it equals the operation's key or one of its aliases, and the operation's bindings are those whose operation member holds its key (section 5.1, Aliases).",
   "scenarios": [
@@ -98,7 +98,7 @@
     },
     {
       "id": "NAMES-04",
-      "description": "A binding's deprecated, preference, and content members do not remove it from its operation's bindings (section 5.3): deprecation recommends migrating away, preference expresses author preference among them, and content's presence and value carry no core meaning.",
+      "description": "A binding's deprecated, preference, and data members do not remove it from its operation's bindings (section 5.3): deprecation recommends migrating away, preference expresses author preference among them, and data's presence and value carry no core meaning.",
       "action": "resolve-operation",
       "given": {
         "document": {
@@ -117,12 +117,12 @@
               "source": "s",
               "deprecated": true
             },
-            "nullContent": {
+            "nullData": {
               "operation": "createTask",
               "source": "s",
-              "content": null
+              "data": null
             },
-            "noContent": {
+            "noData": {
               "operation": "createTask",
               "source": "s"
             },
@@ -151,8 +151,8 @@
         "bindingKeys": [
           "deprecated",
           "negativePreference",
-          "noContent",
-          "nullContent",
+          "noData",
+          "nullData",
           "preferred",
           "zeroPreference"
         ]
@@ -521,7 +521,7 @@
     },
     {
       "id": "NAMES-21",
-      "description": "Source and schema keys are not operation identifiers: a string equal to both identifies no operation.",
+      "description": "Source and schema keys are not operation identifiers: a string equal to both identifies no operation (§5.1).",
       "action": "resolve-operation",
       "given": {
         "document": {
@@ -531,7 +531,8 @@
           },
           "sources": {
             "Task": {
-              "kind": "example.test@1"
+              "kind": "example.local@1",
+              "data": {}
             }
           },
           "schemas": {

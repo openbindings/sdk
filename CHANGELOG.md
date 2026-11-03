@@ -2,6 +2,15 @@
 
 ## 0.2.0-alpha.1 (working draft)
 
+### Changed
+
+- Begin the current 0.2 foundation against specification
+  `c1419c9fc3ae5a00c2b83da710c11bf67dab7934`: source/binding `data`,
+  OBI-01–14, pointers into identified schemas, and admission of references into
+  contained schema resources. The schema and 505-case qualification inputs are
+  re-pinned together. Duplicate resource/name targets cannot choose a winner.
+  See [migration status](docs/migration-0.2.md) for the bounded implementation claim.
+
 ### Added
 
 - The npm package ships compiled JavaScript and declarations without source maps; each build

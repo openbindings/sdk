@@ -25,8 +25,8 @@ test("owner acquisition is a method; property access creates no owner", () => {
     [sdk.ConformantOperationView, ["value", "input", "output"]],
     [sdk.ValueContract, ["schema", "prepare"]],
     [sdk.DependencyView, ["value"]],
-    [sdk.BindingView, ["value", "content"]],
-    [sdk.SourceView, ["value", "content"]],
+    [sdk.BindingView, ["value", "data"]],
+    [sdk.SourceView, ["value", "data"]],
     [sdk.ExampleView, ["value", "input", "output"]],
   ];
   const before = registrations;

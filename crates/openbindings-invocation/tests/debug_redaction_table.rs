@@ -97,7 +97,7 @@ fn debug_redacts_caller_text_at_every_boundary() {
     .unwrap();
     let source = Source {
         kind: SECRET.into(),
-        content: Some(context.clone()),
+        data: Some(context.clone()),
         description: Some(SECRET.into()),
         additional_fields: BTreeMap::from([(format!("x-{SECRET}"), context.clone())]),
     };

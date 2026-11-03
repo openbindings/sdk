@@ -151,7 +151,7 @@ fn authoring_rows(source: &Source, operation: &Operation, context: &JsonValue) -
     let binding = Binding {
         operation: SECRET.into(),
         source: SECRET.into(),
-        content: Some(context.clone()),
+        data: Some(context.clone()),
         description: Some(SECRET.into()),
         additional_fields: evidence(),
         ..Default::default()
@@ -410,7 +410,7 @@ fn debug_redacts_caller_text_at_every_boundary() {
     rows.push(row("EditError::FieldCollision", &collision));
     let source = Source {
         kind: SECRET.into(),
-        content: Some(context.clone()),
+        data: Some(context.clone()),
         description: Some(SECRET.into()),
         additional_fields: BTreeMap::from([(format!("x-{SECRET}"), context.clone())]),
     };
@@ -507,7 +507,7 @@ fn debug_redacts_caller_text_at_every_boundary() {
             &[("rule", rule), ("code", "schema-mismatch")],
         ));
     }
-    for rule in ["OBI-14", "OBI-01-PROBE-BEARER-TOKEN-7391"] {
+    for rule in ["OBI-15", "OBI-01-PROBE-BEARER-TOKEN-7391"] {
         let finding = probe_finding(rule, "schema-mismatch", None);
         rows.push(row_with_fields(
             "Finding unknown OBI rule",
@@ -536,7 +536,7 @@ fn debug_redacts_caller_text_at_every_boundary() {
         ));
     }
 
-    check_rows(rows, 73);
+    check_rows(rows, 74);
 }
 
 fn row_with_fields(label: &'static str, value: &impl Debug, fields: &[(&str, &str)]) -> Row {

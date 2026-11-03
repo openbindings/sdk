@@ -1,0 +1,216 @@
+{
+  "specRevision": "c1419c9fc3ae5a00c2b83da710c11bf67dab7934",
+  "provenance": "SDK migration adjudication/2026-11-02: original historical cases retained at their current admission layer; original IDs and exact document text retained.",
+  "cases": [
+    {
+      "id": "suite/draft2020-12/optional/refOfUnknownKeyword.json#0/0 reference of a root arbitrary keyword /match",
+      "documentText": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"$id\":\"https://suite.openbindings.invalid/schema.json\",\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"properties\":{\"bar\":{\"$ref\":\"#/unknown-keyword\"}},\"unknown-keyword\":{\"type\":\"integer\"}}}}}",
+      "violates": [
+        "OBI-12"
+      ]
+    },
+    {
+      "id": "suite/draft2020-12/optional/refOfUnknownKeyword.json#0/1 reference of a root arbitrary keyword /mismatch",
+      "documentText": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"$id\":\"https://suite.openbindings.invalid/schema.json\",\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"properties\":{\"bar\":{\"$ref\":\"#/unknown-keyword\"}},\"unknown-keyword\":{\"type\":\"integer\"}}}}}",
+      "violates": [
+        "OBI-12"
+      ]
+    },
+    {
+      "id": "suite/draft2020-12/optional/refOfUnknownKeyword.json#1/0 reference of a root arbitrary keyword with encoded ref/match",
+      "documentText": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"$id\":\"https://suite.openbindings.invalid/schema.json\",\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"properties\":{\"bar\":{\"$ref\":\"#/unknown~1keyword\"}},\"unknown/keyword\":{\"type\":\"integer\"}}}}}",
+      "violates": [
+        "OBI-12"
+      ]
+    },
+    {
+      "id": "suite/draft2020-12/optional/refOfUnknownKeyword.json#1/1 reference of a root arbitrary keyword with encoded ref/mismatch",
+      "documentText": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"$id\":\"https://suite.openbindings.invalid/schema.json\",\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"properties\":{\"bar\":{\"$ref\":\"#/unknown~1keyword\"}},\"unknown/keyword\":{\"type\":\"integer\"}}}}}",
+      "violates": [
+        "OBI-12"
+      ]
+    },
+    {
+      "id": "suite/draft2020-12/optional/refOfUnknownKeyword.json#2/0 reference of an arbitrary keyword of a sub-schema/match",
+      "documentText": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"$id\":\"https://suite.openbindings.invalid/schema.json\",\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"properties\":{\"foo\":{\"unknown-keyword\":{\"type\":\"integer\"}},\"bar\":{\"$ref\":\"#/properties/foo/unknown-keyword\"}}}}}}",
+      "violates": [
+        "OBI-12"
+      ]
+    },
+    {
+      "id": "suite/draft2020-12/optional/refOfUnknownKeyword.json#2/1 reference of an arbitrary keyword of a sub-schema/mismatch",
+      "documentText": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"$id\":\"https://suite.openbindings.invalid/schema.json\",\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"properties\":{\"foo\":{\"unknown-keyword\":{\"type\":\"integer\"}},\"bar\":{\"$ref\":\"#/properties/foo/unknown-keyword\"}}}}}}",
+      "violates": [
+        "OBI-12"
+      ]
+    },
+    {
+      "id": "suite/draft2020-12/optional/refOfUnknownKeyword.json#3/0 reference internals of known non-applicator/match",
+      "documentText": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"$id\":\"https://suite.openbindings.invalid/schema.json\",\"$ref\":\"#/examples/0\",\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"examples\":[{\"type\":\"string\"}]}}}}",
+      "violates": [
+        "OBI-12"
+      ]
+    },
+    {
+      "id": "suite/draft2020-12/optional/refOfUnknownKeyword.json#3/1 reference internals of known non-applicator/mismatch",
+      "documentText": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"$id\":\"https://suite.openbindings.invalid/schema.json\",\"$ref\":\"#/examples/0\",\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"examples\":[{\"type\":\"string\"}]}}}}",
+      "violates": [
+        "OBI-12"
+      ]
+    },
+    {
+      "id": "suite/draft2020-12/optional/refOfUnknownKeyword.json#4/0 reference of an arbitrary keyword of a sub-schema with encoded ref/match",
+      "documentText": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"$id\":\"https://suite.openbindings.invalid/schema.json\",\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"properties\":{\"foo\":{\"unknown/keyword\":{\"type\":\"integer\"}},\"bar\":{\"$ref\":\"#/properties/foo/unknown~1keyword\"}}}}}}",
+      "violates": [
+        "OBI-12"
+      ]
+    },
+    {
+      "id": "suite/draft2020-12/optional/refOfUnknownKeyword.json#4/1 reference of an arbitrary keyword of a sub-schema with encoded ref/mismatch",
+      "documentText": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"$id\":\"https://suite.openbindings.invalid/schema.json\",\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"properties\":{\"foo\":{\"unknown/keyword\":{\"type\":\"integer\"}},\"bar\":{\"$ref\":\"#/properties/foo/unknown~1keyword\"}}}}}}",
+      "violates": [
+        "OBI-12"
+      ]
+    },
+    {
+      "id": "adversarial/scope-wrappers/0",
+      "documentText": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"$ref\":\"#/schemas/StrictTree\"}}},\"schemas\":{\"StrictTree\":{\"$dynamicAnchor\":\"node\",\"$ref\":\"https://ex.invalid/tree\",\"unevaluatedProperties\":false}}}",
+      "violates": [
+        "OBI-14"
+      ]
+    },
+    {
+      "id": "adversarial/scope-wrappers/1",
+      "documentText": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"$ref\":\"#/schemas/StrictTree\"}}},\"schemas\":{\"StrictTree\":{\"$dynamicAnchor\":\"node\",\"$ref\":\"https://ex.invalid/tree\",\"unevaluatedProperties\":false}}}",
+      "violates": [
+        "OBI-14"
+      ]
+    },
+    {
+      "id": "adversarial/scope-wrappers/2",
+      "documentText": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"$ref\":\"#/schemas/StrictTree\"}}},\"schemas\":{\"StrictTree\":{\"$dynamicAnchor\":\"node\",\"$ref\":\"https://ex.invalid/tree\",\"unevaluatedProperties\":false}}}",
+      "violates": [
+        "OBI-14"
+      ]
+    },
+    {
+      "id": "adversarial/scope-wrappers-meta/0",
+      "documentText": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"$ref\":\"https://json-schema.org/draft/2020-12/schema\"}}},\"schemas\":{\"A\":{\"$dynamicAnchor\":\"meta\"}}}",
+      "violates": [
+        "OBI-14"
+      ]
+    },
+    {
+      "id": "adversarial/scope-wrappers-meta/1",
+      "documentText": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"$ref\":\"https://json-schema.org/draft/2020-12/schema\"}}},\"schemas\":{\"A\":{\"$dynamicAnchor\":\"meta\"}}}",
+      "violates": [
+        "OBI-14"
+      ]
+    },
+    {
+      "id": "adversarial/scope-wrappers-none-under-id/0",
+      "documentText": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"$id\":\"https://ex.invalid/e\",\"$ref\":\"https://json-schema.org/draft/2020-12/schema\"}}},\"schemas\":{\"A\":{\"$dynamicAnchor\":\"meta\"}}}",
+      "violates": [
+        "OBI-14"
+      ]
+    },
+    {
+      "id": "adversarial/unrelated-dynamic-anchor/0",
+      "documentText": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"type\":\"string\"}}},\"schemas\":{\"Unused\":{\"$dynamicAnchor\":\"n\",\"pattern\":\"a{\"}}}",
+      "violates": [
+        "OBI-14"
+      ]
+    },
+    {
+      "id": "adversarial/unrelated-dynamic-anchor/1",
+      "documentText": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"type\":\"string\"}}},\"schemas\":{\"Unused\":{\"$dynamicAnchor\":\"n\",\"pattern\":\"a{\"}}}",
+      "violates": [
+        "OBI-14"
+      ]
+    },
+    {
+      "id": "adversarial/unreached-uncopied-targets/0",
+      "documentText": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"type\":\"string\",\"$defs\":{\n\t\t\"id\":{\"$ref\":\"https://ex.invalid/other\"},\"resource\":{\"$ref\":\"https://ex.invalid/supplied\"},\n\t\t\"enum\":{\"$ref\":\"#/operations/op/input/$defs/values/enum\"},\"const\":{\"$ref\":\"#/operations/op/input/$defs/values/const\"},\n\t\t\"definitions\":{\"$ref\":\"#/operations/op/input/$defs/legacy/definitions\"},\n\t\t\"values\":{\"enum\":[1],\"const\":{\"a\":1}},\"legacy\":{\"definitions\":{\"x\":{}}}}}}},\"schemas\":{\"Other\":{\"$id\":\"https://ex.invalid/other\",\"type\":\"null\"}}}",
+      "violates": [
+        "OBI-12"
+      ]
+    },
+    {
+      "id": "adversarial/unreached-uncopied-targets/1",
+      "documentText": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"type\":\"string\",\"$defs\":{\n\t\t\"id\":{\"$ref\":\"https://ex.invalid/other\"},\"resource\":{\"$ref\":\"https://ex.invalid/supplied\"},\n\t\t\"enum\":{\"$ref\":\"#/operations/op/input/$defs/values/enum\"},\"const\":{\"$ref\":\"#/operations/op/input/$defs/values/const\"},\n\t\t\"definitions\":{\"$ref\":\"#/operations/op/input/$defs/legacy/definitions\"},\n\t\t\"values\":{\"enum\":[1],\"const\":{\"a\":1}},\"legacy\":{\"definitions\":{\"x\":{}}}}}}},\"schemas\":{\"Other\":{\"$id\":\"https://ex.invalid/other\",\"type\":\"null\"}}}",
+      "violates": [
+        "OBI-12"
+      ]
+    },
+    {
+      "id": "suite/draft2020-12/optional/format-assertion.json#0/0 schema that uses custom metaschema with format-assertion: false/format-assertion: false: valid string",
+      "documentText": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\n            \"$id\": \"https://schema/using/format-assertion/false\",\n            \"$schema\": \"http://localhost:1234/draft2020-12/format-assertion-false.json\",\n            \"format\": \"ipv4\"\n        }}}}",
+      "violates": [
+        "OBI-09"
+      ]
+    },
+    {
+      "id": "suite/draft2020-12/optional/format-assertion.json#0/1 schema that uses custom metaschema with format-assertion: false/format-assertion: false: invalid string",
+      "documentText": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\n            \"$id\": \"https://schema/using/format-assertion/false\",\n            \"$schema\": \"http://localhost:1234/draft2020-12/format-assertion-false.json\",\n            \"format\": \"ipv4\"\n        }}}}",
+      "violates": [
+        "OBI-09"
+      ]
+    },
+    {
+      "id": "suite/draft2020-12/optional/format-assertion.json#1/0 schema that uses custom metaschema with format-assertion: true/format-assertion: true: valid string",
+      "documentText": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\n            \"$id\": \"https://schema/using/format-assertion/true\",\n            \"$schema\": \"http://localhost:1234/draft2020-12/format-assertion-true.json\",\n            \"format\": \"ipv4\"\n        }}}}",
+      "violates": [
+        "OBI-09"
+      ]
+    },
+    {
+      "id": "suite/draft2020-12/optional/format-assertion.json#1/1 schema that uses custom metaschema with format-assertion: true/format-assertion: true: invalid string",
+      "documentText": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\n            \"$id\": \"https://schema/using/format-assertion/true\",\n            \"$schema\": \"http://localhost:1234/draft2020-12/format-assertion-true.json\",\n            \"format\": \"ipv4\"\n        }}}}",
+      "violates": [
+        "OBI-09"
+      ]
+    },
+    {
+      "id": "suite/draft2020-12/vocabulary.json#0/0 schema that uses custom metaschema with with no validation vocabulary/applicator vocabulary still works",
+      "documentText": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\n            \"$id\": \"https://schema/using/no/validation\",\n            \"$schema\": \"http://localhost:1234/draft2020-12/metaschema-no-validation.json\",\n            \"properties\": {\n                \"badProperty\": false,\n                \"numberProperty\": {\n                    \"minimum\": 10\n                }\n            }\n        }}}}",
+      "violates": [
+        "OBI-09"
+      ]
+    },
+    {
+      "id": "suite/draft2020-12/vocabulary.json#0/1 schema that uses custom metaschema with with no validation vocabulary/no validation: valid number",
+      "documentText": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\n            \"$id\": \"https://schema/using/no/validation\",\n            \"$schema\": \"http://localhost:1234/draft2020-12/metaschema-no-validation.json\",\n            \"properties\": {\n                \"badProperty\": false,\n                \"numberProperty\": {\n                    \"minimum\": 10\n                }\n            }\n        }}}}",
+      "violates": [
+        "OBI-09"
+      ]
+    },
+    {
+      "id": "suite/draft2020-12/vocabulary.json#0/2 schema that uses custom metaschema with with no validation vocabulary/no validation: invalid number, but it still validates",
+      "documentText": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\n            \"$id\": \"https://schema/using/no/validation\",\n            \"$schema\": \"http://localhost:1234/draft2020-12/metaschema-no-validation.json\",\n            \"properties\": {\n                \"badProperty\": false,\n                \"numberProperty\": {\n                    \"minimum\": 10\n                }\n            }\n        }}}}",
+      "violates": [
+        "OBI-09"
+      ]
+    },
+    {
+      "id": "suite/draft2020-12/vocabulary.json#1/0 ignore unrecognized optional vocabulary/string value",
+      "documentText": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"$id\":\"https://suite.openbindings.invalid/schema.json\",\"$schema\":\"http://localhost:1234/draft2020-12/metaschema-optional-vocabulary.json\",\"type\":\"number\"}}}}",
+      "violates": [
+        "OBI-09"
+      ]
+    },
+    {
+      "id": "suite/draft2020-12/vocabulary.json#1/1 ignore unrecognized optional vocabulary/number value",
+      "documentText": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"$id\":\"https://suite.openbindings.invalid/schema.json\",\"$schema\":\"http://localhost:1234/draft2020-12/metaschema-optional-vocabulary.json\",\"type\":\"number\"}}}}",
+      "violates": [
+        "OBI-09"
+      ]
+    },
+    {
+      "id": "historical-core/document/OBI-02.json#/tests/27",
+      "documentText": "{\"openbindings\":\"0.2.0\",\"operations\":{},\"sources\":{\"s\":{\"kind\":\"example.test@1\",\"bindingSpec\":\"example.test@1\"}}}",
+      "violates": [
+        "OBI-02"
+      ]
+    }
+  ]
+}

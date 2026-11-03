@@ -213,7 +213,7 @@ test("cursor failure closes only cursor; metadata-only prefix never acquires unv
 });
 
 const documentText =
-  '{"openbindings":"0.2.0","description":"before","operations":{"__proto__":{"tags":[],"aliases":["alias"],"input":{"const":9007199254740993},"examples":{"constructor":{"input":9007199254740993,"output":null,"x-exact":0.29000000000000001}}},"constructor":{}},"schemas":{"__proto__":{"enum":[9007199254740992,9007199254740993]},"constructor":true},"sources":{"toString":{"kind":"local","content":null}},"bindings":{"constructor":{"operation":"__proto__","source":"toString","content":{"large":1000000000000000128},"preference":-1,"deprecated":false}},"dependencies":{"__proto__":{"operation":"__proto__","kinds":[]}},"x-exact":1000000000000000128,"additionalFields":false}';
+  '{"openbindings":"0.2.0","description":"before","operations":{"__proto__":{"tags":[],"aliases":["alias"],"input":{"const":9007199254740993},"examples":{"constructor":{"input":9007199254740993,"output":null,"x-exact":0.29000000000000001}}},"constructor":{}},"schemas":{"__proto__":{"enum":[9007199254740992,9007199254740993]},"constructor":true},"sources":{"toString":{"kind":"local","data":null}},"bindings":{"constructor":{"operation":"__proto__","source":"toString","data":{"large":1000000000000000128},"preference":-1,"deprecated":false}},"dependencies":{"__proto__":{"operation":"__proto__","kinds":[]}},"x-exact":1000000000000000128,"additionalFields":false}';
 
 test("document edits and prototype-sensitive names preserve exact unrelated values", () => {
   // Edits operate directly on exact documents.
@@ -408,7 +408,7 @@ test("new metadata is narrow/frozen/lexical; exact views retain after document r
     assert.deepEqual(source.operations[0].tags, []);
     assert.equal(Object.isFrozen(source.operations[0].tags), true);
     assert.equal(Object.isFrozen(binding.metadata), true);
-    assert.equal("content" in binding.metadata, false);
+    assert.equal("data" in binding.metadata, false);
     assert.equal(binding.metadata.preference, -1);
     assert.equal(binding.metadata.deprecated, false);
     assert.equal(Object.isFrozen(dependency.metadata.kinds), true);
@@ -421,7 +421,7 @@ test("new metadata is narrow/frozen/lexical; exact views retain after document r
         hasOutput: true,
       },
     ]);
-    const content = sourceView.content(),
+    const content = sourceView.data(),
       input = example.input(),
       output = example.output(),
       retained = binding.retain();

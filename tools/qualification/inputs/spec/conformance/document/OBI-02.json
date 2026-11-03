@@ -1,8 +1,8 @@
 {
   "rule": "OBI-02",
   "section": "10",
-  "description": "Is valid against the derived JSON Schema published with this text (openbindings.schema.json, $id https://openbindings.com/schema/openbindings-0.2.json), its pattern values read as ECMA-262 regular expressions. Where the schema and the prose disagree, the schema governs this rule until a patch release corrects the erratum. A patch release that corrects the schema republishes it under the same $id.",
-  "notes": "OBI-02 covers structural failures (missing required fields, wrong value types, malformed sub-objects) that the schema expresses but no more specific rule names. Violations the schema expresses that DO have a specific rule (e.g., OBI-04 name pattern, OBI-03 SemVer) are listed under that rule, not OBI-02. A reference outside the name grammar lists OBI-02 beside the rule the reference concerns: the schema expresses the name syntax of the references OBI-06, OBI-07, and OBI-08 concern, and those rules require only that the reference names a key (section 10). Every constraint of the derived schema has a negative that breaks it alone, here or, for the name patterns, in OBI-04's file, so a validator that drops any single constraint fails a case; removing additionalProperties: true from the schema object form changes nothing, since true is JSON Schema's default.",
+  "description": "Is valid against the derived JSON Schema published with this text (openbindings.schema.json, $id https://openbindings.com/schema/openbindings-0.2.0.json), its pattern values read as ECMA-262 regular expressions. Where the schema and the prose disagree, the schema governs this rule until a patch release corrects the erratum. Each release publishes its schema under an $id naming that release, and https://openbindings.com/schema/openbindings-0.2.json serves the latest release of the line's.",
+  "notes": "OBI-02 covers structural failures (missing required fields, wrong value types, malformed sub-objects) that the schema expresses but no more specific rule names. Violations the schema expresses that DO have a specific rule (e.g., OBI-04 name pattern, OBI-03 SemVer) are listed under that rule, not OBI-02. A reference outside the name grammar lists OBI-02 beside the rule the reference concerns: the schema expresses the name syntax of the references OBI-06, OBI-07, and OBI-08 concern, and those rules require only that the reference names a key (section 10). Structural negatives cover the current model, including source kinds, source data, and binding data; removing additionalProperties: true from the schema object form changes nothing, since true is JSON Schema's default.",
   "tests": [
     {
       "description": "minimal valid document",
@@ -55,13 +55,13 @@
           "createTask": {}
         },
         "sources": {
-          "httpApi": {
+          "tasksApi": {
             "kind": "example.openapi@1"
           }
         },
         "bindings": {
           "createTask.http": {
-            "source": "httpApi"
+            "source": "tasksApi"
           }
         }
       },
@@ -74,77 +74,100 @@
       ]
     },
     {
-      "description": "source missing required `kind` field",
+      "description": "A binding missing its required source violates OBI-02 (§5.3); OBI-07 concerns present source values, so it holds vacuously (§10).",
       "document": {
         "openbindings": "0.2.0",
         "operations": {
-          "createTask": {}
+          "op": {}
         },
         "sources": {
-          "httpApi": {
-            "description": "Task API"
+          "local": {
+            "kind": "example.test@1"
+          }
+        },
+        "bindings": {
+          "b": {
+            "operation": "op"
           }
         }
       },
       "valid": false,
       "violates": [
         "OBI-02"
+      ],
+      "notViolated": [
+        "OBI-07"
       ]
     },
     {
-      "description": "source `kind` is an empty string (violates minLength: 1)",
+      "description": "A source's kind must be non-empty (§5.2): an empty kind violates OBI-02 alone, since OBI-07 concerns the binding's source reference, which names a key.",
       "document": {
         "openbindings": "0.2.0",
         "operations": {
-          "createTask": {}
+          "op": {}
         },
         "sources": {
-          "httpApi": {
+          "s": {
             "kind": ""
           }
+        },
+        "bindings": {
+          "b": {
+            "operation": "op",
+            "source": "s"
+          }
         }
       },
       "valid": false,
       "violates": [
         "OBI-02"
+      ],
+      "notViolated": [
+        "OBI-07"
       ]
     },
     {
-      "description": "source with only `kind` (content is optional; the core does not require kind-specific behavior)",
+      "description": "A binding needs only operation and source, and a source only kind; data is optional on both (§5.3, §5.2).",
       "document": {
         "openbindings": "0.2.0",
         "operations": {
-          "createTask": {}
+          "op": {}
         },
         "sources": {
-          "httpApi": {
-            "kind": "example.openapi@1"
+          "local": {
+            "kind": "example.test@1"
+          }
+        },
+        "bindings": {
+          "b": {
+            "operation": "op",
+            "source": "local"
           }
         }
       },
       "valid": true
     },
     {
-      "description": "source `content` is any JSON value, and `content: null` is a present member",
+      "description": "Source data holds any JSON value, including present null (§5.2).",
       "document": {
         "openbindings": "0.2.0",
         "operations": {
           "createTask": {}
         },
         "sources": {
-          "objectContent": {
-            "kind": "example.test@1",
-            "content": {
+          "objectData": {
+            "kind": "example.local@1",
+            "data": {
               "location": "tasks.json"
             }
           },
-          "stringContent": {
-            "kind": "example.test@1",
-            "content": "openapi: 3.1.0"
+          "stringData": {
+            "kind": "example.local@1",
+            "data": "openapi: 3.1.0"
           },
-          "arrayContent": {
-            "kind": "example.test@1",
-            "content": [
+          "arrayData": {
+            "kind": "example.local@1",
+            "data": [
               1,
               "two",
               {
@@ -152,70 +175,70 @@
               }
             ]
           },
-          "numberContent": {
-            "kind": "example.test@1",
-            "content": 7
+          "numberData": {
+            "kind": "example.local@1",
+            "data": 7
           },
-          "booleanContent": {
-            "kind": "example.test@1",
-            "content": false
+          "booleanData": {
+            "kind": "example.local@1",
+            "data": false
           },
-          "nullContent": {
-            "kind": "example.test@1",
-            "content": null
+          "nullData": {
+            "kind": "example.local@1",
+            "data": null
           }
         }
       },
       "valid": true
     },
     {
-      "description": "binding `content` is any JSON value, and `content: null` is a present member",
+      "description": "binding `data` is any JSON value, and `data: null` is a present member (section 5.3)",
       "document": {
         "openbindings": "0.2.0",
         "operations": {
           "createTask": {}
         },
         "sources": {
-          "s": {
+          "local": {
             "kind": "example.test@1"
           }
         },
         "bindings": {
           "createTask.string": {
             "operation": "createTask",
-            "source": "s",
-            "content": "tasks.create"
+            "source": "local",
+            "data": "tasks.create"
           },
           "createTask.object": {
             "operation": "createTask",
-            "source": "s",
-            "content": {
+            "source": "local",
+            "data": {
               "path": "/tasks",
               "method": "post"
             }
           },
           "createTask.array": {
             "operation": "createTask",
-            "source": "s",
-            "content": [
+            "source": "local",
+            "data": [
               "tasks",
               "create"
             ]
           },
           "createTask.number": {
             "operation": "createTask",
-            "source": "s",
-            "content": 3
+            "source": "local",
+            "data": 3
           },
           "createTask.boolean": {
             "operation": "createTask",
-            "source": "s",
-            "content": true
+            "source": "local",
+            "data": true
           },
           "createTask.null": {
             "operation": "createTask",
-            "source": "s",
-            "content": null
+            "source": "local",
+            "data": null
           }
         }
       },
@@ -502,22 +525,22 @@
       ]
     },
     {
-      "description": "a case variant of a defined member is not that member (Content on a binding)",
+      "description": "a case variant of a defined member is not that member (Data on a binding)",
       "document": {
         "openbindings": "0.2.0",
         "operations": {
           "createTask": {}
         },
         "sources": {
-          "s": {
+          "local": {
             "kind": "example.test@1"
           }
         },
         "bindings": {
           "b": {
             "operation": "createTask",
-            "source": "s",
-            "Content": "x"
+            "source": "local",
+            "Data": "x"
           }
         }
       },
@@ -527,16 +550,22 @@
       ]
     },
     {
-      "description": "a 0.1 member left on a source (location)",
+      "description": "An unprefixed location member on a binding is unknown (§5.3, OBI-02).",
       "document": {
         "openbindings": "0.2.0",
         "operations": {
-          "createTask": {}
+          "op": {}
         },
         "sources": {
-          "s": {
-            "kind": "example.test@1",
-            "location": "https://example.com/openapi.json"
+          "local": {
+            "kind": "example.test@1"
+          }
+        },
+        "bindings": {
+          "b": {
+            "operation": "op",
+            "source": "local",
+            "location": "https://example.com/api.json"
           }
         }
       },
@@ -546,13 +575,21 @@
       ]
     },
     {
-      "description": "the former source member bindingSpec is not a kind",
+      "description": "An unprefixed bindingSpec member on a binding is unknown (§5.3, OBI-02).",
       "document": {
         "openbindings": "0.2.0",
-        "operations": {},
+        "operations": {
+          "op": {}
+        },
         "sources": {
-          "s": {
-            "kind": "example.test@1",
+          "local": {
+            "kind": "example.test@1"
+          }
+        },
+        "bindings": {
+          "b": {
+            "operation": "op",
+            "source": "local",
             "bindingSpec": "example.test@1"
           }
         }
@@ -623,24 +660,24 @@
           "createTask": {}
         },
         "sources": {
-          "s": {
+          "local": {
             "kind": "example.test@1"
           }
         },
         "bindings": {
           "b.selector": {
             "operation": "createTask",
-            "source": "s",
+            "source": "local",
             "selector": "#/paths/~1tasks/post"
           },
           "b.input": {
             "operation": "createTask",
-            "source": "s",
+            "source": "local",
             "inputTransform": "$"
           },
           "b.output": {
             "operation": "createTask",
-            "source": "s",
+            "source": "local",
             "outputTransform": {
               "$ref": "#/transforms/t"
             }
@@ -653,7 +690,7 @@
       ]
     },
     {
-      "description": "x- members are extensions on every OBI-defined object, including examples and dependencies",
+      "description": "x- members are extensions on every OBI-defined object, including examples, dependencies, and sources",
       "document": {
         "openbindings": "0.2.0",
         "x-owner": "tasks-team",
@@ -667,14 +704,8 @@
             }
           }
         },
-        "dependencies": {
-          "d": {
-            "operation": "createTask",
-            "x-note": 1
-          }
-        },
         "sources": {
-          "s": {
+          "local": {
             "kind": "example.test@1",
             "x-note": 1
           }
@@ -682,7 +713,13 @@
         "bindings": {
           "b": {
             "operation": "createTask",
-            "source": "s",
+            "source": "local",
+            "x-note": 1
+          }
+        },
+        "dependencies": {
+          "d": {
+            "operation": "createTask",
             "x-note": 1
           }
         }
@@ -690,7 +727,7 @@
       "valid": true
     },
     {
-      "description": "document declares an unknown kind",
+      "description": "document declares an unknown kind on a source",
       "document": {
         "openbindings": "0.2.0",
         "operations": {
@@ -711,14 +748,14 @@
       "valid": true
     },
     {
-      "description": "document mixes familiar and unfamiliar kinds without a core validity defect",
+      "description": "document mixes familiar and unfamiliar source kinds without a core validity defect",
       "document": {
         "openbindings": "0.2.0",
         "operations": {
           "createTask": {}
         },
         "sources": {
-          "http": {
+          "tasksApi": {
             "kind": "example.openapi@1"
           },
           "exotic": {
@@ -728,8 +765,8 @@
         "bindings": {
           "createTask.http": {
             "operation": "createTask",
-            "source": "http",
-            "content": {
+            "source": "tasksApi",
+            "data": {
               "target": "#/paths/~1tasks/post"
             }
           },
@@ -760,7 +797,7 @@
       "valid": true
     },
     {
-      "description": "optional members of the root, an operation, an example, a source, and a binding, including a binding's preference, idempotent, description, and deprecated",
+      "description": "Optional root, operation, example, binding and source members, including preference, idempotent, description and deprecated (§5).",
       "document": {
         "openbindings": "0.2.0",
         "name": "Tasks",
@@ -782,17 +819,17 @@
           }
         },
         "sources": {
-          "s": {
+          "local": {
             "kind": "example.test@1",
-            "description": "Task API."
+            "description": "A local realization."
           }
         },
         "bindings": {
           "createTask.s": {
             "operation": "createTask",
-            "source": "s",
-            "preference": 10,
+            "source": "local",
             "idempotent": false,
+            "preference": 10,
             "description": "Creates a task through the API.",
             "deprecated": true
           }
@@ -808,24 +845,24 @@
           "createTask": {}
         },
         "sources": {
-          "s": {
+          "local": {
             "kind": "example.test@1"
           }
         },
         "bindings": {
           "createTask.one": {
             "operation": "createTask",
-            "source": "s",
+            "source": "local",
             "preference": 1.0
           },
           "createTask.max": {
             "operation": "createTask",
-            "source": "s",
+            "source": "local",
             "preference": 9007199254740991
           },
           "createTask.min": {
             "operation": "createTask",
-            "source": "s",
+            "source": "local",
             "preference": -9007199254740991
           }
         }
@@ -904,7 +941,7 @@
       ]
     },
     {
-      "description": "sources is an array instead of an object map",
+      "description": "Sources must be an object map (§5.2, OBI-02).",
       "document": {
         "openbindings": "0.2.0",
         "operations": {},
@@ -1059,15 +1096,11 @@
       ]
     },
     {
-      "description": "source entry is a string instead of an object",
+      "description": "Sources cannot be null in place of an object map (§5.2, OBI-02).",
       "document": {
         "openbindings": "0.2.0",
-        "operations": {
-          "createTask": {}
-        },
-        "sources": {
-          "s": "example.test@1"
-        }
+        "operations": {},
+        "sources": null
       },
       "valid": false,
       "violates": [
@@ -1075,33 +1108,48 @@
       ]
     },
     {
-      "description": "source kind is not a string",
+      "description": "A source's kind must be a string (§5.2): a numeric kind violates OBI-02 alone, since OBI-07 concerns the binding's source reference, which names a key.",
       "document": {
         "openbindings": "0.2.0",
         "operations": {
-          "createTask": {}
+          "op": {}
         },
         "sources": {
           "s": {
             "kind": 5
+          }
+        },
+        "bindings": {
+          "b": {
+            "operation": "op",
+            "source": "s"
           }
         }
       },
       "valid": false,
       "violates": [
         "OBI-02"
+      ],
+      "notViolated": [
+        "OBI-07"
       ]
     },
     {
-      "description": "source description is not a string",
+      "description": "Binding description must be a string (§5.3, OBI-02).",
       "document": {
         "openbindings": "0.2.0",
         "operations": {
-          "createTask": {}
+          "op": {}
         },
         "sources": {
-          "s": {
-            "kind": "example.test@1",
+          "local": {
+            "kind": "example.test@1"
+          }
+        },
+        "bindings": {
+          "b": {
+            "operation": "op",
+            "source": "local",
             "description": 5
           }
         }
@@ -1117,11 +1165,6 @@
         "openbindings": "0.2.0",
         "operations": {
           "createTask": {}
-        },
-        "sources": {
-          "s": {
-            "kind": "example.test@1"
-          }
         },
         "bindings": {
           "b": "createTask"
@@ -1140,14 +1183,14 @@
           "createTask": {}
         },
         "sources": {
-          "s": {
+          "local": {
             "kind": "example.test@1"
           }
         },
         "bindings": {
           "b": {
             "operation": 5,
-            "source": "s"
+            "source": "local"
           }
         }
       },
@@ -1164,14 +1207,14 @@
           "createTask": {}
         },
         "sources": {
-          "s": {
+          "local": {
             "kind": "example.test@1"
           }
         },
         "bindings": {
           "b": {
             "operation": "create task",
-            "source": "s"
+            "source": "local"
           }
         }
       },
@@ -1182,21 +1225,22 @@
       ]
     },
     {
-      "description": "binding source is not a string",
+      "description": "A removed binding kind member is unknown even with a non-string value (§5.3, OBI-02).",
       "document": {
         "openbindings": "0.2.0",
         "operations": {
-          "createTask": {}
+          "op": {}
         },
         "sources": {
-          "s": {
+          "local": {
             "kind": "example.test@1"
           }
         },
         "bindings": {
           "b": {
-            "operation": "createTask",
-            "source": 5
+            "operation": "op",
+            "source": "local",
+            "kind": 5
           }
         }
       },
@@ -1206,28 +1250,28 @@
       ]
     },
     {
-      "description": "binding source value outside the name grammar fails the derived schema, which carries the name syntax OBI-07 checks, and names no source key",
+      "description": "A removed binding kind member is unknown even with a string value (§5.3, OBI-02); the kind belongs to the source.",
       "document": {
         "openbindings": "0.2.0",
         "operations": {
-          "createTask": {}
+          "op": {}
         },
         "sources": {
-          "s": {
+          "local": {
             "kind": "example.test@1"
           }
         },
         "bindings": {
           "b": {
-            "operation": "createTask",
-            "source": "task api"
+            "operation": "op",
+            "source": "local",
+            "kind": "example.test@1"
           }
         }
       },
       "valid": false,
       "violates": [
-        "OBI-02",
-        "OBI-07"
+        "OBI-02"
       ]
     },
     {
@@ -1257,14 +1301,14 @@
           "createTask": {}
         },
         "sources": {
-          "s": {
+          "local": {
             "kind": "example.test@1"
           }
         },
         "bindings": {
           "b": {
             "operation": "createTask",
-            "source": "s",
+            "source": "local",
             "idempotent": "yes"
           }
         }
@@ -1282,14 +1326,14 @@
           "createTask": {}
         },
         "sources": {
-          "s": {
+          "local": {
             "kind": "example.test@1"
           }
         },
         "bindings": {
           "b": {
             "operation": "createTask",
-            "source": "s",
+            "source": "local",
             "preference": 1.5
           }
         }
@@ -1307,14 +1351,14 @@
           "createTask": {}
         },
         "sources": {
-          "s": {
+          "local": {
             "kind": "example.test@1"
           }
         },
         "bindings": {
           "b": {
             "operation": "createTask",
-            "source": "s",
+            "source": "local",
             "preference": 9007199254740992
           }
         }
@@ -1332,14 +1376,14 @@
           "createTask": {}
         },
         "sources": {
-          "s": {
+          "local": {
             "kind": "example.test@1"
           }
         },
         "bindings": {
           "b": {
             "operation": "createTask",
-            "source": "s",
+            "source": "local",
             "preference": -9007199254740992
           }
         }
@@ -1357,14 +1401,14 @@
           "createTask": {}
         },
         "sources": {
-          "s": {
+          "local": {
             "kind": "example.test@1"
           }
         },
         "bindings": {
           "b": {
             "operation": "createTask",
-            "source": "s",
+            "source": "local",
             "description": 5
           }
         }
@@ -1382,14 +1426,14 @@
           "createTask": {}
         },
         "sources": {
-          "s": {
+          "local": {
             "kind": "example.test@1"
           }
         },
         "bindings": {
           "b": {
             "operation": "createTask",
-            "source": "s",
+            "source": "local",
             "deprecated": "yes"
           }
         }
@@ -1410,6 +1454,338 @@
       "violates": [
         "OBI-02"
       ]
+    },
+    {
+      "description": "The removed root resources map is an unknown field, even when empty (§5, OBI-02).",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {},
+        "resources": {}
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ]
+    },
+    {
+      "description": "binding source is not a string",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTask": {}
+        },
+        "sources": {
+          "tasksApi": {
+            "kind": "example.openapi@1"
+          }
+        },
+        "bindings": {
+          "b": {
+            "operation": "createTask",
+            "source": 5
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ]
+    },
+    {
+      "description": "binding source value outside the name grammar fails the derived schema, which carries the name syntax OBI-07 checks, and names no source key",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTask": {}
+        },
+        "sources": {
+          "tasksApi": {
+            "kind": "example.openapi@1"
+          }
+        },
+        "bindings": {
+          "b": {
+            "operation": "createTask",
+            "source": "tasks api"
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02",
+        "OBI-07"
+      ]
+    },
+    {
+      "description": "A removed binding content member is unknown; binding data is the member a kind reads (§5.3, OBI-02).",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "op": {}
+        },
+        "sources": {
+          "local": {
+            "kind": "example.test@1"
+          }
+        },
+        "bindings": {
+          "b": {
+            "operation": "op",
+            "source": "local",
+            "content": {
+              "target": "#/paths/~1tasks/post"
+            }
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ]
+    },
+    {
+      "description": "A source entry must be an object, not a kind string (§5.2, OBI-02); OBI-07 holds, since the binding's source names a key (§10).",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "op": {}
+        },
+        "sources": {
+          "s": "example.test@1"
+        },
+        "bindings": {
+          "b": {
+            "operation": "op",
+            "source": "s"
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ],
+      "notViolated": [
+        "OBI-07"
+      ]
+    },
+    {
+      "description": "A source missing its required kind violates OBI-02 (§5.2); OBI-07 holds, since the binding's source names a key (§10).",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "op": {}
+        },
+        "sources": {
+          "s": {}
+        },
+        "bindings": {
+          "b": {
+            "operation": "op",
+            "source": "s"
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ],
+      "notViolated": [
+        "OBI-07"
+      ]
+    },
+    {
+      "description": "A null source kind is not a non-empty string (§5.2, OBI-02); OBI-07 holds, since the binding's source names a key (§10).",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "op": {}
+        },
+        "sources": {
+          "s": {
+            "kind": null
+          }
+        },
+        "bindings": {
+          "b": {
+            "operation": "op",
+            "source": "s"
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ],
+      "notViolated": [
+        "OBI-07"
+      ]
+    },
+    {
+      "description": "A false source kind is not a non-empty string (§5.2, OBI-02); OBI-07 holds, since the binding's source names a key (§10).",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "op": {}
+        },
+        "sources": {
+          "s": {
+            "kind": false
+          }
+        },
+        "bindings": {
+          "b": {
+            "operation": "op",
+            "source": "s"
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ],
+      "notViolated": [
+        "OBI-07"
+      ]
+    },
+    {
+      "description": "A [] source kind is not a non-empty string (§5.2, OBI-02); OBI-07 holds, since the binding's source names a key (§10).",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "op": {}
+        },
+        "sources": {
+          "s": {
+            "kind": []
+          }
+        },
+        "bindings": {
+          "b": {
+            "operation": "op",
+            "source": "s"
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ],
+      "notViolated": [
+        "OBI-07"
+      ]
+    },
+    {
+      "description": "A {} source kind is not a non-empty string (§5.2, OBI-02); OBI-07 holds, since the binding's source names a key (§10).",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "op": {}
+        },
+        "sources": {
+          "s": {
+            "kind": {}
+          }
+        },
+        "bindings": {
+          "b": {
+            "operation": "op",
+            "source": "s"
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ],
+      "notViolated": [
+        "OBI-07"
+      ]
+    },
+    {
+      "description": "A source description must be a string (§5.2, OBI-02).",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "op": {}
+        },
+        "sources": {
+          "s": {
+            "kind": "example.test@1",
+            "description": 5
+          }
+        },
+        "bindings": {
+          "b": {
+            "operation": "op",
+            "source": "s"
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ]
+    },
+    {
+      "description": "An unprefixed location member on a source is unknown; where an artifact lives is for its data (§5.2, OBI-02).",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "op": {}
+        },
+        "sources": {
+          "s": {
+            "kind": "example.test@1",
+            "location": "https://example.com/api.json"
+          }
+        },
+        "bindings": {
+          "b": {
+            "operation": "op",
+            "source": "s"
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02"
+      ]
+    },
+    {
+      "description": "A source key outside the name grammar fails the derived schema, which expresses OBI-04 (§5.2, §10).",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {},
+        "sources": {
+          "http api": {
+            "kind": "example.openapi@1"
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02",
+        "OBI-04"
+      ]
+    },
+    {
+      "description": "A non-empty kind is an opaque string without a name grammar (§6): white space, a prototype-like name, and a URI-shaped string are kinds.",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {},
+        "sources": {
+          "space": {
+            "kind": " "
+          },
+          "proto": {
+            "kind": "constructor"
+          },
+          "uri": {
+            "kind": "https://EXAMPLE.test/kind@1"
+          }
+        }
+      },
+      "valid": true
     }
   ]
 }

@@ -166,10 +166,10 @@ fn keyed_lookup_and_each_field_are_local() {
 #[test]
 fn required_scalars_optional_flags_and_exact_payloads_are_distinct() {
     let doc = document(
-        r#", "sources":{"none":{},"null":{"kind":null}},"bindings":{"none":{},"explicit":{"operation":"x","source":"none","preference":0,"idempotent":false,"deprecated":false,"content":null,"x-wide":9007199254740993},"bad":{"operation":false,"source":null,"idempotent":null,"deprecated":0}}"#,
+        r#", "sources":{"none":{},"null":{"kind":null}},"bindings":{"none":{},"explicit":{"operation":"x","source":"none","preference":0,"idempotent":false,"deprecated":false,"data":null,"x-wide":9007199254740993},"bad":{"operation":false,"source":null,"idempotent":null,"deprecated":0}}"#,
     );
     let none = doc.binding("none").unwrap().unwrap();
-    assert!(none.content().is_none());
+    assert!(none.data().is_none());
     assert_eq!(none.preference().unwrap(), None);
     assert_eq!(none.idempotent().unwrap(), None);
     assert_eq!(none.deprecated().unwrap(), None);
@@ -187,7 +187,7 @@ fn required_scalars_optional_flags_and_exact_payloads_are_distinct() {
     assert_eq!(explicit.preference().unwrap().unwrap().get(), 0);
     assert_eq!(explicit.idempotent().unwrap(), Some(false));
     assert_eq!(explicit.deprecated().unwrap(), Some(false));
-    assert_eq!(explicit.content().unwrap().kind(), JsonKind::Null);
+    assert_eq!(explicit.data().unwrap().kind(), JsonKind::Null);
     assert_eq!(
         explicit.value().get("x-wide").unwrap().number_text(),
         Some("9007199254740993")
@@ -384,14 +384,14 @@ fn owned_traits_document_drop_and_global_refusals() {
     owner::<SourceView>();
     owner::<DependencyView>();
     owner::<ExampleView>();
-    let doc = document(r#", "sources":{"s":{"kind":"k","content":{"large":9007199254740993}}}"#);
+    let doc = document(r#", "sources":{"s":{"kind":"k","data":{"large":9007199254740993}}}"#);
     let view = doc.source("s").unwrap().unwrap();
     let retained = view.clone();
     let kind = retained.kind().unwrap();
     drop(doc);
     drop(view);
     assert_eq!(kind, "k");
-    let exact = retained.content().unwrap().to_owned();
+    let exact = retained.data().unwrap().to_owned();
     drop(retained);
     assert_eq!(exact.get("large").unwrap().text(), "9007199254740993");
     for (text, code) in [

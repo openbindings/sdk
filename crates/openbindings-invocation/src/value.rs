@@ -170,7 +170,7 @@ pub(crate) fn source_from_json(value: JsonRef<'_>) -> Result<Source, BoundaryErr
         let name = member.name.as_str().expect("checked carrier name");
         match name {
             "kind" => {}
-            "content" => source.content = Some(member.value.to_owned()),
+            "content" => source.data = Some(member.value.to_owned()),
             "description" => {
                 source.description = Some(string(member.value, "/source/description")?.into())
             }

@@ -60,7 +60,7 @@ interface synthesis and invocation. A source inspector enumerates bindable targe
 a synthesizer produces an interface with coverage; a binding invoker interacts
 with a realization; an operation invoker applies document selection and value
 contracts. Kind implementations live in separate projects and supply the meaning
-of source and binding content. Applications choose providers and acquisition policy.
+of source and binding data. Applications choose providers and acquisition policy.
 
 Start with the crate guide for
 [core](crates/openbindings/README.md),
@@ -88,8 +88,11 @@ provisional. TypeScript does not expose these APIs.
 Read [capabilities and limits](CAPABILITIES.md), [host support](docs/support.md),
 [performance measurements](docs/performance-boundaries.md) and the
 [API reference](docs/api-reference.md). This SDK applies OpenBindings 0.2.
-Applied specification revision: `30416ef1ca626e58eb8c383a0c71422a68f9243f`.
+Applied specification revision: `c1419c9fc3ae5a00c2b83da710c11bf67dab7934`.
 Package and specification versions are independent.
+
+The [current 0.2 migration checkpoint](docs/migration-0.2.md) records the implemented
+document-admission slice and the remaining API, evaluator and interface work.
 
 Repository build and verification instructions are in
 [the maintainer guide](docs/maintainers.md).

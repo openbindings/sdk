@@ -10,7 +10,7 @@ fn later_rules_require_scalar_document_strings_but_allow_deep_opaque_data() {
     for (text, rules) in [
         (r#"{"openbindings":"0.2.0","description":"\ud800"}"#.to_owned(), vec!["OBI-02"]),
         (r#"{"openbindings":"0.2.0","operations":{"-bad":{}},"description":"\ud800"}"#.into(), vec!["OBI-02", "OBI-04"]),
-        (r#"{"openbindings":"0.2.0","operations":{},"sources":{"s":{"kind":"k"}},"bindings":{"b":{"operation":"missing","source":"s","content":"\ud800"}}}"#.into(), vec!["OBI-06"]),
+        (r#"{"openbindings":"0.2.0","operations":{},"sources":{"s":{"kind":"k"}},"bindings":{"b":{"operation":"missing","source":"s","data":"\ud800"}}}"#.into(), vec!["OBI-06"]),
         (r##"{"openbindings":"0.2.0","operations":{"op":{"input":{"$ref":"#/nope"}}},"x-data":"\ud800"}"##.into(), vec!["OBI-12"]),
         (r#"{"openbindings":"0.2.0","operations":{"op":{"input":{"$schema":"draft-07"}}},"x-data":"\ud800"}"#.into(), vec!["OBI-02", "OBI-09"]),
         (format!(r#"{{"openbindings":"0.2.0","x-d":{}0{}}}"#, "[".repeat(10001), "]".repeat(10001)), vec!["OBI-02"]),
@@ -34,11 +34,11 @@ fn later_rules_require_scalar_document_strings_but_allow_deep_opaque_data() {
 
 #[test]
 fn unpaired_document_strings_are_lossless_drafts_without_conformance() {
-    // OBI-01 covers opaque content and schemas as well as defined fields.
+    // OBI-01 covers opaque data and schemas as well as defined fields.
     for fields in [
         r#""description":"cut \ud83d""#,
         r#""name":"\ud800","version":"\ud800""#,
-        r#""sources":{"s":{"kind":"\ud800","content":{"\ud800":"\udc00"}}}"#,
+        r#""sources":{"s":{"kind":"\ud800","data":{"\ud800":"\udc00"}}}"#,
         r#""x-\ud800":{"\ud800":"\udc00"}"#,
         r#""schemas":{"s":{"description":"\ud800","pattern":"\ud800","const":"\ud800","required":["\ud800","\udc00","\ue000d800;"]}}"#,
         r#""dependencies":{"d":{"operation":"op","kinds":["\ud800","\udc00","\ue000d800;"]}}"#,

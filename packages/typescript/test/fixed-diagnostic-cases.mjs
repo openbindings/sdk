@@ -45,9 +45,9 @@ export function fixedDiagnosticCases(sdk) {
     },
     {
       name: "required source member uses containing object",
-      text: '{"openbindings":"0.2.0","operations":{},"sources":{"s":{"content":"REJECTED_SENTINEL"}}}',
+      text: '{"openbindings":"0.2.0","operations":{},"sources":{"s":{"data":"REJECTED_SENTINEL"}}}',
       pointer: "/sources/s",
-      token: '{"content":',
+      token: '{"data":',
       required: "kind",
     },
     {
@@ -236,7 +236,7 @@ export function fixedDiagnosticCases(sdk) {
         "independent evidence",
       );
       check(
-        Object.keys(report.evidence).length === 13,
+        Object.keys(report.evidence).length === 14,
         "all rule evidence retained",
       );
     } finally {

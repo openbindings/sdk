@@ -54,7 +54,7 @@ fn required_failure_points_at_the_original_containing_object() {
     assert_eq!((at.byte_offset, at.line, at.byte_column), (3, 2, 2));
 
     let nested = validate_document(
-        r#"{"openbindings":"0.2.0","operations":{},"sources":{"s":{"content":"private-payload"}}}"#,
+        r#"{"openbindings":"0.2.0","operations":{},"sources":{"s":{"data":"private-payload"}}}"#,
     )
     .unwrap();
     let finding = nested
@@ -146,7 +146,7 @@ fn unexpected_fields_locate_original_key_tokens_in_source_order() {
 
 #[test]
 fn all_closed_objects_are_diagnosed_without_entering_opaque_or_schema_values() {
-    let text = r#"{"openbindings":"0.2.0","operations":{"run":{"badOperation":0,"input":{"customKeyword":{"inputs":1}},"examples":{"sample":{"badExample":0,"input":{"inputs":1},"x-extra":{"inputs":1}}},"x-extra":{"inputs":1}}},"dependencies":{"d":{"operation":"run","badDependency":0}},"sources":{"s":{"kind":"custom","badSource":0,"content":{"inputs":1}}},"bindings":{"b":{"operation":"run","source":"s","badBinding":0,"content":{"inputs":1}}},"badRoot":0,"x-extra":{"inputs":1}}"#;
+    let text = r#"{"openbindings":"0.2.0","operations":{"run":{"badOperation":0,"input":{"customKeyword":{"inputs":1}},"examples":{"sample":{"badExample":0,"input":{"inputs":1},"x-extra":{"inputs":1}}},"x-extra":{"inputs":1}}},"dependencies":{"d":{"operation":"run","badDependency":0}},"sources":{"s":{"kind":"custom","badSource":0,"data":{"inputs":1}}},"bindings":{"b":{"operation":"run","source":"s","badBinding":0,"data":{"inputs":1}}},"badRoot":0,"x-extra":{"inputs":1}}"#;
     let validation = validate_document(text).unwrap();
     let mut paths: Vec<_> = validation
         .report()
@@ -237,7 +237,7 @@ fn localized_findings_preserve_all_rule_evidence_under_the_findings_cap() {
         assert_eq!(report.findings_truncated, count > 4096);
         assert_eq!(report.evidence["OBI-02"], Evidence::Met);
         assert_eq!(report.evidence["OBI-10"], Evidence::Violated);
-        assert_eq!(report.evidence.len(), 13);
+        assert_eq!(report.evidence.len(), DOCUMENT_RULES.len());
         assert!(
             report
                 .findings

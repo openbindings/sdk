@@ -607,16 +607,16 @@ export interface BindingMetadata {
   /** Declared deprecation or null for absence. */ readonly deprecated:
     | boolean
     | null;
-  /** Presence of content, including explicit JSON null. */ readonly hasContent: boolean;
+  /** Presence of data, including explicit JSON null. */ readonly hasData: boolean;
 }
-/** Frozen source declaration metadata, excluding opaque content. */
+/** Frozen source declaration metadata, excluding opaque data. */
 export interface SourceMetadata {
   /** Source declaration key. */ readonly key: string;
   /** Exact declared kind string; no normalization or execution. */ readonly kind: string;
   /** Declared description or null for absence. */ readonly description:
     | string
     | null;
-  /** Presence of content, including explicit JSON null. */ readonly hasContent: boolean;
+  /** Presence of data, including explicit JSON null. */ readonly hasData: boolean;
 }
 /** Frozen dependency declaration metadata; no provider is selected. */
 export interface DependencyMetadata {
@@ -1850,9 +1850,9 @@ export class BindingView extends Managed {
   value(): ExactJson {
     return new ExactJson(handle<wasm.WasmBinding>(this).value());
   }
-  /** Acquire a NEW exact content owner; undefined means absent, while present null remains an exact value. */
-  content(): ExactJson | undefined {
-    const raw = handle<wasm.WasmBinding>(this).content();
+  /** Acquire a NEW exact data owner; undefined means absent, while present null remains an exact value. */
+  data(): ExactJson | undefined {
+    const raw = handle<wasm.WasmBinding>(this).data();
     return raw ? new ExactJson(raw) : undefined;
   }
 }
@@ -1880,9 +1880,9 @@ export class SourceView extends Managed {
   value(): ExactJson {
     return new ExactJson(handle<wasm.WasmSource>(this).value());
   }
-  /** Acquire a NEW exact content owner; undefined means absent, while present null remains an exact value. */
-  content(): ExactJson | undefined {
-    const raw = handle<wasm.WasmSource>(this).content();
+  /** Acquire a NEW exact data owner; undefined means absent, while present null remains an exact value. */
+  data(): ExactJson | undefined {
+    const raw = handle<wasm.WasmSource>(this).data();
     return raw ? new ExactJson(raw) : undefined;
   }
 }
@@ -3133,25 +3133,25 @@ export interface Example {
   /** Extension/unknown members retained as exact JSON. Normative assessment decides permission; collisions with typed members return a part serialization error. */
   additionalFields?: Readonly<Record<string, JsonInput>>;
 }
-/** Binding source vocabulary; kind-specific content is exact opaque JSON and is never executed or acquired by core. */
+/** Binding source vocabulary; kind-specific data is exact opaque JSON and is never executed or acquired by core. */
 export interface Source {
   /** Source-kind identifier selecting external interpretation. */
   kind: string;
-  /** Optional exact kind-specific content; not interpreted by core. */
-  content?: JsonInput;
+  /** Optional exact kind-specific data; not interpreted by core. */
+  data?: JsonInput;
   /** Optional source explanation. */
   description?: string;
   /** Extension/unknown members retained as exact JSON. Normative assessment decides permission; collisions with typed members return a part serialization error. */
   additionalFields?: Readonly<Record<string, JsonInput>>;
 }
-/** Link from an operation to a source with opaque kind-specific content and annotations. Core does not rank or invoke bindings. */
+/** Link from an operation to a source with opaque kind-specific data and annotations. Core does not rank or invoke bindings. */
 export interface Binding {
   /** Referenced primary operation name. */
   operation: string;
   /** Referenced source key. */
   source: string;
-  /** Optional exact kind-specific binding content. */
-  content?: JsonInput;
+  /** Optional exact kind-specific binding data. */
+  data?: JsonInput;
   /** Optional interoperable integer in inclusive ±9,007,199,254,740,991; no ranking is performed. */
   preference?: number;
   /** Optional idempotence annotation; does not trigger retries. */
@@ -3293,11 +3293,11 @@ const typedFields: Record<AuthorKind, readonly string[]> = {
     "examples",
   ],
   example: ["description", "input", "output"],
-  source: ["kind", "content", "description"],
+  source: ["kind", "data", "description"],
   binding: [
     "operation",
     "source",
-    "content",
+    "data",
     "preference",
     "idempotent",
     "deprecated",

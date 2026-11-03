@@ -58,8 +58,8 @@ const exact = (text) => {
   assert.equal(result.status, "parsed");
   return result.value;
 };
-test("all 440 corpus documents use the same admission and proof evidence", () => {
-  assert.equal(core.length, 440);
+test("all 505 corpus documents use the same admission and proof evidence", () => {
+  assert.equal(core.length, 505);
   for (const request of core) {
     const bytes = Buffer.from(request.given.documentBase64, "base64");
     const opened = sdk.Document.parse(bytes);

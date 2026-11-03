@@ -1,6 +1,6 @@
 # Pinned qualification fixtures
 
-The specification corpus is copied from revision 30416ef1ca626e58eb8c383a0c71422a68f9243f. The immutable inventory contains 440 cases. The observer uses public SDK APIs; the Python judge is independent and includes deliberately incorrect-result controls. These files support repository CI and replay, not runtime SDK features. Generated observations are ignored. The reusable evaluator kit separately preserves 1,566 case IDs with its own provenance: 1,564 evaluator observations and two core rejection cases.
+The current specification corpus is copied from revision c1419c9fc3ae5a00c2b83da710c11bf67dab7934: 372 document cases and 133 scenarios (505 total). The public-API observer and independent Python judge preserve exact text/base64 carriage and include deliberately wrong-result controls. Generated observations are ignored. The evaluator kit still carries its historical 1,566-case source; the migration adjudication assigns 1,546 value cases and 20 document-admission cases. Applying that adjudication to the evaluator runner is separate from this document-admission checkpoint.
 
 For a specification re-pin, replace only the files already present in
 `inputs/spec/` with the same paths from the selected checkout. Rebuild

@@ -72,7 +72,7 @@ space is assembled once per live document revision and set, and released when
 either is dropped.
 
 Core performs no resource acquisition, binding selection or invocation. Source
-and binding content remain opaque. Kind implementations interpret them outside
+and binding data remain opaque. Kind implementations interpret them outside
 core. Document conformance does not establish that a binding works or that an
 example satisfies its value contract.
 

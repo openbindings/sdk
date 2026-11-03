@@ -54,7 +54,7 @@ impl SourceInspector for Echo {
         self.calls.set(self.calls.get() + 1);
         ready(Ok(self.result.clone().unwrap_or_else(|| {
             let mut item = target();
-            item.binding.content = source.content.clone();
+            item.binding.content = source.data.clone();
             SourceInspection::complete(vec![item])
         })))
     }
@@ -138,7 +138,7 @@ async fn exact_content_and_absence_survive_source_and_provider_disposal() {
     ] {
         let (inspector, _) = inspector(None);
         let mut source = source();
-        source.content = text.map(|text| JsonValue::parse(text).unwrap());
+        source.data = text.map(|text| JsonValue::parse(text).unwrap());
         let result = inspector.inspect(&source).await.unwrap();
         drop(source);
         drop(inspector);
@@ -231,7 +231,7 @@ async fn consumer_rejects_provider_author_keys_unknown_binding_fields_and_bad_fr
     .unwrap();
     assert_eq!(binding.operation, "author");
     assert_eq!(binding.source, "author-source");
-    assert!(binding.content.is_none());
+    assert!(binding.data.is_none());
     // Binding replaces keys a by-value binding already carries.
     let binding = BindingValue {
         operation: Some("earlier".into()),

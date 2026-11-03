@@ -2,10 +2,10 @@
   "rule": "OBI-11",
   "section": "10",
   "description": "Has every schema $ref and $dynamicRef in the document resource (§3) an absolute URI or a same-document reference, and every schema $id at an OBI position an absolute URI. All of them are also well-formed URI-references per RFC 3986 §4.1 (§7.1).",
-  "notes": "Nothing within a source's or binding's content is an OBI-defined reference, whatever its spelling: a relative address or a member named $ref there is read under the source's kind, and the positives below pin that no core rule governs it.",
+  "notes": "Nothing within a source's data or a binding's data is an OBI-defined reference, whatever its spelling: a relative address or a member named $ref there is read under the source's kind, and the positives below pin that no core rule governs it.",
   "tests": [
     {
-      "description": "a relative address inside a source's content is read under the source's kind (outside OBI-11)",
+      "description": "a relative address inside a source's data is read under the source's kind (outside OBI-11)",
       "document": {
         "openbindings": "0.2.0",
         "operations": {
@@ -13,8 +13,8 @@
         },
         "sources": {
           "httpApi": {
-            "kind": "example.test@1",
-            "content": {
+            "kind": "example.openapi@1",
+            "data": {
               "location": "openapi.json"
             }
           }
@@ -23,7 +23,7 @@
       "valid": true
     },
     {
-      "description": "a member named $ref inside a source's or binding's content is not a schema reference (outside OBI-11)",
+      "description": "a member named $ref inside a source's data or a binding's data is not a schema reference (outside OBI-11)",
       "document": {
         "openbindings": "0.2.0",
         "operations": {
@@ -32,7 +32,7 @@
         "sources": {
           "httpApi": {
             "kind": "example.test@1",
-            "content": {
+            "data": {
               "$ref": "other.json#Task"
             }
           }
@@ -41,7 +41,7 @@
           "createTask.http": {
             "operation": "createTask",
             "source": "httpApi",
-            "content": {
+            "data": {
               "$ref": "#Task"
             }
           }
@@ -197,7 +197,7 @@
       "valid": true
     },
     {
-      "description": "a same-document $dynamicRef at an OBI position (JSON Schema 2020-12 resolves it; its form is all this rule concerns)",
+      "description": "A same-document $dynamicRef has a permitted form, but its document-resource $dynamicAnchor violates OBI-14 (§§7.1, 7.2).",
       "document": {
         "openbindings": "0.2.0",
         "operations": {
@@ -214,10 +214,16 @@
           }
         }
       },
-      "valid": true
+      "valid": false,
+      "violates": [
+        "OBI-14"
+      ],
+      "notViolated": [
+        "OBI-11"
+      ]
     },
     {
-      "description": "a $dynamicAnchor at an OBI position is JSON Schema's to resolve",
+      "description": "A document-resource $dynamicAnchor violates OBI-14 even when a pointer reaches its schema (§7.2).",
       "document": {
         "openbindings": "0.2.0",
         "operations": {
@@ -234,7 +240,13 @@
           }
         }
       },
-      "valid": true
+      "valid": false,
+      "violates": [
+        "OBI-14"
+      ],
+      "notViolated": [
+        "OBI-11"
+      ]
     },
     {
       "description": "dynamic pair inside an embedded $id-declaring schema resolves against that resource (full 2020-12 semantics, e.g. recursive extension)",

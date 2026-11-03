@@ -1,6 +1,7 @@
 //! The normative schema-position walk. Unknown keywords remain opaque.
 use crate::{JsonKind, JsonRef, JsonValue, identifiers::Identifiers};
 use openbindings_internal_json::backend::{node, ref_id};
+mod references;
 use std::sync::{
     Arc, OnceLock,
     atomic::{AtomicBool, Ordering},
@@ -52,6 +53,8 @@ pub struct SchemaIndex {
     /// the identifier strings, one identifier's in walk order. A document's
     /// index only.
     identifiers: Vec<(u32, u32)>,
+    /// Original reference tokens that fail OBI-12's contained-resource clause.
+    missing_targets: Vec<u32>,
     /// Each `$id` declaration with a base and that base, in walk order. A
     /// supplied resource's index only.
     bases: Vec<(u32, Arc<str>)>,
@@ -214,6 +217,7 @@ impl SchemaIndex {
             ..Self::default()
         };
         let mut compared = Vec::new();
+        let mut uses = Vec::new();
         let mut stack: Vec<(u32, u32)> = Vec::new();
         for root in roots {
             stack.push((ref_id(root) as u32, u32::MAX));
@@ -252,15 +256,38 @@ impl SchemaIndex {
                             of.push((resource, base));
                         }
                         Bases::Compared(ids) => {
-                            // Resource `r` begins at schema `r - 1`; the handles
-                            // of compared declarations follow the walk.
                             let parent_base = match parent_resource {
                                 0 => None,
-                                r => compared.binary_search(&(r - 1)).ok().map(|h| h as u32),
+                                r => base_of(&compared, r).copied(),
                             };
-                            // Each compared declaration's handle is the next.
-                            if text.and_then(|s| ids.compared(parent_base, s)).is_some() {
-                                compared.push(index);
+                            let handle = text.and_then(|s| ids.compared(parent_base, s));
+                            if let Some(handle) = handle {
+                                debug_assert_eq!(handle as usize, uses.len());
+                                uses.push(references::IdentifierUse::Declaration(index));
+                            }
+                            compared.push((resource, handle));
+                        }
+                    }
+                }
+                if let Bases::Compared(ids) = &mut bases {
+                    let base = match resource {
+                        0 => None,
+                        r => base_of(&compared, r).copied(),
+                    };
+                    // OBI-12 does not assess references inside a resource whose
+                    // declaration has no compared base, even absolute ones.
+                    if resource == 0 || base.is_some() {
+                        for keyword in ["$ref", "$dynamicRef"] {
+                            if let Some(reference) = value.get(keyword)
+                                && let Some(text) = reference.as_str()
+                                && crate::uri::valid(text)
+                                && let Some(handle) =
+                                    ids.compared(base, text.split('#').next().unwrap())
+                            {
+                                debug_assert_eq!(handle as usize, uses.len());
+                                uses.push(references::IdentifierUse::Reference(
+                                    ref_id(reference) as u32
+                                ));
                             }
                         }
                     }
@@ -299,11 +326,7 @@ impl SchemaIndex {
         });
         out.anchors = anchors;
         if let Bases::Compared(ids) = bases {
-            out.identifiers = ids
-                .duplicates()
-                .into_iter()
-                .map(|(rank, handle)| (rank, compared[handle as usize]))
-                .collect();
+            out.check_identified_references(&ids, &uses);
         }
         out
     }
@@ -413,7 +436,7 @@ impl SchemaIndex {
                 return SameDocument::Missing;
             };
             return match self.position(ref_id(value)) {
-                Some(index) if self.obi_position(index) => {
+                Some(index) if matches!(value.kind(), JsonKind::Object | JsonKind::Boolean) => {
                     SameDocument::Found(self.owned(&self.nodes[index]))
                 }
                 _ => SameDocument::Missing,
@@ -578,6 +601,7 @@ mod tests {
             "#/schemas/a~1~0/allOf/0",
             "#%2Fschemas%2Fa~1~0%2FallOf%2F1%2Fproperties%2F~01",
             "#/schemas/resource",
+            "#/schemas/resource/properties/child",
             "#/schemas/space%20name",
         ] {
             assert!(
@@ -598,7 +622,6 @@ mod tests {
             "#/schemas/a~2",
             "#/schemas/missing",
             "#/schemas",
-            "#/schemas/resource/properties/child",
             "#/x-opaque/schema",
             "#%FF",
         ] {

@@ -700,7 +700,7 @@ impl BindingInvoker for LargeFailure {
     ) -> Self::Invocation<'a> {
         std::future::ready(Err(InvocationError::new(
             "custom.large",
-            r.source.content.clone(),
+            r.source.data.clone(),
         )
         .unwrap()))
     }
@@ -709,10 +709,10 @@ impl BindingInvoker for LargeFailure {
         r: BindingRequest<'a>,
         _: CancellationToken,
     ) -> Option<Self::Invocation<'a>> {
-        Some(std::future::ready(Err(if r.source.content.is_none() {
+        Some(std::future::ready(Err(if r.source.data.is_none() {
             InvocationError::challenge(challenge())
         } else {
-            InvocationError::new("custom.large", r.source.content.clone()).unwrap()
+            InvocationError::new("custom.large", r.source.data.clone()).unwrap()
         })))
     }
 }
@@ -720,7 +720,7 @@ impl BindingInvoker for LargeFailure {
 #[tokio::test]
 async fn oversized_terminal_and_preflight_failure_fall_back_without_data_or_retry_claim() {
     let s = Source {
-        content: Some(json(&format!("\"{}\"", "x".repeat(512)))),
+        data: Some(json(&format!("\"{}\"", "x".repeat(512)))),
         ..source()
     };
     let b = BindingValue::default();

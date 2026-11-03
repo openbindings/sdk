@@ -104,7 +104,7 @@ fn source_hash(s: &Source) -> u64 {
     let mut h = DefaultHasher::new();
     s.kind.hash(&mut h);
     s.description.as_deref().hash(&mut h);
-    hash_value(s.content.as_ref().map(|v| v.view()), &mut h);
+    hash_value(s.data.as_ref().map(|v| v.view()), &mut h);
     s.additional_fields.len().hash(&mut h);
     for (k, v) in &s.additional_fields {
         k.hash(&mut h);
@@ -119,14 +119,14 @@ fn output_hash(v: JsonRef<'_>) -> u64 {
         .unwrap_or("")
         .hash(&mut h);
     v.get("description").and_then(|v| v.as_str()).hash(&mut h);
-    hash_value(v.get("content"), &mut h);
+    hash_value(v.get("data"), &mut h);
     let ext: BTreeMap<_, _> = v
         .members()
         .into_iter()
         .flatten()
         .filter_map(|m| {
             let k = m.name.as_str()?;
-            (!["kind", "content", "description"].contains(&k)).then_some((k, m.value))
+            (!["kind", "data", "description"].contains(&k)).then_some((k, m.value))
         })
         .collect();
     ext.len().hash(&mut h);
@@ -145,13 +145,13 @@ fn source_matches(a: &Source, b: JsonRef<'_>) -> bool {
     if b.len()
         != Some(
             1 + usize::from(a.description.is_some())
-                + usize::from(a.content.is_some())
+                + usize::from(a.data.is_some())
                 + a.additional_fields.len(),
         )
     {
         return false;
     }
-    match (a.content.as_ref(), b.get("content")) {
+    match (a.data.as_ref(), b.get("data")) {
         (None, None) => {}
         (Some(a), Some(b)) if same_json(a.view(), b) => {}
         _ => return false,
@@ -169,7 +169,7 @@ fn same_source(a: &Source, b: &Source) -> bool {
     a.kind == b.kind
         && a.description == b.description
         && a.additional_fields.len() == b.additional_fields.len()
-        && match (&a.content, &b.content) {
+        && match (&a.data, &b.data) {
             (None, None) => true,
             (Some(a), Some(b)) => same_json(a.view(), b.view()),
             _ => false,
@@ -686,7 +686,7 @@ mod numeric_tests {
                 assert_eq!(a.semantic_eq(&b), Some(false));
                 let input = Source {
                     kind: "example.numeric-source".into(),
-                    content: Some(a),
+                    data: Some(a),
                     ..Default::default()
                 };
                 let mut draft = openbindings::Document::new();
@@ -694,7 +694,7 @@ mod numeric_tests {
                     .set_source(
                         "api",
                         &Source {
-                            content: Some(b),
+                            data: Some(b),
                             ..input.clone()
                         },
                     )

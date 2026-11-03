@@ -41,12 +41,12 @@ test("author every normative object; absence/null and exact opaque values surviv
         examples: { demo: { input: large, output: null } },
       },
     },
-    sources: { local: { kind: "https://kind.example/raw", content: null } },
+    sources: { local: { kind: "https://kind.example/raw", data: null } },
     bindings: {
       default: {
         operation: "run",
         source: "local",
-        content: { large },
+        data: { large },
         preference: 1,
         idempotent: true,
       },
@@ -63,14 +63,14 @@ test("author every normative object; absence/null and exact opaque values surviv
   const value = document.value();
   assert.equal(value.get("description"), undefined);
   for (const path of [
-    "/sources/local/content",
+    "/sources/local/data",
     "/operations/run/examples/demo/output",
   ]) {
     const child = value.at(path);
     assert.equal(child.text, "null");
     child.dispose();
   }
-  const preserved = value.at("/bindings/default/content/large");
+  const preserved = value.at("/bindings/default/data/large");
   assert.equal(preserved.text, "9007199254740993");
   assert.equal(preserved.toValue().status, "inexact");
   preserved.dispose();

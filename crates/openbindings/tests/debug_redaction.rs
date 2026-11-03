@@ -26,7 +26,7 @@ fn exact_views_and_authoring_owners_do_not_print_source_data() {
     redacted(&parsed.clone());
     redacted(&Source {
         kind: SECRET.into(),
-        content: Some(value),
+        data: Some(value),
         ..Source::default()
     });
 }

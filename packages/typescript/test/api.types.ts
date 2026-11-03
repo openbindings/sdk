@@ -28,7 +28,7 @@ async function caller(
       examples: { a: { input: 1, output: null } },
     },
   });
-  created.setSource("local", { kind: "test", content: null });
+  created.setSource("local", { kind: "test", data: null });
   // DocumentValidation names what Rust's does: the result that can carry proof.
   const checked: DocumentValidation = created.validate();
   // @ts-expect-error a DocumentReport has no conformant branch to carry a proof
@@ -259,7 +259,7 @@ function roundOneTypes(document: Document) {
   using dependency = document.dependency("d");
   if (source) {
     source.metadata.kind satisfies string;
-    using content = source.content();
+    using content = source.data();
   }
   if (binding) {
     binding.metadata.preference satisfies number | null;
@@ -444,7 +444,7 @@ import type {
 function namedParts(document: Document) {
   const example: Example = { input: null };
   const operation: Operation = { input: true, examples: { sample: example } };
-  const source: Source = { kind: "custom", content: null };
+  const source: Source = { kind: "custom", data: null };
   const binding: Binding = { operation: "run", source: "local" };
   const dependency: Dependency = { operation: "run" };
   document.setOperation("run", operation);

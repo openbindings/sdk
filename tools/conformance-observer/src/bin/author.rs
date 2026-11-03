@@ -12,7 +12,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "local",
         &Source {
             kind: "example.native@1".into(),
-            content: Some(JsonValue::null()),
+            data: Some(JsonValue::null()),
             ..Default::default()
         },
     )?;
@@ -33,6 +33,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         valid.as_document().operation_bindings("lookup")?,
         vec!["call"]
     );
-    println!("external typed authoring, exact content, validation and immutable snapshot passed");
+    println!("external typed authoring, exact data, validation and immutable snapshot passed");
     Ok(())
 }

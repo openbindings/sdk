@@ -165,7 +165,7 @@ test("coalesced insertions, escaped keys and all typed part setters construct on
   );
   assert.equal(document.operations.length, 1000);
   document.setOperation("run/~", { input: true });
-  document.setSource("s/~", { kind: "custom", content: null });
+  document.setSource("s/~", { kind: "custom", data: null });
   document.setBinding("b/~", {
     operation: "run/~",
     source: "s/~",
@@ -174,7 +174,7 @@ test("coalesced insertions, escaped keys and all typed part setters construct on
   document.setDependency("d/~", { operation: "run/~" });
   document.setExample("run/~", "e/~", { input: null });
   document.setOperations({ run: { input: true } });
-  document.setSources({ s: { kind: "custom", content: null } });
+  document.setSources({ s: { kind: "custom", data: null } });
   document.setBindings({ b: { operation: "run", source: "s" } });
   document.setDependencies({ d: { operation: "run" } });
   document.setExample("run", "e", { input: null });
@@ -327,7 +327,7 @@ test("typed namespace construction and exact pointer edits share one atomic brid
       },
       { op: "set", pointer: "/name", value: "Batch" },
       { op: "set-dependencies", value: { d: { operation: "run" } } },
-      { op: "set-sources", value: { s: { kind: "custom", content: number } } },
+      { op: "set-sources", value: { s: { kind: "custom", data: number } } },
       { op: "set-bindings", value: { b: { operation: "run", source: "s" } } },
     ]);
     assert.equal(calls, 1);

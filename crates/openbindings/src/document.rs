@@ -20,10 +20,10 @@ use std::{
     sync::{Arc, Mutex, OnceLock, PoisonError, Weak},
 };
 
-/// Stable rule identifiers OBI-01 through OBI-13, in specification order.
-pub const DOCUMENT_RULES: [&str; 13] = [
+/// Stable rule identifiers OBI-01 through OBI-14, in specification order.
+pub const DOCUMENT_RULES: [&str; 14] = [
     "OBI-01", "OBI-02", "OBI-03", "OBI-04", "OBI-05", "OBI-06", "OBI-07", "OBI-08", "OBI-09",
-    "OBI-10", "OBI-11", "OBI-12", "OBI-13",
+    "OBI-10", "OBI-11", "OBI-12", "OBI-13", "OBI-14",
 ];
 // The document rules, named by their identifiers and declared in
 // `DOCUMENT_RULES` order, so `Rule::Obi04 as usize` indexes OBI-04's evidence.
@@ -42,9 +42,10 @@ enum Rule {
     Obi11,
     Obi12,
     Obi13,
+    Obi14,
 }
 impl Rule {
-    const ALL: [Rule; 13] = [
+    const ALL: [Rule; 14] = [
         Rule::Obi01,
         Rule::Obi02,
         Rule::Obi03,
@@ -58,6 +59,7 @@ impl Rule {
         Rule::Obi11,
         Rule::Obi12,
         Rule::Obi13,
+        Rule::Obi14,
     ];
     fn id(self) -> &'static str {
         DOCUMENT_RULES[self as usize]
@@ -1056,7 +1058,7 @@ fn input_limit_message(code: &str, limits: JsonLimits, bytes: usize) -> String {
 const MAX_FINDINGS: usize = 4096;
 const MAX_FINDING_POINTER_BYTES: usize = 8 * 1024 * 1024;
 struct Checks<'a> {
-    evidence: [Evidence; 13],
+    evidence: [Evidence; 14],
     findings: Vec<Finding>,
     pending_locations: Vec<(usize, JsonRef<'a>)>,
     retained_at: HashMap<usize, Vec<usize>>,
@@ -1071,7 +1073,7 @@ struct Checks<'a> {
 impl<'a> Checks<'a> {
     fn new() -> Self {
         Self {
-            evidence: [Evidence::Met; 13],
+            evidence: [Evidence::Met; 14],
             findings: Vec::new(),
             pending_locations: Vec::new(),
             retained_at: HashMap::new(),
@@ -1301,7 +1303,7 @@ fn assess_value(document: &Document) -> Result<ValidationReport, VersionRefusal>
     }
     let mut c = Checks::new();
     // Version declaration follows §8.1's JSON grammar, independently of this
-    // line's OBI-01 exclusions. OBI-02 through OBI-13 require OBI-01 (§10).
+    // line's OBI-01 exclusions. OBI-02 through OBI-14 require OBI-01 (§10).
     for at in backend::unpaired_strings(value).take(MAX_FINDINGS + 1) {
         c.violation(
             Rule::Obi01,
@@ -1482,6 +1484,16 @@ fn assess_value(document: &Document) -> Result<ValidationReport, VersionRefusal>
                 "contained schemas must name the 2020-12 dialect",
             );
         }
+        if node.resource == 0
+            && let Some(anchor) = schema.get("$dynamicAnchor")
+        {
+            c.violation(
+                Rule::Obi14,
+                anchor,
+                "document-dynamic-anchor",
+                "a dynamic anchor must belong to an identified schema resource",
+            );
+        }
         if schemas.obi_position(index) {
             if let Some(id) = schema.get("$id") {
                 if !id.as_str().is_some_and(uri::absolute) {
@@ -1517,13 +1529,16 @@ fn assess_value(document: &Document) -> Result<ValidationReport, VersionRefusal>
                         continue;
                     }
                     if (text.is_empty() || text.starts_with('#'))
-                        && matches!(schemas.same_document(value, text), SameDocument::Missing)
+                        && matches!(
+                            schemas.same_document(value, text),
+                            SameDocument::Missing | SameDocument::Ambiguous
+                        )
                     {
                         c.violation(
                             Rule::Obi12,
                             reference,
                             "reference-target",
-                            "same-document reference identifies no schema at an OBI position",
+                            "same-document reference identifies no contained schema",
                         );
                     }
                 }
@@ -1531,6 +1546,14 @@ fn assess_value(document: &Document) -> Result<ValidationReport, VersionRefusal>
         }
     }
     meta.finish();
+    for reference in schemas.missing_contained_targets() {
+        c.violation(
+            Rule::Obi12,
+            reference,
+            "reference-target",
+            "reference into a contained resource identifies no contained schema",
+        );
+    }
     for declarations in schemas.anchor_declarations() {
         if declarations[0].resource == 0 && declarations.len() > 1 {
             for anchor in declarations {

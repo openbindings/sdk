@@ -293,9 +293,9 @@ impl BindingView {
     pub fn deprecated(&self) -> Result<Option<bool>, InterpretationError> {
         boolean(&self.value, "deprecated", "invalid-binding-deprecated")
     }
-    /// Borrow opaque binding content; absence differs from present JSON null.
-    pub fn content(&self) -> Option<JsonRef<'_>> {
-        self.value.get("content")
+    /// Borrow opaque binding data; absence differs from present JSON null.
+    pub fn data(&self) -> Option<JsonRef<'_>> {
+        self.value.get("data")
     }
 }
 impl SourceView {
@@ -307,9 +307,9 @@ impl SourceView {
         exact_string(&self.value, "kind", "invalid-source-kind")?
             .ok_or_else(|| InterpretationError::invalid("missing-source-kind", self.value()))
     }
-    /// Borrow opaque source content; absence differs from present JSON null.
-    pub fn content(&self) -> Option<JsonRef<'_>> {
-        self.value.get("content")
+    /// Borrow opaque source data; absence differs from present JSON null.
+    pub fn data(&self) -> Option<JsonRef<'_>> {
+        self.value.get("data")
     }
 }
 impl DependencyView {

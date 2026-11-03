@@ -193,7 +193,7 @@ fn whole_parts_preserve_absence_null_exact_values_and_collision_paths() {
         "s",
         &Source {
             kind: "custom".into(),
-            content: Some(exact("null")),
+            data: Some(exact("null")),
             ..Default::default()
         },
     )
@@ -218,7 +218,7 @@ fn whole_parts_preserve_absence_null_exact_values_and_collision_paths() {
     doc.set("/x-number", &exact("1e9999999999999999")).unwrap();
     let proof = doc.validate().unwrap().conformant().unwrap();
     assert!(proof.name().is_none());
-    assert_eq!(proof.source("s").unwrap().content().unwrap().text(), "null");
+    assert_eq!(proof.source("s").unwrap().data().unwrap().text(), "null");
     assert_eq!(
         proof
             .resolve_operation("go")
@@ -371,7 +371,7 @@ fn generated_edit_sequences_over_every_corpus_document_match_reparsed_text() {
     let mut corpus = Vec::new();
     corpus_documents(&root.join("document"), &mut corpus);
     corpus_documents(&root.join("scenarios"), &mut corpus);
-    assert_eq!(corpus.len(), 440);
+    assert_eq!(corpus.len(), 505);
     let mut admitted = 0;
     let mut seed = 0x67cd_f829_302a_19e5u64;
     for bytes in corpus {
@@ -633,7 +633,7 @@ fn every_typed_part_setter_matches_an_exact_reference_sequence() {
         };
         let source = Source {
             kind: "custom".into(),
-            content: Some(exact("[-0,1e+3]")),
+            data: Some(exact("[-0,1e+3]")),
             ..Default::default()
         };
         let binding = Binding {
@@ -701,7 +701,7 @@ fn typed_namespace_batch_preserves_exact_bytes_and_is_atomic() {
         "s".into(),
         Source {
             kind: "custom".into(),
-            content: Some(exact("9007199254740993")),
+            data: Some(exact("9007199254740993")),
             ..Default::default()
         },
     )]);
@@ -736,7 +736,7 @@ fn typed_namespace_batch_preserves_exact_bytes_and_is_atomic() {
         ])
         .unwrap();
     assert!(document.validate().unwrap().conformant().is_some());
-    let expected = " {\n\"openbindings\":\"0.2.0\",\"operations\":{\"run\":{\"input\":true,\"x-number\":1e+003}},\"x-keep\": 1e+00 ,\"name\":\"Batch\",\"dependencies\":{\"d\":{\"operation\":\"run\"}},\"sources\":{\"s\":{\"kind\":\"custom\",\"content\":9007199254740993}},\"bindings\":{\"b\":{\"operation\":\"run\",\"source\":\"s\"}}} ";
+    let expected = " {\n\"openbindings\":\"0.2.0\",\"operations\":{\"run\":{\"input\":true,\"x-number\":1e+003}},\"x-keep\": 1e+00 ,\"name\":\"Batch\",\"dependencies\":{\"d\":{\"operation\":\"run\"}},\"sources\":{\"s\":{\"kind\":\"custom\",\"data\":9007199254740993}},\"bindings\":{\"b\":{\"operation\":\"run\",\"source\":\"s\"}}} ";
     assert_eq!(document.as_bytes(), expected.as_bytes());
     let before = document.as_bytes().to_vec();
     assert!(

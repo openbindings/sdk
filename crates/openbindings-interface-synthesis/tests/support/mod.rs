@@ -14,7 +14,7 @@ pub fn json(s: &str) -> JsonValue {
 pub fn source(s: Option<&str>) -> Source {
     Source {
         kind: KIND.into(),
-        content: s.map(json),
+        data: s.map(json),
         ..Default::default()
     }
 }
@@ -161,7 +161,7 @@ pub fn read_source(value: JsonRef<'_>) -> Source {
     Source {
         kind: value.get("kind").unwrap().as_str().unwrap().into(),
         description: optional(value, "description"),
-        content: value.get("content").map(|v| v.to_owned()),
+        data: value.get("content").map(|v| v.to_owned()),
         additional_fields: value
             .members()
             .unwrap()

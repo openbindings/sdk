@@ -48,7 +48,7 @@ def load():
             cases.append({'id':f"{file['path']}#/tests/{index}",'file':file['path'],'action':'validate-document','given':test,'expected':expected})
     for file in manifest['scenarioFiles']:
         data=read(CORPUS/file['path']); counted[file['path']]=len(data['scenarios'])
-        if data['format']!='openbindings.core-scenarios@3' or len(data['scenarios'])!=int(file['scenarios']): raise ValueError('Scenario format/count mismatch')
+        if data['format']!='openbindings.core-scenarios@4' or len(data['scenarios'])!=int(file['scenarios']): raise ValueError('Scenario format/count mismatch')
         for case in data['scenarios']: cases.append(dict(case,file=file['path']))
     actual=sorted(c['id'] for c in cases); expected=read(OUT/'inputs/blueprint/case-inventory.json')['ids']
     if actual!=expected or len(set(actual))!=len(actual): raise ValueError('Frozen case inventory mismatch')
@@ -73,7 +73,7 @@ def judge_value(expected,actual,features,profile):
     form={'result':expected} if isinstance(expected,str) else expected
     dependent=form.get('dependsOn',features); unsupported=lacking(dependent,profile)
     want=form['result']; result=actual['status']
-    if result=='no-contract': return want=='no-contract'
+    if result=='no-schema': return want=='no-schema'
     if result=='undefined': return want=='undefined'
     if result=='no-verdict':
         reason=actual.get('detail',{}).get('reason')
@@ -95,7 +95,7 @@ def judge(case,actual,profile=PROFILE):
     if action=='validate-operation-values':
         return len(actual['values'])==len(want['results']) and all(judge_value(e,a,want.get('dependsOn',[]),profile) for e,a in zip(want['results'],actual['values']))
     if action=='check-examples':
-        claims={'true':'satisfies','false':'fails','no-claim':'no-contract','external':'external','undefined':'undefined'}
+        claims={'true':'satisfies','false':'fails','no-claim':'no-schema','external':'external','undefined':'undefined'}
         expected={(k,s):v for k,example in want['examples'].items() for s,v in example.items()}
         observed={(a['example'],a['side']):a for a in actual['examples']}
         return len(observed)==len(actual['examples']) and expected.keys()==observed.keys() and all(judge_value(claims[e],observed[k],[],profile) for k,e in expected.items())
@@ -118,14 +118,14 @@ def controls():
             'reject_unexecuted':bool(reconcile(cases,[dict(r,executed=False) if i==0 else r for i,r in enumerate(valid)])),
             'exact_integer':exact_text(read_text('{"n":9007199254740993}'))=='{"n":9007199254740993}',
             'reject_wrong_verdict':not judge_value('satisfies',{'status':'fails'},[],PROFILE),
-            'reject_no_contract_for_undefined':not judge_value('undefined',{'status':'no-contract'},[],PROFILE),
-            'reject_no_verdict_for_absence':not judge_value('no-contract',{'status':'no-verdict','detail':{'reason':'resource-unavailable'}},[],PROFILE),
+            'reject_no_schema_for_undefined':not judge_value('undefined',{'status':'no-schema'},[],PROFILE),
+            'reject_no_verdict_for_absence':not judge_value('no-schema',{'status':'no-verdict','detail':{'reason':'resource-unavailable'}},[],PROFILE),
             'reject_undefined_for_external':not judge_value('external',{'status':'undefined','detail':{'code':'static-reference-defect','message':'established undefined result','location':None}},[],PROFILE),
             'reject_undefined_for_valid':not judge_value('satisfies',{'status':'undefined','detail':{'code':'static-reference-defect','message':'established undefined result','location':None}},[],PROFILE),
             'reject_obsolete_undefined_reason':not judge_value('undefined',{'status':'no-verdict','detail':{'reason':'undefined'}},[],PROFILE),
             'accept_proven_undefined':judge_value('undefined',{'status':'undefined','detail':{'code':'static-reference-defect','message':'established undefined result','location':None}},[],PROFILE),
             'reject_unsupported_misuse':not judge_value('satisfies',{'status':'no-verdict'},['exact-numbers'],PROFILE)}
-    for n in range(1,14):
+    for n in range(1,15):
         rule=f'OBI-{n:02}'; case=next(c for c in cases if rule in c['expected'].get('violates',[]))
         result={'id':case['id'],'executed':True,'outcome':'non-conformant','rules':{r:'violated' for r in case['expected']['violates']}}
         checks[rule+'_positive_control']=judge(case,result)

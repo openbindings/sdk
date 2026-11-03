@@ -224,9 +224,9 @@ impl ConformantBindingView {
             .get("deprecated")
             .map(|v| v.as_bool().expect("conformant boolean"))
     }
-    /// Borrow opaque content, preserving present null separately from absence.
-    pub fn content(&self) -> Option<JsonRef<'_>> {
-        self.view.content()
+    /// Borrow opaque data, preserving present null separately from absence.
+    pub fn data(&self) -> Option<JsonRef<'_>> {
+        self.view.data()
     }
 }
 impl ConformantSourceView {
@@ -234,9 +234,9 @@ impl ConformantSourceView {
     pub fn kind(&self) -> &str {
         text(self.value(), "kind").expect("conformant kind")
     }
-    /// Borrow opaque content, preserving present null separately from absence.
-    pub fn content(&self) -> Option<JsonRef<'_>> {
-        self.view.content()
+    /// Borrow opaque data, preserving present null separately from absence.
+    pub fn data(&self) -> Option<JsonRef<'_>> {
+        self.view.data()
     }
 }
 impl ConformantDependencyView {

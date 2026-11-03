@@ -115,6 +115,12 @@ def fixtures():
             expected=dict(status='conformant', finding_count=0), modes=['document'])
         rows[f'read-{count}'] = dict(document=compact(document),
             expected=dict(status='conformant', finding_count=0, reads=reads), modes=['read'])
+    for name, row in rows.items():
+        if name.startswith(('document-', 'read-')):
+            row['expected']['report'] = dict(
+                release='0.2.0', revision='c1419c9fc3ae5a00c2b83da710c11bf67dab7934',
+                conclusion='conformant', evidence={f'OBI-{n:02d}': 'met' for n in range(1, 15)},
+                findings=[], findings_truncated=False)
     rows['document-invalid'] = dict(document=compact(dict(openbindings='0.2.0', operations={
         'bad name': {'input': None, 'tags': 42},
         'other': {'aliases': ['same']}, 'third': {'aliases': ['same']}})),
@@ -126,9 +132,9 @@ def fixtures():
                     location=dict(pointer=pointer, byte_offset=offset, line=1, byte_column=offset + 1))
     fixed = 'value violates the fixed normative schema'
     rows['document-invalid']['expected']['report'] = dict(
-        release='0.2.0', revision='30416ef1ca626e58eb8c383a0c71422a68f9243f',
+        release='0.2.0', revision='c1419c9fc3ae5a00c2b83da710c11bf67dab7934',
         conclusion='non-conformant',
-        evidence={f'OBI-{rule:02d}': 'violated' if rule in (2, 4, 5, 10) else 'met' for rule in range(1, 14)},
+        evidence={f'OBI-{rule:02d}': 'violated' if rule in (2, 4, 5, 10) else 'met' for rule in range(1, 15)},
         findings=[
             finding('OBI-02', 'schema-mismatch', '/operations/bad name', 38, fixed),
             finding('OBI-02', 'schema-mismatch', '/operations/bad name/input', 58, fixed),

@@ -50,7 +50,7 @@ fn owned_input_preserves_opaque_exact_values_without_normalization() {
     let input = BindingInvocationInput::from_json(&original).unwrap();
     assert_eq!(input.source.kind, "private.Kind/v1");
     assert_eq!(
-        input.source.content.as_ref().unwrap().text(),
+        input.source.data.as_ref().unwrap().text(),
         r#"{"n":9007199254740993,"n":1e9999}"#
     );
     assert_eq!(
@@ -80,7 +80,7 @@ fn owned_input_preserves_opaque_exact_values_without_normalization() {
         json(&serde_wire).get("context").unwrap().text(),
         input.context.as_ref().unwrap().text()
     );
-    let retained = input.source.content.unwrap();
+    let retained = input.source.data.unwrap();
     drop(original);
     assert_eq!(retained.get("n").unwrap().text(), "9007199254740993");
 }
@@ -92,7 +92,7 @@ fn source_content_and_context_absence_survive_reencoding() {
             r#"{{"source":{{"kind":"x"}},"binding":{{}}{suffix}}}"#
         )))
         .unwrap();
-        assert!(input.source.content.is_none());
+        assert!(input.source.data.is_none());
         assert_eq!(input.context.is_some(), present);
         let encoded = input.to_json().unwrap();
         assert_eq!(encoded.get("context").is_some(), present);
@@ -486,14 +486,14 @@ fn diagnostics_and_debug_do_not_reveal_strings_values_or_field_names() {
     let source = Source {
         kind: SECRET.into(),
         description: Some(SECRET.into()),
-        content: Some(json(&format!(r#"{{"{SECRET}":"{SECRET}"}}"#))),
+        data: Some(json(&format!(r#"{{"{SECRET}":"{SECRET}"}}"#))),
         ..Source::default()
     };
     let mut binding = BindingValue {
         operation: Some(SECRET.into()),
         source: Some(SECRET.into()),
         description: Some(SECRET.into()),
-        content: source.content.clone(),
+        content: source.data.clone(),
         ..BindingValue::default()
     };
     binding

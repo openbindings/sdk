@@ -226,12 +226,12 @@ impl Serialize for Dependency {
 }
 
 #[derive(Clone, Default)]
-/// Editable source metadata and opaque kind-specific content. Core preserves content without acquiring resources or executing it.
+/// Editable source metadata and opaque kind-specific data. Core preserves data without acquiring resources or executing it.
 pub struct Source {
     /// Kind: the exact, opaque string that selects how this source and its bindings are read.
     pub kind: String,
-    /// Optional exact kind-specific content; explicit JSON null remains present.
-    pub content: Option<JsonValue>,
+    /// Optional exact kind-specific data; explicit JSON null remains present.
+    pub data: Option<JsonValue>,
     /// Optional human-facing source description.
     pub description: Option<String>,
     /// Extension and unknown members, retained verbatim; conformance determines whether each is allowed.
@@ -239,7 +239,7 @@ pub struct Source {
 }
 impl Serialize for Source {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        const RESERVED: &[&str] = &["kind", "content", "description"];
+        const RESERVED: &[&str] = &["kind", "data", "description"];
         for key in self.additional_fields.keys() {
             if RESERVED.contains(&key.as_str()) {
                 return Err(serde::ser::Error::custom(
@@ -249,8 +249,8 @@ impl Serialize for Source {
         }
         let mut map = serializer.serialize_map(None)?;
         map.serialize_entry("kind", &self.kind)?;
-        if let Some(value) = &self.content {
-            map.serialize_entry("content", value)?;
+        if let Some(value) = &self.data {
+            map.serialize_entry("data", value)?;
         }
         if let Some(value) = &self.description {
             map.serialize_entry("description", value)?;
@@ -263,14 +263,14 @@ impl Serialize for Source {
 }
 
 #[derive(Clone, Default)]
-/// Editable binding: an author-declared realization of an operation through a source. Core retains binding content and annotations; invocation and selection policy belong to the consumer.
+/// Editable binding: an author-declared realization of an operation through a source. Core retains binding data and annotations; invocation and selection policy belong to the consumer.
 pub struct Binding {
     /// Primary operation name referenced by this binding.
     pub operation: String,
     /// Key of the source through which this binding realizes its operation.
     pub source: String,
-    /// Optional exact source-kind-specific binding content.
-    pub content: Option<JsonValue>,
+    /// Optional exact source-kind-specific binding data.
+    pub data: Option<JsonValue>,
     /// Optional idempotence annotation; it does not cause retries or execution.
     pub idempotent: Option<bool>,
     /// Optional exact interoperable preference integer; core does not rank bindings.
@@ -287,7 +287,7 @@ impl Serialize for Binding {
         const RESERVED: &[&str] = &[
             "operation",
             "source",
-            "content",
+            "data",
             "idempotent",
             "preference",
             "description",
@@ -303,8 +303,8 @@ impl Serialize for Binding {
         let mut map = serializer.serialize_map(None)?;
         map.serialize_entry("operation", &self.operation)?;
         map.serialize_entry("source", &self.source)?;
-        if let Some(value) = &self.content {
-            map.serialize_entry("content", value)?;
+        if let Some(value) = &self.data {
+            map.serialize_entry("data", value)?;
         }
         if let Some(value) = &self.idempotent {
             map.serialize_entry("idempotent", value)?;
@@ -421,7 +421,7 @@ impl Part for Binding {
             &[
                 "operation",
                 "source",
-                "content",
+                "data",
                 "idempotent",
                 "preference",
                 "description",
@@ -435,7 +435,7 @@ impl Part for Source {
     fn check(&self, path: &[&str]) -> Result<(), EditError> {
         check_fields(
             &self.additional_fields,
-            &["kind", "content", "description"],
+            &["kind", "data", "description"],
             path,
         )
     }
@@ -457,18 +457,12 @@ mod tests {
 
     #[test]
     fn absence_null_and_unknown_survive() {
-        let value = JsonValue::parse(r#"{"openbindings":"0.2.0","operations":{"go":{"input":true,"examples":{"one":{"input":null}}}},"sources":{"x":{"kind":"custom","content":null}},"x-empty":[],"unknown":9007199254740993}"#).unwrap();
+        let value = JsonValue::parse(r#"{"openbindings":"0.2.0","operations":{"go":{"input":true,"examples":{"one":{"input":null}}}},"sources":{"x":{"kind":"custom","data":null}},"x-empty":[],"unknown":9007199254740993}"#).unwrap();
         let model = Document::from_json(value.clone());
         assert_eq!(value.semantic_eq(model.value()), Some(true));
         assert!(model.name().unwrap().is_none());
         assert_eq!(
-            model
-                .source("x")
-                .unwrap()
-                .unwrap()
-                .content()
-                .unwrap()
-                .kind(),
+            model.source("x").unwrap().unwrap().data().unwrap().kind(),
             crate::JsonKind::Null
         );
     }

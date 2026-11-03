@@ -9,7 +9,7 @@ export function inspectEditExampleCases(sdk, example) {
       "output":{"type":"integer"},
       "examples":{"large":{"output":900719925474099312345}}}},
     "sources":{"archive":{"kind":"https://example.test/archive",
-      "content":{"limit":900719925474099312345}}},
+      "data":{"limit":900719925474099312345}}},
     "bindings":{"native":{"operation":"read","source":"archive","preference":0}},
     "x-tokens":{"large":900719925474099312345,"negative":-0}
   }`;
@@ -46,7 +46,7 @@ export function inspectEditExampleCases(sdk, example) {
     try {
       for (const pointer of [
         "/x-tokens",
-        "/sources/archive/content",
+        "/sources/archive/data",
         "/operations/read/examples/large/output",
       ]) {
         const oldValue = original.at(pointer);

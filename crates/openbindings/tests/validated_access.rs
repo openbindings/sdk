@@ -10,7 +10,7 @@ fn proof(text: &str) -> Conformant<Document> {
 #[test]
 fn decoded_text_and_exact_tokens_survive_in_retained_conformant_views() {
     let document = proof(
-        r#"{"openbindings":"0.2.0","name":"\ud800\udc00","version":"\uffff","description":"\ud800\udc00","operations":{"run":{"description":"\ud800\udc00","tags":["\ud800\udc00","𝄞"],"aliases":["go"],"deprecated":false,"input":true,"output":false,"examples":{"e":{"description":"\ud800\udc00","input":null}}}},"sources":{"s":{"kind":"\ud800\udc00","description":"\uffff","content":null}},"bindings":{"b":{"operation":"run","source":"s","description":"\ud800\udc00","preference":0,"idempotent":false,"deprecated":false,"content":null}},"dependencies":{"d":{"operation":"run","kinds":["\uD800\uDC00"],"description":"\ud800\udc00"}},"schemas":{"z":false,"a":{}}}"#,
+        r#"{"openbindings":"0.2.0","name":"\ud800\udc00","version":"\uffff","description":"\ud800\udc00","operations":{"run":{"description":"\ud800\udc00","tags":["\ud800\udc00","𝄞"],"aliases":["go"],"deprecated":false,"input":true,"output":false,"examples":{"e":{"description":"\ud800\udc00","input":null}}}},"sources":{"s":{"kind":"\ud800\udc00","description":"\uffff","data":null}},"bindings":{"b":{"operation":"run","source":"s","description":"\ud800\udc00","preference":0,"idempotent":false,"deprecated":false,"data":null}},"dependencies":{"d":{"operation":"run","kinds":["\uD800\uDC00"],"description":"\ud800\udc00"}},"schemas":{"z":false,"a":{}}}"#,
     );
     assert_eq!(document.openbindings(), "0.2.0");
     let name = document.name().unwrap();
@@ -69,7 +69,7 @@ fn decoded_text_and_exact_tokens_survive_in_retained_conformant_views() {
     assert_eq!(binding.preference().unwrap().get(), 0);
     assert_eq!(binding.idempotent(), Some(false));
     assert_eq!(binding.deprecated(), Some(false));
-    for value in [binding.content(), source.content(), example.input()] {
+    for value in [binding.data(), source.data(), example.input()] {
         assert_eq!(value.unwrap().kind(), JsonKind::Null);
     }
     assert!(example.output().is_none());

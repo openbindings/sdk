@@ -20,7 +20,7 @@ values while re-encoding typed fields. Checked conversion of ordinary applicatio
 data refuses unsupported or inexact representations. Conversion cannot restore
 precision already lost by the application. Document conformance rejects an escaped
 unpaired surrogate in any member name or string value as OBI-01, including opaque
-content and embedded schemas. OBI-02 through OBI-13 then do not apply. Escaped
+content and embedded schemas. OBI-02 through OBI-14 then do not apply. Escaped
 surrogate pairs and noncharacters remain permitted. Draft inspection, caller
 values and supplied schema resources still retain unpaired UTF-16 units exactly,
 and so do the JSON Pointers that locate their nodes.

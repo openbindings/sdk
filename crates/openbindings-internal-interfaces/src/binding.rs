@@ -136,7 +136,7 @@ impl BindingValue {
         Ok(Binding {
             operation: operation.into(),
             source: source.into(),
-            content: self.content,
+            data: self.content,
             idempotent: self.idempotent,
             preference: self.preference,
             description: self.description,
@@ -151,7 +151,7 @@ impl From<&Binding> for BindingValue {
         Self {
             operation: Some(binding.operation.clone()),
             source: Some(binding.source.clone()),
-            content: binding.content.clone(),
+            content: binding.data.clone(),
             idempotent: binding.idempotent,
             preference: binding.preference,
             description: binding.description.clone(),

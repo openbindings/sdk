@@ -8,7 +8,7 @@ await sdk.initialize(
     new URL("../dist/wasm/openbindings_wasm_bg.wasm", import.meta.url),
   ),
 );
-const text = String.raw`{"openbindings":"0.2.0","name":"\ud800\udc00","version":"\uffff","description":"\ud800\udc00","schemas":{"t":true,"f":false,"o":{}},"operations":{"run":{"aliases":["go"],"description":"\ud800\udc00","tags":["\ud800\udc00"],"input":true,"output":false,"examples":{"e":{"description":"\ud800\udc00","input":null}}}},"sources":{"s":{"kind":"\ud800\udc00","description":"\ud800\udc00","content":null}},"dependencies":{"d":{"operation":"run","kinds":["\ud800\udc00"],"description":"\ud800\udc00"}},"bindings":{"b":{"source":"s","operation":"run","description":"\ud800\udc00"}}}`;
+const text = String.raw`{"openbindings":"0.2.0","name":"\ud800\udc00","version":"\uffff","description":"\ud800\udc00","schemas":{"t":true,"f":false,"o":{}},"operations":{"run":{"aliases":["go"],"description":"\ud800\udc00","tags":["\ud800\udc00"],"input":true,"output":false,"examples":{"e":{"description":"\ud800\udc00","input":null}}}},"sources":{"s":{"kind":"\ud800\udc00","description":"\ud800\udc00","data":null}},"dependencies":{"d":{"operation":"run","kinds":["\ud800\udc00"],"description":"\ud800\udc00"}},"bindings":{"b":{"source":"s","operation":"run","description":"\ud800\udc00"}}}`;
 
 test("Rust proof transfer is single-use and unavailable to parsed or forged handles", () => {
   const parsed = bridge.WasmDocument.parseBytes(new TextEncoder().encode(text));

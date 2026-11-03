@@ -1148,7 +1148,7 @@ fn binding_metadata(view: &BindingView) -> Result<String, JsValue> {
       "source":view.source().map_err(interpretation_error)?,
       "preference":view.preference().map_err(interpretation_error)?.map(|v|v.get()),
       "idempotent":view.idempotent().map_err(interpretation_error)?,"deprecated":view.deprecated().map_err(interpretation_error)?,
-      "has_content":view.content().is_some()}),
+      "has_data":view.data().is_some()}),
         &[(
             "description",
             text_token(view.description().map_err(interpretation_error)?),
@@ -1157,7 +1157,7 @@ fn binding_metadata(view: &BindingView) -> Result<String, JsValue> {
 }
 fn source_metadata(view: &SourceView) -> Result<String, JsValue> {
     Ok(exact_metadata(
-        json!({"key":view.key(),"has_content":view.content().is_some()}),
+        json!({"key":view.key(),"has_data":view.data().is_some()}),
         &[
             (
                 "description",
@@ -1220,8 +1220,8 @@ impl WasmBinding {
             value: self.view.value().to_owned(),
         }
     }
-    pub fn content(&self) -> Option<WasmJson> {
-        self.view.content().map(|value| WasmJson {
+    pub fn data(&self) -> Option<WasmJson> {
+        self.view.data().map(|value| WasmJson {
             value: value.to_owned(),
         })
     }
@@ -1252,8 +1252,8 @@ impl WasmSource {
             value: self.view.value().to_owned(),
         }
     }
-    pub fn content(&self) -> Option<WasmJson> {
-        self.view.content().map(|value| WasmJson {
+    pub fn data(&self) -> Option<WasmJson> {
+        self.view.data().map(|value| WasmJson {
             value: value.to_owned(),
         })
     }
