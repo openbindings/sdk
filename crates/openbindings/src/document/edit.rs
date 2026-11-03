@@ -1,6 +1,7 @@
 //! Atomic edits against the current exact source revision.
 use super::*;
 use crate::authoring::Part;
+use serde::Serialize;
 use std::{io::Write, ops::Range};
 
 /// The RFC 6901 pointer an edit addresses, borrowed from escaped text such as
@@ -575,10 +576,10 @@ impl Document {
     /// # Errors
     /// Returns an editing error without changing the document.
     pub fn set<'p>(
-        &mut self,
+        &self,
         pointer: impl Into<PointerRef<'p>>,
         value: &JsonValue,
-    ) -> Result<(), EditError> {
+    ) -> Result<Self, EditError> {
         self.edit(&[Edit::Set {
             pointer: pointer.into(),
             value,
@@ -589,12 +590,12 @@ impl Document {
     ///
     /// # Errors
     /// Returns an editing error without changing the document.
-    pub fn remove<'p>(&mut self, pointer: impl Into<PointerRef<'p>>) -> Result<(), EditError> {
+    pub fn remove<'p>(&self, pointer: impl Into<PointerRef<'p>>) -> Result<Self, EditError> {
         self.edit(&[Edit::Remove {
             pointer: pointer.into(),
         }])
     }
-    /// Commit a batch with one splice and one parse, under the admission limits the
+    /// Return a new snapshot with one splice and one parse, under the admission limits the
     /// document was admitted under ([`Self::limits`]).
     /// All paths refer to the pre-edit revision. Sibling insertions share a boundary
     /// in batch order. Removing adjacent siblings, up to every member of a container,
@@ -606,7 +607,7 @@ impl Document {
     /// Invalid paths, duplicates, overlap and admission failures leave the document
     /// unchanged. Known byte extents are preflighted; typed parts serialize once
     /// into a bounded writer that reserves all remaining known bytes before growing.
-    pub fn edit(&mut self, edits: &[Edit<'_>]) -> Result<(), EditError> {
+    pub fn edit(&self, edits: &[Edit<'_>]) -> Result<Self, EditError> {
         let limits = self.limits();
         if edits.len() > limits.max_nodes {
             return Err(backend::input_error(InputErrorKind::Limit, "node-limit", 0).into());
@@ -643,9 +644,9 @@ impl Document {
         }
         self.apply(&requests, limits)
     }
-    fn apply(&mut self, edits: &[Request<'_>], limits: JsonLimits) -> Result<(), EditError> {
+    fn apply(&self, edits: &[Request<'_>], limits: JsonLimits) -> Result<Self, EditError> {
         if edits.is_empty() {
-            return Ok(());
+            return Ok(self.clone());
         }
         if self.value().has_duplicate_names() {
             return Err(EditError::DuplicateMembers);
@@ -792,14 +793,13 @@ impl Document {
         if next.has_duplicate_names() {
             return Err(EditError::DuplicateMembers);
         }
-        *self = Self::admitted(next, limits);
-        Ok(())
+        Ok(Self::admitted(next, limits))
     }
     fn set_typed<T: Serialize + ?Sized>(
-        &mut self,
+        &self,
         pointer: &str,
         value: &T,
-    ) -> Result<(), EditError> {
+    ) -> Result<Self, EditError> {
         self.apply(
             &[Request {
                 pointer: pointer.into(),
@@ -808,12 +808,7 @@ impl Document {
             self.limits(),
         )
     }
-    fn set_part<T: Part>(
-        &mut self,
-        namespace: &str,
-        key: &str,
-        value: &T,
-    ) -> Result<(), EditError> {
+    fn set_part<T: Part>(&self, namespace: &str, key: &str, value: &T) -> Result<Self, EditError> {
         value.check(&[namespace, key])?;
         if self.value().get(namespace).is_some() {
             self.set_typed(&format!("/{namespace}/{}", escape(key)), value)
@@ -824,84 +819,84 @@ impl Document {
     /// Set the specification version declaration. Conformance is assessed separately.
     /// # Errors
     /// Returns an editing error without changing the document.
-    pub fn set_openbindings(&mut self, value: &str) -> Result<(), EditError> {
+    pub fn set_openbindings(&self, value: &str) -> Result<Self, EditError> {
         self.set_typed("/openbindings", value)
     }
     /// Set the interface name.
     /// # Errors
     /// Returns an editing error without changing the document.
-    pub fn set_name(&mut self, value: &str) -> Result<(), EditError> {
+    pub fn set_name(&self, value: &str) -> Result<Self, EditError> {
         self.set_typed("/name", value)
     }
     /// Set the interface version label.
     /// # Errors
     /// Returns an editing error without changing the document.
-    pub fn set_version(&mut self, value: &str) -> Result<(), EditError> {
+    pub fn set_version(&self, value: &str) -> Result<Self, EditError> {
         self.set_typed("/version", value)
     }
     /// Set the interface description.
     /// # Errors
     /// Returns an editing error without changing the document.
-    pub fn set_description(&mut self, value: &str) -> Result<(), EditError> {
+    pub fn set_description(&self, value: &str) -> Result<Self, EditError> {
         self.set_typed("/description", value)
     }
     /// Set an existing operation's description, escaping its key as an RFC 6901 token.
     /// # Errors
     /// Returns an editing error without changing the document.
-    pub fn set_operation_description(&mut self, key: &str, value: &str) -> Result<(), EditError> {
+    pub fn set_operation_description(&self, key: &str, value: &str) -> Result<Self, EditError> {
         self.set_typed(&format!("/operations/{}/description", escape(key)), value)
     }
     /// Set an existing operation's exact input schema. Validation is separate.
     /// # Errors
     /// Returns an editing error without changing the document.
-    pub fn set_operation_input(&mut self, key: &str, value: &JsonValue) -> Result<(), EditError> {
+    pub fn set_operation_input(&self, key: &str, value: &JsonValue) -> Result<Self, EditError> {
         self.set(&format!("/operations/{}/input", escape(key)), value)
     }
     /// Set an existing operation's exact output schema. Validation is separate.
     /// # Errors
     /// Returns an editing error without changing the document.
-    pub fn set_operation_output(&mut self, key: &str, value: &JsonValue) -> Result<(), EditError> {
+    pub fn set_operation_output(&self, key: &str, value: &JsonValue) -> Result<Self, EditError> {
         self.set(&format!("/operations/{}/output", escape(key)), value)
     }
     /// Set one whole operation, creating its namespace if absent.
     /// # Errors
     /// Returns an editing error, including a typed part's field collision, without changing the document.
-    pub fn set_operation(&mut self, key: &str, value: &Operation) -> Result<(), EditError> {
+    pub fn set_operation(&self, key: &str, value: &Operation) -> Result<Self, EditError> {
         self.set_part("operations", key, value)
     }
-    /// Commit a complete operations map in one splice and parse, for bulk synthesis.
+    /// Return a new snapshot with a complete operations map in one splice and parse, for bulk synthesis.
     /// # Errors
     /// Returns an editing error, including a typed part's field collision, without changing the document.
-    pub fn set_operations(&mut self, value: &BTreeMap<String, Operation>) -> Result<(), EditError> {
+    pub fn set_operations(&self, value: &BTreeMap<String, Operation>) -> Result<Self, EditError> {
         self.edit(&[Edit::SetOperations { value }])
     }
     /// Set one whole binding, creating its namespace if absent.
     /// # Errors
     /// Returns an editing error, including a typed part's field collision, without changing the document.
-    pub fn set_binding(&mut self, key: &str, value: &Binding) -> Result<(), EditError> {
+    pub fn set_binding(&self, key: &str, value: &Binding) -> Result<Self, EditError> {
         self.set_part("bindings", key, value)
     }
     /// Set one whole source, creating its namespace if absent.
     /// # Errors
     /// Returns an editing error, including a typed part's field collision, without changing the document.
-    pub fn set_source(&mut self, key: &str, value: &Source) -> Result<(), EditError> {
+    pub fn set_source(&self, key: &str, value: &Source) -> Result<Self, EditError> {
         self.set_part("sources", key, value)
     }
     /// Set one whole dependency, creating its namespace if absent.
     /// # Errors
     /// Returns an editing error, including a typed part's field collision, without changing the document.
-    pub fn set_dependency(&mut self, key: &str, value: &Dependency) -> Result<(), EditError> {
+    pub fn set_dependency(&self, key: &str, value: &Dependency) -> Result<Self, EditError> {
         self.set_part("dependencies", key, value)
     }
     /// Set an example on an existing operation, creating its examples map if absent.
     /// # Errors
     /// Returns an editing error, including a typed part's field collision, without changing the document.
     pub fn set_example(
-        &mut self,
+        &self,
         operation: &str,
         key: &str,
         value: &Example,
-    ) -> Result<(), EditError> {
+    ) -> Result<Self, EditError> {
         value.check(&["operations", operation, "examples", key])?;
         let namespace = format!("/operations/{}/examples", escape(operation));
         if self.value().at(&namespace).is_some() {
@@ -915,8 +910,8 @@ impl Document {
 macro_rules! set_namespace {
     ($method:ident, $field:literal, $part:ty, $variant:ident) => {
         impl Document {
-            #[doc = concat!("Commit a complete `", $field, "` map in one splice and parse.\n\n# Errors\nReturns an editing error, including a typed part's field collision, without changing the document.")]
-            pub fn $method(&mut self, value: &BTreeMap<String, $part>) -> Result<(), EditError> {
+            #[doc = concat!("Return a new snapshot with a complete `", $field, "` map in one splice and parse.\n\n# Errors\nReturns an editing error, including a typed part's field collision, without changing the document.")]
+            pub fn $method(&self, value: &BTreeMap<String, $part>) -> Result<Self, EditError> {
                 self.edit(&[Edit::$variant { value }])
             }
         }
@@ -949,7 +944,7 @@ mod tests {
                 panic!("preflight must refuse");
             }
         }
-        let mut document = Document::new();
+        let document = Document::new();
         let original = document.as_bytes().to_vec();
         let witness = Witness(Cell::new(false));
         let error = document
@@ -996,7 +991,7 @@ mod tests {
                 ..Default::default()
             },
         ] {
-            let mut doc = Document::new();
+            let doc = Document::new();
             let before = doc.as_bytes().to_vec();
             let value = JsonValue::parse("[[[1]]]").unwrap();
             let error = doc
@@ -1048,7 +1043,7 @@ mod tests {
                 })
                 .collect();
             PLANNING_WORK.with(|work| work.set((0, 0, 0)));
-            document.edit(&edits).unwrap();
+            document = document.edit(&edits).unwrap();
             assert_eq!(PLANNING_WORK.with(Cell::get), (1, 1000, 500));
             let remaining = items
                 .iter()
@@ -1089,7 +1084,7 @@ mod tests {
             fields: Cell::new(0),
         };
         let mut document = Document::new();
-        document.set_typed("/x", &witness).unwrap();
+        document = document.set_typed("/x", &witness).unwrap();
         assert_eq!(witness.calls.get(), 1);
         let before = document.as_bytes().to_vec();
         witness.calls.set(0);

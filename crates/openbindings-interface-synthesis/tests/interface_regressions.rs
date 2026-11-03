@@ -145,8 +145,8 @@ async fn dependency_attribution_is_optional_and_many_to_one() {
     let input = source(None);
     let mut output = candidate(&input);
     let mut draft = output.document.clone();
-    draft.set_operation("event", &Default::default()).unwrap();
-    draft
+    draft = draft.set_operation("event", &Default::default()).unwrap();
+    draft = draft
         .set_dependency(
             "consume",
             &openbindings::Dependency {

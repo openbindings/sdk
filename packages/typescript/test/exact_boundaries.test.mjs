@@ -92,7 +92,7 @@ test("raw member cursor preserves source order, duplicates, escaped/unpaired nam
 
 test("member/element cursors preserve the first terminal reason for every closing order", () => {
   const baseline = testing.liveStorageOwners();
-  for (const source of ["{}", "[]"]) {
+  for (let source of ["{}", "[]"]) {
     const root = exact(source),
       iterator = source === "{}" ? root.members() : root.elements();
     root.dispose();
@@ -115,7 +115,7 @@ test("member/element cursors preserve the first terminal reason for every closin
       if (terminal === "return") assert.equal(iterator.next().done, true);
       else disposed(() => iterator.next());
     }
-  for (const source of ["null", "1", "false", '"x"']) {
+  for (let source of ["null", "1", "false", '"x"']) {
     const root = exact(source);
     assert.equal(root.members(), undefined);
     assert.equal(root.elements(), undefined);
@@ -219,21 +219,45 @@ test("document edits and prototype-sensitive names preserve exact unrelated valu
   // Edits operate directly on exact documents.
   const original = parsed(documentText),
     originalValue = original.value();
-  const document = original.retain();
+  let document = original.retain();
   original.dispose();
   try {
-    document.setDescription("after");
-    document.setOperation("temporary", { input: { type: "integer" } });
-    document.set("/operations/__proto__/tags", ["reviewed"]);
-    document.set("/operations/__proto__/tags", []);
-    document.set("/operations/__proto__/aliases/-", "another");
-    document.remove("/operations/__proto__/aliases/1");
-    document.set("/dependencies/__proto__/kinds/-", "x");
-    document.remove("/dependencies/__proto__/kinds/0");
+    document = replaceDocument(document, document.setDescription("after"));
+    document = replaceDocument(
+      document,
+      document.setOperation("temporary", { input: { type: "integer" } }),
+    );
+    document = replaceDocument(
+      document,
+      document.set("/operations/__proto__/tags", ["reviewed"]),
+    );
+    document = replaceDocument(
+      document,
+      document.set("/operations/__proto__/tags", []),
+    );
+    document = replaceDocument(
+      document,
+      document.set("/operations/__proto__/aliases/-", "another"),
+    );
+    document = replaceDocument(
+      document,
+      document.remove("/operations/__proto__/aliases/1"),
+    );
+    document = replaceDocument(
+      document,
+      document.set("/dependencies/__proto__/kinds/-", "x"),
+    );
+    document = replaceDocument(
+      document,
+      document.remove("/dependencies/__proto__/kinds/0"),
+    );
     const found = document.resolveOperation("temporary");
     assert.equal(found.status, "found");
     found.operation.dispose();
-    document.remove("/operations/temporary");
+    document = replaceDocument(
+      document,
+      document.remove("/operations/temporary"),
+    );
     const newValue = document.value(),
       cursor = originalValue.members();
     try {
@@ -270,7 +294,7 @@ test("document edits and prototype-sensitive names preserve exact unrelated valu
 test("edits retain removed leaves and never adopt external owners", () => {
   // Every acquired exact value owns its revision independently.
   const baseline = testing.liveStorageOwners();
-  const source = parsed(
+  let source = parsed(
     '{"openbindings":"0.2.0","operations":{"run":{"input":true}},"schemas":{"kept":9007199254740993}}',
   );
   const root = source.value(),
@@ -278,8 +302,8 @@ test("edits retain removed leaves and never adopt external owners", () => {
     retained = removed.retain(),
     external = exact("0.29000000000000001");
   root.dispose();
-  source.remove("/schemas/kept");
-  source.setOperationInput("run", external);
+  source = replaceDocument(source, source.remove("/schemas/kept"));
+  source = replaceDocument(source, source.setOperationInput("run", external));
   const branch = source.retain();
   source.dispose();
   try {
@@ -306,14 +330,14 @@ test("edits retain removed leaves and never adopt external owners", () => {
 
 test("malformed documents stay inspectable and repairable independently of conformance", () => {
   // Typed read errors address current bytes; duplicates refuse editing.
-  const source = parsed(
+  let source = parsed(
     '{"openbindings":"0.2.0","operations":{},"description":17}',
   );
   assert.throws(
     () => source.description,
     (e) => e.code === "interpretation" && e.location.pointer === "/description",
   );
-  source.setDescription("repaired");
+  source = replaceDocument(source, source.setDescription("repaired"));
   const proof = source.validate();
   assert.equal(proof.status, "conformant");
   proof.document.dispose();
@@ -322,12 +346,12 @@ test("malformed documents stay inspectable and repairable independently of confo
     '{"openbindings":"0.2.0","operations":{"\\ud800":{}}}',
     '{"openbindings":"0.2.0"}',
   ]) {
-    const document = parsed(text);
+    let document = parsed(text);
     assert.equal(document.validate().status, "report");
     if (!text.includes("operations"))
       assert.throws(() => document.operations, sdk.SdkError);
     assert.deepEqual(document.toBytes(), new TextEncoder().encode(text));
-    document.setOperations({});
+    document = replaceDocument(document, document.setOperations({}));
     const checked = document.validate();
     assert.equal(checked.status, "conformant");
     checked.document.dispose();
@@ -347,10 +371,13 @@ test("malformed documents stay inspectable and repairable independently of confo
     '{"openbindings":"0.2.0","operations":{"run":{"input":null}},"unexpected":{"value":9007199254740993}}',
     '{"openbindings":"0.2.0","operations":{"run":{"input":null}},"unexpected":{"\\ud800":9007199254740993}}',
   ]) {
-    const document = parsed(text),
+    let document = parsed(text),
       held = document.retain();
     document.dispose();
-    held.setDescription("still a broken document");
+    held = replaceDocument(
+      held,
+      held.setDescription("still a broken document"),
+    );
     assert.equal(held.validate().report.conclusion, "non-conformant");
     held.dispose();
   }
@@ -358,7 +385,7 @@ test("malformed documents stay inspectable and repairable independently of confo
 
 test("failed edit encoding and native commits release temporary state", () => {
   // Failure leaves the document unchanged and releases temporary owners.
-  const source = parsed(documentText),
+  let source = parsed(documentText),
     baseline = testing.liveStorageOwners(),
     before = source.toBytes();
   const original = bridge.WasmDocument.prototype.editEncoded;
@@ -391,7 +418,7 @@ test("failed edit encoding and native commits release temporary state", () => {
 });
 
 test("new metadata is narrow/frozen/lexical; exact views retain after document release", () => {
-  const source = parsed(documentText);
+  let source = parsed(documentText);
   const binding = source.binding("constructor"),
     sourceView = source.source("toString"),
     dependency = source.dependency("__proto__");
@@ -454,7 +481,7 @@ test("new metadata is narrow/frozen/lexical; exact views retain after document r
 });
 
 test("keyed metadata checks selected rows and avoids operation namespace interpretation", () => {
-  const source = parsed(
+  let source = parsed(
     '{"openbindings":"0.2.0","operations":{"broken":{"aliases":[17]}},"sources":{"good":{"kind":"k"},"bad":{"kind":"k","description":17}},"bindings":{"good":{"operation":"absent","source":"absent"}},"dependencies":{"good":{"operation":"absent"},"bad":{"operation":"x","kinds":[17]}}}',
   );
   try {
@@ -512,7 +539,7 @@ test("keyed metadata checks selected rows and avoids operation namespace interpr
 // JavaScript copy of its UTF-8; each entry point admits it exactly as it
 // admits those bytes.
 test("text and its UTF-8 bytes are admitted alike by every exact entry point", () => {
-  const document = parsed(
+  let document = parsed(
     '{"openbindings":"0.2.0","operations":{"run":{"input":{"type":"string"}}}}',
   );
   const prepared = prepareInput(document, "run");
@@ -620,3 +647,9 @@ console.log(JSON.stringify({
   assert(native.unpaired.filter(Boolean).length > 500);
   assert(native.unpaired.filter((unpaired) => !unpaired).length > 500);
 });
+
+// Test fixture cursor: keep the new immutable snapshot and release its predecessor.
+function replaceDocument(previous, next) {
+  previous.dispose();
+  return next;
+}

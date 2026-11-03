@@ -77,7 +77,7 @@ projects too: `ESNext.Disposable` types `using`, and the declarations use web
 platform types that `DOM` declares, such as `Response`, `URL`, `AbortSignal` and
 `WebAssembly`. An older compiler minimum has not been qualified.
 
-`Document.parse` retains an inspectable, editable document. `validate()` returns a
+`Document.parse` retains an inspectable, immutable document. `validate()` returns a
 `DocumentValidation`, as Rust's `validate()` does: a `conformant` branch carrying a
 `ConformantDocument`, or a version refusal or conformance report.
 `validateDocument(bytes)` returns only the plain `DocumentReport`, with no proof
@@ -145,7 +145,7 @@ undefined opaque values, bigint, cycles, sparse arrays and accessors are refused
 
 Edit a `Document` through `set(pointer, value)`, `remove(pointer)` or an atomic
 `edit([{ op: "set", pointer, value }, { op: "remove", pointer }])` batch. Paths use
-RFC 6901 and address the revision before the batch. A path may hold an unpaired
+RFC 6901 and address the revision before the batch. Each edit returns a new `Document`; the original stays unchanged. Dispose each acquired owner independently. A path may hold an unpaired
 UTF-16 unit, so a finding's pointer addresses the member it reports. A batch crosses the bridge
 once, including nested exact values, splices once and reads the result once. `parseJson` values
 keep exact decimal spellings. Untouched bytes, formatting and member order remain
@@ -161,7 +161,7 @@ The other namespaces have corresponding map setters. To construct several namesp
 with one bridge call, splice and parse, include typed maps in the same batch:
 
 ```typescript
-document.edit([
+using changed = document.edit([
   { op: "set-operations", value: { run: { input: true } } },
   { op: "set-dependencies", value: { dep: { operation: "run" } } },
   { op: "set-sources", value: { local: { kind: "custom" } } },
@@ -182,7 +182,7 @@ The [inspection/editing example](examples/inspect-edit.ts) demonstrates both poi
 edits and typed reads without an intermediate object projection.
 
 `ConformantDocument` is a separate class with infallible reads and no setters.
-`asDocument()` creates an independent editable owner. `intoDocument()` consumes the
+`asDocument()` creates an independent immutable document owner. `intoDocument()` consumes the
 proof: every alias of that proof becomes disposed and later reads fail lifecycle
 checks. Independently retained proofs and views keep their certified revision.
 `toBytes()` copies the current exact bytes. Dispose every acquired owner.

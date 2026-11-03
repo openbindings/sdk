@@ -35,7 +35,7 @@ fn doc(schema: &str) -> Document {
     ))
     .unwrap()
 }
-fn conformant(document: &Document) -> Conformant<Document> {
+fn conformant(document: &Document) -> ConformantDocument {
     document
         .validate()
         .unwrap()
@@ -44,7 +44,7 @@ fn conformant(document: &Document) -> Conformant<Document> {
 }
 /// Prepare the input contract of operation `op` with no supplied resources.
 fn prepare_op(
-    document: &Conformant<Document>,
+    document: &ConformantDocument,
     evaluator: &dyn SchemaEvaluator,
 ) -> Result<PreparedValueContract, NoVerdict> {
     document

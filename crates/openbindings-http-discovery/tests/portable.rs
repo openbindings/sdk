@@ -298,12 +298,7 @@ async fn complete_bad_body_and_version_priority_survive_with_metadata() {
         panic!("expected found")
     };
     assert_eq!(
-        document
-            .as_document()
-            .validate()
-            .unwrap()
-            .report()
-            .conclusion,
+        document.document().validate().unwrap().report().conclusion,
         Conformance::Conformant
     );
     let (r, _) = get(
@@ -376,7 +371,7 @@ async fn a_raised_body_limit_validates_bodies_past_the_default_byte_limit() {
         panic!("expected a conformant document, got {:?}", r.outcome)
     };
     assert_eq!(
-        document.as_document().limits(),
+        document.document().limits(),
         openbindings::JsonLimits {
             max_bytes: default.max_bytes + 1,
             max_depth: usize::MAX,
@@ -392,7 +387,7 @@ async fn a_raised_body_limit_validates_bodies_past_the_default_byte_limit() {
         panic!("expected a conformant document, got {:?}", r.outcome)
     };
     assert_eq!(
-        document.as_document().limits(),
+        document.document().limits(),
         openbindings::JsonLimits {
             max_depth: usize::MAX,
             ..default

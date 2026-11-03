@@ -608,7 +608,7 @@ async fn every_admitted_interaction_can_be_inspected_synthesized_and_invoked() {
 
 // Materialize the interface's by-value request through its existing exact carrier API.
 fn invocation_input(
-    document: &openbindings::Conformant<openbindings::Document>,
+    document: &openbindings::ConformantDocument,
     key: &str,
 ) -> BindingInvocationInput {
     let binding = document.binding(key).unwrap();

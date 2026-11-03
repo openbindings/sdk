@@ -30,7 +30,7 @@ const parsed = (result) => {
 // Every rule inconclusive, each finding an unlocated input-limit with `message`.
 const undetermined = (report, message) => {
   assert.equal(report.conclusion, "undetermined");
-  assert.equal(report.findings.length, 13);
+  assert.equal(report.findings.length, 14);
   for (const finding of report.findings) {
     assert.equal(finding.code, "input-limit");
     assert.equal(finding.location, null);
@@ -150,18 +150,24 @@ test("edits on a document admitted with raised limits parse under them, and ever
   const large = parsed(
     sdk.parseJson(`"${"a".repeat(DEFAULT_BYTES)}"`, { limits }),
   );
-  const grown = parsed(sdk.Document.parse(empty, { limits }));
-  grown.set("/x-fill", large);
+  let grown = parsed(sdk.Document.parse(empty, { limits }));
+  grown = replaceDocument(grown, grown.set("/x-fill", large));
   assert.ok(grown.toBytes().length > DEFAULT_BYTES);
-  grown.edit([{ op: "set", pointer: "/x-other", value: { n: 1 } }]);
-  grown.setDescription("d".repeat(512));
+  grown = replaceDocument(
+    grown,
+    grown.edit([{ op: "set", pointer: "/x-other", value: { n: 1 } }]),
+  );
+  grown = replaceDocument(grown, grown.setDescription("d".repeat(512)));
   const validation = grown.validate();
   assert.equal(validation.status, "conformant");
   assert.deepEqual(validation.document.limits, grown.limits);
   validation.document.dispose();
   // An ordinary value past the default bytes encodes for this document.
-  grown.remove("/x-fill");
-  grown.setDescription("e".repeat(DEFAULT_BYTES));
+  grown = replaceDocument(grown, grown.remove("/x-fill"));
+  grown = replaceDocument(
+    grown,
+    grown.setDescription("e".repeat(DEFAULT_BYTES)),
+  );
   assert.ok(grown.toBytes().length > DEFAULT_BYTES);
   // A document parsed with the defaults refuses each of them, by every route,
   // with Rust's edit refusal.
@@ -190,17 +196,24 @@ test("edits on a document admitted with raised limits parse under them, and ever
 test("edit limits apply to what the edit writes, as in Rust, not to the edit's own structure", () => {
   // A document admitted at 4 levels holds a 3-level value at a top-level
   // member, whichever route writes it; one level more refuses.
-  const shallow = parsed(
-    sdk.Document.parse(empty, { limits: { maxDepth: 4 } }),
-  );
+  let shallow = parsed(sdk.Document.parse(empty, { limits: { maxDepth: 4 } }));
   const three = parsed(sdk.parseJson("[[[1]]]"));
-  shallow.set("/x-a", three);
-  shallow.remove("/x-a");
-  shallow.set("/x-a", [[[1]]]);
-  shallow.remove("/x-a");
-  shallow.edit([{ op: "set", pointer: "/x-a", value: three }]);
-  shallow.edit([{ op: "set", pointer: "/x-a", value: [[[1]]] }]);
-  shallow.setOperation("o", { input: { type: "string" } });
+  shallow = replaceDocument(shallow, shallow.set("/x-a", three));
+  shallow = replaceDocument(shallow, shallow.remove("/x-a"));
+  shallow = replaceDocument(shallow, shallow.set("/x-a", [[[1]]]));
+  shallow = replaceDocument(shallow, shallow.remove("/x-a"));
+  shallow = replaceDocument(
+    shallow,
+    shallow.edit([{ op: "set", pointer: "/x-a", value: three }]),
+  );
+  shallow = replaceDocument(
+    shallow,
+    shallow.edit([{ op: "set", pointer: "/x-a", value: [[[1]]] }]),
+  );
+  shallow = replaceDocument(
+    shallow,
+    shallow.setOperation("o", { input: { type: "string" } }),
+  );
   const nesting = editRefusal("nesting", "max_depth", "maxDepth");
   refusedEdit(() => shallow.set("/x-b", [[[[1]]]]), "depth-limit", nesting);
   // Values deeper than the limit on their own refuse before crossing the
@@ -217,12 +230,15 @@ test("edit limits apply to what the edit writes, as in Rust, not to the edit's o
     nesting,
   );
   // A document admitted at 7 nodes takes one more member and value.
-  const few = parsed(sdk.Document.parse(empty, { limits: { maxNodes: 7 } }));
-  few.set("/x-a", 1);
-  few.remove("/x-a");
-  few.set("/x-a", parsed(sdk.parseJson("1")));
-  few.remove("/x-a");
-  few.edit([{ op: "set", pointer: "/x-a", value: 1 }]);
+  let few = parsed(sdk.Document.parse(empty, { limits: { maxNodes: 7 } }));
+  few = replaceDocument(few, few.set("/x-a", 1));
+  few = replaceDocument(few, few.remove("/x-a"));
+  few = replaceDocument(few, few.set("/x-a", parsed(sdk.parseJson("1"))));
+  few = replaceDocument(few, few.remove("/x-a"));
+  few = replaceDocument(
+    few,
+    few.edit([{ op: "set", pointer: "/x-a", value: 1 }]),
+  );
   refusedEdit(
     () => few.set("/x-b", 1),
     "node-limit",
@@ -230,10 +246,10 @@ test("edit limits apply to what the edit writes, as in Rust, not to the edit's o
   );
   // A document admitted at its own size takes a same-size replacement.
   const exact = '{"openbindings":"0.2.0","operations":{},"x-a":"abc"}';
-  const sized = parsed(
+  let sized = parsed(
     sdk.Document.parse(exact, { limits: { maxBytes: exact.length } }),
   );
-  sized.set("/x-a", "xyz");
+  sized = replaceDocument(sized, sized.set("/x-a", "xyz"));
   refusedEdit(
     () => sized.set("/x-a", "wxyz"),
     "byte-limit",
@@ -243,7 +259,7 @@ test("edit limits apply to what the edit writes, as in Rust, not to the edit's o
 });
 
 test("edit rows hold only their op's members, before any limit applies", () => {
-  const tight = parsed(
+  let tight = parsed(
     sdk.Document.parse(empty, {
       limits: { maxBytes: 100, maxNodes: 20, maxDepth: 5 },
     }),
@@ -273,8 +289,14 @@ test("edit rows hold only their op's members, before any limit applies", () => {
   malformed({ op: "set", pointer: 7, value: 1 }, "invalid-pointer");
   malformed({ op: "remove" }, "invalid-pointer");
   assert.equal(new TextDecoder().decode(tight.toBytes()), empty);
-  tight.edit([{ op: "set", pointer: "/x-a", value: 1 }]);
-  tight.edit([{ op: "remove", pointer: "/x-a" }]);
+  tight = replaceDocument(
+    tight,
+    tight.edit([{ op: "set", pointer: "/x-a", value: 1 }]),
+  );
+  tight = replaceDocument(
+    tight,
+    tight.edit([{ op: "remove", pointer: "/x-a" }]),
+  );
   assert.equal(new TextDecoder().decode(tight.toBytes()), empty);
   tight.dispose();
 });
@@ -356,9 +378,9 @@ test("a document reports the limits it keeps", () => {
     maxNodes: 1_000_000,
     maxDepth: 10_000,
   };
-  const created = sdk.Document.create();
+  let created = sdk.Document.create();
   assert.deepEqual(created.limits, defaults);
-  created.setName("kept");
+  created = replaceDocument(created, created.setName("kept"));
   assert.deepEqual(created.limits, defaults);
   created.dispose();
   const parsedDefault = parsed(sdk.Document.parse(empty));
@@ -390,3 +412,9 @@ test("ExactJson.from refuses an ordinary value past the nesting limit with a Ran
         "The ordinary value exceeds the admitted JSON limits; parse it with parseJson and larger limits.",
   );
 });
+
+// Test fixture cursor: keep the new immutable snapshot and release its predecessor.
+function replaceDocument(previous, next) {
+  previous.dispose();
+  return next;
+}

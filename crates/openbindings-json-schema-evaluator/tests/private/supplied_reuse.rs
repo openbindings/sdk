@@ -122,7 +122,7 @@ fn shared_and_freshly_admitted_resources_project_identically() {
         let request = request(&input, &resources);
         let (shared, _) = space(&request, Vec::new()).unwrap();
         let fresh = embedding::SchemaSpace::new(
-            embedding::RawDocument::new(request.document().as_document().value().clone()),
+            embedding::RawDocument::new(request.document().document().value().clone()),
             embedding::Supplied::new(request.supplied_resources().iter().map(|r| {
                 embedding::ProjectedResource {
                     uri: r.uri.clone(),

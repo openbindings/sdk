@@ -15,7 +15,7 @@ fn resources(uri: &str, schema: &str) -> ResourceSet {
     }])
     .unwrap()
 }
-fn proof() -> Conformant<Document> {
+fn proof() -> ConformantDocument {
     Document::parse(format!(
         r#"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{{"$ref":"{ITEM}"}}}},"other":{{"input":{{"$ref":"{OTHER}"}}}}}}}}"#
     ))

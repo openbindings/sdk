@@ -1352,7 +1352,7 @@ export type Edit =
     };
 let adoptDocument: (raw: wasm.WasmDocument) => Document;
 const documentToken = Symbol("document owner");
-/** One exact, editable OBI. Reads may refuse malformed typed fields. Clones, views and proofs retain their revision after editing. */
+/** One exact, immutable OBI snapshot. Reads may refuse malformed typed fields. Edits return a new snapshot; owners, views and proofs keep their original revision. */
 export class Document extends DocumentReads {
   private constructor(raw: wasm.WasmDocument, token: symbol) {
     if (token !== documentToken)
@@ -1391,7 +1391,7 @@ export class Document extends DocumentReads {
     requireReady();
     return adoptDocument(wasm.WasmDocument.create());
   }
-  /** Retain a separate editable owner sharing this revision until either owner is edited. */
+  /** Retain a separate owner sharing this immutable revision. */
   retain(): Document {
     return adoptDocument(handle<wasm.WasmDocument>(this).retain());
   }
@@ -1424,26 +1424,28 @@ export class Document extends DocumentReads {
       selection.free();
     }
   }
-  /** Assess all rules; the conformant branch owns a new ConformantDocument. The original owner stays editable. Other branches retain evidence or a version refusal. */
+  /** Assess all rules; the conformant branch owns a new ConformantDocument. The original owner keeps its revision. Other branches retain evidence or a version refusal. */
   validate(): DocumentValidation {
     return assessDocument(this);
   }
-  #commit(call: (raw: wasm.WasmDocument) => void): void {
-    const raw = editableRaw(this);
+  #commit(call: (raw: wasm.WasmDocument) => void): Document {
+    editableRaw(this);
+    const next = this.retain();
     try {
-      sdkCall(() => call(raw));
+      sdkCall(() => call(editableRaw(next)));
     } catch (error) {
+      next.dispose();
       if (error instanceof SdkError && error.code !== "disposed-handle")
         throw new EditError(error.code, error.message);
       throw error;
     }
-    this.invalidateMetadata();
+    return next;
   }
   #encoded(
     value: unknown,
     context?: AuthorContext,
     destination?: { namespace: string; key: string },
-  ): void {
+  ): Document {
     handle(this);
     const exact: EditEncoding = {
       chunks: [],
@@ -1468,7 +1470,7 @@ export class Document extends DocumentReads {
           Math.min(exact.envelopeBytes, 0xffffffff),
           Math.min(exact.envelopeNodes, 0xffffffff),
         ]);
-    this.#commit((raw) => {
+    return this.#commit((raw) => {
       const result = raw.editEncoded(
         exact.chunks,
         new Uint32Array(exact.indices),
@@ -1488,61 +1490,61 @@ export class Document extends DocumentReads {
     });
   }
   /** Atomically apply pointer edits and typed namespace replacements in request order at shared insertion boundaries, with one bridge call including exact inputs. Untouched bytes stay exact. Invalid paths, duplicates, overlaps and admission limits throw EditError and leave the document unchanged. */
-  edit(edits: readonly Edit[]): void {
+  edit(edits: readonly Edit[]): Document {
     handle(this);
     editableRaw(this);
-    this.#encoded(edits, { origins: new WeakMap(), editBatch: true });
+    return this.#encoded(edits, { origins: new WeakMap(), editBatch: true });
   }
   /** Replace or insert a value at an RFC 6901 pointer. A segment may hold an unpaired UTF-16 unit, so a finding's pointer addresses the member it reports. Exact owners are borrowed; ordinary values are checked without invoking getters/toJSON. */
-  set(pointer: string, value: JsonInput): void {
+  set(pointer: string, value: JsonInput): Document {
     // Only a pointer holding an unpaired unit needs the batch route, whose JSON
     // escapes keep it exact across the bridge.
     if (isExact(value) && wellFormed(pointer))
-      this.#commit((raw) => raw.set(pointer, jsonRaw(value)));
-    else this.edit([{ op: "set", pointer, value }]);
+      return this.#commit((raw) => raw.set(pointer, jsonRaw(value)));
+    else return this.edit([{ op: "set", pointer, value }]);
   }
   /** Remove an existing member/array element at an RFC 6901 pointer, which may hold an unpaired UTF-16 unit as a finding's can. Throws EditError on refusal; removing the root is not supported. */
-  remove(pointer: string): void {
-    if (wellFormed(pointer)) this.#commit((raw) => raw.remove(pointer));
-    else this.edit([{ op: "remove", pointer }]);
+  remove(pointer: string): Document {
+    if (wellFormed(pointer)) return this.#commit((raw) => raw.remove(pointer));
+    else return this.edit([{ op: "remove", pointer }]);
   }
   /** Set the version declaration; conformance is assessed separately. */
-  setOpenbindings(value: string): void {
-    this.set("/openbindings", checkedText(value));
+  setOpenbindings(value: string): Document {
+    return this.set("/openbindings", checkedText(value));
   }
   /** Set the interface name. */
-  setName(value: string): void {
-    this.set("/name", checkedText(value));
+  setName(value: string): Document {
+    return this.set("/name", checkedText(value));
   }
   /** Set the interface version label. */
-  setVersion(value: string): void {
-    this.set("/version", checkedText(value));
+  setVersion(value: string): Document {
+    return this.set("/version", checkedText(value));
   }
   /** Set descriptive text, including escaped unpaired UTF-16 units. */
-  setDescription(value: string): void {
-    this.set("/description", checkedText(value));
+  setDescription(value: string): Document {
+    return this.set("/description", checkedText(value));
   }
   /** Set a description on an existing operation, escaping its key. */
-  setOperationDescription(key: string, value: string): void {
-    this.set(
+  setOperationDescription(key: string, value: string): Document {
+    return this.set(
       pointerChild("/operations", key) + "/description",
       checkedText(value),
     );
   }
   /** Set an existing operation's input schema. Absence and explicit null remain distinct. */
-  setOperationInput(key: string, value: JsonInput): void {
-    this.set(pointerChild("/operations", key) + "/input", value);
+  setOperationInput(key: string, value: JsonInput): Document {
+    return this.set(pointerChild("/operations", key) + "/input", value);
   }
   /** Set an existing operation's output schema. */
-  setOperationOutput(key: string, value: JsonInput): void {
-    this.set(pointerChild("/operations", key) + "/output", value);
+  setOperationOutput(key: string, value: JsonInput): Document {
+    return this.set(pointerChild("/operations", key) + "/output", value);
   }
   #part(
     namespace: string,
     key: string,
     kind: AuthorKind,
     value: unknown,
-  ): void {
+  ): Document {
     scalar(key);
     handle(this);
     const context: AuthorContext = { origins: new WeakMap() };
@@ -1552,45 +1554,45 @@ export class Document extends DocumentReads {
       pointerChild("/" + namespace, key),
       context,
     );
-    this.#encoded(object, context, { namespace: "/" + namespace, key });
+    return this.#encoded(object, context, { namespace: "/" + namespace, key });
   }
-  #parts(namespace: string, values: unknown): void {
-    this.edit([{ op: "set-" + namespace, value: values } as Edit]);
+  #parts(namespace: string, values: unknown): Document {
+    return this.edit([{ op: "set-" + namespace, value: values } as Edit]);
   }
   /** Set a whole typed operation, creating its namespace if absent. Collisions and invalid typed input throw EditError with a logical partPointer. */
-  setOperation(key: string, value: Operation): void {
-    this.#part("operations", key, "operation", value);
+  setOperation(key: string, value: Operation): Document {
+    return this.#part("operations", key, "operation", value);
   }
   /** Commit a whole operations map once, for bulk synthesis. */
-  setOperations(value: Readonly<Record<string, Operation>>): void {
-    this.#parts("operations", value);
+  setOperations(value: Readonly<Record<string, Operation>>): Document {
+    return this.#parts("operations", value);
   }
   /** Set a whole typed binding, creating its namespace if absent. */
-  setBinding(key: string, value: Binding): void {
-    this.#part("bindings", key, "binding", value);
+  setBinding(key: string, value: Binding): Document {
+    return this.#part("bindings", key, "binding", value);
   }
   /** Commit a whole bindings map once. */
-  setBindings(value: Readonly<Record<string, Binding>>): void {
-    this.#parts("bindings", value);
+  setBindings(value: Readonly<Record<string, Binding>>): Document {
+    return this.#parts("bindings", value);
   }
   /** Set a whole typed source, creating its namespace if absent. */
-  setSource(key: string, value: Source): void {
-    this.#part("sources", key, "source", value);
+  setSource(key: string, value: Source): Document {
+    return this.#part("sources", key, "source", value);
   }
   /** Commit a whole sources map once. */
-  setSources(value: Readonly<Record<string, Source>>): void {
-    this.#parts("sources", value);
+  setSources(value: Readonly<Record<string, Source>>): Document {
+    return this.#parts("sources", value);
   }
   /** Set a whole typed dependency, creating its namespace if absent. */
-  setDependency(key: string, value: Dependency): void {
-    this.#part("dependencies", key, "dependency", value);
+  setDependency(key: string, value: Dependency): Document {
+    return this.#part("dependencies", key, "dependency", value);
   }
   /** Commit a whole dependencies map once. */
-  setDependencies(value: Readonly<Record<string, Dependency>>): void {
-    this.#parts("dependencies", value);
+  setDependencies(value: Readonly<Record<string, Dependency>>): Document {
+    return this.#parts("dependencies", value);
   }
   /** Set a typed example on an existing operation, creating its examples map if absent. */
-  setExample(operation: string, key: string, value: Example): void {
+  setExample(operation: string, key: string, value: Example): Document {
     scalar(operation);
     scalar(key);
     handle(this);
@@ -1601,7 +1603,7 @@ export class Document extends DocumentReads {
       pointerChild(pointerChild("/operations", operation) + "/examples", key),
       context,
     );
-    this.#encoded(object, context, {
+    return this.#encoded(object, context, {
       namespace: pointerChild("/operations", operation) + "/examples",
       key,
     });

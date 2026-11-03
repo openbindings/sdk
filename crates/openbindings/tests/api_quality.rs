@@ -107,7 +107,7 @@ fn namespace_counts_occurrences_and_refuses_malformed_aliases_everywhere() {
 }
 #[test]
 fn authoring_collision_has_native_draft_path_and_source_is_separate() {
-    let mut b = Document::new();
+    let b = Document::new();
     let mut op = Operation::default();
     let mut ex = Example::default();
     ex.additional_fields
@@ -136,7 +136,7 @@ fn authoring_collision_has_native_draft_path_and_source_is_separate() {
         Some("/operations/x/aliases")
     );
     let mut b = Document::new();
-    b.set("/unknown", &JsonValue::null()).unwrap();
+    b = b.set("/unknown", &JsonValue::null()).unwrap();
     assert_eq!(
         b.clone().validate().unwrap().report().conclusion,
         Conformance::NonConformant
@@ -145,7 +145,7 @@ fn authoring_collision_has_native_draft_path_and_source_is_separate() {
         additional_fields: BTreeMap::from([("input".into(), JsonValue::null())]),
         ..Default::default()
     };
-    let mut b = Document::new();
+    let b = Document::new();
     // A pointer whose escaped spelling would exceed 4,096 bytes is omitted.
     let EditError::FieldCollision { part_pointer, .. } =
         b.set_operation(&"x".repeat(5000), &op).unwrap_err()
@@ -215,7 +215,7 @@ fn serde_profile_preserves_numbers_enums_unicode_and_refuses_loss() {
     );
     assert_eq!(exact.text(), "1e999999999999999999999999");
     let mut draft = Document::new();
-    draft.set("/x-number", &exact).unwrap();
+    draft = draft.set("/x-number", &exact).unwrap();
     assert_eq!(draft.value().get("x-number").unwrap().text(), exact.text());
 }
 #[test]

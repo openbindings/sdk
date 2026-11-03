@@ -5,7 +5,7 @@ use openbindings::*;
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 use std::sync::{Arc, Mutex};
 
-fn document(schema: &str) -> Conformant<Document> {
+fn document(schema: &str) -> ConformantDocument {
     let text = format!(
         "{{\n  \"openbindings\": \"0.2.0\",\n  \"operations\": {{\n    \"op\": {{\n      \"input\": {schema}\n    }}\n  }}\n}}"
     );
@@ -16,7 +16,7 @@ fn document(schema: &str) -> Conformant<Document> {
         .conformant()
         .expect("conformant document")
 }
-fn contract(document: &Conformant<Document>, resources: &ResourceSet) -> PreparedValueContract {
+fn contract(document: &ConformantDocument, resources: &ResourceSet) -> PreparedValueContract {
     document
         .resolve_operation("op")
         .unwrap()

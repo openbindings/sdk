@@ -488,3 +488,8 @@ function typedBatch(
   document.edit([{ op: "set-sources", value: { local: {} } }]);
 }
 void typedBatch;
+
+// Edits return independently owned immutable snapshots.
+using changedSnapshot: Document = parsedOnly.set("/description", "changed");
+using removedSnapshot: Document = changedSnapshot.remove("/description");
+using emptySnapshot: Document = parsedOnly.edit([]);

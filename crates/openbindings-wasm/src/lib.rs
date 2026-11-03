@@ -291,7 +291,7 @@ impl WasmMember {
 // A proven revision contains no editable Document, even under receiver substitution.
 enum DocumentRevision {
     Editable(Document),
-    Conformant(Conformant<Document>),
+    ConformantDocument(ConformantDocument),
 }
 struct DocumentHandle {
     revision: DocumentRevision,
@@ -307,13 +307,13 @@ impl DocumentHandle {
     fn document(&self) -> &Document {
         match &self.revision {
             DocumentRevision::Editable(document) => document,
-            DocumentRevision::Conformant(proof) => proof.as_document(),
+            DocumentRevision::ConformantDocument(proof) => proof.document(),
         }
     }
     fn editable_document(&mut self) -> Option<&mut Document> {
         match &mut self.revision {
             DocumentRevision::Editable(document) => Some(document),
-            DocumentRevision::Conformant(_) => None,
+            DocumentRevision::ConformantDocument(_) => None,
         }
     }
     fn editable(&mut self) -> Result<&mut Document, JsValue> {
@@ -324,15 +324,25 @@ impl DocumentHandle {
             )
         })
     }
+    // The facade edits a newly retained handle. Replace its immutable snapshot
+    // only after the complete batch succeeds; proof handles cannot be edited.
+    fn edit(
+        &mut self,
+        apply: impl FnOnce(&Document) -> Result<Document, EditError>,
+    ) -> Result<(), JsValue> {
+        let next = apply(self.editable()?).map_err(edit_error)?;
+        self.revision = DocumentRevision::Editable(next);
+        Ok(())
+    }
     fn into_document(self) -> Document {
         match self.revision {
             DocumentRevision::Editable(document) => document,
-            DocumentRevision::Conformant(proof) => proof.into_inner(),
+            DocumentRevision::ConformantDocument(proof) => proof.into_inner(),
         }
     }
-    fn proof(&self, code: &str) -> Result<Conformant<Document>, JsValue> {
+    fn proof(&self, code: &str) -> Result<ConformantDocument, JsValue> {
         match &self.revision {
-            DocumentRevision::Conformant(proof) => Ok(proof.clone()),
+            DocumentRevision::ConformantDocument(proof) => Ok(proof.clone()),
             DocumentRevision::Editable(document) => document
                 .validate()
                 .ok()
@@ -456,51 +466,37 @@ impl WasmDocument {
     }
     pub fn set(&mut self, pointer: &str, value: &WasmJson) -> Result<(), JsValue> {
         self.handle
-            .editable()?
-            .set(pointer, &value.value)
-            .map_err(edit_error)
+            .edit(|document| document.set(pointer, &value.value))
     }
     pub fn remove(&mut self, pointer: &str) -> Result<(), JsValue> {
-        self.handle.editable()?.remove(pointer).map_err(edit_error)
+        self.handle.edit(|document| document.remove(pointer))
     }
     #[wasm_bindgen(js_name=setDescription)]
     pub fn set_description(&mut self, value: &str) -> Result<(), JsValue> {
-        self.handle
-            .editable()?
-            .set_description(value)
-            .map_err(edit_error)
+        self.handle.edit(|document| document.set_description(value))
     }
     #[wasm_bindgen(js_name=setName)]
     pub fn set_name(&mut self, value: &str) -> Result<(), JsValue> {
-        self.handle.editable()?.set_name(value).map_err(edit_error)
+        self.handle.edit(|document| document.set_name(value))
     }
     #[wasm_bindgen(js_name=setVersion)]
     pub fn set_version(&mut self, value: &str) -> Result<(), JsValue> {
-        self.handle
-            .editable()?
-            .set_version(value)
-            .map_err(edit_error)
+        self.handle.edit(|document| document.set_version(value))
     }
     #[wasm_bindgen(js_name=setOperationDescription)]
     pub fn set_operation_description(&mut self, key: &str, value: &str) -> Result<(), JsValue> {
         self.handle
-            .editable()?
-            .set_operation_description(key, value)
-            .map_err(edit_error)
+            .edit(|document| document.set_operation_description(key, value))
     }
     #[wasm_bindgen(js_name=setOperationInput)]
     pub fn set_operation_input(&mut self, key: &str, value: &WasmJson) -> Result<(), JsValue> {
         self.handle
-            .editable()?
-            .set_operation_input(key, &value.value)
-            .map_err(edit_error)
+            .edit(|document| document.set_operation_input(key, &value.value))
     }
     #[wasm_bindgen(js_name=setOperationOutput)]
     pub fn set_operation_output(&mut self, key: &str, value: &WasmJson) -> Result<(), JsValue> {
         self.handle
-            .editable()?
-            .set_operation_output(key, &value.value)
-            .map_err(edit_error)
+            .edit(|document| document.set_operation_output(key, &value.value))
     }
     #[must_use]
     pub fn retain(&self) -> WasmDocument {
@@ -744,10 +740,10 @@ impl std::fmt::Debug for WasmConformantDocument {
 }
 
 impl WasmConformantDocument {
-    fn from_proof(document: Conformant<Document>) -> Self {
+    fn from_proof(document: ConformantDocument) -> Self {
         Self {
             handle: DocumentHandle {
-                revision: DocumentRevision::Conformant(document),
+                revision: DocumentRevision::ConformantDocument(document),
                 taken: Cell::new(false),
             },
         }
@@ -767,24 +763,24 @@ impl WasmConformantDocument {
         }
     }
     #[wasm_bindgen(js_name=asDocument)]
-    pub fn as_document(&self) -> WasmDocument {
+    pub fn document(&self) -> WasmDocument {
         WasmDocument {
             handle: DocumentHandle::new(self.handle.document().clone()),
         }
     }
     pub fn value(&self) -> WasmJson {
-        self.as_document().value()
+        self.document().value()
     }
     #[wasm_bindgen(js_name=toBytes)]
     pub fn to_bytes(&self) -> Vec<u8> {
-        self.as_document().to_bytes()
+        self.document().to_bytes()
     }
     /// The admission limits this revision keeps: bytes, nodes and nesting.
     pub fn limits(&self) -> Vec<u32> {
         limit_values(self.handle.document().limits())
     }
     pub fn validate(&self) -> WasmDocumentValidation {
-        self.as_document().validate()
+        self.document().validate()
     }
     /// Locate a schema location, given as exact JSON text, in this document.
     pub fn locate(&self, location: &str) -> Result<String, JsValue> {
@@ -811,31 +807,31 @@ impl WasmConformantDocument {
     }
     #[wasm_bindgen(js_name=schemaNames)]
     pub fn schema_names(&self) -> Result<String, JsValue> {
-        self.as_document().schema_names()
+        self.document().schema_names()
     }
     pub fn schema(&self, key: &str) -> Result<Option<WasmJson>, JsValue> {
-        self.as_document().schema(key)
+        self.document().schema(key)
     }
     pub fn operations(&self) -> Result<String, JsValue> {
-        self.as_document().operations()
+        self.document().operations()
     }
     pub fn bindings(&self) -> Result<String, JsValue> {
-        self.as_document().bindings()
+        self.document().bindings()
     }
     pub fn binding(&self, key: &str) -> Result<Option<WasmBinding>, JsValue> {
-        self.as_document().binding(key)
+        self.document().binding(key)
     }
     pub fn sources(&self) -> Result<String, JsValue> {
-        self.as_document().sources()
+        self.document().sources()
     }
     pub fn source(&self, key: &str) -> Result<Option<WasmSource>, JsValue> {
-        self.as_document().source(key)
+        self.document().source(key)
     }
     pub fn dependencies(&self) -> Result<String, JsValue> {
-        self.as_document().dependencies()
+        self.document().dependencies()
     }
     pub fn dependency(&self, key: &str) -> Result<Option<WasmDependency>, JsValue> {
-        self.as_document().dependency(key)
+        self.document().dependency(key)
     }
     /// Select a primary key or alias of the proved revision; ambiguity is excluded by OBI-05.
     #[wasm_bindgen(js_name=resolveOperation)]
@@ -876,7 +872,7 @@ impl WasmConformantDocument {
         resources: &WasmResources,
         cancelled: bool,
     ) -> Result<String, JsValue> {
-        self.as_document().references(resources, cancelled)
+        self.document().references(resources, cancelled)
     }
 }
 impl WasmDocument {
@@ -940,7 +936,7 @@ impl WasmDocument {
                 }
             })
             .collect();
-        self.handle.editable()?.edit(&edits).map_err(edit_error)
+        self.handle.edit(|document| document.edit(&edits))
     }
     fn set_part_at(&mut self, namespace: &str, key: &str, text: &str) -> Result<(), JsValue> {
         let mut limits = self.handle.editable()?.limits();
@@ -958,10 +954,7 @@ impl WasmDocument {
         };
         let value = JsonValue::parse_owned_with_limits(text.into_bytes(), limits)
             .map_err(admission_error)?;
-        self.handle
-            .editable()?
-            .set(&pointer, &value)
-            .map_err(edit_error)
+        self.handle.edit(|document| document.set(&pointer, &value))
     }
 }
 // The bytes and nodes of an edit batch's own structure, beside its values.
@@ -1292,25 +1285,25 @@ pub struct WasmExample {
 #[derive(Clone)]
 enum ExampleSource {
     Document(ExampleView),
-    Conformant(ConformantExampleView),
+    ConformantDocument(ConformantExampleView),
 }
 impl ExampleSource {
     fn value(&self) -> JsonRef<'_> {
         match self {
             Self::Document(view) => view.value(),
-            Self::Conformant(view) => view.value(),
+            Self::ConformantDocument(view) => view.value(),
         }
     }
     fn input(&self) -> Option<JsonRef<'_>> {
         match self {
             Self::Document(view) => view.input(),
-            Self::Conformant(view) => view.input(),
+            Self::ConformantDocument(view) => view.input(),
         }
     }
     fn output(&self) -> Option<JsonRef<'_>> {
         match self {
             Self::Document(view) => view.output(),
-            Self::Conformant(view) => view.output(),
+            Self::ConformantDocument(view) => view.output(),
         }
     }
 }
@@ -1331,7 +1324,7 @@ impl WasmExample {
     pub fn metadata(&self) -> Result<String, JsValue> {
         match &self.view {
             ExampleSource::Document(view) => example_metadata(view),
-            ExampleSource::Conformant(view) => Ok(conformant_example_metadata(view)),
+            ExampleSource::ConformantDocument(view) => Ok(conformant_example_metadata(view)),
         }
     }
     pub fn value(&self) -> WasmJson {
@@ -1482,7 +1475,7 @@ impl WasmConformantOperation {
     }
     pub fn example(&self, key: &str) -> Option<WasmExample> {
         self.operation.example(key).map(|view| WasmExample {
-            view: ExampleSource::Conformant(view),
+            view: ExampleSource::ConformantDocument(view),
         })
     }
     pub fn bindings(&self) -> String {
@@ -1814,20 +1807,16 @@ mod proof_mutation_tests {
         let proof = WasmConformantDocument {
             handle: substituted.handle,
         };
-        let mut independent = proof.as_document();
+        let mut independent = proof.document();
         independent
             .handle
-            .editable_document()
-            .unwrap()
-            .set_name("changed")
+            .edit(|document| document.set_name("changed"))
             .unwrap();
         assert_eq!(proof.to_bytes(), before);
         let mut consumed = proof.into_inner();
         consumed
             .handle
-            .editable_document()
-            .unwrap()
-            .set_name("edited")
+            .edit(|document| document.set_name("edited"))
             .unwrap();
     }
 }

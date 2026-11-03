@@ -138,7 +138,7 @@ async fn synthesis_rows(source: &Source, parsed: &Document) -> Vec<Row> {
     assert!(rejected.rejected().is_some());
     rows.push(row("SynthesisError::rejected", &rejected));
     let mut document = Document::new();
-    document.set_source(SECRET, source).unwrap();
+    document = document.set_source(SECRET, source).unwrap();
     let mut coverage = synthesis::CoverageClaim::partial(Vec::new(), limitation);
     coverage.additional_fields = evidence();
     let candidate = synthesis::SynthesisCandidate::new(document.clone(), coverage);
@@ -197,7 +197,7 @@ async fn debug_redacts_caller_text_at_every_boundary() {
         description: Some(SECRET.into()),
         additional_fields: BTreeMap::from([(format!("x-{SECRET}"), context.clone())]),
     };
-    let mut draft = Document::new();
+    let draft = Document::new();
     let mut operation = Operation::default();
     operation
         .additional_fields

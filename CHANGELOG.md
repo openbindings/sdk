@@ -11,6 +11,11 @@
   re-pinned together. Duplicate resource/name targets cannot choose a winner.
   See [migration status](docs/migration-0.2.md) for the bounded implementation claim.
 
+- Make document edits return new immutable snapshots in Rust and TypeScript;
+  existing owners, views and proofs retain their revision. Replace generic proof
+  wrappers with concrete `ConformantDocument`, separate conformance assessment,
+  and expose owning exact `JsonObject` access without claiming conformance.
+
 ### Added
 
 - The npm package ships compiled JavaScript and declarations without source maps; each build
@@ -28,7 +33,7 @@
   and `ValueContract.prepare(options)`, whose ready result carries its
   `PreparedValueContract` as `valueContract`.
 
-- One exact OpenBindings 0.2 `Document` for parsing, inspection and in-place
+- One exact OpenBindings 0.2 `Document` for parsing, inspection and immutable
   editing: atomic batches of JSON Pointer edits and typed part maps, and typed
   field and part setters, all keeping untouched bytes exact. Every edit refuses
   with one `EditError`; a typed part's field collision carries a pointer into
@@ -112,7 +117,7 @@
   The checks have no work budget; their work is linear in the admitted document,
   and a 60 MB SemVer near miss reaches its verdict in about 0.6 seconds. The SDK
   carries no fork of any dependency.
-- `Conformant<Document>` (TypeScript `ConformantDocument`), the proven state, with
+- `ConformantDocument` (TypeScript `ConformantDocument`), the proven state, with
   infallible views, operation and alias lookup, exact schema access, reference
   inspection and opaque kind comparison. It is the only route to value contracts.
 - Explicit immutable resources and reusable input/output value contracts, with

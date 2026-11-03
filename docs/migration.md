@@ -19,7 +19,7 @@ the legacy implementation; a registry install alone does not select this API.
 | TypeScript `parseDocument(input)` returning `OBInterface`, and `validateDocument` / `validateInterface` throwing on invalid data | Await `initialize()`, narrow `Document.parse(input)` to `status === "parsed"`, then call `document.validate()` and narrow to `status === "conformant"`. `validateDocument` returns a `DocumentReport` instead of an interface object. |
 
 Parsing here is not a conformance gate. Keep documents for editors; require
-a `Conformant<Document>` before creating value contracts or publishing a document.
+a `ConformantDocument` before creating value contracts or publishing a document.
 Handle unsupported-version refusal separately from non-conformant and undetermined
 reports. Use rule evidence and codes instead of matching diagnostic prose.
 
@@ -34,7 +34,7 @@ first-use guide shows an exact batched edit. See the TypeScript package guide fo
 
 | Legacy API | Replacement |
 | --- | --- |
-| Go `doc.Operations`, `doc.ResolveOperation(name)`, `doc.OperationBindings(key)` | `Conformant<Document>` operation reads and `resolve_operation(name)`; use the returned operation's `key()` and `bindings()`. Document lookup returns explicit found, missing or ambiguous selection. |
+| Go `doc.Operations`, `doc.ResolveOperation(name)`, `doc.OperationBindings(key)` | `ConformantDocument` operation reads and `resolve_operation(name)`; use the returned operation's `key()` and `bindings()`. Document lookup returns explicit found, missing or ambiguous selection. |
 | TypeScript `iface.operations`, `resolveOperation(iface, name)`, `PreparedInterface.operation(name)` | `document.operations` metadata and `resolveOperation(name)`; narrow the selection before using its operation owner. Read schema owners with `input()` and `output()`. |
 
 Primary names and aliases resolve operations; dependency operation references are
@@ -46,7 +46,7 @@ plain data, while `schemas()` and schema access methods acquire new owners.
 
 | Legacy API | Replacement |
 | --- | --- |
-| Go `NewValueContractCompiler(evaluator, resources...)`, `Resolve(ctx, doc)`, `CompileInput` / `CompileOutput` | Select a `SchemaEvaluator`, create an immutable `ResourceSet`, resolve the operation on a `Conformant<Document>`, then call `input()` or `output()` and `prepare_with(&evaluator, &resources)`. |
+| Go `NewValueContractCompiler(evaluator, resources...)`, `Resolve(ctx, doc)`, `CompileInput` / `CompileOutput` | Select a `SchemaEvaluator`, create an immutable `ResourceSet`, resolve the operation on a `ConformantDocument`, then call `input()` or `output()` and `prepare_with(&evaluator, &resources)`. |
 | Go `ValueContract.Validate(ctx, value)` / `ValidateJSON(ctx, bytes)` and error classification | Admit ordinary data with `JsonValue::from_serializable` or exact bytes with `JsonValue::parse`; match `ValueOutcome::Satisfies`, `Fails`, `Undefined` or `NoVerdict`. |
 | TypeScript `compileOperationSchema(iface, name, position)` and `CompiledSchema.validate(value)` returning `valid` and failures | Call `conformant.resolveOperation(name)`, then `input()` or `output()` and `prepare(options)`, narrow to ready, then call `contract.validate(value)`. Handle `satisfies`, `fails`, `undefined`, `no-verdict` and ordinary-input admission errors. |
 

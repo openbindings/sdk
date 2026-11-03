@@ -16,10 +16,10 @@ fn texts<'a>(value: JsonRef<'a>, field: &str) -> Option<impl ExactSizeIterator<I
 }
 macro_rules! conformant_view {
     ($name:ident, $plain:ident) => {
-        #[doc = concat!("The conformant form of [`", stringify!($plain), "`]: the same declaration read from a [`Conformant<Document>`], whose proof it retains. Field reads are infallible; OBI-01 establishes scalar text. Original tokens and locations remain available through value(). Clones and views survive parent drop.")]
+        #[doc = concat!("The conformant form of [`", stringify!($plain), "`]: the same declaration read from a [`ConformantDocument`], whose proof it retains. Field reads are infallible; OBI-01 establishes scalar text. Original tokens and locations remain available through value(). Clones and views survive parent drop.")]
         #[derive(Clone, Debug)]
         pub struct $name {
-            _document: Conformant<Document>,
+            _document: ConformantDocument,
             view: $plain,
         }
         impl $name {
@@ -38,7 +38,7 @@ conformant_view!(ConformantSourceView, SourceView);
 conformant_view!(ConformantDependencyView, DependencyView);
 conformant_view!(ConformantExampleView, ExampleView);
 
-impl Conformant<Document> {
+impl ConformantDocument {
     /// Borrow the exact snapshot certified by this proof.
     pub fn value(&self) -> JsonRef<'_> {
         self.document.value().view()
@@ -113,7 +113,7 @@ impl Conformant<Document> {
 }
 macro_rules! namespace {
     ($many:ident, $one:ident, $view:ident) => {
-        impl Conformant<Document> {
+        impl ConformantDocument {
             #[doc = concat!("Retain ", stringify!($many), " in lexical key order. None means absent; Some(empty) means present-empty.")]
             pub fn $many(&self) -> Option<Vec<$view>> {
                 self.document.$many().expect("conformant namespace").map(|rows| rows.into_iter().map(|view| $view { _document: self.clone(), view }).collect())
@@ -161,7 +161,7 @@ impl ConformantOperationView {
             Side::Output => self.view.output(),
         }
     }
-    pub(crate) fn proof(&self) -> &Conformant<Document> {
+    pub(crate) fn proof(&self) -> &ConformantDocument {
         &self._document
     }
     /// Read binding keys without selecting or ranking them.

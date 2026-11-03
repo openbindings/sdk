@@ -32,13 +32,12 @@ export function addTag(
   document: Document,
   primaryKey: string,
   tag: string,
-): boolean {
+): Document | undefined {
   const operation = document.operations.find((row) => row.key === primaryKey);
-  if (!operation) return false;
-  document.set(`/operations/${pointer(primaryKey)}/tags`, [
+  if (!operation) return undefined;
+  return document.set(`/operations/${pointer(primaryKey)}/tags`, [
     ...new Set([...(operation.tags ?? []), tag]),
   ]);
-  return true;
 }
 function edited(document: Document) {
   const checked = document.validate();
@@ -63,7 +62,7 @@ export function editMetadata(
   try {
     const operation = document.operations.find((row) => row.key === primaryKey);
     if (!operation) return { status: "operation-missing" as const };
-    document.edit([
+    using changed = document.edit([
       { op: "set", pointer: "/description", value: description },
       {
         op: "set",
@@ -72,7 +71,7 @@ export function editMetadata(
       },
     ]);
     // Bytes and reports are detached. Application policy decides whether to save.
-    return edited(document);
+    return edited(changed);
   } catch (error) {
     if (error instanceof SdkError)
       return { status: "edit-error" as const, error };
@@ -143,7 +142,7 @@ export function replaceExactObjectMember(
   }
 }
 
-/** Edit an extension member in place, keeping unrelated exact bytes. */
+/** Return edited extension bytes, keeping unrelated exact bytes. */
 export function editExtensionMember(
   text: string,
   extensionKey: string,
@@ -158,6 +157,9 @@ export function editExtensionMember(
   if (!extension) return { status: "extension-missing" as const };
   using member = extension.get(memberKey);
   if (!member) throw new TypeError("Replacement member is absent.");
-  document.set(`/${pointer(extensionKey)}/${pointer(memberKey)}`, replacement);
-  return edited(document);
+  using changed = document.set(
+    `/${pointer(extensionKey)}/${pointer(memberKey)}`,
+    replacement,
+  );
+  return edited(changed);
 }

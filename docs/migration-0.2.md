@@ -34,13 +34,19 @@ historical admission cases, core/internal-schema tests and document-rule control
 The regression suite includes a 4,000-level relative-ID/reference chain.
 These results do not establish complete evaluator capability or host parity.
 
-The next foundation slices replace mutable authoring and parallel typed parts with
-immutable exact snapshots and atomic edits, privately minted conformant documents
-and owned domain views. Then expose the original schema environment to evaluators,
-integrate the adjudicated 1,546-case value corpus, and qualify the changed Rust,
-Wasm and TypeScript APIs together. The source-level `data` changes to the existing
-bridge are not a newly qualified Wasm package. Retired role companions still await
-replacement by current invocation, context, kind description and source pulling.
+The ownership slice now makes Rust and TypeScript edits return new immutable
+snapshots, replaces the generic proof with concrete ConformantDocument, exposes a
+separate conformance module, and adds exact owning JsonObject access. Independent
+ownership review passes. Native core/schema/JSON/bridge tests pass (271 tests and
+one preexisting ignored test), all 505 core cases pass, and the unchanged Wasm
+memory bounds pass. The full host run has 161 passes and three evaluator replay
+failures whose inputs still assume earlier document admission.
+
+The next slices replace parallel typed parts/views with owned domain views, expose
+the original schema environment to evaluators, and integrate the adjudicated
+1,546-case value corpus and 20 moved negative admission cases. Retired role
+companions still await replacement by current invocation, context, kind description
+and source pulling. See [the development loop](alignment-loop.md) for open gates.
 
 No release, compatibility promise or completion of the migration is implied by this
 checkpoint. The canonical plan, frozen inputs, design reviews and measurement receipts

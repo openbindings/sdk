@@ -106,7 +106,7 @@ async fn strict_recovery_is_one_call_and_preserves_evidence() {
         assert!(e.rejected().is_none());
         let partial = e.into_partial().unwrap();
         assert!(!partial.coverage().fully_represented());
-        assert!(!partial.document().as_document().as_bytes().is_empty());
+        assert!(!partial.document().document().as_bytes().is_empty());
         assert_eq!(provider.calls.load(Ordering::Relaxed), 1);
         let encoded = partial.to_json().unwrap();
         assert!(encoded.get("coverage").is_some());
@@ -165,7 +165,7 @@ async fn dispositions_and_composition_are_distinct() {
     };
     let doc = Synthesizer::new(&p).synthesize(&r).await.unwrap();
     assert_eq!(
-        doc.as_document().value().get("sources").unwrap().len(),
+        doc.document().value().get("sources").unwrap().len(),
         Some(2)
     );
     let one = Catalog {
@@ -403,7 +403,7 @@ async fn persisted_coverage_identifies_sources_after_request_and_provider_drop()
             let key = &coverage.source_keys()[entry.source_index];
             assert!(
                 document
-                    .as_document()
+                    .document()
                     .value()
                     .get("sources")
                     .unwrap()

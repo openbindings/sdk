@@ -45,7 +45,7 @@ complete document-to-verdict example and covers initialization and disposal.
 
 To edit, parse a `Document` with `Document::parse` (or create one with
 `Document::new`) and change it with `set`, `remove`, atomic `edit(&[Edit])`, or typed
-field and part setters. Untouched bytes remain exact. `Conformant<Document>`
+field and part setters. Untouched bytes remain exact. `ConformantDocument`
 has no mutable access; consume it with `into_inner()` to edit again. Clones,
 views and proofs retain their revision.
 

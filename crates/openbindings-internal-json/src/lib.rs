@@ -8,6 +8,9 @@ mod json;
 mod raw;
 pub use json::*;
 #[warn(missing_docs)]
+mod object;
+pub use object::{JsonAccessError, JsonObject};
+#[warn(missing_docs)]
 mod pointer;
 pub use pointer::{Pointer, PointerError};
 

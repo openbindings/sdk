@@ -12,7 +12,7 @@ use crate::{
     value::source_from_json,
 };
 use openbindings::{
-    Conformant, ConformantBindingView, ConformantOperationView, Detail, Document, JsonKind,
+    ConformantBindingView, ConformantDocument, ConformantOperationView, Detail, JsonKind,
     JsonValue, NoVerdict, NoVerdictReason, PreparedValueContract, ResourceSet, SchemaEvaluator,
     Source, ValueContract, ValueOutcome,
 };
@@ -208,7 +208,7 @@ impl fmt::Debug for Attempt<'_> {
 /// an `Arc`: every [`PreparedOperation`] shares it, so a handle can outlive the
 /// `Arc` it came from and move into spawned tasks.
 pub struct Invoker<P> {
-    document: Conformant<Document>,
+    document: ConformantDocument,
     provider: P,
     limits: InvocationLimits,
     evaluation: Option<Evaluation>,
@@ -282,7 +282,7 @@ impl<P: BindingInvoker> Invoker<P> {
     /// Declared schemas
     /// yield `ERR_SCHEMA_UNRESOLVED` on actual values until an evaluator is supplied.
     /// Sides without a schema forward values without claiming validation.
-    pub fn new(document: Conformant<Document>, provider: P) -> Self {
+    pub fn new(document: ConformantDocument, provider: P) -> Self {
         Self {
             document,
             provider,

@@ -241,7 +241,7 @@ impl Document {
     }
 }
 
-impl Conformant<Document> {
+impl ConformantDocument {
     /// Inspect references in the conformant document revision without acquiring resources.
     pub fn references(&self) -> ReferenceReport {
         self.references_with_resources(ResourceSet::default(), &crate::work_control::NeverCancelled)
@@ -252,6 +252,6 @@ impl Conformant<Document> {
         resources: ResourceSet,
         control: &dyn WorkControl,
     ) -> ReferenceReport {
-        SchemaSpace::new(self.as_document(), &resources).references(control)
+        SchemaSpace::new(self.document(), &resources).references(control)
     }
 }

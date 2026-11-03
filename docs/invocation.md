@@ -78,7 +78,7 @@ Unsupported automatic/ordered candidates are skipped; an unsupported explicit
 binding yields `ERR_BINDING_NOT_FOUND` in invocation and preflight. Metadata and provider registration order never choose a binding.
 Use `.with_context(&context)` to forward one opaque object unchanged.
 
-`operation::Invoker::new` requires a `Conformant<Document>`, including when no evaluator
+`operation::Invoker::new` requires a `ConformantDocument`, including when no evaluator
 is configured. Invalid documents are rejected before invocation construction;
 document editor reads still report malformed fields and ambiguous names.
 `with_evaluator` is infallible and performs no preparation. An unpaired-surrogate

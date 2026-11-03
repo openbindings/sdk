@@ -13,7 +13,7 @@ fn document(schema: serde_json::Value) -> Document {
     )
     .unwrap()
 }
-fn conformant(document: &Document) -> Conformant<Document> {
+fn conformant(document: &Document) -> ConformantDocument {
     document
         .validate()
         .unwrap()

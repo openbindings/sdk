@@ -375,10 +375,10 @@ export async function apiQualityCases(sdk, http) {
         depthRefusal.error.instancePointer === null,
       "aggregate limit truthful unknown pointer",
     );
-    const editing = sdk.Document.create();
+    let editing = sdk.Document.create();
     let editFailure;
     try {
-      editing.set("/x-deep", deep);
+      editing = replaceDocument(editing, editing.set("/x-deep", deep));
     } catch (error) {
       editFailure = error;
     } finally {
@@ -497,4 +497,10 @@ export async function apiQualityCases(sdk, http) {
       `complete owner cleanup: ${testing.liveStorageOwners()} vs ${baseline}`,
     );
   }
+}
+
+// Test fixture cursor: keep the new immutable snapshot and release its predecessor.
+function replaceDocument(previous, next) {
+  previous.dispose();
+  return next;
 }

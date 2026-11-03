@@ -85,7 +85,7 @@ async fn sdk_policy_cases_and_interface_output_shapes_are_distinct() {
 #[test]
 fn sdk_policy_fixture_file_satisfies_its_local_schema() {
     let mut draft = openbindings::Document::new();
-    draft
+    draft = draft
         .set_operation(
             "check",
             &openbindings::Operation {

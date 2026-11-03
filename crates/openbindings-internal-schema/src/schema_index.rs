@@ -217,7 +217,6 @@ impl SchemaIndex {
             ..Self::default()
         };
         let mut compared = Vec::new();
-        let mut uses = Vec::new();
         let mut stack: Vec<(u32, u32)> = Vec::new();
         for root in roots {
             stack.push((ref_id(root) as u32, u32::MAX));
@@ -256,38 +255,15 @@ impl SchemaIndex {
                             of.push((resource, base));
                         }
                         Bases::Compared(ids) => {
-                            let parent_base = match parent_resource {
-                                0 => None,
-                                r => base_of(&compared, r).copied(),
-                            };
-                            let handle = text.and_then(|s| ids.compared(parent_base, s));
-                            if let Some(handle) = handle {
-                                debug_assert_eq!(handle as usize, uses.len());
-                                uses.push(references::IdentifierUse::Declaration(index));
-                            }
-                            compared.push((resource, handle));
-                        }
-                    }
-                }
-                if let Bases::Compared(ids) = &mut bases {
-                    let base = match resource {
-                        0 => None,
-                        r => base_of(&compared, r).copied(),
-                    };
-                    // OBI-12 does not assess references inside a resource whose
-                    // declaration has no compared base, even absolute ones.
-                    if resource == 0 || base.is_some() {
-                        for keyword in ["$ref", "$dynamicRef"] {
-                            if let Some(reference) = value.get(keyword)
-                                && let Some(text) = reference.as_str()
-                                && crate::uri::valid(text)
-                                && let Some(handle) =
-                                    ids.compared(base, text.split('#').next().unwrap())
-                            {
-                                debug_assert_eq!(handle as usize, uses.len());
-                                uses.push(references::IdentifierUse::Reference(
-                                    ref_id(reference) as u32
-                                ));
+                            // Register declarations before reference queries. Their
+                            // handles are exactly their positions in this compact
+                            // list, including after an invalid enclosing identifier.
+                            let parent_base = parent_resource
+                                .checked_sub(1)
+                                .and_then(|index| compared.binary_search(&index).ok())
+                                .map(|h| h as u32);
+                            if text.and_then(|s| ids.compared(parent_base, s)).is_some() {
+                                compared.push(index);
                             }
                         }
                     }
@@ -325,8 +301,8 @@ impl SchemaIndex {
                 .then_with(|| out.anchor_name(a).cmp(out.anchor_name(b)))
         });
         out.anchors = anchors;
-        if let Bases::Compared(ids) = bases {
-            out.check_identified_references(&ids, &uses);
+        if let Bases::Compared(mut ids) = bases {
+            out.check_identified_references(source, &mut ids, &compared);
         }
         out
     }

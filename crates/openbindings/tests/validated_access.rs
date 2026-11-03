@@ -1,6 +1,6 @@
 use openbindings::*;
 
-fn proof(text: &str) -> Conformant<Document> {
+fn proof(text: &str) -> ConformantDocument {
     let validation = validate_document(text).unwrap();
     validation
         .conformant()
@@ -44,10 +44,10 @@ fn decoded_text_and_exact_tokens_survive_in_retained_conformant_views() {
     let dependency = document.dependency("d").unwrap();
     let example = operation.example("e").unwrap();
     assert!(dependency.accepts_kind(source.kind()));
-    assert_eq!(document.as_document().description().unwrap().unwrap(), name);
+    assert_eq!(document.document().description().unwrap().unwrap(), name);
     assert_eq!(
         document
-            .as_document()
+            .document()
             .source("s")
             .unwrap()
             .unwrap()

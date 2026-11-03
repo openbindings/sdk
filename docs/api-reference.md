@@ -108,11 +108,11 @@ kind union.
 | `Document::limits(&self) -> JsonLimits` | The admission limits the document was admitted under, which its edits and typed setters apply to the edited document: the caller's for `parse_with_limits` and `validate_document_with_limits`, no nesting cap for `validate_document`, the bytes of the configured body bound (at least the default) for a discovered document, and the defaults for `parse`, `new` and `from_json`. Value-contract preparation keeps fixed bounds of its own: a projection stops at 64 MiB (`program-byte-limit`), each resource it writes fits 64 MiB, 1,000,000 nodes and 10,000 levels (`program-json-limit`), and a reached schema nested more than 256 schemas below the schema position or supplied resource root holding it refuses (`schema-depth-limit`). TypeScript's `limits` getter on a document reports the same. |
 | `is_valid_name` | Tests the specification's ASCII name grammar without normalizing the name. |
 | `Document::new` | Create an empty OBI declaring the authoring version. |
-| `Document::set`, `remove`, `edit(&[Edit])` | Require a mutable borrow. One atomic splice and parse per batch, exact untouched bytes, compact insertions, the document's admission limits. A pointer is a `PointerRef`, converted from escaped text (`&str`, `&String`) or an exact `&Pointer`, so a finding's pointer through a member name with an unpaired UTF-16 unit addresses that member. |
+| `Document::set`, `remove`, `edit(&[Edit])` | Borrow the original and return a new immutable snapshot. One atomic splice and parse per batch, exact untouched bytes, compact insertions, the document's admission limits. A pointer is a `PointerRef`, converted from escaped text (`&str`, `&String`) or an exact `&Pointer`, so a finding's pointer through a member name with an unpaired UTF-16 unit addresses that member. |
 | Typed field and part setters | Edit descriptions, names, versions, operation schemas and typed operations, bindings, sources, dependencies and examples. Map setters support bulk construction. |
 | `DocumentValidation::document`, `conformant` | Borrow an admitted document or obtain proof only when every applicable rule is established. |
-| `Conformant<Document>` | Private proof, infallible reads, sole route to value contracts. No unchecked constructor, deserialization, dereference or mutable borrow. |
-| `as_document`, `into_inner` | Explicit plain reads, or consume proof to edit again. |
+| `ConformantDocument` | Private proof, infallible reads, sole route to value contracts. No unchecked constructor, deserialization, dereference or mutable borrow. |
+| `document`, `into_inner` | Borrow plain reads, or consume proof to retain the immutable document. |
 | `Document::as_bytes`, `EditError::code` | Exact current bytes and stable kebab-case editing failure codes. |
 
 Source positions describe current bytes. Retained views, reports and proofs keep
@@ -135,7 +135,7 @@ for diagnostics and are refused by typed interpretation, editing and proof.
 | `ValueContract` | `schema()` acquires the exact schema; `prepare(options)` takes `resources`, `limits` and `signal` and returns `{ status: "ready", valueContract }` or `{ status: "no-verdict", detail }`. |
 | `PreparedValueContract` | Disposable prepared value contract with `validate(value, options)`, the cheap check, `explain(value, options)`, which adds problems to a failure, and `retain()`; independent of its document, operation, resources and contract owners. `validateJson(input, options)` is Rust's `validate_json`: it admits JSON text or bytes as `parseJson` does and returns a `JsonCheck`, whose `input-error` carries the `parseJson` error. `validate` reads a string as a JSON string value. |
 | `ExactJson.locate(pointer)`, `ConformantDocument.locate(at)`, `SchemaResources.locate(at)` | The `SourceLocation` of the node a problem's instance pointer or a `SchemaLocation` names, in the value, the document or the supplied resource with its URI, or `null`. A malformed pointer throws `SdkError` with code `invalid-pointer`, and a malformed schema location with code `invalid-schema-location`. |
-| `asDocument()`, `intoDocument()` | Acquire an independent editable owner, or consume the proof. Consumption revokes all JavaScript aliases of that proof; retained owners survive. |
+| `asDocument()`, `intoDocument()` | Acquire an independent immutable document owner, or consume the proof. Consumption revokes all JavaScript aliases of that proof; retained owners survive. |
 | `toBytes()`, `dispose()`, `Symbol.dispose`, `disposed` | Detached exact current bytes and the existing deterministic lifecycle. |
 
 A `parseJson` value used in an edit preserves decimal spelling. Views retain their
@@ -164,7 +164,7 @@ known bytes and stops before exceeding the budget. A refusal discards that buffe
 | `PreparedValueContract::validate_json(input: impl AsRef<[u8]>) -> Result<ValueOutcome, InputError>` | Admits through `JsonValue::parse` with default limits, then validates. `Err` is admission failure only; all four value outcomes are `Ok`. Duplicate members yield no-verdict and numbers retain exact semantics. An exceeded limit's message names the route that admits more: `JsonValue::parse_with_limits`, then `validate` (TypeScript: `parseJson` with `limits`, then `validate`). |
 | `PreparedValueContract::validate(&self, &JsonValue)`, `validate_with_control(.., &dyn WorkControl) -> ValueOutcome` | The cheap check: a failure carries no problems and `problems_complete` is false. |
 | `PreparedValueContract::explain(&self, &JsonValue)`, `explain_with_control(.., &dyn WorkControl) -> ValueOutcome` | The same verdict, with problems that explain a failure. Library-bounded; see [value diagnostics](#value-diagnostics). |
-| `JsonValue::locate(&self, &Pointer)`, `Conformant<Document>::locate(&self, &SchemaLocation)`, `ResourceSet::locate(&self, &SchemaLocation) -> Option<SourceLocation>` | Byte offset, line and column of the node a problem's instance pointer or schema location names, in the value's, document's or supplied resource's text; `None` for another source or a pointer naming no node. One pass on the call; nothing retained. |
+| `JsonValue::locate(&self, &Pointer)`, `ConformantDocument::locate(&self, &SchemaLocation)`, `ResourceSet::locate(&self, &SchemaLocation) -> Option<SourceLocation>` | Byte offset, line and column of the node a problem's instance pointer or schema location names, in the value's, document's or supplied resource's text; `None` for another source or a pointer naming no node. One pass on the call; nothing retained. |
 
 `PreparedValueContract` is `Clone + Send + Sync + 'static` and owns what it needs after
 the document, resources and evaluator are dropped. Core has no default evaluator
@@ -215,7 +215,7 @@ Local futures and `Rc` providers are also supported.
 ## Boundaries to preserve
 
 - Parsing and authoring create exact snapshots. Normative validation evaluates OBI
-  document rules; only its conformant branch creates a `Conformant<Document>` proof.
+  document rules; only its conformant branch creates a `ConformantDocument` proof.
   Only that proof constructs normative value contracts and an operation invoker.
   Documents retain fallible editor reads. Wasm owns the Rust proof; plain
   TypeScript reports and forged wrappers cannot create it.
@@ -369,7 +369,7 @@ the limits it was admitted under. `validate_document_owned` and
 exactly as the borrowed forms judge its bytes, and a document they keep holds
 that buffer as its text.
 Both return `Result<DocumentValidation, VersionRefusal>`; only a conformant
-validation provides a `Conformant<Document>` proof.
+validation provides a `ConformantDocument` proof.
 
 Admission precedes version selection. Until the complete JSON text is admitted,
 no version declaration has been established. An admission refusal leaves every
@@ -466,10 +466,10 @@ setting, which works for validated, discovered and published bytes alike.
 Raw parser admission codes `byte-limit`, `node-limit` and `depth-limit` remain
 `InputError` codes; whole-document findings translate them to `input-limit`.
 
-## Conformant document reads
+## ConformantDocument document reads
 
 A conformant operation's `input()` and `output()` return its `ValueContract`s;
-`operation::Invoker::new` takes `Conformant<Document>`; `with_evaluator` and
+`operation::Invoker::new` takes `ConformantDocument`; `with_evaluator` and
 `with_validation_detail(Detail)` return `Self`. Preparation still may refuse, and prepared does not mean decidable.
 `SchemaRequest::document()` exposes the conformant document revision to custom evaluators.
 
@@ -477,17 +477,17 @@ A conformant operation's `input()` and `output()` return its `ValueContract`s;
 | --- | --- |
 | `openbindings()` | `&str`, proved supported SemVer |
 | `name()`, `version()`, `description()` | `Option<&str>`, absence separate from present decoded text |
-| Conformant view `description()` | `Option<&str>` |
-| Conformant operation `tags()`, dependency `kinds()` | Optional exact-size iterators of `&str`; absent differs from present-empty |
-| Conformant source `kind()` | `&str`; provider support is not implied |
-| Conformant dependency `accepts_kind(kind)` | Takes `&str` and compares decoded text, independent of escape spelling |
+| ConformantDocument view `description()` | `Option<&str>` |
+| ConformantDocument operation `tags()`, dependency `kinds()` | Optional exact-size iterators of `&str`; absent differs from present-empty |
+| ConformantDocument source `kind()` | `&str`; provider support is not implied |
+| ConformantDocument dependency `accepts_kind(kind)` | Takes `&str` and compares decoded text, independent of escape spelling |
 | `schemas()`, `schema(key)` | Optional exact object/boolean schema views; no preparation |
 | `operations()`, `resolve_operation(name)` | Retained `ConformantOperationView` vector or optional selection |
-| Conformant operation `input()`, `output()` | Optional `ValueContract`; `schema()` borrows the exact schema without preparation |
+| ConformantDocument operation `input()`, `output()` | Optional `ValueContract`; `schema()` borrows the exact schema without preparation |
 | `bindings()`, `sources()`, `dependencies()` and keyed reads | Optional retained `ConformantBindingView`, `ConformantSourceView`, `ConformantDependencyView`; absent differs from present-empty |
-| Conformant operation `examples()` and `example(key)` | Retained `ConformantExampleView`; example truth is not implied |
+| ConformantDocument operation `examples()` and `example(key)` | Retained `ConformantExampleView`; example truth is not implied |
 
-Conformant views expose the same normative fields as document views, with infallible
+ConformantDocument views expose the same normative fields as document views, with infallible
 reads. OBI-01 establishes scalar text for every string in a conformant document.
 Descriptive text, tags and kinds borrow decoded `&str`. Original spelling and
 locations remain available through each view's `value()`: for example,
@@ -495,8 +495,8 @@ locations remain available through each view's `value()`: for example,
 For exact strings from drafts or caller values, `JsonStringRef::as_str()` can return
 None for an unpaired UTF-16 unit. `utf16_units()` iterates without allocating,
 `json()` retains token/location access, and equality compares decoded UTF-16. `JsonRef::as_string()` returns None only for
-non-strings. The existing fallible view names remain unchanged; the `Conformant`
-prefix identifies proof on the individual view. The owning document state is `Conformant<Document>`.
+non-strings. The existing fallible view names remain unchanged; the `ConformantDocument`
+prefix identifies proof on the individual view. The owning document state is `ConformantDocument`.
 
 The [TypeScript guide](../packages/typescript/README.md) describes facade ownership,
 metadata, initialization and disposal. Exact member and element traversal uses
@@ -575,7 +575,7 @@ be mapped to an original source, it names the selected schema rather than a
 guessed keyword, and no location is invented beneath a member name the evaluator
 cannot spell. Byte offset, line and column come on demand from whoever holds the
 text, each with one pass over the bytes before the node and nothing retained:
-`JsonValue::locate(&problem.instance)` (also on `JsonRef`), `Conformant::locate`
+`JsonValue::locate(&problem.instance)` (also on `JsonRef`), `ConformantDocument::locate`
 and `ResourceSet::locate` (TypeScript `ExactJson.locate`,
 `ConformantDocument.locate`, `SchemaResources.locate`). Each returns a
 `SourceLocation` whose pointer is the one asked for, or `None` when it names no

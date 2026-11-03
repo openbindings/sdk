@@ -111,7 +111,7 @@ export function inspectEditExampleCases(sdk, example) {
     scalar.value.dispose();
   }
   const empty = sdk.Document.create();
-  assert.equal(example.addTag(empty, "toString", "x"), false);
+  assert.equal(example.addTag(empty, "toString", "x"), undefined);
   empty.dispose();
   const opaque = String.raw`{"openbindings":"0.2.0","operations":{},"x-editor":{
     "annotation":null,"large":900719925474099312345,"tiny":1e-1000,
@@ -198,7 +198,7 @@ export function inspectEditExampleCases(sdk, example) {
   );
   // An edited owner survives its source and borrowed replacement value.
   const source = sdk.Document.parse(opaque).value;
-  const built = source.retain();
+  let built = source.retain();
   const root = source.value(),
     extension = root.get("x-editor");
   const inserted = example.replaceExactObjectMember(
@@ -206,7 +206,7 @@ export function inspectEditExampleCases(sdk, example) {
     "annotation",
     "Detached",
   );
-  built.set("/x-editor", inserted);
+  built = replaceDocument(built, built.set("/x-editor", inserted));
   inserted.dispose();
   extension.dispose();
   root.dispose();
@@ -222,4 +222,10 @@ export function inspectEditExampleCases(sdk, example) {
     installedInspectionEditingExample: "passed",
     releasedArenas: baseline,
   };
+}
+
+// Test fixture cursor: keep the new immutable snapshot and release its predecessor.
+function replaceDocument(previous, next) {
+  previous.dispose();
+  return next;
 }

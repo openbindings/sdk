@@ -63,7 +63,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .ok_or("operation is missing")?;
     println!("{:?}: {:?}", operation.key(), operation.description());
     let contract = operation.input().ok_or("operation has no input contract")?;
-    // Conformant reads preserve presence; schema preparation remains separate.
+    // ConformantDocument reads preserve presence; schema preparation remains separate.
     let schema = contract.schema().location();
     println!(
         "input schema at {:?}, line {}",

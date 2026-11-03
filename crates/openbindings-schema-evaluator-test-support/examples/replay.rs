@@ -12,7 +12,7 @@ impl SchemaEvaluator for OriginalContext {
         request: &SchemaRequest,
         control: &dyn WorkControl,
     ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
-        let document: &Conformant<Document> = request.document();
+        let document: &ConformantDocument = request.document();
         let entry = document.locate(&request.entry_location()).unwrap();
         assert_eq!(
             document

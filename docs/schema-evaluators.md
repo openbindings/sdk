@@ -76,7 +76,7 @@ one for a node of the request's document or supplied resources, and
 prepared object must not keep the request. `SchemaLocation::new(resource,
 pointer)` takes any exact `Pointer`. When a keyword cannot be mapped to an
 original source, name the selected schema rather than guessing. Callers find line
-and column on demand with `JsonValue::locate`, `Conformant::locate` and
+and column on demand with `JsonValue::locate`, `ConformantDocument::locate` and
 `ResourceSet::locate`.
 
 These records may gain fields in later versions, so they have no struct-literal

@@ -62,12 +62,12 @@ async fn source_free_overrides_and_ownership() {
     let result = provider.synthesize_with_coverage(&request).await.unwrap();
     let strict = provider.synthesize(&request).await.unwrap();
     assert_eq!(
-        result.document().as_document().as_bytes(),
+        result.document().document().as_bytes(),
         strict.as_bytes()
     );
     assert_eq!(
         strict
-            .as_document()
+            .document()
             .value()
             .get("version")
             .unwrap()
@@ -76,7 +76,7 @@ async fn source_free_overrides_and_ownership() {
     );
     assert_eq!(
         strict
-            .as_document()
+            .document()
             .value()
             .get("description")
             .unwrap()

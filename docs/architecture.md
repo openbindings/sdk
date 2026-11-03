@@ -7,9 +7,9 @@ optional default operation evaluator implements the public Rust trait boundary.
 
 `Document` owns an immutable exact JSON arena and lazily indexed names.
 `DocumentValidation` carries evidence for every rule; only a conformant validation
-can yield `Conformant<Document>`. The same `Document` is edited in place through atomic exact-text batches and
+can yield `ConformantDocument`. `Document` edits return a new immutable snapshot through atomic exact-text batches and
 typed part setters. Editing commits a new arena and fresh caches; clones and proofs
-retain the earlier revision. `Conformant<Document>` exposes no mutable access. Source views keep their owner's storage, not borrowed external
+retain the earlier revision. `ConformantDocument` exposes no mutable access. Source views keep their owner's storage, not borrowed external
 buffers; standalone document views rebase byte locations correctly.
 
 A conformant operation hands out its `ValueContract`s; preparation borrows an

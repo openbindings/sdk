@@ -2,7 +2,7 @@ use openbindings::*;
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 use std::{error::Error, sync::Arc};
 
-fn document(schema: &str) -> Conformant<Document> {
+fn document(schema: &str) -> ConformantDocument {
     Document::parse(format!(
         r#"{{"openbindings":"0.2.0","operations":{{"lookup":{{"aliases":["find"],"input":{schema}}}}}}}"#
     ))

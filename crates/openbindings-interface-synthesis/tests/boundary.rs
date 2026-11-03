@@ -238,7 +238,7 @@ async fn source_indices_names_and_projection_identity() {
     assert_eq!(
         result
             .document()
-            .as_document()
+            .document()
             .value()
             .get("sources")
             .unwrap()
@@ -277,7 +277,7 @@ async fn source_indices_names_and_projection_identity() {
         .unwrap()
         .value()
         .to_owned();
-    reused.document.set("/bindings/second", &binding).unwrap();
+    reused.document = reused.document.set("/bindings/second", &binding).unwrap();
     let e = &mut reused.coverage.entries[0];
     e.scope = CoverageScope::Projection;
     let mut second = e.clone();
@@ -379,7 +379,7 @@ async fn every_boundary_failure_retains_a_repairable_candidate() {
         ..Default::default()
     };
     let mut c = c;
-    c.document.set_source("other", &different).unwrap();
+    c.document = c.document.set_source("other", &different).unwrap();
     c.coverage.entries[0].source_index = 1;
     assert!(
         Synthesizer::new(Fixed::new(c))
@@ -446,7 +446,7 @@ async fn exact_persistence_budgets_and_editing_do_not_reassign_evidence() {
         Some("1")
     );
     let mut edited = doc.clone();
-    edited.set("/sources/api/content", &json("null")).unwrap();
+    edited = edited.set("/sources/api/content", &json("null")).unwrap();
     assert_ne!(edited.as_bytes(), doc.as_bytes());
     assert!(
         result
@@ -463,7 +463,7 @@ async fn unbound_contracts_pass_strict_and_partial_synthesis() {
     let s = source(None);
     let mut c = candidate(&s);
     let mut draft = c.document.clone();
-    draft.set_operation("event", &Default::default()).unwrap();
+    draft = draft.set_operation("event", &Default::default()).unwrap();
     c.document = draft.clone();
     let inputs = [SynthesisSource {
         name: Some("api"),
@@ -494,7 +494,7 @@ async fn unbound_contracts_pass_strict_and_partial_synthesis() {
             .partial()
             .unwrap()
             .document()
-            .as_document()
+            .document()
             .value()
             .get("operations")
             .unwrap()
@@ -507,7 +507,7 @@ async fn unbound_contracts_pass_strict_and_partial_synthesis() {
 async fn unnamed_source_mapping_is_stable_without_restricting_equal_binding_aliases() {
     let (s, mut c) = complete();
     // Binding uses "api"; the mapping may use an equal alias.
-    c.document.set_source("alias", &s).unwrap();
+    c.document = c.document.set_source("alias", &s).unwrap();
     let inputs = [SynthesisSource {
         name: None,
         source: &s,

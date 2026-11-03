@@ -5,12 +5,12 @@
 //! and keeps one copy of each distinct `pattern` form.
 use super::measured;
 use openbindings::{
-    Conformant, Document, JsonValue, NoVerdict, PreparedValueContract, ValueOutcome,
+    ConformantDocument, Document, JsonValue, NoVerdict, PreparedValueContract, ValueOutcome,
 };
 use openbindings_json_schema_evaluator::{DefaultEvaluator, Limits};
 use serde_json::json;
 
-fn conformant(input: &str) -> Conformant<Document> {
+fn conformant(input: &str) -> ConformantDocument {
     let text = format!(r#"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{input}}}}}}}"#);
     Document::parse(text)
         .unwrap()
@@ -20,7 +20,7 @@ fn conformant(input: &str) -> Conformant<Document> {
         .expect("conformant fixture")
 }
 fn prepare(
-    proof: &Conformant<Document>,
+    proof: &ConformantDocument,
     limits: Limits,
 ) -> Result<PreparedValueContract, NoVerdict> {
     proof

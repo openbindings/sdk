@@ -272,7 +272,7 @@ fn debug_redacts_caller_text_at_every_boundary() {
         ),
         row("Document", &parsed),
         row("DocumentValidation", &validation),
-        row("Conformant<Document>", &validated),
+        row("ConformantDocument", &validated),
         row(
             "OperationSelection",
             &OperationSelection::Ambiguous {
@@ -397,7 +397,7 @@ fn debug_redacts_caller_text_at_every_boundary() {
     error.message = SECRET.into();
     rows.push(row("ResourceError::custom", &error));
 
-    let mut draft = Document::new();
+    let draft = Document::new();
     let mut operation = Operation::default();
     operation
         .additional_fields

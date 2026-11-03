@@ -34,7 +34,7 @@ impl<'de> Deserialize<'de> for Limits {
 }
 // Reusable preparation inputs: the proof, one resource set and one evaluator.
 pub struct Context {
-    document: Conformant<Document>,
+    document: ConformantDocument,
     resources: ResourceSet,
     evaluator: Evaluator,
 }
@@ -224,7 +224,7 @@ impl Outcome {
 // read timing starts from that proof without repeating validation.
 pub struct CheckedDocument {
     validation: DocumentValidation,
-    proof: Option<Conformant<Document>>,
+    proof: Option<ConformantDocument>,
 }
 pub fn validate_document_bytes(bytes: &[u8]) -> CheckedDocument {
     let validation = validate_document(bytes).unwrap();

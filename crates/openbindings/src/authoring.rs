@@ -478,7 +478,7 @@ mod tests {
         operation
             .additional_fields
             .insert("input".into(), JsonValue::null());
-        let mut model = Document::new();
+        let model = Document::new();
         assert!(matches!(
             model.set_operation("go", &operation),
             Err(EditError::FieldCollision { .. })

@@ -41,7 +41,7 @@ pub enum NoVerdictReason {
 /// A keyword or schema in an original schema source, by resource and exact
 /// pointer; generated evaluation-program identities are mapped back before
 /// exposure. Line and column come from the source's holder:
-/// [`Conformant::locate`] for the document and [`ResourceSet::locate`] for a
+/// [`ConformantDocument::locate`] for the document and [`ResourceSet::locate`] for a
 /// supplied resource. A prepared value contract keeps no source text. Serializes as JSON text; a pointer through a member name with an unpaired UTF-16 unit has no `serde_json::Value` form, so `serde_json::to_value` refuses such a record and `json!` panics: use `serde_json::to_string` or `to_writer`.
 ///
 /// Custom evaluators build one with [`Self::new`] or [`SchemaRequest::location`].
@@ -220,7 +220,7 @@ pub struct ValueProblem {
     /// line and column when asked: [`JsonValue::locate`].
     pub instance: Pointer,
     /// The failing keyword in its original schema source, from that
-    /// document's or resource's root; [`Conformant::locate`] and
+    /// document's or resource's root; [`ConformantDocument::locate`] and
     /// [`ResourceSet::locate`] find its line and column. When an evaluator
     /// cannot map a keyword to the original source, this names the selected
     /// schema rather than a guessed keyword.
@@ -566,13 +566,13 @@ impl openbindings_internal_schema::SuppliedSet for ResourceSet {
 }
 // It also reuses the schema index the revision built when it was validated,
 // and what that validation established about its schemas.
-impl openbindings_internal_schema::IndexedDocument for Conformant<Document> {
+impl openbindings_internal_schema::IndexedDocument for ConformantDocument {
     fn indexed(&self) -> openbindings_internal_schema::RawDocument {
-        self.as_document().indexed()
+        self.document().indexed()
     }
 }
 
-impl Conformant<Document> {
+impl ConformantDocument {
     /// Locate a schema location in this document: the node its pointer names,
     /// with line and column in the document's text. `None` for a location in a
     /// supplied resource, or a pointer that names no node in this revision.
@@ -581,7 +581,7 @@ impl Conformant<Document> {
         if at.resource.is_some() {
             return None;
         }
-        self.as_document().value().locate(&at.pointer)
+        self.document().value().locate(&at.pointer)
     }
 }
 
@@ -589,7 +589,7 @@ impl Conformant<Document> {
 /// helper or evaluate this request directly; generated identifiers are never API identity.
 #[derive(Clone)]
 pub struct SchemaRequest {
-    document: Conformant<Document>,
+    document: ConformantDocument,
     resources: ResourceSet,
     entry: JsonValue,
 }
@@ -601,7 +601,7 @@ impl std::fmt::Debug for SchemaRequest {
 
 impl SchemaRequest {
     /// Borrow the conformant document revision owning this normative value contract.
-    pub fn document(&self) -> &Conformant<Document> {
+    pub fn document(&self) -> &ConformantDocument {
         &self.document
     }
     /// Borrow the immutable explicit resources for this preparation; evaluators must not substitute global URI caches.
@@ -625,7 +625,7 @@ impl SchemaRequest {
     /// a projected [`EvaluationProgram`] resource. Builds only the pointer.
     pub fn location(&self, node: JsonRef<'_>) -> Option<SchemaLocation> {
         use openbindings_internal_json::backend::{exact_pointer, same_source};
-        let resource = if same_source(node, self.document.as_document().value()) {
+        let resource = if same_source(node, self.document.document().value()) {
             None
         } else {
             Some(
@@ -913,7 +913,7 @@ impl<'a> ValueContract<'a> {
         let entry = schema.to_owned();
         let document = self.operation.proof();
         if !document
-            .as_document()
+            .document()
             .schema_index()
             .position(openbindings_internal_json::backend::node_id(&entry))
             .is_some()

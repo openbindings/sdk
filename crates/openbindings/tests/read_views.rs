@@ -249,7 +249,7 @@ fn preference_reuses_exact_authoring_rules() {
         );
         let preference = Preference::new(expected).unwrap();
         let mut edited = doc.clone();
-        edited
+        edited = edited
             .set_binding(
                 "b",
                 &Binding {

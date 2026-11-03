@@ -70,7 +70,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 It judges the bytes as they are: invalid UTF-8, a byte order mark or a JSON syntax
 error is an OBI-01 violation in the report, located like any other finding.
 A report can be conformant, non-conformant or undetermined. Only established
-conformance yields a `Conformant<Document>`. Its typed field reads are infallible;
+conformance yields a `ConformantDocument`. Its typed field reads are infallible;
 document editor reads remain fallible. `operations()` returns every operation as a
 `ConformantOperationView` in lexical key order: `key()` is its primary name and
 `aliases()` its declared aliases, or `None` when it declares none. Resolve primary
@@ -90,7 +90,7 @@ reports only whether a value fails; `explain` on the same value contract reports
 
 Preparation returns `Result<PreparedValueContract, NoVerdict>`, so `?` propagates a
 refusal with its reason, code, message and location. A missing operation and an
-absent value contract are `None` before preparation. Only a `Conformant<Document>` hands
+absent value contract are `None` before preparation. Only a `ConformantDocument` hands
 out value contracts; a plain `Document` operation exposes the exact schema value.
 Document validation itself needs no caller-supplied evaluator. See
 [evaluator integration](schema-evaluators.md).
@@ -116,9 +116,9 @@ compiles independently. Prepared does not imply that every value is decidable.
 ## Edit an opaque value
 
 Parse a `Document` to edit it. `Document::parse` admits exact JSON, keeps an
-invalid draft editable and refuses text that is not JSON as an `InputError`;
+invalid draft inspectable and refuses text that is not JSON as an `InputError`;
 `document.validate()` returns the same validation as `validate_document`. Edit
-the `Document` through a mutable borrow. Generic paths use RFC 6901:
+the `Document` through a shared borrow and retain the returned snapshot. Generic paths use RFC 6901:
 `~0` escapes a tilde and `~1` a slash. Parents must exist; `set` inserts missing
 object members and `/-` appends to arrays. Use exact JSON values to preserve
 number spellings and escaped UTF-16. A pointer is escaped text or an exact
@@ -129,20 +129,20 @@ name holding an unpaired UTF-16 unit: `document.remove(&pointer)`, or
 ```rust,edition2024
 use openbindings::{Document, Edit, JsonValue};
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut document = Document::parse(
+    let document = Document::parse(
         r#"{"openbindings":"0.2.0","operations":{},"x-editor":{"note":null,"id":9007199254740993}}"#,
     )?;
     let note = JsonValue::string("Reviewed")?;
     let description = JsonValue::string("Ready for review")?;
-    document.edit(&[
+    let changed = document.edit(&[
         Edit::Set { pointer: "/x-editor/note".into(), value: &note },
         Edit::Set { pointer: "/description".into(), value: &description },
     ])?;
     assert_eq!(document.value().at("/x-editor/id").unwrap().text(), "9007199254740993");
-    let proven = document.validate()?.conformant().ok_or("nonconformant")?;
+    let proven = changed.validate()?.conformant().ok_or("nonconformant")?;
     assert!(proven.operations().is_empty());
-    let mut document = proven.into_inner();
-    document.set_description("Editing again")?;
+    let document = proven.document().set_description("Editing again")?;
+    assert_eq!(document.description()?.unwrap().as_str(), Some("Editing again"));
     Ok(())
 }
 ```
@@ -161,8 +161,8 @@ operations map once for synthesis; the bindings, sources and dependencies maps
 have corresponding setters. These setters check typed collisions and admission,
 while `validate()` separately establishes document conformance.
 
-`Conformant<Document>` has no setters or mutable borrow. `as_document()` borrows
-plain reads, and `into_inner()` consumes proof to return an editable owner.
+`ConformantDocument` has no setters or mutable borrow. `document()` borrows
+plain reads, and `into_inner()` consumes proof to return the immutable document snapshot.
 Retained views and proofs keep their earlier bytes. Findings and source positions
 always describe the revision being read. The packaged
 [exact-edit example](../crates/openbindings/examples/exact_edit.rs) includes
@@ -205,7 +205,7 @@ so release builds explain on a thread with that much stack; debug builds need
 more (see [host support](support.md)). An explained problem names the failing
 node by its exact pointer from the value passed (`instance`) and the failing
 keyword by resource and exact pointer (`schema`). Line and column come from the
-text's holder when asked: `JsonValue::locate` for the value, `Conformant::locate`
+text's holder when asked: `JsonValue::locate` for the value, `ConformantDocument::locate`
 and `ResourceSet::locate` for the schema. A prepared value contract keeps a compact copy
 of the keywords it compiled for explanations, never its document or resources, and
 no positions. See the [evaluator guide](../crates/openbindings-json-schema-evaluator/README.md)

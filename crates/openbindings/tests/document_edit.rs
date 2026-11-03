@@ -59,14 +59,25 @@ fn atomic_failure_keeps_bytes_caches_views_and_proof() {
             Conformance::Conformant
         );
     }
-    doc.set_operation_description("go", "new\nline").unwrap();
-    assert_eq!(proof.as_document().as_bytes(), bytes);
+    doc = doc.set_operation_description("go", "new\nline").unwrap();
+    assert_eq!(
+        doc.value()
+            .at("/operations/go/description")
+            .unwrap()
+            .as_str(),
+        Some("new\nline")
+    );
+    assert_eq!(proof.document().as_bytes(), bytes);
     let OperationSelection::Found(view) = view else {
         panic!()
     };
     assert!(view.description().unwrap().is_none());
     let mut doc = proof.into_inner();
-    doc.set_name("editable again").unwrap();
+    doc = doc.set_name("editable again").unwrap();
+    assert_eq!(
+        doc.name().unwrap().unwrap().as_str(),
+        Some("editable again")
+    );
 }
 
 #[test]
@@ -79,52 +90,55 @@ fn sibling_insertions_coalesce_in_batch_order_and_escape_keys() {
         ),
     ] {
         let mut doc = Document::parse(input).unwrap();
-        doc.edit(&[
-            Edit::Set {
-                pointer: "/a~1b".into(),
-                value: &exact("1e+03"),
-            },
-            Edit::Set {
-                pointer: "/c~0d".into(),
-                value: &exact("-0"),
-            },
-        ])
-        .unwrap();
+        doc = doc
+            .edit(&[
+                Edit::Set {
+                    pointer: "/a~1b".into(),
+                    value: &exact("1e+03"),
+                },
+                Edit::Set {
+                    pointer: "/c~0d".into(),
+                    value: &exact("-0"),
+                },
+            ])
+            .unwrap();
         assert_eq!(doc.as_bytes(), expected.as_bytes());
     }
     let mut doc = Document::parse("[ ]").unwrap();
-    doc.edit(&[
-        Edit::Set {
-            pointer: "/-".into(),
-            value: &exact("1"),
-        },
-        Edit::Set {
-            pointer: "/-".into(),
-            value: &exact("2"),
-        },
-    ])
-    .unwrap();
+    doc = doc
+        .edit(&[
+            Edit::Set {
+                pointer: "/-".into(),
+                value: &exact("1"),
+            },
+            Edit::Set {
+                pointer: "/-".into(),
+                value: &exact("2"),
+            },
+        ])
+        .unwrap();
     assert_eq!(doc.as_bytes(), b"[ 1,2]");
     let mut doc = Document::new();
     let pointers: Vec<_> = (0..1000).map(|i| format!("/operations/op{i}")).collect();
     let value = exact("{}");
-    doc.edit(
-        &pointers
-            .iter()
-            .map(|pointer| Edit::Set {
-                pointer: pointer.into(),
-                value: &value,
-            })
-            .collect::<Vec<_>>(),
-    )
-    .unwrap();
+    doc = doc
+        .edit(
+            &pointers
+                .iter()
+                .map(|pointer| Edit::Set {
+                    pointer: pointer.into(),
+                    value: &value,
+                })
+                .collect::<Vec<_>>(),
+        )
+        .unwrap();
     assert_eq!(doc.operations().unwrap().len(), 1000);
     assert!(doc.validate().unwrap().conformant().is_some());
 }
 
 #[test]
 fn duplicates_remain_inspectable_but_cannot_be_edited_or_proven() {
-    let mut doc =
+    let doc =
         Document::parse(r#"{"openbindings":"0.2.0","operations":{},"x":1,"\u0078":2}"#).unwrap();
     let before = doc.as_bytes().to_vec();
     assert!(doc.operations().is_err());
@@ -134,7 +148,7 @@ fn duplicates_remain_inspectable_but_cannot_be_edited_or_proven() {
         "duplicate-members"
     );
     assert_eq!(doc.as_bytes(), before);
-    let mut doc = Document::new();
+    let doc = Document::new();
     assert_eq!(
         doc.set("/x", &exact(r#"{"a":1,"a":2}"#))
             .unwrap_err()
@@ -147,7 +161,7 @@ fn duplicates_remain_inspectable_but_cannot_be_edited_or_proven() {
 fn positions_follow_current_bytes_and_untouched_extensions_stay_exact() {
     let mut doc = Document::parse("{\n\"openbindings\":\"0.2.0\",\"description\":\"old\",\n\"operations\":{}, \"x\" : [ -0, 1e+002, 9007199254740993, \"\\ud800\" ]\n}").unwrap();
     let extension = doc.value().get("x").unwrap().text().to_owned();
-    doc.set_description("different length").unwrap();
+    doc = doc.set_description("different length").unwrap();
     assert_eq!(doc.value().get("x").unwrap().text(), extension);
     let operations = doc.value().get("operations").unwrap().location();
     assert_eq!(
@@ -155,7 +169,7 @@ fn positions_follow_current_bytes_and_untouched_extensions_stay_exact() {
         b"{}"
     );
     assert_eq!(operations.line, 3);
-    doc.set("/operations", &exact("null")).unwrap();
+    doc = doc.set("/operations", &exact("null")).unwrap();
     let error = doc.operations().unwrap_err();
     let location = error.source_location().unwrap();
     assert_eq!(
@@ -172,50 +186,55 @@ fn positions_follow_current_bytes_and_untouched_extensions_stay_exact() {
 #[test]
 fn whole_parts_preserve_absence_null_exact_values_and_collision_paths() {
     let mut doc = Document::new();
-    doc.set_operation(
-        "go",
-        &Operation {
-            input: Some(exact("true")),
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    doc.set_example(
-        "go",
-        "one",
-        &Example {
-            input: Some(exact("null")),
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    doc.set_source(
-        "s",
-        &Source {
-            kind: "custom".into(),
-            data: Some(exact("null")),
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    doc.set_binding(
-        "b",
-        &Binding {
-            operation: "go".into(),
-            source: "s".into(),
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    doc.set_dependency(
-        "d",
-        &Dependency {
-            operation: "go".into(),
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    doc.set("/x-number", &exact("1e9999999999999999")).unwrap();
+    doc = doc
+        .set_operation(
+            "go",
+            &Operation {
+                input: Some(exact("true")),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    doc = doc
+        .set_example(
+            "go",
+            "one",
+            &Example {
+                input: Some(exact("null")),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    doc = doc
+        .set_source(
+            "s",
+            &Source {
+                kind: "custom".into(),
+                data: Some(exact("null")),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    doc = doc
+        .set_binding(
+            "b",
+            &Binding {
+                operation: "go".into(),
+                source: "s".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    doc = doc
+        .set_dependency(
+            "d",
+            &Dependency {
+                operation: "go".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    doc = doc.set("/x-number", &exact("1e9999999999999999")).unwrap();
     let proof = doc.validate().unwrap().conformant().unwrap();
     assert!(proof.name().is_none());
     assert_eq!(proof.source("s").unwrap().data().unwrap().text(), "null");
@@ -384,7 +403,7 @@ fn generated_edit_sequences_over_every_corpus_document_match_reparsed_text() {
         }
         admitted += 1;
         if doc.value().kind() != JsonKind::Object {
-            doc.set("", &exact("{}")).unwrap();
+            doc = doc.set("", &exact("{}")).unwrap();
         }
         let mut expected = String::from_utf8(doc.as_bytes().to_vec()).unwrap();
         for step in 0..24 {
@@ -425,11 +444,11 @@ fn generated_edit_sequences_over_every_corpus_document_match_reparsed_text() {
             let before = expected.clone();
             let (next, range, inserted) = reference(&expected, &pointer, replacement.as_deref());
             if let Some(operations) = part {
-                doc.set_operations(&operations).unwrap();
+                doc = doc.set_operations(&operations).unwrap();
             } else if let Some(value) = replacement {
-                doc.set(&pointer, &exact(&value)).unwrap();
+                doc = doc.set(&pointer, &exact(&value)).unwrap();
             } else {
-                doc.remove(&pointer).unwrap();
+                doc = doc.remove(&pointer).unwrap();
             }
             assert_eq!(
                 &doc.as_bytes()[..range.start],
@@ -455,7 +474,7 @@ fn removing_the_only_child_and_inserting_siblings_uses_one_separator_group() {
         ("[1 ]", "/0", "/-", "[ 2]"),
     ] {
         let mut document = Document::parse(source).unwrap();
-        document
+        document = document
             .edit(&[
                 Edit::Remove {
                     pointer: removed.into(),
@@ -524,7 +543,7 @@ fn removing_any_set_of_siblings_in_one_batch_matches_removing_them_one_at_a_time
                         });
                     }
                     let mut document = Document::parse(source).unwrap();
-                    document.edit(&edits).unwrap();
+                    document = document.edit(&edits).unwrap();
                     assert_eq!(
                         String::from_utf8_lossy(document.as_bytes()),
                         expected,
@@ -535,7 +554,7 @@ fn removing_any_set_of_siblings_in_one_batch_matches_removing_them_one_at_a_time
         }
     }
     let mut document = Document::parse(r#"{"a":1,"b":2,"c":3}"#).unwrap();
-    document
+    document = document
         .edit(&[
             Edit::Remove {
                 pointer: "/b".into(),
@@ -609,7 +628,7 @@ fn overlapping_edits_are_refused_without_changing_bytes() {
             },
         ],
     ] {
-        let mut document = Document::parse(source).unwrap();
+        let document = Document::parse(source).unwrap();
         let error = document.edit(&edits).unwrap_err();
         assert_eq!(error.code(), "overlapping-edits", "{edits:?}");
         assert_eq!(document.as_bytes(), source.as_bytes());
@@ -660,12 +679,12 @@ fn every_typed_part_setter_matches_an_exact_reference_sequence() {
             )
         };
         let (next, range, inserted) = reference(&expected, &pointer, Some(&replacement));
-        match seed % 4 {
+        document = match seed % 4 {
             0 => document.set_operation(&key, &operation).unwrap(),
             1 => document.set_source(&key, &source).unwrap(),
             2 => document.set_binding(&key, &binding).unwrap(),
             _ => document.set_dependency(&key, &dependency).unwrap(),
-        }
+        };
         assert_eq!(document.as_bytes(), next.as_bytes());
         assert_eq!(
             &document.as_bytes()[..range.start],
@@ -721,7 +740,7 @@ fn typed_namespace_batch_preserves_exact_bytes_and_is_atomic() {
         },
     )]);
     let name = exact("\"Batch\"");
-    document
+    document = document
         .edit(&[
             Edit::SetOperations { value: &operations },
             Edit::Set {
@@ -786,7 +805,7 @@ fn a_finding_pointer_through_an_unpaired_name_edits_the_member_it_reports() {
     let conclusion = |doc: &Document| doc.validate().unwrap().report().conclusion;
 
     let mut removed = document.clone();
-    removed.remove(&pointer).unwrap();
+    removed = removed.remove(&pointer).unwrap();
     assert_eq!(
         removed.as_bytes(),
         br#"{"openbindings":"0.2.0","operations":{},"x-a":{"k":2}}"#
@@ -794,7 +813,7 @@ fn a_finding_pointer_through_an_unpaired_name_edits_the_member_it_reports() {
     assert_eq!(conclusion(&removed), Conformance::Conformant);
 
     let mut replaced = document.clone();
-    replaced.set(&pointer, &exact("[3]")).unwrap();
+    replaced = replaced.set(&pointer, &exact("[3]")).unwrap();
     assert_eq!(
         replaced.as_bytes(),
         br#"{"openbindings":"0.2.0","operations":{},"x-a":{"\ud800":[3],"k":2}}"#
@@ -806,12 +825,12 @@ fn a_finding_pointer_through_an_unpaired_name_edits_the_member_it_reports() {
             .collect::<Vec<_>>(),
     )
     .unwrap();
-    replaced.set(&inside, &exact("4")).unwrap();
+    replaced = replaced.set(&inside, &exact("4")).unwrap();
     assert_eq!(replaced.value().at_pointer(&inside).unwrap().text(), "4");
 
     let mut renamed = document.clone();
     let value = exact("1");
-    renamed
+    renamed = renamed
         .edit(&[
             Edit::Remove {
                 pointer: (&pointer).into(),
@@ -839,9 +858,9 @@ fn an_exact_pointer_inserts_and_appends_like_its_text() {
     // A missing name with an unpaired unit, decoded from its escapes, is
     // written as a JSON escape; its own pointer then finds it.
     let inserted = exact_pointer(&[&units("/x/"), &lone, &units("~0~1y")]);
-    doc.set(&inserted, &exact("true")).unwrap();
+    doc = doc.set(&inserted, &exact("true")).unwrap();
     let appended = exact_pointer(&[&units("/x/"), &lone, &units("/list/-")]);
-    doc.set(&appended, &exact("5")).unwrap();
+    doc = doc.set(&appended, &exact("5")).unwrap();
     assert_eq!(
         doc.as_bytes(),
         br#"{"x":{"\ud800":{"list":[5]},"\ud800~/y":true}}"#
@@ -849,19 +868,19 @@ fn an_exact_pointer_inserts_and_appends_like_its_text() {
     assert_eq!(doc.value().at_pointer(&inserted).unwrap().text(), "true");
     // An exact pointer whose units all pair is the same as its text.
     let paired: Pointer = "/x/plain".parse().unwrap();
-    doc.set(&paired, &exact("0")).unwrap();
+    doc = doc.set(&paired, &exact("0")).unwrap();
     assert_eq!(doc.value().at("/x/plain").unwrap().text(), "0");
     // Its refusals match the text form's.
     let missing = exact_pointer(&[&units("/none/"), &lone]);
     assert_eq!(
-        doc.set(&missing, &exact("0")),
-        Err(EditError::MissingParent)
+        doc.set(&missing, &exact("0")).unwrap_err(),
+        EditError::MissingParent
     );
-    assert_eq!(doc.remove(&missing), Err(EditError::MissingValue));
+    assert_eq!(doc.remove(&missing).unwrap_err(), EditError::MissingValue);
     let into_array = exact_pointer(&[&units("/x/"), &lone, &units("/list/"), &lone]);
     assert_eq!(
-        doc.set(&into_array, &exact("0")),
-        Err(EditError::InvalidPointer)
+        doc.set(&into_array, &exact("0")).unwrap_err(),
+        EditError::InvalidPointer
     );
     let duplicate = exact_pointer(&[&units("/x/"), &lone, &units("/n")]);
     let value = exact("1");
@@ -869,5 +888,27 @@ fn an_exact_pointer_inserts_and_appends_like_its_text() {
         pointer: (&duplicate).into(),
         value: &value,
     };
-    assert_eq!(doc.edit(&[twice, twice]), Err(EditError::Overlap));
+    assert_eq!(doc.edit(&[twice, twice]).unwrap_err(), EditError::Overlap);
+}
+
+#[test]
+fn successful_edits_preserve_original_snapshot_and_exact_owners() {
+    let source = " {\"openbindings\":\"0.2.0\",\"operations\":{},\"x-kept\":1e+003} ";
+    let original = Document::parse(source).unwrap();
+    let proof = original.validate().unwrap().conformant().unwrap();
+    let revision = original.set("/description", &JsonValue::null()).unwrap();
+    let empty = original.edit(&[]).unwrap();
+    assert_eq!(original.as_bytes(), source.as_bytes());
+    assert_eq!(proof.document().as_bytes(), source.as_bytes());
+    assert_eq!(empty.as_bytes(), source.as_bytes());
+    assert!(original.value().get("description").is_none());
+    assert_eq!(
+        revision.value().get("description").unwrap().kind(),
+        JsonKind::Null
+    );
+    let retained = revision.value().get("x-kept").unwrap().to_owned();
+    drop(original);
+    drop(revision);
+    assert_eq!(retained.text(), "1e+003");
+    assert_eq!(proof.document().as_bytes(), source.as_bytes());
 }

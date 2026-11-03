@@ -74,7 +74,7 @@ input value contract suspends the provider until its job is dropped, so validati
 failure never appears as clean end of input.
 
 The same input/output lifetime supports empty, unary and streaming interactions.
-For document calls, create `operation::Invoker` with a `Conformant<Document>` and
+For document calls, create `operation::Invoker` with a `ConformantDocument` and
 provider, select an evaluator with `with_evaluator`, hold it in an `Arc`, then
 `prepare` an operation and invoke an `Attempt`. The [invocation guide](https://github.com/openbindings/sdk/blob/main/docs/invocation.md)
 shows the complete caller and describes selection, limits and cancellation.

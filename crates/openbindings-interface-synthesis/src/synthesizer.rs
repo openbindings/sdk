@@ -1,6 +1,6 @@
 use crate::CancellationToken;
 use crate::*;
-use openbindings::{Conformant, Document};
+use openbindings::ConformantDocument;
 use std::{
     future::{Future, poll_fn},
     pin::pin,
@@ -107,7 +107,7 @@ impl<P: InterfaceSynthesizer> Synthesizer<P> {
     pub fn synthesize<'a>(
         &'a self,
         r: &'a SynthesisRequest<'a>,
-    ) -> impl Future<Output = Result<Conformant<Document>, SynthesisError>> + 'a {
+    ) -> impl Future<Output = Result<ConformantDocument, SynthesisError>> + 'a {
         strict(self.with_control(r, CancellationToken::new()))
     }
     /// Strict synthesis with shared caller cancellation.
@@ -127,7 +127,7 @@ impl<P: InterfaceSynthesizer> Synthesizer<P> {
         &'a self,
         r: &'a SynthesisRequest<'a>,
         c: &CancellationToken,
-    ) -> impl Future<Output = Result<Conformant<Document>, SynthesisError>> + 'a {
+    ) -> impl Future<Output = Result<ConformantDocument, SynthesisError>> + 'a {
         strict(self.with_control(r, c.clone()))
     }
     /// Sound document and durable checked coverage, potentially incomplete.
@@ -222,7 +222,7 @@ async fn checked<'a, F: Future<Output = Result<SynthesisCandidate, SynthesisErro
 }
 async fn strict<F: Future<Output = Result<Synthesis, SynthesisError>>>(
     work: F,
-) -> Result<Conformant<Document>, SynthesisError> {
+) -> Result<ConformantDocument, SynthesisError> {
     let s = work.await?;
     if s.coverage().strict_eligible() {
         Ok(s.document)

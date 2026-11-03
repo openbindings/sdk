@@ -2,7 +2,7 @@
 import { Document, EditError } from "@openbindings/sdk";
 export function recoverPartSerialization() {
   const operation = { additionalFields: { input: {} } };
-  const document = Document.create();
+  let document = Document.create();
   try {
     let first;
     try {
@@ -18,7 +18,9 @@ export function recoverPartSerialization() {
       throw new Error("Expected the example's field collision.");
     // Focus the caller's typed part field; no message parsing or byte offset.
     delete operation.additionalFields.input;
-    document.setOperation("run", operation);
+    const changed = document.setOperation("run", operation);
+    document.dispose();
+    document = changed;
     const checked = document.validate();
     if (checked.status !== "conformant")
       throw new Error("Conformance was not established.");

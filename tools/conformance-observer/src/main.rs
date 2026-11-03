@@ -227,7 +227,7 @@ enum Preparation {
     Prepared(Result<PreparedValueContract, NoVerdict>),
 }
 fn prepare(
-    proof: &Conformant<Document>,
+    proof: &ConformantDocument,
     operation: &str,
     side: &str,
     evaluator: &dyn SchemaEvaluator,

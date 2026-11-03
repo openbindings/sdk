@@ -20,23 +20,22 @@ assert_eq!(operation.key(), "lookup");
 `validate_document` checks all document rules on the bytes as given and returns
 evidence as met, violated or inconclusive where applicable. Text that is not JSON
 is an OBI-01 violation in the report, with its location. Only established
-conformance produces a `Conformant<Document>`, with infallible typed field reads
+conformance produces a `ConformantDocument`, with infallible typed field reads
 and operations that hand out value contracts. An unsupported specification
 version is a separate refusal.
 
 To author, create an OBI with `Document::new()` or parse exact JSON with
 `Document::parse`, which retains a snapshot for inspection, including invalid
 editor drafts, and refuses text that is not JSON as an `InputError`;
-`Document::validate` then returns the same validation. Edit that same type through `&mut self`: use `set_description`, whole-part setters
+`Document::validate` then returns the same validation. Edits borrow the original and return a new immutable snapshot: use `set_description`, whole-part setters
 such as `set_operation(key, &operation)`, or RFC 6901 `set` and `remove`.
 `edit(&[Edit])` commits one atomic batch with one splice and one parse. Sibling
 insertions coalesce in batch order; untouched bytes remain exact. The byte budget
 is checked before allocating replacement bytes. Final parsing enforces the default
-JSON limits. A failed batch leaves the document unchanged.
+JSON limits. Both successful and failed batches leave the original document unchanged. Retain the returned document to use an edit.
 
-A `Conformant<Document>` has infallible reads and no mutable access. Use
-`as_document()` for plain fallible reads, or consume it with `into_inner()` to edit
-again. Clones, views, validation reports and proofs retain their own revision;
+A `ConformantDocument` has infallible reads and no mutable access. Use
+`document()` for plain fallible reads, or consume it with `into_inner()` to keep the underlying snapshot. Clones, views, validation reports and proofs retain their own revision;
 editing another owner cannot change them. Positions refer to each revision's
 current bytes, available from `as_bytes()`. Duplicate-member input remains
 inspectable but is refused by typed reads, editing and conformance proof.

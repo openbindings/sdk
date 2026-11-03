@@ -690,7 +690,7 @@ mod numeric_tests {
                     ..Default::default()
                 };
                 let mut draft = openbindings::Document::new();
-                draft
+                draft = draft
                     .set_source(
                         "api",
                         &Source {

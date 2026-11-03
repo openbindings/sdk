@@ -34,7 +34,7 @@ fn source(content: &str) -> Source {
         ..Default::default()
     }
 }
-fn document(operation: &str, content: &str) -> openbindings::Conformant<openbindings::Document> {
+fn document(operation: &str, content: &str) -> openbindings::ConformantDocument {
     Document::parse(format!(r#"{{"openbindings":"0.2.0","operations":{{"run":{operation}}},"sources":{{"catalog":{{"kind":"{KIND}","content":{content}}}}},"bindings":{{"chosen":{{"operation":"run","source":"catalog","content":"manual"}}}}}}"#)).unwrap().validate().unwrap().conformant().unwrap()
 }
 
@@ -53,7 +53,7 @@ impl SchemaEvaluator for Booleans {
         control: &dyn openbindings::WorkControl,
     ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
         control.check()?;
-        let proof: &openbindings::Conformant<openbindings::Document> = request.document();
+        let proof: &openbindings::ConformantDocument = request.document();
         assert_eq!(proof.openbindings(), "0.2.0");
         self.preparations.fetch_add(1, Ordering::Relaxed);
         request

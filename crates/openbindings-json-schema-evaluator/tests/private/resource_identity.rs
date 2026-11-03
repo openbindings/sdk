@@ -33,7 +33,7 @@ fn resources(rows: &[(&str, Value)]) -> ResourceSet {
     }))
     .unwrap()
 }
-fn conformant(doc: &Document) -> Conformant<Document> {
+fn conformant(doc: &Document) -> ConformantDocument {
     doc.validate()
         .unwrap()
         .conformant()
@@ -41,7 +41,7 @@ fn conformant(doc: &Document) -> Conformant<Document> {
 }
 /// Prepare the input contract of the named operation.
 fn prepare_with(
-    proof: &Conformant<Document>,
+    proof: &ConformantDocument,
     supplied: &ResourceSet,
     operation: &str,
     evaluator: &dyn SchemaEvaluator,
@@ -54,14 +54,14 @@ fn prepare_with(
         .prepare_with(evaluator, supplied)
 }
 fn prepare(
-    proof: &Conformant<Document>,
+    proof: &ConformantDocument,
     supplied: &ResourceSet,
     operation: &str,
 ) -> Result<PreparedValueContract, NoVerdict> {
     prepare_with(proof, supplied, operation, &DefaultEvaluator::new())
 }
 fn ready_with(
-    proof: &Conformant<Document>,
+    proof: &ConformantDocument,
     supplied: &ResourceSet,
     operation: &str,
     evaluator: &dyn SchemaEvaluator,
@@ -72,7 +72,7 @@ fn ready_with(
     }
 }
 fn ready(
-    proof: &Conformant<Document>,
+    proof: &ConformantDocument,
     supplied: &ResourceSet,
     operation: &str,
 ) -> PreparedValueContract {

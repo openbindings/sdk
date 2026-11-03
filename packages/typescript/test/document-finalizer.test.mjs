@@ -57,14 +57,14 @@ function deliver(record) {
 test("finalizing an editable document preserves separately acquired exact owners", () => {
   // Independently acquired leaves keep their own finalizers.
   const baseline = testing.liveStorageOwners();
-  const document = sdk.Document.parse(
+  let document = sdk.Document.parse(
     '{"openbindings":"0.2.0","operations":{"run":{"input":9007199254740993}},"schemas":{"removed":false}}',
   ).value;
   const root = document.value();
   const leaf = root.at("/operations/run/input"),
     removed = root.at("/schemas/removed");
   root.dispose();
-  document.remove("/schemas/removed");
+  document = replaceDocument(document, document.remove("/schemas/removed"));
   const documentRecord = registrationFor(document),
     removedRecord = registrationFor(removed);
   assert.ok(documentRecord);
@@ -72,8 +72,11 @@ test("finalizing an editable document preserves separately acquired exact owners
   deliver(documentRecord);
   assert.equal(leaf.disposed, false);
   assert.equal(leaf.text, "9007199254740993");
-  const rebuilt = sdk.Document.create();
-  rebuilt.setOperation("run", { input: leaf });
+  let rebuilt = sdk.Document.create();
+  rebuilt = replaceDocument(
+    rebuilt,
+    rebuilt.setOperation("run", { input: leaf }),
+  );
   rebuilt.dispose();
   deliver(removedRecord);
   leaf.dispose();
@@ -83,7 +86,7 @@ test("finalizing an editable document preserves separately acquired exact owners
 // Temporary exact transfer reattaches a finalizer even after refusal.
 test("a returned exact owner is finalized once after a failed edit", () => {
   const baseline = testing.liveStorageOwners();
-  const document = sdk.Document.create(),
+  let document = sdk.Document.create(),
     value = sdk.parseJson("9007199254740993").value;
   const before = registrationFor(value);
   assert.throws(
@@ -104,3 +107,9 @@ test("a returned exact owner is finalized once after a failed edit", () => {
   document.dispose();
   assert.equal(testing.liveStorageOwners(), baseline);
 });
+
+// Test fixture cursor: keep the new immutable snapshot and release its predecessor.
+function replaceDocument(previous, next) {
+  previous.dispose();
+  return next;
+}

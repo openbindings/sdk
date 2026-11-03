@@ -343,7 +343,7 @@ value nested deeper than half the nesting `stack_bytes` admits is reported as
 failing without its problem; keep `validate` on paths that check untrusted input. The
 explained problem names the failing node by its exact pointer from the value
 passed (`instance`) and the failing keyword by resource and exact pointer
-(`schema`). `JsonValue::locate`, `Conformant::locate` and `ResourceSet::locate`
+(`schema`). `JsonValue::locate`, `ConformantDocument::locate` and `ResourceSet::locate`
 find line and column on demand, so an explanation costs no position. A prepared
 value contract keeps only the original locations of the schemas it reached,
 never their text, the document, its supplied resources or any position.
