@@ -3,12 +3,7 @@ use crate::{
     KindDescription, KindSummary,
 };
 use openbindings_internal_cancellation::CancellationToken;
-use std::{
-    fmt,
-    future::{Future, poll_fn},
-    pin::pin,
-    task::Poll,
-};
+use std::{fmt, future::Future};
 
 /// Provider of kind listings and descriptions. Queries perform no operation under a kind.
 pub trait KindDescriptor {
@@ -94,49 +89,16 @@ impl Default for DescriptionLimits {
     }
 }
 
-struct CancelOnDrop(CancellationToken);
-impl Drop for CancelOnDrop {
-    fn drop(&mut self) {
-        self.0.cancel();
-    }
-}
 async fn call<T, E, F: Future<Output = Result<T, E>>>(
     external: CancellationToken,
     start: impl FnOnce(CancellationToken) -> F,
 ) -> Result<T, ClientError<E>> {
-    // Keep the outcome until provider work and the relay have been released:
-    // provider cleanup can itself complete caller cancellation.
-    let result = {
-        let local = CancellationToken::new();
-        let cancel_on_drop = CancelOnDrop(local.clone());
-        let _relay = openbindings_internal_cancellation::relay(&external, &local);
-        if local.is_cancelled() {
-            return Err(ClientError::Cancelled);
-        }
-        let mut cancelled = pin!(local.cancelled());
-        let mut work = pin!(start(local.clone()));
-        // Moving the guard after work keeps constructor panic protection while
-        // ensuring abandoned work observes cancellation in its destructor.
-        let _cancel_before_work_drop = cancel_on_drop;
-        poll_fn(|cx| {
-            if cancelled.as_mut().poll(cx).is_ready() {
-                return Poll::Ready(Err(ClientError::Cancelled));
-            }
-            let result = work.as_mut().poll(cx);
-            if local.is_cancelled() {
-                Poll::Ready(Err(ClientError::Cancelled))
-            } else {
-                result.map(|result| result.map_err(ClientError::Provider))
-            }
-        })
+    openbindings_internal_cancellation::run_attempt(external, start)
         .await
-    };
-    if external.is_cancelled() {
-        Err(ClientError::Cancelled)
-    } else {
-        result
-    }
+        .ok_or(ClientError::Cancelled)?
+        .map_err(ClientError::Provider)
 }
+
 fn bound<E>(bytes: usize, maximum: usize, resource: &'static str) -> Result<(), ClientError<E>> {
     if bytes > maximum {
         Err(ClientError::LimitExceeded(resource))

@@ -110,6 +110,57 @@ pub fn relay(external: &CancellationToken, local: &CancellationToken) -> Cancell
     }
     registration
 }
+/// Drive one explicitly supplied finite provider attempt until completion or
+/// cancellation. `None` means cancellation; provider outcomes stay unchanged in
+/// `Some`. Construction is lazy, requires no executor or Send/Sync bound, and
+/// receives an isolated child token. Dropping this future cancels that child
+/// before releasing provider work, without cancelling the caller's token.
+///
+/// Provider construction and cleanup may themselves complete cancellation. The
+/// final caller check runs after provider work and the relay have been dropped.
+/// This private SDK mechanism defines no portable role error or retry behavior.
+pub async fn run_attempt<T, F: Future<Output = T>>(
+    external: CancellationToken,
+    start: impl FnOnce(CancellationToken) -> F,
+) -> Option<T> {
+    struct CancelOnDrop(CancellationToken);
+    impl Drop for CancelOnDrop {
+        fn drop(&mut self) {
+            self.0.cancel();
+        }
+    }
+    let outcome = {
+        let local = CancellationToken::new();
+        let cancel_on_drop = CancelOnDrop(local.clone());
+        let _relay = relay(&external, &local);
+        if local.is_cancelled() {
+            return None;
+        }
+        let mut cancelled = std::pin::pin!(local.cancelled());
+        let mut work = std::pin::pin!(start(local.clone()));
+        // The initial guard protects a constructor panic. Moving it here makes
+        // normal completion/abandonment cancel before destroying provider work.
+        let _cancel_before_work_drop = cancel_on_drop;
+        std::future::poll_fn(|cx| {
+            if cancelled.as_mut().poll(cx).is_ready() {
+                return Poll::Ready(None);
+            }
+            let outcome = work.as_mut().poll(cx);
+            if local.is_cancelled() {
+                Poll::Ready(None)
+            } else {
+                outcome.map(Some)
+            }
+        })
+        .await
+    };
+    if external.is_cancelled() {
+        None
+    } else {
+        outcome
+    }
+}
+
 #[must_use = "cancellation futures must be polled or awaited"]
 /// Executor-independent future that resolves on [`CancellationToken::cancel`]. Polling registers a scoped waker; dropping the future unregisters it. It owns a clone of the cancellation state, not a task or timer.
 pub struct Cancellation {
