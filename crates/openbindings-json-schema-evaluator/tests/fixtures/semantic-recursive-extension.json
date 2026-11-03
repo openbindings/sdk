@@ -1,0 +1,2177 @@
+{
+  "spec_revision": "c1419c9fc3ae5a00c2b83da710c11bf67dab7934",
+  "cases": [
+    {
+      "id": "recursive-adversarial/opaque-component-not-self",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "B": {
+            "not": {
+              "$ref": "#/schemas/B"
+            }
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "#/schemas/B"
+            }
+          }
+        }
+      },
+      "value": null,
+      "resources": [],
+      "required_semantic": "undefined",
+      "permitted_bounded_capability": "N",
+      "forbidden": [
+        "S",
+        "F"
+      ],
+      "historical_review_record": {
+        "id": "recursive-adversarial/opaque-component-not-self",
+        "document": {
+          "openbindings": "0.2.0",
+          "schemas": {
+            "B": {
+              "not": {
+                "$ref": "#/schemas/B"
+              }
+            }
+          },
+          "operations": {
+            "op": {
+              "input": {
+                "$ref": "#/schemas/B"
+              }
+            }
+          }
+        },
+        "value": null,
+        "resources": [],
+        "required_semantic": "undefined",
+        "permitted_bounded_capability": "N",
+        "forbidden": [
+          "S",
+          "F"
+        ]
+      },
+      "required": "U",
+      "adjudication": "Pinned same-instance cycle dependence"
+    },
+    {
+      "id": "recursive-adversarial/unresolved-annotation-consumer",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "A": {
+            "anyOf": [
+              true,
+              {
+                "allOf": [
+                  {
+                    "$ref": "#/schemas/A"
+                  },
+                  {
+                    "properties": {
+                      "x": true
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "#/schemas/A",
+              "unevaluatedProperties": false
+            }
+          }
+        }
+      },
+      "value": {
+        "x": 1
+      },
+      "resources": [],
+      "review_control": "Must retain annotation dependency until independently proved; do not certify solely from valid=TRUE.",
+      "historical_review_record": {
+        "id": "recursive-adversarial/unresolved-annotation-consumer",
+        "document": {
+          "openbindings": "0.2.0",
+          "schemas": {
+            "A": {
+              "anyOf": [
+                true,
+                {
+                  "allOf": [
+                    {
+                      "$ref": "#/schemas/A"
+                    },
+                    {
+                      "properties": {
+                        "x": true
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "operations": {
+            "op": {
+              "input": {
+                "$ref": "#/schemas/A",
+                "unevaluatedProperties": false
+              }
+            }
+          }
+        },
+        "value": {
+          "x": 1
+        },
+        "resources": [],
+        "review_control": "Must retain annotation dependency until independently proved; do not certify solely from valid=TRUE."
+      },
+      "required": "S",
+      "adjudication": "Universal validity then annotation refinement"
+    },
+    {
+      "id": "recursive-adversarial/dense-eight-node",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "A0": {
+            "anyOf": [
+              {
+                "$ref": "#/schemas/A0"
+              },
+              {
+                "$ref": "#/schemas/A1"
+              },
+              {
+                "$ref": "#/schemas/A2"
+              },
+              {
+                "$ref": "#/schemas/A3"
+              },
+              {
+                "$ref": "#/schemas/A4"
+              },
+              {
+                "$ref": "#/schemas/A5"
+              },
+              {
+                "$ref": "#/schemas/A6"
+              },
+              {
+                "$ref": "#/schemas/A7"
+              }
+            ]
+          },
+          "A1": {
+            "anyOf": [
+              {
+                "$ref": "#/schemas/A0"
+              },
+              {
+                "$ref": "#/schemas/A1"
+              },
+              {
+                "$ref": "#/schemas/A2"
+              },
+              {
+                "$ref": "#/schemas/A3"
+              },
+              {
+                "$ref": "#/schemas/A4"
+              },
+              {
+                "$ref": "#/schemas/A5"
+              },
+              {
+                "$ref": "#/schemas/A6"
+              },
+              {
+                "$ref": "#/schemas/A7"
+              }
+            ]
+          },
+          "A2": {
+            "anyOf": [
+              {
+                "$ref": "#/schemas/A0"
+              },
+              {
+                "$ref": "#/schemas/A1"
+              },
+              {
+                "$ref": "#/schemas/A2"
+              },
+              {
+                "$ref": "#/schemas/A3"
+              },
+              {
+                "$ref": "#/schemas/A4"
+              },
+              {
+                "$ref": "#/schemas/A5"
+              },
+              {
+                "$ref": "#/schemas/A6"
+              },
+              {
+                "$ref": "#/schemas/A7"
+              }
+            ]
+          },
+          "A3": {
+            "anyOf": [
+              {
+                "$ref": "#/schemas/A0"
+              },
+              {
+                "$ref": "#/schemas/A1"
+              },
+              {
+                "$ref": "#/schemas/A2"
+              },
+              {
+                "$ref": "#/schemas/A3"
+              },
+              {
+                "$ref": "#/schemas/A4"
+              },
+              {
+                "$ref": "#/schemas/A5"
+              },
+              {
+                "$ref": "#/schemas/A6"
+              },
+              {
+                "$ref": "#/schemas/A7"
+              }
+            ]
+          },
+          "A4": {
+            "anyOf": [
+              {
+                "$ref": "#/schemas/A0"
+              },
+              {
+                "$ref": "#/schemas/A1"
+              },
+              {
+                "$ref": "#/schemas/A2"
+              },
+              {
+                "$ref": "#/schemas/A3"
+              },
+              {
+                "$ref": "#/schemas/A4"
+              },
+              {
+                "$ref": "#/schemas/A5"
+              },
+              {
+                "$ref": "#/schemas/A6"
+              },
+              {
+                "$ref": "#/schemas/A7"
+              }
+            ]
+          },
+          "A5": {
+            "anyOf": [
+              {
+                "$ref": "#/schemas/A0"
+              },
+              {
+                "$ref": "#/schemas/A1"
+              },
+              {
+                "$ref": "#/schemas/A2"
+              },
+              {
+                "$ref": "#/schemas/A3"
+              },
+              {
+                "$ref": "#/schemas/A4"
+              },
+              {
+                "$ref": "#/schemas/A5"
+              },
+              {
+                "$ref": "#/schemas/A6"
+              },
+              {
+                "$ref": "#/schemas/A7"
+              }
+            ]
+          },
+          "A6": {
+            "anyOf": [
+              {
+                "$ref": "#/schemas/A0"
+              },
+              {
+                "$ref": "#/schemas/A1"
+              },
+              {
+                "$ref": "#/schemas/A2"
+              },
+              {
+                "$ref": "#/schemas/A3"
+              },
+              {
+                "$ref": "#/schemas/A4"
+              },
+              {
+                "$ref": "#/schemas/A5"
+              },
+              {
+                "$ref": "#/schemas/A6"
+              },
+              {
+                "$ref": "#/schemas/A7"
+              }
+            ]
+          },
+          "A7": {
+            "anyOf": [
+              {
+                "$ref": "#/schemas/A0"
+              },
+              {
+                "$ref": "#/schemas/A1"
+              },
+              {
+                "$ref": "#/schemas/A2"
+              },
+              {
+                "$ref": "#/schemas/A3"
+              },
+              {
+                "$ref": "#/schemas/A4"
+              },
+              {
+                "$ref": "#/schemas/A5"
+              },
+              {
+                "$ref": "#/schemas/A6"
+              },
+              {
+                "$ref": "#/schemas/A7"
+              }
+            ]
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "#/schemas/A0"
+            }
+          }
+        }
+      },
+      "value": null,
+      "resources": [],
+      "required_semantic": "undefined",
+      "permitted_bounded_capability": "N",
+      "forbidden": [
+        "S",
+        "F"
+      ],
+      "historical_review_record": {
+        "id": "recursive-adversarial/dense-eight-node",
+        "document": {
+          "openbindings": "0.2.0",
+          "schemas": {
+            "A0": {
+              "anyOf": [
+                {
+                  "$ref": "#/schemas/A0"
+                },
+                {
+                  "$ref": "#/schemas/A1"
+                },
+                {
+                  "$ref": "#/schemas/A2"
+                },
+                {
+                  "$ref": "#/schemas/A3"
+                },
+                {
+                  "$ref": "#/schemas/A4"
+                },
+                {
+                  "$ref": "#/schemas/A5"
+                },
+                {
+                  "$ref": "#/schemas/A6"
+                },
+                {
+                  "$ref": "#/schemas/A7"
+                }
+              ]
+            },
+            "A1": {
+              "anyOf": [
+                {
+                  "$ref": "#/schemas/A0"
+                },
+                {
+                  "$ref": "#/schemas/A1"
+                },
+                {
+                  "$ref": "#/schemas/A2"
+                },
+                {
+                  "$ref": "#/schemas/A3"
+                },
+                {
+                  "$ref": "#/schemas/A4"
+                },
+                {
+                  "$ref": "#/schemas/A5"
+                },
+                {
+                  "$ref": "#/schemas/A6"
+                },
+                {
+                  "$ref": "#/schemas/A7"
+                }
+              ]
+            },
+            "A2": {
+              "anyOf": [
+                {
+                  "$ref": "#/schemas/A0"
+                },
+                {
+                  "$ref": "#/schemas/A1"
+                },
+                {
+                  "$ref": "#/schemas/A2"
+                },
+                {
+                  "$ref": "#/schemas/A3"
+                },
+                {
+                  "$ref": "#/schemas/A4"
+                },
+                {
+                  "$ref": "#/schemas/A5"
+                },
+                {
+                  "$ref": "#/schemas/A6"
+                },
+                {
+                  "$ref": "#/schemas/A7"
+                }
+              ]
+            },
+            "A3": {
+              "anyOf": [
+                {
+                  "$ref": "#/schemas/A0"
+                },
+                {
+                  "$ref": "#/schemas/A1"
+                },
+                {
+                  "$ref": "#/schemas/A2"
+                },
+                {
+                  "$ref": "#/schemas/A3"
+                },
+                {
+                  "$ref": "#/schemas/A4"
+                },
+                {
+                  "$ref": "#/schemas/A5"
+                },
+                {
+                  "$ref": "#/schemas/A6"
+                },
+                {
+                  "$ref": "#/schemas/A7"
+                }
+              ]
+            },
+            "A4": {
+              "anyOf": [
+                {
+                  "$ref": "#/schemas/A0"
+                },
+                {
+                  "$ref": "#/schemas/A1"
+                },
+                {
+                  "$ref": "#/schemas/A2"
+                },
+                {
+                  "$ref": "#/schemas/A3"
+                },
+                {
+                  "$ref": "#/schemas/A4"
+                },
+                {
+                  "$ref": "#/schemas/A5"
+                },
+                {
+                  "$ref": "#/schemas/A6"
+                },
+                {
+                  "$ref": "#/schemas/A7"
+                }
+              ]
+            },
+            "A5": {
+              "anyOf": [
+                {
+                  "$ref": "#/schemas/A0"
+                },
+                {
+                  "$ref": "#/schemas/A1"
+                },
+                {
+                  "$ref": "#/schemas/A2"
+                },
+                {
+                  "$ref": "#/schemas/A3"
+                },
+                {
+                  "$ref": "#/schemas/A4"
+                },
+                {
+                  "$ref": "#/schemas/A5"
+                },
+                {
+                  "$ref": "#/schemas/A6"
+                },
+                {
+                  "$ref": "#/schemas/A7"
+                }
+              ]
+            },
+            "A6": {
+              "anyOf": [
+                {
+                  "$ref": "#/schemas/A0"
+                },
+                {
+                  "$ref": "#/schemas/A1"
+                },
+                {
+                  "$ref": "#/schemas/A2"
+                },
+                {
+                  "$ref": "#/schemas/A3"
+                },
+                {
+                  "$ref": "#/schemas/A4"
+                },
+                {
+                  "$ref": "#/schemas/A5"
+                },
+                {
+                  "$ref": "#/schemas/A6"
+                },
+                {
+                  "$ref": "#/schemas/A7"
+                }
+              ]
+            },
+            "A7": {
+              "anyOf": [
+                {
+                  "$ref": "#/schemas/A0"
+                },
+                {
+                  "$ref": "#/schemas/A1"
+                },
+                {
+                  "$ref": "#/schemas/A2"
+                },
+                {
+                  "$ref": "#/schemas/A3"
+                },
+                {
+                  "$ref": "#/schemas/A4"
+                },
+                {
+                  "$ref": "#/schemas/A5"
+                },
+                {
+                  "$ref": "#/schemas/A6"
+                },
+                {
+                  "$ref": "#/schemas/A7"
+                }
+              ]
+            }
+          },
+          "operations": {
+            "op": {
+              "input": {
+                "$ref": "#/schemas/A0"
+              }
+            }
+          }
+        },
+        "value": null,
+        "resources": [],
+        "required_semantic": "undefined",
+        "permitted_bounded_capability": "N",
+        "forbidden": [
+          "S",
+          "F"
+        ]
+      },
+      "required": "U",
+      "adjudication": "Pinned same-instance cycle dependence"
+    },
+    {
+      "id": "recursive-extension/annotation/empty",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "A": {
+            "anyOf": [
+              true,
+              {
+                "allOf": [
+                  {
+                    "$ref": "#/schemas/A"
+                  },
+                  {
+                    "properties": {
+                      "x": true
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "#/schemas/A",
+              "unevaluatedProperties": false
+            }
+          }
+        }
+      },
+      "value": {},
+      "resources": [],
+      "required": "S",
+      "reason": "Only x has an originating evaluated-property producer; A validity is constant true."
+    },
+    {
+      "id": "recursive-extension/annotation/extra",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "A": {
+            "anyOf": [
+              true,
+              {
+                "allOf": [
+                  {
+                    "$ref": "#/schemas/A"
+                  },
+                  {
+                    "properties": {
+                      "x": true
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "#/schemas/A",
+              "unevaluatedProperties": false
+            }
+          }
+        }
+      },
+      "value": {
+        "x": 1,
+        "y": 2
+      },
+      "resources": [],
+      "required": "F",
+      "reason": "Only x has an originating evaluated-property producer; A validity is constant true."
+    },
+    {
+      "id": "recursive-extension/annotation/missing-x",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "A": {
+            "anyOf": [
+              true,
+              {
+                "allOf": [
+                  {
+                    "$ref": "#/schemas/A"
+                  },
+                  {
+                    "properties": {
+                      "x": true
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "#/schemas/A",
+              "unevaluatedProperties": false
+            }
+          }
+        }
+      },
+      "value": {
+        "y": 2
+      },
+      "resources": [],
+      "required": "F",
+      "reason": "Only x has an originating evaluated-property producer; A validity is constant true."
+    },
+    {
+      "id": "recursive-extension/annotation/order-False",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "A": {
+            "anyOf": [
+              true,
+              {
+                "allOf": [
+                  {
+                    "$ref": "#/schemas/A"
+                  },
+                  {
+                    "properties": {
+                      "x": true
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "#/schemas/A",
+              "unevaluatedProperties": false
+            }
+          }
+        }
+      },
+      "value": {
+        "x": 1
+      },
+      "resources": [],
+      "required": "S",
+      "reason": "Order does not alter validity or successful annotation union."
+    },
+    {
+      "id": "recursive-extension/annotation/order-True",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "A": {
+            "anyOf": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "#/schemas/A"
+                  },
+                  {
+                    "properties": {
+                      "x": true
+                    }
+                  }
+                ]
+              },
+              true
+            ]
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "#/schemas/A",
+              "unevaluatedProperties": false
+            }
+          }
+        }
+      },
+      "value": {
+        "x": 1
+      },
+      "resources": [],
+      "required": "S",
+      "reason": "Order does not alter validity or successful annotation union."
+    },
+    {
+      "id": "recursive-extension/annotation/failed-producer",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "A": {
+            "anyOf": [
+              true,
+              {
+                "allOf": [
+                  {
+                    "$ref": "#/schemas/A"
+                  },
+                  {
+                    "properties": {
+                      "x": false
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "#/schemas/A",
+              "unevaluatedProperties": false
+            }
+          }
+        }
+      },
+      "value": {
+        "x": 1
+      },
+      "resources": [],
+      "required": "F",
+      "reason": "The only x-producing branch fails and contributes no usable annotation."
+    },
+    {
+      "id": "recursive-extension/annotation/not-discards",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "A": {
+            "anyOf": [
+              true,
+              {
+                "not": {
+                  "allOf": [
+                    {
+                      "$ref": "#/schemas/A"
+                    },
+                    {
+                      "properties": {
+                        "x": true
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "#/schemas/A",
+              "unevaluatedProperties": false
+            }
+          }
+        }
+      },
+      "value": {
+        "x": 1
+      },
+      "resources": [],
+      "required": "F",
+      "reason": "not never exports the child annotation."
+    },
+    {
+      "id": "recursive-extension/annotation/known-undefined-producer",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "A": {
+            "anyOf": [
+              true,
+              {
+                "allOf": [
+                  {
+                    "$ref": "#/schemas/A"
+                  },
+                  {
+                    "properties": {
+                      "x": {
+                        "pattern": "(?i)x"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "#/schemas/A",
+              "unevaluatedProperties": false
+            }
+          }
+        }
+      },
+      "value": {
+        "x": "y"
+      },
+      "resources": [],
+      "required": "U",
+      "reason": "A validity is true; annotation x follows the same original invalid-pattern result."
+    },
+    {
+      "id": "recursive-extension/annotation/items-1",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "A": {
+            "anyOf": [
+              true,
+              {
+                "allOf": [
+                  {
+                    "$ref": "#/schemas/A"
+                  },
+                  {
+                    "prefixItems": [
+                      true
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "#/schemas/A",
+              "unevaluatedItems": false
+            }
+          }
+        }
+      },
+      "value": [
+        1
+      ],
+      "resources": [],
+      "required": "S",
+      "reason": "Tuple index 0 has a known producer; no other index is invented by recurrence."
+    },
+    {
+      "id": "recursive-extension/annotation/items-2",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "A": {
+            "anyOf": [
+              true,
+              {
+                "allOf": [
+                  {
+                    "$ref": "#/schemas/A"
+                  },
+                  {
+                    "prefixItems": [
+                      true
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "#/schemas/A",
+              "unevaluatedItems": false
+            }
+          }
+        }
+      },
+      "value": [
+        1,
+        2
+      ],
+      "resources": [],
+      "required": "F",
+      "reason": "Tuple index 0 has a known producer; no other index is invented by recurrence."
+    },
+    {
+      "id": "recursive-extension/annotation/items-0",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "A": {
+            "anyOf": [
+              true,
+              {
+                "allOf": [
+                  {
+                    "$ref": "#/schemas/A"
+                  },
+                  {
+                    "prefixItems": [
+                      true
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "#/schemas/A",
+              "unevaluatedItems": false
+            }
+          }
+        }
+      },
+      "value": [],
+      "resources": [],
+      "required": "S",
+      "reason": "Tuple index 0 has a known producer; no other index is invented by recurrence."
+    },
+    {
+      "id": "recursive-extension/negative/same-twice",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "B": {
+            "not": {
+              "$ref": "#/schemas/B"
+            }
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "oneOf": [
+                {
+                  "$ref": "#/schemas/B"
+                },
+                {
+                  "$ref": "#/schemas/B"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "value": null,
+      "resources": [],
+      "required": "F",
+      "reason": "Coherence of the same original cyclic application; the outer Boolean identity is decisive."
+    },
+    {
+      "id": "recursive-extension/negative/complement",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "B": {
+            "not": {
+              "$ref": "#/schemas/B"
+            }
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "anyOf": [
+                {
+                  "$ref": "#/schemas/B"
+                },
+                {
+                  "not": {
+                    "$ref": "#/schemas/B"
+                  }
+                }
+              ]
+            }
+          }
+        }
+      },
+      "value": null,
+      "resources": [],
+      "required": "S",
+      "reason": "Coherence of the same original cyclic application; the outer Boolean identity is decisive."
+    },
+    {
+      "id": "recursive-extension/negative/masked-true",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "B": {
+            "not": {
+              "$ref": "#/schemas/B"
+            }
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "anyOf": [
+                true,
+                {
+                  "$ref": "#/schemas/B"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "value": null,
+      "resources": [],
+      "required": "S",
+      "reason": "Coherence of the same original cyclic application; the outer Boolean identity is decisive."
+    },
+    {
+      "id": "recursive-extension/negative/masked-false",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "B": {
+            "not": {
+              "$ref": "#/schemas/B"
+            }
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "allOf": [
+                false,
+                {
+                  "$ref": "#/schemas/B"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "value": null,
+      "resources": [],
+      "required": "F",
+      "reason": "Coherence of the same original cyclic application; the outer Boolean identity is decisive."
+    },
+    {
+      "id": "recursive-extension/negative/transparent-allOf",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "B": {
+            "not": {
+              "$ref": "#/schemas/B"
+            }
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "allOf": [
+                {
+                  "$ref": "#/schemas/B"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "value": null,
+      "resources": [],
+      "required": "U",
+      "reason": "Singleton alias preserves entry and the same undefined cycle outcome."
+    },
+    {
+      "id": "recursive-extension/negative/transparent-anyOf",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "B": {
+            "not": {
+              "$ref": "#/schemas/B"
+            }
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "anyOf": [
+                {
+                  "$ref": "#/schemas/B"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "value": null,
+      "resources": [],
+      "required": "U",
+      "reason": "Singleton alias preserves entry and the same undefined cycle outcome."
+    },
+    {
+      "id": "recursive-extension/negative/transparent-oneOf",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "B": {
+            "not": {
+              "$ref": "#/schemas/B"
+            }
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "oneOf": [
+                {
+                  "$ref": "#/schemas/B"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "value": null,
+      "resources": [],
+      "required": "U",
+      "reason": "Singleton alias preserves entry and the same undefined cycle outcome."
+    },
+    {
+      "id": "recursive-extension/closed-or/size-1",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "A0": {
+            "anyOf": [
+              {
+                "$ref": "#/schemas/A0"
+              }
+            ]
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "#/schemas/A0"
+            }
+          }
+        }
+      },
+      "value": null,
+      "resources": [],
+      "required": "U",
+      "reason": "All reachable leaves are same-instance references in one closed nonempty OR component; uniform false/true cycle completions give opposite outcomes."
+    },
+    {
+      "id": "recursive-extension/closed-or/reversed-1",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "A0": {
+            "anyOf": [
+              {
+                "$ref": "#/schemas/A0"
+              }
+            ]
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "#/schemas/A0"
+            }
+          }
+        }
+      },
+      "value": null,
+      "resources": [],
+      "required": "U",
+      "reason": "Renaming entry and reordering branches cannot alter closed-component dependence."
+    },
+    {
+      "id": "recursive-extension/closed-or/size-2",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "A0": {
+            "anyOf": [
+              {
+                "$ref": "#/schemas/A0"
+              },
+              {
+                "$ref": "#/schemas/A1"
+              }
+            ]
+          },
+          "A1": {
+            "anyOf": [
+              {
+                "$ref": "#/schemas/A0"
+              },
+              {
+                "$ref": "#/schemas/A1"
+              }
+            ]
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "#/schemas/A0"
+            }
+          }
+        }
+      },
+      "value": null,
+      "resources": [],
+      "required": "U",
+      "reason": "All reachable leaves are same-instance references in one closed nonempty OR component; uniform false/true cycle completions give opposite outcomes."
+    },
+    {
+      "id": "recursive-extension/closed-or/reversed-2",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "A0": {
+            "anyOf": [
+              {
+                "$ref": "#/schemas/A1"
+              },
+              {
+                "$ref": "#/schemas/A0"
+              }
+            ]
+          },
+          "A1": {
+            "anyOf": [
+              {
+                "$ref": "#/schemas/A1"
+              },
+              {
+                "$ref": "#/schemas/A0"
+              }
+            ]
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "#/schemas/A1"
+            }
+          }
+        }
+      },
+      "value": null,
+      "resources": [],
+      "required": "U",
+      "reason": "Renaming entry and reordering branches cannot alter closed-component dependence."
+    },
+    {
+      "id": "recursive-extension/closed-or/size-4",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "A0": {
+            "anyOf": [
+              {
+                "$ref": "#/schemas/A0"
+              },
+              {
+                "$ref": "#/schemas/A1"
+              },
+              {
+                "$ref": "#/schemas/A2"
+              },
+              {
+                "$ref": "#/schemas/A3"
+              }
+            ]
+          },
+          "A1": {
+            "anyOf": [
+              {
+                "$ref": "#/schemas/A0"
+              },
+              {
+                "$ref": "#/schemas/A1"
+              },
+              {
+                "$ref": "#/schemas/A2"
+              },
+              {
+                "$ref": "#/schemas/A3"
+              }
+            ]
+          },
+          "A2": {
+            "anyOf": [
+              {
+                "$ref": "#/schemas/A0"
+              },
+              {
+                "$ref": "#/schemas/A1"
+              },
+              {
+                "$ref": "#/schemas/A2"
+              },
+              {
+                "$ref": "#/schemas/A3"
+              }
+            ]
+          },
+          "A3": {
+            "anyOf": [
+              {
+                "$ref": "#/schemas/A0"
+              },
+              {
+                "$ref": "#/schemas/A1"
+              },
+              {
+                "$ref": "#/schemas/A2"
+              },
+              {
+                "$ref": "#/schemas/A3"
+              }
+            ]
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "#/schemas/A0"
+            }
+          }
+        }
+      },
+      "value": null,
+      "resources": [],
+      "required": "U",
+      "reason": "All reachable leaves are same-instance references in one closed nonempty OR component; uniform false/true cycle completions give opposite outcomes."
+    },
+    {
+      "id": "recursive-extension/closed-or/reversed-4",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "A0": {
+            "anyOf": [
+              {
+                "$ref": "#/schemas/A3"
+              },
+              {
+                "$ref": "#/schemas/A2"
+              },
+              {
+                "$ref": "#/schemas/A1"
+              },
+              {
+                "$ref": "#/schemas/A0"
+              }
+            ]
+          },
+          "A1": {
+            "anyOf": [
+              {
+                "$ref": "#/schemas/A3"
+              },
+              {
+                "$ref": "#/schemas/A2"
+              },
+              {
+                "$ref": "#/schemas/A1"
+              },
+              {
+                "$ref": "#/schemas/A0"
+              }
+            ]
+          },
+          "A2": {
+            "anyOf": [
+              {
+                "$ref": "#/schemas/A3"
+              },
+              {
+                "$ref": "#/schemas/A2"
+              },
+              {
+                "$ref": "#/schemas/A1"
+              },
+              {
+                "$ref": "#/schemas/A0"
+              }
+            ]
+          },
+          "A3": {
+            "anyOf": [
+              {
+                "$ref": "#/schemas/A3"
+              },
+              {
+                "$ref": "#/schemas/A2"
+              },
+              {
+                "$ref": "#/schemas/A1"
+              },
+              {
+                "$ref": "#/schemas/A0"
+              }
+            ]
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "#/schemas/A3"
+            }
+          }
+        }
+      },
+      "value": null,
+      "resources": [],
+      "required": "U",
+      "reason": "Renaming entry and reordering branches cannot alter closed-component dependence."
+    },
+    {
+      "id": "recursive-extension/closed-or/size-8",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "A0": {
+            "anyOf": [
+              {
+                "$ref": "#/schemas/A0"
+              },
+              {
+                "$ref": "#/schemas/A1"
+              },
+              {
+                "$ref": "#/schemas/A2"
+              },
+              {
+                "$ref": "#/schemas/A3"
+              },
+              {
+                "$ref": "#/schemas/A4"
+              },
+              {
+                "$ref": "#/schemas/A5"
+              },
+              {
+                "$ref": "#/schemas/A6"
+              },
+              {
+                "$ref": "#/schemas/A7"
+              }
+            ]
+          },
+          "A1": {
+            "anyOf": [
+              {
+                "$ref": "#/schemas/A0"
+              },
+              {
+                "$ref": "#/schemas/A1"
+              },
+              {
+                "$ref": "#/schemas/A2"
+              },
+              {
+                "$ref": "#/schemas/A3"
+              },
+              {
+                "$ref": "#/schemas/A4"
+              },
+              {
+                "$ref": "#/schemas/A5"
+              },
+              {
+                "$ref": "#/schemas/A6"
+              },
+              {
+                "$ref": "#/schemas/A7"
+              }
+            ]
+          },
+          "A2": {
+            "anyOf": [
+              {
+                "$ref": "#/schemas/A0"
+              },
+              {
+                "$ref": "#/schemas/A1"
+              },
+              {
+                "$ref": "#/schemas/A2"
+              },
+              {
+                "$ref": "#/schemas/A3"
+              },
+              {
+                "$ref": "#/schemas/A4"
+              },
+              {
+                "$ref": "#/schemas/A5"
+              },
+              {
+                "$ref": "#/schemas/A6"
+              },
+              {
+                "$ref": "#/schemas/A7"
+              }
+            ]
+          },
+          "A3": {
+            "anyOf": [
+              {
+                "$ref": "#/schemas/A0"
+              },
+              {
+                "$ref": "#/schemas/A1"
+              },
+              {
+                "$ref": "#/schemas/A2"
+              },
+              {
+                "$ref": "#/schemas/A3"
+              },
+              {
+                "$ref": "#/schemas/A4"
+              },
+              {
+                "$ref": "#/schemas/A5"
+              },
+              {
+                "$ref": "#/schemas/A6"
+              },
+              {
+                "$ref": "#/schemas/A7"
+              }
+            ]
+          },
+          "A4": {
+            "anyOf": [
+              {
+                "$ref": "#/schemas/A0"
+              },
+              {
+                "$ref": "#/schemas/A1"
+              },
+              {
+                "$ref": "#/schemas/A2"
+              },
+              {
+                "$ref": "#/schemas/A3"
+              },
+              {
+                "$ref": "#/schemas/A4"
+              },
+              {
+                "$ref": "#/schemas/A5"
+              },
+              {
+                "$ref": "#/schemas/A6"
+              },
+              {
+                "$ref": "#/schemas/A7"
+              }
+            ]
+          },
+          "A5": {
+            "anyOf": [
+              {
+                "$ref": "#/schemas/A0"
+              },
+              {
+                "$ref": "#/schemas/A1"
+              },
+              {
+                "$ref": "#/schemas/A2"
+              },
+              {
+                "$ref": "#/schemas/A3"
+              },
+              {
+                "$ref": "#/schemas/A4"
+              },
+              {
+                "$ref": "#/schemas/A5"
+              },
+              {
+                "$ref": "#/schemas/A6"
+              },
+              {
+                "$ref": "#/schemas/A7"
+              }
+            ]
+          },
+          "A6": {
+            "anyOf": [
+              {
+                "$ref": "#/schemas/A0"
+              },
+              {
+                "$ref": "#/schemas/A1"
+              },
+              {
+                "$ref": "#/schemas/A2"
+              },
+              {
+                "$ref": "#/schemas/A3"
+              },
+              {
+                "$ref": "#/schemas/A4"
+              },
+              {
+                "$ref": "#/schemas/A5"
+              },
+              {
+                "$ref": "#/schemas/A6"
+              },
+              {
+                "$ref": "#/schemas/A7"
+              }
+            ]
+          },
+          "A7": {
+            "anyOf": [
+              {
+                "$ref": "#/schemas/A0"
+              },
+              {
+                "$ref": "#/schemas/A1"
+              },
+              {
+                "$ref": "#/schemas/A2"
+              },
+              {
+                "$ref": "#/schemas/A3"
+              },
+              {
+                "$ref": "#/schemas/A4"
+              },
+              {
+                "$ref": "#/schemas/A5"
+              },
+              {
+                "$ref": "#/schemas/A6"
+              },
+              {
+                "$ref": "#/schemas/A7"
+              }
+            ]
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "#/schemas/A0"
+            }
+          }
+        }
+      },
+      "value": null,
+      "resources": [],
+      "required": "U",
+      "reason": "All reachable leaves are same-instance references in one closed nonempty OR component; uniform false/true cycle completions give opposite outcomes."
+    },
+    {
+      "id": "recursive-extension/closed-or/reversed-8",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "A0": {
+            "anyOf": [
+              {
+                "$ref": "#/schemas/A7"
+              },
+              {
+                "$ref": "#/schemas/A6"
+              },
+              {
+                "$ref": "#/schemas/A5"
+              },
+              {
+                "$ref": "#/schemas/A4"
+              },
+              {
+                "$ref": "#/schemas/A3"
+              },
+              {
+                "$ref": "#/schemas/A2"
+              },
+              {
+                "$ref": "#/schemas/A1"
+              },
+              {
+                "$ref": "#/schemas/A0"
+              }
+            ]
+          },
+          "A1": {
+            "anyOf": [
+              {
+                "$ref": "#/schemas/A7"
+              },
+              {
+                "$ref": "#/schemas/A6"
+              },
+              {
+                "$ref": "#/schemas/A5"
+              },
+              {
+                "$ref": "#/schemas/A4"
+              },
+              {
+                "$ref": "#/schemas/A3"
+              },
+              {
+                "$ref": "#/schemas/A2"
+              },
+              {
+                "$ref": "#/schemas/A1"
+              },
+              {
+                "$ref": "#/schemas/A0"
+              }
+            ]
+          },
+          "A2": {
+            "anyOf": [
+              {
+                "$ref": "#/schemas/A7"
+              },
+              {
+                "$ref": "#/schemas/A6"
+              },
+              {
+                "$ref": "#/schemas/A5"
+              },
+              {
+                "$ref": "#/schemas/A4"
+              },
+              {
+                "$ref": "#/schemas/A3"
+              },
+              {
+                "$ref": "#/schemas/A2"
+              },
+              {
+                "$ref": "#/schemas/A1"
+              },
+              {
+                "$ref": "#/schemas/A0"
+              }
+            ]
+          },
+          "A3": {
+            "anyOf": [
+              {
+                "$ref": "#/schemas/A7"
+              },
+              {
+                "$ref": "#/schemas/A6"
+              },
+              {
+                "$ref": "#/schemas/A5"
+              },
+              {
+                "$ref": "#/schemas/A4"
+              },
+              {
+                "$ref": "#/schemas/A3"
+              },
+              {
+                "$ref": "#/schemas/A2"
+              },
+              {
+                "$ref": "#/schemas/A1"
+              },
+              {
+                "$ref": "#/schemas/A0"
+              }
+            ]
+          },
+          "A4": {
+            "anyOf": [
+              {
+                "$ref": "#/schemas/A7"
+              },
+              {
+                "$ref": "#/schemas/A6"
+              },
+              {
+                "$ref": "#/schemas/A5"
+              },
+              {
+                "$ref": "#/schemas/A4"
+              },
+              {
+                "$ref": "#/schemas/A3"
+              },
+              {
+                "$ref": "#/schemas/A2"
+              },
+              {
+                "$ref": "#/schemas/A1"
+              },
+              {
+                "$ref": "#/schemas/A0"
+              }
+            ]
+          },
+          "A5": {
+            "anyOf": [
+              {
+                "$ref": "#/schemas/A7"
+              },
+              {
+                "$ref": "#/schemas/A6"
+              },
+              {
+                "$ref": "#/schemas/A5"
+              },
+              {
+                "$ref": "#/schemas/A4"
+              },
+              {
+                "$ref": "#/schemas/A3"
+              },
+              {
+                "$ref": "#/schemas/A2"
+              },
+              {
+                "$ref": "#/schemas/A1"
+              },
+              {
+                "$ref": "#/schemas/A0"
+              }
+            ]
+          },
+          "A6": {
+            "anyOf": [
+              {
+                "$ref": "#/schemas/A7"
+              },
+              {
+                "$ref": "#/schemas/A6"
+              },
+              {
+                "$ref": "#/schemas/A5"
+              },
+              {
+                "$ref": "#/schemas/A4"
+              },
+              {
+                "$ref": "#/schemas/A3"
+              },
+              {
+                "$ref": "#/schemas/A2"
+              },
+              {
+                "$ref": "#/schemas/A1"
+              },
+              {
+                "$ref": "#/schemas/A0"
+              }
+            ]
+          },
+          "A7": {
+            "anyOf": [
+              {
+                "$ref": "#/schemas/A7"
+              },
+              {
+                "$ref": "#/schemas/A6"
+              },
+              {
+                "$ref": "#/schemas/A5"
+              },
+              {
+                "$ref": "#/schemas/A4"
+              },
+              {
+                "$ref": "#/schemas/A3"
+              },
+              {
+                "$ref": "#/schemas/A2"
+              },
+              {
+                "$ref": "#/schemas/A1"
+              },
+              {
+                "$ref": "#/schemas/A0"
+              }
+            ]
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "#/schemas/A7"
+            }
+          }
+        }
+      },
+      "value": null,
+      "resources": [],
+      "required": "U",
+      "reason": "Renaming entry and reordering branches cannot alter closed-component dependence."
+    },
+    {
+      "id": "recursive-extension/closed-or/outer-S",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "A": {
+            "anyOf": [
+              {
+                "$ref": "#/schemas/A"
+              }
+            ]
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "anyOf": [
+                true,
+                {
+                  "$ref": "#/schemas/A"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "value": null,
+      "resources": [],
+      "required": "S",
+      "reason": "Decisive enclosing branch defeats any cycle dependence."
+    },
+    {
+      "id": "recursive-extension/closed-or/outer-F",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "A": {
+            "anyOf": [
+              {
+                "$ref": "#/schemas/A"
+              }
+            ]
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "allOf": [
+                false,
+                {
+                  "$ref": "#/schemas/A"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "value": null,
+      "resources": [],
+      "required": "F",
+      "reason": "Decisive enclosing branch defeats any cycle dependence."
+    },
+    {
+      "id": "recursive-extension/exclusion/consuming-recursion",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "A": {
+            "type": "object",
+            "properties": {
+              "child": {
+                "$ref": "#/schemas/A"
+              }
+            }
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "#/schemas/A"
+            }
+          }
+        }
+      },
+      "value": {
+        "child": {}
+      },
+      "resources": [],
+      "required": "S",
+      "reason": "Changing instance occurrence is consumption, not the same-instance cycle class."
+    },
+    {
+      "id": "recursive-extension/exclusion/absent-content",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "A": {
+            "anyOf": [
+              {
+                "$ref": "#/schemas/A"
+              },
+              {
+                "$ref": "https://review.test/missing"
+              }
+            ]
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "#/schemas/A"
+            }
+          }
+        }
+      },
+      "value": null,
+      "resources": [],
+      "required": "N:resource-unavailable",
+      "reason": "An external true schema makes this S; the document alone cannot establish unconditional U."
+    }
+  ],
+  "note": "Required semantics are derived independently; no SDK observations used. Historical records retained inline for the original three cases."
+}

@@ -68,15 +68,31 @@ a different independence boundary. A conservative opaque local summary may depen
 on either category.
 
 Pure reference aliases preserve resource entry and dynamic scope before being
-normalized. A pure alias cycle can establish `Undefined`. More complex recursive
-components use conservative summaries; an unfinished recursive proof gives
-`NoVerdict`, never an answer inferred from a traversal cut. Decisive surrounding
-logic can still establish a result.
+normalized. A pure alias cycle can establish `Undefined`. Recursive summaries also
+refine separately proved validity and evaluated-property/item coordinates between
+attempts. A completed state is cached only when every coordinate is independent
+of transient cuts. A bounded original-graph producer analysis prevents recursion
+from inventing evaluated names or positions. Complete producer states supply
+formula-valued upper bounds, preserving conditional selection and undefined
+pattern correlations; unknown contents keep their support unknown. Exact property
+names remain UTF-16 sequences even in supplied schemas. A malformed reference
+contributes a local undefined result. An identifier establishes a base rather
+than an assertion: a malformed identifier affects validity through references
+that depend on that base, not merely by being present.
 
-The current implementation has open capability gaps for some complex recursive
-summaries. The 1,546 required migration values pass, including standard external
-dialects and custom vocabulary/format cases. Finite passing suites do not
-establish complete JSON Schema support.
+After universal S/F proofs, a separate direct-entry certificate can establish U
+for a canonical negating self-cycle or a fully closed, strongly connected OR
+component. It inspects every original transparent wrapper, accepts only standard
+2020-12 interpretation with no effective dynamic scope, and requires complete
+closure. It does not solve general Boolean fixed points or publish reusable
+choices for individual component members. Unfinished proofs and excluded recursive
+shapes remain honest `NoVerdict` results. All rounds, closures and retained facts
+share the same work and allocation allowance.
+
+The 1,546 required migration values pass, including standard external dialects and
+custom vocabulary/format cases. The additional recursive extension has 33
+independently adjudicated controls. Finite suites and these deliberately narrow
+certificates do not establish complete JSON Schema support.
 
 ## Limits and cancellation
 

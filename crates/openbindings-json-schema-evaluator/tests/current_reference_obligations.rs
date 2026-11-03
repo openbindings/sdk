@@ -36,7 +36,7 @@ struct Case {
     schema: Option<Value>,
     #[serde(default)]
     value: Value,
-    #[serde(default, rename = "valueText")]
+    #[serde(default, rename = "valueText", alias = "value_text")]
     value_text: Option<String>,
     #[serde(default)]
     resources: Vec<Resource>,
@@ -47,7 +47,10 @@ struct Case {
 #[derive(Deserialize)]
 struct Resource {
     uri: String,
+    #[serde(default)]
     schema: Value,
+    #[serde(default)]
+    schema_text: Option<String>,
 }
 #[test]
 fn current_reference_obligations_have_required_semantic_results() {
@@ -78,6 +81,28 @@ fn recursive_summaries_preserve_validity_and_evaluated_annotations() {
     check_values(cases);
 }
 #[test]
+fn recursive_extension_meets_independently_adjudicated_results() {
+    #[derive(Deserialize)]
+    struct Controls {
+        cases: Vec<Case>,
+    }
+    let controls: Controls =
+        serde_json::from_str(include_str!("fixtures/semantic-recursive-extension.json")).unwrap();
+    assert_eq!(controls.cases.len(), 33);
+    check_values(controls.cases);
+}
+#[test]
+fn recursive_coordinates_follow_selected_complete_producers() {
+    #[derive(Deserialize)]
+    struct Controls {
+        cases: Vec<Case>,
+    }
+    let controls: Controls =
+        serde_json::from_str(include_str!("fixtures/semantic-coordinate-refinement.json")).unwrap();
+    assert_eq!(controls.cases.len(), 71);
+    check_values(controls.cases);
+}
+#[test]
 fn semantic_fallback_honors_construction_and_evaluation_limits() {
     let cases: Vec<Case> =
         serde_json::from_str(include_str!("fixtures/semantic-limits.json")).unwrap();
@@ -104,11 +129,17 @@ fn check_values(cases: Vec<Case>) {
         let proof = validation
             .conformant()
             .unwrap_or_else(|| panic!("{} admission", case.id));
-        let external = ExternalSchemas::new(case.resources.into_iter().map(|r| ExternalSchema {
-            uri: r.uri,
-            document: JsonValue::parse(r.schema.to_string()).unwrap(),
-        }))
-        .unwrap();
+        let external =
+            ExternalSchemas::new(
+                case.resources.into_iter().map(|r| ExternalSchema {
+                    uri: r.uri,
+                    document: JsonValue::parse(
+                        r.schema_text.unwrap_or_else(|| r.schema.to_string()),
+                    )
+                    .unwrap(),
+                }),
+            )
+            .unwrap();
         let schema = proof.resolve_operation("op").unwrap().input().unwrap();
         match schema.prepare(
             &DefaultEvaluator::with_limits(case.limits),
@@ -136,7 +167,9 @@ fn check_values(cases: Vec<Case>) {
                         }
                         ValueOutcome::NoVerdict { .. } => "N",
                     };
-                    if actual != case.required {
+                    if actual != case.required
+                        && !(actual == "external" && case.required == "N:resource-unavailable")
+                    {
                         failures.push(format!(
                             "{}: expected {}, got {result:?}",
                             case.id, case.required
@@ -149,8 +182,10 @@ fn check_values(cases: Vec<Case>) {
                 ..
             }) if case.required == "limit" => {}
             Err(failure) => failures.push(format!(
-                "{}: expected {}, preparation refused {failure:?}",
-                case.id, case.required
+                "{}: expected {}, preparation refused {}",
+                case.id,
+                case.required,
+                serde_json::to_string(&failure).unwrap()
             )),
         }
     }

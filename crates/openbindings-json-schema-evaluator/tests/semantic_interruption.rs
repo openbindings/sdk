@@ -70,3 +70,124 @@ fn direct_validator_checks_cancellation_before_inspecting_duplicates() {
         );
     }
 }
+
+#[test]
+fn every_recursive_refinement_and_certificate_stop_keeps_clean_retries() {
+    let mut controls: serde_json::Value =
+        serde_json::from_str(include_str!("fixtures/semantic-recursive-extension.json")).unwrap();
+    let coordinates: serde_json::Value =
+        serde_json::from_str(include_str!("fixtures/semantic-coordinate-refinement.json")).unwrap();
+    controls["cases"]
+        .as_array_mut()
+        .unwrap()
+        .extend(coordinates["cases"].as_array().unwrap().iter().cloned());
+    let selected = [
+        "recursive-adversarial/opaque-component-not-self",
+        "recursive-adversarial/unresolved-annotation-consumer",
+        "recursive-extension/closed-or/size-4",
+        "recursive-extension/annotation/known-undefined-producer",
+        "recursive-extension/exclusion/absent-content",
+        "coordinate-review/pattern-does-not-produce-y",
+        "coordinate-review/patternProperties-undefined-correlation",
+        "coordinate-review/unknown-external-support",
+    ];
+    assert_eq!(
+        controls["cases"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|case| selected.contains(&case["id"].as_str().unwrap()))
+            .count(),
+        selected.len()
+    );
+    for case in controls["cases"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|case| selected.contains(&case["id"].as_str().unwrap()))
+    {
+        let schema = Document::parse(case["document"].to_string())
+            .unwrap()
+            .validate()
+            .unwrap()
+            .conformant()
+            .unwrap()
+            .operation("op")
+            .unwrap()
+            .input()
+            .unwrap();
+        let prepared = schema
+            .prepare(
+                &DefaultEvaluator::new(),
+                &ExternalSchemas::default(),
+                &PreparationLimits::default(),
+            )
+            .unwrap();
+        let value = JsonValue::parse(case["value"].to_string()).unwrap();
+        let code = |outcome: &ValueOutcome| match outcome {
+            ValueOutcome::Satisfies => "S",
+            ValueOutcome::Fails { .. } => "F",
+            ValueOutcome::Undefined { .. } => "U",
+            ValueOutcome::NoVerdict { detail }
+                if detail.reason == NoVerdictReason::ResourceUnavailable =>
+            {
+                "N:resource-unavailable"
+            }
+            _ => "unexpected",
+        };
+        for explain in [false, true] {
+            let invoke = |control: &dyn WorkControl| {
+                if explain {
+                    prepared.explain_with_control(&value, control)
+                } else {
+                    prepared.evaluate_with_control(&value, control)
+                }
+            };
+            let counter = CancelAfter {
+                calls: AtomicUsize::new(0),
+                allowance: usize::MAX,
+            };
+            assert_eq!(
+                code(&invoke(&counter)),
+                case["required"].as_str().unwrap(),
+                "{}",
+                case["id"]
+            );
+            let checks = counter.calls.load(Ordering::Relaxed);
+            let mut interruptions = 0;
+            for allowance in 0..=checks {
+                let control = CancelAfter {
+                    calls: AtomicUsize::new(0),
+                    allowance,
+                };
+                let result = invoke(&control);
+                if control.calls.load(Ordering::Relaxed) > allowance {
+                    assert!(
+                        matches!(result, ValueOutcome::NoVerdict { detail } if detail.reason == NoVerdictReason::Cancelled),
+                        "{} stop {allowance}",
+                        case["id"]
+                    );
+                    interruptions += 1;
+                } else {
+                    assert_eq!(
+                        code(&result),
+                        case["required"].as_str().unwrap(),
+                        "{} stop {allowance}",
+                        case["id"]
+                    );
+                }
+                assert_eq!(
+                    code(&invoke(&AtomicBool::new(false))),
+                    case["required"].as_str().unwrap(),
+                    "{} retry {allowance}",
+                    case["id"]
+                );
+            }
+            assert!(
+                interruptions > 10,
+                "{} must reach the proof work",
+                case["id"]
+            );
+        }
+    }
+}

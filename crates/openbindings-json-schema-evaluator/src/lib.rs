@@ -199,33 +199,25 @@ impl Default for Limits {
     }
 }
 #[derive(Clone, Debug, Default)]
-/// Optional JSON Schema 2020-12 companion with exact numeric semantics and
-/// explicit resources only, composed over the unmodified `jsonschema` library.
-/// It performs no network or filesystem acquisition. `format` is an
-/// annotation. Patterns run on a linear-time engine.
+/// Default schema evaluator with exact JSON values and explicit external resources.
+/// It performs no network or filesystem acquisition. Contained schemas use the
+/// specification's fixed 2020-12 interpretation; supplied resources retain their
+/// original dialect, identifiers and dynamic scope.
 ///
-/// A value contract prepares with a stand-in for what the evaluator cannot
-/// evaluate: a resource that was not supplied, a schema that could apply
-/// again without consuming the instance, and a pattern, in `pattern` or as a
-/// `patternProperties` name, that is invalid with Unicode semantics, needs a
-/// backtracking engine (lookaround or backreferences), has a Unicode property
-/// escape or holds the non-word boundary `\B`. A value whose verdict depends
-/// on how a stand-in comes out gives no verdict naming it; every other value
-/// keeps the verdict that holds however the stand-ins come out, which a
-/// second program decides for a pass that reaches one, within eight times
-/// that pass's work and 64 units more, counted as [`Limits::evaluation_steps`]
-/// counts work. A value contract in
-/// which an `unevaluatedProperties` or `unevaluatedItems` keyword's
-/// annotation sources reach a stand-in for a missing resource, a cycle or
-/// `patternProperties` names, a reference to a fragment of a missing
-/// resource, or one that identifies no schema refuses preparation. Use a
-/// custom [`SchemaEvaluator`] when different qualified capabilities are
-/// required.
+/// Ordinary supported schemas use the compiled validator. When compilation
+/// cannot preserve the original meaning, a bounded semantic plan reasons about
+/// validity and evaluated-property/item annotations. Known undefined predicates,
+/// unavailable content and evaluator limitations remain distinct. A surrounding
+/// applicator may settle a result despite a local unknown; otherwise evaluation
+/// returns [`ValueOutcome::Undefined`] or a typed [`ValueOutcome::NoVerdict`].
+/// Recursive proofs use certified summaries and bounded coordinate refinement;
+/// unresolved components may still require an unsupported-capability result.
 ///
-/// A cheap check ([`Detail::Outcome`]) decides with the library's validity test
-/// and reports a failure with a fixed message and no problems. An explanation
-/// ([`Detail::Explain`]) reports the library's first error at the keyword's
-/// original schema location, with a redacted message.
+/// Preparation and evaluation honor their explicit limits and cancellation.
+/// [`Detail::Outcome`] avoids collecting failure explanations. [`Detail::Explain`]
+/// may supply a bounded diagnostic at an established original source location;
+/// it does not change the semantic outcome. A custom [`SchemaEvaluator`] can
+/// provide different qualified capabilities.
 pub struct DefaultEvaluator {
     limits: Limits,
 }
@@ -336,6 +328,7 @@ impl DefaultEvaluator {
                     PreparationFailureKind::UnsupportedCapability { capability } => matches!(
                         capability.as_str(),
                         "foreign-dialect-projection"
+                            | "lone-surrogate-schema"
                             | "in-place-cycle"
                             | "evaluation-cycle"
                             | "schema-pattern-compilation"

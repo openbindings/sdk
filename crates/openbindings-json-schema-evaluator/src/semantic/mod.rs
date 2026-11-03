@@ -2,12 +2,14 @@
 //! The ordinary compiled engine remains the fast path. This layer represents
 //! local effects and applicator annotations together when that path cannot
 //! establish a value's result. It does not infer Undefined from failed bounds.
+mod cycles;
 mod decision;
 mod formats;
 mod meta;
 mod patterns;
 mod preparation;
 mod primitive;
+mod refinement;
 mod regex_format;
 mod values;
 use self::decision::{Class, FALSE, Formula, Graph, TRUE};
@@ -135,6 +137,10 @@ impl Plan {
             provisional: HashSet::new(),
             retry: false,
             memo: HashMap::new(),
+            facts: HashMap::new(),
+            pending_facts: HashMap::new(),
+            supports: HashMap::new(),
+            support_memo_count: 0,
             queries: HashMap::new(),
             patterns: HashMap::new(),
             depth: 0,
@@ -144,12 +150,19 @@ impl Plan {
             let result = run.schema(self.entry, value.view(), &Vec::new());
             if run.retry {
                 run.retry = false;
-                if !run.finish_attempt() {
-                    return ValueOutcome::NoVerdict {
-                        detail: cycle_inability(),
-                    };
+                match run.finish_attempt() {
+                    Ok(true) => continue,
+                    Ok(false) => {
+                        return run.finish_root(
+                            value.view(),
+                            ValueOutcome::NoVerdict {
+                                detail: cycle_inability(),
+                            },
+                            unavailable,
+                        );
+                    }
+                    Err(detail) => return ValueOutcome::NoVerdict { detail },
                 }
-                continue;
             }
             let result = result.and_then(|state| {
                 if run.pending_cycles.is_empty()
@@ -160,16 +173,22 @@ impl Plan {
                 // An enclosing applicator may eliminate a provisional cut. Only
                 // make unresolved components opaque after completing that proof
                 // attempt. Certified summaries remain valid across retries.
-                if run.finish_attempt() {
+                if run.finish_attempt()? {
                     Ok(None)
                 } else {
                     Err(cycle_inability())
                 }
             });
             match result {
-                Ok(Some(outcome)) => return outcome,
+                Ok(Some(outcome)) => return run.finish_root(value.view(), outcome, unavailable),
                 Ok(None) => {}
-                Err(detail) => return ValueOutcome::NoVerdict { detail },
+                Err(detail) => {
+                    return run.finish_root(
+                        value.view(),
+                        ValueOutcome::NoVerdict { detail },
+                        unavailable,
+                    );
+                }
             }
         }
     }
@@ -305,6 +324,10 @@ struct Run<'a> {
     provisional: HashSet<Visit>,
     retry: bool,
     memo: HashMap<Visit, State>,
+    facts: HashMap<Visit, refinement::Facts>,
+    pending_facts: HashMap<Visit, refinement::Facts>,
+    supports: HashMap<Visit, Arc<Option<refinement::Support>>>,
+    support_memo_count: usize,
     queries: HashMap<(usize, u8), Arc<Result<openbindings_internal_schema::Target, QueryFailure>>>,
     patterns: HashMap<(usize, usize), patterns::Pattern>,
     depth: usize,
@@ -363,7 +386,20 @@ impl Run<'_> {
     fn context_copy(&mut self, context: &Context) -> Result<(), NoVerdict> {
         reserve_context(&mut self.graph, context)
     }
-    fn finish_attempt(&mut self) -> bool {
+    fn finish_attempt(&mut self) -> Result<bool, NoVerdict> {
+        // Only an earlier completed round supplies facts to the next one. Do
+        // not discard a still-refinable component into the opaque fallback.
+        let new_coordinates = self.commit_coordinates()?;
+        let new_complete_states = self.memo.len() > self.support_memo_count;
+        if new_complete_states {
+            self.support_memo_count = self.memo.len();
+            self.supports.clear();
+        }
+        if new_coordinates || new_complete_states {
+            self.pending_cycles.clear();
+            self.provisional.clear();
+            return Ok(true);
+        }
         let mut progress = false;
         for visit in self.pending_cycles.drain() {
             if !self.memo.contains_key(&visit) {
@@ -371,7 +407,7 @@ impl Run<'_> {
             }
         }
         self.provisional.clear();
-        progress
+        Ok(progress)
     }
     fn space(&self) -> &SchemaSpace {
         self.plan.environment.space()
@@ -644,10 +680,10 @@ impl Run<'_> {
             if !self.space().eligible(original.resource)
                 || original.profile.is_none()
                 || self.space().query_inventory(original.resource).is_err()
-                || schema
-                    .get("$id")
-                    .and_then(|v| v.as_str())
-                    .is_some_and(|id| !openbindings_internal_schema::uri::valid(id))
+                || schema.get("$id").is_some_and(|id| {
+                    id.as_str()
+                        .is_none_or(|id| !openbindings_internal_schema::uri::valid(id))
+                })
             {
                 return Ok((node, context, false));
             }
@@ -782,8 +818,7 @@ impl Run<'_> {
             // namespace differs from the persistent opaque fallback summary.
             // Parent frames may eliminate every cut before certification.
             let first = self.atoms.len();
-            let result =
-                self.unknown_schema(Class::Inability, node, "$cycle-cut", value, &context, None)?;
+            let result = self.recursive_cut(&key, value)?;
             for id in first..self.atoms.len() {
                 self.graph.charge(32)?;
                 self.cuts.insert(id as u32);
@@ -814,7 +849,11 @@ impl Run<'_> {
         {
             *annotation = self.graph.and(result.valid, *annotation)?;
         }
-        if result.independent(&mut self.graph, &self.cuts)? {
+        let complete = result.independent(&mut self.graph, &self.cuts)?;
+        if !complete || self.facts.contains_key(&key) {
+            self.certify_coordinates(&key, value, &result)?;
+        }
+        if complete {
             let copied = result.copied(&mut self.graph)?;
             self.graph.charge(256)?;
             self.memo.insert(key, copied);
@@ -861,14 +900,10 @@ impl Run<'_> {
             );
         }
         let mut state = State::truth(TRUE);
-        if schema
-            .get("$id")
-            .and_then(|id| id.as_str())
-            .is_some_and(|id| !openbindings_internal_schema::uri::valid(id))
-        {
-            let effect = self.effect(Class::Undefined, node, "$id", value, &Vec::new(), None)?;
-            self.conjunction(&mut state, &effect)?;
-        }
+        // Identifier declarations establish resource/base context, not an
+        // assertion about this instance. A malformed identifier matters when
+        // a reference actually depends on that context; reference() retains
+        // the original query failure instead of inventing a validity atom.
         match self.primitives(&schema, value) {
             Ok(true) => {}
             Ok(false) => state.valid = FALSE,
@@ -997,7 +1032,15 @@ impl Run<'_> {
         context: &Context,
     ) -> Result<State, NoVerdict> {
         let Some(reference) = reference.as_str() else {
-            return self.effect(Class::Inability, node, keyword, value, context, None);
+            // A JSON string containing an unpaired unit cannot be a URI
+            // reference. Keep that local undefined fact visible to masking
+            // applicators, just as for a malformed scalar URI reference.
+            let class = if reference.kind() == JsonKind::String {
+                Class::Undefined
+            } else {
+                Class::Inability
+            };
+            return self.effect(class, node, keyword, value, context, None);
         };
         if keyword == "$recursiveRef" && reference != "#" {
             return self.effect(Class::Inability, node, keyword, value, context, None);

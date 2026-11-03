@@ -64,6 +64,10 @@ fn measured<T>(call: impl FnOnce() -> T) -> (T, usize, u128) {
     (result, PEAK.load(Relaxed).saturating_sub(before), nanos)
 }
 fn main() {
+    if std::env::args().any(|arg| arg == "--recursive-only") {
+        semantic::recursive();
+        return;
+    }
     if std::env::args().any(|arg| arg == "--semantic-only") {
         semantic::run();
         return;
@@ -252,4 +256,5 @@ fn main() {
     patterns::run();
     limits::run();
     semantic::run();
+    semantic::recursive();
 }

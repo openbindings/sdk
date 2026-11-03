@@ -17,10 +17,13 @@ for (const [name, count] of [
   ["current-auxiliary-obligations.json", 50],
   ["semantic-soundness.json", 26],
   ["semantic-recursive-summaries.json", 24],
+  ["semantic-recursive-extension.json", 33],
+  ["semantic-coordinate-refinement.json", 71],
   ["semantic-limits.json", 16],
 ]) {
   test(`current semantic obligations through Wasm: ${name}`, async () => {
-    const cases = JSON.parse(await readFile(new URL(name, directory), "utf8"));
+    const loaded = JSON.parse(await readFile(new URL(name, directory), "utf8"));
+    const cases = loaded.cases ?? loaded;
     assert.equal(cases.length, count);
     for (const c of cases) {
       const parsed = sdk.Document.parse(
@@ -49,7 +52,9 @@ for (const [name, count] of [
         assert.equal(validation.status, "conformant", c.id);
         validation.document.dispose();
         for (const resource of c.resources ?? []) {
-          const parsed = sdk.parseJson(JSON.stringify(resource.schema));
+          const parsed = sdk.parseJson(
+            resource.schema_text ?? JSON.stringify(resource.schema),
+          );
           supplied.push([resource.uri, parsed.value]);
         }
         resources = new sdk.ExternalSchemas(supplied);
@@ -71,7 +76,9 @@ for (const [name, count] of [
         }
         assert.equal(setup.status, "ready", c.id);
         prepared = setup.schema;
-        value = sdk.parseJson(c.valueText ?? JSON.stringify(c.value)).value;
+        value = sdk.parseJson(
+          c.valueText ?? c.value_text ?? JSON.stringify(c.value),
+        ).value;
         for (const result of [
           prepared.evaluate(value),
           prepared.explain(value),
@@ -92,7 +99,7 @@ for (const [name, count] of [
                       : "N";
           assert.equal(
             actual,
-            c.required,
+            c.required === "N:resource-unavailable" ? "external" : c.required,
             `${c.id}: ${JSON.stringify(result)}`,
           );
         }
