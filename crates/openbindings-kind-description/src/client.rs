@@ -129,64 +129,26 @@ impl<P: KindDescriptor> KindClient<P> {
         Self { provider, limits }
     }
     /// Lazily list kinds. Cancellation before polling does not invoke the provider.
-    pub async fn list_kinds(
-        &self,
+    pub fn list_kinds<'a>(
+        &'a self,
         control: CancellationToken,
-    ) -> Result<Vec<KindSummary>, ClientError<P::Error>> {
-        let values = call(control.clone(), |local| self.provider.list_kinds(local)).await?;
-        bound(values.len(), self.limits.max_listed_kinds, "listed-kinds")?;
-        let mut bytes = 2usize;
-        for (index, value) in values.iter().enumerate() {
-            if control.is_cancelled() {
-                return Err(ClientError::Cancelled);
-            }
-            bytes = bytes
-                .saturating_add(usize::from(index != 0))
-                .saturating_add(value.value().value().text().len());
-            bound(bytes, self.limits.max_response_bytes, "response-bytes")?;
-        }
-        bound(bytes, self.limits.max_response_bytes, "response-bytes")?;
-        if control.is_cancelled() {
-            return Err(ClientError::Cancelled);
-        }
-        Ok(values)
+    ) -> impl Future<Output = Result<Vec<KindSummary>, ClientError<P::Error>>> {
+        list(self.limits, control, |local| -> P::List<'a> {
+            self.provider.list_kinds(local)
+        })
     }
     /// Lazily describe one exact kind and check the response's kind identity.
-    pub async fn describe_kind(
-        &self,
+    pub fn describe_kind<'a>(
+        &'a self,
         request: DescribeKindRequest,
         control: CancellationToken,
-    ) -> Result<KindDescription, ClientError<P::Error>> {
-        if control.is_cancelled() {
-            return Err(ClientError::Cancelled);
-        }
-        bound(
-            request.value().value().text().len(),
-            self.limits.max_request_bytes,
-            "request-bytes",
-        )?;
-        let expected = request
-            .value()
-            .value()
-            .get("kind")
-            .expect("admitted kind")
-            .to_owned();
-        let value = call(control.clone(), |local| {
-            self.provider.describe_kind(request, local)
-        })
-        .await?;
-        if control.is_cancelled() {
-            return Err(ClientError::Cancelled);
-        }
-        bound(
-            value.value().value().text().len(),
-            self.limits.max_response_bytes,
-            "response-bytes",
-        )?;
-        if value.kind() != expected.view().as_string().expect("kind") {
-            return Err(ClientError::KindMismatch);
-        }
-        Ok(value)
+    ) -> impl Future<Output = Result<KindDescription, ClientError<P::Error>>> {
+        describe(
+            self.limits,
+            request,
+            control,
+            |request, local| -> P::Describe<'a> { self.provider.describe_kind(request, local) },
+        )
     }
 }
 
@@ -213,64 +175,133 @@ impl<P: SourceChecker> SourceCheckClient<P> {
         Self { provider, limits }
     }
     /// Lazily check one proposal, keeping context separate from the returned source.
-    pub async fn check_source(
-        &self,
+    pub fn check_source<'a>(
+        &'a self,
         request: CheckSourceRequest,
         control: CancellationToken,
-    ) -> Result<CheckedSource, ClientError<CheckFailure<P::Error>>> {
-        if control.is_cancelled() {
-            return Err(ClientError::Cancelled);
-        }
-        bound(
-            request.value().value().text().len(),
-            self.limits.max_request_bytes,
-            "request-bytes",
-        )?;
-        let expected = request
-            .value()
-            .value()
-            .get("kind")
-            .expect("admitted kind")
-            .to_owned();
-        let value = match call(control.clone(), |local| {
-            self.provider.check_source(request, local)
-        })
-        .await
-        {
-            Err(ClientError::Provider(CheckFailure::Cancelled)) => {
-                return Err(ClientError::Cancelled);
-            }
-            Err(ClientError::Provider(CheckFailure::Rejected(rejection))) => {
-                bound(
-                    rejection.to_json().value().text().len(),
-                    self.limits.max_response_bytes,
-                    "response-bytes",
-                )?;
-                return Err(ClientError::Provider(CheckFailure::Rejected(rejection)));
-            }
-            Err(ClientError::Provider(CheckFailure::ContextRequired(challenge))) => {
-                bound(
-                    challenge.value().value().text().len(),
-                    self.limits.max_response_bytes,
-                    "response-bytes",
-                )?;
-                return Err(ClientError::Provider(CheckFailure::ContextRequired(
-                    challenge,
-                )));
-            }
-            other => other?,
-        };
-        if control.is_cancelled() {
-            return Err(ClientError::Cancelled);
-        }
-        bound(
-            value.value().value().text().len(),
-            self.limits.max_response_bytes,
-            "response-bytes",
-        )?;
-        if value.kind() != expected.view().as_string().expect("kind") {
-            return Err(ClientError::KindMismatch);
-        }
-        Ok(value)
+    ) -> impl Future<Output = Result<CheckedSource, ClientError<CheckFailure<P::Error>>>> {
+        check(
+            self.limits,
+            request,
+            control,
+            |request, local| -> P::Check<'a> { self.provider.check_source(request, local) },
+        )
     }
+}
+
+// Instantiate provider GATs before constructing async state. Concrete future
+// parameters preserve conditional Send for non-static borrowed providers.
+async fn list<E, F: Future<Output = Result<Vec<KindSummary>, E>>>(
+    limits: DescriptionLimits,
+    control: CancellationToken,
+    start: impl FnOnce(CancellationToken) -> F,
+) -> Result<Vec<KindSummary>, ClientError<E>> {
+    let values = call(control.clone(), start).await?;
+    bound(values.len(), limits.max_listed_kinds, "listed-kinds")?;
+    let mut bytes = 2usize;
+    for (index, value) in values.iter().enumerate() {
+        if control.is_cancelled() {
+            return Err(ClientError::Cancelled);
+        }
+        bytes = bytes
+            .saturating_add(usize::from(index != 0))
+            .saturating_add(value.value().value().text().len());
+        bound(bytes, limits.max_response_bytes, "response-bytes")?;
+    }
+    bound(bytes, limits.max_response_bytes, "response-bytes")?;
+    if control.is_cancelled() {
+        return Err(ClientError::Cancelled);
+    }
+    Ok(values)
+}
+async fn describe<E, F: Future<Output = Result<KindDescription, E>>>(
+    limits: DescriptionLimits,
+    request: DescribeKindRequest,
+    control: CancellationToken,
+    start: impl FnOnce(DescribeKindRequest, CancellationToken) -> F,
+) -> Result<KindDescription, ClientError<E>> {
+    if control.is_cancelled() {
+        return Err(ClientError::Cancelled);
+    }
+    bound(
+        request.value().value().text().len(),
+        limits.max_request_bytes,
+        "request-bytes",
+    )?;
+    let expected = request
+        .value()
+        .value()
+        .get("kind")
+        .expect("admitted kind")
+        .to_owned();
+    let value = call(control.clone(), |local| start(request, local)).await?;
+    if control.is_cancelled() {
+        return Err(ClientError::Cancelled);
+    }
+    bound(
+        value.value().value().text().len(),
+        limits.max_response_bytes,
+        "response-bytes",
+    )?;
+    if value.kind() != expected.view().as_string().expect("kind") {
+        return Err(ClientError::KindMismatch);
+    }
+    Ok(value)
+}
+async fn check<E, F: Future<Output = Result<CheckedSource, CheckFailure<E>>>>(
+    limits: DescriptionLimits,
+    request: CheckSourceRequest,
+    control: CancellationToken,
+    start: impl FnOnce(CheckSourceRequest, CancellationToken) -> F,
+) -> Result<CheckedSource, ClientError<CheckFailure<E>>> {
+    if control.is_cancelled() {
+        return Err(ClientError::Cancelled);
+    }
+    bound(
+        request.value().value().text().len(),
+        limits.max_request_bytes,
+        "request-bytes",
+    )?;
+    let expected = request
+        .value()
+        .value()
+        .get("kind")
+        .expect("admitted kind")
+        .to_owned();
+    let value = match call(control.clone(), |local| start(request, local)).await {
+        Err(ClientError::Provider(CheckFailure::Cancelled)) => {
+            return Err(ClientError::Cancelled);
+        }
+        Err(ClientError::Provider(CheckFailure::Rejected(rejection))) => {
+            bound(
+                rejection.to_json().value().text().len(),
+                limits.max_response_bytes,
+                "response-bytes",
+            )?;
+            return Err(ClientError::Provider(CheckFailure::Rejected(rejection)));
+        }
+        Err(ClientError::Provider(CheckFailure::ContextRequired(challenge))) => {
+            bound(
+                challenge.value().value().text().len(),
+                limits.max_response_bytes,
+                "response-bytes",
+            )?;
+            return Err(ClientError::Provider(CheckFailure::ContextRequired(
+                challenge,
+            )));
+        }
+        other => other?,
+    };
+    if control.is_cancelled() {
+        return Err(ClientError::Cancelled);
+    }
+    bound(
+        value.value().value().text().len(),
+        limits.max_response_bytes,
+        "response-bytes",
+    )?;
+    if value.kind() != expected.view().as_string().expect("kind") {
+        return Err(ClientError::KindMismatch);
+    }
+    Ok(value)
 }

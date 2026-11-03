@@ -108,33 +108,50 @@ impl<P: SourcePuller> PullClient<P> {
     /// A missing source or exhausted request policy prevents provider construction.
     /// Successful handoff establishes prospective core conformance only, not the
     /// truth of kind-owned claims. The returned report is still producer evidence.
-    pub async fn pull_source(
-        &self,
+    pub fn pull_source<'a>(
+        &'a self,
         request: PullRequest,
         control: CancellationToken,
-    ) -> Result<PullResult, ClientError<P::Error>> {
-        let mut attempt = Attempt::new(self.limits, &control);
-        attempt.request(&request)?;
-        let original = request.clone();
-        let response = openbindings_internal_cancellation::run_attempt(control.clone(), |local| {
-            self.provider.pull_source(request, local)
-        })
-        .await
-        .ok_or(ClientError::Cancelled)?;
-        attempt.check()?;
-        let result = match response {
-            Ok(result) => result,
-            Err(PullFailure::Cancelled) => return Err(ClientError::Cancelled),
-            Err(PullFailure::ContextRequired(challenge)) => {
-                attempt.response(challenge.value().value().text().len())?;
-                return Err(ClientError::Provider(PullFailure::ContextRequired(
-                    challenge,
-                )));
-            }
-            Err(error) => return Err(ClientError::Provider(error)),
-        };
-        validation::validate(&result, &original, &mut attempt)?;
-        attempt.check()?;
-        Ok(result)
+    ) -> impl Future<Output = Result<PullResult, ClientError<P::Error>>> {
+        checked_pull(
+            self.limits,
+            request,
+            control,
+            |request, local| -> P::Pull<'a> { self.provider.pull_source(request, local) },
+        )
     }
+}
+
+// Keep the async state generic over the concrete future, rather than a provider
+// GAT projection. This preserves conditional Send for providers borrowing local
+// state without introducing a higher-ranked 'static requirement.
+async fn checked_pull<E, F: Future<Output = Result<PullResult, PullFailure<E>>>>(
+    limits: PullLimits,
+    request: PullRequest,
+    control: CancellationToken,
+    start: impl FnOnce(PullRequest, CancellationToken) -> F,
+) -> Result<PullResult, ClientError<E>> {
+    let mut attempt = Attempt::new(limits, &control);
+    attempt.request(&request)?;
+    let original = request.clone();
+    let response = openbindings_internal_cancellation::run_attempt(control.clone(), |local| {
+        start(request, local)
+    })
+    .await
+    .ok_or(ClientError::Cancelled)?;
+    attempt.check()?;
+    let result = match response {
+        Ok(result) => result,
+        Err(PullFailure::Cancelled) => return Err(ClientError::Cancelled),
+        Err(PullFailure::ContextRequired(challenge)) => {
+            attempt.response(challenge.value().value().text().len())?;
+            return Err(ClientError::Provider(PullFailure::ContextRequired(
+                challenge,
+            )));
+        }
+        Err(error) => return Err(ClientError::Provider(error)),
+    };
+    validation::validate(&result, &original, &mut attempt)?;
+    attempt.check()?;
+    Ok(result)
 }

@@ -50,12 +50,23 @@ crates and external consumers have not yet been retired. Core prospective
 edit/validation internals retain core limits and are explicitly outside the pull
 relationship ledger; this is not a whole-call allocation or interruptibility claim.
 
+The separate source-pull consumer now passes against checkout sources and extracted
+Cargo archives, with real async Wasm/TypeScript/Node calls on both Rust toolchains.
+Its borrowing test found an implied-static Send requirement in all four finite
+clients. The [reviewed correction](alignment-checkpoint/borrowed-provider-review.md)
+selects the provider future at the actual borrow lifetime before constructing
+private async state. No blanket Send/Sync/static requirement was added. Current
+source-pull tests total 26 groups/doctests; the related kind/pull/cancellation suites
+pass 53 checks on both supported toolchains. Strict lint runs on the development
+toolchain; the MSRV compatibility receipt explicitly records no matching Clippy run.
+
 ## Resume implementation
 
-1. Source-pull implementation review and current/MSRV, Wasm, docs and
-   cancellation/resource gates pass. Finish external packaged/host
-   consumers before retiring legacy inspection/synthesis crates, support records,
-   obsolete verification tools and performance adapters.
+1. Source-pull implementation and external packaged/host consumers pass. Complete
+   the current invocation consumer and remaining current-spec catalog/performance
+   witnesses, then delete obsolete inspection/synthesis crates, support records,
+   verification tools and old consumers. Historical APIs, test counts and incidental
+   behavior have no compatibility protection.
 2. Close ordinary compiler allocation accounting. The independent construction
    design calls for one attempt through SDK conversion/projection/diagnostics,
    early semantic routing for uncertified shapes, and a version-locked allocation

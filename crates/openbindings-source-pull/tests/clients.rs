@@ -251,3 +251,42 @@ fn pending_drop_and_ready_destructor_cancellation_preserve_cleanup_order() {
         assert_eq!(external.is_cancelled(), ready);
     }
 }
+
+#[test]
+fn send_futures_can_borrow_non_static_providers_in_each_ownership_form() {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+    struct Borrowed<'env>(&'env AtomicUsize);
+    impl SourcePuller for Borrowed<'_> {
+        type Error = ();
+        type Pull<'a>
+            =
+            Pin<Box<dyn Future<Output = Result<PullResult, PullFailure<Self::Error>>> + Send + 'a>>
+        where
+            Self: 'a;
+        fn pull_source(&self, _: PullRequest, _: CancellationToken) -> Self::Pull<'_> {
+            Box::pin(async move {
+                self.0.fetch_add(1, Ordering::Relaxed);
+                Ok(result())
+            })
+        }
+    }
+    fn drive<'a, P: SourcePuller + Sync + 'a>(client: &'a PullClient<P>)
+    where
+        P::Pull<'a>: Send,
+    {
+        fn send<T: Send>(_: &T) {}
+        let mut future = Box::pin(client.pull_source(request(), CancellationToken::new()));
+        send(&future);
+        assert!(matches!(poll(future.as_mut()), Poll::Ready(Ok(_))));
+    }
+    let calls = AtomicUsize::new(0);
+    let provider = Borrowed(&calls);
+    drive(&PullClient::new(&provider));
+    drive(&PullClient::new(Borrowed(&calls)));
+    drive(&PullClient::new(Box::new(Borrowed(&calls))));
+    drive(&PullClient::new(Arc::new(Borrowed(&calls))));
+    assert_eq!(calls.load(Ordering::Relaxed), 4);
+}

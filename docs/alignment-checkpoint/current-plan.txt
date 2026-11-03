@@ -56,7 +56,10 @@ APIs, document relationships and prospective conformance are now implemented. Th
 21 pinned cases, five published examples, 74 independent controls and illustrative
 kind/consumer witnesses pass. Independent implementation review closes its
 annotation-drift finding; 500 closure controls and 48 allocation lanes pass. Legacy
-consumer migration and retirement remain active. Remaining consumers,
+consumer migration and retirement remain active. The external source-pull consumer
+passes against extracted packages and both Rust/Wasm hosts. Its non-static borrowed
+provider test exposed a finite-client Send constraint; the reviewed concrete-future
+boundary fixes it for pulling and all three kind operations without global bounds. Remaining consumers,
 TypeScript organization, all-host packaging, ordinary backend allocation and final
 matched-toolchain performance qualification remain active. No whole-SDK completion
 claim is made. Older progress receipts remain historical.
