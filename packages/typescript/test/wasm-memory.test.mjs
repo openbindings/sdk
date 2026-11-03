@@ -45,7 +45,7 @@ console.log(JSON.stringify({
 }));
 `;
 
-test("validating the probe's costliest documents adds no more module memory than it does now", async () => {
+test("validating the probe's costliest documents adds no more module memory than it does now", async (t) => {
   const shapes = [
     ["copied identifier paths", "", "conformant", 224 * MIB],
     ["copied identifier paths with pieces", "?#f", "non-conformant", 228 * MIB],
@@ -59,6 +59,14 @@ test("validating the probe's costliest documents adds no more module memory than
       );
       return JSON.parse(stdout);
     }),
+  );
+  t.diagnostic(
+    JSON.stringify(
+      results.map((result, at) => ({
+        name: shapes[at][0],
+        ...result,
+      })),
+    ),
   );
   results.forEach((result, at) => {
     const [name, , conclusion, bound] = shapes[at];

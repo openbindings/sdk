@@ -15,11 +15,14 @@ workspace = true
 [dependencies]
 openbindings = { version = "=0.2.0-alpha.1", path = "../openbindings" }
 serde_json.workspace = true
-jsonschema.workspace = true
+jsonschema = { workspace = true, features = ["idna"] }
 # The linear-time engine that matches `pattern` values.
 regex = "1.13.1"
 # Extract the already-pinned engine Unicode tables after strict ECMA name validation.
 regex-syntax = "0.8.11"
+# The semantic path owns one bounded VM/cache per original pattern and charges
+# matching work from its states and outgoing edges. This is the regex crate's engine.
+regex-automata = { version = "=0.4.18", default-features = false, features = ["std", "syntax", "nfa-pikevm", "unicode"] }
 
 openbindings-internal-json = { version = "=0.2.0-alpha.1", path = "../openbindings-internal-json", features = ["evaluator-work"] }
 serde.workspace = true

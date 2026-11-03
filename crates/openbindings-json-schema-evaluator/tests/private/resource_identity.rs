@@ -807,10 +807,15 @@ fn ri22_23_original_dialect_follows_selected_resource() {
     );
     helpers_ready(&doc, &supplied, "owner");
     identity_refusal(&doc, &supplied, "alias");
-    // An unknown dialect does not establish a nested schema or its identifier.
-    assert!(
-        matches!(ready(&conformant(&doc), &supplied, "nested").evaluate(&value("2")),
-        ValueOutcome::NoVerdict { detail } if detail.reason == NoVerdictReason::ResourceUnavailable)
+    // Unknown required vocabulary can introduce competing names. It does not
+    // prove that W is absent, even though no actual indexed child claims it.
+    assert_eq!(
+        refusal(prepare(&conformant(&doc), &supplied, "nested")).kind,
+        PreparationFailureKind::Resolution {
+            cause: ResolutionFailureKind::UnsupportedCapability {
+                capability: "custom-profile-namespace".into()
+            }
+        }
     );
     // Identical child bodies retain distinct resolved bases and inherited dialects.
     let child = json!({"$id":"child","type":"integer"});
@@ -829,24 +834,60 @@ fn ri22_23_original_dialect_follows_selected_resource() {
         json!({"old":{"input":{"$ref":"https://identity.example.invalid/old/root"}},"fragment":{"input":{"$ref":"https://identity.example.invalid/old/root#/$defs/Child"}},"new":{"input":{"$ref":"https://identity.example.invalid/new/child"}}}),
     );
     let proof = conformant(&doc);
-    for operation in ["old", "fragment"] {
-        let failure = refusal(prepare(&proof, &supplied, operation));
-        assert!(matches!(
-            failure.kind,
+    for operation in ["old", "fragment", "new"] {
+        assert_eq!(
+            refusal(prepare(&proof, &supplied, operation)).kind,
             PreparationFailureKind::Resolution {
-                cause: ResolutionFailureKind::UnsupportedDialect { .. }
+                cause: ResolutionFailureKind::UnsupportedCapability {
+                    capability: "custom-profile-namespace".into()
+                }
             }
-        ));
-        // A root may be observable without knowing its child schema positions.
-        if let Some(origin) = failure.origin {
-            assert_ne!(origin.pointer.to_string(), "/$defs/Child");
-        }
+        );
     }
-    verdicts(
-        &ready(&proof, &supplied, "new"),
-        &[("2", "satisfies"), (r#""x""#, "fails")],
+    // Retain the independent base/inheritance control with two fully known
+    // profiles; the opaque fixture above intentionally cannot prove it.
+    let supplied = resources(&[
+        (
+            "https://identity.example.invalid/old/root",
+            json!({"$schema":"https://json-schema.org/draft/2019-09/schema","$defs":{"Child":child}}),
+        ),
+        (
+            "https://identity.example.invalid/new/root",
+            json!({"$defs":{"Child":child}}),
+        ),
+    ]);
+    let doc = document(
+        json!({}),
+        json!({"old":{"input":{"$ref":"https://identity.example.invalid/old/child"}},"new":{"input":{"$ref":"https://identity.example.invalid/new/child"}}}),
     );
+    let proof = conformant(&doc);
+    for (operation, dialect) in [
+        ("old", "https://json-schema.org/draft/2019-09/schema"),
+        ("new", "https://json-schema.org/draft/2020-12/schema"),
+    ] {
+        verdicts(
+            &ready(&proof, &supplied, operation),
+            &[("2", "satisfies"), (r#""x""#, "fails")],
+        );
+        let input = proof.resolve_operation(operation).unwrap().input().unwrap();
+        let environment = input
+            .environment(
+                &supplied,
+                &PreparationLimits::default(),
+                &std::sync::atomic::AtomicBool::new(false),
+            )
+            .unwrap();
+        let child = environment
+            .resolve(
+                &environment.root(),
+                &format!("https://identity.example.invalid/{operation}/child"),
+            )
+            .unwrap()
+            .schema;
+        assert_eq!(child.dialect(), Some(dialect));
+    }
 }
+
 #[test]
 fn ri24_user_standard_names_do_not_replace_trusted_assessment() {
     for uri in [

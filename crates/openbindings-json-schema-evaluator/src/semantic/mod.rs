@@ -3,177 +3,103 @@
 //! local effects and applicator annotations together when that path cannot
 //! establish a value's result. It does not infer Undefined from failed bounds.
 mod decision;
+mod formats;
+mod meta;
+mod patterns;
 mod preparation;
+mod primitive;
+mod regex_format;
 mod values;
 use self::decision::{Class, FALSE, Formula, Graph, TRUE};
-use super::{Compiled, DefaultEvaluator, Limits, no_verdict};
+use super::{Limits, no_verdict};
 use openbindings::*;
 use openbindings_internal_json::{backend, decimal::Decimal};
 use openbindings_internal_schema::{
-    OriginalEnvironment, QueryFailure, SchemaSpace, dialect::Dialect,
+    OriginalEnvironment, QueryFailure, SchemaSpace,
+    dialect::{Dialect, Profile},
 };
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
-    sync::{Arc, Mutex},
+    sync::Arc,
 };
 
-type Primitive = Result<Option<Arc<Compiled>>, NoVerdict>;
 const RECURSIVE_SCOPE: &str = "#recursive-scope";
 
 #[derive(Clone, Copy)]
 struct Interpreted<'a> {
     value: JsonRef<'a>,
-    dialect: Dialect,
+    profile: Profile,
 }
 impl<'a> Interpreted<'a> {
     fn get(self, keyword: &str) -> Option<JsonRef<'a>> {
-        if !self.dialect.active(keyword)
-            || (self.dialect.reference_object(self.value) && keyword != "$ref")
-        {
-            None
-        } else {
-            self.value.get(keyword)
-        }
+        self.profile.get(self.value, keyword)
     }
 }
 
 pub(super) struct Plan {
     environment: SchemaEnvironment,
+    entry: usize,
     limits: Limits,
     preparation: PreparationLimits,
-    primitives: Mutex<HashMap<usize, Primitive>>,
+    custom: Vec<usize>,
+    resources: Vec<usize>,
+    formats: HashMap<usize, formats::Format>,
 }
 impl Plan {
     pub(super) fn new(
         environment: SchemaEnvironment,
         limits: Limits,
         preparation: PreparationLimits,
-        control: &dyn WorkControl,
+        control: &dyn openbindings_internal_schema::Control,
     ) -> Result<Self, PreparationFailure> {
-        preparation::check(&environment, &limits, control)?;
+        let entry = environment.entry();
+        let plan = Self::at(environment, entry, limits, preparation, control)?;
+        meta::validate(&plan, control)?;
+        Ok(plan)
+    }
+    /// Evaluate an original schema position without constructing a replacement
+    /// document or changing its resource base and dynamic scope.
+    pub(super) fn at(
+        environment: SchemaEnvironment,
+        entry: usize,
+        limits: Limits,
+        preparation: PreparationLimits,
+        control: &dyn openbindings_internal_schema::Control,
+    ) -> Result<Self, PreparationFailure> {
+        let checked = preparation::check_from(&environment, entry, &limits, control)?;
         Ok(Self {
             environment,
+            entry,
             limits,
             preparation,
-            primitives: Mutex::new(HashMap::new()),
+            custom: checked.custom,
+            resources: checked.resources,
+            formats: checked.formats,
         })
-    }
-    fn primitive(
-        &self,
-        node: usize,
-        control: &dyn WorkControl,
-    ) -> Result<Option<Arc<Compiled>>, NoVerdict> {
-        const PRIMITIVES: &[&str] = &[
-            "type",
-            "enum",
-            "const",
-            "minimum",
-            "maximum",
-            "exclusiveMinimum",
-            "exclusiveMaximum",
-            "multipleOf",
-            "minLength",
-            "maxLength",
-            "minItems",
-            "maxItems",
-            "uniqueItems",
-            "minProperties",
-            "maxProperties",
-            "required",
-            "dependentRequired",
-        ];
-        let mut cache = self.primitives.lock().map_err(|_| {
-            no_verdict(
-                NoVerdictReason::EvaluatorFailure,
-                "semantic-cache",
-                "semantic predicate cache was interrupted",
-            )
-        })?;
-        if let Some(known) = cache.get(&node) {
-            return known.clone();
-        }
-        if cache.len() >= self.limits.program_bytes / 8192 {
-            return Err(decision::limit("semantic-predicate-memory-limit"));
-        }
-        let original = self.environment.space().node(node);
-        let schema = Interpreted {
-            value: original.value.view(),
-            dialect: original.dialect.expect("known primitive profile"),
-        };
-        let mut fields: Vec<_> = PRIMITIVES
-            .iter()
-            .filter_map(|name| schema.get(name).map(|v| format!("\"{name}\":{}", v.text())))
-            .collect();
-        if let Some(dependencies) = schema.get("dependencies").and_then(|v| v.members()) {
-            let fields_for_arrays: Vec<_> = dependencies
-                .filter(|d| d.value.kind() == JsonKind::Array)
-                .map(|d| format!("{}:{}", d.name.text(), d.value.text()))
-                .collect();
-            if !fields_for_arrays.is_empty() {
-                fields.push(format!(
-                    "\"dependentRequired\":{{{}}}",
-                    fields_for_arrays.join(",")
-                ));
-            }
-        }
-        let prepared = if fields.is_empty() {
-            Ok(None)
-        } else {
-            let body = format!("{{{}}}", fields.join(","));
-            let text = [
-                "{\"openbindings\":\"0.2.0\",\"operations\":{\"leaf\":{\"input\":",
-                &body,
-                "}}}",
-            ]
-            .concat();
-            (|| {
-                let doc = Document::parse(text)
-                    .map_err(|_| decision::limit("semantic-predicate-input-limit"))?;
-                let validation = doc.validate().map_err(|_| {
-                    no_verdict(
-                        NoVerdictReason::UnsupportedCapability,
-                        "semantic-predicate-schema",
-                        "a primitive predicate cannot be interpreted",
-                    )
-                })?;
-                let proof = validation.conformant().ok_or_else(|| {
-                    no_verdict(
-                        NoVerdictReason::UnsupportedCapability,
-                        "semantic-predicate-schema",
-                        "a primitive predicate does not have a supported schema shape",
-                    )
-                })?;
-                let schema = proof
-                    .resolve_operation("leaf")
-                    .expect("leaf operation")
-                    .input()
-                    .expect("leaf schema");
-                let external = ExternalSchemas::default();
-                let evaluator = DefaultEvaluator::with_limits(self.limits.clone());
-                evaluator
-                    .compiled(
-                        EvaluationRequest {
-                            schema: &schema,
-                            external_schemas: &external,
-                        },
-                        &self.preparation,
-                        control,
-                    )
-                    .map(Some)
-                    .map_err(preparation_inability)
-            })()
-        };
-        // Interruption belongs to this attempt, never to the prepared schema.
-        if prepared.is_ok() {
-            cache.insert(node, prepared.clone());
-        }
-        prepared
     }
     pub(super) fn evaluate(
         &self,
         value: &JsonValue,
         _detail: Detail,
         control: &dyn WorkControl,
+    ) -> ValueOutcome {
+        self.evaluate_with_preparation(value, _detail, control, None)
+    }
+    pub(super) fn evaluate_with_preparation(
+        &self,
+        value: &JsonValue,
+        _detail: Detail,
+        control: &dyn WorkControl,
+        attempt: Option<&dyn openbindings_internal_schema::Control>,
+    ) -> ValueOutcome {
+        self.evaluate_recording(value, control, attempt, &mut None)
+    }
+    fn evaluate_recording(
+        &self,
+        value: &JsonValue,
+        control: &dyn WorkControl,
+        attempt: Option<&dyn openbindings_internal_schema::Control>,
+        unavailable: &mut Option<String>,
     ) -> ValueOutcome {
         if let Err(cancelled) = control.check() {
             return ValueOutcome::NoVerdict {
@@ -192,11 +118,12 @@ impl Plan {
         let depth = (self.limits.stack_bytes / 4096).max(1);
         let mut run = Run {
             plan: self,
-            graph: Graph::new(
+            graph: Graph::with_preparation(
                 self.limits.program_bytes,
                 self.limits.evaluation_steps,
                 depth,
                 control,
+                attempt,
             ),
             atoms: Vec::new(),
             values: values::Values::default(),
@@ -208,12 +135,13 @@ impl Plan {
             provisional: HashSet::new(),
             retry: false,
             memo: HashMap::new(),
+            queries: HashMap::new(),
+            patterns: HashMap::new(),
             depth: 0,
             maximum_depth: depth,
-            control,
         };
         loop {
-            let result = run.schema(self.environment.entry(), value.view(), &Vec::new());
+            let result = run.schema(self.entry, value.view(), &Vec::new());
             if run.retry {
                 run.retry = false;
                 if !run.finish_attempt() {
@@ -227,7 +155,7 @@ impl Plan {
                 if run.pending_cycles.is_empty()
                     || independent(state.valid, &mut run.graph, &run.cuts)?
                 {
-                    return run.conclude(state.valid).map(Some);
+                    return run.conclude(state.valid, unavailable).map(Some);
                 }
                 // An enclosing applicator may eliminate a provisional cut. Only
                 // make unresolved components opaque after completing that proof
@@ -245,6 +173,9 @@ impl Plan {
             }
         }
     }
+}
+fn preparation_control_inability(failure: openbindings_internal_schema::Failure) -> NoVerdict {
+    preparation_inability(failure.into())
 }
 fn preparation_inability(failure: PreparationFailure) -> NoVerdict {
     let (reason, code) = match failure.kind {
@@ -275,6 +206,14 @@ fn cycle_inability() -> NoVerdict {
 }
 // Effective outermost bindings, not an ever-growing resource-entry history.
 type Context = Vec<(String, Option<usize>)>;
+fn reserve_context(graph: &mut Graph<'_>, context: &Context) -> Result<(), NoVerdict> {
+    let mut bytes = 256usize;
+    for (name, _) in context {
+        graph.work(name.len().saturating_mul(16).saturating_add(1))?;
+        bytes = bytes.saturating_add(name.len().saturating_mul(2).saturating_add(256));
+    }
+    graph.charge(bytes)
+}
 #[derive(Clone, PartialEq, Eq, Hash)]
 struct Visit {
     schema: usize,
@@ -308,6 +247,21 @@ struct State {
     items: BTreeMap<usize, Formula>,
 }
 impl State {
+    fn copied(&self, graph: &mut Graph<'_>) -> Result<Self, NoVerdict> {
+        graph.work(
+            self.items
+                .len()
+                .saturating_add(self.properties.len())
+                .saturating_add(1),
+        )?;
+        let mut bytes = 256usize.saturating_add(self.items.len().saturating_mul(128));
+        for name in self.properties.keys() {
+            graph.work(name.len().saturating_add(1))?;
+            bytes = bytes.saturating_add(name.len().saturating_mul(2).saturating_add(256));
+        }
+        graph.charge(bytes)?;
+        Ok(self.clone())
+    }
     fn truth(valid: Formula) -> Self {
         Self {
             valid,
@@ -351,11 +305,64 @@ struct Run<'a> {
     provisional: HashSet<Visit>,
     retry: bool,
     memo: HashMap<Visit, State>,
+    queries: HashMap<(usize, u8), Arc<Result<openbindings_internal_schema::Target, QueryFailure>>>,
+    patterns: HashMap<(usize, usize), patterns::Pattern>,
     depth: usize,
     maximum_depth: usize,
-    control: &'a dyn WorkControl,
 }
 impl Run<'_> {
+    fn units(&mut self, value: JsonRef<'_>) -> Result<Vec<u16>, NoVerdict> {
+        let bound = value.text().len();
+        self.graph
+            .work(bound.saturating_mul(16).saturating_add(1))?;
+        self.graph
+            .charge(bound.saturating_mul(2).saturating_add(32))?;
+        let mut units = Vec::with_capacity(bound);
+        units.extend(value.as_string().expect("string").utf16_units());
+        Ok(units)
+    }
+    fn copy_uri(&mut self, uri: Option<&str>) -> Result<Option<String>, NoVerdict> {
+        let Some(uri) = uri else {
+            return Ok(None);
+        };
+        self.graph.work(uri.len().saturating_add(1))?;
+        self.graph.charge(uri.len().saturating_add(32))?;
+        Ok(Some(uri.into()))
+    }
+    fn query(
+        &mut self,
+        node: usize,
+        keyword: &str,
+        reference: &str,
+    ) -> Result<Arc<Result<openbindings_internal_schema::Target, QueryFailure>>, NoVerdict> {
+        let kind = match keyword {
+            "$ref" => 0,
+            "$dynamicRef" => 1,
+            "$recursiveRef" => 2,
+            _ => unreachable!("reference keyword"),
+        };
+        self.graph.tick()?;
+        if let Some(known) = self.queries.get(&(node, kind)) {
+            return Ok(known.clone());
+        }
+        let space = self.plan.environment.space();
+        let base = space
+            .resource(space.node(node).resource)
+            .base
+            .as_ref()
+            .map_or(0, String::len);
+        let bytes = base.saturating_add(reference.len());
+        self.graph
+            .work(bytes.saturating_mul(16).saturating_add(1))?;
+        self.graph
+            .charge(bytes.saturating_mul(64).saturating_add(1024))?;
+        let target = Arc::new(space.query(node, reference));
+        self.queries.insert((node, kind), target.clone());
+        Ok(target)
+    }
+    fn context_copy(&mut self, context: &Context) -> Result<(), NoVerdict> {
+        reserve_context(&mut self.graph, context)
+    }
     fn finish_attempt(&mut self) -> bool {
         let mut progress = false;
         for visit in self.pending_cycles.drain() {
@@ -384,11 +391,20 @@ impl Run<'_> {
                 )
             })
     }
-    fn enter(&self, node: usize, context: &Context) -> Context {
-        let resource = self.space().resource(self.space().node(node).resource);
+    fn enter(&mut self, node: usize, context: &Context) -> Result<Context, NoVerdict> {
+        self.context_copy(context)?;
+        let space = self.plan.environment.space();
+        let resource = space.resource(space.node(node).resource);
         let mut out: BTreeMap<_, _> = context.iter().cloned().collect();
         for (name, anchors) in &resource.anchors {
+            self.graph
+                .work(name.len().saturating_mul(16).saturating_add(anchors.len()))?;
             if anchors.iter().any(|(_, dynamic)| *dynamic) {
+                if out.contains_key(name) {
+                    continue;
+                }
+                self.graph
+                    .charge(name.len().saturating_mul(2).saturating_add(256))?;
                 out.entry(name.clone()).or_insert_with(|| {
                     if anchors.len() == 1 {
                         Some(anchors[0].0)
@@ -398,17 +414,19 @@ impl Run<'_> {
                 });
             }
         }
-        let original = self.space().node(node);
-        if original.dialect == Some(Dialect::Draft201909)
+        let original = space.node(node);
+        if original.profile == Some(Profile::standard(Dialect::Draft201909))
             && original
                 .value
                 .get("$recursiveAnchor")
                 .and_then(|v| v.as_bool())
                 == Some(true)
         {
+            self.graph.charge(256)?;
             out.entry(RECURSIVE_SCOPE.into()).or_insert(resource.root);
         }
-        out.into_iter().collect()
+        self.graph.charge(out.len().saturating_mul(64))?;
+        Ok(out.into_iter().collect())
     }
     fn atom(
         &mut self,
@@ -436,6 +454,13 @@ impl Run<'_> {
         } else {
             class
         };
+        self.context_copy(context)?;
+        if let Subject::Text(units) | Subject::Member(_, units) = &subject {
+            self.graph
+                .work(units.len().saturating_mul(4).saturating_add(1))?;
+        }
+        self.graph.work(predicate.len().saturating_add(1))?;
+        self.graph.charge(predicate.len().saturating_add(256))?;
         let key = Effect {
             node,
             predicate: predicate.clone(),
@@ -494,7 +519,7 @@ impl Run<'_> {
             keyword.into(),
             Subject::Instance(identity),
             context,
-            uri.clone(),
+            uri,
         )?;
         Ok(State::truth(valid))
     }
@@ -508,7 +533,8 @@ impl Run<'_> {
         uri: Option<String>,
     ) -> Result<State, NoVerdict> {
         let identity = self.values.intern(value, &mut self.graph)?;
-        let mut state = self.effect(class, node, keyword, value, context, uri.clone())?;
+        let copied_uri = self.copy_uri(uri.as_deref())?;
+        let mut state = self.effect(class, node, keyword, value, context, copied_uri)?;
         let valid = state.valid;
         // Unknown schema contents may produce annotations. This is a conservative
         // enlargement, so its variables cannot witness an Undefined conclusion.
@@ -516,14 +542,21 @@ impl Run<'_> {
         // Finite property/index selections are coherent across repeated calls.
         if let Some(members) = value.members() {
             for member in members {
-                let name = member.name.utf16_units().expect("member string");
+                let name = self.units(member.name)?;
+                self.graph.charge(
+                    name.len()
+                        .saturating_mul(2)
+                        .saturating_add(keyword.len())
+                        .saturating_add(256),
+                )?;
+                let copied_uri = self.copy_uri(uri.as_deref())?;
                 let selected = self.atom(
                     class,
                     node,
                     format!("{keyword}/annotation"),
                     Subject::Member(identity, name.clone()),
                     context,
-                    uri.clone(),
+                    copied_uri,
                 )?;
                 let selected = self.graph.and(valid, selected)?;
                 self.graph.charge(96 + name.len() * 2)?;
@@ -532,16 +565,18 @@ impl Run<'_> {
         }
         if let Some(elements) = value.elements() {
             for (index, _) in elements.enumerate() {
+                self.graph.charge(keyword.len().saturating_add(256))?;
+                let copied_uri = self.copy_uri(uri.as_deref())?;
                 let selected = self.atom(
                     class,
                     node,
                     format!("{keyword}/annotation/{index}"),
                     Subject::Instance(identity),
                     context,
-                    uri.clone(),
+                    copied_uri,
                 )?;
-                state.items.insert(index, self.graph.and(valid, selected)?);
                 self.graph.charge(96)?;
+                state.items.insert(index, self.graph.and(valid, selected)?);
             }
         }
         Ok(state)
@@ -576,11 +611,12 @@ impl Run<'_> {
         mut node: usize,
         incoming: &Context,
     ) -> Result<(usize, Context, bool), NoVerdict> {
+        self.context_copy(incoming)?;
         let mut context = incoming.clone();
         let mut path = Vec::<(usize, Context, Option<String>)>::new();
         loop {
             self.graph.tick()?;
-            context = self.enter(node, &context);
+            context = self.enter(node, &context)?;
             if let Some(start) = path
                 .iter()
                 .position(|(prior, scope, _)| *prior == node && *scope == context)
@@ -591,6 +627,7 @@ impl Run<'_> {
                     .map(|(node, _, _)| *node)
                     .min()
                     .expect("nonempty cycle");
+                self.context_copy(&context)?;
                 let relevant: Context = context
                     .iter()
                     .filter(|(name, _)| {
@@ -605,7 +642,7 @@ impl Run<'_> {
             let original = self.space().node(node);
             let schema = original.value.clone();
             if !self.space().eligible(original.resource)
-                || original.dialect.is_none()
+                || original.profile.is_none()
                 || self.space().query_inventory(original.resource).is_err()
                 || schema
                     .get("$id")
@@ -614,15 +651,15 @@ impl Run<'_> {
             {
                 return Ok((node, context, false));
             }
-            let dialect = original.dialect.expect("known alias profile");
+            let profile = original.profile.expect("known alias profile");
             let mut alias = None;
             let Some(fields) = schema.view().members() else {
                 return Ok((node, context, false));
             };
             for field in fields {
                 if field.name.as_str().is_some_and(|key| {
-                    !dialect.active(key)
-                        || (dialect.reference_object(schema.view()) && key != "$ref")
+                    !profile.active(key)
+                        || (profile.reference_object(schema.view()) && key != "$ref")
                 }) {
                     continue;
                 }
@@ -635,8 +672,9 @@ impl Run<'_> {
                         "$schema" | "$id" | "$anchor" | "$dynamicAnchor" | "$recursiveAnchor"
                         | "$defs" | "definitions" | "$comment" | "title" | "description"
                         | "default" | "examples" | "deprecated" | "readOnly" | "writeOnly"
-                        | "format" | "contentEncoding" | "contentMediaType" | "contentSchema",
+                        | "contentEncoding" | "contentMediaType" | "contentSchema",
                     ) => {}
+                    Some("format") if !profile.asserts_format() => {}
                     _ => return Ok((node, context, false)),
                 }
             }
@@ -661,14 +699,19 @@ impl Run<'_> {
                 if keyword == "$recursiveRef" && reference != "#" {
                     return Ok((node, context, false));
                 }
-                let Ok(target) = self.space().query(node, reference) else {
+                let query = self.query(node, keyword, reference)?;
+                let Ok(target) = query.as_ref() else {
                     return Ok((node, context, false));
                 };
+                if let Some(name) = &target.dynamic_name {
+                    self.graph.work(name.len().saturating_add(1))?;
+                    self.graph.charge(name.len().saturating_add(64))?;
+                }
                 let dynamic = if keyword == "$recursiveRef" && self.recursive_target(target.node) {
                     Some(RECURSIVE_SCOPE.into())
                 } else {
                     (keyword == "$dynamicRef")
-                        .then_some(target.dynamic_name)
+                        .then(|| target.dynamic_name.clone())
                         .flatten()
                 };
                 let selected = if let Some(name) = &dynamic {
@@ -710,13 +753,14 @@ impl Run<'_> {
                 None,
             );
         }
+        self.context_copy(&context)?;
         let key = Visit {
             schema: node,
             instance: backend::ref_id(value),
             context: context.clone(),
         };
         if let Some(known) = self.memo.get(&key) {
-            return Ok(known.clone());
+            return known.copied(&mut self.graph);
         }
         if self.opaque_cycles.contains(&key) {
             return self.unknown_schema(
@@ -730,6 +774,7 @@ impl Run<'_> {
         }
         if let Some(start) = self.active.iter().position(|visit| visit == &key) {
             for visit in &self.active[start..] {
+                reserve_context(&mut self.graph, &visit.context)?;
                 self.graph.charge(256)?;
                 self.pending_cycles.insert(visit.clone());
             }
@@ -752,9 +797,10 @@ impl Run<'_> {
             self.retry = true;
             return Err(cycle_inability());
         }
-        self.active.push(key.clone());
+        self.context_copy(&context)?;
         self.graph
             .charge(256 + context.iter().map(|(s, _)| s.len() + 32).sum::<usize>())?;
+        self.active.push(key.clone());
         self.depth += 1;
         let result = self.body(node, value, &context);
         self.depth -= 1;
@@ -769,7 +815,9 @@ impl Run<'_> {
             *annotation = self.graph.and(result.valid, *annotation)?;
         }
         if result.independent(&mut self.graph, &self.cuts)? {
-            self.memo.insert(key, result.clone());
+            let copied = result.copied(&mut self.graph)?;
+            self.graph.charge(256)?;
+            self.memo.insert(key, copied);
         } else {
             self.graph.charge(256)?;
             self.provisional.insert(key);
@@ -796,14 +844,14 @@ impl Run<'_> {
         {
             return self.unknown_schema(Class::Inability, node, "$dialect", value, context, None);
         }
-        let Some(dialect) = self.space().node(node).dialect else {
+        let Some(profile) = self.space().node(node).profile else {
             return self.unknown_schema(Class::Inability, node, "$dialect", value, context, None);
         };
         let schema = Interpreted {
             value: schema.view(),
-            dialect,
+            profile,
         };
-        if dialect.reference_object(schema.value) {
+        if profile.reference_object(schema.value) {
             return self.reference(
                 node,
                 "$ref",
@@ -821,41 +869,9 @@ impl Run<'_> {
             let effect = self.effect(Class::Undefined, node, "$id", value, &Vec::new(), None)?;
             self.conjunction(&mut state, &effect)?;
         }
-        match self.plan.primitive(node, self.control) {
-            Ok(Some(compiled)) => {
-                match compiled.evaluate(&value.to_owned(), Detail::Outcome, self.control) {
-                    ValueOutcome::Satisfies => {}
-                    ValueOutcome::Fails { .. } => state.valid = FALSE,
-                    ValueOutcome::NoVerdict { detail }
-                        if matches!(
-                            detail.reason,
-                            NoVerdictReason::LimitExceeded | NoVerdictReason::Cancelled
-                        ) =>
-                    {
-                        return Err(detail);
-                    }
-                    ValueOutcome::NoVerdict { detail } => {
-                        let unknown = self.effect(
-                            Class::Inability,
-                            node,
-                            "$predicate",
-                            value,
-                            context,
-                            None,
-                        )?;
-                        self.cause(unknown.valid, detail)?;
-                        self.conjunction(&mut state, &unknown)?;
-                    }
-                    ValueOutcome::Undefined { .. } => {
-                        return Err(no_verdict(
-                            NoVerdictReason::EvaluatorFailure,
-                            "primitive-undefined",
-                            "a defined primitive predicate unexpectedly returned undefined",
-                        ));
-                    }
-                }
-            }
-            Ok(None) => {}
+        match self.primitives(&schema, value) {
+            Ok(true) => {}
+            Ok(false) => state.valid = FALSE,
             Err(detail)
                 if matches!(
                     detail.reason,
@@ -869,6 +885,26 @@ impl Run<'_> {
                     self.effect(Class::Inability, node, "$predicate", value, context, None)?;
                 self.cause(unknown.valid, detail)?;
                 self.conjunction(&mut state, &unknown)?;
+            }
+        }
+        if let Some(format) = self.plan.formats.get(&node) {
+            match format.evaluate(value, &mut self.graph) {
+                Ok(true) => {}
+                Ok(false) => state.valid = FALSE,
+                Err(detail)
+                    if matches!(
+                        detail.reason,
+                        NoVerdictReason::LimitExceeded | NoVerdictReason::Cancelled
+                    ) =>
+                {
+                    return Err(detail);
+                }
+                Err(detail) => {
+                    let unknown =
+                        self.effect(Class::Inability, node, "format", value, context, None)?;
+                    self.cause(unknown.valid, detail)?;
+                    self.conjunction(&mut state, &unknown)?;
+                }
             }
         }
         if let Some(pattern) = schema.get("pattern")
@@ -945,7 +981,7 @@ impl Run<'_> {
     }
     fn recursive_target(&self, node: usize) -> bool {
         let target = self.space().node(node);
-        target.dialect == Some(Dialect::Draft201909)
+        target.profile == Some(Profile::standard(Dialect::Draft201909))
             && target
                 .value
                 .get("$recursiveAnchor")
@@ -966,16 +1002,17 @@ impl Run<'_> {
         if keyword == "$recursiveRef" && reference != "#" {
             return self.effect(Class::Inability, node, keyword, value, context, None);
         }
-        match self.space().query(node, reference) {
+        let query = self.query(node, keyword, reference)?;
+        match query.as_ref() {
             Ok(target) => {
                 let recursive = keyword == "$recursiveRef" && self.recursive_target(target.node);
                 let selected = if keyword == "$dynamicRef" || recursive {
                     if let Some(name) = if recursive {
-                        Some(RECURSIVE_SCOPE.into())
+                        Some(RECURSIVE_SCOPE)
                     } else {
-                        target.dynamic_name
+                        target.dynamic_name.as_deref()
                     } {
-                        match context.iter().find(|(binding, _)| *binding == name) {
+                        match context.iter().find(|(binding, _)| binding == name) {
                             Some((_, Some(target))) => *target,
                             Some((_, None)) => {
                                 return self.effect(
@@ -1001,6 +1038,14 @@ impl Run<'_> {
                 // The resource identity and original fragment identify one
                 // predicate across all referrers in this environment.
                 let fragment = reference.split_once('#').map_or("", |(_, f)| f);
+                self.graph
+                    .work(uri.len().saturating_add(fragment.len()).saturating_add(1))?;
+                self.graph.charge(
+                    uri.len()
+                        .saturating_mul(4)
+                        .saturating_add(fragment.len())
+                        .saturating_add(512),
+                )?;
                 let predicate = format!("$external:{uri}#{fragment}");
                 self.unknown_schema(
                     Class::External,
@@ -1008,13 +1053,14 @@ impl Run<'_> {
                     &predicate,
                     value,
                     context,
-                    Some(uri),
+                    Some(uri.clone()),
                 )
             }
             Err(
                 QueryFailure::IdentityConflict
                 | QueryFailure::UnsupportedDialect(_)
-                | QueryFailure::UnsupportedCapability(_),
+                | QueryFailure::UnsupportedCapability(_)
+                | QueryFailure::InvalidExternalSchema,
             ) => self.unknown_schema(Class::Inability, node, keyword, value, context, None),
             Err(_) => self.effect(Class::Undefined, node, keyword, value, &Vec::new(), None),
         }
@@ -1028,8 +1074,7 @@ impl Run<'_> {
     ) -> Result<Formula, NoVerdict> {
         // Linear matching borrows UTF-8 directly. Only an unknown match needs an
         // exact text key; reserve its allowance before decoding or retaining it.
-        self.graph.charge(value.text().len().saturating_mul(2))?;
-        let units = value.utf16_units().expect("pattern string");
+        let units = self.units(value)?;
         self.atom(
             class,
             node,
@@ -1053,59 +1098,38 @@ impl Run<'_> {
         if source.len() > self.plan.limits.pattern_bytes {
             return Err(decision::limit("pattern-byte-limit"));
         }
-        let reading = super::pattern::read(
-            source,
-            self.plan.limits.pattern_depth,
-            self.plan.limits.pattern_bytes,
-        );
-        match reading {
-            Err(super::pattern::Refusal::Invalid)
-            | Ok(super::pattern::Reading::Unsupported(super::pattern::Unsupported::Invalid)) => {
+        let key = backend::occurrence(pattern);
+        if !self.patterns.contains_key(&key) {
+            self.graph.charge(512)?;
+            let compiled = patterns::Pattern::prepare(source, &self.plan.limits, &mut self.graph)?;
+            self.patterns.insert(key, compiled);
+        }
+        match self
+            .patterns
+            .get_mut(&key)
+            .expect("prepared pattern")
+            .evaluate(value.as_str(), &mut self.graph)?
+        {
+            patterns::ResultKind::Matched(matched) => Ok(if matched { TRUE } else { FALSE }),
+            patterns::ResultKind::Undefined => {
                 self.pattern_atom(Class::Undefined, node, keyword, value)
             }
-            Err(super::pattern::Refusal::Depth) => Err(decision::limit("pattern-depth-limit")),
-            Ok(super::pattern::Reading::Unsupported(
-                super::pattern::Unsupported::Size | super::pattern::Unsupported::Memory(_),
-            )) => Err(decision::limit("pattern-size-limit")),
-            Ok(super::pattern::Reading::Unsupported(why)) => {
+            patterns::ResultKind::Unsupported(why) => {
                 let formula = self.pattern_atom(Class::Inability, node, keyword, value)?;
                 self.cause(formula, super::unsupported_pattern(why, "pattern"))?;
                 Ok(formula)
             }
-            Ok(super::pattern::Reading::Linear(linear)) => {
-                let Some(text) = value.as_str() else {
-                    let formula = self.pattern_atom(Class::Inability, node, keyword, value)?;
-                    self.cause(
-                        formula,
-                        no_verdict(
-                            NoVerdictReason::UnsupportedCapability,
-                            "lone-surrogate-instance",
-                            "the pattern matcher cannot interpret an unpaired UTF-16 code unit",
-                        ),
-                    )?;
-                    return Ok(formula);
-                };
-                self.graph.charge(linear.form.len())?;
-                let matched = if let Some(simple) = linear.simple {
-                    simple.is_match(text)
-                } else {
-                    let allowance = super::pattern::Allowance {
-                        compiled: self
-                            .plan
-                            .limits
-                            .total_pattern_memory
-                            .min(super::pattern::COMPILED_SIZE),
-                        cache: self
-                            .plan
-                            .limits
-                            .total_pattern_memory
-                            .min(super::pattern::SEARCH_CACHE),
-                    };
-                    let regex = super::pattern::compile(&linear.form, allowance)
-                        .ok_or_else(|| decision::limit("pattern-size-limit"))?;
-                    regex.is_match(text)
-                };
-                Ok(if matched { TRUE } else { FALSE })
+            patterns::ResultKind::Unpaired => {
+                let formula = self.pattern_atom(Class::Inability, node, keyword, value)?;
+                self.cause(
+                    formula,
+                    no_verdict(
+                        NoVerdictReason::UnsupportedCapability,
+                        "lone-surrogate-instance",
+                        "the pattern matcher cannot interpret an unpaired UTF-16 code unit",
+                    ),
+                )?;
+                Ok(formula)
             }
         }
     }
@@ -1152,7 +1176,7 @@ impl Run<'_> {
         }
         for member in value.members().expect("object") {
             self.graph.tick()?;
-            let name = member.name.utf16_units().expect("member name");
+            let name = self.units(member.name)?;
             let mut selected = FALSE;
             if let Some(properties) = schema.get("properties")
                 && let Some(child) = self.named(properties, member.name)?
@@ -1160,10 +1184,14 @@ impl Run<'_> {
                 let child = self.schema(self.child(node, child)?, member.value, context)?;
                 state.valid = self.graph.and(state.valid, child.valid)?;
                 selected = TRUE;
+                self.graph
+                    .charge(name.len().saturating_mul(2).saturating_add(256))?;
                 state.properties.insert(name.clone(), TRUE);
             }
             if let Some(patterns) = schema.get("patternProperties").and_then(|v| v.members()) {
                 for pattern in patterns {
+                    self.graph
+                        .charge(pattern.name.text().len().saturating_add(32))?;
                     let keyword = format!("patternProperties/{}", pattern.name.text());
                     let matched =
                         self.pattern(node, &keyword, pattern.name, member.name, context)?;
@@ -1173,6 +1201,8 @@ impl Run<'_> {
                     state.valid = self.graph.and(state.valid, applies)?;
                     selected = self.graph.or(selected, matched)?;
                     let old = state.properties.get(&name).copied().unwrap_or(FALSE);
+                    self.graph
+                        .charge(name.len().saturating_mul(2).saturating_add(256))?;
                     state
                         .properties
                         .insert(name.clone(), self.graph.or(old, matched)?);
@@ -1182,6 +1212,8 @@ impl Run<'_> {
                 let child = self.schema(self.child(node, child)?, member.value, context)?;
                 let applies = self.graph.or(selected, child.valid)?;
                 state.valid = self.graph.and(state.valid, applies)?;
+                self.graph
+                    .charge(name.len().saturating_mul(2).saturating_add(256))?;
                 state.properties.insert(name.clone(), TRUE);
             }
             if let Some(child) = schema.get("propertyNames") {
@@ -1193,7 +1225,7 @@ impl Run<'_> {
         if let Some(child) = schema.get("unevaluatedProperties") {
             let child = self.child(node, child)?;
             for member in value.members().expect("object") {
-                let name = member.name.utf16_units().expect("name");
+                let name = self.units(member.name)?;
                 let evaluated = state.properties.get(&name).copied().unwrap_or(FALSE);
                 let result = self.schema(child, member.value, context)?;
                 let valid = self.graph.or(evaluated, result.valid)?;
@@ -1212,37 +1244,33 @@ impl Run<'_> {
         context: &Context,
         state: &mut State,
     ) -> Result<(), NoVerdict> {
-        let tuple = schema.dialect != Dialect::Draft202012
+        let tuple = schema.profile.edition() != Dialect::Draft202012
             && schema
                 .get("items")
                 .is_some_and(|v| v.kind() == JsonKind::Array);
-        let prefix: Vec<_> = schema
-            .get(if tuple { "items" } else { "prefixItems" })
-            .and_then(|v| v.elements())
-            .into_iter()
-            .flatten()
-            .collect();
+        let prefix = schema.get(if tuple { "items" } else { "prefixItems" });
         for (index, item) in value.elements().expect("array").enumerate() {
             self.graph.tick()?;
             if let Some(child) = prefix
-                .get(index)
-                .copied()
+                .and_then(|prefix| prefix.element(index))
                 .or_else(|| schema.get(if tuple { "additionalItems" } else { "items" }))
             {
                 let result = self.schema(self.child(node, child)?, item, context)?;
                 state.valid = self.graph.and(state.valid, result.valid)?;
-                state.items.insert(index, TRUE);
                 self.graph.charge(96)?;
+                state.items.insert(index, TRUE);
             }
         }
         if let Some(child) = schema.get("contains") {
             let child = self.child(node, child)?;
+            self.graph.charge(32)?;
             let mut counts = vec![TRUE];
             for (index, item) in value.elements().expect("array").enumerate() {
                 let result = self.schema(child, item, context)?;
                 let not = self.graph.not(result.valid)?;
+                self.graph
+                    .charge(counts.len().saturating_add(1).saturating_mul(8))?;
                 let mut next = vec![FALSE; counts.len() + 1];
-                self.graph.charge(next.len() * 8)?;
                 for (count, &formula) in counts.iter().enumerate() {
                     let same = self.graph.and(formula, not)?;
                     next[count] = self.graph.or(next[count], same)?;
@@ -1250,20 +1278,28 @@ impl Run<'_> {
                     next[count + 1] = self.graph.or(next[count + 1], more)?;
                 }
                 counts = next;
-                if schema.dialect == Dialect::Draft202012 {
+                if schema.profile.edition() == Dialect::Draft202012 {
                     let old = state.items.get(&index).copied().unwrap_or(FALSE);
+                    self.graph.charge(96)?;
                     state.items.insert(index, self.graph.or(old, result.valid)?);
                 }
             }
-            let count = |key: &str, default: u64| {
-                schema
-                    .get(key)
-                    .and_then(|n| n.number_text())
-                    .and_then(|n| Decimal::parse(n).nonnegative_integer_u64_saturating())
-                    .unwrap_or(default)
+            let mut count = |key: &str, default: u64| -> Result<u64, NoVerdict> {
+                let Some(value) = schema.get(key) else {
+                    return Ok(default);
+                };
+                self.number(value)?
+                    .nonnegative_integer_u64_saturating()
+                    .ok_or_else(|| {
+                        no_verdict(
+                            NoVerdictReason::UnsupportedCapability,
+                            "contains-count-shape",
+                            "a contains bound must be a nonnegative integer",
+                        )
+                    })
             };
-            let minimum = count("minContains", 1);
-            let maximum = count("maxContains", u64::MAX);
+            let minimum = count("minContains", 1)?;
+            let maximum = count("maxContains", u64::MAX)?;
             let mut valid = FALSE;
             for (count, &formula) in counts.iter().enumerate() {
                 if (minimum..=maximum).contains(&(count as u64)) {
@@ -1279,18 +1315,22 @@ impl Run<'_> {
                 let result = self.schema(child, item, context)?;
                 let valid = self.graph.or(evaluated, result.valid)?;
                 state.valid = self.graph.and(state.valid, valid)?;
-                state.items.insert(index, TRUE);
                 self.graph.charge(96)?;
+                state.items.insert(index, TRUE);
             }
         }
         Ok(())
     }
-    fn origin(&self, atom: &Atom) -> Option<SchemaOrigin> {
+    fn origin(
+        plan: &Plan,
+        atom: &Atom,
+        graph: &mut Graph<'_>,
+    ) -> Result<Option<SchemaOrigin>, NoVerdict> {
         if atom.node == usize::MAX {
-            return None;
+            return Ok(None);
         }
-        let node = self.space().node(atom.node);
-        let source = self.space().source(node.source);
+        let node = plan.environment.space().node(atom.node);
+        let source = plan.environment.space().source(node.source);
         let location_keyword = if atom.keyword.starts_with("patternProperties/") {
             "patternProperties"
         } else {
@@ -1301,17 +1341,30 @@ impl Run<'_> {
             .as_ref()
             .map_or(0, String::len)
             .saturating_add(location_keyword.len().saturating_mul(2));
-        let remaining = (64usize * 1024).checked_sub(overhead)?;
+        let Some(remaining) = (64usize * 1024).checked_sub(overhead) else {
+            return Ok(None);
+        };
         // Measure before materializing a potentially enormous original pointer.
-        backend::location_pointer_size(node.value.view(), remaining / 2)?;
-        let original = self.space().location(atom.node);
+        graph.work(64 * 1024)?;
+        let Some(pointer_bytes) = backend::location_pointer_size(node.value.view(), remaining / 2)
+        else {
+            return Ok(None);
+        };
+        graph.charge(
+            pointer_bytes
+                .saturating_add(overhead)
+                .saturating_mul(16)
+                .saturating_add(1024),
+        )?;
+        let original = plan.environment.space().location(atom.node);
         let bytes = original.pointer.utf16_units().count().saturating_mul(2)
             + original.resource.as_ref().map_or(0, String::len)
             + location_keyword.len().saturating_mul(2);
         if bytes > 64 * 1024 {
-            return None;
+            return Ok(None);
         }
-        let mut pointer: Vec<u16> = original.pointer.utf16_units().collect();
+        let mut pointer = Vec::with_capacity(bytes.saturating_add(32));
+        pointer.extend(original.pointer.utf16_units());
         if atom.keyword == "pattern"
             || matches!(atom.keyword.as_str(), "$id" | "$ref" | "$dynamicRef")
         {
@@ -1321,12 +1374,15 @@ impl Run<'_> {
             // Locate the original keyword without echoing authored regex text.
             pointer.extend("/patternProperties".encode_utf16());
         }
-        Some(SchemaOrigin::new(
-            original.resource,
-            Pointer::from_utf16(&pointer).ok()?,
-        ))
+        Ok(Pointer::from_utf16(&pointer)
+            .ok()
+            .map(|pointer| SchemaOrigin::new(original.resource, pointer)))
     }
-    fn conclude(&mut self, formula: Formula) -> Result<ValueOutcome, NoVerdict> {
+    fn conclude(
+        &mut self,
+        formula: Formula,
+        unavailable: &mut Option<String>,
+    ) -> Result<ValueOutcome, NoVerdict> {
         if formula == TRUE {
             return Ok(ValueOutcome::Satisfies);
         }
@@ -1347,7 +1403,7 @@ impl Run<'_> {
                 "semantic-dependence",
                 "the value's validity depends on a known undefined schema result",
             );
-            detail.location = self.origin(atom);
+            detail.location = Self::origin(self.plan, atom, &mut self.graph)?;
             return Ok(ValueOutcome::Undefined { detail });
         }
         let atom = support
@@ -1372,10 +1428,19 @@ impl Run<'_> {
                 "the evaluator has not established the value's result",
             ),
         };
+        if reason == NoVerdictReason::ResourceUnavailable
+            && let Some(uri) = atom.and_then(|a| a.uri.as_ref())
+        {
+            self.graph.charge(uri.len().saturating_add(32))?;
+            *unavailable = Some(uri.clone());
+        }
         let mut detail = atom
             .and_then(|atom| atom.cause.clone())
             .unwrap_or_else(|| no_verdict(reason, code, message));
-        detail.location = atom.and_then(|atom| self.origin(atom));
+        detail.location = match atom {
+            Some(atom) => Self::origin(self.plan, atom, &mut self.graph)?,
+            None => None,
+        };
         // Keep missing identity and predicate metadata separate from source
         // origins; diagnostic formatting never needs to echo their text.
         if let Some(atom) = atom {

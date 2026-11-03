@@ -100,7 +100,17 @@ test("static reference matrix and concrete completions through Wasm", async () =
           refused: "refused",
         }[result.status],
       };
-      if (result.failure) actual.failure = result.failure;
+      if (result.failure) {
+        actual.failure = {
+          ...result.failure,
+          origin: result.failure.origin
+            ? {
+                source_uri: result.failure.origin.sourceUri,
+                pointer: result.failure.origin.pointer,
+              }
+            : null,
+        };
+      }
       if (result.detail)
         actual.detail = {
           reason: result.detail.reason,

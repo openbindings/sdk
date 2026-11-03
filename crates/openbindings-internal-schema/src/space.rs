@@ -1,5 +1,7 @@
 //! Original-context resource graph. No URI here acquires bytes.
+mod custom;
 mod original;
+mod potential;
 use crate::{
     schema_index::{DIALECT, SchemaIndex},
     uri, *,
@@ -12,7 +14,7 @@ pub use original::QueryFailure;
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 
 pub struct SpaceNode {
-    pub dialect: Option<crate::dialect::Dialect>,
+    pub profile: Option<crate::dialect::Profile>,
     pub value: JsonValue,
     pub resource: usize,
     pub source: usize,
@@ -29,6 +31,7 @@ pub struct Resource {
     pub base: Option<String>,
     pub anonymous: bool,
     pub dialect: Option<String>,
+    pub profile: Option<crate::dialect::Profile>,
     pub anchors: BTreeMap<String, Vec<(usize, bool)>>,
     pub origin: ResourceOrigin,
     // Read through `SchemaSpace::eligible`, which accounts for local claims.
@@ -205,6 +208,7 @@ pub struct SchemaSpace {
     local: Layer,
     identity_bytes: usize,
     packaged: &'static Layer,
+    custom: custom::Custom,
 }
 // The packaged layer numbers its nodes, resources and sources from here, so
 // its entries hold their final identifiers in every space. Local identifiers
@@ -337,6 +341,7 @@ impl Layer {
                 .and_then(|name| uri::compared_id(None, name)),
             anonymous: retrieval.is_none(),
             dialect: Some(DIALECT.into()),
+            profile: index.profile(0),
             anchors: BTreeMap::new(),
             origin,
             eligible: true,
@@ -350,6 +355,7 @@ impl Layer {
         for (at, node) in index.nodes.iter().enumerate() {
             control.check()?;
             let value = index.value(node);
+            let profile = index.profile(at);
             let resource = if let Some(&id) = resources.get(&(node.resource as usize)) {
                 id
             } else {
@@ -370,6 +376,7 @@ impl Layer {
                     base,
                     anonymous: false,
                     dialect,
+                    profile,
                     anchors: BTreeMap::new(),
                     origin,
                     eligible: true,
@@ -377,7 +384,7 @@ impl Layer {
                 id
             };
             if origin != ResourceOrigin::Contained
-                && node.dialect.is_none()
+                && profile.is_none()
                 && self
                     .resource(resource)
                     .dialect
@@ -390,14 +397,17 @@ impl Layer {
             let id = self.base + self.nodes.len();
             positions.insert(node.id as usize, id);
             self.nodes.push(SpaceNode {
-                dialect: node.dialect,
+                profile,
                 value: value.to_owned(),
                 resource,
                 source,
                 depth: node.depth as usize,
             });
-            if node.dialect == Some(crate::dialect::Dialect::Draft7)
-                && !node.dialect.unwrap().reference_object(value)
+            if profile
+                == Some(crate::dialect::Profile::standard(
+                    crate::dialect::Dialect::Draft7,
+                ))
+                && !profile.unwrap().reference_object(value)
                 && let Some(name) = value
                     .get("$id")
                     .and_then(|v| v.as_str())
@@ -411,13 +421,11 @@ impl Layer {
                     .push((id, false));
             }
             for keyword in ["$anchor", "$dynamicAnchor"] {
-                if node
-                    .dialect
-                    .is_some_and(|d| d.active(keyword) && !d.reference_object(value))
+                if profile.is_some_and(|d| d.active(keyword) && !d.reference_object(value))
                     && let Some(name) = value
                         .get(keyword)
                         .and_then(|v| v.as_str())
-                        .filter(|s| node.dialect.is_some_and(|d| d.anchor_name(s)))
+                        .filter(|s| profile.is_some_and(|d| d.anchor_name(s)))
                 {
                     self.resource_mut(resource)
                         .anchors
@@ -599,13 +607,25 @@ fn select(
 }
 
 impl SchemaSpace {
-    pub fn new(document: RawDocument, supplied: Supplied) -> Self {
+    pub fn new(document: RawDocument, supplied: Supplied) -> Result<Self, Failure> {
         Self::new_bounded(document, supplied, usize::MAX, usize::MAX, &|| false)
-            .expect("unbounded uncancelled assembly")
     }
     /// Assemble original sources with a node bound and cooperative cancellation.
     /// Incomplete work never enters the shared resolution cache.
     pub fn new_bounded(
+        document: RawDocument,
+        supplied: Supplied,
+        maximum: usize,
+        maximum_identity: usize,
+        control: &dyn Control,
+    ) -> Result<Self, Failure> {
+        Self::assemble(document, supplied, maximum, maximum_identity, control)?.complete_custom(
+            maximum,
+            maximum_identity,
+            control,
+        )
+    }
+    fn assemble(
         document: RawDocument,
         supplied: Supplied,
         maximum: usize,
@@ -625,6 +645,15 @@ impl SchemaSpace {
                 )
             })?;
         let supplied_nodes = supplied.nodes_bounded(remaining, control)?;
+        let local_nodes = supplied_nodes
+            .iter()
+            .try_fold(document.schema_index().nodes.len(), |count, index| {
+                count.checked_add(index.nodes.len())
+            })
+            .ok_or_else(crate::identity_budget::exceeded)?;
+        // Per-node layer/index/maps overhead, including temporary base-length
+        // analysis. Shared packaged/source bytes are not newly allocated here.
+        control.charge_allocation(local_nodes.saturating_add(1).saturating_mul(2048))?;
         let packaged_bytes: usize = packaged
             .resources
             .iter()
@@ -643,6 +672,7 @@ impl SchemaSpace {
             control,
         )?;
         let identity_bytes = reserved + document_bytes;
+        crate::preparation::identities(identity_bytes, control)?;
         let mut local = Layer::default();
         let protected = &supplied.policy.protected;
         local.add_source_controlled(
@@ -680,11 +710,16 @@ impl SchemaSpace {
             local,
             identity_bytes,
             packaged,
+            custom: custom::Custom::default(),
         })
     }
     /// Conservative expanded-identity spelling cost established before allocation.
     pub fn identity_bytes(&self) -> usize {
         self.identity_bytes
+    }
+    /// Completed inventory footprint, available without walking a cache hit.
+    pub fn node_count(&self) -> usize {
+        self.local.nodes.len() + self.packaged.nodes.len()
     }
     // Local identifiers index the local layer directly; any other identifier
     // is the packaged layer's.
@@ -844,6 +879,11 @@ impl SchemaSpace {
         self.query(holder, reference).map_err(|cause| {
             use QueryFailure as Q;
             let (reason, code, message) = match &cause {
+                Q::InvalidExternalSchema => (
+                    FailureReason::ConservativePreparation,
+                    "invalid-schema",
+                    "the external schema has an invalid interpretation declaration",
+                ),
                 Q::ResourceUnavailable(uri) => {
                     missing(uri);
                     (
@@ -1460,7 +1500,16 @@ impl SchemaSpace {
             ));
         }
         self.check_resource(node.resource, id)?;
-        if node.dialect.is_none()
+        if let Some(Err(cause)) = self.custom_meta(node.resource) {
+            let mut failure = Failure::new(
+                FailureReason::UnsupportedCapability,
+                "custom-meta-selection",
+                "the resource's custom interpretation could not be established",
+            );
+            failure.query_failure = Some(Box::new(cause));
+            return Err(failure);
+        }
+        if node.profile.is_none()
             && resource
                 .dialect
                 .as_deref()
@@ -1479,8 +1528,8 @@ impl SchemaSpace {
             return Err(failure);
         }
         if node
-            .dialect
-            .is_some_and(|d| d != crate::dialect::Dialect::Draft202012)
+            .profile
+            .is_some_and(|d| d.is_custom() || d.edition() != crate::dialect::Dialect::Draft202012)
         {
             return Err(self.failure(
                 id,
@@ -1788,6 +1837,7 @@ pub fn embedded_resources() -> &'static [ProjectedResource] {
             .into_iter()
             .chain(crate::fixed_schema::DRAFT7_FILES)
             .chain(crate::fixed_schema::DRAFT2019_FILES)
+            .chain(crate::fixed_schema::FORMAT_ASSERTION_FILES)
             .map(|text| {
                 let document = JsonValue::parse(text).expect("pinned meta-schema is JSON");
                 let uri = document
@@ -1839,7 +1889,7 @@ mod projection_tests {
                 } else {
                     Supplied::default()
                 };
-                let space = SchemaSpace::new(document, supplied);
+                let space = SchemaSpace::new(document, supplied).unwrap();
                 let entry = space
                     .document_node(
                         &space
@@ -1896,7 +1946,8 @@ mod projection_tests {
         }
         meta.finish();
         assert!(!index.schemas_checked());
-        let space = SchemaSpace::new(RawDocument::shared(index.clone()), Supplied::default());
+        let space =
+            SchemaSpace::new(RawDocument::shared(index.clone()), Supplied::default()).unwrap();
         let entry = space
             .document_node(&malformed.at("/operations/op/input").unwrap().to_owned())
             .unwrap();
@@ -2007,6 +2058,7 @@ mod projection_tests {
                 local,
                 identity_bytes: 0,
                 packaged,
+                custom: custom::Custom::default(),
             }
         }
     }
@@ -2131,7 +2183,7 @@ mod projection_tests {
                 if flat {
                     SchemaSpace::flat(document, supplied)
                 } else {
-                    SchemaSpace::new(document, supplied)
+                    SchemaSpace::new(document, supplied).unwrap()
                 }
             };
             let (layered, flat) = (space(false), space(true));
@@ -2228,7 +2280,7 @@ mod projection_tests {
                 .unwrap(),
         }])
         .unwrap();
-        let space = SchemaSpace::new(document, resources);
+        let space = SchemaSpace::new(document, resources).unwrap();
         let entry = space
             .document_node(
                 &space
@@ -2290,7 +2342,7 @@ mod projection_tests {
             .unwrap(),
         }])
         .unwrap();
-        let space = SchemaSpace::new(document, resources);
+        let space = SchemaSpace::new(document, resources).unwrap();
         let entry = space
             .document_node(
                 &space
@@ -2330,7 +2382,7 @@ mod projection_tests {
     fn generated_name_changes_preserve_dynamic_scope_annotations_opaque_strings_and_locations() {
         let document=RawDocument::parse(r##"{"openbindings":"0.2.0","operations":{"op":{"input":{"$ref":"#/schemas/strict"}}},"schemas":{"strict":{"$dynamicAnchor":"node","$ref":"https://example.invalid/tree","unevaluatedProperties":false}}}"##).unwrap();
         let resources=Supplied::new([ProjectedResource{uri:"https://example.invalid/tree".into(),document:JsonValue::parse(r##"{"$dynamicAnchor":"node","type":"object","properties":{"children":{"type":"array","items":{"$dynamicRef":"#node"}},"literal":{"const":"https://sdk-program.openbindings.invalid/r0#/$defs/n0"}}}"##).unwrap()}]).unwrap();
-        let space = SchemaSpace::new(document, resources);
+        let space = SchemaSpace::new(document, resources).unwrap();
         let entry = space
             .document_node(
                 &space

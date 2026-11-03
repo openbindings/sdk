@@ -143,9 +143,28 @@ impl ExternalSchemas {
         limits: &PreparationLimits,
         control: &dyn WorkControl,
     ) -> Result<Self, ExternalSchemaError> {
+        openbindings_internal_schema::preparation::Attempt::run(
+            limits.max_work_units,
+            limits.max_allocation_bytes,
+            &|| control.is_cancelled(),
+            |attempt| Self::register(resources, limits, attempt),
+        )
+        .map_err(registration_failure)?
+    }
+    fn register(
+        resources: impl IntoIterator<Item = ExternalSchema>,
+        limits: &PreparationLimits,
+        control: &dyn openbindings_internal_schema::Control,
+    ) -> Result<Self, ExternalSchemaError> {
         let mut by_uri = BTreeMap::new();
         let mut retrieval_bytes = 0usize;
         for mut resource in resources {
+            control
+                .charge_work(resource.uri.len().saturating_add(1))
+                .map_err(registration_failure)?;
+            control
+                .charge_allocation(resource.uri.len().saturating_mul(8).saturating_add(1024))
+                .map_err(registration_failure)?;
             let exceeded = |resource: &str| ExternalSchemaError {
                 kind: ExternalSchemaErrorKind::Limit {
                     resource: resource.into(),
@@ -160,13 +179,7 @@ impl ExternalSchemas {
                 .checked_add(resource.uri.len())
                 .filter(|bytes| *bytes <= limits.max_identity_bytes)
                 .ok_or_else(|| exceeded("schema-identity-bytes"))?;
-            if control.is_cancelled() {
-                return Err(ExternalSchemaError {
-                    kind: ExternalSchemaErrorKind::Cancelled,
-                    uri: String::new(),
-                    message: "the caller cancelled registration".into(),
-                });
-            }
+            control.check().map_err(registration_failure)?;
             let invalid = |message: &str| ExternalSchemaError {
                 kind: ExternalSchemaErrorKind::InvalidIdentity,
                 uri: resource.uri.clone(),
@@ -186,6 +199,13 @@ impl ExternalSchemas {
             }
             resource.uri = crate::uri::compared_id(None, &resource.uri)
                 .ok_or_else(|| invalid("invalid retrieval URI"))?;
+            if openbindings_internal_json::backend::node_id(&resource.document) != 0 {
+                let bytes = resource.document.bytes().len();
+                control.charge_work(bytes).map_err(registration_failure)?;
+                control
+                    .charge_allocation(bytes.saturating_mul(128))
+                    .map_err(registration_failure)?;
+            }
             resource.document = openbindings_internal_json::backend::standalone(resource.document);
             let uri = resource.uri.clone();
             if by_uri.insert(uri.clone(), resource).is_some() {
@@ -206,19 +226,12 @@ impl ExternalSchemas {
                 }),
             limits.max_schema_nodes,
             limits.max_identity_bytes,
-            &|| control.is_cancelled(),
+            control,
         )
-        .map_err(|failure| ExternalSchemaError {
-            kind: if failure.reason == openbindings_internal_schema::FailureReason::Cancelled {
-                ExternalSchemaErrorKind::Cancelled
-            } else {
-                ExternalSchemaErrorKind::Limit {
-                    resource: failure.code,
-                }
-            },
-            uri: String::new(),
-            message: failure.message,
-        })?;
+        .map_err(registration_failure)?;
+        control
+            .charge_allocation(512)
+            .map_err(registration_failure)?;
         Ok(Self {
             inner: Arc::new(ExternalSchemasInner {
                 resources,
@@ -311,6 +324,20 @@ impl std::fmt::Debug for ExternalSchemas {
         f.debug_struct("ExternalSchemas")
             .field("resources", &self.inner.resources.len())
             .finish_non_exhaustive()
+    }
+}
+
+fn registration_failure(failure: openbindings_internal_schema::Failure) -> ExternalSchemaError {
+    ExternalSchemaError {
+        kind: if failure.reason == openbindings_internal_schema::FailureReason::Cancelled {
+            ExternalSchemaErrorKind::Cancelled
+        } else {
+            ExternalSchemaErrorKind::Limit {
+                resource: failure.code,
+            }
+        },
+        uri: String::new(),
+        message: failure.message,
     }
 }
 

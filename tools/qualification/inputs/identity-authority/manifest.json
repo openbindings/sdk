@@ -1,0 +1,68 @@
+{
+  "recorded_utc": "2026-11-03T16:53:05.744267+00:00",
+  "sources": [
+    {
+      "family": "v1",
+      "revision": "8595c839899a81abf0cb09e8cc9774b9a0a23db7",
+      "path": "specs/jsonschema-core.md",
+      "url": "https://raw.githubusercontent.com/json-schema-org/json-schema-spec/8595c839899a81abf0cb09e8cc9774b9a0a23db7/specs/jsonschema-core.md",
+      "sha256": "c2c3caeb85c5eff967e7f32577beefa06f2439f261ae8474784fa5658f8e85cb",
+      "bytes": 118602,
+      "use": "certificate-only inventory/identifier authority, not evaluation qualification"
+    },
+    {
+      "family": "v1",
+      "revision": "8595c839899a81abf0cb09e8cc9774b9a0a23db7",
+      "path": "specs/jsonschema-validation.md",
+      "url": "https://raw.githubusercontent.com/json-schema-org/json-schema-spec/8595c839899a81abf0cb09e8cc9774b9a0a23db7/specs/jsonschema-validation.md",
+      "sha256": "734ea8d237bcd5b06aa6529668847975c77a49938e680649116e0d3b377d2a9b",
+      "bytes": 39707,
+      "use": "certificate-only inventory/identifier authority, not evaluation qualification"
+    },
+    {
+      "family": "v1",
+      "revision": "8595c839899a81abf0cb09e8cc9774b9a0a23db7",
+      "path": "specs/meta/meta.schema.json",
+      "url": "https://raw.githubusercontent.com/json-schema-org/json-schema-spec/8595c839899a81abf0cb09e8cc9774b9a0a23db7/specs/meta/meta.schema.json",
+      "sha256": "5d0e7f8c52553fd6c556d181bd70c4432797cdf08da1b56360fbdf9f66c21d6a",
+      "bytes": 6957,
+      "use": "certificate-only inventory/identifier authority, not evaluation qualification"
+    },
+    {
+      "family": "v1",
+      "revision": "8595c839899a81abf0cb09e8cc9774b9a0a23db7",
+      "path": "PROCESS.md",
+      "url": "https://raw.githubusercontent.com/json-schema-org/json-schema-spec/8595c839899a81abf0cb09e8cc9774b9a0a23db7/PROCESS.md",
+      "sha256": "715a0405de38b8761740824006f64876cfafdf380f151513dae2052a6d9815e0",
+      "bytes": 9301,
+      "use": "certificate-only inventory/identifier authority, not evaluation qualification"
+    },
+    {
+      "family": "draft06",
+      "revision": "59ed5f6fc6f6386e23ca51d7f31d7fe9cf696713",
+      "path": "jsonschema-core.xml",
+      "url": "https://raw.githubusercontent.com/json-schema-org/json-schema-spec/59ed5f6fc6f6386e23ca51d7f31d7fe9cf696713/jsonschema-core.xml",
+      "sha256": "eca862ff39ebbc2dc2dc4c7b04c93a2baa08d9fde22849ddc002f11dcd349049",
+      "bytes": 39726,
+      "use": "certificate-only inventory/identifier authority, not evaluation qualification"
+    },
+    {
+      "family": "draft06",
+      "revision": "59ed5f6fc6f6386e23ca51d7f31d7fe9cf696713",
+      "path": "jsonschema-validation.xml",
+      "url": "https://raw.githubusercontent.com/json-schema-org/json-schema-spec/59ed5f6fc6f6386e23ca51d7f31d7fe9cf696713/jsonschema-validation.xml",
+      "sha256": "88eac0960abdab0691afcd80317a456cf6ed56dc3c1821eab4cc8137d6e72f6d",
+      "bytes": 44840,
+      "use": "certificate-only inventory/identifier authority, not evaluation qualification"
+    },
+    {
+      "family": "draft06",
+      "revision": "59ed5f6fc6f6386e23ca51d7f31d7fe9cf696713",
+      "path": "schema.json",
+      "url": "https://raw.githubusercontent.com/json-schema-org/json-schema-spec/59ed5f6fc6f6386e23ca51d7f31d7fe9cf696713/schema.json",
+      "sha256": "0064e880ba214bff1cee511e678fbe48c9826dd359e91e2423fc36de67b2ebe1",
+      "bytes": 4497,
+      "use": "certificate-only inventory/identifier authority, not evaluation qualification"
+    }
+  ]
+}

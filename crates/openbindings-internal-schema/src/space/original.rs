@@ -4,6 +4,7 @@ use super::*;
 /// Structural query results, without diagnostic-string classification.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum QueryFailure {
+    InvalidExternalSchema,
     MalformedReference,
     MissingTarget,
     NonSchemaTarget,
@@ -38,35 +39,62 @@ impl SchemaSpace {
         } else {
             let absolute = uri::compared_id(current.base.as_deref(), reference)
                 .ok_or(QueryFailure::InvalidIdentifier)?;
-            let name = absolute
-                .split_once('#')
-                .map_or(absolute.as_str(), |(name, _)| name);
-            let exact = self.name(name).filter(|name| name.exact_contained);
-            let normalized =
-                || crate::input_policy::canonical_uri(name).and_then(|name| self.name(&name));
-            let selected = exact.or_else(normalized);
-            if self.local.uncertain_identifiers
-                && selected.is_none_or(|s| s.origin != ResourceOrigin::Contained)
-            {
-                return Err(QueryFailure::UnsupportedCapability(
-                    "schema-identifier-form",
-                ));
-            }
-            match selected {
-                Some(NameSelection {
-                    carrier: Some(resource),
-                    ..
-                }) if self.eligible(resource) => resource,
-                Some(_) => return Err(QueryFailure::IdentityConflict),
-                None => return Err(QueryFailure::ResourceUnavailable(name.into())),
-            }
+            self.named_resource(&absolute)?
         };
         self.query_fragment(resource, reference)
+    }
+
+    /// One selection implementation for ordinary references and custom dialect
+    /// certificates. A certificate does not acquire a second alias registry.
+    pub(super) fn named_resource(&self, absolute: &str) -> Result<usize, QueryFailure> {
+        if !uri::absolute(absolute) {
+            return Err(QueryFailure::MalformedReference);
+        }
+        let name = absolute.split_once('#').map_or(absolute, |(name, _)| name);
+        let exact = self.name(name).filter(|name| name.exact_contained);
+        let normalized =
+            || crate::input_policy::canonical_uri(name).and_then(|name| self.name(&name));
+        let selected = exact.or_else(normalized);
+        // Additional opaque claims cannot erase a conflict already established
+        // by the original carriers. Preserve that determinate evidence before
+        // refusing selections that would require proving namespace absence.
+        if selected.is_some_and(|selection| {
+            selection
+                .carrier
+                .is_none_or(|resource| !self.eligible(resource))
+        }) {
+            return Err(QueryFailure::IdentityConflict);
+        }
+        if self.local.uncertain_identifiers
+            && selected.is_none_or(|s| s.origin != ResourceOrigin::Contained)
+        {
+            return Err(QueryFailure::UnsupportedCapability(
+                "schema-identifier-form",
+            ));
+        }
+        if self.custom.unknown_namespace
+            && selected.is_none_or(|s| s.origin != ResourceOrigin::Contained)
+        {
+            return Err(QueryFailure::UnsupportedCapability(
+                "custom-profile-namespace",
+            ));
+        }
+        match selected {
+            Some(NameSelection {
+                carrier: Some(resource),
+                ..
+            }) if self.eligible(resource) => Ok(resource),
+            Some(_) => Err(QueryFailure::IdentityConflict),
+            None => Err(QueryFailure::ResourceUnavailable(name.into())),
+        }
     }
 
     /// Whether this resource's non-root schema positions are known by this
     /// inventory. A custom evaluator can still inspect its root and meta-schema.
     pub fn query_inventory(&self, resource: usize) -> Result<(), QueryFailure> {
+        if let Some(Err(cause)) = self.custom_meta(resource) {
+            return Err(cause);
+        }
         if self.local.uncertain_identifiers
             && self.resource(resource).origin != ResourceOrigin::Contained
         {
@@ -75,11 +103,7 @@ impl SchemaSpace {
             ));
         }
         let dialect = &self.resource(resource).dialect;
-        if dialect
-            .as_deref()
-            .and_then(crate::dialect::Dialect::from_uri)
-            .is_some()
-        {
+        if self.resource(resource).profile.is_some() {
             Ok(())
         } else {
             Err(QueryFailure::UnsupportedDialect(
@@ -90,7 +114,7 @@ impl SchemaSpace {
 
     fn query_identifier_interpretation(&self, node: usize) -> Result<(), QueryFailure> {
         let original = self.node(node);
-        if original.dialect.is_none()
+        if original.profile.is_none()
             && self
                 .resource(original.resource)
                 .dialect
@@ -105,7 +129,11 @@ impl SchemaSpace {
         Ok(())
     }
 
-    fn query_fragment(&self, resource_id: usize, reference: &str) -> Result<Target, QueryFailure> {
+    pub(super) fn query_fragment(
+        &self,
+        resource_id: usize,
+        reference: &str,
+    ) -> Result<Target, QueryFailure> {
         let resource = self.resource(resource_id);
         let fragment = reference
             .split_once('#')

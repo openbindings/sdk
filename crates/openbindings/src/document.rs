@@ -631,7 +631,7 @@ impl ConformantDocument {
         resources: &ExternalSchemas,
         maximum: usize,
         maximum_identity: usize,
-        control: &dyn WorkControl,
+        control: &dyn openbindings_internal_schema::Control,
     ) -> Result<Arc<SchemaSpace>, openbindings_internal_schema::Failure> {
         let inner = &self.document.inner;
         let cached = if resources.is_empty() {

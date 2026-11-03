@@ -1,6 +1,8 @@
 # OpenBindings internal schema
 
-Implements the shared document-schema and OpenBindings embedding machinery.
+Implements shared fixed document/schema admission and the original-schema resource
+graph. It separates the normative contained OBI walk from external interpretation
+profiles, while retaining original identities, references and source locations.
 Applications use `openbindings` for document validation and an explicit schema
 evaluator for operation values.
 

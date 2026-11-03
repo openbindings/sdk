@@ -1289,6 +1289,11 @@ pub fn node_id(value: &crate::JsonValue) -> usize {
 pub fn ref_id(value: crate::JsonRef<'_>) -> usize {
     value.id
 }
+/// Process-local occurrence identity while the owning arena is retained. Unlike
+/// `ref_id`, this can distinguish operands borrowed from different arenas.
+pub fn occurrence(value: crate::JsonRef<'_>) -> (usize, usize) {
+    (std::sync::Arc::as_ptr(value.owner) as usize, value.id)
+}
 /// Borrow the value at an arena position recorded by [`ref_id`] from any value
 /// sharing that arena. `None` when the position does not exist.
 pub fn node(value: &crate::JsonValue, id: usize) -> Option<crate::JsonRef<'_>> {

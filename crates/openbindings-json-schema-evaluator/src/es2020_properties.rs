@@ -3,6 +3,10 @@
 //! <https://262.ecma-international.org/11.0/>). Names only: whether a pattern
 //! with a property escape is valid depends on them. Matching reads scalar
 //! ranges from the pinned engine only after these exact names are admitted.
+/// Inclusive bound for every property expression admitted below in the pinned
+/// engine. The exhaustive table audit tests both signs and every name/alias;
+/// dependency/table changes must keep this reservation bound valid.
+pub(crate) const MAX_ENGINE_PROPERTY_RANGES: usize = 4096;
 pub(crate) fn valid(value: &str, name: Option<&str>) -> bool {
     match name {
         Some("General_Category" | "gc") => CATEGORY.binary_search(&value).is_ok(),
@@ -11,6 +15,7 @@ pub(crate) fn valid(value: &str, name: Option<&str>) -> bool {
         None => BINARY.binary_search(&value).is_ok() || CATEGORY.binary_search(&value).is_ok(),
     }
 }
+
 const BINARY: &[&str] = &[
     "AHex",
     "ASCII",
@@ -490,3 +495,43 @@ const SCRIPT: &[&str] = &[
     "Zinh",
     "Zyyy",
 ];
+
+#[cfg(test)]
+mod reservation_tests {
+    use super::*;
+    #[test]
+    fn every_admitted_property_fits_the_preparation_range_reservation() {
+        let mut names: Vec<String> = BINARY.iter().chain(CATEGORY).map(|s| (*s).into()).collect();
+        for prefix in ["General_Category", "gc"] {
+            names.extend(CATEGORY.iter().map(|s| format!("{prefix}={s}")));
+        }
+        for prefix in ["Script", "sc", "Script_Extensions", "scx"] {
+            names.extend(SCRIPT.iter().map(|s| format!("{prefix}={s}")));
+        }
+        let mut checked = 0;
+        let mut maximum = 0;
+        for name in names {
+            for sign in ["p", "P"] {
+                let Ok(hir) = regex_syntax::Parser::new().parse(&format!("\\{sign}{{{name}}}"))
+                else {
+                    continue;
+                };
+                if let regex_syntax::hir::HirKind::Class(regex_syntax::hir::Class::Unicode(class)) =
+                    hir.kind()
+                {
+                    let ranges = class.iter().count();
+                    maximum = maximum.max(ranges);
+                    assert!(
+                        ranges <= MAX_ENGINE_PROPERTY_RANGES,
+                        "{sign}{{{name}}}: {ranges}"
+                    );
+                }
+                checked += 1;
+            }
+        }
+        assert!(checked > 1000);
+        eprintln!(
+            "Unicode reservation audit: {checked} expressions, maximum {maximum} ranges, bound {MAX_ENGINE_PROPERTY_RANGES}"
+        );
+    }
+}

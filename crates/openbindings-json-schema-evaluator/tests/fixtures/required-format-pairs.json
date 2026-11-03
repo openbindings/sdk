@@ -1,0 +1,249 @@
+[
+  {
+    "format": "date-time",
+    "valid": "2020-02-29T12:34:56Z",
+    "invalid": "2020-02-30T12:34:56Z",
+    "required_outcomes": [
+      "satisfies",
+      "fails"
+    ],
+    "optional_assertion_outcomes": [
+      "satisfies",
+      "satisfies"
+    ]
+  },
+  {
+    "format": "date",
+    "valid": "2020-02-29",
+    "invalid": "2019-02-29",
+    "required_outcomes": [
+      "satisfies",
+      "fails"
+    ],
+    "optional_assertion_outcomes": [
+      "satisfies",
+      "satisfies"
+    ]
+  },
+  {
+    "format": "time",
+    "valid": "12:34:56Z",
+    "invalid": "25:00:00Z",
+    "required_outcomes": [
+      "satisfies",
+      "fails"
+    ],
+    "optional_assertion_outcomes": [
+      "satisfies",
+      "satisfies"
+    ]
+  },
+  {
+    "format": "duration",
+    "valid": "P1D",
+    "invalid": "P",
+    "required_outcomes": [
+      "satisfies",
+      "fails"
+    ],
+    "optional_assertion_outcomes": [
+      "satisfies",
+      "satisfies"
+    ]
+  },
+  {
+    "format": "email",
+    "valid": "a@example.com",
+    "invalid": "missing-at",
+    "required_outcomes": [
+      "satisfies",
+      "fails"
+    ],
+    "optional_assertion_outcomes": [
+      "satisfies",
+      "satisfies"
+    ]
+  },
+  {
+    "format": "idn-email",
+    "valid": "\u00e9@example.com",
+    "invalid": "missing-at",
+    "required_outcomes": [
+      "satisfies",
+      "fails"
+    ],
+    "optional_assertion_outcomes": [
+      "satisfies",
+      "satisfies"
+    ]
+  },
+  {
+    "format": "hostname",
+    "valid": "example.com",
+    "invalid": "bad host",
+    "required_outcomes": [
+      "satisfies",
+      "fails"
+    ],
+    "optional_assertion_outcomes": [
+      "satisfies",
+      "satisfies"
+    ]
+  },
+  {
+    "format": "idn-hostname",
+    "valid": "b\u00fccher.example",
+    "invalid": "bad host",
+    "required_outcomes": [
+      "satisfies",
+      "fails"
+    ],
+    "optional_assertion_outcomes": [
+      "satisfies",
+      "satisfies"
+    ]
+  },
+  {
+    "format": "ipv4",
+    "valid": "127.0.0.1",
+    "invalid": "256.0.0.1",
+    "required_outcomes": [
+      "satisfies",
+      "fails"
+    ],
+    "optional_assertion_outcomes": [
+      "satisfies",
+      "satisfies"
+    ]
+  },
+  {
+    "format": "ipv6",
+    "valid": "::1",
+    "invalid": "2001:db8:::1",
+    "required_outcomes": [
+      "satisfies",
+      "fails"
+    ],
+    "optional_assertion_outcomes": [
+      "satisfies",
+      "satisfies"
+    ]
+  },
+  {
+    "format": "uri",
+    "valid": "https://example.test/x",
+    "invalid": "relative/path",
+    "required_outcomes": [
+      "satisfies",
+      "fails"
+    ],
+    "optional_assertion_outcomes": [
+      "satisfies",
+      "satisfies"
+    ]
+  },
+  {
+    "format": "uri-reference",
+    "valid": "relative/path",
+    "invalid": "%",
+    "required_outcomes": [
+      "satisfies",
+      "fails"
+    ],
+    "optional_assertion_outcomes": [
+      "satisfies",
+      "satisfies"
+    ]
+  },
+  {
+    "format": "iri",
+    "valid": "https://example.test/\u00e9",
+    "invalid": "relative/path",
+    "required_outcomes": [
+      "satisfies",
+      "fails"
+    ],
+    "optional_assertion_outcomes": [
+      "satisfies",
+      "satisfies"
+    ]
+  },
+  {
+    "format": "iri-reference",
+    "valid": "\u00e9/path",
+    "invalid": "%",
+    "required_outcomes": [
+      "satisfies",
+      "fails"
+    ],
+    "optional_assertion_outcomes": [
+      "satisfies",
+      "satisfies"
+    ]
+  },
+  {
+    "format": "uuid",
+    "valid": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6",
+    "invalid": "not-a-uuid",
+    "required_outcomes": [
+      "satisfies",
+      "fails"
+    ],
+    "optional_assertion_outcomes": [
+      "satisfies",
+      "satisfies"
+    ]
+  },
+  {
+    "format": "uri-template",
+    "valid": "https://example.test/{id}",
+    "invalid": "https://example.test/{id",
+    "required_outcomes": [
+      "satisfies",
+      "fails"
+    ],
+    "optional_assertion_outcomes": [
+      "satisfies",
+      "satisfies"
+    ]
+  },
+  {
+    "format": "json-pointer",
+    "valid": "/a~1b",
+    "invalid": "/a~2b",
+    "required_outcomes": [
+      "satisfies",
+      "fails"
+    ],
+    "optional_assertion_outcomes": [
+      "satisfies",
+      "satisfies"
+    ]
+  },
+  {
+    "format": "relative-json-pointer",
+    "valid": "0#",
+    "invalid": "01#",
+    "required_outcomes": [
+      "satisfies",
+      "fails"
+    ],
+    "optional_assertion_outcomes": [
+      "satisfies",
+      "satisfies"
+    ]
+  },
+  {
+    "format": "regex",
+    "valid": "a+",
+    "invalid": "[",
+    "required_outcomes": [
+      "satisfies",
+      "fails"
+    ],
+    "optional_assertion_outcomes": [
+      "satisfies",
+      "satisfies"
+    ]
+  }
+]

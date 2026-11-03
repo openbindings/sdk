@@ -16,16 +16,15 @@ Preparing a `Schema` requires an explicit evaluator. There is
 no fallback value evaluator in core. A stated `true`, `false` or `{}` schema
 still requires an evaluator. Absence alone means no value contract is stated.
 
-`operation::Invoker::prepare`, called on an invoker held in an `Arc`, accepts
-operations with no stated value contracts without an evaluator. Any stated input or output value contract without one yields
-`ERR_SCHEMA_UNRESOLVED` during preparation, before provider effects. Supply one
-through `with_evaluator` to enable those checks.
-
-Plain `operation::Invoker::invoke` prepares each direction lazily when a value
-crosses it. With no evaluator, the first value in a declared direction yields
-`ERR_SCHEMA_UNRESOLVED`; a direction carrying no values triggers no preparation.
-Provider effects can precede an output refusal. Use `prepare` when the application
-requires both stated value contracts to prepare before invocation. The TypeScript facade bundles
+`OperationClient::new(provider, evaluator, external_schemas)` makes the invocation
+dependencies explicit. Lazy invocation prepares a declared direction when its
+first value crosses that boundary. An absent schema invokes no evaluator and
+makes no validation claim. Provider effects can precede an output refusal.
+Use `client.prepare(interface, name, &control)` when the application requires both
+stated contracts to prepare before invocation. The resulting `PreparedOperation`
+owns its validators and does not retain a provider or evaluator. See the
+[invocation contract](invocation.md) for binding selection and prepared reuse.
+The TypeScript facade bundles
 the default evaluator; it does not expose custom evaluator callbacks.
 
 ## Bring your own
@@ -50,9 +49,45 @@ sources, inventories and typed reference queries. The bounded environment is
 reused for a live document/resource pair; it does not rewrite the document or
 fetch missing content. An implementation can retain this owned environment or
 copy the prepared facts it needs. A failed environment query remains a typed
-preparation/resolution cause, not a value verdict. Custom evaluators may inspect
-an external resource root even when the built-in inventory cannot interpret its
-dialect-dependent child positions.
+preparation/resolution cause, not a value verdict. `ExternalSchemas` retains the
+supplied original JSON. Environment lookup can refuse when an unknown dialect
+leaves its resource names uncertain; it does not infer that an undiscovered name
+is absent. A certificate for a known dialect can establish its root identity
+without establishing support for evaluating that dialect.
+
+The default evaluator interprets standard draft-07, 2019-09 and 2020-12 external
+resources, plus supported 2020-12 vocabulary combinations. A custom dialect is
+selected through its original meta-schema and that meta-schema's own standard
+2020-12 interpretation. Consumer schemas must satisfy the actual meta-schema,
+including its authored restrictions and referenced helpers. Required unknown
+vocabularies, unstable resource selection and cyclic admission obligations produce
+typed preparation failures. Optional known vocabularies remain active; omitted
+vocabularies do not turn their keywords into schema positions.
+
+Required format assertion supports the 19 standard 2020-12 attributes. Optional
+format assertion remains annotation-only. An unknown required attribute refuses
+preparation. The `regex` format uses the SDK's documented ECMA-262 11th-edition
+no-flags syntax policy, including Annex B; it checks syntax without executing the
+expression. This format policy is separate from Unicode-mode `pattern` matching.
+Date/time attributes check [RFC 3339](https://www.rfc-editor.org/rfc/rfc3339)
+syntax, calendar dates, offsets and UTC month boundaries for leap-second syntax.
+They do not consult an external table of historical or announced leap seconds.
+
+`PreparationLimits` keeps inventory footprint (`max_schema_nodes`,
+`max_identity_bytes`) separate from an attempt's work and conservative allocation
+reservations (`max_work_units`, `max_allocation_bytes`). A completed cached
+inventory still checks the requested footprint bounds; work and storage already
+shared are not charged again. Nested preparation cannot renew a spent allowance,
+and cancellation retains its distinct cause. A failed limit check can omit origin
+details rather than allocating an unbounded diagnostic path.
+
+The allocation allowance is not a resident-memory measurement. The current
+migration debits original-environment construction, semantic proof graphs and
+custom meta-schema validation against the same attempt. Repeated patterns and
+original reference queries reuse bounded local state. Independent allocation,
+work, cancellation and retry controls cover these paths. Complete allocation
+accounting for the ordinary user-schema backend compiler remains an open
+qualification gate.
 
 Implement OpenBindings' value-contract semantics, including its JSON Schema
 provisions and original-source locations. Declare unsupported capabilities with

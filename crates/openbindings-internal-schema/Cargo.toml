@@ -1,6 +1,6 @@
 [package]
 name = "openbindings-internal-schema"
-description = "Private OpenBindings schema embedding and provenance adapter"
+description = "Private OpenBindings schema admission and original resource graph"
 readme = "README.md"
 version.workspace = true
 edition.workspace = true

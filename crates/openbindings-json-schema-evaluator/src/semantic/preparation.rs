@@ -5,32 +5,143 @@ use super::*;
 use openbindings_internal_schema::{child_shape, schema_index::SchemaSelector};
 use std::collections::{BTreeSet, VecDeque};
 
+pub(super) struct Checked {
+    pub custom: Vec<usize>,
+    pub resources: Vec<usize>,
+    pub formats: HashMap<usize, formats::Format>,
+}
+
+/// Syntax admission traverses every declared schema position, including unused
+/// definitions, content schemas and orphan conditionals. Evaluation reachability
+/// below deliberately omits those positions, so it cannot certify this fact.
+pub(super) fn meta_syntax(
+    environment: &SchemaEnvironment,
+    entry: usize,
+    control: &dyn openbindings_internal_schema::Control,
+) -> Result<Vec<usize>, PreparationFailure> {
+    let space = environment.space();
+    control.charge_allocation(512)?;
+    let mut queue = vec![entry];
+    let mut custom = BTreeSet::new();
+    while let Some(node) = queue.pop() {
+        control.check()?;
+        let original = space.node(node);
+        if original.depth > 256 {
+            return Err(limit("schema-depth-limit"));
+        }
+        space.check_resource(original.resource, node)?;
+        if let Some(meta) = space.custom_meta(original.resource) {
+            meta.map_err(super::meta::query_failure)?;
+            control.charge_allocation(64)?;
+            custom.insert(original.resource);
+        }
+        let profile = original.profile.ok_or_else(|| {
+            super::meta::query_failure(QueryFailure::UnsupportedDialect(
+                space.resource(original.resource).dialect.clone(),
+            ))
+        })?;
+        if !profile.is_custom() {
+            let valid = openbindings_internal_schema::fixed_schema::dialect_validity_bounded(
+                &original.value,
+                profile.edition(),
+                control,
+            )?;
+            if !valid {
+                return Err(PreparationFailure::new(
+                    PreparationFailureKind::InvalidExternalSchema,
+                ));
+            }
+        }
+        let value = original.value.view();
+        if profile.reference_object(value) {
+            continue;
+        }
+        for field in value.members().into_iter().flatten() {
+            control.charge_work(field.name.text().len().saturating_add(1))?;
+            let Some(keyword) = field.name.as_str() else {
+                continue;
+            };
+            let Some(selector) = profile.selector(keyword, field.value) else {
+                continue;
+            };
+            control.charge_allocation(64)?;
+            let children: Box<dyn Iterator<Item = JsonRef<'_>>> = match selector {
+                SchemaSelector::Map | SchemaSelector::MapOrStringArray => {
+                    Box::new(field.value.members().into_iter().flatten().map(|m| m.value))
+                }
+                SchemaSelector::Array => Box::new(field.value.elements().into_iter().flatten()),
+                SchemaSelector::Direct => Box::new(std::iter::once(field.value)),
+            };
+            for child in children {
+                control.check()?;
+                if let Some(&child) = space
+                    .source(original.source)
+                    .positions
+                    .get(&backend::ref_id(child))
+                {
+                    control.charge_allocation(32)?;
+                    queue.push(child);
+                }
+            }
+        }
+    }
+    control.charge_allocation(custom.len().saturating_mul(8))?;
+    Ok(custom.into_iter().collect())
+}
+
+#[cfg(test)]
 pub(super) fn check(
     environment: &SchemaEnvironment,
     limits: &Limits,
-    control: &dyn WorkControl,
+    control: &dyn openbindings_internal_schema::Control,
 ) -> Result<(), PreparationFailure> {
+    check_from(environment, environment.entry(), limits, control).map(|_| ())
+}
+
+pub(super) fn check_from(
+    environment: &SchemaEnvironment,
+    entry: usize,
+    limits: &Limits,
+    control: &dyn openbindings_internal_schema::Control,
+) -> Result<Checked, PreparationFailure> {
     let space = environment.space();
-    let mut queue = VecDeque::from([environment.entry()]);
+    control.charge_allocation(512)?;
+    let mut queue = VecDeque::from([entry]);
     let mut visited = HashSet::new();
     let mut resources = HashSet::new();
     let mut missing = HashSet::new();
     let mut dynamic = BTreeMap::<String, BTreeSet<usize>>::new();
     let mut used = BTreeSet::<String>::new();
     let mut patterns = Patterns::default();
+    let mut custom = Vec::new();
+    let mut formats = HashMap::new();
     while let Some(node) = queue.pop_front() {
         control.check()?;
-        if !visited.insert(node) {
+        if visited.contains(&node) {
             continue;
         }
+        control.charge_allocation(1024)?;
+        visited.insert(node);
         let original = space.node(node);
         if original.depth > 256 {
             return Err(limit("schema-depth-limit"));
         }
         if resources.insert(original.resource) {
             count_resources(resources.len(), missing.len(), limits)?;
+            if let Some(meta) = space.custom_meta(original.resource) {
+                meta.map_err(super::meta::query_failure)?;
+                control.charge_allocation(32)?;
+                custom.push(original.resource);
+            }
             for (name, anchors) in &space.resource(original.resource).anchors {
+                control.charge_work(name.len().saturating_add(1))?;
                 for &(target, is_dynamic) in anchors {
+                    control.check()?;
+                    if is_dynamic {
+                        control.charge_work(name.len().saturating_mul(8).saturating_add(1))?;
+                        control
+                            .charge_allocation(name.len().saturating_mul(2).saturating_add(256))?;
+                    }
                     if is_dynamic
                         && dynamic.entry(name.clone()).or_default().insert(target)
                         && used.contains(name)
@@ -43,15 +154,19 @@ pub(super) fn check(
         if !space.eligible(original.resource) || space.query_inventory(original.resource).is_err() {
             continue;
         }
-        let Some(dialect) = original.dialect else {
+        let Some(profile) = original.profile else {
             continue;
         };
-        if dialect != Dialect::Draft202012 {
-            let valid = openbindings_internal_schema::fixed_schema::dialect_validity(
+        if !profile.is_custom()
+            && (profile.edition() != Dialect::Draft202012
+                || space.resource(original.resource).origin
+                    == openbindings_internal_schema::ResourceOrigin::Supplied)
+        {
+            let valid = openbindings_internal_schema::fixed_schema::dialect_validity_bounded(
                 &original.value,
-                dialect,
-            )
-            .map_err(|_| limit("foreign-meta-schema-check"))?;
+                profile.edition(),
+                control,
+            )?;
             if !valid {
                 return Err(PreparationFailure::new(
                     PreparationFailureKind::InvalidExternalSchema,
@@ -60,20 +175,27 @@ pub(super) fn check(
         }
         let schema = Interpreted {
             value: original.value.view(),
-            dialect,
+            profile,
         };
+        if profile.asserts_format()
+            && let Some(format) = schema.get("format")
+        {
+            let format = formats::Format::prepare(format, control)?;
+            control.charge_allocation(128)?;
+            formats.insert(node, format);
+        }
         if let Some(pattern) = schema.get("pattern").and_then(|v| v.as_str()) {
-            patterns.add(pattern, false, limits)?;
+            patterns.add(pattern, false, limits, control)?;
         }
         if let Some(entries) = schema.get("patternProperties").and_then(|v| v.members()) {
             for entry in entries {
                 control.check()?;
                 if let Some(pattern) = entry.name.as_str() {
-                    patterns.add(pattern, true, limits)?;
+                    patterns.add(pattern, true, limits, control)?;
                 }
             }
         }
-        if dialect == Dialect::Draft201909
+        if profile.edition() == Dialect::Draft201909
             && schema.get("$recursiveAnchor").and_then(|v| v.as_bool()) == Some(true)
             && let Some(root) = space.resource(original.resource).root
             && dynamic
@@ -86,12 +208,26 @@ pub(super) fn check(
         }
         for keyword in ["$ref", "$dynamicRef", "$recursiveRef"] {
             if let Some(reference) = schema.get(keyword).and_then(|v| v.as_str()) {
+                // Ordinary lookup resolves/normalizes URI spellings and may
+                // retain a missing name or decoded dynamic anchor. Reserve
+                // their source-size bound before any query allocation.
+                let base = space
+                    .resource(original.resource)
+                    .base
+                    .as_ref()
+                    .map_or(0, String::len);
+                let bytes = base
+                    .checked_add(reference.len())
+                    .ok_or_else(|| limit("preparation-allocation-bytes"))?;
+                control.charge_work(bytes.saturating_mul(16).saturating_add(1))?;
+                control.charge_allocation(bytes.saturating_mul(16).saturating_add(512))?;
                 match space.query(node, reference) {
                     Ok(target) => {
                         queue.push_back(target.node);
                         if keyword == "$recursiveRef"
                             && reference == "#"
-                            && space.node(target.node).dialect == Some(Dialect::Draft201909)
+                            && space.node(target.node).profile
+                                == Some(Profile::standard(Dialect::Draft201909))
                             && space
                                 .node(target.node)
                                 .value
@@ -100,6 +236,9 @@ pub(super) fn check(
                                 == Some(true)
                             && used.insert(RECURSIVE_SCOPE.into())
                         {
+                            let count = dynamic.get(RECURSIVE_SCOPE).map_or(0, BTreeSet::len);
+                            control.charge_work(count)?;
+                            control.charge_allocation(count.saturating_mul(16))?;
                             queue.extend(
                                 dynamic.get(RECURSIVE_SCOPE).into_iter().flatten().copied(),
                             );
@@ -108,6 +247,9 @@ pub(super) fn check(
                             && let Some(name) = target.dynamic_name
                             && used.insert(name.clone())
                         {
+                            let count = dynamic.get(&name).map_or(0, BTreeSet::len);
+                            control.charge_work(count)?;
+                            control.charge_allocation(count.saturating_mul(16))?;
                             queue.extend(dynamic.get(&name).into_iter().flatten().copied());
                         }
                     }
@@ -140,6 +282,7 @@ pub(super) fn check(
         }
         if let Some(fields) = schema.value.members() {
             for field in fields {
+                control.charge_work(field.name.text().len().saturating_add(1))?;
                 let Some(keyword) = field.name.as_str() else {
                     continue;
                 };
@@ -154,9 +297,10 @@ pub(super) fn check(
                 {
                     continue;
                 }
-                let Some(selector) = dialect.selector(keyword, field.value) else {
+                let Some(selector) = profile.selector(keyword, field.value) else {
                     continue;
                 };
+                control.charge_allocation(64)?;
                 let children: Box<dyn Iterator<Item = JsonRef<'_>>> = match selector {
                     SchemaSelector::Map | SchemaSelector::MapOrStringArray => {
                         Box::new(field.value.members().into_iter().flatten().map(|m| m.value))
@@ -167,18 +311,27 @@ pub(super) fn check(
                 for child in
                     children.filter(|v| matches!(v.kind(), JsonKind::Object | JsonKind::Boolean))
                 {
+                    control.check()?;
                     if let Some(&child) = space
                         .source(original.source)
                         .positions
                         .get(&backend::ref_id(child))
                     {
+                        control.charge_allocation(64)?;
                         queue.push_back(child);
                     }
                 }
             }
         }
     }
-    Ok(())
+    control.charge_allocation(resources.len().saturating_mul(8))?;
+    let mut resources: Vec<_> = resources.into_iter().collect();
+    resources.sort_unstable();
+    Ok(Checked {
+        custom,
+        resources,
+        formats,
+    })
 }
 fn limit(resource: &str) -> PreparationFailure {
     PreparationFailure::new(PreparationFailureKind::Limit {
@@ -207,7 +360,23 @@ struct Patterns {
     compiled: usize,
 }
 impl Patterns {
-    fn add(&mut self, source: &str, name: bool, limits: &Limits) -> Result<(), PreparationFailure> {
+    fn add(
+        &mut self,
+        source: &str,
+        name: bool,
+        limits: &Limits,
+        control: &dyn openbindings_internal_schema::Control,
+    ) -> Result<(), PreparationFailure> {
+        control.check()?;
+        if source.len() > limits.pattern_bytes {
+            return Err(limit("pattern-byte-limit"));
+        }
+        // Debit the lexical preflight itself before scanning for expansions.
+        control.charge_work(source.len().saturating_add(1))?;
+        let (work, allocation) = super::super::pattern::preparation_cost(source)
+            .ok_or_else(|| limit("preparation-allocation-bytes"))?;
+        control.charge_work(work)?;
+        control.charge_allocation(allocation)?;
         let reading = super::super::read_pattern(source, limits).map_err(|detail| {
             PreparationFailure::new(PreparationFailureKind::Limit {
                 resource: detail.code,
@@ -237,5 +406,73 @@ impl Patterns {
             return Err(limit("pattern-total-memory-limit"));
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use openbindings_internal_schema::preparation::Attempt;
+    #[test]
+    fn short_unicode_properties_reserve_their_expansion_before_reading() {
+        let failed = Attempt::run(1_000_000, 2048, &|| false, |a| {
+            Patterns::default().add(r"\p{L}", false, &Limits::default(), a)
+        })
+        .unwrap_err();
+        assert_eq!(failed.code, "preparation-allocation-bytes");
+        let (reserved, retained) = Attempt::run(1_000_000, 8 * 1024 * 1024, &|| false, |a| {
+            let mut patterns = Patterns::default();
+            patterns
+                .add(r"\p{L}", false, &Limits::default(), a)
+                .unwrap();
+            (
+                a.allocated(),
+                patterns.forms.iter().map(String::len).sum::<usize>(),
+            )
+        })
+        .unwrap();
+        assert!(retained > 10_000);
+        assert!(reserved > retained * 4);
+    }
+
+    #[test]
+    fn unresolved_reference_names_are_reserved_before_query_and_retention() {
+        let uri = format!("https://example.test/{}", "n".repeat(100_000));
+        let document = Document::parse(format!(r#"{{"openbindings":"0.2.0","operations":{{}},"schemas":{{"entry":{{"$ref":"{uri}"}}}}}}"#)).unwrap().validate().unwrap().conformant().unwrap();
+        let schema = document.schema("entry").unwrap();
+        let environment = schema
+            .environment(
+                &ExternalSchemas::default(),
+                &PreparationLimits::default(),
+                &std::sync::atomic::AtomicBool::new(false),
+            )
+            .unwrap();
+        let failed = Attempt::run(10_000_000, 2048, &|| false, |a| {
+            check(&environment, &Limits::default(), a)
+        })
+        .unwrap_err();
+        assert_eq!(failed.code, "preparation-allocation-bytes");
+        assert!(
+            Attempt::run(10_000_000, 8 * 1024 * 1024, &|| false, |a| {
+                check(&environment, &Limits::default(), a)
+            })
+            .unwrap()
+            .is_ok()
+        );
+    }
+
+    #[test]
+    fn literal_ranges_are_charged_again_for_repeated_shorthand_unions() {
+        let literals: String = (0..1000)
+            .map(|i| char::from_u32(0x1000 + i * 2).unwrap())
+            .collect();
+        let source = format!("[{literals}{}]", r"\s".repeat(1000));
+        let failed = Attempt::run(usize::MAX, 1024 * 1024, &|| false, |a| {
+            Patterns::default().add(&source, false, &Limits::default(), a)
+        })
+        .unwrap_err();
+        assert_eq!(failed.code, "preparation-allocation-bytes");
+        let (_, allocation) = super::super::super::pattern::preparation_cost(&source).unwrap();
+        assert!(allocation > 16_482_598);
     }
 }

@@ -7,6 +7,7 @@ pub mod fixed_locations;
 pub mod fixed_schema;
 mod identifiers;
 mod identity_budget;
+pub mod preparation;
 pub use identity_budget::DEFAULT_IDENTITY_BYTES;
 mod input_policy;
 pub mod schema_index;
@@ -152,6 +153,25 @@ pub trait Control: Send + Sync {
         } else {
             Ok(())
         }
+    }
+    /// Charge size-proportional construction work. Ordinary controls only
+    /// observe cancellation; a preparation attempt owns the work allowance.
+    fn charge_work(&self, _units: usize) -> Result<(), Failure> {
+        self.check()
+    }
+    /// Reserve a conservative allocation estimate before allocating. Footprint
+    /// limits remain separate; reservations are never refunds of retained data.
+    fn charge_allocation(&self, _bytes: usize) -> Result<(), Failure> {
+        self.check()
+    }
+    /// Keep an exhausted nested allocation allowance sticky in every enclosing
+    /// attempt. Ordinary cancellation controls have no allocation state.
+    fn allocation_limit_reached(&self) {}
+    /// Observe an enclosing exhausted allocation allowance without performing
+    /// another work charge. This prevents a child continuing after its parent
+    /// refused a reservation.
+    fn allocation_is_exhausted(&self) -> bool {
+        false
     }
 }
 impl<F: Fn() -> bool + Send + Sync> Control for F {

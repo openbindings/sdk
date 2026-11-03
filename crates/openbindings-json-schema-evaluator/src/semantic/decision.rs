@@ -40,6 +40,7 @@ pub(super) struct Graph<'a> {
     maximum_steps: Option<usize>,
     maximum_variables: usize,
     control: &'a dyn WorkControl,
+    preparation: Option<&'a dyn openbindings_internal_schema::Control>,
 }
 pub(super) fn limit(resource: &'static str) -> NoVerdict {
     NoVerdict::new(
@@ -49,11 +50,21 @@ pub(super) fn limit(resource: &'static str) -> NoVerdict {
     )
 }
 impl<'a> Graph<'a> {
+    #[cfg(test)]
     pub(super) fn new(
         bytes: usize,
         steps: Option<usize>,
         variables: usize,
         control: &'a dyn WorkControl,
+    ) -> Self {
+        Self::with_preparation(bytes, steps, variables, control, None)
+    }
+    pub(super) fn with_preparation(
+        bytes: usize,
+        steps: Option<usize>,
+        variables: usize,
+        control: &'a dyn WorkControl,
+        preparation: Option<&'a dyn openbindings_internal_schema::Control>,
     ) -> Self {
         Self {
             nodes: Vec::new(),
@@ -66,20 +77,37 @@ impl<'a> Graph<'a> {
             maximum_steps: steps,
             maximum_variables: variables,
             control,
+            preparation,
         }
     }
     pub(super) fn tick(&mut self) -> Result<(), NoVerdict> {
+        self.work(1)
+    }
+    pub(super) fn work(&mut self, units: usize) -> Result<(), NoVerdict> {
         self.control.check().map_err(NoVerdict::from)?;
+        if let Some(attempt) = self.preparation {
+            attempt
+                .charge_work(units)
+                .map_err(super::preparation_control_inability)?;
+        }
+        self.steps = self
+            .steps
+            .checked_add(units)
+            .ok_or_else(|| limit("evaluation-work-limit"))?;
         if self
             .maximum_steps
-            .is_some_and(|maximum| self.steps >= maximum)
+            .is_some_and(|maximum| self.steps > maximum)
         {
             return Err(limit("evaluation-work-limit"));
         }
-        self.steps = self.steps.saturating_add(1);
         Ok(())
     }
     pub(super) fn charge(&mut self, bytes: usize) -> Result<(), NoVerdict> {
+        if let Some(attempt) = self.preparation {
+            attempt
+                .charge_allocation(bytes)
+                .map_err(super::preparation_control_inability)?;
+        }
         self.bytes = self.bytes.saturating_add(bytes);
         if self.bytes > self.maximum_bytes {
             return Err(limit("semantic-analysis-memory-limit"));
@@ -115,6 +143,7 @@ impl<'a> Graph<'a> {
             return Err(limit("semantic-analysis-depth-limit"));
         }
         let variable = self.classes.len() as u32;
+        self.charge(32)?;
         self.classes.push(class);
         Ok((variable, self.make(variable, FALSE, TRUE)?))
     }

@@ -54,6 +54,7 @@ for (const name of metaSchemas) {
 }
 
 const externalMetaSchemas = [
+  'draft2020-12/meta/format-assertion.json',
   'draft7.json',
   'draft2019-09/schema.json',
   'draft2019-09/meta/core.json',
@@ -72,14 +73,34 @@ for (const name of externalMetaSchemas) {
   assert.match(externalDigests[name], /^[0-9a-f]{64}$/, 'Invalid external SHA-256 digest: ' + name);
   assert.equal(externalSources[name].sha256, externalDigests[name], 'External source digest mismatch: ' + name);
   assert.match(externalSources[name].revision, /^[0-9a-f]{40}$/, 'External source must use an immutable revision: ' + name);
-  const revision = name === 'draft7.json' ? '20a3fee852db88519dcb3bb329b7a872ebad8953' : 'c8eb3d320f60eca7cfb18da25337a426ceb40eaa';
-  const path = name === 'draft7.json' ? 'schema.json' : name.slice('draft2019-09/'.length);
+  const revision = name === 'draft7.json' ? '20a3fee852db88519dcb3bb329b7a872ebad8953'
+    : name.startsWith('draft2020-12/') ? 'add836e705c9a07434c467b6b90946ba45258a73' : 'c8eb3d320f60eca7cfb18da25337a426ceb40eaa';
+  const path = name === 'draft7.json' ? 'schema.json' : name.slice(name.indexOf('/') + 1);
   assert.equal(externalSources[name].url, `https://raw.githubusercontent.com/json-schema-org/json-schema-spec/${revision}/${path}`, 'External source publication changed: ' + name);
   assert.equal(externalSources[name].revision, revision, 'External source revision changed: ' + name);
   const digest = createHash('sha256').update(readFileSync(join(sdk, schemasPath, name))).digest('hex');
   assert.equal(digest, externalDigests[name], 'Bundled meta-schema SHA-256 differs: ' + schemasPath + '/' + name);
 }
 const allMetaSchemas = [...metaSchemas, ...externalMetaSchemas];
+
+// Supplemental authorities justify identity certificates only. They are not
+// embedded evaluation meta-schemas or replacements for the pinned OBI inputs.
+const identityAuthorityPath = 'tools/qualification/inputs/identity-authority';
+const identityManifest = JSON.parse(readFileSync(join(sdk, identityAuthorityPath, 'manifest.json'), 'utf8'));
+const identityAuthorities = [
+  'draft06/jsonschema-core.xml', 'draft06/jsonschema-validation.xml', 'draft06/schema.json',
+  'v1/specs/jsonschema-core.md', 'v1/specs/jsonschema-validation.md', 'v1/specs/meta/meta.schema.json', 'v1/PROCESS.md',
+];
+assert.deepEqual(identityManifest.sources.map(s => s.family + '/' + s.path).sort(), [...identityAuthorities].sort(), 'Identity authority inventory must contain all seven pinned sources');
+for (const source of identityManifest.sources) {
+  const name = source.family + '/' + source.path;
+  const revision = source.family === 'draft06' ? '59ed5f6fc6f6386e23ca51d7f31d7fe9cf696713' : '8595c839899a81abf0cb09e8cc9774b9a0a23db7';
+  assert.equal(source.revision, revision, 'Identity authority revision changed: ' + name);
+  assert.equal(source.url, `https://raw.githubusercontent.com/json-schema-org/json-schema-spec/${revision}/${source.path}`, 'Identity authority publication changed: ' + name);
+  const bytes = readFileSync(join(sdk, identityAuthorityPath, name));
+  assert.equal(bytes.length, source.bytes, 'Identity authority byte count differs: ' + name);
+  assert.equal(createHash('sha256').update(bytes).digest('hex'), source.sha256, 'Identity authority SHA-256 differs: ' + name);
+}
 
 // A pin only guarantees the bytes the product uses when it names them: every
 // bundled schema a crate source embeds is pinned above, and each pinned file is embedded.
@@ -112,7 +133,7 @@ function testDrift() {
   const embedder = 'crates/openbindings-internal-schema/src';
   try {
     const copy = join(temporary, 'sdk');
-    for (const name of ['README.md', 'tools/qualification/inputs/spec', schemasPath, embedder]) {
+    for (const name of ['README.md', 'tools/qualification/inputs/spec', identityAuthorityPath, schemasPath, embedder]) {
       mkdirSync(dirname(join(copy, name)), {recursive:true});
       cpSync(join(sdk, name), join(copy, name), {recursive:true});
     }
@@ -126,6 +147,7 @@ function testDrift() {
     const inputs = [
       [derivedPath, 'Bundled derived schema differs from pinned spec: ' + derivedPath],
       ...allMetaSchemas.map(name => [schemasPath + '/' + name, 'Bundled meta-schema SHA-256 differs: ' + schemasPath + '/' + name]),
+      ...identityAuthorities.map(name => [identityAuthorityPath + '/' + name, 'Identity authority SHA-256 differs: ' + name]),
     ];
     for (const [name, message] of inputs) {
       const path = join(copy, name);
@@ -175,11 +197,21 @@ function testDrift() {
     const externalResult = run();
     assert.equal(externalResult.status, 1, 'incomplete external digest inventory must fail');
     assert(externalResult.stderr.includes('External meta-schema digest inventory'), 'external inventory failure must be identified');
-    return inputs.length + 4;
+    writeFileSync(externalPath, JSON.stringify(externalDigests));
+    const identityPath = join(copy, identityAuthorityPath, 'manifest.json');
+    writeFileSync(identityPath, JSON.stringify({...identityManifest, sources: identityManifest.sources.slice(1)}));
+    const missingIdentity = run();
+    assert.equal(missingIdentity.status, 1, 'incomplete identity authority inventory must fail');
+    assert(missingIdentity.stderr.includes('Identity authority inventory'), 'identity inventory failure must be identified');
+    writeFileSync(identityPath, JSON.stringify({...identityManifest, sources: identityManifest.sources.map((s, i) => i ? s : {...s, revision:'0'.repeat(40)})}));
+    const changedIdentity = run();
+    assert.equal(changedIdentity.status, 1, 'changed identity authority revision must fail');
+    assert(changedIdentity.stderr.includes('Identity authority revision changed'), 'identity revision failure must be identified');
+    return inputs.length + 6;
   } finally {
     rmSync(temporary, {recursive:true, force:true});
   }
 }
 
 const regression = options.length ? {driftRegressionTests:testDrift()} : {};
-console.log(JSON.stringify({appliedSpecification:expected, identicalFiles:count, verifiedMetaSchemas:metaSchemas.length, verifiedExternalMetaSchemas:externalMetaSchemas.length, ...regression}));
+console.log(JSON.stringify({appliedSpecification:expected, identicalFiles:count, verifiedMetaSchemas:metaSchemas.length, verifiedExternalMetaSchemas:externalMetaSchemas.length, verifiedIdentityAuthorities:identityAuthorities.length, ...regression}));

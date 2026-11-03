@@ -1,0 +1,8427 @@
+{
+  "oracle": "v22.23.0",
+  "policy": "ECMA-262 no-flags syntax; no matching or pattern execution",
+  "seed": 5738941,
+  "cases": [
+    {
+      "source_json": "\"\\\\q\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"a{foo}\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"a{2,1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[z-a]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[\\\\d-a]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"[\\\\c-a]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[a-\\\\c]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[\\\\c1]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\1\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\08\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\1234\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\8\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\9\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\x\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\u{123}\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\k<x>\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"(?<x>a)\\\\k<x>\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"(?<x>a)\\\\k<z>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<x>a)\\\\k\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<x>a)[\\\\k<x>]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?=a)*\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"(?<=a)*\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<a>x)|(?<a>y)\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<é>a)\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"(?<\\\\u{10400}>a)\\\\k<\\\\uD801\\\\uDC00>\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"(?<𐐀>a)\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"(?<\\ud801\\\\uDC00>a)\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<\\\\u{D801}\\\\u{DC00}>a)\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\ud800\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"[\\ud800-\\ud801]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"[\\ud801-\\ud800]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\u0000\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"a\\nb\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"?[a-z]\\\\b)(?:\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?:\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"b(?<!a(a\\\\qb{foo}{1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[a-z]\\\\k<x>]\\\\u{foo}\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"(?=[-\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\k<y>\\ud800{2,}{foo}(?<!{foo}\\\\u\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,1}\\\\b\\\\d|-.??{1}\\\\d\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{foo}(?:(?!\\\\ub\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\k<y>-\\\\k<x>\\\\0?\\\\c\\\\k<x>\\\\k<x>[\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"a[]b\\\\x\\\\b\\\\b{,2}\\\\k<y>]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"$\\\\k<x>\\\\k<x>[{1}{2,1}(?!\\\\8??\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\k<y>^[\\\\d-a]\\\\B(?<=|{,2}+?\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?!\\\\)\\\\d{,2}[a-z]{01,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"*{foo}{foo}\\\\b{01,2}a\\\\u\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"??$\\\\q[\\\\q\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\c\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\u\\\\\\\\bbb\\\\8\\\\u\"",
+      "valid": true
+    },
+    {
+      "source_json": "\")\\\\8]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\1\\\\c[\\\\b?\\ud800(?<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{,2}\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"(?=+[\\\\d(?!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[a-z](?<=\\\\0a[][\\\\d-a]{2,1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\")[\\\\d-a]\\\\1-(?:\\\\0{2,1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"-\\\\k<x>\\\\1\\\\u\\\\u(?:[\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[](?!\\\\b+{2,}b{2,}.\\\\0\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[a-z](?<=\\\\1\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(]^\\\\b-(?<!]?.\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?:\\\\cb\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\x(?<!(?:[]??\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\[\\\\u{2,}b[\\\\d-a]{1}\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"](?:??\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\b\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\B(?:\\\\8\\\\q(?<!-\\\\b\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<=[^]\\\\k<y>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\b\\\\u[^]\\\\k<x>\\\\c\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"{01,2}\\\\b\\ud800\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[^]\\\\u{1}\\\\b[\\\\d-a]\\\\0\\\\(?=\\\\\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\x\\\\b$[{01,2}|\\\\B]*\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"(?<x>{1}\\\\0{2,1}[\\\\d-a]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<x>|\\\\\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\x\\ud800(?<=-)?[^]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"^?){01,2}\\\\1)\\\\d(\\\\0\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\(?<x>.(({,2}\\\\B\\\\u[a-z]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"^??(?=\\\\k<y>$\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,1}??$\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"-*$(?<x>(?![(?<!^b\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\]{2,}\\\\x\\\\8(?![\\\\d-a]\\\\c)\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"[a-z]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"(?=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"|{,2}(?!{,2}a\\\\k<x>[\\\\d-a]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\x\\\\x{2,}b{,2}\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\k<x>\\\\d\\\\u(?<x>{1})\\\\8[\\\\d-a]{,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"*[a-z]\\ud800\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<=?(?!\\\\k<x>b\\\\d]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?!\\\\b\\\\u\\\\d\\\\c\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[\\\\k<x>?\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"]$\\\\k<y>{1}?[\\\\d-a]\\\\u(?<=\\ud800\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?=.\\\\+\\\\\\\\x(?!\\\\k<y>{foo}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[a-z]a.]{2,1}(?!]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"*{1}(?<!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{,2}(?={01,2}\\ud800\\\\k<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\k<y>\\\\x\\\\B)a\\\\(?:\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\1{foo}??\\\\b\\ud800](\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"^\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\q\\\\0{foo}\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\b{01,2}\\\\d\\\\b{2,}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(-)\\\\d(?<x>$\\\\k<y>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<x>a$\\\\u)+.\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"(?!b\\\\k<y>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?!\\\\c\\\\0\\\\0{2,}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\q+\\\\b(?<=(?<!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?:(\\\\c|\\\\k<x>\\\\B[^]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\8\\\\b-(?:\\\\c\\\\B\\ud800\\\\q(?!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\8\\\\u(?=\\\\1|\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"|-\\\\k<y>]\\\\k<y>{01,2}-(?<=]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"b(?:a(?=\\ud800\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"^\\\\\\\\1\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"[^]\\\\d\\ud800^[^]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"{1}(?<x>?[^]{foo}{2,}\\\\x\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?=(?!$\\\\B?*(?<!(?<x>(?:\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"??\\\\k<y>][\\\\b[\\\\d-a]+\"",
+      "valid": false
+    },
+    {
+      "source_json": "\")\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{1}(?<!$({foo}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[]\\\\B((?<x>(?:+[^]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{01,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\".\\\\d\\\\1\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\ud800.+\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\8\\\\k<y>\\\\k<y>\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\B?(?=\\\\k<y>[]{01,2}\\\\k<y>.(?<=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\k<y>\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\q[\\\\d-a]\\\\b(.??{01,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"a\\\\k<x>((?=(?!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"]\\\\c[\\\\d-a]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\u\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"){,2}??\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"({,2}(?<=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<=.)?[\\\\d-a]{2,1}(?<x>(?=\\\\0\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(\\\\x(?<=[])\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"$[^{2,}-\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"?(?!(?:\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[]+\\\\x\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"(?=\\\\k<y>\\\\c\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"|^?[\\\\d-a]\\\\8\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"|\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"(?<=\\\\x[^]\\\\1(?!{2,1}$??(?<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\-(?:\\\\d\\\\0+){01,2}(?<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,}+)??a\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"$[[a-z]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"(?!\\\\k<y>\\\\0\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"][]\\\\d\\\\\\\\+\\\\d\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\B|\\\\8\\\\k<y>\\\\0\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"(?<!{2,}{2,}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"?\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"|[a-z]([\\\\d-a](?:\\\\u(?=[^]\\\\c\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"](?<!\\\\k<x>??(?!a\\\\d\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\q\\\\x\\\\0??[^]+\\\\c(?<!\\ud800\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"a$??(?<!{2,1}\\\\\\\\8\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[\\\\d-a](?<=\\\\B(?<!^\\\\u(?<=*\\\\k<y>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{,2}{2,1}[]{,2}|\\\\b*?\\\\b\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<![^]??\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?:\\\\b[a-z][\\\\d-a][^]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"a\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"{01,2}\\\\\\\\b-\\\\c\\\\B|\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[\\\\d-a](?![^]{,2}\\\\c\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"$\\\\q+\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\0]|\\\\c)\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\c(+(?={2,}.[(\\\\8\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\d][a-z])\\\\\\\\B|(?<!)\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{foo}[a-z](?=.{foo}\\\\q|\\\\1{2,1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\0\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\k<y>\\\\k<x>-({,2}(?<![\\\\d-a]??{01,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"$|(?!$(?<={foo}^\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"|$]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"{2,1}^(?<=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"*\\\\0|+{2,1}|\\\\k<y>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\8{2,}\\\\k<y>\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\(\\\\x{,2}(?!\\ud800(?<!]-\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,}{2,1}\\\\b|{,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"a]](?:.{01,2}{foo}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"){2,1}[](?<x>b\\\\8(?<!(?=(?<!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\0(\\\\1\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"??\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?=\\\\k<y>(?=[\\\\d-a][a-z]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"?(?<![\\\\d-a]]\\\\b\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"]${foo}.(?<x>(?=\\\\k<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,1}[a-z]\\\\d+[a-z]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?=-\\\\1\\\\b\\\\c\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{foo}([a-z]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\".[^][]$+(?:a{foo}\\\\1\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\d{,2}(?<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"?(?!\\\\\\\\0{foo}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,}[^]{,2}{,2}\\\\k<x>\\\\d]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"(?<={2,}??\\ud800\\\\k<y>\\\\k<x>(?=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\ud800\\\\8|\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\b{1}{foo}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[\\\\d{1}??(?<x>b(?!.\\\\1\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[]{01,2}$\\\\8){2,}-\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<=\\\\c\\\\1\\\\).\\\\c(?<x>??\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\u{2,1}a[a-z][^]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\".^\\ud800\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"{1}\\\\d]).){2,1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\d^(\\\\k<x>\\\\u(?<x>{,2}[\\\\d-a]{2,1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"+\\\\b^^\\\\k<x>b[^(?<!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<x>{01,2}-|b\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\ud800(?:*\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\8\\\\k<x>{,2}*[-[\\\\d-a]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"|\\\\k<y>\\\\k<x>\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"+\\\\\\\\u\\\\c{2,1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<!{,2}(?=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\u(?<=\\\\(?<=\\\\k<y>\\\\x\\\\1]\\\\0\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,1}(?<!-\\\\B[a-z]^\\\\x\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\k<y>[]{01,2}\\ud800a{2,1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"$\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\8]b{1}\\\\c\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"(?<!(?<=(?!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\8\\\\\\\\8(?:??\\\\0(?<=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,}\\\\b{2,}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"?\\\\1{,2}\\ud800\\\\B\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\x+[a-z]\\\\1\\\\0\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"(\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\8\\\\k<y>$\\\\u?\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"{,2}){foo}(?!(?!\\\\x\\\\q{1}\\\\b\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<x>-\\\\u\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\+a?.\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"(?:|+[])\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[\\\\d-a]\\\\8{foo}\\\\b(?=({2,1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\B\\\\u[\\\\d-a]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"*\"",
+      "valid": false
+    },
+    {
+      "source_json": "\")|[\\\\d-a]\\\\x\\\\u\"",
+      "valid": false
+    },
+    {
+      "source_json": "\".--\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\d(?=\\\\0\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[\\\\d-a][a-z]{2,1}\\\\u[^]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?!{01,2}(?:\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"??[a-z]\\\\d{01,2}(?<x>\\\\d\\\\x(?:\\ud800\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\d\\\\x|\\\\qa[{2,1}[{foo}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\1(?=^+\\\\Bb]\\\\d)\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<=[\\\\d-a]\\\\xab\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?:){1}^\\\\0[\\\\d-a]ab{2,1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\")\\\\B][a-z])(?<x>(?!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{1}[a-z]{,2}.[^]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?!(?<=a\\ud800??{01,2}\\\\8\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<!\\\\x(?:[\\\\k<x>\\\\x+\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\k<y>(?<x>--](?<=\\\\8[]{01,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?:b{2,}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?=(?<!\\\\k<x>\\\\B[\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"^{foo}\\\\q\\\\q(?<=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\ud800-\\\\1-b.(?<!{,2}{2,}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\q(?<=.a\\\\d[a-z]a\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\1+)\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\8((?<![\\\\d-a]\\\\k<y>\\\\8$\\\\q\\\\B\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\k<y>.(?<=[a-z]{foo}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\B\\\\k<x>\\\\b\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"[${,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"b??\\\\k<y>\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"[^]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"-(?:{01,2}\\\\x(?<={2,}{2,}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(\\\\1\\\\B^\\\\0b{1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[\\\\d-a]\\\\x\\\\\\\\b)\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\x(?!\\\\q(\\\\c\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[[]\\\\8\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"(?!a[a-z]\\\\0\\\\c\\\\1]([^]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\b{2,1}\\\\|a\\\\c{foo}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\b|)|{,2}\\\\1)\\\\q\\\\u\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\B*\\\\1[^])\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\k<x>(?<x>[]????\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"+\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\0\\\\\\\\\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"(?<=\\\\0\\\\cb\\\\0|??\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"]{,2}\\\\\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\1{,2}\\\\B\\\\q(?<x>[a-z]\\\\c\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{1}[^]\\\\u\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,}{1}+|\\\\B\\\\b??\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?=(?<=]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\d??\\\\x\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"{foo}\\\\0(?:*{foo}{,2}${1}{2,}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\1??[\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\x\\\\1|[]b(?:{01,2}\\\\.\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(\\\\8?\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"b+(?=)*\\\\k<x>a\\\\d[\\\\d-a]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"]{2,}$.{2,1}\\\\\\\\cb[\\\\d-a]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\d[^]?\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"[]\\\\{foo}[a-z](?<=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"+(?<x>a\\\\0(\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,1}-^(?<!*\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\q{2,1}\\ud800{2,}(?:(?:{,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,1}\\\\B{1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[\\\\q\\\\d(\\\\ca{1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"??\\\\k<y>\\\\k<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\8\\\\x[\\\\q^\"",
+      "valid": false
+    },
+    {
+      "source_json": "\")$(?=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[a-z]\\\\c\\\\k<x>\\\\b\\\\b\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"[]\\\\\\\\c\\\\0\\\\8[\\\\d-a]((\\\\u\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\k<x>a{01,2}(?<=(\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[^]\\\\ca|[^]{01,2}\\\\u\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\b\\\\x-{1}(?<=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\".((?![\\\\d{2,}[\\\\d-a]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<=\\\\c[]{2,}\\\\B(?!\\\\1\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[\\\\d-a])(?:{2,}\\\\1[\\\\d-a]\\ud800\\\\[\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,1}{2,1}\\\\u??a\\\\B(?!^(?!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{1}{2,}(?<!(?<!|\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"^[\\\\d-a]|\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"(?<![\\\\d-a]{foo}b+\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"a{2,1}(?<x>\\\\k<y>\\\\\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\x[]^.??{,2}\\\\q?*\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"$a\\\\x\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"*(?!+\\\\0{2,1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[\\\\d-a]\\\\q\\\\k<x>[\\\\k<x>\\\\d\\\\8\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"+-*\\\\0{1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\u(?:{01,2}\\ud800[\\\\d-a](?!+\\\\1+\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"??{01,2}\\\\u\\\\B\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\b?{2,1}-\\\\x\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[]{2,}\\\\0+[^]{1})\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"b{,2}$\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"{01,2}\\\\k<x>{foo}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\8[-\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\0|(?<x>???\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,}\\\\k<x>?\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?!\\\\0(?<={1}]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,1}\\\\1??\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(-(?<=\\ud800{2,}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<=(?<!\\ud800{2,1}]]\\\\q[\\\\d-a]\\\\q\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{01,2}a[^]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"]?\\\\d(?!\\\\b?[\\\\0\\\\8\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<!(?<x>(?:\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?:b\\\\u-({,2}(?<!\\\\k<x>{01,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[\\\\d-a]a\\ud800??(\\\\b{2,1}??\\\\u\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[\\\\d-a]\\\\u?((?:\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,}({01,2}\\\\q[(?:\\\\q\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<!{1}\\\\B{01,2}?[a-z][a-z]*(?:\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"?\\\\8{,2}[]|\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{01,2}$\\\\c\\\\+{1}\\\\u|\\\\q\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?!\\\\d(?:\\\\k<y>\\\\q\\\\b|\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"|\\\\x{2,}\\\\B\\\\c{,2}{,2}\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"-{foo}{01,2}\\\\d\\\\x{,2}\\\\k<y>\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\B\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"(?!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<!*\\\\c(?<=(?<=^(?<!(?<={foo}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,}.{foo}$(?<=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"b\\\\c\\\\k<y>(?:\\\\0[])\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\ud800(?![\\\\d-a]\\\\d\\\\u\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\ud800-\\\\d\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"{1}.{,2}|{2,1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(\\ud800\\\\u\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?=(?\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\8\\\\8({,2}+\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"??*[|-[\\\\q??\\\\c\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?:(?<x>{01,2}\\\\u\\\\u\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\c{2,1}[^]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"abb\\\\q(?<=.b\\\\8[\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"-\\\\b[]\\\\B.|?(?<![^]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\ud800\\\\k<x>\\\\8+(?!{2,}\\\\k<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\b][a-z]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\u(?<=[]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[a-z]b{,2}\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"^b(?!\\\\x{1}a+{2,}|\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"](\\\\c+|(?<x>)\\\\1.\"",
+      "valid": false
+    },
+    {
+      "source_json": "\".\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\q\\\\B\\\\8\\\\u[\\\\d-a].??\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\B|{01,2}\\\\1^^{2,}{1}[\\\\d-a]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[\\\\d-a]{foo}{1}\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"^??(?:(?<=\\\\k<x>^{,2}(?=\\ud800\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\1$\\\\0\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"[\\\\d-a][]\\ud800\\\\(?:\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"{01,2}$\\\\k<x>{foo}[^]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?:\\\\0\\\\8{01,2}{foo}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"|\\\\u[^]\\\\{2,1}(?:{01,2}??(?<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\k<y>?\\\\x)\\\\k<y>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\8$(\\\\u\\\\d\\\\k<y>]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\ud800[]\\\\d\\\\k<y>\\\\q\"",
+      "valid": true
+    },
+    {
+      "source_json": "\".-\\\\d$$\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"{,2}\\\\k<y>{,2})](?<![]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\B??\\\\8\\\\0^\\\\d\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"??{01,2}[^]\\\\u\\\\B\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{foo}(\\\\k<x>\\\\a*$\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\d[a-z]a\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\b\\\\c?](\\\\Bb\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[a-z]+\\\\))\\\\B(?:){1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{01,2}{2,1}{foo}{2,1}{foo}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\x\\\\{2,}\\\\b[^]a[|??\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,1}[^]|\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\B{foo}[a-z]a(\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\1\\\\k<y>-\\\\q+([]\\\\u\\\\\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"??\\\\B\\\\8\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"|\\\\q*(?!??\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"-\\\\x\\\\0(?=[-\\\\B{1}(?<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?:{,2}(?=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[\\\\d-a]*^\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\8(?:{,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?:-{2,}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\k<x>?(?<=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\u{2,}\\\\c\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"(?:{,2}\\\\q\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?=(?={01,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?={2,1}\\\\q\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(\\\\B\\\\x{,2}\\\\B\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\8\\\\d\\\\0\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"[^]\\\\u{foo}\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"{,2}(?!\\\\u$??{,2}$\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\x|??(?!\\\\1\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,}[a-z](?:bb\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"^\\\\c^a(?!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"$(?!-]\\\\k<x>+([^]\\\\c\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[{,2}\\\\0{1}\\\\1^(?<=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{01,2}\\\\0(?!{2,}\\\\c\\\\{1}(?:(?<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{foo}(?<=||(?<!{1}\\\\d\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"({1}(\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"-(?<=-\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"*?\\ud800(?=?\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\c\\\\8b-(?=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[a-z]b\\\\c\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\8{1}[a-z]{foo}\\ud800\\\\d{foo}\\\\c(?<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"a\\\\0{,2}\\\\[\\\\c{2,}\"",
+      "valid": true
+    },
+    {
+      "source_json": "\".\\\\d\\\\B[^]\\\\(?<x>-(?<!\\\\u\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"-{,2}(?:{foo}\\\\c[a-z](?!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\k<x>[^]\\\\x\\ud800{1}\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"{2,}]\\ud800\\\\B[a-z]{foo}b]{2,1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?=][\\\\d-a]|??\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[\\\\d-a]+(?<x>\\ud800[^]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"??{,2}(?<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{,2}(?<=\\\\8[^][\\\\d-a]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<x>(\\\\k<y>\\\\8^\\\\k<y>\\\\c\\\\8|\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\d\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"(?!+|\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\^[\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\q\\\\k<x>a[a-z]\\\\k<y>[\\\\q\"",
+      "valid": false
+    },
+    {
+      "source_json": "\")??\\\\\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\d\\ud800[^]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"{foo}(?<x>{01,2}[(?:[^](?:\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<=\\\\d(?<x>+\\\\8(?<x>\\\\k<y>{foo}b\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?=\\\\k<x>a\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\k<x>^[]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"[]\\\\c(?=\\ud800*b\\\\8{2,}]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"??]{,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\1.(?<x>\\\\k<x>[a-z](?<=[\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\q(\\ud800\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\c)|\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"]\\\\q-\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"(?!\\\\d\\\\1\\\\8\\\\1(?<x>(?:{foo}?\"",
+      "valid": false
+    },
+    {
+      "source_json": "\")\\\\0[^]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\".a{2,1}\\\\1\\\\b\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?!\\\\b{01,2}(?:.?\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\u[{01,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[]\\\\B\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"($^[\\\\d-a][(?<!\\\\1*\\ud800\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\x\\\\x+\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"*\\\\b(?<!\\\\8{1}\\\\u\\\\d{2,1}$\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\B[\\\\d-a]\\\\u\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\8[^]{2,1}\\\\B\\ud800(?!\\\\d\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{,2}(?<!\\\\k<x>[\\\\d-a]-{1}[\\\\B*\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<!\\\\k<y>[]\\ud800{2,}bb\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<x>{,2}|{01,2}\\\\q\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"?\\\\d\\\\1\\\\u([a-z]-(?<x>\\\\k<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{1}\\\\b\\\\x{2,}a(?!-\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[^][a-z]|\\\\c^{foo}\\\\x\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"{01,2}^b\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"^{01,2}\\\\q\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?!^\\\\(?!\\\\c[\\\\d-a][]-a\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?:(?<x>(??a[\\\\d-a]]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"({01,2}\\\\u(?!(?!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[^][\\\\d-a]\\\\1][a-z]{2,1}?\\\\q-\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\8.(?<x>a(?<x>)\\\\([a-z]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{foo}{01,2}\\\\d[a-z]{2,}\\\\[\\\\d-a])a\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\d\\\\d{,2}{2,1}(]$\"",
+      "valid": false
+    },
+    {
+      "source_json": "\".\\\\u\\\\c\\\\u??[\\\\d-a]\\\\k<x>\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"{,2}|[^]\\\\0$\\\\8\\\\{foo}*\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\8$[^](?<=[\\\\d-a]+\\\\\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\u$\\\\d(?<!\\\\8{,2}(\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{,2}(?!\\\\0\\\\1[a-z]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\ud800\\ud800(?!\\\\k<x>{foo}(?<=[a-z]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"|\\\\k<y>+\\ud800\\\\b*??\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\ud800\\ud800?(-\"",
+      "valid": false
+    },
+    {
+      "source_json": "\")a[\\\\d-a]a(?<![\\\\d-a]]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"b{2,1}^\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"$]{2,}\\\\B{2,}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\0*b\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"(?<x>\\\\[(?:\\\\d{2,}\\\\k<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\8\\\\0\\ud800\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\d[^]{2,1}\\\\\\\\c(?<=(?!{1})\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"?*{01,2}\\\\8|\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<x>\\\\0\\\\1\\\\1\\\\d??$??*\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\b[(\\\\0[a-z]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"[^]\\\\B\\ud800\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\8(?=\\\\k<y>{2,1}{foo}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[]\\\\k<x>\\\\8\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"|\\\\d+\\\\8*b[^]{1}\\ud800\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"{2,}*{2,1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"^b\\\\k<y>\\\\1[^]bb{,2}(?<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,1}(?<=+\\\\b(?<x>\\\\1(?:(?!\\\\u\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[\\\\d-a]\\\\x{foo}?\\ud800\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\x.(?={01,2}\\\\1\\\\x$\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\c[^]\\\\d\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"??(?:(?<!.(?:\\\\d(?:\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{foo}(?:\\\\B{01,2}-\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"b\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"-\\\\k<y>+\\\\x*.{01,2}[\\\\d-a]]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"b(?<=|\\ud800*{,2}\\\\c\\\\u$\"",
+      "valid": false
+    },
+    {
+      "source_json": "\")-)$[a-z]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"](?!{2,}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\ud800\\\\(?<![]^{1}\\ud800\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,}?(?<!\\\\k<x>(\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<=?[[^]\\ud800\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\q{,2})\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?:$?\\\\x[]((?<!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"??\\\\q(?<x>(?\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,}{foo}\\\\[a-z]{2,}\\ud800a\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\k<y>-]\\\\b[a-z](?=.[]|\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[]\\\\x{2,1}[\\\\d-a]{2,}(??\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?:{,2}\\\\b\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\d\\\\d(]|a\\\\q\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[a-z]\\\\1\\\\k<x>\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\b(?<=\\\\8\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"](?<!\\\\x\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[^]{01,2}\\\\k<x>\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"[^]{01,2}$??[]??\\\\b\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"]$|\\\\B\\\\x\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"{,2}-\\\\B\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"??*\\\\0\\\\q^\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\x\\\\da.(?!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\ud800\\\\b)\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"$[^]\\\\c[\\\\d-a](?:{2,}+-+\"",
+      "valid": false
+    },
+    {
+      "source_json": "\")\\\\1[{,2}\\\\q\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"a*\\\\u\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"{2,1}{,2}\\\\x)\\\\1\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[]\\\\8){01,2}\\\\k<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\0b\\\\B.\\\\d.a\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"b[[]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\c[a-z].\\\\\\\\0{2,1}*\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?=+](?!|)[a-z]\\\\c\\\\k<y>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"+{01,2}\\\\0[^][\\\\d-a]{,2}-\\\\x[\\\\d-a]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\u\\\\b?b(?:\\\\d)\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\0?\\\\x\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"-??\\\\1)\\\\k<x>\\\\.\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{foo}\\\\b[^]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\qb).[a-z]?(?:(?:]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"|\\\\0(?=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"b\\\\B\\\\u\\\\b[]{2,}\\\\k<y>${2,1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\q\\\\8{01,2}\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"b\\\\c[^]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"[]\\\\0.\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"{2,1}^{2,}??\\\\b\\\\b(?!\\\\B\\\\u\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{01,2}\\\\q\\\\\\\\1?.]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\b\\\\k<x>a[(?<!?\\\\c\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\k<y>\\\\0\\\\)??\\\\c]\\\\{01,2}\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"{01,2}b(\"",
+      "valid": false
+    },
+    {
+      "source_json": "\".\\\\k<x>[]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"[[|(?<!{foo}\\\\8\\\\k<y>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"*+\\\\u+*\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\0{,2}\\\\0(?<x>?{01,2}[\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{1}(?<x>\\\\k<x>\\\\k<y>{2,1}\\\\k<x>\\\\k<y>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[\\\\d-a](?<=((?:\\\\0\\\\k<x>\\\\k<y>\\\\d[]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\q{01,2}\\\\k<y>|\\\\8[a-z]]][\\\\d-a]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"[a-z]\\\\u\\\\1.)[^])\"",
+      "valid": false
+    },
+    {
+      "source_json": "\".|\\\\x\\\\k<y>\\\\d\\\\B^\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\q{foo}+\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\\\\\q\\\\d[]?(?<x>(?<x>[a-z][]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\u+*\\\\k<x>{2,1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\".\\\\q[a-z]\\\\c[a-z]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"[\\\\x\\\\q\\\\x\\\\c\\ud800(?<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"a{,2}\\\\q[\\\\0\\\\0\\\\d\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"a[a-z]\\\\d\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"(?<x>\\ud800(?<!\\\\b{2,}\\\\k<y>(?:\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\B????{01,2}(?<!\\\\{01,2}?(?<!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\c(?<=(?=[^]{,2}|(?!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\d{2,}*(?<!\\\\k<y>[]..{1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[a-z]{,2}{foo}\\\\B(?=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[^])[]|\\\\c[][\\\\d-a]\\\\u{,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\q??{2,1}{,2}{2,1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?:)\\\\8(?<!????\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"a{foo}*\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"{1}\\\\0|\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\1\\\\B[{foo}-\\\\8-\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\c\\ud800[]((?:[^]]$(?<=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(\\\\q(?=(?:(?<!{01,2}{foo}\\\\k<y>[]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{01,2}[\\\\d-a](?:.\\\\+\\\\q\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"+[{01,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"$\\\\1\\\\8??\\\\k<y>\\\\8|(?=-\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\k<y>\\\\x^\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\B(?<x>\\\\k<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{01,2}[\\\\d-a]+*\\\\q\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"].b\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\ud800\\\\d{2,1}\\\\d^\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"*{2,}\\\\B\\\\1$\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"-\\\\q\\\\u??..(?<!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"|\\ud800??\\\\c[]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"{01,2}[^]a)\\\\8..*(?<!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"b\\\\b??b+\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<x>\\\\c(?<x>^{,2}|a\\\\u{2,}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\0(?!^{01,2}[a-z]\\\\k<x>{,2}.?\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\cbb\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"a\\\\u-\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"-\\\\u{2,}b\\\\b(?<!\\\\b?{,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"$[](?<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"*(?:\\\\1]))(?:\\\\1?\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"^[a-z](?=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<=\\\\1\\\\\\\\k<y>[(?![\\\\x\\\\q\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?:\\\\q\\\\k<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\ud800\\\\1\\\\c\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"(?<!*((?<=b\\\\k<y>b\\\\c\\\\d\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\u\\\\x?\\\\k<y>\\\\q{01,2}\\\\k<x>\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"{,2}{2,1}??({1}(\\\\k<y>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"-\\ud800(?={2,}(?<=[a-z]|\\ud800[\\\\d-a]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"|??\\ud800[^][a-z]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[^]\\\\k<x>{01,2}(?:[\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"|((?<=-\\\\b\\ud800\\\\u??(?<=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{01,2}[${2,1}(?=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[a-z][](?<=[][^]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"..{1}\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"(?=[\\\\d-a]{01,2}[[\\\\d-a]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\0\\\\q[a\\\\x\\\\cb\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?={2,1}?[^])(?=(]{2,}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{01,2}{1}\\\\b{,2}\\\\k<y>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\")??\\\\k<x>\\\\8[^](?!\\\\]\\\\1\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[a-z]*]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"a|{2,1}{2,1})[a-z]\\\\b\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?:.bb(?:\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"b\\\\xb]??\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"[a-z](?!??{1}??\\\\x\\\\1(?<=-\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"-\\\\x\\\\b\\\\0[^]\\\\q{01,2}\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\ud800[-(?<=[]?\\\\b\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\x(?<!\\\\c{2,1}\\\\k<x>(([\\\\d-a].\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?:\\\\d\\\\u].??+.?\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\ud800[\\\\d-a]\\\\x(?=\\\\1a$\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[a-z](?:\\\\0(?<x>\\\\u\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"^{foo}[^]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\k<y>]($?{,2}{,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[]\\\\8\\ud800(?!(?<!+\\\\d\\\\8(?=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[a-z][^]\\\\\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"]\\\\x[^]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"b.{,2}??(\\\\B\\\\^(?<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"b{,2}\\\\1\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"{foo}?[^]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"{foo}-(?=.+|{01,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"){2,}*\\\\c{,2}??\\\\b\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"??\\\\1a*{2,}\\\\0{foo}??|\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?=.b\\\\c[a-z]\\\\k<y>(?:\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"+]\\\\0[]\\\\b\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"aa(?!(?:(\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{1}\\\\0(??[^]\\\\8(?<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[a-z](?:\\\\B*\\\\k<y>\\\\b(?=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\8)({,2}\\\\x\\\\(?=^.\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\8|{,2}\\\\cb\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"[]^{01,2}-))\\\\u\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\d\\\\u[\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\B[^]\\\\k<x>+\\\\k<y>\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"*|\\\\u\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{1}{1}-\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\B(?<=\\\\c^|{1}\\\\x\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"$a*\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"{foo}+\\\\k<y>.{foo}\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"*[]\\\\b${1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"*(?<!{2,1}\\\\k<y>\\\\c[??\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"b[\\ud800[^](?<=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[\\\\d-a]{2,}\\ud800[](?<!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"*]b{01,2}\\\\x\\\\x\\\\x(?=\\\\1\"",
+      "valid": false
+    },
+    {
+      "source_json": "\".){2,}\\\\B\\\\q[a-z]\\\\8-\\\\\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(\\\\(?={1}[a-z]\\\\k<x>(?<x>[].\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<x>\\\\1{,2}\\ud800[^]*(?<={1}.\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"*(?<x>\\\\u[\\\\d-a]^\\\\k<y>]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{01,2}^(?:*{2,1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?=-\\\\b(?<=[a-z](?:??[a-z](?=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\x\\ud800\\\\u\\\\k<y>{01,2}][{,2}(?<=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{,2}^{,2}.-[]{2,1}\\\\d??\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{1}[a-z]{,2}(?=]+{2,}\\\\1a\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?=\\\\c+\\\\k<x>\\ud800\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\b[]\\\\q]\\\\0\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"-\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\ud800|^[a-z]+\\\\B[]??\\\\x\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"[a-z](?!\\\\u\\\\B\\\\q[{foo}.\\\\8\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\ud800\\\\\\\\a*\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"(?=[]\\\\8\\\\0\\\\q)\\\\u\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"[\\\\d-a](?!$\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?=??{01,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"?\\ud800[a-z]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"|+(?!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\b[^](?<x>{1}(\\\\1\\\\u\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"*\\\\k<x>(?:{2,}\\\\1{2,}(?<!b^\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\k<x>{foo}\\\\b(?=|[a-z]\\\\d\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[^]+?\\\\u$|[\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\q(?<!\\\\b(?<x>(?<!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"+\\\\B{2,}\\\\8$$a?\\\\u\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"b(-\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?:\\\\0[\\\\d-a](?<=\\\\1??|\\\\u\\\\0\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"$\\\\B??\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[\\\\d-a](?=[]|^\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\u[a-z][a-z]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"*(?<x>(?<=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[^]\\\\(\\\\q\\\\d\\\\q^\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"(?=\\\\8?(?!{1}a{2,1}]-\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"]{foo}(?<!)(?!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{foo}-(?<!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\0{2,}(?=\\\\u-\\\\k<x>+\\\\d]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"^a{1}[^](?<!b(?<=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\u$\\\\k<x>\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"[{2,}(?<x>\\\\u{1}\\\\k<y>\\\\q\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"()\\\\u[](?=+)[\\\\d-a]{01,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,1}(]{2,}\\\\b\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?=[b\\\\c[^][][^]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"*\\\\0-\\\\q\\ud800\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[^]]\\\\k<x>(?<!]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?:\\\\B|\\\\c-b{2,}\\\\u[]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?:\\\\0{2,}\\\\8{1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?:?.\\\\u\\\\8\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(.{,2}\\\\c\\\\u\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\8??\\\\8\"",
+      "valid": true
+    },
+    {
+      "source_json": "\".(?<!|[]-b[][\\\\d-a](?<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,1}\\\\d*(?<=?\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\\\\\k<x>??[^]\\\\k<x>\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\c^[^]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\c(?<=\\\\c\\\\k<y>{2,1}(??\\\\c{1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<=(?<!\\\\k<y>{2,1}\\\\u[]\\\\x(?!\\\\k<y>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\u??+$[a-z]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\B[\\\\u\\\\c{foo}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"*\\\\1(?=]\\ud800\\\\k<y>{,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\d\\\\k<y>\\\\{,2}{2,}^[\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\c\\\\(?={2,1}??\\\\x{,2})\\\\B\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\d\\\\x\\\\0(?<x>(?<x>*{2,}\\\\k<y>\\\\x\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"b\\\\1\\\\d$\\\\a{,2}\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"$$\\\\k<y>\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\B\\\\c\\\\q(?<x>[{1}\\\\0(?:b\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"?\\\\k<y>[](?=${,2}(\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[^]{1}\\\\x(\\\\k<x>\\\\c*\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"|[\\\\0({1}[a-z]\\ud800\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"a\\\\b\\\\d(?:{,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?:[a-z][\\\\d-a]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\x{2,}$\\\\k<x>(?<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\1.\\ud800\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\q(?<=?\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<=\\\\8\\\\q[\\\\d-a]\\\\k<y>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<=\\\\B?\\\\x\\\\d[\\\\d-a](\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<=+(?!(?={foo}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"]\\\\k<x>\\\\b\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"{2,1}??^\\\\x\\\\8?\\\\B\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\0{01,2}]{2,})\\\\k<y>(?<=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\k<x>\\\\B{2,1}\\\\x{1}.\\\\x{2,}|\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\u{2,}(?<=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[]\\\\x\\\\B[][^]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\".-[]+\\\\8\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"(?=(?<=\\\\k<y>??\\\\x\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[^](?<!\\\\k<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?:\\\\0?\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\c|\\\\k<x>$*[\\\\d-a]??\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"+[]{1}-]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"-\\\\b\\\\q(?={,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"]{foo}\\\\k<x>[(?<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[]\\\\x\\\\d\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\k<x>))\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\(?<!\\\\b\"",
+      "valid": true
+    },
+    {
+      "source_json": "\".-\\\\k<y>\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\d{,2}\\\\c{2,1}[]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\u(\\\\q\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\u\\\\k<y>\\\\k<y>*$\\\\q\\\\\\\\1[\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[\\\\d-a][\\\\q]\\\\b\\\\x{foo}(?<=\\ud800\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(\\\\8{,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\x\\\\(?=??a(([^]\\\\c\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<x>(?<!(?!(?<x>+\\\\8-\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"a**[]\\\\c\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\B\\\\8{1}(?!(?!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"${2,}\\\\u(?<=)\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?!+\\\\{,2}+{01,2}(?!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"^b^\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\d(?<x>.{,2}|\\\\u+\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"*\\\\1??(?=\\\\c\\\\\\\\-)\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"|\\ud800\\\\d\\\\1[\\\\d-a]\\\\1]\\\\q\\ud800\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\1(?=(?!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[\\\\k<x>\\\\??\\ud800\\\\q(?<!(?<=(?<!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"$[a-z]$[]?^[].\\\\B\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"[]\\ud800+{01,2}\\\\x\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"..{01,2}(?!$\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{foo}\\\\k<y>\\\\k<x>\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"(?=\\\\x)(?=\\\\x\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\q{,2}??{1}+\\\\q{2,1}{foo}$\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"-)(?<=\\ud800{1}??{2,1}\\\\q{2,1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"a(?<x>-({1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[a-z]{,2}{2,}\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"[(?=\\\\k<y>?{2,}{2,}(\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\8(?<=^\\\\k<y>[]^{1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[a-z]\\\\b\\\\B{01,2}+{,2}[\\\\d-a]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\ud800{1}{,2}\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"(?=b]]{foo}\\\\q\\\\[\\\\d-a]\\\\q\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[^][\\ud800\\\\k<y>^\\\\$(?<x>\\\\8\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"b\\\\d\\\\b[\\\\d-a](?:+[a-z]{2,}\\\\1\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<=|]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\k<y>{foo}\\\\u\\\\0\\\\u\\\\(\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\8b?\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"({,2}(?<=*{2,}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"]\\\\q(\\\\b{,2}b(?<=[??\"",
+      "valid": false
+    },
+    {
+      "source_json": "\")\\ud800\\\\k<y>^\\\\u+-\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\q{2,}\\\\B{foo}\\\\u.\\\\1\\\\c\\\\B\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\u{01,2}^\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"(?<!(({2,}((?!(?<x>^[a-z]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"a(*[\\\\d-a][^]\\\\8\\\\B\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[(?<=$[]\\\\b[??\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"][](\\\\q(\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\[]{01,2}-(?<=\\\\k<x>\\\\k<y>(?<!a\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"]*\\\\b\\\\0{2,1}*\\\\k<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"a(?!?\\\\(|{1}\\\\$\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"$(?<x>\\\\c??\\\\c\\\\c\\ud800$(?=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\q{2,})\\\\x\\\\d\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[a-z](?:)\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"(?=b.\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"?[^]{1}\\\\c\\\\B\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"??{,2}{2,1}\\\\q\"",
+      "valid": false
+    },
+    {
+      "source_json": "\".+{,2}(?<!\\\\8(?:.[^](?<=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[^]{,2}(?<x>\\\\1[a-z]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\ud800[\\\\x{,2}(?<x>[a-z][a-z]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"??(?<!\\\\u\\\\8(?<=]*\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"??$\\\\d{1}\\\\q(?!]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[\\\\c{,2}\\ud800\\\\x[^]{1}\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"$[\\\\d-a]\\\\k<y>\\\\k<y>(?<=-|\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"|^*a[(?!??\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[^(?:](\\\\[a-z]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{1}\\ud800*|(?:\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\k<y>[]\\\\d|{1}([\\\\d-a]{2,1}?\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,}?\\\\d\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,}[^](?!\\ud800{,2}\\\\(?!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"|\\\\1\\\\b(?!\\ud800(?:-){1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{,2}(?=b\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\8(?:(?<=[a-z]$+??({1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"^{2,}[\\\\d-a](?!\\\\k<x>(?=$(?:\\\\k<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{01,2})\\\\da{2,}\\\\B{,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\x\\\\B\\ud800\\\\k<y>a\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"*{01,2}{2,}|(?<=$${2,1}(?<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\c\\\\]^-\\\\u*\\\\B]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\(?<x>[\\\\d\\\\0\\\\{2,}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,1}{foo}(?<!{1}|)|\\\\u\\\\u\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\c\\\\x\\\\B.(?!(?:\\\\\\ud800b\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\B\\\\q+$\\\\1\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"-+{2,}??({1}\\ud800\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"([^]\\\\k<y>{01,2}-\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<=(\\\\c[a-z]\\\\u\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[a-z][][\\\\d-a]\\ud800.[]{2,}\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\1??[^]{foo}b\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"{foo}.??a{1}(?<!\\\\q\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<={,2}{01,2}(?!{foo}b{2,}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"^\\\\u[\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\8a-\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"(?:{foo}$(?=(?<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{1}?\\ud800$+\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{01,2}\\\\B{1}(\\\\B\\\\d|(?={01,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\c\\\\0[]\\\\(?=\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"{foo}]*[]{,2}\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"^+(?:(?!?\\\\k<x>\\\\0\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[]\\\\8(?=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{1}.\\\\b[]|\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\0\\\\x|{foo}\\\\c\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"[^]\\\\B\\\\1b.\\\\x\\\\8\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\B(?<=[^]\\\\b\\\\8)|\\ud800\\\\q\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\x$[\\\\d-a]\\\\u(?!\\\\b{,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?=\\\\1(?<=b\\\\x(?=\\\\x\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<x>ab\\ud800\\\\B\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?=[]\\\\\\\\k<x>??{1}b\\\\8\\\\q\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\u\\\\1(?<!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\8^)(\\\\d^\\\\1\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\b(\\\\k<y>\\\\0\\ud800^(?<x>\\\\8\\\\1\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"-.|.b(\\\\\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"a{2,}{2,}(?:)\\\\d{01,2}]\\\\0\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"??\\\\da\\\\0{01,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{1}{2,}$[^](-|[a-z]]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{,2}^](?![\\\\d-a]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\")\\\\1\\ud800\\ud800(?<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\[\\\\d-a]{2,}[](\\\\k<y>??$$\"",
+      "valid": false
+    },
+    {
+      "source_json": "\".-{1}\\\\q(\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,}*(?=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[\\\\d-a]^b\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"a{2,1}{1}\\\\c[]a{1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"^[^])??^[a-z]\\\\u\\\\k<y>(?:\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"*\\\\8\\\\u(?!(?<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,1}?\\\\k<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\1{01,2}\\ud800.{2,}\\\\d{1}(?:\\\\1\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\1?[a-z]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"[\\\\d)]\\\\b\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\d{foo}[.\\\\u{01,2}\\\\k<y>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\c(^^[^]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{1}\\\\1\\\\x^{2,}\\\\x\\\\\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"a(?!\\\\k<x>\\ud800[a-z](?<=|\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[^]|(?:\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\x.[-.\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"b\\ud800)\\\\B{2,1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\")\\\\u(?<=\\\\0\\\\c(?<![^]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"???\\\\1{01,2}*\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<!\\\\k<x>\\\\u\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\B+\\\\x+\\ud800\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"b{,2}[a-z]\\\\d\\\\u$(?<=$]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"([]\\\\k<x>[a-z]\\\\c(?<=)[a-z](\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?!\\ud800\\\\8\\\\d\\\\k<y>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\ud800\\\\q\\\\b(?!{,2}([^]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\u$\\\\8*\\\\q\\\\k<y>[a-z]+[\\\\d-a]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"[^]|{2,}\\\\\\\\x\\\\8|\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<!{foo}\\\\d]\\\\8\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?:\\\\k<y>\\\\\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,1}|\\\\k<y>+\\\\b\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\k<x>\\\\k<x>(?<x>^\\\\B\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\0?|-\\\\c\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\q{foo}[^]\\\\x+{2,}\\\\B\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,1}b{,2}(?={1}\\\\1{foo}{2,1}(?!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[++\\\\c{1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\\\\\d[]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"?\\\\k<y>{2,}{1}\\\\k<y>\\\\q\\\\u??\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"*^^\\\\k<x>\\\\d\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{foo}.|\\\\b]{2,1}$\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\c\\\\1\\\\c\"",
+      "valid": true
+    },
+    {
+      "source_json": "\")\\\\8\\\\u\\\\x-{1}\\\\0\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[^]\\\\cb{1}\\\\\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\qa\\\\\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\1\\\\8{foo}^+{1}(?=\\\\0|\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{,2}{01,2}(?:|\\\\u\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\8$(?={1}(?<x>\\\\1|??\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[^]\\\\b\\\\k<y>\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\k<y>{01,2}\\\\q\\\\1\\\\q(?!{2,1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\-\\ud800\\\\B{2,}?)[a-z]{2,}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"](?=\\\\q$*\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"?\\\\q*(?![a-z]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\B(?:[\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[^]*\\\\B\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"(?<!\\\\d(?<x>(?<x>{01,2}\\\\-\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"b\\\\8\\\\k<y>[a-z]\\\\q\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\0[^]{2,1}\\\\q{2,}b\\\\8??\\\\k<y>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[\\\\d-a]\\\\((?<!\\\\8\\ud800{2,1}-|\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"](?<x>\\\\x\\\\B^\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,}|\\\\\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\ud800??\\\\b(?<!)\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"(?!\\\\8{,2}+\\\\0\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\q(?:{2,1}\\\\x\\\\8$?a.\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\0|\\\\0[a-z]?\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\1b+{1}[^]-\\\\u\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"*|\\\\1??\\\\B\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\x*??\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?:)\\\\q+\\\\k<x>{1}^a^\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"[][\\\\d-a]]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"(?!{,2}\\\\8\\\\k<x>{,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?=?[(?<!\\\\0\"",
+      "valid": false
+    },
+    {
+      "source_json": "\")(?=\\\\\"",
+      "valid": false
+    },
+    {
+      "source_json": "\".\\\\u^{foo}(?!+?\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{,2}^(?<!((?<=\\\\0{2,}[^]\\\\x\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{1}^\\\\b*\\\\q\\\\8\\\\d{2,}\\\\0\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"-]?\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\k<x>(?<!{foo}$]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\x{1}(?:\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"?$\\\\u(?<x>\\\\B\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<x>\\\\0[^]\\ud800[]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?!\\\\q](?<x>[^](?<x>*[\\\\d-a]\\\\k<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"*a\\\\d\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\B(?<x>.(?:)[^]\\\\\\\\1\\\\1\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\1\\\\8\\\\b{foo}\\ud800|(\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,}\\\\u{2,}aa\\\\0+\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<![\\\\d-a]{foo}{foo}+\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"??|a(?:\\\\0\\\\x.\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[a-z]{01,2}(?<!{2,1}{2,}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{1}b^|+\\\\ba\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\q\\\\b](\\\\x[\\\\d-a](?<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"${01,2}\\\\*(?<x>\\\\B[^]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\d|{1}\\ud800a(+\\\\0*\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\c(?<=[](?:*[[\\\\d-a]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[^]\\\\b\\\\b[^]\\\\B\\\\1^\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\B*b\\\\k<x>{,2}]+\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[^]{2,}(?!\\\\c(?:$a.[^]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,}\\\\B\\ud800(?<x>{1}\\\\c-\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"]*-\\\\b\\\\k<x>((?<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"a?{2,1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<!+\\\\1a(?<=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[^]\\\\k<y>\\ud800\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\B\\\\B[^]b\\\\k<x>\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"[^]\\\\Bb\\\\q\\ud800?\\\\q\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"[]??*[]{1}-(?<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\u\\ud800-|\\\\d\\\\^\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"+\\\\q{01,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,1}*{2,}{01,2}.\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[\\\\d-a]-\\\\(?<!*?(\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"b(?=(?<!\\\\1[a-z]\\\\c(?!.{foo}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\x]\\\\1\"",
+      "valid": true
+    },
+    {
+      "source_json": "\".{2,}(\\\\8\\\\u\\\\1\\\\8\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\k<x>\\\\1(?!a(?:*\\\\b\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\d{2,}]b(?<!\\\\q\\\\1]\\ud800\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\q?(?<!\\\\k<x>|\\\\q[^])??\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<x>(?:a+a\\\\c|\\\\B(?<!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[\\\\d-a][\\\\d-a]\\\\q[]\\ud800\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"b\\\\c*(?![^]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\1.??^|(?!(?![]+\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"??\\\\c{01,2}(?<!]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"---+[^]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"((?=+{01,2}a.(?:\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{1}$\\\\d\\\\u\\\\k<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,1}[]\\\\d\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\B[a-z]\\\\b\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\1\\\\x\\\\\\\\q\\\\8\\\\1$(?=\\\\u\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\x[a-z]{2,}][a-z]\\\\x(?<=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{foo}\\\\Bb(?:)(\\\\B\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<x>^|(?:a\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{,2}\\\\0\\\\u[a-z](-\\ud800{2,1}[\\\\d-a]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"?[\\\\8(?=(\\\\8)\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"){2,1}\\ud800\"",
+      "valid": false
+    },
+    {
+      "source_json": "\".a{foo}\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\d$\\\\q(?:\\\\u(?!\\\\c\"",
+      "valid": false
+    },
+    {
+      "source_json": "\".[\\\\d-a]\\\\1.]\\\\8[(?<x>\\\\d\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"^b\\\\d\\\\d\\\\k<y>)\\\\x\\\\B\\\\0\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[{2,}\\\\b.{01,2}\\\\B(?!{1}?\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?=\\\\1[]\\\\q[^]\\\\u?{1}\\\\c\"",
+      "valid": false
+    },
+    {
+      "source_json": "\".({1}+??\\\\ua\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[\\\\d-a]\\\\c]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"a\\\\k<x>\\\\x\\\\x\\\\b(b\\ud800[\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"|(?!*$\\\\c{2,}{1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\")(?<=(?<x>??b\\\\x\\\\q\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"|\\\\1{2,1}\\\\B[^]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"((?!\\\\u\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\c{foo}(?<=$\\\\B\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[\\\\d-a]{foo}]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\.+{foo}b(?=).\\\\0\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"??.[]|\\\\1\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<=(?:\\\\+b(?<=(\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"??\\\\B(\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"??{2,1}{2,1}\\\\b[{,2}(?!{01,2}a\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?=(?=(?<=\\\\1(?<x>{2,}|\\\\8^\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\u](?:\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<![]\\\\1[[\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,}(?<=()\\\\k<x>{1}\\ud800\\ud800[^]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"]{2,}\\\\q\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"(?:{2,1}a(?<x>{foo}??\\\\k<y>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"b{2,}{2,}[\\\\k<x>(?!-[a\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{foo}^\\ud800\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"(?<=a(?<x>(\\\\u\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\^{1}(?<!\\\\x?\\\\\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,1}{01,2}(-++(?:\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{01,2}{,2}(?:\\\\d(?<x>-\\\\k<y>\\\\k<x>[\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\c(?<x>{2,1}+\\\\*[^]-{1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\")\\\\u\\\\8[\\\\d-a](?:\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<x>(?:\\ud800(|\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"a{1}\\\\k<y>\\\\d$\\\\x\\\\0\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\q]^\\\\k<y>\\\\k<x>\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"[\\\\d-a](?:(?:??$\\\\c(?<x>\\\\0{2,1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"b{1}\\\\0[](?!{,2}\\\\d\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"-+[a-z]\\\\k<y>\\ud800\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\b\\\\c??\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\bb\\\\0(?:)\\ud800\\\\k<x>\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\q)\\\\k<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<=]+\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\1[^]{,2}{1}(?<x>\\\\c^|\\\\q\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\8[(?=\\\\1^(?:(?!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"]b\\\\8\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\a{foo}\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"[\\\\d-a]?\\\\q\\\\q(?={2,}(?<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\0[a-z]^\\\\1)(?=[^]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<x>\\\\8[^]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\b(\\\\b(?<=[]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[\\\\d-a]*[a-z](?<=\\\\k<x>*\\\\u[[a-z]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\k<x>\\\\1(?!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\")(?<x>\\\\cab(?<!(?<!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?!{foo}(?<x>(?=\\\\u\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[\\\\d-a]{foo}{2,1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"-{2,1}-\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"b\\\\x\\\\1\\\\k<y>\\\\(\\\\|{,2}\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"{foo}\\\\k<x>bb[\\\\d-a](?<!][^]{2,1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,}\\\\k<x>[(?<!{,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"+^b\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\0\\\\1[a-z]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"+.-](?<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\8\\ud800[(?<x>{,2}(?<!??\\\\1[a-z]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"|\\\\0\\\\k<x>\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\ua(\\\\c?\\\\0\\\\b{01,2}|\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{1}\\\\c\\\\k<y>[(?<x>]\\\\1\\\\1b\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\d[[a-z]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"[^](?={2,}\\\\b???[\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<x>\\\\c\\\\k<y>\\\\k<x>\\\\q(?<!\\\\?{,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"^\\\\d(\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[\\\\d-a](?<x>\\\\0\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\q\\\\d[][{2,}[\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\qb\\\\k<y>\\\\k<y>{01,2}$\\\\c{2,1}{,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"?{,2}a[\\\\d-a](?=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"-+\\\\k<y>\\\\b[\\\\d-a]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"{2,}\\\\B(\\\\x[\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{01,2}{2,1}\\\\b{01,2}|\\\\0^\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"a{,2}{2,1}\\\\d)\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\k<y>^[]b{01,2}{2,})\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{,2}\\\\B\\\\q{2,}|\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"(?!\\\\b\\\\x\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[a-z]\\\\x(?:{,2}^\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<=[a-z]?\\\\c((?!(?<!\\\\c\\\\c\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\d(?<x>)b??\\\\c(?<!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"^\\\\qb\\\\B(?<=\\\\u{01,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"??\\\\B?[^]b\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[^][][{foo}(?:??\\\\\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"([]^\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\ud800.][^]\\\\u\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\u[\\\\k<y>$\\\\k<y>-??\\\\k<x>+\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\ud800^\\\\q[\\\\d-a]$\\\\0a\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\db\\\\q\\\\0{,2}(?![][\\\\c\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?:\\\\q{01,2}\\\\8-\"",
+      "valid": false
+    },
+    {
+      "source_json": "\".\\\\q\\\\q\\\\c(?=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<x>(?<!*[\\\\d-a](?=(?<x>??({,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"b\\\\q??^\\\\8\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\q|\\\\k<x>\\\\1\\\\k<y>?(?<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\x\\\\$\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"b\\\\q\\\\c\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\8{2,}\\ud800\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"[]\\\\k<x>-{1}$[^]\\\\k<x>(?!)\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\x\\\\q{01,2}\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"{2,}\\\\0\\\\q\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\k<x>\\\\b(?<x>)a?\\\\u\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\1\\\\b$\\\\d(?!(?:\\\\b\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\B[a-z]-(?=$[]\\\\\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,})[a-z]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[\\\\d-a]\\\\\\\\0\\\\k<x>(?<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"${2,}[||\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\1[[\\\\{1}+\\\\u\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[\\\\q\\\\x(?<!]\\\\8a\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"(?:\\\\c{2,}{2,}-\\\\b\\\\B\\\\c{01,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"][a-z])(?<=[${1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<x>[\\\\c\\\\8\\\\0\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"^)]\\\\k<x>(?=\\\\b\\\\\\\\B\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,}\\\\c{2,}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{,2}{foo}[\\\\d-a])[]\\\\q?\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\8[a-z]|\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"+)[{foo}[a-z](?:??\\\\b[]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\k<x>.+\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"{foo}\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"(?<x>\\\\x(?<!.??|+\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"ba(?<=\\\\d(?<!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<!+(?<!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"]b|\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\8\\\\d\\\\u\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\u[\\\\d-a]\\\\d^\\\\B(?<x>(?=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"*][^]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<x>^(|\\\\c\\\\d??+\\\\x\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\0\\\\q??(?<=(?<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\B[](?<=$(?=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"-$^)\\\\1.(?<=.(\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"*[a-z]\\\\k<y>{1}b\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\k<x>\\\\8[][\\\\k<y>{,2}\\\\k<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,1}{foo}[\\\\d-a]\\\\u|\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,}{1}\\\\u\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[]\\\\k<y>\\\\x\\\\k<y>{2,}\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\q\\\\B\\ud800\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"{01,2}^(\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"^|\\\\0\\\\k<x>\\\\0\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\u(]\\\\k<x>(?<=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,}(?<=[]+)\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\1\\\\q)$(?<!(?<x>(?<=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\k<x>](?<!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[]\\\\d{2,1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\8${2,1}\\\\0+\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"abb\\\\k<y>??\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"??{2,}(?!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{,2}\\\\x\\\\B\\\\b\\\\u\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\k<y>-\\\\u(?<=(?<![\\\\k<y>(?=$\"",
+      "valid": false
+    },
+    {
+      "source_json": "\")+[][bb\\\\0\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"$.[^]{1}(?<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\".(?<=^[\\\\d-a]{2,}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"*{2,1}a*\\\\\\\\q(?<=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\q\\\\d\\\\d--|(?<={01,2}[\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\B){foo}(?<=\\\\B\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"|\\\\B\\ud800\\\\B{01,2}\\\\b\\\\)\\\\k<y>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\1{2,}*(\\\\\\\\{,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[a-z]\\\\0?\\\\b[a-z]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"{2,}{2,1}\\\\1${01,2}(?<x>\\\\u\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\8\\\\1\\\\d\\\\1\\\\\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{,2}-.(?<=([a-z]+\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\x{2,1}(?<x>*{2,1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{foo}?\\\\c(?:*[^])\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"|{foo}(?<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\ud800??{foo}\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\k<x>\\\\k<x>\\\\u\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"{2,1}\\\\q.\\\\0\\\\a[^]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\B{2,}\\\\x\\ud800(?!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\u\\\\b^(?<x>${2,1}\\\\\\\\d^\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"|(?<={2,1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\q[{,2}[\\\\d-a]{2,}[\\\\d-a]\\\\1\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"[^]\\\\c$$??\\\\k<x>(?=+{2,}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\1?\\\\8\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"(?<!(?<=??{2,1}\\\\d\\\\1[]{,2}(?!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"${2,1}?{1}|][a-z]\\\\q??\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,}??{,2}|b-*\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"]$(?:\"",
+      "valid": false
+    },
+    {
+      "source_json": "\")\\ud800$+{2,}(?<=[\\\\d-a]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\0\\\\0{01,2}\\\\c(?![a-z]\\ud800\\\\b\\\\k<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\8(?!{2,1}\\\\k<x>\\\\B\\\\x(?<=[a-z]\\\\1\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?=(?<=[\\\\d-a]{1}]\\\\c{2,}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"|{2,}[\\\\d-a]b\\\\B[^](?:\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\1+.{2,}\\\\d\\\\ub\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"[^]+??(?<x>[\\\\d-a]\\\\k<x>[a-z]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\c{,2}(?<x>{1}\\\\0\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?=$[^]\\\\B){01,2}[\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<x>??$[\\\\d-a]b\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{01,2}(?<x>\\ud800\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?:\\\\\\\\B*\\\\k<x>]{foo}{,2}(\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\8\\\\0]\\\\k<y>)(?=\\\\q\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\c^(?!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\\\\\u-a{2,1}\\\\\\\\q[^]\\\\0\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\B(?=\\\\0\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?:\\\\0[\\\\d-a]{,2}{foo}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"??{01,2}(?<!\\\\d{2,}[?\\\\k<y>]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\x(?=\\\\{2,}]\\\\c*\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"*\\\\8\\\\|.[[^][^]\\\\1\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\k<y>[\\\\d-a]\\\\\\\\0(\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"??)(?=(?<x>{1}\\\\b[\\\\d-a]*.\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{1}\\\\B|\\\\d|\\\\{2,}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{1}\\\\c$[^][\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"??]-\\\\c\\\\1\\\\B\\\\u\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\0-\\\\d\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"[a-z]\\\\k<x>{01,2}^(?:\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"-(?!^*b\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"+[a-z]\\\\c\"",
+      "valid": false
+    },
+    {
+      "source_json": "\")\\ud800{2,1}??(?<=.\\\\0+{01,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[\\\\d-a]\\\\k<y>\\\\B\"",
+      "valid": true
+    },
+    {
+      "source_json": "\".[[^]\\ud800[^]??))b\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,1}(?:a\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"-(?<!\\\\c\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<=.\\\\k<y>?{01,2}{foo}[]|.\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\\\\\d[\\\\d-a]{foo}\\\\8\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"|*{foo}-[\\\\d-a]\\\\q{2,}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,}(?<=(-[^]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"?\\\\(?<![](?<=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\d(?!\\\\1\\\\q\\\\8(?:[^]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"+{1}\\\\q{2,}[]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{01,2}[](?<!-(?=\\ud800\\ud800\"",
+      "valid": false
+    },
+    {
+      "source_json": "\")b||[][^].\\ud800?\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<=\\\\B)\\\\q[\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"a|(+\\\\c[a-z](?:\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[a-z]-\\\\u\\\\b-\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"(?={01,2}^\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[?(?:\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?!\\\\0(?<!a??{1}\\\\8\\\\B{foo}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{,2}\\\\k<x>\\\\q{01,2}(?<=[a-z](?<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<![\\\\8a[\\\\d-a]{foo}{2,1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\[)||+*\\\\0|\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"$\\\\c$\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"(?:.{,2}\\\\x{2,}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\d{2,1}\\\\q\\\\8.\\\\1{2,1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\b[(?:\\\\\\\\1[\\\\d-a]?\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\q(\\\\k<y>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\ud800(?<=\\\\q\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,}]*?[\\\\B\\\\B\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"b^(\\\\u\\\\k<y>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[]\\\\q[]\\\\b(?<!\\\\0{foo}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\q(?=[][{foo}(?:(?<!{01,2}\\\\b\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"-[a-z]\\\\0\\\\q[\\\\d-a].|\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"(?<=[^]\\\\x(?<x>[a-z]?\\\\u[\\\\d-a][a-z]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\k<y>*(?<!]\\\\k<y>\\\\d(?<x>{01,2}(?<!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\c{2,}\\ud800\\\\0\\\\ca[\\\\d-a]{,2}^\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\0^\\\\\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\d\\\\q[a-z](?!\\\\k<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\0\\\\B\\\\b\\\\k<y>?\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"{foo}{01,2}(?:{foo}^(?<=|\\\\u{1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\b*^\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\k<x>(?<!{01,2}.[][^]-\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"-{2,1}+(?!(?<x>(?<x>)\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\q.??\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"+{,2}{2,1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"+(?<=[\\\\d-a]\\\\x{foo}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"*{,2}(?=\\\\0\\\\B{2,}[])+\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\k<y>\\ud800]]\\\\B\\\\0$\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"|^\\\\k<y>|[]a$\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"(?<x>)[\\\\d-a]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"+\\\\8\\\\8\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[\\\\d-a]\\\\x\\\\1{2,}(?<=?\\\\8{01,2}{1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"?a\\\\x\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"?\\\\\\\\\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[]\\\\u-??(?<!{2,}\\\\d\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\x(?!\\\\1\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(\\\\u\\\\q\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[^]\\\\d{2,}??b\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\k<x>\\\\1{1}.{foo}](?<!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\B\\\\q(?<!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\b{foo}|\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"{2,})*\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"*\\\\xa\\\\B\\\\k<y>??\\\\b.\\\\B\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"b.[^])[\\\\d-a]\\\\u$\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<!{,2}.(?<={foo}\\\\Bb\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\0^a\\\\u](?!(\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"$\\\\0\\\\0\\\\q-(?:[^]{2,}[a-z]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\b\\\\b[]*[\\\\d-a]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"??-\\\\1\\\\q^\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{01,2}\\ud800+-](?=\\\\x\\ud800?\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{1}\\\\B)\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"][a-z]ba\\ud800\"",
+      "valid": true
+    },
+    {
+      "source_json": "\".*\\\\c)[]??(?=?)\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[]\\\\k<y>\\\\c(?<=\\\\x$(?!\\\\b(?<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\b\\\\1.??\\\\\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<=\\\\k<x>{2,1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"-$\\\\x\\\\k<y>(?<![](?!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"+[\\\\d-a](?!\\\\x?\"",
+      "valid": false
+    },
+    {
+      "source_json": "\".{foo}\\ud800\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\ud800a\\\\k<y>|\\ud800{1}??^\\\\k<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<!\\\\b\\\\1[[^]\\\\x\\\\B\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\q\\\\k<y>a(?<x>{2,1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<x>\\\\1\\ud800\\\\8)\\\\B|\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"^[?\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?:\\\\x)-\\\\\"",
+      "valid": false
+    },
+    {
+      "source_json": "\".(?<!\\\\k<x>(?<x>{1}.$\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"??\\ud800\\\\c\\\\b??\\\\c$(?<=\\\\\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\q[\\\\d-a][^]^b\"",
+      "valid": true
+    },
+    {
+      "source_json": "\")\\\\cb[]\\\\d\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?!{foo}(?<=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\ba\\\\d\\ud800{2,1}(?<=(?:|(?<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[].\\ud800\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"$?].a(?<x>(?:{foo})\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?!{1}\\\\1\\\\8\\\\k<x>{foo}-\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{01,2}(?<x>\\\\d{2,1}\\\\c{2,1}+\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\k<x>\\\\1(?:\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\k<x>\\\\B-[^][]?$\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"[\\\\B\\\\1\\\\k<y>b\\\\q|\\\\x{2,}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[\\\\d-a]((?=[^]^\\\\x\\\\c\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\q?]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\8{foo}.{,2}[\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[\\\\b^[a-z]){1}*)\\\\1\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"a)\\\\b\\\\x{01,2}\\\\B(?<x>(?!{,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\{foo}\\\\k<x>\\ud800a|[(?=\\\\d\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\B{1}*^{foo}(?=\\\\8\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\da\\\\k<y>[]\\\\1\"",
+      "valid": true
+    },
+    {
+      "source_json": "\".b^\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"[(?=\\\\d[[{foo}\\\\8\\\\x\\ud800\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\k<x>[^]{2,1}\\\\k<y>(?=a\\\\q\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\1??\\\\x(?:*.\\\\$\\\\k<y>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"b(?:b{foo}\\\\0\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[a-z]\\\\8\\\\q((?<!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[]|\\\\1\\\\k<y>a{2,}{foo}\\\\0\\\\c\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"[])]([\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"??\\\\q|(?<!\\\\\\ud800[*(\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{1}[]{1}[\\\\d-a]\\\\8{01,2}a-[\\\\d-a]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\ud800\\\\B\\\\0^?\\\\c(?<x>(?=\\\\d\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[a-z]\\\\0\\\\k<x>[^][a-z]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\u(?<!|\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?:+(?!{,2}\\ud800\\\\b\\\\\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[](?<x>(?<=[a-z]\\\\a\\\\c{foo}(?<=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{foo}\\\\0[(?<x>{01,2}(?=-\\\\q.\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"-\\\\c{2,1}\\\\B(?!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\k<y>b]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"{2,}(?!]|b\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<![]^-[\\\\d-a][a-z][]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?={2,1}\\\\b[^][]\\\\b{,2}([]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\".\\\\k<y>^]{foo}\\\\B{1}\\\\{1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{,2}.??\\\\8[\\\\d-a](?!\\\\u\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\B${2,}{foo}\\\\B\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{,2}?[^]^-+???a\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"-\\\\8$[\\\\d-a]?a\\\\u{1})\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[]\\\\q]\\\\8\\\\1\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"*[^]|\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\ud800{2,1}[^][](?<x>\\\\k<x>)\\\\0{01,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\1\\\\x]{foo}|\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"(?!\\\\B-\\\\d[^](?<x>]??(?!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<=\\\\q.(?<!\\ud800\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"??(?<!\\\\8\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\d\\\\q[\\\\d-a]+\\\\0[a-z][\\\\d-a](?<={2,1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[a-z](?<x>\\\\\\\\c-\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?!${2,}\\\\c\\\\1\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\x\\\\k<y>$)+\\\\q\\\\c\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,}??(?<!bb\"",
+      "valid": false
+    },
+    {
+      "source_json": "\".\\\\u[a-z](?<=|(??\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<=+]{,2}-\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{,2}{2,}\\\\0\\\\c[^]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\d\\\\c{01,2}(?:a^{2,1}){,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?!{01,2}*??{foo}][^]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<![.\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\d{2,1}\\\\\\\\0^{1}\\\\8\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"|\\\\0\\\\\\\\c[]b??\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"{01,2}[\\\\d-a]\\\\k<y>\\\\B\\\\8(?:(?!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[a-z]\\\\B[a\\ud800\\\\8(?<!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"**a.{1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\1{,2}\\\\q\"",
+      "valid": true
+    },
+    {
+      "source_json": "\".(?<!]{2,}\\\\x{2,}\\\\x\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[\\\\d-a](?:\\\\q{foo}\\\\k<x>[]\\\\u*(?<=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\\\\\b^\\\\d\\\\B\"",
+      "valid": true
+    },
+    {
+      "source_json": "\")\\\\x[\\\\d-a]-)\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"](?={1}\\ud800]](?<x>b(?!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"]b(?<!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"-(?=[^][]\\\\d\\\\d\\\\x\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"((?<=\\\\k<x>(\\\\b(?<=?\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\ud800(?<x>\\\\B)\\\\0+{01,2}\\\\q[a-z]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\u-\\\\b)\\\\u[]\\\\B{,2}\\\\k<y>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[\\\\x(]\\\\k<x>\\\\B(?<!]\\\\u\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"?a\\ud800\\\\u\\\\k<y>??(?!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"){,2}(?:.(?<=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"+(?<=][\\\\d-a][\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"ab{2,}\\\\8^\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\ud800{2,}[^]b*\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"[\\\\d-a](?<!\\\\b${01,2}(?!\\\\1\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\d??\\\\0\\\\d\\\\x(?<=(?<=\\\\x]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?!(?:\\\\x{2,}\\\\0(?!\\ud800]??\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"]\\\\d{1}^{1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"b^(?<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"$[]a\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\k<y>\\\\ub{01,2}\\\\\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\k<x>\\\\d\\\\8\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"[^]\\ud800\\\\x\\\\u^\\ud800\\\\x(?<![a-z]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<x>)??\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\k<y>^{2,}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\0\\\\k<y>ab\\\\0(?<=[]\\\\\\\\\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<=|\\\\8](?:\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[^](?=?\\\\c\\\\d\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\ud800\\\\8?(?<=(?<=(?!{,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,1}{01,2}\\\\k<x>\\\\c{2,1}\\\\u\\\\c\"",
+      "valid": false
+    },
+    {
+      "source_json": "\")[^](?<![]|\\\\0(?<=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<x>\\\\0[^]])[]{foo}^{foo}\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"$\\\\B[a-z]\\\\c]\\\\q]{1}(?<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\1b|\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\ud800{foo}\\ud800(?!(?=\\\\0\\\\8\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{1}\\\\?{,2}.\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"b[^]*\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"$\\ud800*\\\\c\\\\d\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\c\\\\](?<=*(?<!{1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\c\\ud800{01,2}{,2}*\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"{foo})\\\\k<x>{,2}(?:\\\\b(?=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\".*\\\\k<y>\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"-.[^]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\1.*???*\\\\d\\\\\\ud800\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?:\\\\k<y>)|\\\\q[\\\\d-a]?*??\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"+[^]?(?!*{01,2}[{2,1}*\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<=[(?<={2,}[^]{01,2}[a-z]\\\\8\\\\0\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[a-z]{01,2}\\\\k<y>\\\\B\\\\c\\\\u(?=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,1}\\\\x\\\\8.(?:(?<x>??\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"({,2}{,2}\\ud800\\\\b[\\\\c*[^]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<={2,}b\\\\d\\\\\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\ud800[{1}]\\\\8[\\\\c(?:\\\\0\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\k<x>\\\\u+\"",
+      "valid": true
+    },
+    {
+      "source_json": "\")${1}[\\\\d-a]\\ud800\\\\q{1}[^]\\\\0\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"?{1}\\\\u^+\\\\u\\\\k<x>{01,2}{2,1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\k<y>{01,2}\\\\x(?<x>a\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"+\\\\8\\\\0^{,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"?[[\\\\k<x>({01,2}?[a-z]\\\\\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"+{2,}{2,1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,1}{foo}*(?:[\\\\d-a]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\B\\\\8[(?={01,2}\\\\x\\\\0\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,}??{foo}(?<x>\\\\1\\\\B[\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?={foo}|[\\\\d-a][]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[^]b\\\\c^*\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"?[\\\\b\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\d{foo}[a-z]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\ud800\\\\k<y>a(?<=??$)\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[\\\\d-a][]^\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"*[a-z]+\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{01,2}([b\\\\c\\\\c\\\\u\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[\\\\d-a]b[]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"{01,2}\\\\k<x>\\\\db+[^])]\\\\k<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,1}*\\\\u\\\\0{2,1}b\\\\d\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?!{,2}\\\\q{1}[](?!(?<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"*a$\\\\x({2,1}$\\\\B[\\\\d-a]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{01,2}(?=\\\\d{01,2}b(?<!(?=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{01,2}???\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"+[\\\\d-a](?<=$+|(?:\\\\k<y>[\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\ud800\\\\k<x>+{2,1}[]\\\\u[^](*\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?=a+\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[\\\\d-a](?<x>\\\\d{01,2}((?:?\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"?\\\\k<x>(?:+(?:?[a-z]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"-\\\\8{foo}a(?<!\\\\q{1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{,2}(?<!*{,2}b\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\1{01,2}(?<!*[^]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,}\\\\q(?:|a)(\"",
+      "valid": false
+    },
+    {
+      "source_json": "\")[{1}-)\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\x\\\\k<y>{1}[\\\\k<y>\\ud800[|\\\\\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\0(?!\\\\1]\\\\q??]\\\\8a\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\c[^]\\\\k<y>{,2}+(?<!\\\\1\\\\1{foo}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{1}\\\\d\\\\1a()(?!\\\\0)\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\c\\\\1\\\\d\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\u[]{,2}\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\b[a\"",
+      "valid": false
+    },
+    {
+      "source_json": "\".-a\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\\\ud800\\\\k<x>\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\1\\\\c(?<=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?={2,1}[{,2}[^](?:a\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\b\\\\q\\\\d\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\ud800\\\\B.\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\1[][]\\\\q(?<!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<!\\\\x[^]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?!(?<x>]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"??(?<!*(?:\\\\B\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"-$\\\\q{2,1}\\\\q$(\\\\k<x>(?=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[\\\\b|(?<!{2,})$\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\u)\\\\\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\k<x>[+|[]|\\\\k<x>\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\1[\\\\d-a]*\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"{1}??\\\\x(\\\\B\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[^]-\\\\0{2,}\\\\k<y>(?<=[]\\\\B{01,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<!\\\\d\\\\b(?<![^]^^\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(+(?:\\\\x^+(?:[^](?<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"??$[]{2,1})b[]\\ud800[\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\1\\\\x[\\\\d-a](?=(?:[]\\\\\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\ud800-[(?<x>+*(?<=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,}]\\ud800[a-z]|\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{,2}-(?<x>[\\\\d-a](?:\\\\B{2,1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{foo}\\\\k<y>(\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"??]+\\\\k<x>{01,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"a{01,2}\\\\B\\\\B\\\\c\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"^\\\\8\\ud800\\\\B\\\\u(?:{foo}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\ud800\\ud800(?<=({foo})(?<=??\\\\B\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[]\\\\B(?<![\\\\1\\ud800\\\\8?\\\\1\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\8{1}+-{foo}\\\\k<y>{01,2}\\\\B.\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"a\\\\c(?:\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"|\\\\8{,2}*\\\\d*[a-z]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"{foo}*(?<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[^]\\\\1\\\\x\\\\q\\\\B[a-z].((?=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"??\\\\x{foo}(?<=.{2,1}+\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[\\\\d-a](?<!\\\\k<y>(?<=$\\\\8\\\\8{2,}\\\\u\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"*-[\\\\d-a])?\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\u{,2}\\\\k<x>\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\x[?+{2,1}\\\\k<x>[\\\\d-a]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\k<x>\\\\x??\\\\8(?!b\\\\q(?<!\\\\k<y>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{foo}{foo}(?=\\\\k<x>(?<={1}{01,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\b{2,1}{,2}\\\\x\\\\d\\\\{2,1}]\\\\u\"",
+      "valid": false
+    },
+    {
+      "source_json": "\")\\\\k<x>[[\\\\d-a]??(({01,2}[\\\\d-a]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\c\\\\b\\\\d+\\\\8\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"[-(?<!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<!\\\\d\\\\B\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\[??\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\0{2,1}\\\\d\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"]?a\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"([\\\\d-a]b\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?![a-z]$([^{2,}\\\\d[\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\\\\\8{2,}\\\\q[a-z]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"(?=(?<![^]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[)\\\\B(?<!(?={2,}\\\\q(?!\\\\u\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\k<y>++\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\u{2,}(\\\\u{2,1}([a-z]{2,}[]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\8\\\\b{1}(*\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[][^](?=(?!^[a-z]b\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"a\\\\0^\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"[\\\\d-a]\\\\B\\\\k<y>]^?\\\\k<y>^[a-z]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?!\\\\\\\\b[^]$\\\\B{,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?:(?<!].[]\\\\b[a-z])]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\".{,2}(?!{2,1}\\\\q(?:|\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[^])--(?:{1}(?<x>\\ud800(?<!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<x>[{1}^)|\\\\1\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\(?!\\\\k<y>\\\\b[^]{1}{2,1}[\\\\d-a]\\\\c\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{1}|\\\\c\\\\0{,2}\\\\+(?:-\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"^[].(?<!|\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?:\\\\cb|\\\\k<y>a\\\\d\\\\{,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\0((?=\\\\q+\\\\c-\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\1{1}b?^]]\\\\u\\\\1\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"*{2,1}?\\\\\\\\q\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{1}{2,}\\\\B\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"*\\\\B$a\\\\B\\\\k<y>??\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?:??\\\\k<x>({01,2}({2,1}|{1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,1}\\\\u\\\\8({2,}[]{1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,}\\\\x\\\\8\\\\0$)[b|\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\c\\\\B{1}(?=\\\\(?=(?<x>??\\\\k<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"*|(?=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"^\\\\B??\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[\\\\d-a]{2,1}??[a-z]\\\\k<x>(?=\\\\b||\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{01,2})\\\\c\\\\k<x>(?:\\\\0\\\\\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?=\\ud800??{1}?\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"()*\\\\u\\\\(?=\\ud800\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"[a-z]b([\\\\d-a]\\\\\\\\u(?!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?:).b(?<!\\\\d|\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\ud800-{1}\\\\k<y>)\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{1}\\\\q^(?<x>b\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<={foo}\\\\1[]\\\\u\\\\c{,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\u(?<=\\\\1\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"?[-[]{1}\\\\d(?!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"^*\\\\\\\\k<x>\\\\k<y>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\(?!|$(?=(?<x>\\\\q\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{1}{2,}[]{01,2}(?:\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\k<y>\\\\0a^|??\\\\0\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?=|{2,1}{01,2}\\\\x\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,}b]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"a[\\\\0??^\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"??\\\\8(?<!\\\\(-\\\\B(?:?\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{1}\\\\8[\\\\d-a][[a-z]{1}{2,1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<!(?<!\\\\d?(?:\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"|(?<=(?:??+\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{01,2}^\\\\k<y>.\\\\8{01,2}(?<!^\\\\8\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{foo}?\\\\u\\\\c{foo})\\\\x\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{,2}(?<=(?={01,2}\\\\k<x>\\ud800\\\\c-{foo}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\c\\\\1\\\\k<x>.\\\\u-\\\\1\\\\B\\\\B\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\q\\\\q-(?!{2,}{01,2}[\\\\d-a]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"^\\\\0?)?\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[^](?:..\\\\k<y>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?!\\\\8{01,2}{,2}\\\\u|[\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[\\\\d-a]-+\\\\k<x>\\\\8|\\\\0\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"{,2}{2,1}a(?<=[]{2,1}(?:{2,}+\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[](\\\\0b[]\\\\B.\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[\\\\1\\\\b)\\\\da^\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?:\\\\q\\\\b{01,2}[a-z](?<![\\\\d-a]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\ud800(?<!]-{,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"^\\\\b?\\\\b\\\\x\\\\8[\\\\1$\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?=+\\\\-\\\\q(?=a\\\\d[\\\\d-a]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[\\\\k<x>]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"[\\\\d-a]?\\\\^(?<x>(?=.\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\d\\\\0[^]\\\\b+|(?<x>(?<x>$\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?![^]^\\\\x*\\\\k<x>+(?:(\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"|[[\\\\d-a]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\8.(?=\\ud800??\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"+(?<!{2,}{01,2}|\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?:(?:a\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"]\\\\q(?<!\\\\x[a-z]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?!{01,2}\\\\\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"({foo}(\\\\x(?<x>{2,}{1}\\\\d)\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?!{,2}\\\\q](?!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\8$a\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"[[](\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<x>???\\\\0(-\\\\8(a\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(^?\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\d(?:*{2,1}{1}\\\\k<y>\\ud800$\\\\c\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"-{foo}\\\\B+*]^\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\q.$\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\x(?={1}\\\\x\\\\b$(?<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"((ab\\\\k<y>${2,1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\d\\\\0(?!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?![\\\\d-a]{foo}[[](?={2,1}[\\\\d-a]?\"",
+      "valid": false
+    },
+    {
+      "source_json": "\")+[a-z]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,}\\\\1$\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"a\\\\k<x>+\\\\+\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\x(?={foo}\\\\8(?![a-z]??\\\\0-\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{,2}+\\\\\\\\1(?<x>{2,})\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"*{01,2}{2,}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"$\\\\k<x>[\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{01,2}(?<!(?<x>{01,2}\\\\d\\\\d(?<x>a\\\\0\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<=[]\\\\0\\ud800(?<!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<={foo}(?!\\\\8\\\\0\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[^]\\\\\\ud800{,2}.\\\\{foo}\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"b+(?={2,}\\\\8.[]\\\\1(?<=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?!\\\\8\\\\8\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<!\\\\u\\\\x?[\\\\d-a]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"??+-{1}${01,2}(?<!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[a-z]?{1}(?:(?:\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?=+(?<=\\\\k<x>^\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\k<y>\\\\[][\\\\q\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[\\\\d-a](?=\\ud800{1}{1}\\\\]{,2}[\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{1}[]?][^]\\\\x(?<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\c\\\\ca\\\\x]{foo}\\\\d\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\?{,2}+*\\\\x.]^\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\ud800(?<x>a\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"b|(?<x>.*\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{1}{2,}{2,1}[a-z](?=[^]??\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"b(?:b.\\\\k<y>[{2,1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(\\ud800(?<=\\\\b*\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\Bb\\\\q[[^]${foo}\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"[]\\\\B??[a-z]\\ud800|\\\\k<x>[a-z]\\\\1\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\x\\\\b[\\\\b??\\\\k<y>\\\\q.\\\\k<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(\\\\|\\\\k<x>\\\\0a(?=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{foo}\\\\0\\\\k<x>\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"]\\\\1)\\\\u\\\\k<x>*^{2,1}{2,1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"-(?<!{1}[a-z]\\\\k<y>^\\\\k<y>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{1}\\\\u\\\\b\\\\c(?<!(?<x>*(?<=?\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\c\\\\d?^{01,2}*|^(?:\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\c(?=.(?<x>{,2}.+\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"+\\\\0]\\\\u\\\\\\\\8[\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?!{2,1}(?:\\\\0+[\\\\d-a](?<=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"](?!(?=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\x\\ud800?[^]$\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"[^]\\\\q(?!{foo}(?<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"a[]?+{2,}\\\\u{1}\\\\*\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[{,2}+|+\\\\0\\\\1\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\1\\\\0(?<![a-z]\\\\{2,}[^]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"-((*+\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\k<y>?[]\\\\u\\\\b\\\\0??\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"[]+\\\\B$\\\\x\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"{2,}\\\\c\\\\b\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"b[]^[\\\\d-a]\\\\1\\\\cb\\\\0(?<!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<=]{2,1}\\\\1{1}]\\ud800\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<=\\\\8???\\\\k<y>\\\\q[\\\\d-a]{2,}*\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{,2}{2,1}[\\\\d-a]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[^])(?<=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{foo}|[a-z](\\\\\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"b{1}\\\\x.\\\\1\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\k<x>-()\\\\8)\\\\\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\xa*{01,2}(?:{01,2}[^]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<x>[\\\\d-a]\\\\8^..[^]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"]+{1}[^]){01,2}\\\\c{foo}]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\x\\\\k<y>b[\\\\d[[\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{1}b\\\\8[^]]\\\\x|\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"a[]{2,}\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\k<y>\\ud800[a-z](?<x>?\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[(?:\\\\c[a-z]{01,2}\"",
+      "valid": true
+    },
+    {
+      "source_json": "\".\\\\k<y>(?<=[^][\\\\d-a](?=\\\\B\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\8a\\\\q{foo}{01,2}\\\\q[]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"*{,2}\\\\k<y>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"+){2,})|\"",
+      "valid": false
+    },
+    {
+      "source_json": "\")]{2,}??{1}{foo}\\\\8\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\u??\\\\B[])b\\\\0\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\u(?<!\\\\8(?:[^]]\\\\\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[\\\\d-a](?<x>[^]\\\\B[a-z]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{,2}\\\\c)[\\\\d-a]\\\\B(*\\\\b^\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\d.{1}\\\\(?<=\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\8*[](?:\\\\u\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\b){1}\\\\b{1}[a-z](?<x>(?=\\\\x\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"-(?<!$??[\\\\d-a]+[]\\\\k<y>(?=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?=\\\\B\\\\\\\\1a(?<x>\\\\1\\\\q\\\\c\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"a\\\\q[\\\\\\\\b(?<!(a[\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[\\\\d-a](?![]{foo}({foo}.\"",
+      "valid": false
+    },
+    {
+      "source_json": "\".(?=\\\\k<y>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\x?(?=\\\\b\\\\B)\\\\8([^]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\8\\\\q]\\\\0{2,}^|+?\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,}\\\\k<y>{2,}b^\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"*(?=\\\\0$b*{2,}[^]{2,1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"-]\\\\q\\\\0{2,}???\\\\8|\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\k<y>\\\\q[a-z]|\\\\b{,2}\\\\b\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"+(?:|\\\\\\\\k<x>$*.\\\\u\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,}\\\\k<y>*[.b[a-z]\\\\8[\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?=\\\\\\\\{,2}\\\\k<y>(?=(?!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\k<y>{1}(?!{2,1}{2,}{01,2}|(?<x>b\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[]\\\\da\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"$\\\\1{1}\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"^??{2,}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"b(?<!\\\\d[\\\\d-a]\\\\b\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<x>(?:a?(?<![^]{foo}\\\\q+\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"$(?:\\\\Bb\\\\q(?<!\\\\c\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<x>(?<x>{1}\\\\B\\\\B??\\\\d{2,1}?\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[^]\\\\q{2,}\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"{,2}\\\\{1}\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"(?<=\\\\k<y>\\ud800\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[]\\\\0^{2,}{foo}\\\\c|\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"+-??\\\\b$\\\\x?]\\\\k<y>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"b*(?!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\B\\\\0[a-z]?[^]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\k<x>\\\\1{2,}-{2,1}??(?<x>\\\\1\\\\k<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"b{2,}?[\\\\d-a]??\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\-\\\\0\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"{foo}(?:\\\\B\\\\k<y>{,2}(*[]?\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"|[?{,2}\\\\k<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\")\\\\b{2,1}\\\\1(?!)??\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?!\\\\k<x>\\\\d{foo}\\\\\\\\B??\\\\q\\ud800\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[][a-z](?!\\\\1\\\\k<x>\\\\k<x>\\\\c\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\1(?:??(?!(\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{01,2}[\\\\d-a]*\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\(?<![^][^]\\\\q(?<=(?<x>(?:\\\\d\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"*{2,1}a*-$[\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"*{01,2}{1}(?<=(?<=\\\\u(\"",
+      "valid": false
+    },
+    {
+      "source_json": "\")ba.\\\\0\\\\k<y>\\\\B\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"]([\\\\1\\\\u[a-z]\\\\1\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\x-{1}{2,1}b\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\(\\\\c\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"?${01,2}\\\\k<x>\\\\q\\\\B\\\\1[a-z]\\\\c\"",
+      "valid": false
+    },
+    {
+      "source_json": "\")]\\\\k<x>+\\\\0\\\\1)(?=(?<!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{,2}[^]\\\\k<x>]$(?:*)\\\\d\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{1}--\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"?(?:\\\\B|\\\\x\\\\x\\ud800\\\\u\\\\8\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<![\\\\d-a][\\\\d-a](?<!\\ud800\\\\k<y>[a-z]\\\\k<x>[^]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\8\\\\u\\\\b{01,2}).[\\\\d-a]{1}*\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"?(?:[^]\\\\c)\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{01,2}?(?<=[\\\\d-a](?<!(?=?\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"a\\\\c\\\\k<x>(?:{foo}\\\\B\\\\b{foo}??\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<x>\\ud800\\ud800[a-z]\\\\d\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"*(?!\\\\0(?<!\\\\x{1}(?<x>(?<={2,}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?=+-\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,1}(?=.?\\\\k<y>.(?<!a{1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"+(?!\\\\c{,2}^\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\0a\\\\k<y>\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"[^]\\\\u\\\\0-$\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"{foo}-.\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\[]\\\\x\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\k<y>\\\\8^\\\\d(?!|\\\\B{foo}\\\\k<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"?((?:(?!*\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\0\\\\c{1}^({2,}[^]{foo}$\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"().(?![\\\\d-a]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\u+b(?=[a-z]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?=*.[]\\\\d){,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\B\\\\x(?=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"b[^]](?!\\ud800\\\\0\\\\b\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"^*\\ud800(?<x>\\\\x[]\\\\0(]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\k<y>\\\\8+[^]?(+\"",
+      "valid": false
+    },
+    {
+      "source_json": "\")*(?:\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{1}{01,2}[][^][\\\\d-a]\\\\b\\\\u\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[*b\\\\B[(?=[^]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"(?<x>\\\\8[]*(?!${2,}?]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{foo}(\\\\x{,2}{2,1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<=\\\\\\\\8\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,1}\\\\8([\\\\d-a](?![a-z](?<!??|\"",
+      "valid": false
+    },
+    {
+      "source_json": "\".+\\\\1{2,}a\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\ud800{,2}{01,2}\\\\k<y>?\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"[][a-z][\\\\d-a]{foo}.$\\\\q\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"{2,}\\\\B\\\\q\\\\({2,}a\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\x(?=??\\\\0|[a-z]\\\\B\\ud800(?<!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\0(?=(?:[]-\\\\u\\\\u\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\B\\\\x|\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"?\\\\c[\\\\d-a][^]|\\\\k<y>*??{,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"^.[^]{1}\\\\1-(?<x>{1}(?<!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,1}(\\\\0a\\\\k<y>{01,2}[a-z]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"${,2}[\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"a(?!\\\\8$\\\\0)\\\\k<x>\\\\B{2,1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"a$\\\\d{01,2}\\\\q\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"[.(\\\\8(\\\\k<x>?\\ud800(?<=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"b\\\\1^{2,1}\\\\x[]\\\\d\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\ud800b??\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\b\\\\b(?![^](?<!{1})\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,}[]\\\\B\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\k<x>\\\\d\\\\d\\\\B\\\\b+\\\\k<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?:\\ud800?-{foo}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[]$]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"]\\\\B(?={foo}(?<x>\\\\{01,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"|\\\\qb[^]\\\\c\\\\k<x>](?=(\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\b[[]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"b?\\\\1\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"[\\\\d\\\\k<y>[\\\\x+\\\\([a-z]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"[^]-\\\\\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"|[$\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,}[](?=[a-z][a-z]\\\\c{2,}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"$(?<x>**\\\\c(?:(?=(?<x>|\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,1}*?\\\\(?!(?<={01,2}\\\\{,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"+{foo}-\\ud800{,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\8(?:{foo}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\ud800-(?<x>(?<x>[a-z][{2,}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\x??\\\\q\\\\8[]{foo})\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\(?=$[]{foo}\\\\k<y>(?:\\\\1)\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"b{2,}??\\\\x\\\\0\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[a-z]\\ud800\\ud800(?<={2,}\\\\u+\\ud800??\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"??)?(\\\\B\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\k<x>[](?={2,}](?<!{2,1})b\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<=a[^]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\(?:\\\\0\\\\c\\\\B\\\\ub\\\\k<y>\\\\c\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"(?=\\\\d\\\\k<x>b*)\\\\1??$\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"{2,}{foo}]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"?\\\\q(?<!.a(?<x>.\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\u-){2,}\\\\b[{01,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{01,2}a{foo}*\\\\{2,}\\\\k<x>??\\\\x\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"*{01,2}\\\\k<y>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?!\\\\b{foo}b*\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"$-{2,1}^(?:\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"+(?<={2,1}$\\\\0)\\\\8\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\0a{1}\\ud800\\\\c\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"||\\\\u{01,2}[]]\\\\B-?\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"*{2,1}]\\\\d$b|\\\\b^\"",
+      "valid": false
+    },
+    {
+      "source_json": "\".{2,1}[(-\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{01,2}[a-z]\\\\1[^](?<!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\b[^](?{2,}\\\\k<x>*[^](?!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<=^a\\\\B+\\\\0a(?:*\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\d\\\\k<x>[][]{foo}\\\\B\\\\8\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"*-\\\\d]\\ud800\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\k<x>(?!??\\\\b(?<!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"$\\\\x|{2,1}-(?<!\\\\d\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"]\\\\c{2,1}[)\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"-(?<=\\\\B[a-z]](?:\\\\k<x>*)\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\B\\\\q\\\\B\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\8$\\\\u\\ud800+(?=\\\\0\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"+{2,1}((?=b\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"]\\\\u\\\\q\\\\\\\\0\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"(?=(?<=\\\\8(?=?[a-z]{1}(?<x>(?<!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\B\\ud800\\ud800a[]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"(?:??]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"?????\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,1}(?=.|(?<=-ba\\\\k<y>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<x>\\\\1|\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\0\\\\{1}\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"(?=[^](?![\\ud800\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<!(?={,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[\\\\d-a]\\\\d\\\\x\\\\1\\\\q{2,1}[a-z]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\q\\\\0{2,1}\\\\c{1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"??([$[].[a-z]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"?(?=.+$\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{01,2}(?!\\\\k<x>\\\\b\\\\d[\\\\d-a]+\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\k<x>\\\\8[^](?<!(?!+-\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\1\\\\q(?<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\".(?<x>\\\\q\\ud800\\\\c\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{01,2}??a\\\\Ba\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<!^\\\\0\\\\c|\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"*\\ud800\\\\0\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[]\\\\c(?!(?<=\\\\8\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[[^]{01,2}\\\\B(?=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<=[](?<=?(?=$(?=(?=\\\\B\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<x>\\\\b[^]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?!\\\\q{2,1}{foo}\\\\0(?={01,2}(?!\\\\b\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\-\\\\b{01,2}{2,}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\k<y>\\\\q[]??|\\\\1(\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\q\\\\u]\\\\k<x>\\\\k<x>\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"+{1}??\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\q(-\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\u-\\\\0\\\\B(?<!??(\\\\x[^]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\d(?=(?!\\\\B\\\\k<y>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"a(?<x>[\\\\x](?<x>\\\\q\\\\b(?=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,}^{1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\1(?<=\\\\d\\\\u^|{2,1}\\\\1$\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\[^]\\\\b)(?!^{2,1}\\\\1{01,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\k<x>(?<=|{foo}^^{2,}\\\\c.\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\1\\\\B*\\\\k<y>(*b\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<x>\\\\b(?:(?=\\\\1\\\\Ba*\\\\q\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\8(?=[\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?=\\\\x\\\\q{,2}b\\\\8$(\\\\u\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"*\\\\d\\\\d\\\\0\\\\b(?!]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{1}a)(?:{foo}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{foo}\\\\1{foo}b??\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"+{2,1}\\ud800|(?<x>^[^]*]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[\\\\d-a]\\\\B{2,}[\\\\d-a]\\\\u[a-z]{2,}\\\\d[\\\\d-a]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,1}+\\\\8\\\\8[]?(?<x>[^][^]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\k<x>??(?<!\\\\c\\\\d)\\\\q\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\B[{foo}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?=-))b\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\B[a-z]{,2}+\\\\u\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"a\\\\u(?!\\\\q\\\\x[a-z][]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"*\\\\8[a-z]^[\\\\k<x>[a-z]\\\\x)\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{foo}[\\\\d-a]{01,2}\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"b\\\\x)*\\\\Bba(?<=(?<!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\B(?!{01,2}\\\\B|{1}\\\\c\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"?[]\\\\0\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\1|\\\\q{01,2}[[\\\\d-a](?<x>[(?!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?![]{2,}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\c\\ud800\\\\u??\\\\0\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"{1}.]\\\\u\\\\8{01,2}[\\\\d-a]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\u\\\\?){1}(?=(\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\ud800{foo}b+^\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"-[]\\\\c\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"[{,2}[\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\u(?<!*\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\B|[a-z]\\\\Bb\\\\q^\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"{01,2}$^\\\\k<y>{foo}(?:{2,1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\0(?<=b(?<=)[^]\\\\x\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<x>{1}{1}(?!\\\\u\"",
+      "valid": false
+    },
+    {
+      "source_json": "\".[\\\\d-a][\\\\d|\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\q?(?<=[\\\\d-a]\\\\b??[^]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"]a\\\\b)[]\\\\B[^][^]$\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\8{1}{01,2}(?=(\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"+\\\\8|b(?=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{01,2}b[a-z]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,}+[]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"*\\\\8\\\\u\\\\d\\\\B\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\0\\\\B|(?!b{2,}(?=\\\\1(?<=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\q(?<!{1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\q\\\\\\ud800\\\\8\\\\x\\\\\\\\\"",
+      "valid": true
+    },
+    {
+      "source_json": "\")[\\\\d-a]{2,}b{1}|{2,1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"*\\\\u\\\\k<x>[*\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{foo}\\\\\\\\8\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"[|^[)\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\0{foo}.?(?<!\\\\1+\\\\0?\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<!\\\\0{01,2}\\\\u\\ud800??\\ud800\\\\8[^]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{1}\\ud800b|\\\\x+(?<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<x>?^(?:\\ud800\\\\d{,2}{1}*\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\B]$\\\\ua(?:\\\\b(?<=\\\\q\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"$\\\\1*\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"{,2}\\\\k<y>\\\\0\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"*\\\\d[\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[]\\\\u\\\\Bb\\\\k<y>][(?<=\\\\k<y>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\q\\\\q?(?<!(?<!(?![^]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\0\\\\k<x>\\\\\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\q\\\\u\\\\{foo}\\ud800\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"{,2}[]{2,1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"a\\\\1.*a\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"{01,2}\\\\0\\\\\\\\B{foo}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\k<y>[a-z]\\\\u(?:{01,2}-(?=\\\\c\\\\0\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\B-{,2}((?<=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<=[\\\\d-a]\\\\8{2,1}]][\\\\d-a](?<=*\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"^\\\\k<x>\\\\q\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"(\\ud800^(?<=\\\\x-((?<x>\\\\8\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\ud800[^][\\\\d-a]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"a(?<x>${foo}\\\\k<x>(?<=(?<=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[a\\\\q\\\\ca{foo}.\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?=a([^]\\\\1[a-z](?=\\\\.\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[\\\\d-a](?<!(?!\\\\k<y>[]b{2,}b$\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<=\\\\d\\\\u\\\\q\\\\0+\\\\1].\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,})(?=\\\\k<y>\\\\u\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\b(?=[](?=\\\\8\\\\k<x>\\\\0*[\\\\d-a]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[^]\\\\k<x>[]$*-[({1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<x>b{,2}(?:{foo}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\c??\\\\k<x>\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\0*{2,1}][a-z]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"]{01,2}(?=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"?\\\\c$[a-z](?<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<!\\\\c\\\\c(\\\\8{2,}\\\\k<y>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[\\\\d-a]{2,}[](?<x>(?!\\\\x*??^\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"+\\\\x[[a-z]\\\\k<x>\\\\x\\\\0\\\\8{,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"*[\\\\d-a](?<!?\\\\x\\ud800$\\\\0{foo}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{1}\\\\q\\\\u\\\\8??[]\\\\q\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"^^)\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\ud800[]\\\\u({1}[][]\\\\B{foo}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{1}\\\\u.\\\\(?!{2,}][\\\\d-a](?<=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"b[a-z]\\\\d{,2}\\\\(?=\\\\0\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"-((?=(?<!]\\\\b^\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?=\\\\1(?<x>(?<x>(\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"${01,2}\\\\0\\\\ca\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"*b\\\\c\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<x>*\\\\c\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"${2,}\\\\8a\\\\x{2,1})|(\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\u[\\\\d-a]\\\\c\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\ud800$*\"",
+      "valid": false
+    },
+    {
+      "source_json": "\")\\\\c{,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\k<x>^?(?:{2,}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{01,2}\\\\b\\\\q\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\x(?={,2}??$\\\\c{foo}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"^(?=){foo}.(?=$\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"-^*-[]a(?<!\\\\b\\\\0\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?!\\\\q*\\\\u{01,2}[\\\\d-a][\\\\d-a]*{,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?!\\\\1\\\\\\\\d\\\\8\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\c\\\\k<y>{1}-(?<![\\\\d-a]\\\\k<y>(?:\\\\q\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\c\\\\b\\\\b??\\\\1\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\1\\\\c{1}{2,}\\\\1??\\\\1\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<x>\\\\c\\\\k<y>{1}\\\\k<y>{2,}.\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\B\\\\b(?<=(?<!\\ud800\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{foo}[\\\\d-a]{1}\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\q?(?!*(?<=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"+{2,}[+{2,1}[^]\\\\x\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"*{01,2}.\\\\B$\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\k<y>(?<!||^\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{1}\\\\k<x>\\ud800\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"*\\\\k<x>{2,}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<=[\\\\k<x>+^[^].-(?=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"-[(?<=\\\\8b\\\\u[]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"-a(-\\\\8\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"+(?=b\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\0\\\\8{1}(?<x>^\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\q\\\\8\\\\u\\\\B?\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\d(?:(?<=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{foo}\\\\q|\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\d\\\\b[\\\\d-a]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"*{1}^\\\\B??\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[^]^\\\\1${01,2}(?<x>\\ud800+(\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?!\\\\d\\ud800\\\\c[\\\\d-a][\\\\cb\\\\0\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{01,2}(?:(?!\\\\c*[]\\\\1*(?=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"b(?<=??\\\\B^((?<x>(?<=\\\\k<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{01,2}^\\\\u[^]|\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{,2}*)(?!\\\\\\\\u.\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?=\\\\0\\\\u*\\\\Bb\\\\q\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[\\\\d-a]\\\\x(?<x>[][]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[a-z]\\\\u(?<x>(?:\\\\0\\ud800[]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[\\\\d-a]\\ud800(?<!((?<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{1}\\\\b\\\\B\\\\b\\ud800\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"){2,1})\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[]-\\\\0\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"[^][][]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\k<x>{,2}{foo}[\\\\d-a]\\\\B\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\0a]a+(?<!-\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"+b](?<x>?(?<x>.{01,2}\\\\x\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"b(?<!\\\\k<y>.{1}a(\\\\B\\\\8\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"?+\\\\q\\\\d[\\\\d-a]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\]b\\\\8(?<=.+\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<!{2,}?\\\\b*\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\q?{1}[\\\\d-a]\\\\k<y>(?:b[a-z]{2,1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\k<x>\\\\u\\\\1\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"*][a-z]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?!.(?=\\\\q{1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"^^(?<!\\ud800{2,}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[a-z](?<={2,1}\\\\B.\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<=a\\\\B(?!+\\\\k<y>-\\\\d[]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"|\\ud800[]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\".\\\\0(?=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"?\\\\8[\\\\d-a]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?!{,2}|\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\u\\\\8(?=\\\\u{2,}\\\\k<y>\\\\1(?<x>\\\\b\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<!\\\\b(?=*\\\\b\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,})\\\\k<y>(?!??(?:\\\\B\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"??(?<!{01,2}{,2}\\\\1\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\[b](?<x>(?<x>[\\\\d-a](?=[\\\\d-a]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\q\\\\d\\\\c[a-z](\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?:\\\\B{01,2}{2,}{1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\b{2,}\\ud800\\\\\\\\c\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"*\\\\B((?<=\\\\b{2,1}*\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\8\\\\b(?<![^]\\\\q\\\\1\\\\u\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{1}(+^\\\\u^\\\\0\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[\\\\d-a][a-z][\\\\d-a]{01,2}\\\\x\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"{01,2}b+\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{foo}^(?<x>{2,1}?[](?:\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?=\\\\u$[])(]^{2,}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\1{2,1}(\\\\c\\\\8][\\\\d-a]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\c\\\\{foo}{2,}\\\\{foo}][b\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?=\\\\0(\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{foo}(?=\\\\u(?<!*|\\\\c\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,1}*(?<x>-\\\\x(?=*\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,1}\\\\u(?={01,2}.[\\\\d-a][[]+\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\x\\\\B\\ud800\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"{2,}{2,}(?<=\\\\k<x>{01,2}\\\\d(?=|[a-z]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\0\\\\b\\\\{foo}[a-z]{2,}\\\\q[]{2,}\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"${2,}\\\\1\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<x>(?!(?<=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"]\\ud800b\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"[^][\\\\q{foo}){2,1}*|??\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{,2}-{01,2}{2,1}\\\\c{2,}\\\\x\\\\1-\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"a-(?<!\\\\d\\ud800\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<=[\\\\d-a]|\\\\(?<=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\8(?!\\\\k<x>{01,2}\\\\d\\\\0(?<!(?!\\\\0\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"|+(?<={1}(\\\\d{01,2}\\\\1?\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<!??\\\\x\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{foo}\\\\1\\\\8*(?<=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\b[\\\\d-a])|\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"*?(?<!\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\b({,2}+\\\\8\\\\0a\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?:\\\\8[a-z]*(?=\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"+\\\\k<y>{,2}[.{2,}$\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\b??b+{01,2}{2,}\\\\k<y>{2,}^\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\c{1}.{2,1}(?<x>[\\\\d-a]b\"",
+      "valid": false
+    },
+    {
+      "source_json": "\".(?!\\\\1{2,1}{2,1}\\\\[\\\\d-a]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[]\\\\8\\\\B\\\\[^]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"(?<x>\\\\qbb|\\\\1$\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[a-z]\\\\k<x>\\\\)\\\\k<y>[(?<![^]{2,}\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"*[][a-z]\\\\x\\ud800{,2}a+?\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,1}[](?<=(?=[\\\\k<x>\\\\u\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{2,}\\\\1(?<x>\\\\b\\\\x\\\\c{01,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\")*??]]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"([a-z]\\\\ba*\\\\u{1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\{foo}(?=\\\\k<x>\\\\b\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\d{2,1}($\\\\c\\\\B${1}|\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\q{1}\\ud800\\\\8[\\\\d-a]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"??\\\\8{01,2}\\\\8(?:\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<=a\\\\q$+\\\\x^{2,1}{2,}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"{01,2}-(?<x>\\\\u{2,1}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\Bb?\\\\0\\\\8\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\c(?<!^\\\\d\\\\d(?:\\\\x{,2}$\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"|\\\\k<x>(?:\\\\x{1}a\\\\k<x>\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"]$\\\\\\\\x{1}){01,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<=|{1}\\\\q[^][]{foo}(?:^\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"[^][a-z]\\\\b+|\\\\b[a-z]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\b\\\\x[\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\u\\ud800\\\\0{1}\\\\c\\\\1{01,2})]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"(?<x>{1}[]\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\ud800?.\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"{2,}(?<x>\\\\b\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"({01,2}\\\\\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"${2,1}?$)\"",
+      "valid": false
+    },
+    {
+      "source_json": "\".\\ud800\\\\1\\\\B(?<!a{,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\u\\\\k<x>+\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"|(-\\\\k<y>\\ud800)\\\\1\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"[^]{01,2}${foo}\\\\q\\\\k<x>+{01,2}\\\\b\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\)\\\\c\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"(?<x>(?!\\\\k<y>[a-z]|\\ud800*(?<={01,2}\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\k<x>{1}\\\\d^[^][]{2,}\\ud800[a-z]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\k<x>*\\\\k<x>\\\\u+\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\ud800{01,2}???.\"",
+      "valid": false
+    },
+    {
+      "source_json": "\"\\\\d][a-z]\"",
+      "valid": true
+    },
+    {
+      "source_json": "\"\\\\u(?<=(?=\\\\ba{01,2}\\\\0(?=?\"",
+      "valid": false
+    }
+  ]
+}

@@ -150,6 +150,40 @@ impl Supplied {
             collected.push(resource);
         }
         let resources: Arc<[ProjectedResource]> = collected.into();
+        Self::indexed(
+            resources,
+            maximum_nodes,
+            maximum_identity,
+            control,
+            &crate::dialect::Profile::from_uri,
+        )
+    }
+    /// Build document-dependent indexes without changing this immutable input
+    /// set or publishing them to its standard-only cache. The resolver must
+    /// contain only profiles with completed carrier-stability certificates.
+    pub(crate) fn with_profiles(
+        &self,
+        maximum_nodes: usize,
+        maximum_identity: usize,
+        control: &dyn Control,
+        resolve_profile: &dyn Fn(&str) -> Option<crate::dialect::Profile>,
+    ) -> Result<Self, Failure> {
+        Self::indexed(
+            self.resources.clone(),
+            maximum_nodes,
+            maximum_identity,
+            control,
+            resolve_profile,
+        )
+    }
+    fn indexed(
+        resources: Arc<[ProjectedResource]>,
+        maximum_nodes: usize,
+        maximum_identity: usize,
+        control: &dyn Control,
+        resolve_profile: &dyn Fn(&str) -> Option<crate::dialect::Profile>,
+    ) -> Result<Self, Failure> {
+        control.check()?;
         // First walk only positions and integer length bounds. Expanding URI
         // bases in the ordinary association index is allowed only after every
         // source fits the cumulative budget.
@@ -157,10 +191,12 @@ impl Supplied {
         let mut remaining_nodes = maximum_nodes;
         let mut indexes = Vec::new();
         for resource in resources.iter() {
-            let index = schema_index::SchemaIndex::supplied_nodes_bounded(
+            let index = schema_index::SchemaIndex::supplied_profiled(
                 &resource.document,
+                None,
                 remaining_nodes,
                 control,
+                resolve_profile,
             )?;
             remaining_nodes -= index.nodes.len();
             let bytes = crate::identity_budget::measure(
@@ -172,9 +208,16 @@ impl Supplied {
             policy.identity_bytes += bytes;
             indexes.push(index);
         }
+        crate::preparation::identities(policy.identity_bytes, control)?;
         for (source, resource) in resources.iter().enumerate() {
             control.check()?;
-            let index = schema_index::SchemaIndex::supplied(&resource.document, &resource.uri);
+            let index = schema_index::SchemaIndex::supplied_profiled(
+                &resource.document,
+                Some(&resource.uri),
+                maximum_nodes,
+                control,
+                resolve_profile,
+            )?;
             let mut add = |name: &str, node: usize| {
                 if let Some(name) = canonical_uri(name) {
                     if standards().contains_resource(&name) {
@@ -212,5 +255,124 @@ impl std::fmt::Debug for InputPolicy {
 impl std::fmt::Debug for Supplied {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Supplied").finish_non_exhaustive()
+    }
+}
+
+#[cfg(test)]
+mod profile_tests {
+    use super::*;
+    use crate::dialect::Profile;
+
+    fn profile(applicator: bool) -> Profile {
+        let extra = if applicator {
+            r#", "https://json-schema.org/draft/2020-12/vocab/applicator":false"#
+        } else {
+            ""
+        };
+        let value = JsonValue::parse(format!(
+            r#"{{"https://json-schema.org/draft/2020-12/vocab/core":true{extra}}}"#
+        ))
+        .unwrap();
+        Profile::from_vocabulary(Some(value.view())).unwrap()
+    }
+    fn supplied() -> Supplied {
+        Supplied::new([ProjectedResource {
+            uri: "https://profiles.test/schema".into(),
+            document: JsonValue::parse(r#"{"$schema":"https://profiles.test/meta","properties":{"x":{"$id":"https://profiles.test/child","type":"integer"}}}"#).unwrap(),
+        }]).unwrap()
+    }
+
+    #[test]
+    fn completed_profiles_change_actual_inventory_without_mutating_shared_inputs() {
+        let original = supplied();
+        let clone = original.clone();
+        let build = |applicator| {
+            original
+                .with_profiles(100, 4096, &|| false, &|uri| {
+                    if uri == "https://profiles.test/meta" {
+                        Some(profile(applicator))
+                    } else {
+                        Profile::from_uri(uri)
+                    }
+                })
+                .unwrap()
+        };
+        let core_only = build(false);
+        let active = build(true);
+        assert!(
+            !core_only
+                .policy
+                .names
+                .contains_key("https://profiles.test/child")
+        );
+        assert!(
+            active
+                .policy
+                .names
+                .contains_key("https://profiles.test/child")
+        );
+        assert!(
+            !original
+                .policy
+                .names
+                .contains_key("https://profiles.test/child")
+        );
+        assert!(
+            !clone
+                .policy
+                .names
+                .contains_key("https://profiles.test/child")
+        );
+        assert_eq!(
+            core_only.nodes_bounded(100, &|| false).unwrap()[0]
+                .nodes
+                .len(),
+            1
+        );
+        assert_eq!(
+            active.nodes_bounded(100, &|| false).unwrap()[0].nodes.len(),
+            2
+        );
+        assert_eq!(
+            original.nodes_bounded(100, &|| false).unwrap()[0]
+                .nodes
+                .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn profile_inventory_refusal_does_not_publish_a_partial_input_policy() {
+        let original = supplied();
+        let resolve = |uri: &str| {
+            if uri == "https://profiles.test/meta" {
+                Some(profile(true))
+            } else {
+                Profile::from_uri(uri)
+            }
+        };
+        let refusal = original
+            .with_profiles(1, 4096, &|| false, &resolve)
+            .unwrap_err();
+        assert_eq!(refusal.reason, FailureReason::LimitExceeded);
+        let cancellation = original
+            .with_profiles(100, 4096, &|| true, &resolve)
+            .unwrap_err();
+        assert_eq!(cancellation.reason, FailureReason::Cancelled);
+        assert_eq!(
+            original.nodes_bounded(100, &|| false).unwrap()[0]
+                .nodes
+                .len(),
+            1
+        );
+        let retry = original
+            .with_profiles(100, 4096, &|| false, &resolve)
+            .unwrap();
+        assert!(
+            retry
+                .policy
+                .names
+                .contains_key("https://profiles.test/child")
+        );
     }
 }

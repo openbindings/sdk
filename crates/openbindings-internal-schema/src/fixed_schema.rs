@@ -63,6 +63,8 @@ const MAX_EXPANDED_POINTER_BYTES: usize = 8 * 1024 * 1024;
 type Compiled = Result<Validator<FlatJson>, String>;
 static DOCUMENT: OnceLock<Compiled> = OnceLock::new();
 static META: OnceLock<Compiled> = OnceLock::new();
+static DRAFT7: OnceLock<Compiled> = OnceLock::new();
+static DRAFT2019: OnceLock<Compiled> = OnceLock::new();
 
 /// An exact comparison of a number with a fixed schema's own operand. The fixed
 /// schemas assert only the four comparisons (a test checks every position), and
@@ -190,8 +192,6 @@ pub fn dialect_validity(
     dialect: crate::dialect::Dialect,
 ) -> Result<bool, String> {
     use crate::dialect::Dialect;
-    static DRAFT7: OnceLock<Compiled> = OnceLock::new();
-    static DRAFT2019: OnceLock<Compiled> = OnceLock::new();
     if dialect.reference_object(value.view()) {
         return Ok(value.get("$ref").is_some_and(|r| r.as_str().is_some()));
     }
@@ -264,7 +264,45 @@ pub fn dialect_validity(
     Ok(backend::fixed_strings(|| valid(compiled, value.view())))
 }
 
+/// Fixed syntax validators still parse exact original operands and may lazily
+/// initialize their fixed compiler. Reserve both costs before entering either
+/// operation; a warm immutable compiler does not repeat its startup charge.
+pub fn dialect_validity_bounded(
+    value: &JsonValue,
+    dialect: crate::dialect::Dialect,
+    control: &dyn crate::Control,
+) -> Result<bool, crate::Failure> {
+    use crate::dialect::Dialect;
+    control.check()?;
+    let (cold, allocation, work) = match dialect {
+        Dialect::Draft7 => (DRAFT7.get().is_none(), 1024 * 1024, 100_000),
+        Dialect::Draft201909 => (DRAFT2019.get().is_none(), 8 * 1024 * 1024, 1_000_000),
+        Dialect::Draft202012 => (META.get().is_none(), 16 * 1024 * 1024, 1_000_000),
+    };
+    if cold {
+        control.charge_allocation(allocation)?;
+        control.charge_work(work)?;
+    }
+    let bytes = value.text().len();
+    control.charge_allocation(bytes.saturating_mul(64).saturating_add(4096))?;
+    control.charge_work(bytes.saturating_mul(64).saturating_add(1))?;
+    let result = dialect_validity(value, dialect);
+    control.check()?;
+    result.map_err(|_| {
+        crate::Failure::new(
+            crate::FailureReason::EvaluatorFailure,
+            "fixed-meta-schema-compilation",
+            "a fixed syntax validator could not be constructed",
+        )
+    })
+}
+
 pub(crate) const DRAFT7_FILES: [&str; 1] = [include_str!("../schemas/draft7.json")];
+// Supplemental external profile support. The pinned OBI dialect remains the
+// exact eight-file META_FILES inventory and keeps format annotation policy.
+pub(crate) const FORMAT_ASSERTION_FILES: [&str; 1] = [include_str!(
+    "../schemas/draft2020-12/meta/format-assertion.json"
+)];
 pub(crate) const DRAFT2019_FILES: [&str; 7] = [
     include_str!("../schemas/draft2019-09/schema.json"),
     include_str!("../schemas/draft2019-09/meta/core.json"),

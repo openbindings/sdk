@@ -13,12 +13,21 @@ pub struct PreparationLimits {
     /// are charged before dot removal, without materializing expanded strings.
     /// Several indexes retain spellings, so this is not a resident-memory limit.
     pub max_identity_bytes: usize,
+    /// Aggregate construction and nested meta-validation work. A cache hit
+    /// charges its actual checks rather than replaying work already completed.
+    pub max_work_units: usize,
+    /// Monotone conservative allocation reservations for one preparation,
+    /// including temporary and failed work. This is not resident memory.
+    pub max_allocation_bytes: usize,
 }
 impl Default for PreparationLimits {
     fn default() -> Self {
         Self {
             max_schema_nodes: 100_000,
             max_identity_bytes: openbindings_internal_schema::DEFAULT_IDENTITY_BYTES,
+            max_work_units: openbindings_internal_schema::preparation::DEFAULT_WORK_UNITS,
+            max_allocation_bytes:
+                openbindings_internal_schema::preparation::DEFAULT_ALLOCATION_BYTES,
         }
     }
 }

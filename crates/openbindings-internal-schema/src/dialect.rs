@@ -1,6 +1,9 @@
 //! Interpretation of original external schema resources. Contained OBI schema
 //! positions retain their separate, fixed 2020-12 admission walk.
+pub(crate) mod certificate;
+mod profile;
 use crate::{JsonKind, JsonRef, schema_index::SchemaSelector};
+pub use profile::{Profile, ProfileConstructionFailure, ProfileFailure};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Dialect {
@@ -79,24 +82,6 @@ impl Dialect {
             }
             _ => return None,
         })
-    }
-
-    pub fn each_child<'a>(self, schema: JsonRef<'a>, mut visit: impl FnMut(JsonRef<'a>)) {
-        if self.reference_object(schema) {
-            return;
-        }
-        if let Some(fields) = schema.members() {
-            for field in fields {
-                let Some(selector) = field
-                    .name
-                    .as_str()
-                    .and_then(|k| self.selector(k, field.value))
-                else {
-                    continue;
-                };
-                crate::schema_index::selected_children(field.value, selector, &mut visit);
-            }
-        }
     }
 }
 

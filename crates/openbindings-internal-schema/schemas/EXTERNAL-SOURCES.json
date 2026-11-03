@@ -34,6 +34,11 @@
     "sha256": "7b761b3e121f0a0ca1ea2a0b8e2cc856bcf801604b8268d71bacaa202bc0c13b",
     "url": "https://raw.githubusercontent.com/json-schema-org/json-schema-spec/c8eb3d320f60eca7cfb18da25337a426ceb40eaa/schema.json"
   },
+  "draft2020-12/meta/format-assertion.json": {
+    "revision": "add836e705c9a07434c467b6b90946ba45258a73",
+    "sha256": "c52242b9a1bb786b26c3e82c7add428c31f9c96e575dce99e56ea5feaa6da20c",
+    "url": "https://raw.githubusercontent.com/json-schema-org/json-schema-spec/add836e705c9a07434c467b6b90946ba45258a73/meta/format-assertion.json"
+  },
   "draft7.json": {
     "revision": "20a3fee852db88519dcb3bb329b7a872ebad8953",
     "sha256": "692e1d165e47afcb5f11b2ce1c639635ffa834035d6ecb6bcf3087481dae8404",

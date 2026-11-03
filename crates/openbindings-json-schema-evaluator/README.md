@@ -74,9 +74,9 @@ components use conservative summaries; an unfinished recursive proof gives
 logic can still establish a result.
 
 The current implementation has open capability gaps for some complex recursive
-summaries and external dialect/vocabulary interpretation. Required migration
-fixtures for historical dialects remain failing until implemented. Finite passing
-suites do not establish complete JSON Schema support.
+summaries. The 1,546 required migration values pass, including standard external
+dialects and custom vocabulary/format cases. Finite passing suites do not
+establish complete JSON Schema support.
 
 ## Limits and cancellation
 
@@ -108,12 +108,13 @@ fn prepare_bounded(schema: &Schema, resources: &ExternalSchemas)
 | `total_pattern_memory` | 64 MiB | Matchers and their engine allowances |
 | `program_bytes` | 48 MiB | SDK program growth and semantic proof storage |
 
-`PreparationLimits` separately bounds the original schema environment. A local
+`PreparationLimits` bounds the original schema environment's footprint and the
+whole preparation attempt's work and conservative allocation reservations. A local
 undefined operation cannot bypass construction accounting: the semantic path
 walks known original references and applicators, counts resources and checks
 pattern budgets before becoming ready. Proof work, exact effect keys, annotations
-and decision-graph storage are charged, including retries after discovering a
-recursive component. Supported pattern matching borrows the input string;
+and decision-graph storage are charged, including custom meta-schema admission
+and retries after discovering a recursive component. Supported pattern matching borrows the input string;
 unknown matches reserve their exact text-key allowance before constructing it.
 
 These limits are not a process RSS guarantee and do not include caller-owned
@@ -140,8 +141,12 @@ Numbers are compared exactly, including large integers and exponents. Expensive
 numeric arithmetic can hit its explicit limit. JSON strings retain unpaired
 UTF-16 units; exact equality preserves them, while unsupported Unicode-text
 operations report their limitation. `format` is an annotation where its assertion
-is optional. An external resource's declared dialect is never silently read as
-2020-12.
+is optional. Required format assertion supports all 19 standard attributes;
+unknown required attributes refuse preparation. Its `regex` attribute checks
+ECMA-262 11th-edition no-flags syntax with Annex B, without executing a pattern.
+An external resource's declared dialect is never silently read as 2020-12.
+See [evaluator profiles and preparation](../../docs/schema-evaluators.md) for
+custom meta-schema admission and the remaining backend allocation gate.
 
 `evaluate` is the cheap check: failure has no problems and marks diagnostics
 incomplete. `explain` preserves the same result and reports available bounded

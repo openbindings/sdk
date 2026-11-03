@@ -38,9 +38,11 @@ pub fn measure(
     for (at, node) in index.nodes.iter().enumerate() {
         control.check()?;
         let value = index.value(node);
+        let profile = index.profile(at);
         if node.resource as usize == at + 1
             && let Some(id) = value.get("$id")
         {
+            control.charge_work(id.text().len().saturating_add(1))?;
             let parent = bases.get(&index.parent_resource(at)).copied().flatten();
             let length = match id.as_str().filter(|id| uri::valid(id)) {
                 Some(id) if uri::absolute(id) => Some(id.len()),
@@ -59,8 +61,11 @@ pub fn measure(
             }
             bases.insert(node.resource, length);
         }
-        if node.dialect == Some(crate::dialect::Dialect::Draft7)
-            && !node.dialect.unwrap().reference_object(value)
+        if profile
+            == Some(crate::dialect::Profile::standard(
+                crate::dialect::Dialect::Draft7,
+            ))
+            && !profile.unwrap().reference_object(value)
             && let Some(name) = value
                 .get("$id")
                 .and_then(|v| v.as_str())
@@ -74,10 +79,7 @@ pub fn measure(
                 if node.depth != 0 && node.resource as usize != at + 1 {
                     continue;
                 }
-            } else if !node
-                .dialect
-                .is_some_and(|d| d.active(keyword) && !d.reference_object(value))
-            {
+            } else if !profile.is_some_and(|d| d.active(keyword) && !d.reference_object(value)) {
                 continue;
             }
 

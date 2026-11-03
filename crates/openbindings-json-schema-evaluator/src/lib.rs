@@ -299,9 +299,31 @@ impl SchemaEvaluator for DefaultEvaluator {
         limits: &PreparationLimits,
         control: &dyn WorkControl,
     ) -> Result<Self::Validator, PreparationFailure> {
+        openbindings_internal_schema::preparation::Attempt::run(
+            limits.max_work_units,
+            limits.max_allocation_bytes,
+            &|| control.is_cancelled(),
+            |attempt| self.prepare_attempt(request, limits, control, attempt),
+        )
+        .map_err(PreparationFailure::from)?
+    }
+}
+impl DefaultEvaluator {
+    fn prepare_attempt(
+        &self,
+        request: EvaluationRequest<'_>,
+        limits: &PreparationLimits,
+        control: &dyn WorkControl,
+        attempt: &dyn openbindings_internal_schema::Control,
+    ) -> Result<DefaultValidator, PreparationFailure> {
+        use openbindings_internal_schema::preparation::EnvironmentRequest;
         control.check()?;
-        let environment = request.environment(limits, control)?;
-        let compiled = self.compiled(request, limits, control);
+        let environment = request.environment_with_control(
+            limits.max_schema_nodes,
+            limits.max_identity_bytes,
+            attempt,
+        )?;
+        let compiled = self.compiled_environment(request, &environment, limits, control, attempt);
         let inner = match compiled {
             Ok(compiled) => Some(compiled),
             Err(failure)
@@ -339,7 +361,7 @@ impl SchemaEvaluator for DefaultEvaluator {
                 environment,
                 self.limits.clone(),
                 *limits,
-                control,
+                attempt,
             )?))
         } else {
             None
@@ -348,21 +370,19 @@ impl SchemaEvaluator for DefaultEvaluator {
     }
 }
 impl DefaultEvaluator {
-    // Primitive predicates use this compiled path directly, without recursively
-    // constructing another semantic evaluator.
-    fn compiled(
+    fn compiled_environment(
         &self,
         request: EvaluationRequest<'_>,
+        environment: &SchemaEnvironment,
         limits: &PreparationLimits,
         control: &dyn WorkControl,
+        attempt: &dyn openbindings_internal_schema::Control,
     ) -> Result<Arc<Compiled>, PreparationFailure> {
         use openbindings_internal_schema::OriginalEnvironment;
         control.check()?;
-        let environment = request.environment(limits, control)?;
         let space = environment.space();
         let entry = environment.entry();
-        let cancellation = || control.is_cancelled();
-        let compiled = match space.program_definitions(entry, &cancellation) {
+        let compiled = match space.program_definitions(entry, attempt) {
             Err(failure)
                 if failure.reason
                     == openbindings_internal_schema::FailureReason::ResourceUnavailable =>
@@ -375,22 +395,21 @@ impl DefaultEvaluator {
                     &request,
                     missing::stand_ins(&missing).collect(),
                     limits,
-                    control,
+                    attempt,
                 )?;
-                let projected =
-                    space
-                        .program_definitions(entry, &cancellation)
-                        .map_err(|fallback| {
-                            if matches!(
-                                fallback.reason,
-                                openbindings_internal_schema::FailureReason::Cancelled
-                                    | openbindings_internal_schema::FailureReason::LimitExceeded
-                            ) {
-                                PreparationFailure::from(fallback)
-                            } else {
-                                PreparationFailure::from(failure)
-                            }
-                        })?;
+                let projected = space
+                    .program_definitions(entry, attempt)
+                    .map_err(|fallback| {
+                        if matches!(
+                            fallback.reason,
+                            openbindings_internal_schema::FailureReason::Cancelled
+                                | openbindings_internal_schema::FailureReason::LimitExceeded
+                        ) {
+                            PreparationFailure::from(fallback)
+                        } else {
+                            PreparationFailure::from(failure)
+                        }
+                    })?;
                 self.prepared(projected, &space, entry, missing, control)
                     .map_err(CompilerFailure::into_failure)
             }
@@ -464,7 +483,7 @@ fn space(
     request: &EvaluationRequest<'_>,
     stand_ins: Vec<openbindings_internal_schema::ProjectedResource>,
     limits: &PreparationLimits,
-    control: &dyn WorkControl,
+    control: &dyn openbindings_internal_schema::Control,
 ) -> Result<(SchemaSpace, usize), PreparationFailure> {
     let supplied = request.external_schemas.supplied();
     let supplied = if stand_ins.is_empty() {
@@ -474,7 +493,7 @@ fn space(
             supplied.iter().cloned().chain(stand_ins),
             limits.max_schema_nodes,
             limits.max_identity_bytes,
-            &|| control.is_cancelled(),
+            control,
         )
         .map_err(PreparationFailure::from)?
     };
@@ -483,7 +502,7 @@ fn space(
         supplied,
         limits.max_schema_nodes,
         limits.max_identity_bytes,
-        &|| control.is_cancelled(),
+        control,
     )
     .map_err(PreparationFailure::from)?;
     let entry = space

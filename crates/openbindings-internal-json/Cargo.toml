@@ -22,7 +22,8 @@ num-traits = "0.2.19"
 
 [features]
 # Charge this adapter's reads to the default evaluator's optional evaluation
-# work allowance (`work`). Core's fixed checks have none and never enable it.
+# work allowance (`work`). Core construction charges that shared counter
+# explicitly; it does not enable automatic backend instance-read charging.
 evaluator-work = []
 
 [dev-dependencies]

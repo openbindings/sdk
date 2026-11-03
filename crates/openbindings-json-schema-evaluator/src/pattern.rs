@@ -386,6 +386,79 @@ pub(crate) fn read(pattern: &str, max_depth: usize, max_form: usize) -> Result<R
     })
 }
 
+/// Conservative reader work/allocation reservations, including expanded Unicode
+/// properties, range-set unions, parser scratch, rendered forms and their retained
+/// clone. A short property spelling is not a bound on its translated form.
+pub(crate) fn preparation_cost(source: &str) -> Option<(usize, usize)> {
+    // Only members of the same character class are repeatedly unioned. A
+    // sequence of independent escapes creates independent sets, so charging
+    // their Cartesian product would refuse otherwise modest linear patterns.
+    let base = source.len().checked_mul(128)?.checked_add(512)?;
+    let (mut work, mut allocation) = (base, base);
+    let mut class = None;
+    let (mut properties, mut shorthand) = (0usize, 0usize);
+    let bytes = source.as_bytes();
+    let mut at = 0;
+    while at < bytes.len() {
+        match bytes[at] {
+            b'\\' if at + 1 < bytes.len() => {
+                let property = matches!(bytes[at + 1], b'p' | b'P');
+                let short = matches!(bytes[at + 1], b'd' | b'D' | b'w' | b'W' | b's' | b'S');
+                if class.is_some() {
+                    properties += usize::from(property);
+                    shorthand += usize::from(short);
+                } else if property || short {
+                    let ranges = if property {
+                        crate::es2020_properties::MAX_ENGINE_PROPERTY_RANGES
+                    } else {
+                        16
+                    };
+                    work = work.checked_add(ranges.checked_mul(128)?)?;
+                    allocation = allocation.checked_add(ranges.checked_mul(512)?)?;
+                }
+                at += 2;
+                continue;
+            }
+            b'[' if class.is_none() => {
+                class = Some(at);
+                properties = 0;
+                shorthand = 0;
+            }
+            b']' if class.is_some() => {
+                let start = class.take().expect("open class");
+                let (w, a) = class_cost(at - start + 1, properties, shorthand)?;
+                work = work.checked_add(w)?;
+                allocation = allocation.checked_add(a)?;
+            }
+            _ => {}
+        }
+        at += 1;
+    }
+    if let Some(start) = class {
+        // An unterminated class still allocates its parsed prefix before the
+        // syntax error is discovered.
+        let (w, a) = class_cost(bytes.len() - start, properties, shorthand)?;
+        work = work.checked_add(w)?;
+        allocation = allocation.checked_add(a)?;
+    }
+    Some((work, allocation))
+}
+fn class_cost(bytes: usize, properties: usize, shorthand: usize) -> Option<(usize, usize)> {
+    let property_ranges =
+        properties.checked_mul(crate::es2020_properties::MAX_ENGINE_PROPERTY_RANGES)?;
+    // Repeated shorthand sets are merged immediately. Their union has fewer
+    // than 96 ranges; literal members can survive every subsequent merge.
+    let ranges = bytes
+        .checked_add(property_ranges)?
+        .checked_add(if shorthand == 0 { 0 } else { 96 })?;
+    let merges = properties.checked_add(shorthand)?.checked_add(2)?;
+    let scratch = ranges.checked_mul(merges)?.checked_mul(64)?;
+    let allocation = scratch
+        .checked_add(ranges.checked_mul(256)?)?
+        .checked_add(property_ranges.checked_mul(128)?)?;
+    Some((scratch, allocation))
+}
+
 // A set nothing matches, and one that matches every scalar value. Every set
 // is written as the positive class of the scalar values it matches, never as a
 // negated class: the regex crate's negation of a class with ranges on both
@@ -540,7 +613,7 @@ fn hex(chars: &[char], at: &mut usize, digits: usize) -> Result<u32, Refusal> {
     Ok(value)
 }
 
-mod identifier {
+pub(crate) mod identifier {
     //! `ID_Start` and `ID_Continue`, for group names, read from the `regex`
     //! crate's Unicode tables.
     use std::sync::OnceLock;
@@ -549,11 +622,11 @@ mod identifier {
         let mut buffer = [0; 4];
         regex.is_match(c.encode_utf8(&mut buffer))
     }
-    pub(super) fn start(c: char) -> bool {
+    pub(crate) fn start(c: char) -> bool {
         static START: OnceLock<regex::Regex> = OnceLock::new();
         c.is_ascii_alphabetic() || (!c.is_ascii() && class(&START, r"\A\p{ID_Start}\z", c))
     }
-    pub(super) fn part(c: char) -> bool {
+    pub(crate) fn part(c: char) -> bool {
         static PART: OnceLock<regex::Regex> = OnceLock::new();
         c.is_ascii_alphanumeric()
             || c == '_'

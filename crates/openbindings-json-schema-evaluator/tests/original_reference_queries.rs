@@ -76,12 +76,29 @@ fn queries_retain_exact_contained_selection_and_supplied_alias_conflicts() {
     ));
 }
 #[test]
-fn unknown_dialect_roots_are_visible_but_default_interpretation_still_refuses() {
+fn opaque_dialects_require_namespace_certificates_before_root_selection() {
     let e = env(
         DOC,
         &[(
             "https://e.test/r",
             r#"{"$schema":"https://e.test/custom","$defs":{"child":{"type":"string"}}}"#,
+        )],
+    );
+    for query in ["https://e.test/r", "https://e.test/r#/$defs/child"] {
+        assert!(matches!(
+            e.space().query(e.entry(), query),
+            Err(QueryFailure::UnsupportedCapability(
+                "custom-profile-namespace"
+            ))
+        ));
+    }
+    // A known identity grammar can certify an original root without providing
+    // a value evaluator or child inventory for that dialect.
+    let e = env(
+        DOC,
+        &[(
+            "https://e.test/r",
+            r#"{"$schema":"http://json-schema.org/draft-06/schema#","definitions":{"child":{"type":"string"}}}"#,
         )],
     );
     let space = e.space();
@@ -95,7 +112,7 @@ fn unknown_dialect_roots_are_visible_but_default_interpretation_still_refuses() 
         Some(QueryFailure::UnsupportedDialect(_))
     ));
     assert!(matches!(
-        space.query(e.entry(), "https://e.test/r#/$defs/child"),
+        space.query(e.entry(), "https://e.test/r#/definitions/child"),
         Err(QueryFailure::UnsupportedDialect(_))
     ));
 }

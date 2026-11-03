@@ -17,7 +17,7 @@ enum Value {
 }
 #[derive(Default)]
 pub(super) struct Values {
-    occurrences: HashMap<usize, usize>,
+    occurrences: HashMap<(usize, usize), usize>,
     values: HashMap<Value, usize>,
 }
 impl Values {
@@ -26,10 +26,11 @@ impl Values {
         value: JsonRef<'_>,
         graph: &mut Graph<'_>,
     ) -> Result<usize, NoVerdict> {
+        graph.charge(64)?;
         let mut pending = vec![(value, false)];
         while let Some((current, expanded)) = pending.pop() {
             graph.tick()?;
-            let occurrence = backend::ref_id(current);
+            let occurrence = backend::occurrence(current);
             if self.occurrences.contains_key(&occurrence) {
                 continue;
             }
@@ -58,19 +59,26 @@ impl Values {
                 JsonKind::Boolean => Value::Boolean(current.as_bool().expect("boolean")),
                 JsonKind::Number => {
                     let text = current.number_text().expect("number");
-                    graph.charge(text.len().saturating_mul(8))?;
+                    graph.work(text.len().saturating_mul(16).saturating_add(1))?;
+                    graph.charge(text.len().saturating_mul(16))?;
                     Value::Number(Decimal::parse(text))
                 }
                 JsonKind::String => {
-                    graph.charge(current.text().len().saturating_mul(2))?;
-                    Value::String(current.utf16_units().expect("string"))
+                    let bound = current.text().len();
+                    graph.work(bound.saturating_mul(16).saturating_add(1))?;
+                    graph.charge(bound.saturating_mul(2))?;
+                    // The raw JSON token bounds the decoded UTF-16 length.
+                    // Exact capacity avoids cumulative doubling allocations.
+                    let mut units = Vec::with_capacity(bound);
+                    units.extend(current.as_string().expect("string").utf16_units());
+                    Value::String(units)
                 }
                 JsonKind::Array => {
                     let mut values = Vec::new();
                     for child in current.elements().expect("array") {
                         graph.tick()?;
                         graph.charge(16)?;
-                        values.push(self.occurrences[&backend::ref_id(child)]);
+                        values.push(self.occurrences[&backend::occurrence(child)]);
                     }
                     Value::Array(values)
                 }
@@ -80,8 +88,8 @@ impl Values {
                         graph.tick()?;
                         graph.charge(32)?;
                         values.push((
-                            self.occurrences[&backend::ref_id(member.name)],
-                            self.occurrences[&backend::ref_id(member.value)],
+                            self.occurrences[&backend::occurrence(member.name)],
+                            self.occurrences[&backend::occurrence(member.value)],
                         ));
                     }
                     // Names have exact interned identities, so sorting them is
@@ -94,6 +102,6 @@ impl Values {
             let identity = *self.values.entry(key).or_insert(next);
             self.occurrences.insert(occurrence, identity);
         }
-        Ok(self.occurrences[&backend::ref_id(value)])
+        Ok(self.occurrences[&backend::occurrence(value)])
     }
 }

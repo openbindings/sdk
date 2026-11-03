@@ -120,7 +120,8 @@ fn shared_and_freshly_admitted_resources_project_identically() {
                 }
             }))
             .unwrap(),
-        );
+        )
+        .unwrap();
         assert_eq!(
             serde_json::to_string(&shared.references(&control)).unwrap(),
             serde_json::to_string(&fresh.references(&control)).unwrap()

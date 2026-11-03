@@ -1,73 +1,73 @@
-# Current 0.2 foundation checkpoint
+# Current 0.2 alignment checkpoint
 
-This unpublished migration treats existing APIs and module boundaries as replaceable.
-The selected target specification is
-`c1419c9fc3ae5a00c2b83da710c11bf67dab7934`; target interfaces are
-`5815fb106bddd2c85ff4e93e0077570b3f6b9e74`. The interface companions have
-not yet adopted that target revision.
+This unpublished migration targets specification
+`c1419c9fc3ae5a00c2b83da710c11bf67dab7934` and interfaces
+`5815fb106bddd2c85ff4e93e0077570b3f6b9e74` on
+`codex/sdk-02-foundation`. Existing APIs and module boundaries remain replaceable.
+There is no compatibility requirement for the earlier SDK.
 
-The first implementation slice updates document admission:
+## Implemented responsibilities
 
-- Source and binding fields/accessors use `data`, preserving absence, explicit null
-  and exact JSON. No `content` alias is provided.
-- The derived structural schema and all 505 core cases come from the target spec.
-  Validation reports evidence for OBI-01 through OBI-14.
-- A document pointer can identify any contained schema, including schemas inside
-  identified resources. Primitive values at malformed schema slots remain non-schemas.
-- Contained-resource references use the exact compared identifiers from OBI-13.
-  Initial static resolution applies to both reference keywords; core does not fetch.
-  Unknown-keyword data is not a schema. An unusable compared base leaves that
-  resource's references outside OBI-12's second clause.
-- Duplicate identifiers cannot select a resource; used duplicate document anchors
-  cannot select a schema. Both OBI-12 and OBI-13 can be violated. Identical copies
-  remain distinct occurrences; there is no first/last-writer rule.
-- OBI-14 rejects every dynamic-anchor member in the document resource, including
-  unused declarations. Identified schema resources retain JSON Schema semantics.
+Core preserves exact JSON, validates the current structural schema and OBI-01
+through OBI-14, and retains immutable document proofs. Sources and bindings use
+`data`, with omission distinct from explicit null. Schema positions, contained
+resource comparisons, duplicate identities, anchors and original reference
+queries follow the pinned specification. Fixed contained inventories do not
+store an identical dialect profile on every node.
 
-The reference checks share the compact identifier representation used for duplicate
-checking. They retain source locations without expanding every nested relative URI.
-The schema inventory owns this interpretation; document assessment collects its
-rule evidence. This is the first portion of the future core schema responsibility.
+Edits return new snapshots. `ConformantDocument` owns a concrete proof, and
+contextual `Schema` values retain the original document after caller handles are
+dropped. `ExternalSchemas` and `SchemaEnvironment` preserve original sources,
+identities and typed resolution failures. They do not fetch missing content or
+expose generated compilation identities as author-written locations.
 
-Native qualification covers the full current 505-case corpus, 30 adjudicated
-historical admission cases, core/internal-schema tests and document-rule controls.
-The regression suite includes a 4,000-level relative-ID/reference chain.
-These results do not establish complete evaluator capability or host parity.
+The optional evaluator implements the generic owned-validator interface. Its
+semantic path reasons over original schemas, exact values and coupled evaluation
+annotations. Preparation uses one bounded attempt across environment assembly,
+custom-profile selection, original meta-schema admission and semantic analysis.
+Standard draft-07, 2019-09 and 2020-12 external resources and supported custom
+2020-12 vocabulary combinations are implemented. Custom admission validates the
+consumer against the selected meta-schema's actual restrictions and references.
+Required format assertions support all 19 standard attributes; optional format
+assertion remains annotation-only. See [evaluator contracts](schema-evaluators.md)
+for the interpretation policies and remaining allocation gate.
 
-The ownership work makes edits return immutable snapshots, replaces the generic
-proof with concrete ConformantDocument, exposes a conformance module, and adds exact
-owning JsonObject access. Rust Edit values now own paths and values. Contextual Schema
-views replace borrowed ValueContract handles, cover named schemas and operation slots,
-and retain their document after caller handles are dropped. TypeScript exposes the
-same retained Schema capability. Independent ownership reviews pass for these slices.
+`openbindings-context` and `openbindings-invocation` implement the adopted current
+interface carriers. Invocation has owned original-document requests, explicit
+provider/evaluator/resource dependencies, separate invocation and preflight,
+shared context and consuming prepared validators. Consumer migration is ongoing;
+the obsolete source-inspection and interface-synthesis companions remain to be
+replaced by the designed current interfaces.
 
-The reviewed 1,546 value cases and 20 moved admission negatives are now checked into
-the SDK with exact input-accounting controls. Unicode property/terminal-lookahead
-support and exact contained-resource selection pass separate independent reviews.
-The current strict evaluator gate still has 10 external dialect/vocabulary gaps;
-an additional independent identity corpus exposes 8 semantic-undefined capability
-gaps. The full workspace and final performance gates remain open.
+## Qualification
 
-The next slices replace parallel typed parts/views with owned domain views and expose
-the original schema environment through the redesigned evaluator interface. Retired
-role companions still await replacement by current invocation, context, kind
-description and source pulling. See [the development loop](alignment-loop.md) for
-open gates and the unattended work policy.
+The current document/evaluator slice passes the 505-case production corpus,
+1,546 required evaluator values and the retained admission negatives. The 2,348
+auxiliary reference inputs retain their independently reviewed current obligations
+and concrete-completion controls. These overlapping inventories are not additive
+coverage. Native and Rust 1.88 core/internal-schema/evaluator suites pass 502
+checks, and Rust 1.88 also builds the WebAssembly bridge.
 
-No release, compatibility promise or completion of the migration is implied by this
-checkpoint. The canonical plan, frozen inputs, design reviews and measurement receipts
-are maintained in the adjacent sdk-migration repository.
+Independent reviews cover custom profile selection, original meta-schema
+admission, aggregate preparation budgets and the compact inventory layout.
+Semantic primitive/format review and current host/package results are recorded in
+the migration receipts. Finite passing controls do not establish complete JSON
+Schema capability or completion of the SDK migration.
 
-The original-schema environment is implemented and independently reviewed. Resource
-inputs are `ExternalSchema`/`ExternalSchemas`; original diagnostic coordinates are
-`SchemaOrigin { source_uri, pointer }` in Rust and `{ sourceUri, pointer }` in
-TypeScript. These coordinates identify original source text, independently of the
-resolved `$id` base and opaque environment-scoped resource identity.
+## Remaining work
 
-`Schema::environment` takes explicit external inputs, `PreparationLimits`, and a
-cooperative work control. Original nodes retain their owners, and queries do not fetch.
-Unknown external dialect roots remain inspectable, while operations requiring an
-unsupported inventory return a capability failure. Construction is bounded before
-URI expansion, including external registration and cached-environment reuse. The
-remaining generic evaluator migration will replace the old projection-based seam;
-this checkpoint does not claim complete value-evaluation qualification.
+- Resolve the two harder recursive Undefined obligations and adjudicate the
+  remaining recursive annotation control.
+- Finish ordinary user-schema backend allocation qualification.
+- Replace parallel authoring/plain/conformant representations with canonical
+  owned domain views; complete the planned module and terminology organization.
+- Implement schema comparison, kind description and source pulling against the
+  pinned current interfaces, and finish invocation consumers and examples.
+- Complete TypeScript organization, all-host/package qualification, CI and the
+  final matched-toolchain performance campaign. No performance threshold is waived.
+
+The [development loop](alignment-loop.md) continues through implementation,
+validation, independent review, corrections and feature-branch checkpoints.
+The normative inputs and full alignment map are retained in the adjacent
+`sdk-migration` coordination repository. No release, merge or completed-alignment
+claim is implied by this checkpoint.

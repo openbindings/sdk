@@ -79,31 +79,42 @@ impl SchemaEnvironment {
         control: &dyn WorkControl,
     ) -> Result<Self, PreparationFailure> {
         control.check()?;
+        openbindings_internal_schema::preparation::Attempt::run(
+            limits.max_work_units,
+            limits.max_allocation_bytes,
+            &|| control.is_cancelled(),
+            |attempt| {
+                Self::with_control(
+                    schema,
+                    external,
+                    limits.max_schema_nodes,
+                    limits.max_identity_bytes,
+                    attempt,
+                )
+            },
+        )
+        .map_err(|failure| construction_failure(failure, schema))?
+    }
+
+    pub(crate) fn with_control(
+        schema: &Schema,
+        external: &ExternalSchemas,
+        maximum_nodes: usize,
+        maximum_identity: usize,
+        control: &dyn openbindings_internal_schema::Control,
+    ) -> Result<Self, PreparationFailure> {
+        // Reserve the returned handle before construction can publish a
+        // completed immutable graph to the document/resource-pair cache.
+        control
+            .charge_allocation(256)
+            .map_err(|failure| construction_failure(failure, schema))?;
         let space = schema
             .document()
-            .resolution_bounded(
-                external,
-                limits.max_schema_nodes,
-                limits.max_identity_bytes,
-                control,
-            )
-            .map_err(|failure| PreparationFailure {
-                kind: match failure.reason {
-                    openbindings_internal_schema::FailureReason::Cancelled => {
-                        PreparationFailureKind::Cancelled
-                    }
-                    openbindings_internal_schema::FailureReason::LimitExceeded => {
-                        PreparationFailureKind::Limit {
-                            resource: failure.code,
-                        }
-                    }
-                    _ => PreparationFailureKind::Implementation {
-                        message: failure.message,
-                    },
-                },
-                origin: Some(schema.location()),
-            })?;
-        control.check()?;
+            .resolution_bounded(external, maximum_nodes, maximum_identity, control)
+            .map_err(|failure| construction_failure(failure, schema))?;
+        control
+            .check()
+            .map_err(|failure| construction_failure(failure, schema))?;
         let root = space
             .document_node(&schema.json())
             .expect("contained schema was admitted by conformance");
@@ -131,6 +142,30 @@ impl SchemaEnvironment {
     pub(crate) fn owns(&self, other: &Self) -> bool {
         Arc::ptr_eq(&self.inner, &other.inner)
     }
+}
+
+fn construction_failure(
+    failure: openbindings_internal_schema::Failure,
+    schema: &Schema,
+) -> PreparationFailure {
+    let mut failure = PreparationFailure::from(failure);
+    // An exhausted attempt cannot spend an unbounded amount describing its
+    // own failure. Limit/cancellation causes need no newly materialized path;
+    // other fallback provenance has the same fixed diagnostic cap as queries.
+    if failure.origin.is_none()
+        && !matches!(
+            failure.kind,
+            PreparationFailureKind::Limit { .. } | PreparationFailureKind::Cancelled
+        )
+        && openbindings_internal_json::backend::location_pointer_size(
+            schema.value.view(),
+            64 * 1024,
+        )
+        .is_some()
+    {
+        failure.origin = Some(schema.location());
+    }
+    failure
 }
 impl SchemaNode {
     /// Exact original schema JSON, retaining its source snapshot.
@@ -267,5 +302,24 @@ impl openbindings_internal_schema::OriginalEnvironment for SchemaEnvironment {
     }
     fn entry(&self) -> usize {
         self.inner.root
+    }
+}
+
+impl openbindings_internal_schema::preparation::EnvironmentRequest for EvaluationRequest<'_> {
+    type Environment = SchemaEnvironment;
+    type Failure = PreparationFailure;
+    fn environment_with_control(
+        &self,
+        maximum_nodes: usize,
+        maximum_identity: usize,
+        control: &dyn openbindings_internal_schema::Control,
+    ) -> Result<Self::Environment, Self::Failure> {
+        SchemaEnvironment::with_control(
+            self.schema,
+            self.external_schemas,
+            maximum_nodes,
+            maximum_identity,
+            control,
+        )
     }
 }

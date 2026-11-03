@@ -1,4 +1,5 @@
-//! The default evaluator's optional evaluation work allowance and stack guard.
+//! Shared synchronous work allowances for construction and evaluation, with a
+//! stack guard for backend instance traversal.
 //!
 //! An application that sets the evaluator's work cap gets one allowance per
 //! evaluation pass. This crate's adapter charges a unit for each element,

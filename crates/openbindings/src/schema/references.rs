@@ -26,14 +26,14 @@ impl SchemaSpace {
         supplied: &ExternalSchemas,
         maximum: usize,
         maximum_identity: usize,
-        control: &dyn WorkControl,
+        control: &dyn embedding::Control,
     ) -> Result<Self, embedding::Failure> {
         let inner = embedding::SchemaSpace::new_bounded(
             document.indexed(),
             embedding::SuppliedSet::supplied(supplied).clone(),
             maximum,
             maximum_identity,
-            &|| control.is_cancelled(),
+            control,
         )?;
         #[cfg(test)]
         ASSEMBLED.with(|count| count.set(count.get() + 1));
@@ -43,15 +43,9 @@ impl SchemaSpace {
         &self,
         maximum: usize,
         maximum_identity: usize,
-        control: &dyn WorkControl,
+        control: &dyn embedding::Control,
     ) -> Result<(), embedding::Failure> {
-        if control.is_cancelled() {
-            return Err(embedding::Failure::new(
-                embedding::FailureReason::Cancelled,
-                "caller-cancelled",
-                "the caller cancelled this operation",
-            ));
-        }
+        control.check()?;
         if self.identity_bytes() > maximum_identity {
             return Err(embedding::Failure::new(
                 embedding::FailureReason::LimitExceeded,
@@ -59,7 +53,7 @@ impl SchemaSpace {
                 "expanded schema identities exceed their configured byte budget",
             ));
         }
-        if self.nodes().take(maximum.saturating_add(1)).count() > maximum {
+        if self.node_count() > maximum {
             return Err(embedding::Failure::new(
                 embedding::FailureReason::LimitExceeded,
                 "schema-nodes",
@@ -165,6 +159,7 @@ fn reference_refusal(f: embedding::Failure) -> ReferenceRefusal {
                 Q::MissingTarget | Q::NonSchemaTarget | Q::MissingAnchor => R::MissingTarget,
                 Q::AmbiguousAnchor => R::AmbiguousTarget,
                 Q::IdentityConflict => R::IdentityConflict,
+                Q::InvalidExternalSchema => R::ResolverFailure,
                 Q::ResourceUnavailable(_) => R::ResourceUnavailable,
                 Q::UnsupportedDialect(_) | Q::UnsupportedCapability(_) => R::UnsupportedCapability,
             }
@@ -513,7 +508,9 @@ pub(crate) fn query_kind(error: embedding::QueryFailure) -> ResolutionFailureKin
         Q::MissingAnchor => R::Undefined(D::MissingAnchor),
         Q::AmbiguousAnchor => R::Undefined(D::AmbiguousAnchor),
         Q::InvalidIdentifier => R::Undefined(D::InvalidIdentifier),
-        Q::IdentityConflict | Q::UnsupportedDialect(None) => R::InvalidExternalSchema,
+        Q::IdentityConflict | Q::InvalidExternalSchema | Q::UnsupportedDialect(None) => {
+            R::InvalidExternalSchema
+        }
         Q::ResourceUnavailable(uri) => R::ResourceUnavailable { uri },
         Q::UnsupportedDialect(Some(uri)) => R::UnsupportedDialect { uri },
         Q::UnsupportedCapability(capability) => R::UnsupportedCapability {
@@ -533,7 +530,7 @@ fn inspect(
         resources,
         limits.max_schema_nodes,
         limits.max_identity_bytes,
-        control,
+        &|| control.is_cancelled(),
     ) {
         Ok(space) => space.references(control),
         Err(failure) => ReferenceReport {

@@ -23,9 +23,17 @@ def pointer_exists(value,pointer):
     if pointer=='':return True
     if not isinstance(pointer,str) or not pointer.startswith('/'):return False
     for part in pointer[1:].split('/'):
+        at = 0
+        while at < len(part):
+            if part[at] == '~':
+                if at + 1 == len(part) or part[at + 1] not in '01':
+                    return False
+                at += 2
+            else:
+                at += 1
         part=part.replace('~1','/').replace('~0','~')
         if isinstance(value,dict) and part in value:value=value[part]
-        elif isinstance(value,list) and part.isdecimal() and (part=='0' or not part.startswith('0')) and int(part)<len(value):value=value[int(part)]
+        elif isinstance(value,list) and part.isascii() and part.isdecimal() and (part=='0' or not part.startswith('0')) and int(part)<len(value):value=value[int(part)]
         else:return False
     return True
 
@@ -42,7 +50,8 @@ def judge_value(case,result,sources):
         if not detail.get('code','').strip() or not detail.get('message','').strip():failures.append('unexplained undefined result')
         location=detail.get('location')
         if location:
-            resource=location.get('resource');pointer=location.get('pointer')
+            resource=location.get('sourceUri');pointer=location.get('pointer')
+            if 'sourceUri' not in location:failures.append('missing original source coordinate')
             if resource is not None and resource.startswith('https://sdk-program.openbindings.invalid/'):failures.append('generated identity leaked')
             if resource not in sources or not pointer_exists(sources[resource],pointer):failures.append('nonexistent original schema location')
     if tag=='fails':
@@ -56,7 +65,8 @@ def judge_value(case,result,sources):
             location=problem.get('schema')
             if not location:
                 failures.append('problem lacks a schema location');continue
-            resource=location.get('resource');pointer=location.get('pointer')
+            resource=location.get('sourceUri');pointer=location.get('pointer')
+            if 'sourceUri' not in location:failures.append('missing original source coordinate')
             if resource is not None and resource.startswith('https://sdk-program.openbindings.invalid/'):failures.append('generated identity leaked')
             if resource not in sources or not pointer_exists(sources[resource],pointer):failures.append('nonexistent original schema location')
     return failures
@@ -81,15 +91,19 @@ def judge_evaluator(fixture,observed):
 
 
 def controls():
+    assert not pointer_exists({'a~2': 1}, '/a~2')
+    assert pointer_exists({'a~2': 1}, '/a~02')
+    assert not pointer_exists([1], '/٠')
+    assert pointer_exists({'٠': 1}, '/٠')
     case={'id':'control','value':'{"a":7}','expected':'fails','acceptable_paths':[['/a']],'optional_capability':None,'refusal_kind':None}
-    valid={'status':'fails','problemsComplete':True,'problems':[{'instance':'/a','schema':{'resource':None,'pointer':'/type'}}]}
+    valid={'status':'fails','problemsComplete':True,'problems':[{'instance':'/a','schema':{'sourceUri':None,'pointer':'/type'}}]}
     sources={None:{'type':'string'}}
     assert not judge_value(case,valid,sources)
     bad=[]
     bad.append({**valid,'status':'mismatch'}) # obsolete public result tag is not a synonym
     bad.append({'status':'satisfies'})
     bad.append({k:v for k,v in valid.items() if k!='status'}|{'outcome':'fails'}) # the former discriminant is not read
-    for field,value in [('instance','/missing'),('instance',None),('schema',None),('schema',{'resource':None,'pointer':'/missing'}),('schema',{'resource':'https://sdk-program.openbindings.invalid/private','pointer':''})]:
+    for field,value in [('instance','/missing'),('instance',None),('schema',None),('schema',{'resource':None,'pointer':'/type'}),('schema',{'sourceUri':None,'pointer':'/missing'}),('schema',{'sourceUri':'https://sdk-program.openbindings.invalid/private','pointer':''})]:
         x=copy.deepcopy(valid);x['problems'][0][field]=value;bad.append(x)
     x=copy.deepcopy(valid);x['problemsComplete']=False;assert not judge_value(case,x,sources)
     for result in bad:assert judge_value(case,result,sources)
@@ -100,13 +114,13 @@ def controls():
     declined={**case,'expected':'undefined','optional_capability':'undefined-results','refusal_kind':'conservative-preparation'}
     assert judge_value(declined,{'status':'no-verdict','detail':{'reason':'conservative-preparation','code':'x','message':'x'}},sources)
     assert judge_value(declined,{'status':'no-verdict','detail':{'reason':'unsupported-capability','code':'x','message':'x'}},sources)
-    undefined={'status':'undefined','detail':{'code':'proof','message':'established undefined result','location':{'resource':None,'pointer':'/type'}}}
+    undefined={'status':'undefined','detail':{'code':'proof','message':'established undefined result','location':{'sourceUri':None,'pointer':'/type'}}}
     semantic={**case,'expected':'undefined','refusal_kind':None}
     assert not judge_value(semantic,undefined,sources)
     assert judge_value(optional,undefined,sources)
     assert judge_value(semantic,{'status':'no-verdict','detail':{'reason':'undefined','code':'proof','message':'old representation'}},sources)
     assert judge_value(semantic,{'status':'undefined','detail':{}},sources)
-    for location in [{'resource':None,'pointer':'/missing'}, {'resource':'https://sdk-program.openbindings.invalid/private','pointer':''}]:
+    for location in [{'sourceUri':None,'pointer':'/missing'}, {'sourceUri':'https://sdk-program.openbindings.invalid/private','pointer':''}]:
         assert judge_value(semantic,{**undefined,'detail':{**undefined['detail'],'location':location}},sources)
     fixture={'resources':{},'groups':[{'id':'group','document':'{"type":"string"}','resources':[],'cases':[case]}]}
     group={'id':'group','executed':True,'values':[valid]}

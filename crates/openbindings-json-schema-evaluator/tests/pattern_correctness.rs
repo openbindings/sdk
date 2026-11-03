@@ -7,6 +7,14 @@ fn prepare(
     resources: ExternalSchemas,
 ) -> Result<PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator>, PreparationFailure>
 {
+    prepare_with_limits(schema, resources, &PreparationLimits::default())
+}
+fn prepare_with_limits(
+    schema: Value,
+    resources: ExternalSchemas,
+    limits: &PreparationLimits,
+) -> Result<PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator>, PreparationFailure>
+{
     let document = Document::parse(
         json!({"openbindings":"0.2.0","operations":{"op":{"input":schema}}}).to_string(),
     )
@@ -20,11 +28,7 @@ fn prepare(
         .expect("declared operation")
         .input()
         .expect("declared input")
-        .prepare(
-            &DefaultEvaluator::new(),
-            &resources,
-            &openbindings::PreparationLimits::default(),
-        )
+        .prepare(&DefaultEvaluator::new(), &resources, limits)
 }
 
 // Patterns with lone surrogate escapes, matched as Node's `RegExp` with the `u`
@@ -184,11 +188,19 @@ fn combined(
         .iter()
         .map(|(index, row)| (member(*index), schema(&row.pattern)))
         .collect();
-    prepare(
+    // This batches the entire independently generated matching corpus into one
+    // document for test speed. Its cumulative Unicode translation work exceeds
+    // an ordinary request's default allowance; keep a finite explicit budget.
+    prepare_with_limits(
         json!({ "properties": properties }),
         ExternalSchemas::default(),
+        &PreparationLimits {
+            max_work_units: 256 * 1024 * 1024,
+            max_allocation_bytes: 1024 * 1024 * 1024,
+            ..PreparationLimits::default()
+        },
     )
-    .unwrap_or_else(|detail| panic!("{detail:?}"))
+    .unwrap_or_else(|detail| panic!("{:?}", detail.kind))
 }
 
 // Generated patterns, matched as V8's `RegExp` with the `u` flag matches them,

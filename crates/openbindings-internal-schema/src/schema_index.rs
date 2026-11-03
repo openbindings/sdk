@@ -1,5 +1,5 @@
 //! The normative schema-position walk. Unknown keywords remain opaque.
-use crate::dialect::Dialect;
+use crate::dialect::{Dialect, Profile};
 use crate::{JsonKind, JsonRef, JsonValue, identifiers::Identifiers};
 use openbindings_internal_json::backend::{node, ref_id};
 mod references;
@@ -17,8 +17,6 @@ pub struct SchemaNode {
     pub id: u32,
     pub depth: u32,
     pub resource: u32,
-    /// Interpretation inherited from the nearest external resource root.
-    pub dialect: Option<Dialect>,
 }
 impl std::fmt::Debug for SchemaNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -42,6 +40,9 @@ pub struct SchemaIndex {
     /// The indexed value; every node is in its source.
     source: Option<JsonValue>,
     pub nodes: Vec<SchemaNode>,
+    /// External positions can inherit different interpretations. Contained OBI
+    /// positions all use the fixed profile, with no per-position storage cost.
+    profiles: Option<Vec<Option<Profile>>>,
     /// Each resource after the first and the resource enclosing it, by
     /// resource number.
     parent_resources: Vec<(u32, u32)>,
@@ -220,7 +221,7 @@ impl SchemaIndex {
         roots: impl IntoIterator<Item = JsonRef<'a>>,
         bases: Bases<'a>,
     ) -> Self {
-        Self::build_roots_checked(source, roots, bases, &mut |_| Ok(()))
+        Self::build_roots_checked(source, roots, bases, &Profile::from_uri, &mut |_| Ok(()))
             .expect("unbounded inventory")
     }
     pub(crate) fn supplied_nodes_bounded(
@@ -228,10 +229,25 @@ impl SchemaIndex {
         maximum: usize,
         control: &dyn crate::Control,
     ) -> Result<Self, crate::Failure> {
+        Self::supplied_profiled(value, None, maximum, control, &Profile::from_uri)
+    }
+    /// Interpret an already certified profile map. Expanded bases are requested
+    /// only after a nodes-only pass has established identity spelling bounds.
+    pub(crate) fn supplied_profiled(
+        value: &JsonValue,
+        retrieval: Option<&str>,
+        maximum: usize,
+        control: &dyn crate::Control,
+        resolve_profile: &dyn Fn(&str) -> Option<Profile>,
+    ) -> Result<Self, crate::Failure> {
+        let bases = retrieval.map_or(Bases::None, |uri| {
+            Bases::Ordinary(Vec::new(), Arc::from(uri))
+        });
         Self::build_roots_checked(
             value,
             std::iter::once(value.view()),
-            Bases::None,
+            bases,
+            resolve_profile,
             &mut |count| {
                 control.check()?;
                 if count >= maximum {
@@ -241,6 +257,7 @@ impl SchemaIndex {
                         "schema inventory exceeds its configured node limit",
                     ));
                 }
+                control.charge_allocation(512)?;
                 Ok(())
             },
         )
@@ -249,12 +266,14 @@ impl SchemaIndex {
         source: &'a JsonValue,
         roots: impl IntoIterator<Item = JsonRef<'a>>,
         mut bases: Bases<'a>,
+        resolve_profile: &dyn Fn(&str) -> Option<Profile>,
         check: &mut dyn FnMut(usize) -> Result<(), crate::Failure>,
     ) -> Result<Self, crate::Failure> {
         let external = !matches!(bases, Bases::Compared(_));
         let full = !matches!(bases, Bases::None);
         let mut out = Self {
             source: Some(source.clone()),
+            profiles: external.then(Vec::new),
             ..Self::default()
         };
         let mut compared = Vec::new();
@@ -270,41 +289,44 @@ impl SchemaIndex {
                 };
                 let index =
                     u32::try_from(out.nodes.len()).expect("schemas are bounded by the node count");
-                let inherited = out
-                    .nodes
-                    .get(parent as usize)
-                    .map_or(Some(Dialect::Draft202012), |n| n.dialect);
+                let inherited = if parent == u32::MAX {
+                    Some(Profile::standard(Dialect::Draft202012))
+                } else {
+                    out.profile(parent as usize)
+                };
                 let candidate_id = value.get("$id");
-                let mut dialect = if !external {
-                    Some(Dialect::Draft202012)
+                let mut profile = if !external {
+                    Some(Profile::standard(Dialect::Draft202012))
                 } else if parent == u32::MAX
                     || (candidate_id.is_some()
                         && !inherited.is_some_and(|d| d.reference_object(value))
-                        && !(inherited == Some(Dialect::Draft7)
+                        && !(inherited == Some(Profile::standard(Dialect::Draft7))
                             && candidate_id
                                 .and_then(|v| v.as_str())
                                 .is_some_and(|id| id.starts_with('#'))))
                 {
                     value
                         .get("$schema")
-                        .map_or(inherited, |v| v.as_str().and_then(Dialect::from_uri))
+                        .map_or(inherited, |v| v.as_str().and_then(resolve_profile))
                 } else {
                     inherited
                 };
-                let reference_object = dialect.is_some_and(|d| d.reference_object(value));
-                // A mixed-dialect boundary is established by the enclosing
+                let reference_object = profile.is_some_and(|d| d.reference_object(value));
+                // A mixed-profile boundary is established by the enclosing
                 // profile. Its new root interpretation cannot erase that boundary.
                 let id_suppressed = if parent == u32::MAX {
                     reference_object
                 } else {
                     inherited.is_some_and(|d| d.reference_object(value))
                 };
-                let declaring_dialect = if parent == u32::MAX {
-                    dialect
+                let declaring_profile = if parent == u32::MAX {
+                    profile
                 } else {
                     inherited
                 };
-                let fragment = if declaring_dialect == Some(Dialect::Draft7) && !id_suppressed {
+                let fragment = if declaring_profile == Some(Profile::standard(Dialect::Draft7))
+                    && !id_suppressed
+                {
                     candidate_id
                         .and_then(|v| v.as_str())
                         .and_then(|s| s.strip_prefix('#'))
@@ -313,17 +335,17 @@ impl SchemaIndex {
                 };
                 // Draft-07 only assigns a portable meaning to a fragment-only
                 // plain name. Other nonempty-fragment forms stay uninterpreted.
-                let unsupported_identifier = dialect == Some(Dialect::Draft7)
+                let unsupported_identifier = profile == Some(Profile::standard(Dialect::Draft7))
                     && !id_suppressed
                     && candidate_id.and_then(|v| v.as_str()).is_some_and(|id| {
                         (id.contains('#') && !id.ends_with('#') && !id.starts_with('#'))
                             || fragment.is_some_and(|name| !crate::dialect::draft7_name(name))
-                            || (declaring_dialect != Some(Dialect::Draft7)
+                            || (declaring_profile != Some(Profile::standard(Dialect::Draft7))
                                 && id.starts_with('#')
                                 && id.len() > 1)
                     });
                 if unsupported_identifier {
-                    dialect = None;
+                    profile = None;
                 }
                 let declared = candidate_id
                     .filter(|_| !id_suppressed && fragment.is_none() && !unsupported_identifier);
@@ -369,11 +391,11 @@ impl SchemaIndex {
                 for (keyword, dynamic) in [("$anchor", false), ("$dynamicAnchor", true)] {
                     if full
                         && !reference_object
-                        && dialect.is_some_and(|d| d.active(keyword))
+                        && profile.is_some_and(|d| d.active(keyword))
                         && let Some(name) = value.get(keyword)
                         && name
                             .as_str()
-                            .is_some_and(|name| dialect.is_some_and(|d| d.anchor_name(name)))
+                            .is_some_and(|name| profile.is_some_and(|d| d.anchor_name(name)))
                     {
                         out.anchors.push(Anchor {
                             resource,
@@ -403,8 +425,8 @@ impl SchemaIndex {
                 };
                 if !external {
                     each_schema_child(value, &mut visit);
-                } else if let Some(dialect) = dialect {
-                    dialect.each_child(value, &mut visit);
+                } else if let Some(profile) = profile {
+                    profile.each_child(value, &mut visit);
                 }
                 if let Some(error) = stopped {
                     return Err(error);
@@ -414,8 +436,10 @@ impl SchemaIndex {
                     id,
                     depth,
                     resource,
-                    dialect,
                 });
+                if let Some(profiles) = &mut out.profiles {
+                    profiles.push(profile);
+                }
             }
         }
         drop(stack);
@@ -449,6 +473,14 @@ impl SchemaIndex {
     /// satisfy the 2020-12 meta-schemas.
     pub fn schemas_checked(&self) -> bool {
         self.checked.load(Ordering::Acquire)
+    }
+    /// The interpretation of an indexed schema position.
+    pub fn profile(&self, position: usize) -> Option<Profile> {
+        self.nodes.get(position)?;
+        match &self.profiles {
+            Some(profiles) => profiles[position],
+            None => Some(Profile::standard(Dialect::Draft202012)),
+        }
     }
     /// A schema's value.
     pub fn value(&self, node: &SchemaNode) -> JsonRef<'_> {

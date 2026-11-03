@@ -32,30 +32,74 @@ for case in CASES:
     if case["id"] in CAPABILITIES:
         capability = CAPABILITIES[case["id"]]
         assert case == capability["historical_case"]
-        case["expected"] = capability["expected"]
 
-# Original cases remain exact; current admission replaces their value expectation.
+# Original inputs remain exact; current obligations are selected below.
 for case in CASES:
     if case["id"] in NEGATIVES:
         negative = NEGATIVES[case["id"]]
         assert case == negative["historical_case"]
-        case["expected"] = {"stage":"admission", "outcome":"non-conformant", "evidence":{rule:"violated" for rule in negative["required_violated_rules"]}}
 
-# Translate the historical representation without changing the frozen controls.
-for case in CASES:
-    expected = case["expected"]
-    if expected["outcome"] == "N" and expected.get("detail", {}).get("reason") == "undefined":
-        expected["outcome"] = "undefined"
-        del expected["detail"]["reason"]
+# The native and facade adapters already use this independently adjudicated
+# current ledger. Historical inability codes above are retained as provenance,
+# not as the semantics required of the current implementation.
+CURRENT = json.loads((INPUTS / "reference-current-oracle.json").read_text())
+assert CURRENT["specification"] == ADJUDICATION["spec_revision"]
+CURRENT = {case["id"]: case for case in CURRENT["cases"]}
+assert len(CURRENT) == len(CASES) and set(CURRENT) == {case["id"] for case in CASES}
 
 
-def subset(expected, actual):
-    if isinstance(expected, dict):
-        assert isinstance(actual, dict)
-        for key, value in expected.items():
-            subset(value, actual.get(key))
+def pointer_exists(value, pointer):
+    if pointer == "":
+        return True
+    if not isinstance(pointer, str) or not pointer.startswith("/"):
+        return False
+    for part in pointer[1:].split("/"):
+        at = 0
+        while at < len(part):
+            if part[at] == '~':
+                if at + 1 == len(part) or part[at + 1] not in '01':
+                    return False
+                at += 2
+            else:
+                at += 1
+        part = part.replace("~1", "/").replace("~0", "~")
+        if isinstance(value, dict) and part in value:
+            value = value[part]
+        elif isinstance(value, list) and part.isascii() and part.isdecimal() and (part == "0" or not part.startswith("0")) and int(part) < len(value):
+            value = value[int(part)]
+        else:
+            return False
+    return True
+
+
+def current_expectation(case, actual):
+    expected = CURRENT[case["id"]]
+    required = expected["required"]
+    detail = actual.get("detail", {})
+    if required in ("S", "F", "U"):
+        assert actual["stage"] == "ready"
+        assert actual["outcome"] == ("undefined" if required == "U" else required)
+        if required == "U":
+            assert detail.get("code") and detail.get("location")
+            assert "reason" not in detail
+    elif required == "external":
+        assert actual["outcome"] == "N" and detail["reason"] == "resource-unavailable"
+        assert detail.get("code")
+    elif required == "limit":
+        assert (actual["outcome"] == "N" and detail.get("reason") == "limit-exceeded") or (
+            actual["stage"] == "preparation" and actual["outcome"] == "refused" and actual["failure"]["kind"] == "limit")
+    elif required == "admission":
+        assert actual["stage"] == "admission" and actual["outcome"] == "non-conformant"
+        assert all(actual["evidence"][rule] == "violated" for rule in expected["rules"])
     else:
-        assert expected == actual, (expected, actual)
+        raise AssertionError("unrecognized current obligation: " + required)
+    sources = {None: case.get("document", {"openbindings": "0.2.0", "operations": {"op": {"input": case.get("schema")}}})}
+    sources.update({resource["uri"]: resource["schema"] for resource in case.get("resources", [])})
+    for location, coordinate in [(detail.get("location"), "resource"), (actual.get("failure", {}).get("origin"), "source_uri")]:
+        if location is not None:
+            assert coordinate in location
+            assert location[coordinate] in sources
+            assert pointer_exists(sources[location[coordinate]], location.get("pointer"))
 
 
 def oracle(schema, value, supplied):
@@ -93,7 +137,7 @@ def check(rows):
     for c in CASES:
         result = actual[c["id"]]
         try:
-            subset(c["expected"], result)
+            current_expectation(c, result)
         except AssertionError as error:
             raise AssertionError(c["id"]) from error
         if c["family"] in ["differential", "semantic-differential", "completion"]:
@@ -124,6 +168,10 @@ def check(rows):
 
 
 def main():
+    assert not pointer_exists({'a~2': 1}, '/a~2')
+    assert pointer_exists({'a~2': 1}, '/a~02')
+    assert not pointer_exists([1], '/٠')
+    assert pointer_exists({'٠': 1}, '/٠')
     parser = argparse.ArgumentParser()
     parser.add_argument("receipts", nargs="+", type=Path)
     args = parser.parse_args()

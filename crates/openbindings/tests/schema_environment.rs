@@ -25,6 +25,115 @@ fn value(text: &str) -> JsonValue {
 }
 
 #[test]
+fn preparation_attempts_bound_work_and_allocations_without_poisoning_caches() {
+    let selected = schema(r#"{"openbindings":"0.2.0","operations":{},"schemas":{"entry":{}}}"#);
+    let external = ExternalSchemas::default();
+    let control = AtomicBool::new(false);
+    for (limits, resource) in [
+        (
+            PreparationLimits {
+                max_work_units: 0,
+                ..PreparationLimits::default()
+            },
+            "preparation-work-units",
+        ),
+        (
+            PreparationLimits {
+                max_allocation_bytes: 0,
+                ..PreparationLimits::default()
+            },
+            "preparation-allocation-bytes",
+        ),
+    ] {
+        assert_eq!(
+            selected
+                .environment(&external, &limits, &control)
+                .unwrap_err()
+                .kind,
+            PreparationFailureKind::Limit {
+                resource: resource.into()
+            }
+        );
+    }
+    let held = environment(&selected, &external);
+    // Completed immutable inventory is shared rather than charged again as a
+    // new allocation. The returned environment handle still reserves its cost.
+    let warm = PreparationLimits {
+        max_work_units: 100,
+        max_allocation_bytes: 256,
+        ..PreparationLimits::default()
+    };
+    assert!(selected.environment(&external, &warm, &control).is_ok());
+    let stopped = PreparationLimits {
+        max_work_units: 0,
+        ..warm
+    };
+    assert_eq!(
+        selected
+            .environment(&external, &stopped, &control)
+            .unwrap_err()
+            .kind,
+        PreparationFailureKind::Limit {
+            resource: "preparation-work-units".into()
+        }
+    );
+    let small = PreparationLimits {
+        max_schema_nodes: 0,
+        ..warm
+    };
+    assert_eq!(
+        selected
+            .environment(&external, &small, &control)
+            .unwrap_err()
+            .kind,
+        PreparationFailureKind::Limit {
+            resource: "schema-nodes".into()
+        }
+    );
+    control.store(true, Ordering::Release);
+    assert_eq!(
+        selected
+            .environment(&external, &warm, &control)
+            .unwrap_err()
+            .kind,
+        PreparationFailureKind::Cancelled
+    );
+    assert_eq!(held.root().value().kind(), JsonKind::Object);
+}
+
+#[test]
+fn a_failed_attempt_does_not_materialize_an_unbounded_origin() {
+    let name = "n".repeat(100_000);
+    let text =
+        format!(r#"{{"openbindings":"0.2.0","operations":{{}},"schemas":{{"{name}":{{}}}}}}"#);
+    let schema = Document::parse(text)
+        .unwrap()
+        .validate()
+        .unwrap()
+        .conformant()
+        .unwrap()
+        .schema(&name)
+        .unwrap();
+    let failure = schema
+        .environment(
+            &ExternalSchemas::default(),
+            &PreparationLimits {
+                max_allocation_bytes: 0,
+                ..PreparationLimits::default()
+            },
+            &AtomicBool::new(false),
+        )
+        .unwrap_err();
+    assert_eq!(
+        failure.kind,
+        PreparationFailureKind::Limit {
+            resource: "preparation-allocation-bytes".into()
+        }
+    );
+    assert!(failure.origin.is_none());
+}
+
+#[test]
 fn original_sources_bases_and_resource_roots_are_separate() {
     let selected = schema(
         r##"{"openbindings":"0.2.0","operations":{},"schemas":{"entry":{},"local":{"$id":"https://id.test/local","$defs":{"number":{"type":"number"}}}}}"##,
@@ -220,7 +329,7 @@ fn defects_are_distinct_from_unavailable_content_and_unknown_dialects() {
 }
 
 #[test]
-fn unknown_dialects_are_local_and_metadata_is_reachable() {
+fn unknown_required_vocabularies_do_not_certify_external_name_absence() {
     let selected = schema(
         r##"{"openbindings":"0.2.0","operations":{},"schemas":{"entry":{"$ref":"https://missing.test/unvisited"}}}"##,
     );
@@ -229,52 +338,59 @@ fn unknown_dialects_are_local_and_metadata_is_reachable() {
         .with("https://dialect.test/custom",value(r##"{"$schema":"https://json-schema.org/draft/2020-12/schema","$vocabulary":{"https://vocab.test/custom":true}}"##)).unwrap()
         .with("https://fetch.test/known",value(r##"{"$defs":{"nested":{"$id":"https://id.test/nested","$schema":"https://dialect.test/custom","$defs":{"child":true}}}}"##)).unwrap();
     let env = environment(&selected, &external);
-    let unknown = env
-        .resolve(&env.root(), "https://id.test/unknown")
-        .unwrap()
-        .schema;
-    assert_eq!(unknown.dialect(), Some("https://dialect.test/custom"));
-    assert!(unknown.source().get("$defs").is_some());
-    let meta = env
-        .resolve(&unknown, unknown.dialect().unwrap())
-        .unwrap()
-        .schema;
-    assert!(meta.value().get("$vocabulary").is_some());
-    for query in ["#/$defs/hidden", "#h"] {
-        assert!(matches!(
-            env.resolve(&unknown, query).unwrap_err().kind,
-            ResolutionFailureKind::UnsupportedDialect { .. }
-        ));
+    // The original input records remain observable without claiming that an
+    // unrecognized vocabulary cannot introduce competing resource identities.
+    let original = external
+        .iter()
+        .find(|r| r.uri == "https://fetch.test/unknown")
+        .unwrap();
+    assert_eq!(
+        original.document.get("$schema").unwrap().as_str(),
+        Some("https://dialect.test/custom")
+    );
+    assert!(original.document.get("$defs").is_some());
+    for query in [
+        "https://id.test/unknown",
+        "https://dialect.test/custom",
+        "https://fetch.test/unknown#/$defs/hidden",
+        "https://fetch.test/known#/$defs/nested",
+        "https://fetch.test/known#/$defs/nested/$defs/child",
+        "https://id.test/hidden",
+    ] {
+        assert_eq!(
+            env.resolve(&env.root(), query).unwrap_err().kind,
+            ResolutionFailureKind::UnsupportedCapability {
+                capability: "custom-profile-namespace".into()
+            }
+        );
     }
-    assert!(matches!(
-        env.dynamic_anchor(&unknown.resource(), "h")
-            .unwrap_err()
-            .kind,
-        ResolutionFailureKind::UnsupportedDialect { .. }
-    ));
-    assert!(matches!(
-        unknown.subschema(&["$defs", "hidden"]).unwrap_err().kind,
-        ResolutionFailureKind::UnsupportedDialect { .. }
-    ));
-    let nested = env
-        .resolve(&env.root(), "https://fetch.test/known#/$defs/nested")
+}
+
+#[test]
+fn certificate_known_unevaluated_dialect_retains_original_root_metadata() {
+    let selected = schema(r#"{"openbindings":"0.2.0","operations":{},"schemas":{"entry":true}}"#);
+    let external = ExternalSchemas::default().with("https://fetch.test/old", value(r#"{"$schema":"http://json-schema.org/draft-06/schema#","definitions":{"hidden":true}}"#)).unwrap();
+    let env = environment(&selected, &external);
+    let old = env
+        .resolve(&env.root(), "https://fetch.test/old")
         .unwrap()
         .schema;
-    assert_eq!(nested.dialect(), unknown.dialect());
+    assert_eq!(
+        old.dialect(),
+        Some("http://json-schema.org/draft-06/schema#")
+    );
+    assert!(old.source().get("definitions").is_some());
     assert!(matches!(
-        env.resolve(
-            &env.root(),
-            "https://fetch.test/known#/$defs/nested/$defs/child"
-        )
-        .unwrap_err()
-        .kind,
+        env.resolve(&old, "#/definitions/hidden").unwrap_err().kind,
         ResolutionFailureKind::UnsupportedDialect { .. }
     ));
     assert!(matches!(
-        env.resolve(&env.root(), "https://id.test/hidden")
-            .unwrap_err()
-            .kind,
-        ResolutionFailureKind::ResourceUnavailable { .. }
+        old.subschema(&["definitions", "hidden"]).unwrap_err().kind,
+        ResolutionFailureKind::UnsupportedDialect { .. }
+    ));
+    assert!(matches!(
+        env.dynamic_anchor(&old.resource(), "h").unwrap_err().kind,
+        ResolutionFailureKind::UnsupportedDialect { .. }
     ));
 }
 
