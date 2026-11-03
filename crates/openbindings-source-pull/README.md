@@ -6,7 +6,60 @@ It carries additions to one original document and the report of pulling one
 selected source. Kind implementations own source interpretation and projection.
 A report is a producer claim, not proof of live availability or fidelity.
 
-The carrier foundation preserves exact JSON, allowed output metadata and absence
-versus null. Proposals carry restricted edit authority; retaining unknown metadata
-does not authorize copying it into a document. Checked clients and full relationship
-validation follow this foundation. No TypeScript role API is implied.
+The carriers preserve exact JSON, allowed output metadata and absence versus null.
+Proposals carry restricted edit authority; retaining unknown metadata does not
+authorize copying it into a document. No TypeScript role API is implied.
+
+`PullRequest` retains a complete `ConformantDocument`, selected source key and
+optional shared `Context`. `SourcePuller` supplies borrowed finite work and its
+own native operational error. `PullClient` checks source existence before dispatch,
+then checks key/alias collisions, selected-source attribution, report coverage,
+canonical operation keys, uses labels and known report dependency closure. It
+validates a prospective document with all additions before returning the exact
+result. The original remains unchanged and stale proposals are never applied.
+
+```rust
+use openbindings::ConformantDocument;
+use openbindings_source_pull::{CancellationToken, ClientError, PullClient, PullRequest, SourcePuller};
+
+async fn inspect<P: SourcePuller>(provider: P, document: ConformantDocument)
+    -> Result<bool, ClientError<P::Error>>
+{
+    let request = PullRequest::new(document, "catalog");
+    let result = PullClient::new(provider)
+        .pull_source(request, CancellationToken::new()).await?;
+    Ok(result.report().is_complete())
+}
+```
+
+`is_complete` means exhaustive with no implementation-unsupported omission. It
+does not independently verify that the source was read. A context challenge is
+returned to the caller; no context collection, source check, retry or source
+operation is performed automatically. Dropping pending work cancels its child
+token before dropping the provider's future.
+
+`PullResult::validate_for` also checks an already supplied result and returns the
+prospective conformant document. That establishes core conformance, not offered
+schema identity behind a reuse claim, faithful execution, live availability,
+change judgments or dependency closure inside opaque kind data. A caller adopts
+a chosen dependency-closed subset or applies permitted proposal fields through
+explicit document edits, then revalidates that edited snapshot.
+
+`PullLimits` defaults to 32 MiB request/response handoffs, 100,000 indexed entries
+and uses labels, 20 million relationship work units and 64 MiB cumulative
+relationship-index/edit-metadata reservations. They exclude provider work and
+already admitted carriers. Core prospective rebuilding/validation uses the
+original document's JSON limits and core finding limits, not the relationship
+ledger; cancellation is checked before and after those synchronous calls.
+Requests read through `from_json` are admitted before client limits, so byte
+consumers should first choose explicit JSON parsing limits. Native operational
+errors are not measured as JSON; exact context challenges are.
+
+The publication has no proposal deletion representation. Omission means no
+change, `data: null` sets null, and null is invalid for input/output schemas.
+Removal-only drift requires operational inability or a separate caller-owned
+removal edit; it must not become a fabricated current/unmatched report.
+
+Qualification includes the 21 pinned pull-report cases, five published examples,
+74 independently designed controls and two illustrative kind consumers. Legacy
+companion/consumer retirement and full SDK integration remain separate work.

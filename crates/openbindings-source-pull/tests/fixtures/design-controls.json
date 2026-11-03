@@ -1,0 +1,4164 @@
+{
+  "format": "independent-source-pull-design-controls@1",
+  "scope": "Design oracles only; no production implementation run or value-support claim",
+  "cases": [
+    {
+      "id": "minimal-no-data",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {},
+          "sources": {
+            "api": {
+              "kind": "example.review@1"
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {},
+        "report": {
+          "exhaustive": true,
+          "added": []
+        }
+      },
+      "expected": "accept",
+      "authority": "source-puller/README.md:59-64",
+      "note": ""
+    },
+    {
+      "id": "open-carriers-exact-metadata",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {},
+          "sources": {
+            "api": {
+              "kind": "example.report@1"
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {
+          "applicationNote": {
+            "keep": null
+          }
+        },
+        "report": {
+          "exhaustive": true,
+          "added": [],
+          "applicationNote": "example"
+        },
+        "extension": {
+          "exact": "\ud800"
+        }
+      },
+      "expected": "accept",
+      "authority": "source-puller/0.1.json#/schemas/PullSourceResult",
+      "note": "Retain all unknown fields and exact UTF-16; do not insert additions.applicationNote into the document."
+    },
+    {
+      "id": "current-open-metadata",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {
+            "getUser": {},
+            "getLegacy": {}
+          },
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          },
+          "bindings": {
+            "getUser.api": {
+              "operation": "getUser",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1users~1{id}/get"
+              }
+            },
+            "getLegacy.api": {
+              "operation": "getLegacy",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1legacy/get"
+              }
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {},
+        "report": {
+          "exhaustive": true,
+          "added": [],
+          "existing": [
+            {
+              "binding": "getUser.api",
+              "status": "current",
+              "applicationNote": "ok"
+            },
+            {
+              "binding": "getLegacy.api",
+              "status": "unmatched",
+              "reasonCode": "example.path-removed",
+              "message": "The source no longer declares this path."
+            }
+          ]
+        }
+      },
+      "expected": "accept",
+      "authority": "source-puller/0.1.json#/schemas/PullExistingEntry",
+      "note": ""
+    },
+    {
+      "id": "current-forbids-proposal",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {
+            "getUser": {},
+            "getLegacy": {}
+          },
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          },
+          "bindings": {
+            "getUser.api": {
+              "operation": "getUser",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1users~1{id}/get"
+              }
+            },
+            "getLegacy.api": {
+              "operation": "getLegacy",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1legacy/get"
+              }
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {},
+        "report": {
+          "exhaustive": true,
+          "added": [],
+          "existing": [
+            {
+              "binding": "getUser.api",
+              "status": "current",
+              "proposal": null
+            },
+            {
+              "binding": "getLegacy.api",
+              "status": "unmatched",
+              "reasonCode": "example.path-removed",
+              "message": "The source no longer declares this path."
+            }
+          ]
+        }
+      },
+      "expected": "reject-carrier",
+      "authority": "source-puller/0.1.json#/schemas/PullExistingEntry/allOf/1",
+      "note": "Presence is forbidden, even null or empty."
+    },
+    {
+      "id": "current-forbids-change",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {
+            "getUser": {},
+            "getLegacy": {}
+          },
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          },
+          "bindings": {
+            "getUser.api": {
+              "operation": "getUser",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1users~1{id}/get"
+              }
+            },
+            "getLegacy.api": {
+              "operation": "getLegacy",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1legacy/get"
+              }
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {},
+        "report": {
+          "exhaustive": true,
+          "added": [],
+          "existing": [
+            {
+              "binding": "getUser.api",
+              "status": "current",
+              "change": "non-breaking"
+            },
+            {
+              "binding": "getLegacy.api",
+              "status": "unmatched",
+              "reasonCode": "example.path-removed",
+              "message": "The source no longer declares this path."
+            }
+          ]
+        }
+      },
+      "expected": "reject-carrier",
+      "authority": "source-puller/0.1.json#/schemas/PullExistingEntry/allOf/1",
+      "note": "Presence is forbidden, even null or empty."
+    },
+    {
+      "id": "current-forbids-reasonCode",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {
+            "getUser": {},
+            "getLegacy": {}
+          },
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          },
+          "bindings": {
+            "getUser.api": {
+              "operation": "getUser",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1users~1{id}/get"
+              }
+            },
+            "getLegacy.api": {
+              "operation": "getLegacy",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1legacy/get"
+              }
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {},
+        "report": {
+          "exhaustive": true,
+          "added": [],
+          "existing": [
+            {
+              "binding": "getUser.api",
+              "status": "current",
+              "reasonCode": "why"
+            },
+            {
+              "binding": "getLegacy.api",
+              "status": "unmatched",
+              "reasonCode": "example.path-removed",
+              "message": "The source no longer declares this path."
+            }
+          ]
+        }
+      },
+      "expected": "reject-carrier",
+      "authority": "source-puller/0.1.json#/schemas/PullExistingEntry/allOf/1",
+      "note": "Presence is forbidden, even null or empty."
+    },
+    {
+      "id": "current-forbids-message",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {
+            "getUser": {},
+            "getLegacy": {}
+          },
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          },
+          "bindings": {
+            "getUser.api": {
+              "operation": "getUser",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1users~1{id}/get"
+              }
+            },
+            "getLegacy.api": {
+              "operation": "getLegacy",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1legacy/get"
+              }
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {},
+        "report": {
+          "exhaustive": true,
+          "added": [],
+          "existing": [
+            {
+              "binding": "getUser.api",
+              "status": "current",
+              "message": ""
+            },
+            {
+              "binding": "getLegacy.api",
+              "status": "unmatched",
+              "reasonCode": "example.path-removed",
+              "message": "The source no longer declares this path."
+            }
+          ]
+        }
+      },
+      "expected": "reject-carrier",
+      "authority": "source-puller/0.1.json#/schemas/PullExistingEntry/allOf/1",
+      "note": "Presence is forbidden, even null or empty."
+    },
+    {
+      "id": "current-forbids-details",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {
+            "getUser": {},
+            "getLegacy": {}
+          },
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          },
+          "bindings": {
+            "getUser.api": {
+              "operation": "getUser",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1users~1{id}/get"
+              }
+            },
+            "getLegacy.api": {
+              "operation": "getLegacy",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1legacy/get"
+              }
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {},
+        "report": {
+          "exhaustive": true,
+          "added": [],
+          "existing": [
+            {
+              "binding": "getUser.api",
+              "status": "current",
+              "details": {}
+            },
+            {
+              "binding": "getLegacy.api",
+              "status": "unmatched",
+              "reasonCode": "example.path-removed",
+              "message": "The source no longer declares this path."
+            }
+          ]
+        }
+      },
+      "expected": "reject-carrier",
+      "authority": "source-puller/0.1.json#/schemas/PullExistingEntry/allOf/1",
+      "note": "Presence is forbidden, even null or empty."
+    },
+    {
+      "id": "unmatched-forbids-proposal",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {
+            "getUser": {},
+            "getLegacy": {}
+          },
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          },
+          "bindings": {
+            "getUser.api": {
+              "operation": "getUser",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1users~1{id}/get"
+              }
+            },
+            "getLegacy.api": {
+              "operation": "getLegacy",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1legacy/get"
+              }
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {},
+        "report": {
+          "exhaustive": true,
+          "added": [],
+          "existing": [
+            {
+              "binding": "getUser.api",
+              "status": "current"
+            },
+            {
+              "binding": "getLegacy.api",
+              "status": "unmatched",
+              "reasonCode": "example.path-removed",
+              "message": "The source no longer declares this path.",
+              "proposal": {
+                "data": null
+              }
+            }
+          ]
+        }
+      },
+      "expected": "reject-carrier",
+      "authority": "source-puller/0.1.json#/schemas/PullExistingEntry/allOf/1",
+      "note": ""
+    },
+    {
+      "id": "unmatched-forbids-change",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {
+            "getUser": {},
+            "getLegacy": {}
+          },
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          },
+          "bindings": {
+            "getUser.api": {
+              "operation": "getUser",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1users~1{id}/get"
+              }
+            },
+            "getLegacy.api": {
+              "operation": "getLegacy",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1legacy/get"
+              }
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {},
+        "report": {
+          "exhaustive": true,
+          "added": [],
+          "existing": [
+            {
+              "binding": "getUser.api",
+              "status": "current"
+            },
+            {
+              "binding": "getLegacy.api",
+              "status": "unmatched",
+              "reasonCode": "example.path-removed",
+              "message": "The source no longer declares this path.",
+              "change": "dangerous"
+            }
+          ]
+        }
+      },
+      "expected": "reject-carrier",
+      "authority": "source-puller/0.1.json#/schemas/PullExistingEntry/allOf/1",
+      "note": ""
+    },
+    {
+      "id": "binding-proposal-explicit-null",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {
+            "getUser": {}
+          },
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          },
+          "bindings": {
+            "getUser.api": {
+              "operation": "getUser",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1users~1{userId}/get"
+              }
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {},
+        "report": {
+          "exhaustive": true,
+          "added": [],
+          "existing": [
+            {
+              "binding": "getUser.api",
+              "status": "stale",
+              "change": "non-breaking",
+              "message": "The operation is now served at /users/{id}.",
+              "proposal": {
+                "data": null
+              }
+            }
+          ]
+        }
+      },
+      "expected": "accept",
+      "authority": "source-puller/0.1.json#/schemas/PullBindingProposal",
+      "note": ""
+    },
+    {
+      "id": "binding-proposal-null-schema",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {
+            "getUser": {}
+          },
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          },
+          "bindings": {
+            "getUser.api": {
+              "operation": "getUser",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1users~1{userId}/get"
+              }
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {},
+        "report": {
+          "exhaustive": true,
+          "added": [],
+          "existing": [
+            {
+              "binding": "getUser.api",
+              "status": "stale",
+              "change": "non-breaking",
+              "message": "The operation is now served at /users/{id}.",
+              "proposal": {
+                "input": null
+              }
+            }
+          ]
+        }
+      },
+      "expected": "reject-carrier",
+      "authority": "source-puller/0.1.json#/schemas/JSONSchemaValue",
+      "note": ""
+    },
+    {
+      "id": "binding-proposal-uses-only",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {
+            "getUser": {}
+          },
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          },
+          "bindings": {
+            "getUser.api": {
+              "operation": "getUser",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1users~1{userId}/get"
+              }
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {},
+        "report": {
+          "exhaustive": true,
+          "added": [],
+          "existing": [
+            {
+              "binding": "getUser.api",
+              "status": "stale",
+              "change": "non-breaking",
+              "message": "The operation is now served at /users/{id}.",
+              "proposal": {
+                "uses": []
+              }
+            }
+          ]
+        }
+      },
+      "expected": "reject-carrier",
+      "authority": "source-puller/0.1.json#/schemas/PullBindingProposal/anyOf",
+      "note": ""
+    },
+    {
+      "id": "source-proposal-explicit-null",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {},
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json",
+                "etag": "\"v1\""
+              }
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {},
+        "report": {
+          "exhaustive": true,
+          "added": [],
+          "existing": [
+            {
+              "source": "api",
+              "status": "stale",
+              "change": "non-breaking",
+              "message": "The origin serves a newer document.",
+              "proposal": {
+                "data": null
+              }
+            }
+          ]
+        }
+      },
+      "expected": "accept",
+      "authority": "source-puller/0.1.json#/schemas/PullSourceProposal",
+      "note": ""
+    },
+    {
+      "id": "source-proposal-data-required",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {},
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json",
+                "etag": "\"v1\""
+              }
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {},
+        "report": {
+          "exhaustive": true,
+          "added": [],
+          "existing": [
+            {
+              "source": "api",
+              "status": "stale",
+              "change": "non-breaking",
+              "message": "The origin serves a newer document.",
+              "proposal": {}
+            }
+          ]
+        }
+      },
+      "expected": "reject-carrier",
+      "authority": "source-puller/0.1.json#/schemas/PullSourceProposal",
+      "note": ""
+    },
+    {
+      "id": "schema-proposal-object",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "schemas": {
+            "User": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name"
+              ]
+            }
+          },
+          "operations": {
+            "getUser": {
+              "output": {
+                "$ref": "#/schemas/User"
+              }
+            }
+          },
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          },
+          "bindings": {
+            "getUser.api": {
+              "operation": "getUser",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1users~1{id}/get"
+              }
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {},
+        "report": {
+          "exhaustive": true,
+          "added": [],
+          "existing": [
+            {
+              "binding": "getUser.api",
+              "status": "current"
+            },
+            {
+              "schema": "User",
+              "status": "stale",
+              "change": "non-breaking",
+              "message": "The component gained an optional email.",
+              "proposal": {}
+            }
+          ]
+        }
+      },
+      "expected": "accept",
+      "authority": "source-puller/0.1.json#/schemas/JSONSchemaValue",
+      "note": ""
+    },
+    {
+      "id": "schema-proposal-true",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "schemas": {
+            "User": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name"
+              ]
+            }
+          },
+          "operations": {
+            "getUser": {
+              "output": {
+                "$ref": "#/schemas/User"
+              }
+            }
+          },
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          },
+          "bindings": {
+            "getUser.api": {
+              "operation": "getUser",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1users~1{id}/get"
+              }
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {},
+        "report": {
+          "exhaustive": true,
+          "added": [],
+          "existing": [
+            {
+              "binding": "getUser.api",
+              "status": "current"
+            },
+            {
+              "schema": "User",
+              "status": "stale",
+              "change": "non-breaking",
+              "message": "The component gained an optional email.",
+              "proposal": true
+            }
+          ]
+        }
+      },
+      "expected": "accept",
+      "authority": "source-puller/0.1.json#/schemas/JSONSchemaValue",
+      "note": ""
+    },
+    {
+      "id": "schema-proposal-false",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "schemas": {
+            "User": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name"
+              ]
+            }
+          },
+          "operations": {
+            "getUser": {
+              "output": {
+                "$ref": "#/schemas/User"
+              }
+            }
+          },
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          },
+          "bindings": {
+            "getUser.api": {
+              "operation": "getUser",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1users~1{id}/get"
+              }
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {},
+        "report": {
+          "exhaustive": true,
+          "added": [],
+          "existing": [
+            {
+              "binding": "getUser.api",
+              "status": "current"
+            },
+            {
+              "schema": "User",
+              "status": "stale",
+              "change": "non-breaking",
+              "message": "The component gained an optional email.",
+              "proposal": false
+            }
+          ]
+        }
+      },
+      "expected": "accept",
+      "authority": "source-puller/0.1.json#/schemas/JSONSchemaValue",
+      "note": ""
+    },
+    {
+      "id": "schema-proposal-null",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "schemas": {
+            "User": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name"
+              ]
+            }
+          },
+          "operations": {
+            "getUser": {
+              "output": {
+                "$ref": "#/schemas/User"
+              }
+            }
+          },
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          },
+          "bindings": {
+            "getUser.api": {
+              "operation": "getUser",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1users~1{id}/get"
+              }
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {},
+        "report": {
+          "exhaustive": true,
+          "added": [],
+          "existing": [
+            {
+              "binding": "getUser.api",
+              "status": "current"
+            },
+            {
+              "schema": "User",
+              "status": "stale",
+              "change": "non-breaking",
+              "message": "The component gained an optional email.",
+              "proposal": null
+            }
+          ]
+        }
+      },
+      "expected": "reject-carrier",
+      "authority": "source-puller/0.1.json#/schemas/JSONSchemaValue",
+      "note": ""
+    },
+    {
+      "id": "schema-proposal-opaque-unknown-keywords",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "schemas": {
+            "User": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name"
+              ]
+            }
+          },
+          "operations": {
+            "getUser": {
+              "output": {
+                "$ref": "#/schemas/User"
+              }
+            }
+          },
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          },
+          "bindings": {
+            "getUser.api": {
+              "operation": "getUser",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1users~1{id}/get"
+              }
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {},
+        "report": {
+          "exhaustive": true,
+          "added": [],
+          "existing": [
+            {
+              "binding": "getUser.api",
+              "status": "current"
+            },
+            {
+              "schema": "User",
+              "status": "stale",
+              "change": "non-breaking",
+              "message": "The component gained an optional email.",
+              "proposal": {
+                "description": "kind schema annotation",
+                "type": "string",
+                "uses": [
+                  "not-a-PullUses-label"
+                ],
+                "preference": null
+              }
+            }
+          ]
+        }
+      },
+      "expected": "accept",
+      "authority": "source-puller/README.md:155",
+      "note": "No proposal-wrapper denylist or PullUses interpretation inside a whole schema."
+    },
+    {
+      "id": "binding-data-does-not-inherit-wrapper-denylist",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {
+            "getUser": {}
+          },
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          },
+          "bindings": {
+            "getUser.api": {
+              "operation": "getUser",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1users~1{userId}/get"
+              }
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {},
+        "report": {
+          "exhaustive": true,
+          "added": [],
+          "existing": [
+            {
+              "binding": "getUser.api",
+              "status": "stale",
+              "change": "non-breaking",
+              "message": "The operation is now served at /users/{id}.",
+              "proposal": {
+                "data": {
+                  "description": "kind data",
+                  "preference": null,
+                  "idempotent": "opaque",
+                  "operation": 42,
+                  "source": "opaque"
+                },
+                "applicationNote": "keep"
+              }
+            }
+          ]
+        }
+      },
+      "expected": "accept",
+      "authority": "source-puller/README.md:148-155",
+      "note": ""
+    },
+    {
+      "id": "binding-proposal-authority-description",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {
+            "getUser": {}
+          },
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          },
+          "bindings": {
+            "getUser.api": {
+              "operation": "getUser",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1users~1{userId}/get"
+              }
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {},
+        "report": {
+          "exhaustive": true,
+          "added": [],
+          "existing": [
+            {
+              "binding": "getUser.api",
+              "status": "stale",
+              "change": "non-breaking",
+              "message": "The operation is now served at /users/{id}.",
+              "proposal": {
+                "data": {
+                  "selector": "#/paths/~1users~1{id}/get"
+                },
+                "description": "author"
+              }
+            }
+          ]
+        }
+      },
+      "expected": "reject-proposal-authority",
+      "authority": "source-puller/README.md:148-155",
+      "note": "Known edits outside the published proposal authority; this is stricter than JSON shape validation alone."
+    },
+    {
+      "id": "binding-proposal-authority-preference",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {
+            "getUser": {}
+          },
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          },
+          "bindings": {
+            "getUser.api": {
+              "operation": "getUser",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1users~1{userId}/get"
+              }
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {},
+        "report": {
+          "exhaustive": true,
+          "added": [],
+          "existing": [
+            {
+              "binding": "getUser.api",
+              "status": "stale",
+              "change": "non-breaking",
+              "message": "The operation is now served at /users/{id}.",
+              "proposal": {
+                "data": {
+                  "selector": "#/paths/~1users~1{id}/get"
+                },
+                "preference": 1
+              }
+            }
+          ]
+        }
+      },
+      "expected": "reject-proposal-authority",
+      "authority": "source-puller/README.md:148-155",
+      "note": "Known edits outside the published proposal authority; this is stricter than JSON shape validation alone."
+    },
+    {
+      "id": "binding-proposal-authority-idempotent",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {
+            "getUser": {}
+          },
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          },
+          "bindings": {
+            "getUser.api": {
+              "operation": "getUser",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1users~1{userId}/get"
+              }
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {},
+        "report": {
+          "exhaustive": true,
+          "added": [],
+          "existing": [
+            {
+              "binding": "getUser.api",
+              "status": "stale",
+              "change": "non-breaking",
+              "message": "The operation is now served at /users/{id}.",
+              "proposal": {
+                "data": {
+                  "selector": "#/paths/~1users~1{id}/get"
+                },
+                "idempotent": true
+              }
+            }
+          ]
+        }
+      },
+      "expected": "reject-proposal-authority",
+      "authority": "source-puller/README.md:148-155",
+      "note": "Known edits outside the published proposal authority; this is stricter than JSON shape validation alone."
+    },
+    {
+      "id": "binding-proposal-authority-operation",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {
+            "getUser": {}
+          },
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          },
+          "bindings": {
+            "getUser.api": {
+              "operation": "getUser",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1users~1{userId}/get"
+              }
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {},
+        "report": {
+          "exhaustive": true,
+          "added": [],
+          "existing": [
+            {
+              "binding": "getUser.api",
+              "status": "stale",
+              "change": "non-breaking",
+              "message": "The operation is now served at /users/{id}.",
+              "proposal": {
+                "data": {
+                  "selector": "#/paths/~1users~1{id}/get"
+                },
+                "operation": "other"
+              }
+            }
+          ]
+        }
+      },
+      "expected": "reject-proposal-authority",
+      "authority": "source-puller/README.md:148-155",
+      "note": "Known edits outside the published proposal authority; this is stricter than JSON shape validation alone."
+    },
+    {
+      "id": "binding-proposal-authority-source",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {
+            "getUser": {}
+          },
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          },
+          "bindings": {
+            "getUser.api": {
+              "operation": "getUser",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1users~1{userId}/get"
+              }
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {},
+        "report": {
+          "exhaustive": true,
+          "added": [],
+          "existing": [
+            {
+              "binding": "getUser.api",
+              "status": "stale",
+              "change": "non-breaking",
+              "message": "The operation is now served at /users/{id}.",
+              "proposal": {
+                "data": {
+                  "selector": "#/paths/~1users~1{id}/get"
+                },
+                "source": "other"
+              }
+            }
+          ]
+        }
+      },
+      "expected": "reject-proposal-authority",
+      "authority": "source-puller/README.md:148-155",
+      "note": "Known edits outside the published proposal authority; this is stricter than JSON shape validation alone."
+    },
+    {
+      "id": "binding-proposal-authority-aliases",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {
+            "getUser": {}
+          },
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          },
+          "bindings": {
+            "getUser.api": {
+              "operation": "getUser",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1users~1{userId}/get"
+              }
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {},
+        "report": {
+          "exhaustive": true,
+          "added": [],
+          "existing": [
+            {
+              "binding": "getUser.api",
+              "status": "stale",
+              "change": "non-breaking",
+              "message": "The operation is now served at /users/{id}.",
+              "proposal": {
+                "data": {
+                  "selector": "#/paths/~1users~1{id}/get"
+                },
+                "aliases": [
+                  "other"
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "expected": "reject-proposal-authority",
+      "authority": "source-puller/README.md:148-155",
+      "note": "Known edits outside the published proposal authority; this is stricter than JSON shape validation alone."
+    },
+    {
+      "id": "binding-proposal-authority-deprecated",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {
+            "getUser": {}
+          },
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          },
+          "bindings": {
+            "getUser.api": {
+              "operation": "getUser",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1users~1{userId}/get"
+              }
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {},
+        "report": {
+          "exhaustive": true,
+          "added": [],
+          "existing": [
+            {
+              "binding": "getUser.api",
+              "status": "stale",
+              "change": "non-breaking",
+              "message": "The operation is now served at /users/{id}.",
+              "proposal": {
+                "data": {
+                  "selector": "#/paths/~1users~1{id}/get"
+                },
+                "deprecated": true
+              }
+            }
+          ]
+        }
+      },
+      "expected": "reject-proposal-authority",
+      "authority": "source-puller/README.md:148-155",
+      "note": "Known edits outside the published proposal authority; this is stricter than JSON shape validation alone."
+    },
+    {
+      "id": "source-proposal-authority-kind",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {},
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json",
+                "etag": "\"v1\""
+              }
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {},
+        "report": {
+          "exhaustive": true,
+          "added": [],
+          "existing": [
+            {
+              "source": "api",
+              "status": "stale",
+              "change": "non-breaking",
+              "message": "The origin serves a newer document.",
+              "proposal": {
+                "data": {
+                  "location": "https://example.com/openapi.json",
+                  "etag": "\"v2\""
+                },
+                "kind": "other@1"
+              }
+            }
+          ]
+        }
+      },
+      "expected": "reject-proposal-authority",
+      "authority": "source-puller/README.md:156-158",
+      "note": ""
+    },
+    {
+      "id": "source-proposal-authority-description",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {},
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json",
+                "etag": "\"v1\""
+              }
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {},
+        "report": {
+          "exhaustive": true,
+          "added": [],
+          "existing": [
+            {
+              "source": "api",
+              "status": "stale",
+              "change": "non-breaking",
+              "message": "The origin serves a newer document.",
+              "proposal": {
+                "data": {
+                  "location": "https://example.com/openapi.json",
+                  "etag": "\"v2\""
+                },
+                "description": "author"
+              }
+            }
+          ]
+        }
+      },
+      "expected": "reject-proposal-authority",
+      "authority": "source-puller/README.md:156-158",
+      "note": ""
+    },
+    {
+      "id": "exhaustive-true-with-limitation",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {},
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {},
+        "report": {
+          "exhaustive": true,
+          "added": [],
+          "limitation": {
+            "code": "observed",
+            "message": "retained metadata"
+          }
+        }
+      },
+      "expected": "accept",
+      "authority": "source-puller/0.1.json#/schemas/PullReport/oneOf",
+      "note": "is_complete remains true; no prohibition on limitation under exhaustive:true."
+    },
+    {
+      "id": "limitation-message-empty",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {
+            "getLegacy": {}
+          },
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          },
+          "bindings": {
+            "getLegacy.api": {
+              "operation": "getLegacy",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1legacy/get"
+              }
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {
+          "operations": {
+            "getUser": {}
+          },
+          "bindings": {
+            "getUser.api": {
+              "operation": "getUser",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1users~1{id}/get"
+              }
+            }
+          }
+        },
+        "report": {
+          "exhaustive": false,
+          "limitation": {
+            "code": "example.unread-reference",
+            "message": ""
+          },
+          "added": [
+            {
+              "binding": "getUser.api",
+              "operation": "getUser"
+            }
+          ],
+          "existing": [
+            {
+              "binding": "getLegacy.api",
+              "status": "unmatched"
+            }
+          ]
+        }
+      },
+      "expected": "reject-carrier",
+      "authority": "source-puller/0.1.json#/schemas/PullLimitation",
+      "note": ""
+    },
+    {
+      "id": "loss-message-may-be-empty",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {},
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {
+          "operations": {
+            "getUser": {
+              "output": {
+                "type": "object"
+              }
+            }
+          },
+          "bindings": {
+            "getUser.api": {
+              "operation": "getUser",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1users~1{id}/get"
+              }
+            }
+          }
+        },
+        "report": {
+          "exhaustive": true,
+          "added": [
+            {
+              "binding": "getUser.api",
+              "operation": "getUser",
+              "lossy": {
+                "reasonCode": "example.schema-approximated",
+                "message": "",
+                "details": {
+                  "construct": "discriminator"
+                }
+              }
+            }
+          ]
+        }
+      },
+      "expected": "accept",
+      "authority": "source-puller/0.1.json#/schemas/PullLoss",
+      "note": ""
+    },
+    {
+      "id": "nonexcluded-rule-and-empty-message",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {
+            "getUser": {
+              "input": {
+                "type": "string"
+              },
+              "output": {
+                "type": "object"
+              }
+            }
+          },
+          "sources": {
+            "legacy": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://legacy.example.com/openapi.json"
+              }
+            },
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          },
+          "bindings": {
+            "getUser.legacy": {
+              "operation": "getUser",
+              "source": "legacy",
+              "data": {
+                "selector": "#/paths/~1user~1{id}/get"
+              }
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {},
+        "report": {
+          "exhaustive": true,
+          "added": [],
+          "omitted": [
+            {
+              "status": "conflict",
+              "reasonCode": "openbindings.source-puller.operation-conflict",
+              "message": "",
+              "details": {
+                "operation": "getUser"
+              },
+              "rule": "retained"
+            }
+          ]
+        }
+      },
+      "expected": "accept",
+      "authority": "source-puller/0.1.json#/schemas/PullOmittedEntry",
+      "note": "is_complete remains true."
+    },
+    {
+      "id": "details-must-be-object",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {
+            "getUser": {
+              "input": {
+                "type": "string"
+              },
+              "output": {
+                "type": "object"
+              }
+            }
+          },
+          "sources": {
+            "legacy": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://legacy.example.com/openapi.json"
+              }
+            },
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          },
+          "bindings": {
+            "getUser.legacy": {
+              "operation": "getUser",
+              "source": "legacy",
+              "data": {
+                "selector": "#/paths/~1user~1{id}/get"
+              }
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {},
+        "report": {
+          "exhaustive": true,
+          "added": [],
+          "omitted": [
+            {
+              "status": "conflict",
+              "reasonCode": "openbindings.source-puller.operation-conflict",
+              "message": "The source offers getUser with a different input; the document's getUser takes a string.",
+              "details": null
+            }
+          ]
+        }
+      },
+      "expected": "reject-carrier",
+      "authority": "source-puller/0.1.json#/schemas/PullOmittedEntry",
+      "note": ""
+    },
+    {
+      "id": "reused-false-is-not-absence",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "schemas": {
+            "User": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "operations": {
+            "getUser": {
+              "input": {
+                "type": "string"
+              },
+              "output": {
+                "$ref": "#/schemas/User"
+              }
+            }
+          },
+          "sources": {
+            "legacy": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://legacy.example.com/openapi.json"
+              }
+            },
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          },
+          "bindings": {
+            "getUser.legacy": {
+              "operation": "getUser",
+              "source": "legacy",
+              "data": {
+                "selector": "#/paths/~1user~1{id}/get"
+              }
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {
+          "bindings": {
+            "getUser.api": {
+              "operation": "getUser",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1users~1{id}/get"
+              }
+            }
+          }
+        },
+        "report": {
+          "exhaustive": true,
+          "added": [
+            {
+              "binding": "getUser.api",
+              "operation": "getUser",
+              "reused": false
+            }
+          ]
+        }
+      },
+      "expected": "reject-carrier",
+      "authority": "source-puller/0.1.json#/schemas/PullAddedEntry",
+      "note": ""
+    },
+    {
+      "id": "closed-request",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {},
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          }
+        },
+        "source": "api",
+        "unexpected": true
+      },
+      "result": {
+        "additions": {},
+        "report": {
+          "exhaustive": true,
+          "added": []
+        }
+      },
+      "expected": "reject-request",
+      "authority": "source-puller/0.1.json#/schemas/PullSourceInput/additionalProperties",
+      "note": ""
+    },
+    {
+      "id": "null-context-is-not-absence",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {},
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          }
+        },
+        "source": "api",
+        "context": null
+      },
+      "result": {
+        "additions": {},
+        "report": {
+          "exhaustive": true,
+          "added": []
+        }
+      },
+      "expected": "reject-request",
+      "authority": "source-puller/0.1.json#/schemas/PullContext",
+      "note": ""
+    },
+    {
+      "id": "empty-context-retained",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {},
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          }
+        },
+        "source": "api",
+        "context": {}
+      },
+      "result": {
+        "additions": {},
+        "report": {
+          "exhaustive": true,
+          "added": []
+        }
+      },
+      "expected": "accept",
+      "authority": "source-puller/0.1.json#/schemas/PullContext",
+      "note": "Keep present empty context distinct from absence; do not copy it into source data."
+    },
+    {
+      "id": "selected-source-must-exist",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {},
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          }
+        },
+        "source": "missing"
+      },
+      "result": {
+        "additions": {},
+        "report": {
+          "exhaustive": true,
+          "added": []
+        }
+      },
+      "expected": "reject-before-provider",
+      "authority": "source-puller/README.md:31-33",
+      "note": ""
+    },
+    {
+      "id": "missing-added-report",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {},
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {
+          "operations": {
+            "getUser": {
+              "output": {
+                "type": "object"
+              }
+            }
+          },
+          "bindings": {
+            "getUser.api": {
+              "operation": "getUser",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1users~1{id}/get"
+              }
+            }
+          }
+        },
+        "report": {
+          "exhaustive": true,
+          "added": []
+        }
+      },
+      "expected": "reject-relationship",
+      "authority": "source-puller/README.md:111",
+      "note": ""
+    },
+    {
+      "id": "duplicate-added-report",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {},
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {
+          "operations": {
+            "getUser": {
+              "output": {
+                "type": "object"
+              }
+            }
+          },
+          "bindings": {
+            "getUser.api": {
+              "operation": "getUser",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1users~1{id}/get"
+              }
+            }
+          }
+        },
+        "report": {
+          "exhaustive": true,
+          "added": [
+            {
+              "binding": "getUser.api",
+              "operation": "getUser",
+              "lossy": {
+                "reasonCode": "example.schema-approximated",
+                "message": "The response schema is approximated as an object.",
+                "details": {
+                  "construct": "discriminator"
+                }
+              }
+            },
+            {
+              "binding": "getUser.api",
+              "operation": "getUser",
+              "lossy": {
+                "reasonCode": "example.schema-approximated",
+                "message": "The response schema is approximated as an object.",
+                "details": {
+                  "construct": "discriminator"
+                }
+              }
+            }
+          ]
+        }
+      },
+      "expected": "reject-relationship",
+      "authority": "source-puller/README.md:111",
+      "note": ""
+    },
+    {
+      "id": "added-operation-must-match-binding",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {},
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {
+          "operations": {
+            "getUser": {
+              "output": {
+                "type": "object"
+              }
+            }
+          },
+          "bindings": {
+            "getUser.api": {
+              "operation": "getUser",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1users~1{id}/get"
+              }
+            }
+          }
+        },
+        "report": {
+          "exhaustive": true,
+          "added": [
+            {
+              "binding": "getUser.api",
+              "operation": "other",
+              "lossy": {
+                "reasonCode": "example.schema-approximated",
+                "message": "The response schema is approximated as an object.",
+                "details": {
+                  "construct": "discriminator"
+                }
+              }
+            }
+          ]
+        }
+      },
+      "expected": "reject-relationship",
+      "authority": "source-puller/0.1.json#/schemas/PullAddedEntry/properties/operation",
+      "note": ""
+    },
+    {
+      "id": "added-binding-selected-source-only",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {},
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            },
+            "other": {
+              "kind": "example.other@1"
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {
+          "operations": {
+            "getUser": {
+              "output": {
+                "type": "object"
+              }
+            }
+          },
+          "bindings": {
+            "getUser.api": {
+              "operation": "getUser",
+              "source": "other",
+              "data": {
+                "selector": "#/paths/~1users~1{id}/get"
+              }
+            }
+          }
+        },
+        "report": {
+          "exhaustive": true,
+          "added": [
+            {
+              "binding": "getUser.api",
+              "operation": "getUser",
+              "lossy": {
+                "reasonCode": "example.schema-approximated",
+                "message": "The response schema is approximated as an object.",
+                "details": {
+                  "construct": "discriminator"
+                }
+              }
+            }
+          ]
+        }
+      },
+      "expected": "reject-relationship",
+      "authority": "source-puller/README.md:63",
+      "note": ""
+    },
+    {
+      "id": "existing-operation-requires-reused",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "schemas": {
+            "User": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "operations": {
+            "getUser": {
+              "input": {
+                "type": "string"
+              },
+              "output": {
+                "$ref": "#/schemas/User"
+              }
+            }
+          },
+          "sources": {
+            "legacy": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://legacy.example.com/openapi.json"
+              }
+            },
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          },
+          "bindings": {
+            "getUser.legacy": {
+              "operation": "getUser",
+              "source": "legacy",
+              "data": {
+                "selector": "#/paths/~1user~1{id}/get"
+              }
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {
+          "bindings": {
+            "getUser.api": {
+              "operation": "getUser",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1users~1{id}/get"
+              }
+            }
+          }
+        },
+        "report": {
+          "exhaustive": true,
+          "added": [
+            {
+              "binding": "getUser.api",
+              "operation": "getUser"
+            }
+          ]
+        }
+      },
+      "expected": "reject-relationship",
+      "authority": "source-puller/README.md:70-80",
+      "note": ""
+    },
+    {
+      "id": "new-operation-cannot-be-reused",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {},
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {
+          "operations": {
+            "getUser": {
+              "output": {
+                "type": "object"
+              }
+            }
+          },
+          "bindings": {
+            "getUser.api": {
+              "operation": "getUser",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1users~1{id}/get"
+              }
+            }
+          }
+        },
+        "report": {
+          "exhaustive": true,
+          "added": [
+            {
+              "binding": "getUser.api",
+              "operation": "getUser",
+              "lossy": {
+                "reasonCode": "example.schema-approximated",
+                "message": "The response schema is approximated as an object.",
+                "details": {
+                  "construct": "discriminator"
+                }
+              },
+              "reused": true
+            }
+          ]
+        }
+      },
+      "expected": "reject-relationship",
+      "authority": "source-puller/README.md:117-122",
+      "note": ""
+    },
+    {
+      "id": "new-operation-key-collision",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {
+            "getUser": {}
+          },
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {
+          "operations": {
+            "getUser": {
+              "output": {
+                "type": "object"
+              }
+            }
+          },
+          "bindings": {
+            "getUser.api": {
+              "operation": "getUser",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1users~1{id}/get"
+              }
+            }
+          }
+        },
+        "report": {
+          "exhaustive": true,
+          "added": [
+            {
+              "binding": "getUser.api",
+              "operation": "getUser",
+              "lossy": {
+                "reasonCode": "example.schema-approximated",
+                "message": "The response schema is approximated as an object.",
+                "details": {
+                  "construct": "discriminator"
+                }
+              }
+            }
+          ]
+        }
+      },
+      "expected": "reject-relationship",
+      "authority": "source-puller/README.md:60-62",
+      "note": ""
+    },
+    {
+      "id": "new-key-collides-with-input-alias",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {
+            "old": {
+              "aliases": [
+                "getUser"
+              ]
+            }
+          },
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {
+          "operations": {
+            "getUser": {
+              "output": {
+                "type": "object"
+              }
+            }
+          },
+          "bindings": {
+            "getUser.api": {
+              "operation": "getUser",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1users~1{id}/get"
+              }
+            }
+          }
+        },
+        "report": {
+          "exhaustive": true,
+          "added": [
+            {
+              "binding": "getUser.api",
+              "operation": "getUser",
+              "lossy": {
+                "reasonCode": "example.schema-approximated",
+                "message": "The response schema is approximated as an object.",
+                "details": {
+                  "construct": "discriminator"
+                }
+              }
+            }
+          ]
+        }
+      },
+      "expected": "reject-relationship",
+      "authority": "source-puller/README.md:60-62",
+      "note": ""
+    },
+    {
+      "id": "new-alias-collides-with-input-alias",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {
+            "old": {
+              "aliases": [
+                "taken"
+              ]
+            }
+          },
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {
+          "operations": {
+            "getUser": {
+              "output": {
+                "type": "object"
+              },
+              "aliases": [
+                "taken"
+              ]
+            }
+          },
+          "bindings": {
+            "getUser.api": {
+              "operation": "getUser",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1users~1{id}/get"
+              }
+            }
+          }
+        },
+        "report": {
+          "exhaustive": true,
+          "added": [
+            {
+              "binding": "getUser.api",
+              "operation": "getUser",
+              "lossy": {
+                "reasonCode": "example.schema-approximated",
+                "message": "The response schema is approximated as an object.",
+                "details": {
+                  "construct": "discriminator"
+                }
+              }
+            }
+          ]
+        }
+      },
+      "expected": "reject-prospective",
+      "authority": "core OBI-05",
+      "note": ""
+    },
+    {
+      "id": "binding-and-report-never-reference-alias",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {},
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {
+          "operations": {
+            "getUser": {
+              "output": {
+                "type": "object"
+              },
+              "aliases": [
+                "alias"
+              ]
+            }
+          },
+          "bindings": {
+            "getUser.api": {
+              "operation": "alias",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1users~1{id}/get"
+              }
+            }
+          }
+        },
+        "report": {
+          "exhaustive": true,
+          "added": [
+            {
+              "binding": "getUser.api",
+              "operation": "alias",
+              "lossy": {
+                "reasonCode": "example.schema-approximated",
+                "message": "The response schema is approximated as an object.",
+                "details": {
+                  "construct": "discriminator"
+                }
+              }
+            }
+          ]
+        }
+      },
+      "expected": "reject-relationship",
+      "authority": "core \u00a75.1/OBI-06; source-puller/README.md:117-119",
+      "note": ""
+    },
+    {
+      "id": "existing-binding-coverage",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {
+            "getUser": {},
+            "getLegacy": {}
+          },
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          },
+          "bindings": {
+            "getUser.api": {
+              "operation": "getUser",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1users~1{id}/get"
+              }
+            },
+            "getLegacy.api": {
+              "operation": "getLegacy",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1legacy/get"
+              }
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {},
+        "report": {
+          "exhaustive": true,
+          "added": [],
+          "existing": [
+            {
+              "binding": "getUser.api",
+              "status": "current"
+            }
+          ]
+        }
+      },
+      "expected": "reject-relationship",
+      "authority": "source-puller/README.md:135-140",
+      "note": ""
+    },
+    {
+      "id": "partial-report-still-covers-existing-bindings",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {
+            "getLegacy": {}
+          },
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          },
+          "bindings": {
+            "getLegacy.api": {
+              "operation": "getLegacy",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1legacy/get"
+              }
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {
+          "operations": {
+            "getUser": {}
+          },
+          "bindings": {
+            "getUser.api": {
+              "operation": "getUser",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1users~1{id}/get"
+              }
+            }
+          }
+        },
+        "report": {
+          "exhaustive": false,
+          "limitation": {
+            "code": "example.unread-reference",
+            "message": "An external reference was not read, so further paths may exist."
+          },
+          "added": [
+            {
+              "binding": "getUser.api",
+              "operation": "getUser"
+            }
+          ],
+          "existing": []
+        }
+      },
+      "expected": "reject-relationship",
+      "authority": "source-puller/README.md:135-146",
+      "note": ""
+    },
+    {
+      "id": "duplicate-existing-target",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {
+            "getUser": {},
+            "getLegacy": {}
+          },
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          },
+          "bindings": {
+            "getUser.api": {
+              "operation": "getUser",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1users~1{id}/get"
+              }
+            },
+            "getLegacy.api": {
+              "operation": "getLegacy",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1legacy/get"
+              }
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {},
+        "report": {
+          "exhaustive": true,
+          "added": [],
+          "existing": [
+            {
+              "binding": "getUser.api",
+              "status": "current"
+            },
+            {
+              "binding": "getLegacy.api",
+              "status": "unmatched",
+              "reasonCode": "example.path-removed",
+              "message": "The source no longer declares this path."
+            },
+            {
+              "binding": "getUser.api",
+              "status": "current"
+            }
+          ]
+        }
+      },
+      "expected": "reject-relationship",
+      "authority": "source-puller/README.md:135-140",
+      "note": ""
+    },
+    {
+      "id": "foreign-existing-binding",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {
+            "getUser": {},
+            "getLegacy": {}
+          },
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            },
+            "other": {
+              "kind": "other@1"
+            }
+          },
+          "bindings": {
+            "getUser.api": {
+              "operation": "getUser",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1users~1{id}/get"
+              }
+            },
+            "getLegacy.api": {
+              "operation": "getLegacy",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1legacy/get"
+              }
+            },
+            "foreign": {
+              "operation": "getUser",
+              "source": "other"
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {},
+        "report": {
+          "exhaustive": true,
+          "added": [],
+          "existing": [
+            {
+              "binding": "getUser.api",
+              "status": "current"
+            },
+            {
+              "binding": "getLegacy.api",
+              "status": "unmatched",
+              "reasonCode": "example.path-removed",
+              "message": "The source no longer declares this path."
+            },
+            {
+              "binding": "foreign",
+              "status": "current"
+            }
+          ]
+        }
+      },
+      "expected": "reject-relationship",
+      "authority": "source-puller/README.md:135-138",
+      "note": ""
+    },
+    {
+      "id": "foreign-existing-source",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {},
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            },
+            "other": {
+              "kind": "other@1"
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {},
+        "report": {
+          "exhaustive": true,
+          "added": [],
+          "existing": [
+            {
+              "source": "other",
+              "status": "current"
+            }
+          ]
+        }
+      },
+      "expected": "reject-relationship",
+      "authority": "source-puller/0.1.json#/schemas/PullExistingEntry/properties/source",
+      "note": ""
+    },
+    {
+      "id": "existing-schema-coverage-is-not-inferable",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {},
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          },
+          "schemas": {
+            "not-offered": {}
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {},
+        "report": {
+          "exhaustive": true,
+          "added": []
+        }
+      },
+      "expected": "accept",
+      "authority": "source-puller/README.md:135-138",
+      "note": "Do not require reports for every document schema; only the producer knows which schemas its source offers."
+    },
+    {
+      "id": "existing-schema-must-exist",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {},
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {},
+        "report": {
+          "exhaustive": true,
+          "added": [],
+          "existing": [
+            {
+              "schema": "missing",
+              "status": "current"
+            }
+          ]
+        }
+      },
+      "expected": "reject-relationship",
+      "authority": "source-puller/README.md:135-138",
+      "note": ""
+    },
+    {
+      "id": "uses-excludes-own-binding",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {},
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {
+          "operations": {
+            "getUser": {
+              "output": {
+                "type": "object"
+              }
+            }
+          },
+          "bindings": {
+            "getUser.api": {
+              "operation": "getUser",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1users~1{id}/get"
+              }
+            }
+          }
+        },
+        "report": {
+          "exhaustive": true,
+          "added": [
+            {
+              "binding": "getUser.api",
+              "operation": "getUser",
+              "lossy": {
+                "reasonCode": "example.schema-approximated",
+                "message": "The response schema is approximated as an object.",
+                "details": {
+                  "construct": "discriminator"
+                }
+              },
+              "uses": [
+                "bindings/getUser.api"
+              ]
+            }
+          ]
+        }
+      },
+      "expected": "reject-relationship",
+      "authority": "source-puller/README.md:123-128",
+      "note": ""
+    },
+    {
+      "id": "uses-labels-distinct",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "schemas": {
+            "UserId": {
+              "type": "string"
+            }
+          },
+          "operations": {},
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {
+          "schemas": {
+            "User": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "address": {
+                  "$ref": "#/schemas/Address"
+                }
+              }
+            },
+            "Address": {
+              "type": "object",
+              "properties": {
+                "city": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "operations": {
+            "getUser": {
+              "input": {
+                "$ref": "#/schemas/UserId"
+              },
+              "output": {
+                "$ref": "#/schemas/User"
+              }
+            }
+          },
+          "bindings": {
+            "getUser.api": {
+              "operation": "getUser",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1users~1{id}/get"
+              }
+            }
+          }
+        },
+        "report": {
+          "exhaustive": true,
+          "added": [
+            {
+              "binding": "getUser.api",
+              "operation": "getUser",
+              "uses": [
+                "schemas/User",
+                "schemas/Address",
+                "schemas/User"
+              ]
+            }
+          ],
+          "existing": [
+            {
+              "source": "api",
+              "status": "current"
+            }
+          ]
+        }
+      },
+      "expected": "reject-relationship",
+      "authority": "source-puller/0.1.json#/schemas/PullUses",
+      "note": ""
+    },
+    {
+      "id": "uses-does-not-name-original-only-entry",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "schemas": {
+            "UserId": {
+              "type": "string"
+            }
+          },
+          "operations": {},
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {
+          "schemas": {
+            "User": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "address": {
+                  "$ref": "#/schemas/Address"
+                }
+              }
+            },
+            "Address": {
+              "type": "object",
+              "properties": {
+                "city": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "operations": {
+            "getUser": {
+              "input": {
+                "$ref": "#/schemas/UserId"
+              },
+              "output": {
+                "$ref": "#/schemas/User"
+              }
+            }
+          },
+          "bindings": {
+            "getUser.api": {
+              "operation": "getUser",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1users~1{id}/get"
+              }
+            }
+          }
+        },
+        "report": {
+          "exhaustive": true,
+          "added": [
+            {
+              "binding": "getUser.api",
+              "operation": "getUser",
+              "uses": [
+                "schemas/UserId"
+              ]
+            }
+          ],
+          "existing": [
+            {
+              "source": "api",
+              "status": "current"
+            }
+          ]
+        }
+      },
+      "expected": "reject-relationship",
+      "authority": "source-puller/0.1.json#/schemas/PullUses",
+      "note": ""
+    },
+    {
+      "id": "uses-must-name-real-addition",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "schemas": {
+            "UserId": {
+              "type": "string"
+            }
+          },
+          "operations": {},
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {
+          "schemas": {
+            "User": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "address": {
+                  "$ref": "#/schemas/Address"
+                }
+              }
+            },
+            "Address": {
+              "type": "object",
+              "properties": {
+                "city": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "operations": {
+            "getUser": {
+              "input": {
+                "$ref": "#/schemas/UserId"
+              },
+              "output": {
+                "$ref": "#/schemas/User"
+              }
+            }
+          },
+          "bindings": {
+            "getUser.api": {
+              "operation": "getUser",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1users~1{id}/get"
+              }
+            }
+          }
+        },
+        "report": {
+          "exhaustive": true,
+          "added": [
+            {
+              "binding": "getUser.api",
+              "operation": "getUser",
+              "uses": [
+                "schemas/Missing"
+              ]
+            }
+          ],
+          "existing": [
+            {
+              "source": "api",
+              "status": "current"
+            }
+          ]
+        }
+      },
+      "expected": "reject-relationship",
+      "authority": "source-puller/0.1.json#/schemas/PullUses",
+      "note": ""
+    },
+    {
+      "id": "uses-is-label-not-json-pointer",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "schemas": {
+            "UserId": {
+              "type": "string"
+            }
+          },
+          "operations": {},
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {
+          "schemas": {
+            "User": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "address": {
+                  "$ref": "#/schemas/Address"
+                }
+              }
+            },
+            "Address": {
+              "type": "object",
+              "properties": {
+                "city": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "operations": {
+            "getUser": {
+              "input": {
+                "$ref": "#/schemas/UserId"
+              },
+              "output": {
+                "$ref": "#/schemas/User"
+              }
+            }
+          },
+          "bindings": {
+            "getUser.api": {
+              "operation": "getUser",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1users~1{id}/get"
+              }
+            }
+          }
+        },
+        "report": {
+          "exhaustive": true,
+          "added": [
+            {
+              "binding": "getUser.api",
+              "operation": "getUser",
+              "uses": [
+                "#/schemas/User"
+              ]
+            }
+          ],
+          "existing": [
+            {
+              "source": "api",
+              "status": "current"
+            }
+          ]
+        }
+      },
+      "expected": "reject-relationship",
+      "authority": "source-puller/0.1.json#/schemas/PullUses",
+      "note": ""
+    },
+    {
+      "id": "uses-may-redundantly-name-own-added-operation",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {},
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {
+          "operations": {
+            "getUser": {
+              "output": {
+                "type": "object"
+              }
+            }
+          },
+          "bindings": {
+            "getUser.api": {
+              "operation": "getUser",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1users~1{id}/get"
+              }
+            }
+          }
+        },
+        "report": {
+          "exhaustive": true,
+          "added": [
+            {
+              "binding": "getUser.api",
+              "operation": "getUser",
+              "lossy": {
+                "reasonCode": "example.schema-approximated",
+                "message": "The response schema is approximated as an object.",
+                "details": {
+                  "construct": "discriminator"
+                }
+              },
+              "uses": [
+                "operations/getUser"
+              ]
+            }
+          ]
+        }
+      },
+      "expected": "accept",
+      "authority": "source-puller/README.md:123-128",
+      "note": "The operation is another addition, already inserted implicitly; no duplicate label or self-binding."
+    },
+    {
+      "id": "report-to-report-closed-uses",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {},
+          "sources": {
+            "api": {
+              "kind": "example.review@1"
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {
+          "operations": {
+            "a": {},
+            "b": {}
+          },
+          "schemas": {
+            "S": {}
+          },
+          "bindings": {
+            "a": {
+              "operation": "a",
+              "source": "api"
+            },
+            "b": {
+              "operation": "b",
+              "source": "api"
+            }
+          }
+        },
+        "report": {
+          "exhaustive": true,
+          "added": [
+            {
+              "binding": "a",
+              "operation": "a",
+              "uses": [
+                "bindings/b",
+                "operations/b",
+                "schemas/S"
+              ]
+            },
+            {
+              "binding": "b",
+              "operation": "b",
+              "uses": [
+                "schemas/S"
+              ]
+            }
+          ]
+        }
+      },
+      "expected": "accept",
+      "authority": "source-puller/README.md:123-128",
+      "note": ""
+    },
+    {
+      "id": "report-to-report-missing-operations-b",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {},
+          "sources": {
+            "api": {
+              "kind": "example.review@1"
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {
+          "operations": {
+            "a": {},
+            "b": {}
+          },
+          "schemas": {
+            "S": {}
+          },
+          "bindings": {
+            "a": {
+              "operation": "a",
+              "source": "api"
+            },
+            "b": {
+              "operation": "b",
+              "source": "api"
+            }
+          }
+        },
+        "report": {
+          "exhaustive": true,
+          "added": [
+            {
+              "binding": "a",
+              "operation": "a",
+              "uses": [
+                "bindings/b",
+                "schemas/S"
+              ]
+            },
+            {
+              "binding": "b",
+              "operation": "b",
+              "uses": [
+                "schemas/S"
+              ]
+            }
+          ]
+        }
+      },
+      "expected": "reject-relationship",
+      "authority": "source-puller/README.md:123-128",
+      "note": "A needs B, including B's added operation and already-declared dependency closure."
+    },
+    {
+      "id": "report-to-report-missing-schemas-S",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {},
+          "sources": {
+            "api": {
+              "kind": "example.review@1"
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {
+          "operations": {
+            "a": {},
+            "b": {}
+          },
+          "schemas": {
+            "S": {}
+          },
+          "bindings": {
+            "a": {
+              "operation": "a",
+              "source": "api"
+            },
+            "b": {
+              "operation": "b",
+              "source": "api"
+            }
+          }
+        },
+        "report": {
+          "exhaustive": true,
+          "added": [
+            {
+              "binding": "a",
+              "operation": "a",
+              "uses": [
+                "bindings/b",
+                "operations/b"
+              ]
+            },
+            {
+              "binding": "b",
+              "operation": "b",
+              "uses": [
+                "schemas/S"
+              ]
+            }
+          ]
+        }
+      },
+      "expected": "reject-relationship",
+      "authority": "source-puller/README.md:123-128",
+      "note": "A needs B, including B's added operation and already-declared dependency closure."
+    },
+    {
+      "id": "unbound-added-operation-is-not-extra-report",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {},
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {
+          "operations": {
+            "free": {}
+          }
+        },
+        "report": {
+          "exhaustive": true,
+          "added": []
+        }
+      },
+      "expected": "accept",
+      "authority": "source-puller/README.md:59-64;111",
+      "note": "The publication requires exactly one report per binding, not per operation or schema."
+    },
+    {
+      "id": "schemas-only-additions",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {},
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {
+          "schemas": {
+            "S": false
+          }
+        },
+        "report": {
+          "exhaustive": true,
+          "added": []
+        }
+      },
+      "expected": "accept",
+      "authority": "source-puller/README.md:59-64;111",
+      "note": ""
+    },
+    {
+      "id": "open-operation-carrier-does-not-waive-core",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {},
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {
+          "operations": {
+            "getUser": {
+              "output": {
+                "type": "object"
+              },
+              "unpublishedField": true
+            }
+          },
+          "bindings": {
+            "getUser.api": {
+              "operation": "getUser",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1users~1{id}/get"
+              }
+            }
+          }
+        },
+        "report": {
+          "exhaustive": true,
+          "added": [
+            {
+              "binding": "getUser.api",
+              "operation": "getUser",
+              "lossy": {
+                "reasonCode": "example.schema-approximated",
+                "message": "The response schema is approximated as an object.",
+                "details": {
+                  "construct": "discriminator"
+                }
+              }
+            }
+          ]
+        }
+      },
+      "expected": "reject-prospective",
+      "authority": "core OBI-02; source-puller/0.1.json:5",
+      "note": ""
+    },
+    {
+      "id": "added-binding-null-data",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {},
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {
+          "operations": {
+            "getUser": {
+              "output": {
+                "type": "object"
+              }
+            }
+          },
+          "bindings": {
+            "getUser.api": {
+              "operation": "getUser",
+              "source": "api",
+              "data": null
+            }
+          }
+        },
+        "report": {
+          "exhaustive": true,
+          "added": [
+            {
+              "binding": "getUser.api",
+              "operation": "getUser",
+              "lossy": {
+                "reasonCode": "example.schema-approximated",
+                "message": "The response schema is approximated as an object.",
+                "details": {
+                  "construct": "discriminator"
+                }
+              }
+            }
+          ]
+        }
+      },
+      "expected": "accept",
+      "authority": "core \u00a75 presence; source-puller/0.1.json#/schemas/Binding",
+      "note": ""
+    },
+    {
+      "id": "inserted-value-obeys-obi01",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {},
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {
+          "operations": {
+            "getUser": {
+              "output": {
+                "type": "object"
+              }
+            }
+          },
+          "bindings": {
+            "getUser.api": {
+              "operation": "getUser",
+              "source": "api",
+              "data": {
+                "opaque": "\ud800"
+              }
+            }
+          }
+        },
+        "report": {
+          "exhaustive": true,
+          "added": [
+            {
+              "binding": "getUser.api",
+              "operation": "getUser",
+              "lossy": {
+                "reasonCode": "example.schema-approximated",
+                "message": "The response schema is approximated as an object.",
+                "details": {
+                  "construct": "discriminator"
+                }
+              }
+            }
+          ]
+        }
+      },
+      "expected": "reject-prospective",
+      "authority": "core OBI-01",
+      "note": "Contrast allowed exact non-scalar report metadata; inserted document values require conformance."
+    },
+    {
+      "id": "prospective-contained-reference-must-resolve",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {},
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {
+          "operations": {
+            "getUser": {
+              "output": {
+                "type": "object"
+              },
+              "input": {
+                "$ref": "#/schemas/missing"
+              }
+            }
+          },
+          "bindings": {
+            "getUser.api": {
+              "operation": "getUser",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1users~1{id}/get"
+              }
+            }
+          }
+        },
+        "report": {
+          "exhaustive": true,
+          "added": [
+            {
+              "binding": "getUser.api",
+              "operation": "getUser",
+              "lossy": {
+                "reasonCode": "example.schema-approximated",
+                "message": "The response schema is approximated as an object.",
+                "details": {
+                  "construct": "discriminator"
+                }
+              }
+            }
+          ]
+        }
+      },
+      "expected": "reject-prospective",
+      "authority": "core OBI-12",
+      "note": ""
+    },
+    {
+      "id": "unlisted-schema-dependency-is-producer-claim-gap",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "schemas": {
+            "UserId": {
+              "type": "string"
+            }
+          },
+          "operations": {},
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {
+          "schemas": {
+            "User": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "address": {
+                  "$ref": "#/schemas/Address"
+                }
+              }
+            },
+            "Address": {
+              "type": "object",
+              "properties": {
+                "city": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "operations": {
+            "getUser": {
+              "input": {
+                "$ref": "#/schemas/UserId"
+              },
+              "output": {
+                "$ref": "#/schemas/User"
+              }
+            }
+          },
+          "bindings": {
+            "getUser.api": {
+              "operation": "getUser",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1users~1{id}/get"
+              }
+            }
+          }
+        },
+        "report": {
+          "exhaustive": true,
+          "added": [
+            {
+              "binding": "getUser.api",
+              "operation": "getUser",
+              "uses": []
+            }
+          ],
+          "existing": [
+            {
+              "source": "api",
+              "status": "current"
+            }
+          ]
+        }
+      },
+      "expected": "kind-evidence-required",
+      "authority": "source-puller/README.md:123-128",
+      "note": "Prospective all-additions conformance alone cannot certify chosen-subset closure. A stronger checker may inspect proven core references; it must not claim complete opaque-data closure."
+    },
+    {
+      "id": "unknown-change-judgment-is-dangerous",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {
+            "getUser": {}
+          },
+          "sources": {
+            "api": {
+              "kind": "example.report@1",
+              "data": {
+                "location": "https://example.com/openapi.json"
+              }
+            }
+          },
+          "bindings": {
+            "getUser.api": {
+              "operation": "getUser",
+              "source": "api",
+              "data": {
+                "selector": "#/paths/~1users~1{userId}/get"
+              }
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {},
+        "report": {
+          "exhaustive": true,
+          "added": [],
+          "existing": [
+            {
+              "binding": "getUser.api",
+              "status": "stale",
+              "change": "dangerous",
+              "message": "The operation is now served at /users/{id}.",
+              "proposal": {
+                "data": {
+                  "source": "opaque",
+                  "description": "opaque"
+                }
+              }
+            }
+          ]
+        }
+      },
+      "expected": "accept",
+      "authority": "source-puller/README.md:160-165",
+      "note": "Whether the kind can classify the change is provider evidence, not inferable from JSON shape."
+    }
+  ]
+}

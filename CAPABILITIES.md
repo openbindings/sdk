@@ -179,9 +179,19 @@ inside a provider. Native provider failures remain distinct from kind rejections
 Kind implementations supply source interpretation, binding behavior and acquisition
 policy in separate projects. Applications choose providers; kinds remain exact
 opaque strings in core. No fixed registry or universal kind-support claim follows
-from installing the SDK. TypeScript does not expose role APIs. Source pulling remains
-implementation work; the obsolete inspection/synthesis
-companions are awaiting replacement and are not current-interface claims.
+from installing the SDK. TypeScript does not expose role APIs.
+
+[Source pulling](crates/openbindings-source-pull/README.md) provides exact carriers,
+original-document requests, borrowed providers and checked lazy callers. The client
+checks mechanically knowable report relationships and core conformance of a
+prospective all-additions snapshot. It does not establish kind-owned fidelity,
+offered-contract identity or opaque dependency closure, and it never applies
+proposals. Default handoffs are 32 MiB; relationship indexing has separate entry,
+work and allocation bounds. These do not cover provider work or core prospective
+rebuild/validation internals, which retain core limits. Cancellation is checked
+around those synchronous core calls. Independent review and legacy consumer
+replacement remain in progress; obsolete inspection/synthesis companions are not
+current-interface claims.
 
 ## Runtime qualifications
 

@@ -13,6 +13,8 @@ existing unpublished APIs have no compatibility protection.
   identifier-dependence adjudication. Original auxiliary expectations unchanged.
 - `8ac089e`: current kind descriptions, source checking and shared cancellation.
 - `42cd6f0`: bounded exact schema identity against the pinned comparison profile.
+- `a7e4548`: Matthew's requested safety checkpoint, including the carrier foundation.
+- `574dc05`: independently reviewed shared finite-provider cancellation lifecycle.
 
 Canonical owned document entries, exact JSON, conformance, original schema context,
 major evaluator semantics and current context/invocation APIs are implemented.
@@ -21,42 +23,44 @@ Comparison passes 14 ordinary and 10 exact identity groups, 64 independent contr
 Rust toolchains and Wasm builds pass for that companion. The 88 directional groups
 are outside its claim. These overlapping inventories are not additive coverage.
 
-## Unfinished code saved here
+## Source-pull implementation saved here
 
-`openbindings-source-pull` currently implements exact additions, reports, entries,
-loss/limitation disclosures and role-specific proposals. It retains allowed metadata
-and exact values. It does not yet implement PullRequest, SourcePuller/PullClient,
-request/result relationship validation, prospective document conformance, selection
-application or the two required kind consumers. The old inspection/synthesis crates
-have not been removed.
+`openbindings-source-pull` implements exact additions, reports, entries, proposals,
+original-document requests, provider/client APIs and offline result validation.
+The checks cover key/alias collisions, source attribution, exact binding/report
+correspondence, existing-binding coverage, uses-label existence and known closure.
+All additions are validated in a prospective snapshot; proposals remain unapplied.
+The shared finite-call helper preserves lazy dispatch and cleanup cancellation.
 
-Its carrier tests pass all 21 unmodified pinned pull-report cases and all five
-published examples. Eight test groups also cover exact values, retained owners,
-proposal authority, absent/null/removal distinctions, completeness and exact integer
-preferences. Strict Clippy passes. Independent carrier review is underway; its
-operation-tags authority finding is corrected in this checkpoint. This is a carrier
-slice, not a qualified source-puller implementation.
+Current tests cover all 21 unmodified pinned pull-report cases, five published
+example pairs and 74 independent design controls. Duplicate uses are refused at
+the earlier carrier gate rather than the later relationship gate. Two illustrative
+kind implementations project from source alone, then use profile identity for
+reuse/conflict and existing-entry drift. Consumer witnesses cover inspection,
+explicit selective adoption, revalidation, repeated pull and explicit proposals.
+Comparison failure and unrepresentable removal-only drift remain operational
+inability. Core owns preference/idempotent on bindings, despite loose wording in
+the source-puller prose; operation descriptions and binding author fields survive.
+
+Independent implementation review is in progress. Legacy inspection/synthesis
+crates and external consumers have not yet been retired. Core prospective
+edit/validation internals retain core limits and are explicitly outside the pull
+relationship ledger; this is not a whole-call allocation or interruptibility claim.
 
 ## Resume implementation
 
-1. Finish independent carrier review, then add document relationship checks: key and
-   alias collisions, selected-source attribution, exact report/binding correspondence,
-   complete existing-binding coverage, uses-label existence and known transitive
-   dependencies. Operation fields name canonical keys, not aliases.
-2. Insert all additions into a prospective immutable document and require core
-   conformance under explicit limits. Atomic edits address the original revision:
-   set an entire absent map, or insert distinct entries into an existing map.
-3. Add explicit lazy provider/client calls, distinct native operational failures and
-   context challenges, finite handoff policy, and scoped cooperative cancellation.
-   The already qualified kind client lifecycle can be extracted into shared private
-   cancellation support; that refactor has not been implemented yet.
-4. Exercise two kinds with source-only projection followed by comparison/reconciliation.
-   Verify new, reused, conflicting, stale, unmatched and partial reports. Demonstrate
-   inspection/discard, selected adoption and explicit proposal application. Retire
-   obsolete inspection/synthesis APIs and migrate their real consumer witnesses.
-5. Close ordinary compiler allocation accounting, remaining invocation/discovery and
-   TypeScript organization work, full workspace/host/CI/package checks, matched
-   performance measurements and the final alignment audit.
+1. Resolve independent source-pull implementation review and finalize current/MSRV,
+   Wasm, docs and cancellation/resource evidence. Finish external packaged/host
+   consumers before retiring legacy inspection/synthesis crates, support records,
+   obsolete verification tools and performance adapters.
+2. Close ordinary compiler allocation accounting. The independent construction
+   design calls for one attempt through SDK conversion/projection/diagnostics,
+   early semantic routing for uncertified shapes, and a version-locked allocation
+   schedule before enabling each backend lane. Do not substitute an unproved
+   per-node multiplier or relax semantic/performance expectations.
+3. Finish remaining invocation/discovery consumers and TypeScript organization,
+   full workspace/host/CI/package checks, matched performance measurements and the
+   complete specification-to-code audit. No whole-SDK completion claim is made.
 
 ## Boundaries that must survive
 

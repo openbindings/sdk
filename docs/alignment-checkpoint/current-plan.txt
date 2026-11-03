@@ -51,7 +51,11 @@ Rust/native/WebAssembly checks. The independently reviewed schema-identity compa
 passes all 24 applicable published groups and 64 additional controls, with exact
 reference contexts and shared resource limits; directional comparison is not claimed.
 [Comparison checkpoint evidence](../receipts/2026-11-02-preparation/comparison-progress/README.md)
-records its scope and explicit capability refusals. Source pulling, remaining consumers,
+records its scope and explicit capability refusals. Source-pull carriers, request/client
+APIs, document relationships and prospective conformance are now implemented. The
+21 pinned cases, five published examples, 74 independent controls and illustrative
+kind/consumer witnesses pass; implementation review and legacy consumer retirement
+remain active. Remaining consumers,
 TypeScript organization, all-host packaging, ordinary backend allocation and final
 matched-toolchain performance qualification remain active. No whole-SDK completion
 claim is made. Older progress receipts remain historical.
