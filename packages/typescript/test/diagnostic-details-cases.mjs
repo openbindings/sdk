@@ -125,7 +125,7 @@ export function diagnosticDetailsCases(sdk) {
     check(parsed.status === "parsed", "resource parse");
     let resources;
     try {
-      resources = new sdk.SchemaResources([
+      resources = new sdk.ExternalSchemas([
         ["https://example.test/schema", parsed.value],
       ]);
       return prepare(documentText, { resources });

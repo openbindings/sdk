@@ -178,7 +178,7 @@ export function diagnosticPolicyCases(sdk) {
         result.status === "no-verdict" &&
           result.detail.reason === "conservative-preparation" &&
           result.detail.code === "in-place-cycle" &&
-          result.detail.location?.resource === null &&
+          result.detail.location?.sourceUri === null &&
           result.detail.location?.pointer === "/operations/op/input",
         "a value depending on the cycle names the schema applying again",
       );
@@ -216,7 +216,7 @@ export function diagnosticPolicyCases(sdk) {
         const parsed = sdk.parseJson(JSON.stringify(schema));
         check(parsed.status === "parsed", "pattern resource admitted");
         const resources = own(
-          new sdk.SchemaResources([[patternUri, own(parsed.value)]]),
+          new sdk.ExternalSchemas([[patternUri, own(parsed.value)]]),
         );
         for (const [entry, options, resource, pointer] of [
           [schema, undefined, null, "/operations/op/input"],
@@ -248,7 +248,7 @@ export function diagnosticPolicyCases(sdk) {
             "an invalid pattern's no-verdict provides safe actionable classification",
           );
           check(
-            state.detail.location?.resource === resource &&
+            state.detail.location?.sourceUri === resource &&
               state.detail.location?.pointer === `${pointer}/${keyword}`,
             "an invalid pattern's no-verdict maps the authored keyword location",
           );
@@ -321,7 +321,7 @@ export function diagnosticPolicyCases(sdk) {
       "SECRET-relative",
       "https://example.invalid/" + "SECRET-long".repeat(2000) + "#SECRET",
     ]) {
-      const error = thrown(() => new sdk.SchemaResources([[uri, exact.value]]));
+      const error = thrown(() => new sdk.ExternalSchemas([[uri, exact.value]]));
       check(
         error instanceof sdk.SdkError && error.code === "resource",
         "resource bridge preserves error category",
@@ -333,7 +333,7 @@ export function diagnosticPolicyCases(sdk) {
       "https://SECRET-user:SECRET-password@example.invalid/?SECRET-query";
     const duplicateResource = thrown(
       () =>
-        new sdk.SchemaResources([
+        new sdk.ExternalSchemas([
           [uri, exact.value],
           [uri, exact.value],
         ]),

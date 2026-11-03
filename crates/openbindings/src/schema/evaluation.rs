@@ -1,11 +1,79 @@
-//! Retained value contracts and the optional evaluator interface.
-use crate::{document::DocumentInner, schema_space::SchemaSpace, *};
+//! Schema evaluation outcomes and optional evaluator extensions.
+use crate::*;
 use serde::Serialize;
-use std::{
-    collections::BTreeMap,
-    fmt,
-    sync::{Arc, Mutex, PoisonError, Weak},
-};
+use std::{fmt, sync::Arc};
+
+/// Bounds for constructing an original schema environment. These are SDK work
+/// limits, not OpenBindings conformance rules.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PreparationLimits {
+    /// Maximum inventoried schema positions, including supplied and packaged schemas.
+    pub max_schema_nodes: usize,
+    /// Cumulative conservative expanded-URI spelling bound. Relative identifiers
+    /// are charged before dot removal, without materializing expanded strings.
+    /// Several indexes retain spellings, so this is not a resident-memory limit.
+    pub max_identity_bytes: usize,
+}
+impl Default for PreparationLimits {
+    fn default() -> Self {
+        Self {
+            max_schema_nodes: 100_000,
+            max_identity_bytes: openbindings_internal_schema::DEFAULT_IDENTITY_BYTES,
+        }
+    }
+}
+
+/// Why preparation could not construct a validator. This judges no value.
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum PreparationFailureKind {
+    /// The selected evaluator does not implement a required capability.
+    UnsupportedCapability {
+        /// Capability identifier.
+        capability: String,
+    },
+    /// A configured work or representation bound was reached.
+    Limit {
+        /// Resource whose bound was reached.
+        resource: String,
+    },
+    /// The caller cancelled the attempt.
+    Cancelled,
+    /// A reached external schema cannot be interpreted as a valid resource.
+    InvalidExternalSchema,
+    /// The implementation could not complete its work.
+    Implementation {
+        /// Diagnostic description, never a semantic verdict.
+        message: String,
+    },
+}
+/// A preparation refusal with original provenance when established.
+#[derive(Clone, PartialEq, Eq)]
+pub struct PreparationFailure {
+    /// Structured cause; callers need not parse diagnostic prose.
+    pub kind: PreparationFailureKind,
+    /// Original source location; never a private evaluator projection.
+    pub origin: Option<SchemaOrigin>,
+}
+impl fmt::Debug for PreparationFailure {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("PreparationFailure").finish_non_exhaustive()
+    }
+}
+impl fmt::Display for PreparationFailure {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("schema preparation did not complete")
+    }
+}
+impl std::error::Error for PreparationFailure {}
+impl From<Cancelled> for PreparationFailure {
+    fn from(_: Cancelled) -> Self {
+        Self {
+            kind: PreparationFailureKind::Cancelled,
+            origin: None,
+        }
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -41,24 +109,28 @@ pub enum NoVerdictReason {
 /// A keyword or schema in an original schema source, by resource and exact
 /// pointer; generated evaluation-program identities are mapped back before
 /// exposure. Line and column come from the source's holder:
-/// [`ConformantDocument::locate`] for the document and [`ResourceSet::locate`] for a
+/// [`ConformantDocument::locate`] for the document and [`ExternalSchemas::locate`] for a
 /// supplied resource. A prepared value contract keeps no source text. Serializes as JSON text; a pointer through a member name with an unpaired UTF-16 unit has no `serde_json::Value` form, so `serde_json::to_value` refuses such a record and `json!` panics: use `serde_json::to_string` or `to_writer`.
 ///
 /// Custom evaluators build one with [`Self::new`] or [`SchemaRequest::location`].
 /// Later versions may add fields: read them by name and match with `..`.
 #[non_exhaustive]
-pub struct SchemaLocation {
-    /// Original supplied-resource URI, or `None` for the OpenBindings document. A URI is an identity, never an instruction to fetch.
-    pub resource: Option<String>,
+pub struct SchemaOrigin {
+    /// Original source's supplied retrieval URI, or `None` for the OpenBindings
+    /// document. This is not the resource base established by a nested `$id`.
+    pub source_uri: Option<String>,
     /// Exact RFC 6901 pointer from the source's root; an empty pointer denotes the root. Escape for presentation without changing `~0`/`~1` semantics.
     pub pointer: Pointer,
 }
-impl SchemaLocation {
+impl SchemaOrigin {
     /// A location in the document (`resource` `None`) or in the supplied resource
     /// with this URI. [`SchemaRequest::location`] builds one for a schema node an
     /// evaluator was given.
-    pub fn new(resource: Option<String>, pointer: Pointer) -> Self {
-        Self { resource, pointer }
+    pub fn new(source_uri: Option<String>, pointer: Pointer) -> Self {
+        Self {
+            source_uri,
+            pointer,
+        }
     }
 }
 #[derive(Clone, PartialEq, Eq, Serialize)]
@@ -74,7 +146,7 @@ pub struct NoVerdict {
     /// Explanatory text. Custom evaluators own its content and should avoid echoing source or instance data.
     pub message: String,
     /// Original schema location when known; no generated or guessed location is substituted.
-    pub location: Option<SchemaLocation>,
+    pub location: Option<SchemaOrigin>,
 }
 impl std::fmt::Debug for NoVerdict {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -102,7 +174,7 @@ impl NoVerdict {
     }
     /// Attach an established original schema location.
     #[must_use]
-    pub fn with_location(mut self, location: SchemaLocation) -> Self {
+    pub fn with_location(mut self, location: SchemaOrigin) -> Self {
         self.location = Some(location);
         self
     }
@@ -126,7 +198,7 @@ pub struct UndefinedResult {
     /// Explanatory text; custom evaluators should avoid echoing source or instance data.
     pub message: String,
     /// Original schema location when known; no generated or guessed location is substituted.
-    pub location: Option<SchemaLocation>,
+    pub location: Option<SchemaOrigin>,
 }
 impl UndefinedResult {
     /// Construct an undefined result without an original schema location.
@@ -139,7 +211,7 @@ impl UndefinedResult {
     }
     /// Attach an established original schema location.
     #[must_use]
-    pub fn with_location(mut self, location: SchemaLocation) -> Self {
+    pub fn with_location(mut self, location: SchemaOrigin) -> Self {
         self.location = Some(location);
         self
     }
@@ -197,14 +269,14 @@ pub enum ValueProblemDetails {
 /// Serializes as JSON text; a pointer through a member name with an unpaired UTF-16 unit has no `serde_json::Value` form, so `serde_json::to_value` refuses such a record and `json!` panics: use `serde_json::to_string` or `to_writer`.
 /// ```compile_fail,E0639
 /// use openbindings::*;
-/// fn build(instance: Pointer, schema: SchemaLocation) -> ValueProblem {
+/// fn build(instance: Pointer, schema: SchemaOrigin) -> ValueProblem {
 ///     ValueProblem { instance, schema, code: "type".into(), message: "wrong type".into(),
 ///         details: None }
 /// }
 /// ```
 /// ```
 /// use openbindings::*;
-/// fn build(instance: Pointer, schema: SchemaLocation) -> ValueProblem {
+/// fn build(instance: Pointer, schema: SchemaOrigin) -> ValueProblem {
 ///     ValueProblem::new(instance, schema, "type", "wrong type")
 ///         .with_details(ValueProblemDetails::Type { expected: vec!["integer".into()] })
 /// }
@@ -221,10 +293,10 @@ pub struct ValueProblem {
     pub instance: Pointer,
     /// The failing keyword in its original schema source, from that
     /// document's or resource's root; [`ConformantDocument::locate`] and
-    /// [`ResourceSet::locate`] find its line and column. When an evaluator
+    /// [`ExternalSchemas::locate`] find its line and column. When an evaluator
     /// cannot map a keyword to the original source, this names the selected
     /// schema rather than a guessed keyword.
-    pub schema: SchemaLocation,
+    pub schema: SchemaOrigin,
     /// Stable evaluator-defined problem code, commonly the failed JSON Schema keyword.
     pub code: String,
     /// Explanatory text; custom evaluators should avoid exposing instance values or source-controlled strings by default.
@@ -286,7 +358,7 @@ impl ValueProblem {
     /// [`SchemaRequest::location`] at preparation names `schema`.
     pub fn new(
         instance: Pointer,
-        schema: SchemaLocation,
+        schema: SchemaOrigin,
         code: impl Into<String>,
         message: impl Into<String>,
     ) -> Self {
@@ -357,213 +429,6 @@ impl std::fmt::Debug for ValueOutcome {
     }
 }
 
-#[derive(Clone)]
-/// An explicit immutable schema resource associated with its retrieval identity. Supplying it performs no I/O.
-pub struct SchemaResource {
-    /// Absolute retrieval URI without a nonempty fragment; [`ResourceSet::new`] validates and normalizes identity.
-    pub uri: String,
-    /// Exact resource JSON retained by its set; duplicate-member resources are refused.
-    pub document: JsonValue,
-}
-/// Immutable caller-supplied resources. Separate sets can use the same URI
-/// for different snapshots; this is not a process-wide registry or an acquirer.
-/// Clones share storage, including the identity index built by [`Self::new`].
-/// [`SchemaRequest::evaluation_program`] reads that index, and the resolution
-/// space it assembles for a nonempty set and a document revision is kept with
-/// the set while both are alive, and released when either is dropped. The
-/// default evaluator reuses the index instead of indexing the set again, but
-/// assembles its own resolution space for each preparation, so its preparation
-/// time still grows with the set's resources, including those the value contract
-/// never reaches.
-#[derive(Clone, Default)]
-pub struct ResourceSet {
-    inner: Arc<ResourceSetInner>,
-}
-#[derive(Default)]
-pub(crate) struct ResourceSetInner {
-    resources: Vec<SchemaResource>,
-    input_policy: openbindings_internal_schema::Supplied,
-    // One space per live revision this set was projected with. A revision's
-    // entry leaves when the revision is dropped; all leave with the set.
-    spaces: Mutex<Vec<(Weak<DocumentInner>, Arc<SchemaSpace>)>>,
-}
-impl Drop for ResourceSetInner {
-    fn drop(&mut self) {
-        let set: *const Self = self;
-        let spaces = std::mem::take(
-            self.spaces
-                .get_mut()
-                .unwrap_or_else(PoisonError::into_inner),
-        );
-        // Live revisions stop tracking this set; the spaces go with it.
-        for (revision, _) in &spaces {
-            if let Some(revision) = revision.upgrade() {
-                revision.forget_set(set);
-            }
-        }
-    }
-}
-impl ResourceSetInner {
-    /// Release the space kept for a revision that is being dropped.
-    pub(crate) fn release(&self, document: *const DocumentInner) {
-        // Drop the released space after unlocking: it can own large snapshots.
-        let released: Vec<_> = {
-            let mut spaces = self.spaces.lock().unwrap_or_else(PoisonError::into_inner);
-            let (released, kept) = std::mem::take(&mut *spaces)
-                .into_iter()
-                .partition(|(revision, _)| std::ptr::eq(revision.as_ptr(), document));
-            *spaces = kept;
-            released
-        };
-        drop(released);
-    }
-}
-#[derive(Clone, PartialEq, Eq)]
-/// Invalid supplied-resource configuration, separate from schema preparation and value outcomes.
-/// Later versions may add fields: read them by name and match with `..`.
-#[non_exhaustive]
-pub struct ResourceError {
-    /// Caller-supplied resource identifier associated with the error; treat it as untrusted display data.
-    pub uri: String,
-    /// Explanation of the configuration failure; not a schema verdict.
-    pub message: String,
-}
-impl fmt::Display for ResourceError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.message)
-    }
-}
-impl std::error::Error for ResourceError {}
-impl ResourceSet {
-    /// Admit immutable resources without acquisition. Duplicate retrieval spellings
-    /// after RFC resolution and empty-fragment removal are configuration errors.
-    /// Canonical associations use the library's ordinary URI normalization;
-    /// collisions and protected standard identities are retained as input policy
-    /// and refuse when reached, without poisoning unrelated contracts.
-    ///
-    /// # Errors
-    /// Returns a resource error if a URI is not absolute or has a nonempty fragment, two resources have the same normalized URI, or a resource contains duplicate members.
-    pub fn new(resources: impl IntoIterator<Item = SchemaResource>) -> Result<Self, ResourceError> {
-        let mut by_uri = BTreeMap::new();
-        for mut resource in resources {
-            let invalid = |message: &str| ResourceError {
-                uri: resource.uri.clone(),
-                message: message.into(),
-            };
-            if !crate::uri::absolute(&resource.uri)
-                || crate::uri::fragment(&resource.uri).is_some_and(|s| !s.is_empty())
-            {
-                return Err(invalid(
-                    "retrieval URI must be absolute with no nonempty fragment",
-                ));
-            }
-            if resource.document.has_duplicate_names() {
-                return Err(invalid("resource repeats JSON member names"));
-            }
-            resource.uri = crate::uri::compared_id(None, &resource.uri)
-                .ok_or_else(|| invalid("invalid retrieval URI"))?;
-            resource.document = openbindings_internal_json::backend::standalone(resource.document);
-            let uri = resource.uri.clone();
-            if by_uri.insert(uri.clone(), resource).is_some() {
-                return Err(ResourceError {
-                    uri,
-                    message: "duplicate retrieval URI".into(),
-                });
-            }
-        }
-        let resources: Vec<_> = by_uri.into_values().collect();
-        let input_policy = openbindings_internal_schema::Supplied::new(resources.iter().map(|r| {
-            openbindings_internal_schema::ProjectedResource {
-                uri: r.uri.clone(),
-                document: r.document.clone(),
-            }
-        }))
-        .expect("admitted resources");
-        Ok(Self {
-            inner: Arc::new(ResourceSetInner {
-                resources,
-                input_policy,
-                spaces: Mutex::default(),
-            }),
-        })
-    }
-    /// Borrow supplied resources in deterministic normalized-URI order; no allocation or acquisition.
-    pub fn iter(&self) -> impl ExactSizeIterator<Item = &SchemaResource> {
-        self.inner.resources.iter()
-    }
-    /// Locate a schema location in one of these resources: the node its
-    /// pointer names in the resource with its URI, with line and column in
-    /// that resource's own text. A resource built from a subtree of a larger
-    /// value is admitted as its own text, so its coordinates count from the
-    /// subtree's start, where [`JsonValue::locate`] on that subtree counts in
-    /// the whole text it was parsed from. `None` for a document location, a
-    /// URI this set does not hold (such as a packaged meta-schema's), or a
-    /// pointer that names no node. Positions are computed on this call.
-    pub fn locate(&self, at: &SchemaLocation) -> Option<SourceLocation> {
-        let uri = at.resource.as_deref()?;
-        let resources = &self.inner.resources;
-        let found = resources
-            .binary_search_by(|resource| resource.uri.as_str().cmp(uri))
-            .ok()?;
-        resources[found].document.locate(&at.pointer)
-    }
-    pub(crate) fn is_empty(&self) -> bool {
-        self.inner.resources.is_empty()
-    }
-    /// The space kept for this set and a live revision, if one was assembled.
-    pub(crate) fn kept_space(&self, document: &Arc<DocumentInner>) -> Option<Arc<SchemaSpace>> {
-        let spaces = self
-            .inner
-            .spaces
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner);
-        spaces
-            .iter()
-            .find(|(revision, _)| std::ptr::eq(revision.as_ptr(), Arc::as_ptr(document)))
-            .map(|(_, space)| space.clone())
-    }
-    /// Keep `space` for this set and a live revision; when a concurrent
-    /// preparation kept one first, that space wins and is returned.
-    pub(crate) fn keep_space(
-        &self,
-        document: &Arc<DocumentInner>,
-        space: Arc<SchemaSpace>,
-    ) -> Arc<SchemaSpace> {
-        let mut spaces = self
-            .inner
-            .spaces
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner);
-        if let Some((_, kept)) = spaces
-            .iter()
-            .find(|(revision, _)| std::ptr::eq(revision.as_ptr(), Arc::as_ptr(document)))
-        {
-            return kept.clone();
-        }
-        spaces.push((Arc::downgrade(document), space.clone()));
-        space
-    }
-    pub(crate) fn downgrade(&self) -> Weak<ResourceSetInner> {
-        Arc::downgrade(&self.inner)
-    }
-    #[cfg(test)]
-    pub(crate) fn kept_spaces(&self) -> usize {
-        self.inner.spaces.lock().unwrap().len()
-    }
-    /// One shared empty set, so preparation without resources allocates nothing.
-    pub(crate) fn empty() -> &'static Self {
-        static EMPTY: std::sync::OnceLock<ResourceSet> = std::sync::OnceLock::new();
-        EMPTY.get_or_init(Self::default)
-    }
-}
-
-// The default evaluator reuses the identity index built in `ResourceSet::new`
-// rather than admitting the resources again on every preparation.
-impl openbindings_internal_schema::SuppliedSet for ResourceSet {
-    fn supplied(&self) -> &openbindings_internal_schema::Supplied {
-        &self.inner.input_policy
-    }
-}
 // It also reuses the schema index the revision built when it was validated,
 // and what that validation established about its schemas.
 impl openbindings_internal_schema::IndexedDocument for ConformantDocument {
@@ -577,8 +442,8 @@ impl ConformantDocument {
     /// with line and column in the document's text. `None` for a location in a
     /// supplied resource, or a pointer that names no node in this revision.
     /// Positions are computed on this call; a prepared value contract keeps none.
-    pub fn locate(&self, at: &SchemaLocation) -> Option<SourceLocation> {
-        if at.resource.is_some() {
+    pub fn locate(&self, at: &SchemaOrigin) -> Option<SourceLocation> {
+        if at.source_uri.is_some() {
             return None;
         }
         self.document().value().locate(&at.pointer)
@@ -590,7 +455,7 @@ impl ConformantDocument {
 #[derive(Clone)]
 pub struct SchemaRequest {
     pub(crate) document: ConformantDocument,
-    pub(crate) resources: ResourceSet,
+    pub(crate) resources: ExternalSchemas,
     pub(crate) entry: JsonValue,
 }
 impl std::fmt::Debug for SchemaRequest {
@@ -605,7 +470,7 @@ impl SchemaRequest {
         &self.document
     }
     /// Borrow the immutable explicit resources for this preparation; evaluators must not substitute global URI caches.
-    pub fn supplied_resources(&self) -> &ResourceSet {
+    pub fn supplied_resources(&self) -> &ExternalSchemas {
         &self.resources
     }
     /// Borrow the selected exact input/output schema in its original context.
@@ -613,9 +478,9 @@ impl SchemaRequest {
         &self.entry
     }
     /// Allocate the selected schema's original document location.
-    pub fn entry_location(&self) -> SchemaLocation {
-        SchemaLocation {
-            resource: None,
+    pub fn entry_location(&self) -> SchemaOrigin {
+        SchemaOrigin {
+            source_uri: None,
             pointer: openbindings_internal_json::backend::exact_pointer(self.entry.view()),
         }
     }
@@ -623,7 +488,7 @@ impl SchemaRequest {
     /// document (such as one inside [`Self::entry`]) or from one of its
     /// supplied resources, or `None` for a node from another source, including
     /// a projected [`EvaluationProgram`] resource. Builds only the pointer.
-    pub fn location(&self, node: JsonRef<'_>) -> Option<SchemaLocation> {
+    pub fn location(&self, node: JsonRef<'_>) -> Option<SchemaOrigin> {
         use openbindings_internal_json::backend::{exact_pointer, same_source};
         let resource = if same_source(node, self.document.document().value()) {
             None
@@ -636,8 +501,8 @@ impl SchemaRequest {
                     .clone(),
             )
         };
-        Some(SchemaLocation {
-            resource,
+        Some(SchemaOrigin {
+            source_uri: resource,
             pointer: exact_pointer(node),
         })
     }
@@ -655,7 +520,16 @@ impl SchemaRequest {
         control: &dyn WorkControl,
     ) -> Result<EvaluationProgram, NoVerdict> {
         control.check()?;
-        let space = self.document.resolution(&self.resources);
+        let limits = PreparationLimits::default();
+        let space = self
+            .document
+            .resolution_bounded(
+                &self.resources,
+                limits.max_schema_nodes,
+                limits.max_identity_bytes,
+                control,
+            )
+            .map_err(projection_failure)?;
         let entry = space
             .document_node(&self.entry)
             .expect("preparation admits only indexed document schema positions");
@@ -667,7 +541,7 @@ impl SchemaRequest {
 #[derive(Clone)]
 pub struct EvaluationProgram {
     entry_uri: String,
-    resources: Vec<SchemaResource>,
+    resources: Vec<ExternalSchema>,
     projection: openbindings_internal_schema::Program,
 }
 impl EvaluationProgram {
@@ -676,11 +550,11 @@ impl EvaluationProgram {
         &self.entry_uri
     }
     /// Borrow the immutable projected resources with their original provenance.
-    pub fn resources(&self) -> &[SchemaResource] {
+    pub fn resources(&self) -> &[ExternalSchema] {
         &self.resources
     }
     /// Map a generated keyword URI to an established original source location.
-    pub fn original_location(&self, uri: &str) -> Option<SchemaLocation> {
+    pub fn original_location(&self, uri: &str) -> Option<SchemaOrigin> {
         self.projection
             .original_location(uri)
             .map(original_location)
@@ -690,7 +564,7 @@ impl EvaluationProgram {
     pub(crate) fn from_projection(mut projection: openbindings_internal_schema::Program) -> Self {
         let resources = std::mem::take(&mut projection.resources)
             .into_iter()
-            .map(|r| SchemaResource {
+            .map(|r| ExternalSchema {
                 uri: r.uri,
                 document: r.document,
             })
@@ -702,9 +576,9 @@ impl EvaluationProgram {
         }
     }
 }
-pub(crate) fn original_location(at: openbindings_internal_schema::Location) -> SchemaLocation {
-    SchemaLocation {
-        resource: at.resource,
+pub(crate) fn original_location(at: openbindings_internal_schema::Location) -> SchemaOrigin {
+    SchemaOrigin {
+        source_uri: at.resource,
         pointer: at.pointer,
     }
 }
@@ -853,7 +727,7 @@ impl PreparedValueContract {
     /// `problems_complete` is false. Call [`Self::explain`] with the same value
     /// to learn why it fails.
     pub fn validate(&self, value: &JsonValue) -> ValueOutcome {
-        self.validate_with_control(value, &crate::work_control::NeverCancelled)
+        self.validate_with_control(value, &crate::control::NeverCancelled)
     }
     /// Validate with cooperative cancellation. Cancellation observed before a
     /// verdict is established yields no-verdict and leaves this owner usable with
@@ -883,7 +757,7 @@ impl PreparedValueContract {
     /// Failure diagnostics can be incomplete; inspect `problems_complete` rather
     /// than assuming every failed keyword is reported.
     pub fn explain(&self, value: &JsonValue) -> ValueOutcome {
-        self.explain_with_control(value, &crate::work_control::NeverCancelled)
+        self.explain_with_control(value, &crate::control::NeverCancelled)
     }
     /// Explain with cooperative cancellation. Cancellation before a verdict yields
     /// no-verdict. Cancellation of the explanation after a verdict does not weaken
@@ -933,39 +807,8 @@ impl std::fmt::Debug for EvaluationProgram {
     }
 }
 
-impl std::fmt::Debug for SchemaResource {
+impl std::fmt::Debug for SchemaOrigin {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("SchemaResource").finish_non_exhaustive()
-    }
-}
-
-impl std::fmt::Debug for ResourceSet {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ResourceSet")
-            .field("resources", &self.inner.resources.len())
-            .finish_non_exhaustive()
-    }
-}
-
-impl std::fmt::Debug for SchemaLocation {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("SchemaLocation").finish_non_exhaustive()
-    }
-}
-
-impl std::fmt::Debug for ResourceError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let reason = match self.message.as_str() {
-            "retrieval URI must be absolute with no nonempty fragment" => {
-                "retrieval URI must be absolute with no nonempty fragment"
-            }
-            "resource repeats JSON member names" => "resource repeats JSON member names",
-            "invalid retrieval URI" => "invalid retrieval URI",
-            "duplicate retrieval URI" => "duplicate retrieval URI",
-            _ => "<redacted>",
-        };
-        f.debug_struct("ResourceError")
-            .field("reason", &reason)
-            .finish_non_exhaustive()
+        f.debug_struct("SchemaOrigin").finish_non_exhaustive()
     }
 }

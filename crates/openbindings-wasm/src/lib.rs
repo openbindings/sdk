@@ -36,7 +36,7 @@ macro_rules! object {
     }};
 }
 // A schema location as exact JSON text, so its pointer keeps unpaired units.
-fn schema_location(text: &str) -> Result<SchemaLocation, JsValue> {
+fn schema_location(text: &str) -> Result<SchemaOrigin, JsValue> {
     let invalid = || {
         error(
             "invalid-schema-location",
@@ -44,7 +44,7 @@ fn schema_location(text: &str) -> Result<SchemaLocation, JsValue> {
         )
     };
     let value = JsonValue::parse(text).map_err(|_| invalid())?;
-    let resource = match value.get("resource") {
+    let resource = match value.get("source_uri") {
         Some(resource) if resource.kind() == JsonKind::Null => None,
         Some(resource) => Some(resource.as_str().ok_or_else(invalid)?.to_owned()),
         None => return Err(invalid()),
@@ -53,7 +53,7 @@ fn schema_location(text: &str) -> Result<SchemaLocation, JsValue> {
         .get("pointer")
         .and_then(openbindings_internal_json::backend::string_pointer)
         .ok_or_else(invalid)?;
-    Ok(SchemaLocation::new(resource, pointer))
+    Ok(SchemaOrigin::new(resource, pointer))
 }
 fn error(code: &str, message: impl ToString) -> JsValue {
     JsValue::from_str(&encoded(json!({"code":code,"message":message.to_string()})))
@@ -1353,7 +1353,7 @@ impl WasmExample {
 }
 #[wasm_bindgen]
 pub struct WasmResources {
-    resources: ResourceSet,
+    resources: ExternalSchemas,
 }
 impl std::fmt::Debug for WasmResources {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1366,11 +1366,11 @@ impl WasmResources {
     #[wasm_bindgen(constructor)]
     pub fn new() -> WasmResources {
         Self {
-            resources: ResourceSet::default(),
+            resources: ExternalSchemas::default(),
         }
     }
     pub fn add(&self, uri: &str, value: &WasmJson) -> Result<WasmResources, JsValue> {
-        ResourceSet::new(self.resources.iter().cloned().chain([SchemaResource {
+        ExternalSchemas::new(self.resources.iter().cloned().chain([ExternalSchema {
             uri: uri.into(),
             document: value.value.clone(),
         }]))
@@ -1393,12 +1393,12 @@ impl Default for WasmResources {
         Self::new()
     }
 }
-/// Entries collected for one `ResourceSet::new`, so a set is admitted once
+/// Entries collected for one `ExternalSchemas::new`, so a set is admitted once
 /// rather than rebuilt for each added resource.
 #[wasm_bindgen]
 #[derive(Default)]
 pub struct WasmResourceEntries {
-    resources: Vec<SchemaResource>,
+    resources: Vec<ExternalSchema>,
 }
 impl std::fmt::Debug for WasmResourceEntries {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1413,14 +1413,14 @@ impl WasmResourceEntries {
         Self::default()
     }
     pub fn push(&mut self, uri: &str, value: &WasmJson) {
-        self.resources.push(SchemaResource {
+        self.resources.push(ExternalSchema {
             uri: uri.into(),
             document: value.value.clone(),
         });
     }
     /// Admit every collected entry as one set; the entries are taken.
     pub fn build(&mut self) -> Result<WasmResources, JsValue> {
-        ResourceSet::new(std::mem::take(&mut self.resources))
+        ExternalSchemas::new(std::mem::take(&mut self.resources))
             .map(|resources| WasmResources { resources })
             .map_err(|e| error("resource", e))
     }
@@ -1518,7 +1518,7 @@ impl std::fmt::Debug for WasmSchema {
 impl WasmSchema {
     fn prepare_in(
         &self,
-        resources: &ResourceSet,
+        resources: &ExternalSchemas,
         limits: Option<String>,
         cancelled: bool,
     ) -> Result<WasmPreparation, JsValue> {
@@ -1545,8 +1545,12 @@ impl WasmSchema {
         limits: Option<String>,
         cancelled: bool,
     ) -> Result<WasmPreparation, JsValue> {
-        static EMPTY: std::sync::OnceLock<ResourceSet> = std::sync::OnceLock::new();
-        self.prepare_in(EMPTY.get_or_init(ResourceSet::default), limits, cancelled)
+        static EMPTY: std::sync::OnceLock<ExternalSchemas> = std::sync::OnceLock::new();
+        self.prepare_in(
+            EMPTY.get_or_init(ExternalSchemas::default),
+            limits,
+            cancelled,
+        )
     }
     #[wasm_bindgen(js_name=prepareWith)]
     pub fn prepare_with(
@@ -1864,7 +1868,7 @@ mod location_transfer_tests {
             .unwrap();
         let located = resources
             .locate(&format!(
-                r#"{{"resource":"{uri}","pointer":"/$defs/\ud800/type"}}"#
+                r#"{{"source_uri":"{uri}","pointer":"/$defs/\ud800/type"}}"#
             ))
             .unwrap();
         assert_eq!(
@@ -1873,7 +1877,7 @@ mod location_transfer_tests {
         );
         assert_eq!(
             resources
-                .locate(r#"{"resource":null,"pointer":"/$defs"}"#)
+                .locate(r#"{"source_uri":null,"pointer":"/$defs"}"#)
                 .unwrap(),
             "null"
         );
@@ -1885,7 +1889,7 @@ mod location_transfer_tests {
             WasmConformantDocument::from_proof(document.validate().unwrap().conformant().unwrap());
         assert_eq!(
             proof
-                .locate(r#"{"resource":null,"pointer":"/operations/op/input/type"}"#)
+                .locate(r#"{"source_uri":null,"pointer":"/operations/op/input/type"}"#)
                 .unwrap(),
             r#"{"pointer":"/operations/op/input/type","byte_offset":61,"line":2,"byte_column":37}"#
         );

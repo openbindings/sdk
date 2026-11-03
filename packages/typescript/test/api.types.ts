@@ -1,13 +1,13 @@
 import {
   parseJson,
   Document,
-  SchemaResources,
+  ExternalSchemas,
   ExactJson,
   Schema,
   ConformantDocument,
   initialize,
   type JsonOutput,
-  type SchemaLocation,
+  type SchemaOrigin,
   type SourceLocation,
   type ValueOutcome,
   type ValueProblemDetails,
@@ -49,7 +49,7 @@ async function caller(
   if (parsed.status === "parsed" && resource.status === "parsed") {
     using document = parsed.value;
     using schema = resource.value;
-    using empty = new SchemaResources();
+    using empty = new ExternalSchemas();
     using resources = empty.with("https://example.test/schema", schema);
     const proof = document.validate();
     if (proof.status !== "conformant") return undefined;
@@ -77,7 +77,7 @@ async function caller(
       value.locate(
         result.problems[0]!.instance,
       ) satisfies SourceLocation | null;
-      result.problems[0]!.schema satisfies SchemaLocation;
+      result.problems[0]!.schema satisfies SchemaOrigin;
       validated.locate(
         result.problems[0]!.schema,
       ) satisfies SourceLocation | null;
@@ -193,7 +193,7 @@ if (selection.status === "ambiguous") {
   // @ts-expect-error ambiguity candidates are immutable
   selection.candidates.push("another");
 }
-using batchResources = new SchemaResources([
+using batchResources = new ExternalSchemas([
   ["https://schema.test", exactInput] as const,
 ]);
 void exactOutcome;

@@ -127,7 +127,7 @@ fn encoded_plain_names_keep_document_decoding_and_follow_the_library_elsewhere()
     for carrier in ["document", "contained", "supplied"] {
         for fragment in ["task", "t%61sk"] {
             let mut schema = json!({"$defs":{"target":{"$anchor":"task","type":"string"}}});
-            let mut supplied = ResourceSet::default();
+            let mut supplied = ExternalSchemas::default();
             let reference = if carrier == "document" {
                 format!("#{fragment}")
             } else {
@@ -135,7 +135,7 @@ fn encoded_plain_names_keep_document_decoding_and_follow_the_library_elsewhere()
                 format!("{URI}#{fragment}")
             };
             let schemas = if carrier == "supplied" {
-                supplied = ResourceSet::new([SchemaResource {
+                supplied = ExternalSchemas::new([ExternalSchema {
                     uri: URI.into(),
                     document: JsonValue::parse(schema.to_string()).unwrap(),
                 }])

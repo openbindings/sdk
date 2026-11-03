@@ -88,3 +88,40 @@ The TypeScript Schema facade mirrors that ownership. Typed draft models, paralle
 views, the old evaluator seam, and obsolete companion interfaces remain scheduled
 for replacement. Full workspace/host and final performance gates remain open.
 No user decision is pending.
+
+## Original-schema environment checkpoint
+
+Core now separates `schema::inventory`, `schema::resources`,
+`schema::references`, `schema::evaluation`, and `control`. `ExternalSchemas`
+replaces the old resource-set names without aliases. `SchemaOrigin` identifies an
+original source URI plus exact pointer; TypeScript uses `sourceUri`. Resource bases
+and environment-scoped identities remain separate from those coordinates.
+
+The owned `SchemaEnvironment` exposes original nodes, checked subschemas, effective
+dialects, optional resource roots, general URI resolution, and dynamic-anchor lookup.
+A document resource has no schema root. Unsupported external dialect roots remain
+observable; inventory-dependent operations refuse locally instead of inventing
+2020-12 positions beneath them. Reference defects, unavailable resources, unsupported
+capabilities, caller misuse, limits and cancellation have distinct structured causes.
+
+Independent implementation review passed after fixing two allocation findings.
+`PreparationLimits` bounds inventory nodes and conservative expanded-identity spelling
+(default 100,000 nodes and 8 MiB). Identity lengths are checked before expanded URI
+indexes are built, including registration of external schemas. Registration stops
+consuming its iterator at the first over-budget input. The spelling budget is not an
+RSS promise; existing host memory gates remain unchanged. Failed/cancelled attempts
+and tighter limits on a warm cache cannot bypass those bounds or poison a retry.
+
+Current validation: 505/505 core corpus cases, 210 native core/internal tests and
+examples (one pre-existing ignored test), 16 focused host jobs including memory,
+24 focused evaluator tests, TypeScript type/build checks, formatting and workspace
+Clippy. The strict evaluator replay still has 10 required dialect/vocabulary gaps
+out of 1,546 cases; the 8 contained-reference evaluation gaps also remain open.
+The obsolete test expecting an anonymous document-resource dynamic anchor to capture
+references is now an OBI-14 admission-negative witness. This retires its invalid
+assumption without weakening the current specification.
+
+Next: replace the object-safe evaluator/projection API with the reviewed generic
+`SchemaEvaluator`/`SchemaValidator` seam and separate preparation failures. Canonical
+owned domain views, companion interfaces, full hosts, MSRV, matched performance
+comparisons and final qualification remain unfinished.

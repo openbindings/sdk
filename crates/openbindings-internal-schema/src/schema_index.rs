@@ -209,8 +209,40 @@ impl SchemaIndex {
     fn build_roots<'a>(
         source: &'a JsonValue,
         roots: impl IntoIterator<Item = JsonRef<'a>>,
-        mut bases: Bases<'a>,
+        bases: Bases<'a>,
     ) -> Self {
+        Self::build_roots_checked(source, roots, bases, &mut |_| Ok(()))
+            .expect("unbounded inventory")
+    }
+    pub(crate) fn supplied_nodes_bounded(
+        value: &JsonValue,
+        maximum: usize,
+        control: &dyn crate::Control,
+    ) -> Result<Self, crate::Failure> {
+        Self::build_roots_checked(
+            value,
+            std::iter::once(value.view()),
+            Bases::None,
+            &mut |count| {
+                control.check()?;
+                if count >= maximum {
+                    return Err(crate::Failure::new(
+                        crate::FailureReason::LimitExceeded,
+                        "schema-nodes",
+                        "schema inventory exceeds its configured node limit",
+                    ));
+                }
+                Ok(())
+            },
+        )
+    }
+    fn build_roots_checked<'a>(
+        source: &'a JsonValue,
+        roots: impl IntoIterator<Item = JsonRef<'a>>,
+        mut bases: Bases<'a>,
+        check: &mut dyn FnMut(usize) -> Result<(), crate::Failure>,
+    ) -> Result<Self, crate::Failure> {
+        let external = !matches!(bases, Bases::Compared(_));
         let full = !matches!(bases, Bases::None);
         let mut out = Self {
             source: Some(source.clone()),
@@ -221,6 +253,7 @@ impl SchemaIndex {
         for root in roots {
             stack.push((ref_id(root) as u32, u32::MAX));
             while let Some((id, parent)) = stack.pop() {
+                check(out.nodes.len())?;
                 let value = node(source, id as usize).expect("a node of the source");
                 let (depth, parent_resource) = match out.nodes.get(parent as usize) {
                     Some(parent) => (parent.depth + 1, parent.resource),
@@ -283,7 +316,38 @@ impl SchemaIndex {
                 }
                 // Push children in reverse so they are visited in document order.
                 let pending = stack.len();
-                each_schema_child(value, |child| stack.push((ref_id(child) as u32, index)));
+                let mut stopped = None;
+                // External resources declare their own dialect. Retain an
+                // unsupported resource root but do not invent its positions
+                // using 2020-12 rules. Contained OBI schemas are fixed 2020-12.
+                let known_inventory = !external
+                    || (parent != u32::MAX && declared.is_none())
+                    || value.get("$schema").is_none_or(|dialect| {
+                        matches!(
+                            dialect.as_str(),
+                            Some(DIALECT | "https://json-schema.org/draft/2020-12/schema#")
+                        )
+                    });
+                if known_inventory {
+                    each_schema_child(value, |child| {
+                        if stopped.is_some() {
+                            return;
+                        }
+                        if let Err(error) = check(
+                            out.nodes
+                                .len()
+                                .saturating_add(stack.len())
+                                .saturating_add(1),
+                        ) {
+                            stopped = Some(error);
+                        } else {
+                            stack.push((ref_id(child) as u32, index));
+                        }
+                    });
+                }
+                if let Some(error) = stopped {
+                    return Err(error);
+                }
                 stack[pending..].reverse();
                 out.nodes.push(SchemaNode {
                     id,
@@ -304,7 +368,7 @@ impl SchemaIndex {
         if let Bases::Compared(mut ids) = bases {
             out.check_identified_references(source, &mut ids, &compared);
         }
-        out
+        Ok(out)
     }
     /// The value this index was built for.
     pub fn source(&self) -> Option<&JsonValue> {

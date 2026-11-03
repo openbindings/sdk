@@ -215,9 +215,9 @@ pub fn run(evaluator: &dyn SchemaEvaluator) -> Report {
     };
     for group in &suite.groups {
         let document = Document::parse(&group.document).expect("packaged document JSON");
-        let resources = ResourceSet::new(group.resources.iter().map(|id| {
+        let resources = ExternalSchemas::new(group.resources.iter().map(|id| {
             let r = &suite.resources[id];
-            SchemaResource {
+            ExternalSchema {
                 uri: r.uri.clone(),
                 document: JsonValue::parse(&r.document).expect("packaged resource JSON"),
             }
@@ -287,7 +287,7 @@ pub fn run(evaluator: &dyn SchemaEvaluator) -> Report {
             for location in locations {
                 // The document and supplied resources locate their own nodes;
                 // a packaged meta-schema is read from its text.
-                let exists = match &location.resource {
+                let exists = match &location.source_uri {
                     None => validated.locate(location).is_some(),
                     Some(uri) => {
                         resources.locate(location).is_some()
@@ -309,7 +309,7 @@ pub fn run(evaluator: &dyn SchemaEvaluator) -> Report {
                     );
                 }
                 if location
-                    .resource
+                    .source_uri
                     .as_deref()
                     .is_some_and(|s| s.starts_with("https://sdk-program.openbindings.invalid/"))
                 {

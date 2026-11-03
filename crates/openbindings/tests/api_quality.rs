@@ -722,7 +722,7 @@ fn version_refusals_are_built_only_for_unsupported_declarations() {
 }
 #[test]
 fn evaluator_records_build_with_constructors_and_optional_fields() {
-    let location = SchemaLocation::new(
+    let location = SchemaOrigin::new(
         Some("https://example.invalid/s".into()),
         "/type".parse().unwrap(),
     );
@@ -758,7 +758,7 @@ fn evaluator_records_build_with_constructors_and_optional_fields() {
     });
     assert_eq!(
         serde_json::to_string(&problem).unwrap(),
-        r#"{"instance":"/0","schema":{"resource":"https://example.invalid/s","pointer":"/type"},"code":"type","message":"wrong type","details":{"kind":"type","expected":["integer"]}}"#
+        r#"{"instance":"/0","schema":{"source_uri":"https://example.invalid/s","pointer":"/type"},"code":"type","message":"wrong type","details":{"kind":"type","expected":["integer"]}}"#
     );
 }
 #[test]
@@ -779,7 +779,7 @@ fn outcome_and_report_records_compare_by_value() {
         references,
         Document::parse(text).unwrap().references().unwrap()
     );
-    let location = SchemaLocation::new(None, "/operations/op/input".parse().unwrap());
+    let location = SchemaOrigin::new(None, "/operations/op/input".parse().unwrap());
     let refusal = NoVerdict::new(NoVerdictReason::LimitExceeded, "budget", "limit")
         .with_location(location.clone());
     let undefined = UndefinedResult::new("static-reference-defect", "undefined");

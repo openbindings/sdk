@@ -35,7 +35,7 @@ impl<'de> Deserialize<'de> for Limits {
 // Reusable preparation inputs: the proof, one resource set and one evaluator.
 pub struct Context {
     document: ConformantDocument,
-    resources: ResourceSet,
+    resources: ExternalSchemas,
     evaluator: Evaluator,
 }
 // A request for upstream diagnostics asks every check of the contract to
@@ -93,19 +93,19 @@ pub fn context(
     let validation = document.validate().unwrap();
     let mut resources: Vec<_> = supplied
         .iter()
-        .map(|(uri, text)| SchemaResource {
+        .map(|(uri, text)| ExternalSchema {
             uri: uri.clone(),
             document: JsonValue::parse(text).unwrap(),
         })
         .collect();
-    resources.push(SchemaResource {
+    resources.push(ExternalSchema {
         uri: ROOT.into(),
         document: JsonValue::parse(schema).unwrap(),
     });
     let evaluator = DefaultEvaluator::with_limits(limits.0.clone());
     Context {
         document: validation.conformant().unwrap(),
-        resources: ResourceSet::new(resources).unwrap(),
+        resources: ExternalSchemas::new(resources).unwrap(),
         evaluator: if upstream {
             Evaluator::Explaining(Explaining(evaluator))
         } else {

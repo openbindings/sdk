@@ -7,7 +7,7 @@ resolves names and pure support at call construction, then returns the **same
 `Invocation`** as the binding entry point. Provider execution remains lazy.
 
 ```rust
-use openbindings::{JsonValue, Document, ResourceSet};
+use openbindings::{JsonValue, Document, ExternalSchemas};
 use openbindings_invocation::{binding::BindingInvoker, operation::{Attempt, Invoker}};
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 use std::sync::Arc;
@@ -18,7 +18,7 @@ async fn call<P: BindingInvoker>(document: Document, provider: P)
     let proof = document.validate()?.conformant().ok_or("document is not conformant")?;
     let invoker = Arc::new(
         Invoker::new(proof, provider)
-            .with_evaluator(Arc::new(DefaultEvaluator::new()), ResourceSet::default()),
+            .with_evaluator(Arc::new(DefaultEvaluator::new()), ExternalSchemas::default()),
     );
     let prepared = invoker.prepare("echo")?; // Keep for further attempts.
     let mut invocation = prepared.invoke(Attempt::new());

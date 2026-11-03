@@ -432,6 +432,19 @@ impl SchemaSpace {
                 Ok(target)
             }
             Some(Err(refusal)) => {
+                // Unknown dialect roots remain visible, but a query below
+                // one cannot establish a missing schema from our inventory.
+                if matches!(
+                    self.query(holder, reference),
+                    Err(QueryFailure::UnsupportedDialect(_))
+                ) {
+                    return Err(self.failure(
+                        holder,
+                        FailureReason::UnsupportedCapability,
+                        "schema-dialect",
+                        "the resource dialect is outside the supported inventory",
+                    ));
+                }
                 if let Some(uri) = &refusal.missing {
                     missing(uri);
                 }

@@ -5,6 +5,8 @@ pub use openbindings_internal_json::{JsonKind, JsonRef, JsonValue};
 pub mod fixed_locations;
 pub mod fixed_schema;
 mod identifiers;
+mod identity_budget;
+pub use identity_budget::DEFAULT_IDENTITY_BYTES;
 mod input_policy;
 pub mod schema_index;
 mod space;

@@ -1,5 +1,16 @@
 //! Contextual schemas retained from conformant document snapshots.
+pub mod evaluation;
+pub mod inventory;
+pub mod references;
+pub mod resources;
 use crate::*;
+pub use evaluation::*;
+pub use inventory::{ResourceBase, ResourceIdentity, SchemaEnvironment, SchemaNode};
+pub use references::{
+    Reference, ReferenceRefusal, ReferenceRefusalReason, ReferenceReport, ReferenceResolution,
+};
+pub use references::{ReferenceDefect, ReferenceTarget, ResolutionFailure, ResolutionFailureKind};
+pub use resources::*;
 use std::fmt;
 
 /// A contained schema and the conformant document that gives it meaning.
@@ -49,8 +60,8 @@ impl Schema {
         &self.document
     }
     /// Locate this schema in its original document, without a generated URI.
-    pub fn location(&self) -> SchemaLocation {
-        SchemaLocation::new(
+    pub fn location(&self) -> SchemaOrigin {
+        SchemaOrigin::new(
             None,
             openbindings_internal_json::backend::exact_pointer(self.value.view()),
         )
@@ -66,7 +77,7 @@ impl Schema {
         &self,
         evaluator: &dyn SchemaEvaluator,
     ) -> Result<PreparedValueContract, NoVerdict> {
-        self.prepare_with(evaluator, ResourceSet::empty())
+        self.prepare_with(evaluator, ExternalSchemas::empty())
     }
     /// Prepare with immutable supplied resources; nothing is fetched. An
     /// evaluator that calls [`SchemaRequest::evaluation_program`] reuses the
@@ -80,9 +91,9 @@ impl Schema {
     pub fn prepare_with(
         &self,
         evaluator: &dyn SchemaEvaluator,
-        resources: &ResourceSet,
+        resources: &ExternalSchemas,
     ) -> Result<PreparedValueContract, NoVerdict> {
-        self.prepare_with_control(evaluator, resources, &crate::work_control::NeverCancelled)
+        self.prepare_with_control(evaluator, resources, &crate::control::NeverCancelled)
     }
     /// Prepare with cooperative cancellation. A cancelled attempt returns no
     /// prepared owner. Cancellation and transient evaluator failures do not
@@ -95,7 +106,7 @@ impl Schema {
     pub fn prepare_with_control(
         &self,
         evaluator: &dyn SchemaEvaluator,
-        resources: &ResourceSet,
+        resources: &ExternalSchemas,
         control: &dyn WorkControl,
     ) -> Result<PreparedValueContract, NoVerdict> {
         control.check()?;
@@ -113,8 +124,8 @@ impl Schema {
                 "non-schema-entry",
                 "the entry is not a schema position",
             )
-            .with_location(SchemaLocation {
-                resource: None,
+            .with_location(SchemaOrigin {
+                source_uri: None,
                 pointer: openbindings_internal_json::backend::exact_pointer(schema),
             }));
         }

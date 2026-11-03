@@ -530,7 +530,7 @@ fn prepare(
     let proof = validation
         .conformant()
         .unwrap_or_else(|| panic!("conformant document {document}"));
-    let resources = ResourceSet::new(supplied.iter().map(|(uri, text)| SchemaResource {
+    let resources = ExternalSchemas::new(supplied.iter().map(|(uri, text)| ExternalSchema {
         uri: uri.clone(),
         document: JsonValue::parse(text).unwrap(),
     }))

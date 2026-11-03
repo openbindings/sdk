@@ -23,7 +23,7 @@ fn conformant(document: &Document) -> ConformantDocument {
 /// Prepare operation `op` input with the default evaluator and the given resources.
 fn prepare(
     document: &Document,
-    resources: &ResourceSet,
+    resources: &ExternalSchemas,
 ) -> Result<PreparedValueContract, NoVerdict> {
     conformant(document)
         .resolve_operation("op")
@@ -33,7 +33,7 @@ fn prepare(
         .prepare_with(&DefaultEvaluator::new(), resources)
 }
 fn ready(document: &Document) -> PreparedValueContract {
-    match prepare(document, &ResourceSet::default()) {
+    match prepare(document, &ExternalSchemas::default()) {
         Ok(contract) => contract,
         Err(detail) => panic!("expected ready: {detail:?}"),
     }
@@ -146,7 +146,7 @@ fn a_cycle_costs_only_values_whose_verdict_depends_on_it() {
         assert_eq!(detail.code, "in-place-cycle");
         assert_eq!(
             detail.location,
-            Some(SchemaLocation::new(
+            Some(SchemaOrigin::new(
                 None,
                 "/operations/op/input".parse().unwrap()
             ))
@@ -188,19 +188,19 @@ fn invalid_patterns_use_original_locations_and_safe_messages() {
             for (entry, resources, resource, pointer) in [
                 (
                     schema.clone(),
-                    ResourceSet::default(),
+                    ExternalSchemas::default(),
                     None,
                     "/operations/op/input",
                 ),
                 (
                     serde_json::json!({"$defs":{"target":schema},"$ref":"#/operations/op/input/$defs/target"}),
-                    ResourceSet::default(),
+                    ExternalSchemas::default(),
                     None,
                     "/operations/op/input/$defs/target",
                 ),
                 (
                     serde_json::json!({"$ref":URI}),
-                    ResourceSet::new([SchemaResource {
+                    ExternalSchemas::new([ExternalSchema {
                         uri: URI.into(),
                         document: JsonValue::parse(schema.to_string()).unwrap(),
                     }])
@@ -231,7 +231,7 @@ fn invalid_patterns_use_original_locations_and_safe_messages() {
                 );
                 assert_eq!(
                     detail.location,
-                    Some(SchemaLocation::new(
+                    Some(SchemaOrigin::new(
                         resource,
                         format!("{pointer}/{keyword}").parse().unwrap()
                     ))
@@ -277,7 +277,7 @@ fn reference_and_resource_messages_do_not_echo_source_identifiers() {
         // A missing resource has a stand-in, and a value reaching it gives no
         // verdict; a reference to a fragment of it refuses preparation.
         // Privacy applies in both phases.
-        let detail = match prepare(&doc, &ResourceSet::default()) {
+        let detail = match prepare(&doc, &ExternalSchemas::default()) {
             Ok(contract) => {
                 let ValueOutcome::NoVerdict { detail } =
                     contract.explain(&JsonValue::parse("null").unwrap())
@@ -311,7 +311,7 @@ fn reference_and_resource_messages_do_not_echo_source_identifiers() {
             "SECRET-long".repeat(2000)
         ),
     ] {
-        let error = ResourceSet::new([SchemaResource {
+        let error = ExternalSchemas::new([ExternalSchema {
             uri: uri.clone(),
             document: JsonValue::parse("true").unwrap(),
         }])
@@ -321,11 +321,11 @@ fn reference_and_resource_messages_do_not_echo_source_identifiers() {
         assert_eq!(error.uri, uri);
     }
     let uri = "https://SECRET-user:SECRET-password@example.invalid/?SECRET-query";
-    let item = SchemaResource {
+    let item = ExternalSchema {
         uri: uri.into(),
         document: JsonValue::parse("true").unwrap(),
     };
-    let error = ResourceSet::new([item.clone(), item]).unwrap_err();
+    let error = ExternalSchemas::new([item.clone(), item]).unwrap_err();
     safe(&error.to_string());
     assert_eq!(error.message, "duplicate retrieval URI");
 }
@@ -371,7 +371,7 @@ fn messages_use_only_bounded_fixed_type_names_and_never_instance_or_schema_value
 // public diagnostics, exhaustively match semantic partitions, and retain a
 // wildcard for cause families that may acquire new diagnostic distinctions.
 struct Custom(Arc<AtomicUsize>);
-struct CustomPrepared(SchemaLocation);
+struct CustomPrepared(SchemaOrigin);
 impl SchemaEvaluator for Custom {
     fn prepare(
         &self,
@@ -438,7 +438,7 @@ fn external_evaluator_construction_and_matching_stay_supported() {
         "undefined"
     );
     let detail = UndefinedResult::new("custom", "established by a custom evaluator").with_location(
-        SchemaLocation::new(None, "/operations/op/input".parse().unwrap()),
+        SchemaOrigin::new(None, "/operations/op/input".parse().unwrap()),
     );
     assert_eq!(detail.location.unwrap().pointer, "/operations/op/input");
     assert_eq!(

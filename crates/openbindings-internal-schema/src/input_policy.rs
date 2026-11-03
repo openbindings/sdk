@@ -7,6 +7,7 @@ use std::{
 };
 #[derive(Clone, Default)]
 pub struct InputPolicy {
+    pub(crate) identity_bytes: usize,
     pub(crate) names: BTreeMap<String, Vec<(usize, usize)>>,
     pub(crate) protected: HashSet<String>,
 }
@@ -86,26 +87,93 @@ impl Supplied {
     }
     /// Each resource's schema nodes ([`schema_index::SchemaIndex::supplied_nodes`]),
     /// in resource order: walked once for every space over these resources.
-    pub(crate) fn nodes(&self) -> &[schema_index::SchemaIndex] {
-        self.nodes.get_or_init(|| {
-            self.resources
-                .iter()
-                .map(|resource| schema_index::SchemaIndex::supplied_nodes(&resource.document))
-                .collect()
-        })
+    pub(crate) fn nodes_bounded(
+        &self,
+        maximum: usize,
+        control: &dyn crate::Control,
+    ) -> Result<&[schema_index::SchemaIndex], crate::Failure> {
+        control.check()?;
+        if self.nodes.get().is_none() {
+            let mut remaining = maximum;
+            let mut nodes = Vec::new();
+            for resource in self.resources.iter() {
+                let index = schema_index::SchemaIndex::supplied_nodes_bounded(
+                    &resource.document,
+                    remaining,
+                    control,
+                )?;
+                remaining -= index.nodes.len();
+                nodes.push(index);
+            }
+            control.check()?;
+            let _ = self.nodes.set(nodes.into_boxed_slice());
+        }
+        let nodes = self.nodes.get().expect("complete supplied inventory");
+        let count = nodes
+            .iter()
+            .try_fold(0usize, |count, index| count.checked_add(index.nodes.len()));
+        if count.is_none_or(|count| count > maximum) {
+            return Err(crate::Failure::new(
+                crate::FailureReason::LimitExceeded,
+                "schema-nodes",
+                "schema inventory exceeds its configured node limit",
+            ));
+        }
+        Ok(nodes)
     }
     pub fn new(resources: impl IntoIterator<Item = ProjectedResource>) -> Result<Self, String> {
-        // Collected straight into the shared slice: one allocation, as a vector
-        // takes, when the source has a trusted length like the resource set's;
-        // an empty set shares the allocation-free empty slice.
-        let mut resources = resources.into_iter().peekable();
-        let resources: Arc<[ProjectedResource]> = if resources.peek().is_some() {
-            resources.collect()
-        } else {
-            Arc::default()
-        };
+        Self::new_bounded(resources, 100_000, crate::DEFAULT_IDENTITY_BYTES, &|| false)
+            .map_err(|failure| failure.code)
+    }
+    pub fn new_bounded(
+        resources: impl IntoIterator<Item = ProjectedResource>,
+        maximum_nodes: usize,
+        maximum_identity: usize,
+        control: &dyn Control,
+    ) -> Result<Self, Failure> {
+        control.check()?;
+        let mut collected = Vec::new();
+        let mut retrieval_bytes = 0usize;
+        for resource in resources {
+            control.check()?;
+            if collected.len() >= maximum_nodes {
+                return Err(Failure::new(
+                    FailureReason::LimitExceeded,
+                    "schema-nodes",
+                    "external schema registration exceeds its configured node budget",
+                ));
+            }
+            retrieval_bytes = retrieval_bytes
+                .checked_add(resource.uri.len())
+                .filter(|bytes| *bytes <= maximum_identity)
+                .ok_or_else(crate::identity_budget::exceeded)?;
+            collected.push(resource);
+        }
+        let resources: Arc<[ProjectedResource]> = collected.into();
+        // First walk only positions and integer length bounds. Expanding URI
+        // bases in the ordinary association index is allowed only after every
+        // source fits the cumulative budget.
         let mut policy = InputPolicy::default();
+        let mut remaining_nodes = maximum_nodes;
+        let mut indexes = Vec::new();
+        for resource in resources.iter() {
+            let index = schema_index::SchemaIndex::supplied_nodes_bounded(
+                &resource.document,
+                remaining_nodes,
+                control,
+            )?;
+            remaining_nodes -= index.nodes.len();
+            let bytes = crate::identity_budget::measure(
+                &index,
+                Some(&resource.uri),
+                maximum_identity - policy.identity_bytes,
+                control,
+            )?;
+            policy.identity_bytes += bytes;
+            indexes.push(index);
+        }
         for (source, resource) in resources.iter().enumerate() {
+            control.check()?;
             let index = schema_index::SchemaIndex::supplied(&resource.document, &resource.uri);
             let mut add = |name: &str, node: usize| {
                 if let Some(name) = canonical_uri(name) {
@@ -122,13 +190,15 @@ impl Supplied {
                 add(&resource.uri, root.id as usize);
             }
             for (node, base) in index.declared_bases() {
+                control.check()?;
                 add(base, index.nodes[*node as usize].id as usize);
             }
         }
+        control.check()?;
         Ok(Self {
             resources,
             policy: Arc::new(policy),
-            nodes: Arc::default(),
+            nodes: Arc::new(OnceLock::from(indexes.into_boxed_slice())),
         })
     }
 }

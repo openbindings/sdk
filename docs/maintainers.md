@@ -68,7 +68,7 @@ direct applicators into a competing carrier conservatively refuse preparation.
 Unused conflicts do not poison other contracts, and an independently named nested
 resource retains its original base and dialect. No schema-body comparison, alias
 transfer or missing-fragment fallback occurs. `SchemaRequest::supplied_resources()`
-retains the original catalog. `SchemaLocation.resource` records original retrieval
+retains the original catalog. `SchemaOrigin.resource` records original retrieval
 provenance, which need not be the winning lookup association for that URI. Replacing
 resources requires a new immutable set and preparation; retained contracts keep their inputs.
 OBI-13 retains exact identifier comparison; ordinary JSON Schema resolution uses

@@ -7,7 +7,7 @@ use openbindings_json_schema_evaluator::DefaultEvaluator;
 
 const M: char = '\u{e000}';
 
-fn prepare(input: &str, resources: &ResourceSet) -> Result<PreparedValueContract, NoVerdict> {
+fn prepare(input: &str, resources: &ExternalSchemas) -> Result<PreparedValueContract, NoVerdict> {
     let text = format!(
         r#"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{input}}}}},"schemas":{{"s":{{"$defs":{{"{M}":{{"type":"integer"}}}}}}}}}}"#
     );
@@ -52,26 +52,30 @@ fn a_reference_names_the_member_with_the_markers_it_encodes() {
     ] {
         let input =
             format!(r#"{{"$id":"https://e.test/r","$defs":{{{defs}}},"$ref":"{reference}"}}"#);
-        let contract = prepare(&input, &ResourceSet::default()).expect(reference);
+        let contract = prepare(&input, &ExternalSchemas::default()).expect(reference);
         assert_eq!(integer(&contract), expected_integer, "{reference}");
     }
     // A name holding the marker inside other text.
     let input = format!(
         r##"{{"$id":"https://e.test/r","$defs":{{"a{M}b":{{"type":"integer"}}}},"$ref":"#/$defs/a%EE%80%80b"}}"##
     );
-    assert!(integer(&prepare(&input, &ResourceSet::default()).unwrap()));
+    assert!(integer(
+        &prepare(&input, &ExternalSchemas::default()).unwrap()
+    ));
     // Through the document root, and from one embedded resource into another.
     assert!(integer(
         &prepare(
             r##"{"$ref":"#/schemas/s/$defs/%EE%80%80"}"##,
-            &ResourceSet::default()
+            &ExternalSchemas::default()
         )
         .unwrap()
     ));
     let input = format!(
         r#"{{"$id":"https://e.test/a","$defs":{{"b":{{"$id":"https://e.test/b","$defs":{{"{M}":{{"type":"integer"}}}}}}}},"$ref":"https://e.test/b#/$defs/%EE%80%80"}}"#
     );
-    assert!(integer(&prepare(&input, &ResourceSet::default()).unwrap()));
+    assert!(integer(
+        &prepare(&input, &ExternalSchemas::default()).unwrap()
+    ));
 }
 
 #[test]
@@ -80,7 +84,7 @@ fn a_reference_to_an_absent_marker_name_identifies_no_schema() {
     let input = format!(
         r##"{{"$id":"https://e.test/r","$defs":{{"{M}{M}":{{"type":"integer"}}}},"$ref":"#/$defs/%EE%80%80"}}"##
     );
-    let refused = prepare(&input, &ResourceSet::default()).unwrap_err();
+    let refused = prepare(&input, &ExternalSchemas::default()).unwrap_err();
     assert_eq!(refused.code, "non-schema-target", "{refused:?}");
 }
 
@@ -89,7 +93,7 @@ fn supplied_resources_resolve_marker_names_with_or_without_unpaired_units() {
     // Each resource defines the two names; one also holds an unpaired unit,
     // so the library view encodes units in it and not in the other.
     let resource = |uri: &str, extra: &str| {
-        SchemaResource {
+        ExternalSchema {
         uri: uri.into(),
         document: JsonValue::parse(format!(
             r#"{{"$id":"{uri}"{extra},"$defs":{{"{M}":{{"type":"string"}},"{M}{M}":{{"type":"integer"}}}}}}"#
@@ -97,7 +101,7 @@ fn supplied_resources_resolve_marker_names_with_or_without_unpaired_units() {
         .unwrap(),
     }
     };
-    let resources = ResourceSet::new([
+    let resources = ExternalSchemas::new([
         resource("https://e.test/plain", ""),
         resource("https://e.test/unpaired", r#","$comment":"\ud800""#),
     ])

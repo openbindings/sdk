@@ -61,7 +61,7 @@ required fields and `with_*` methods for optional ones:
 
 | Builder | Records |
 | --- | --- |
-| Custom evaluators | `NoVerdict::new(reason, code, message).with_location(..)`, `UndefinedResult::new(code, message).with_location(..)`, `ValueProblem::new(instance, schema, code, message).with_details(..)`, `SchemaLocation::new(resource, pointer)` |
+| Custom evaluators | `NoVerdict::new(reason, code, message).with_location(..)`, `UndefinedResult::new(code, message).with_location(..)`, `ValueProblem::new(instance, schema, code, message).with_details(..)`, `SchemaOrigin::new(resource, pointer)` |
 | Source inspectors | `SourceInspection::complete(targets)` or `partial(targets, limitation)` and `with_limitation(..)`, `BindableTarget::new(source_ref, binding).with_operation_key(..).with_operation(..)`, `InspectionLimitation::new(code, message).with_details(..).with_additional_fields(..)`, `SupportedKind::new(kind).with_description(..)` |
 | Interface synthesizers | `SynthesisCandidate::new(document, coverage)`, `CoverageClaim::complete(entries)` or `partial(entries, limitation)`, `CoverageEntry::new(..)` then its assignable evidence fields, `CoverageLimitation::new(code, message)` with the same builders, `SupportedKind::new(kind)` |
 | Binding invokers and transports | `binding::SupportedKind::new(kind).with_description(..)`, HTTP discovery `RequestError::new(kind, message)` |
@@ -76,7 +76,7 @@ inspected target's binding as it is, or assign the author's keys with
 `BindingValue::bind` to get a core `Binding`.
 
 Input records, which callers build and the SDK reads, keep struct-literal
-construction: typed authoring parts and `BindingValue`, `SchemaResource`,
+construction: typed authoring parts and `BindingValue`, `ExternalSchema`,
 `JsonLimits`, evaluator `Limits`, discovery `ClientOptions`,
 `PublicationOptions`, `HttpResponse`, synthesis requests, invocation carriers and
 `InvocationLimits`. Add `..Default::default()` where a record implements
@@ -134,7 +134,7 @@ for diagnostics and are refused by typed interpretation, editing and proof.
 | `ConformantOperationView` | `input()` and `output()` return a disposable `Schema` or `undefined`; the plain `OperationView` of a `Document` returns exact values instead. Both views have `retain()`. |
 | `Schema` | `json()` acquires the exact schema; `prepare(options)` takes `resources`, `limits` and `signal` and returns `{ status: "ready", valueContract }` or `{ status: "no-verdict", detail }`. |
 | `PreparedValueContract` | Disposable prepared value contract with `validate(value, options)`, the cheap check, `explain(value, options)`, which adds problems to a failure, and `retain()`; independent of its document, operation, resources and contract owners. `validateJson(input, options)` is Rust's `validate_json`: it admits JSON text or bytes as `parseJson` does and returns a `JsonCheck`, whose `input-error` carries the `parseJson` error. `validate` reads a string as a JSON string value. |
-| `ExactJson.locate(pointer)`, `ConformantDocument.locate(at)`, `SchemaResources.locate(at)` | The `SourceLocation` of the node a problem's instance pointer or a `SchemaLocation` names, in the value, the document or the supplied resource with its URI, or `null`. A malformed pointer throws `SdkError` with code `invalid-pointer`, and a malformed schema location with code `invalid-schema-location`. |
+| `ExactJson.locate(pointer)`, `ConformantDocument.locate(at)`, `ExternalSchemas.locate(at)` | The `SourceLocation` of the node a problem's instance pointer or a `SchemaOrigin` names, in the value, the document or the supplied resource with its URI, or `null`. A malformed pointer throws `SdkError` with code `invalid-pointer`, and a malformed schema location with code `invalid-schema-location`. |
 | `asDocument()`, `intoDocument()` | Acquire an independent immutable document owner, or consume the proof. Consumption revokes all JavaScript aliases of that proof; retained owners survive. |
 | `toBytes()`, `dispose()`, `Symbol.dispose`, `disposed` | Detached exact current bytes and the existing deterministic lifecycle. |
 
@@ -155,11 +155,11 @@ from findings. An atomic batch returns a new document and preserves earlier owne
 | `ConformantOperationView::input(&self)`, `output(&self) -> Option<Schema>` | The operation's declared value contract, or `None` when the field is absent. Reading prepares nothing. Only a conformant view hands one out; a plain `OperationView` returns the exact `JsonRef`. |
 | `Schema::json(&self) -> JsonValue` | The exact unprepared schema; present `true`, `false` and objects remain distinct. |
 | `Schema::prepare(&self, &dyn SchemaEvaluator) -> Result<PreparedValueContract, NoVerdict>` | Prepares with no supplied resources. A `&DefaultEvaluator` coerces; the evaluator is borrowed for the call. |
-| `Schema::prepare_with(&self, &dyn SchemaEvaluator, &ResourceSet)`, `prepare_with_control(.., &dyn WorkControl)` | The same with immutable supplied resources and cooperative cancellation. A refusal judges no instance and does not prove undefinedness. |
+| `Schema::prepare_with(&self, &dyn SchemaEvaluator, &ExternalSchemas)`, `prepare_with_control(.., &dyn WorkControl)` | The same with immutable supplied resources and cooperative cancellation. A refusal judges no instance and does not prove undefinedness. |
 | `PreparedValueContract::validate_json(input: impl AsRef<[u8]>) -> Result<ValueOutcome, InputError>` | Admits through `JsonValue::parse` with default limits, then validates. `Err` is admission failure only; all four value outcomes are `Ok`. Duplicate members yield no-verdict and numbers retain exact semantics. An exceeded limit's message names the route that admits more: `JsonValue::parse_with_limits`, then `validate` (TypeScript: `parseJson` with `limits`, then `validate`). |
 | `PreparedValueContract::validate(&self, &JsonValue)`, `validate_with_control(.., &dyn WorkControl) -> ValueOutcome` | The cheap check: a failure carries no problems and `problems_complete` is false. |
 | `PreparedValueContract::explain(&self, &JsonValue)`, `explain_with_control(.., &dyn WorkControl) -> ValueOutcome` | The same verdict, with problems that explain a failure. Library-bounded; see [value diagnostics](#value-diagnostics). |
-| `JsonValue::locate(&self, &Pointer)`, `ConformantDocument::locate(&self, &SchemaLocation)`, `ResourceSet::locate(&self, &SchemaLocation) -> Option<SourceLocation>` | Byte offset, line and column of the node a problem's instance pointer or schema location names, in the value's, document's or supplied resource's text; `None` for another source or a pointer naming no node. One pass on the call; nothing retained. |
+| `JsonValue::locate(&self, &Pointer)`, `ConformantDocument::locate(&self, &SchemaOrigin)`, `ExternalSchemas::locate(&self, &SchemaOrigin) -> Option<SourceLocation>` | Byte offset, line and column of the node a problem's instance pointer or schema location names, in the value's, document's or supplied resource's text; `None` for another source or a pointer naming no node. One pass on the call; nothing retained. |
 
 `PreparedValueContract` is `Clone + Send + Sync + 'static` and owns what it needs after
 the document, resources and evaluator are dropped. Core has no default evaluator
@@ -167,7 +167,7 @@ dependency. Use `JsonValue::parse_with_limits` and `PreparedValueContract::valid
 for custom admission limits or retained exact values (TypeScript: `parseJson` with
 `limits`, then `validate`); `validate_with_control`
 accepts cooperative cancellation. Each preparation still compiles independently.
-A `ResourceSet` indexes its resource identities once, and clones share it. A
+A `ExternalSchemas` indexes its resource identities once, and clones share it. A
 resolution space is assembled only when an evaluator requests the core projection,
 once per live revision and set; repeated or alternating preparation reuses it. The
 space without supplied resources stays with the revision, and a space with a set
@@ -273,7 +273,7 @@ Custom evaluators receive a `SchemaRequest` with the original document, supplied
 resources, entry and entry location; `location(node)` names a node of the document
 or a supplied resource. They build problems with `ValueProblem::new(instance,
 schema, code, message)` and `with_details(details)`, an instance pointer from the
-validated value and `SchemaLocation::new(resource, pointer)`, and refusals with
+validated value and `SchemaOrigin::new(resource, pointer)`, and refusals with
 `NoVerdict::new(reason, code, message)` and `with_location(location)`. `evaluation_program(control)` provides the
 strict §7 projection; read-only `EvaluationProgram::entry_uri()` and `resources()`
 keep its contents aligned with provenance, and `original_location` recovers
@@ -564,21 +564,21 @@ failure and never counts as rule evidence.
 Each problem names its failure on both sides, by exact pointer. `instance` is the
 failing node's `Pointer` from the value passed to validation (the instance's root,
 also when that value is a subtree of a larger text). `schema` is a
-`SchemaLocation`: `resource` (`None` for the document) and an exact `pointer` from
+`SchemaOrigin`: `resource` (`None` for the document) and an exact `pointer` from
 that document's or resource's root to the failing keyword. When a keyword cannot
 be mapped to an original source, it names the selected schema rather than a
 guessed keyword, and no location is invented beneath a member name the evaluator
 cannot spell. Byte offset, line and column come on demand from whoever holds the
 text, each with one pass over the bytes before the node and nothing retained:
 `JsonValue::locate(&problem.instance)` (also on `JsonRef`), `ConformantDocument::locate`
-and `ResourceSet::locate` (TypeScript `ExactJson.locate`,
-`ConformantDocument.locate`, `SchemaResources.locate`). Each returns a
+and `ExternalSchemas::locate` (TypeScript `ExactJson.locate`,
+`ConformantDocument.locate`, `ExternalSchemas.locate`). Each returns a
 `SourceLocation` whose pointer is the one asked for, or `None` when it names no
 node. A resource's coordinates are in its own text: a resource built from a
 subtree of a larger value counts from the subtree's start, while `JsonValue::locate`
 on that subtree counts in the whole text it was parsed from. An explanation
 computes no position. `NoVerdict` and `UndefinedResult`
-carry an optional `SchemaLocation` of the same shape.
+carry an optional `SchemaOrigin` of the same shape.
 
 `Pointer` holds RFC 6901 segments exactly. `as_str()` returns `None` for a
 pointer through a member name with an unpaired UTF-16 unit, `utf16_units()` reads

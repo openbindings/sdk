@@ -123,7 +123,7 @@ for (const call of ["validate", "explain"]) {
         const checked = document.validate();
         assert.equal(checked.status, "conformant", group.id);
         proof = checked.document;
-        resources = new sdk.SchemaResources(
+        resources = new sdk.ExternalSchemas(
           group.resources.map((key) => {
             const resource = fixture.resources[key],
               value = exact(resource.documentJson);

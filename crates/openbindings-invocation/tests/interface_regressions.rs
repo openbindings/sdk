@@ -1,4 +1,4 @@
-use openbindings::{Document, JsonValue, ResourceSet, Source};
+use openbindings::{Document, ExternalSchemas, JsonValue, Source};
 use openbindings_invocation::CancellationToken;
 use openbindings_invocation::{
     BindingRequest, BindingValue, ContextChallenge, InvocationError, ProviderIo,
@@ -410,7 +410,10 @@ async fn emit_after_settlement_reports_the_terminal_error() {
                 .expect("conformant invocation document"),
             &provider,
         )
-        .with_evaluator(Arc::new(DefaultEvaluator::new()), ResourceSet::default())
+        .with_evaluator(
+            Arc::new(DefaultEvaluator::new()),
+            ExternalSchemas::default(),
+        )
         .with_limits(openbindings_invocation::InvocationLimits {
             max_value_bytes: 256,
             ..Default::default()
@@ -471,7 +474,10 @@ async fn explain_detail_covers_both_directions_and_names_value_members() {
                     .expect("conformant invocation document"),
                 EmitMember,
             )
-            .with_evaluator(Arc::new(DefaultEvaluator::new()), ResourceSet::default())
+            .with_evaluator(
+                Arc::new(DefaultEvaluator::new()),
+                ExternalSchemas::default(),
+            )
             .with_validation_detail(detail);
             let mut call = invoker.invoke(Request::binding("b"));
             call.write(JsonValue::parse(r#"{"caller-member":7}"#).unwrap())
@@ -712,7 +718,10 @@ async fn sdk_selection_and_validation_errors_still_surface() {
             Reads,
         );
         let facade = if evaluated {
-            facade.with_evaluator(Arc::new(DefaultEvaluator::new()), ResourceSet::default())
+            facade.with_evaluator(
+                Arc::new(DefaultEvaluator::new()),
+                ExternalSchemas::default(),
+            )
         } else {
             facade
         };

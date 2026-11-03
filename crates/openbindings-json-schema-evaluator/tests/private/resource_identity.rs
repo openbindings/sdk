@@ -26,8 +26,8 @@ fn one(schemas: Value, schema: Value) -> Document {
 fn owner() -> Value {
     json!({"E":{"$id":U,"type":"integer","minimum":1}})
 }
-fn resources(rows: &[(&str, Value)]) -> ResourceSet {
-    ResourceSet::new(rows.iter().map(|(uri, schema)| SchemaResource {
+fn resources(rows: &[(&str, Value)]) -> ExternalSchemas {
+    ExternalSchemas::new(rows.iter().map(|(uri, schema)| ExternalSchema {
         uri: (*uri).into(),
         document: value(&schema.to_string()),
     }))
@@ -42,7 +42,7 @@ fn conformant(doc: &Document) -> ConformantDocument {
 /// Prepare the input contract of the named operation.
 fn prepare_with(
     proof: &ConformantDocument,
-    supplied: &ResourceSet,
+    supplied: &ExternalSchemas,
     operation: &str,
     evaluator: &dyn SchemaEvaluator,
 ) -> Result<PreparedValueContract, NoVerdict> {
@@ -55,14 +55,14 @@ fn prepare_with(
 }
 fn prepare(
     proof: &ConformantDocument,
-    supplied: &ResourceSet,
+    supplied: &ExternalSchemas,
     operation: &str,
 ) -> Result<PreparedValueContract, NoVerdict> {
     prepare_with(proof, supplied, operation, &DefaultEvaluator::new())
 }
 fn ready_with(
     proof: &ConformantDocument,
-    supplied: &ResourceSet,
+    supplied: &ExternalSchemas,
     operation: &str,
     evaluator: &dyn SchemaEvaluator,
 ) -> PreparedValueContract {
@@ -73,7 +73,7 @@ fn ready_with(
 }
 fn ready(
     proof: &ConformantDocument,
-    supplied: &ResourceSet,
+    supplied: &ExternalSchemas,
     operation: &str,
 ) -> PreparedValueContract {
     ready_with(proof, supplied, operation, &DefaultEvaluator::new())
@@ -115,7 +115,7 @@ impl SchemaEvaluator for Project {
         Ok(Arc::new(Projected))
     }
 }
-fn helpers_ready(doc: &Document, supplied: &ResourceSet, operation: &str) {
+fn helpers_ready(doc: &Document, supplied: &ExternalSchemas, operation: &str) {
     ready_with(&conformant(doc), supplied, operation, &Project);
 }
 fn refusal(prepared: Result<PreparedValueContract, NoVerdict>) -> NoVerdict {
@@ -124,7 +124,7 @@ fn refusal(prepared: Result<PreparedValueContract, NoVerdict>) -> NoVerdict {
         other => panic!("expected preparation refusal: {other:?}"),
     }
 }
-fn identity_refusal(doc: &Document, supplied: &ResourceSet, operation: &str) {
+fn identity_refusal(doc: &Document, supplied: &ExternalSchemas, operation: &str) {
     for evaluator in [&DefaultEvaluator::new() as &dyn SchemaEvaluator, &Project] {
         let detail = refusal(prepare_with(
             &conformant(doc),
@@ -147,7 +147,7 @@ fn identity_refusal(doc: &Document, supplied: &ResourceSet, operation: &str) {
         assert!(detail.location.is_some(), "{detail:?}");
     }
 }
-fn reference(doc: &Document, supplied: &ResourceSet, pointer: &str) -> ReferenceResolution {
+fn reference(doc: &Document, supplied: &ExternalSchemas, pointer: &str) -> ReferenceResolution {
     doc.references_with_resources(supplied.clone(), &std::sync::atomic::AtomicBool::new(false))
         .unwrap()
         .references
@@ -158,7 +158,7 @@ fn reference(doc: &Document, supplied: &ResourceSet, pointer: &str) -> Reference
 }
 fn located(
     doc: &Document,
-    supplied: &ResourceSet,
+    supplied: &ExternalSchemas,
     pointer: &str,
     target: &str,
     source: Option<&str>,
@@ -170,13 +170,13 @@ fn located(
             dynamic_lookup,
         } => {
             assert_eq!(actual.pointer, target);
-            assert_eq!(actual.resource.as_deref(), source);
+            assert_eq!(actual.source_uri.as_deref(), source);
             assert_eq!(dynamic_lookup, dynamic);
         }
         other => panic!("{other:?}"),
     }
 }
-fn unresolved_identity(doc: &Document, supplied: &ResourceSet, pointer: &str) {
+fn unresolved_identity(doc: &Document, supplied: &ExternalSchemas, pointer: &str) {
     match reference(doc, supplied, pointer) {
         ReferenceResolution::Unresolved { detail } => {
             assert_eq!(detail.reason, ReferenceRefusalReason::IdentityConflict);
@@ -191,7 +191,7 @@ fn unresolved_identity(doc: &Document, supplied: &ResourceSet, pointer: &str) {
         other => panic!("{other:?}"),
     }
 }
-fn failed_location(contract: &PreparedValueContract, text: &str) -> SchemaLocation {
+fn failed_location(contract: &PreparedValueContract, text: &str) -> SchemaOrigin {
     let ValueOutcome::Fails { problems, .. } = contract.explain(&value(text)) else {
         panic!("expected failure")
     };
@@ -207,7 +207,7 @@ fn ri01_03_exact_b32_original_and_edited_resources() {
     let schema = value(include_str!(
         "../fixtures/resource-identity/B32-runner-result.json"
     ));
-    let supplied = ResourceSet::new([SchemaResource {
+    let supplied = ExternalSchemas::new([ExternalSchema {
         uri: schema.get("$id").unwrap().as_str().unwrap().into(),
         document: schema,
     }])
@@ -225,7 +225,7 @@ fn ri01_03_exact_b32_original_and_edited_resources() {
         let doc = Document::parse(text).unwrap();
         let proof = conformant(&doc);
         let evaluator = DefaultEvaluator::new();
-        let local = ResourceSet::default();
+        let local = ExternalSchemas::default();
         for case in expectations["valueCases"].as_array().unwrap() {
             let resources = if case["setup"] == "runner-result-supplied" {
                 &supplied
@@ -305,7 +305,7 @@ fn ri04_05_contained_authority_ignores_supplied_body_and_keeps_raw_catalog() {
         "false",
         r#"{"type":"string"}"#,
     ] {
-        let supplied = ResourceSet::new([SchemaResource {
+        let supplied = ExternalSchemas::new([ExternalSchema {
             uri: U.into(),
             document: value(text),
         }])
@@ -323,7 +323,7 @@ fn ri04_05_contained_authority_ignores_supplied_body_and_keeps_raw_catalog() {
         assert_eq!(*observed.lock().unwrap(), vec![text]);
         assert_eq!(
             failed_location(&contract, "0"),
-            SchemaLocation::new(None, "/schemas/E/minimum".parse().unwrap())
+            SchemaOrigin::new(None, "/schemas/E/minimum".parse().unwrap())
         );
         helpers_ready(&doc, &supplied, "op");
         located(
@@ -449,7 +449,7 @@ fn ri09_10_distinct_canonical_identity_preserves_alias_provenance_and_base() {
         let own = resources(&[(retrieval, json!({"$id":canonical,"type":"string"}))]);
         assert_eq!(
             failed_location(&ready(&proof, &own, "canonical"), "2")
-                .resource
+                .source_uri
                 .as_deref(),
             Some(retrieval)
         );
@@ -470,12 +470,12 @@ fn ri11_31_invalid_resource_configuration_is_not_hidden_by_precedence() {
     ] {
         for text in ["true", "false"] {
             assert!(
-                ResourceSet::new([
-                    SchemaResource {
+                ExternalSchemas::new([
+                    ExternalSchema {
                         uri: U.into(),
                         document: value("true")
                     },
-                    SchemaResource {
+                    ExternalSchema {
                         uri: second.into(),
                         document: value(text)
                     }
@@ -491,7 +491,7 @@ fn ri11_31_invalid_resource_configuration_is_not_hidden_by_precedence() {
         (U, r#"{"type":"integer","type":"string"}"#),
     ] {
         assert!(
-            ResourceSet::new([SchemaResource {
+            ExternalSchemas::new([ExternalSchema {
                 uri: uri.into(),
                 document: value(text)
             }])
@@ -605,11 +605,15 @@ fn obi13_keeps_host_spelling_while_resolution_uses_library_identity() {
     let validation = doc.validate().unwrap();
     assert_eq!(validation.report().evidence["OBI-13"], Evidence::Met);
     assert!(validation.conformant().is_some());
-    let detail = refusal(prepare(&conformant(&doc), &ResourceSet::default(), "op"));
+    let detail = refusal(prepare(
+        &conformant(&doc),
+        &ExternalSchemas::default(),
+        "op",
+    ));
     assert_eq!(detail.code, "ambiguous-resource");
     assert_eq!(detail.reason, NoVerdictReason::ConservativePreparation);
     assert!(matches!(
-        reference(&doc, &ResourceSet::default(), "/operations/op/input/$ref"),
+        reference(&doc, &ExternalSchemas::default(), "/operations/op/input/$ref"),
         ReferenceResolution::Unresolved { detail }
             if detail.reason == ReferenceRefusalReason::IdentityConflict
                 && detail.code == "ambiguous-resource"
@@ -770,7 +774,7 @@ fn ri22_23_original_dialect_follows_selected_resource() {
         assert_eq!(detail.code, "schema-dialect");
         assert_eq!(
             detail.location.unwrap(),
-            SchemaLocation::new(Some(A.into()), "/$defs/Child".parse().unwrap())
+            SchemaOrigin::new(Some(A.into()), "/$defs/Child".parse().unwrap())
         );
     }
     // Identical child bodies retain distinct resolved bases and inherited dialects.
@@ -888,10 +892,10 @@ fn ri25_27_preparations_and_retained_owners_are_independent() {
     verdicts(&first, &[("2", "satisfies"), (r#""x""#, "fails")]);
     verdicts(&second, &[("true", "satisfies"), ("2", "fails")]);
     assert_eq!(
-        failed_location(&old_owner, "2").resource.as_deref(),
+        failed_location(&old_owner, "2").source_uri.as_deref(),
         Some(U)
     );
-    assert_eq!(failed_location(&first, r#""x""#).resource, None);
+    assert_eq!(failed_location(&first, r#""x""#).source_uri, None);
     let doc = document(
         json!({}),
         json!({"op":{"input":{"$ref":V}},"other":{"input":true}}),
@@ -909,11 +913,13 @@ fn ri25_27_preparations_and_retained_owners_are_independent() {
     verdicts(&retained[0], &[("2", "satisfies"), (r#""x""#, "fails")]);
     verdicts(&retained[1], &[("2", "fails"), (r#""x""#, "satisfies")]);
     assert_eq!(
-        failed_location(&retained[0], r#""x""#).resource.as_deref(),
+        failed_location(&retained[0], r#""x""#)
+            .source_uri
+            .as_deref(),
         Some(V)
     );
     assert_eq!(
-        failed_location(&retained[1], "2").resource.as_deref(),
+        failed_location(&retained[1], "2").source_uri.as_deref(),
         Some(V)
     );
 }
@@ -966,12 +972,12 @@ fn ri30_precancellation_and_fresh_retry_preserve_identity_policy() {
 #[test]
 fn ri30_oversized_supplied_closure_keeps_limits_and_healthy_catalog_entries() {
     let deep = format!("{}true{}", r#"{"items":"#.repeat(258), "}".repeat(258));
-    let supplied = ResourceSet::new([
-        SchemaResource {
+    let supplied = ExternalSchemas::new([
+        ExternalSchema {
             uri: A.into(),
             document: value(&deep),
         },
-        SchemaResource {
+        ExternalSchema {
             uri: U.into(),
             document: value("false"),
         },
@@ -1038,7 +1044,7 @@ fn ri33_anonymous_document_has_no_acquisition_or_generated_identity() {
         "https://sdk-bounds.openbindings.invalid/0/r0#/schemas/E",
     ] {
         let doc = one(json!({"E":{"type":"integer"}}), json!({"$ref":uri}));
-        let supplied = ResourceSet::default();
+        let supplied = ExternalSchemas::default();
         assert_eq!(
             refusal(prepare_with(&conformant(&doc), &supplied, "op", &Project)).reason,
             NoVerdictReason::ResourceUnavailable
@@ -1060,7 +1066,7 @@ fn ri28_unused_contained_and_supplied_peer_conflicts_are_local() {
     for (schemas, supplied) in [
         (
             json!({"E":{"$id":U,"type":"integer"},"Duplicate":{"$id":U,"type":"string"}}),
-            ResourceSet::default(),
+            ExternalSchemas::default(),
         ),
         (
             json!({}),
@@ -1104,7 +1110,7 @@ fn ri16_nested_resource_does_not_invent_losing_parent_dynamic_scope() {
     verdicts(&contract, &[("2", "satisfies"), (r#""x""#, "fails")]);
     assert_eq!(
         failed_location(&contract, r#""x""#),
-        SchemaLocation::new(
+        SchemaOrigin::new(
             Some(A.into()),
             "/$defs/Child/$defs/Node/type".parse().unwrap()
         )
@@ -1123,7 +1129,7 @@ fn inherited_conservative_policy_case_has_both_value_controls() {
     verdicts(&contract, &[("1", "satisfies"), (r#""x""#, "fails")]);
     assert_eq!(
         failed_location(&contract, r#""x""#),
-        SchemaLocation::new(None, "/schemas/S/type".parse().unwrap())
+        SchemaOrigin::new(None, "/schemas/S/type".parse().unwrap())
     );
     helpers_ready(&doc, &supplied, "op");
 }
@@ -1251,7 +1257,7 @@ fn standard_identity_claims_are_ambiguous_not_completions() {
         );
         // Without the claim `U` is missing: a value whose verdict depends on
         // it gives no verdict.
-        let contract = prepare(&conformant(&doc), &ResourceSet::default(), "op").unwrap();
+        let contract = prepare(&conformant(&doc), &ExternalSchemas::default(), "op").unwrap();
         assert!(matches!(
             contract.validate(&value(depends)),
             ValueOutcome::NoVerdict { detail } if detail.reason == NoVerdictReason::ResourceUnavailable

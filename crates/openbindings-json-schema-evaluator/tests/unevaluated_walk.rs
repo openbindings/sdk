@@ -45,7 +45,7 @@ fn pattern_subschemas_reached_through_references_stay_evaluable() {
         let parsed = Document::parse(case.document.get()).unwrap();
         let validation = parsed.validate().unwrap();
         let proof = validation.conformant().expect("conformant fixture");
-        let resources = ResourceSet::new(case.resources.iter().map(|r| SchemaResource {
+        let resources = ExternalSchemas::new(case.resources.iter().map(|r| ExternalSchema {
             uri: r.uri.clone(),
             document: JsonValue::parse(r.schema.get()).unwrap(),
         }))
@@ -138,7 +138,7 @@ fn moved_subschema_failures_are_explained_at_their_pattern_properties() {
     assert_eq!(problems[0].instance, "/o");
     assert_eq!(
         problems[0].schema,
-        SchemaLocation::new(None, "/schemas/p/patternProperties".parse().unwrap())
+        SchemaOrigin::new(None, "/schemas/p/patternProperties".parse().unwrap())
     );
     assert!(matches!(
         contract.validate(&JsonValue::parse(r#"{"o":{"a":1}}"#).unwrap()),
@@ -184,7 +184,7 @@ fn a_walk_too_deep_refuses_at_its_keyword() {
     assert_eq!(detail.code, "unevaluated-walk-limit");
     assert_eq!(
         detail.location,
-        Some(SchemaLocation::new(
+        Some(SchemaOrigin::new(
             None,
             "/operations/op/input/properties/inner/unevaluatedProperties"
                 .parse()

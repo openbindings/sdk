@@ -202,10 +202,10 @@ export type DocumentReport =
         supported: string;
       };
     };
-/** A keyword or schema in an original schema source, by resource and exact pointer. resource null denotes the OpenBindings document; supplied URIs identify explicit resources and never initiate acquisition. Private evaluator projection identities are not exposed. Line and column come from the source's holder: ConformantDocument.locate() for the document and SchemaResources.locate() for a supplied resource; a prepared value contract keeps no source text. */
-export interface SchemaLocation {
-  /** Original supplied-resource URI, or null for the OpenBindings document. */
-  resource: string | null;
+/** A keyword or schema in an original schema source, by source URI and exact pointer. sourceUri null denotes the OpenBindings document; supplied URIs identify explicit resources and never initiate acquisition. Private evaluator projection identities are not exposed. Line and column come from the source's holder: ConformantDocument.locate() for the document and ExternalSchemas.locate() for a supplied resource; a prepared value contract keeps no source text. */
+export interface SchemaOrigin {
+  /** Original source retrieval URI, or null for the OpenBindings document; distinct from a nested resource’s $id. */
+  sourceUri: string | null;
   /** Exact RFC 6901 pointer from that source's root; empty string denotes root. */
   pointer: string;
 }
@@ -226,7 +226,7 @@ export interface NoVerdict {
   /** Human-readable explanation; use reason/code for logic. */
   message: string;
   /** Original schema location when known, otherwise null. */
-  location: SchemaLocation | null;
+  location: SchemaOrigin | null;
 }
 /** Established undefined result under the value-contract rules, separate from an evaluator's inability to answer. */
 export interface UndefinedResult {
@@ -235,7 +235,7 @@ export interface UndefinedResult {
   /** Explanatory text; custom evaluators should avoid echoing source or instance data. */
   message: string;
   /** Original schema location when known, otherwise null. */
-  location: SchemaLocation | null;
+  location: SchemaOrigin | null;
 }
 /** Opt-in schema facts, not rejected instance data. Bounds and enum choices are exact JSON token strings: do not coerce them to Number. Source facts can contain secrets and must be rendered as text under an application disclosure policy. Each variant contains complete facts. */
 export type ValueProblemDetails =
@@ -273,8 +273,8 @@ export type ValueProblemDetails =
 export interface ValueProblem {
   /** Exact RFC 6901 pointer to the failing node, from the value passed to validate/explain (also when that value was acquired from a larger text); it can hold an unpaired UTF-16 unit. ExactJson.locate(instance) gives its byte offset, line and column when asked; an ordinary value is located in its exact JSON serialization. */
   instance: string;
-  /** The failing keyword in its original schema source, from that document's or resource's root: ConformantDocument.locate() or SchemaResources.locate() gives its coordinates. When the evaluator cannot map a keyword to the original source, the selected schema itself rather than a guessed keyword. */
-  schema: SchemaLocation;
+  /** The failing keyword in its original schema source, from that document's or resource's root: ConformantDocument.locate() or ExternalSchemas.locate() gives its coordinates. When the evaluator cannot map a keyword to the original source, the selected schema itself rather than a guessed keyword. */
+  schema: SchemaOrigin;
   /** Stable evaluator-defined problem code, commonly the failed keyword. */
   code: string;
   /** Explanatory text; present pointers separately and safely. */
@@ -399,12 +399,12 @@ export interface ReferenceRefusal {
   /** Explanation of the inspection refusal; generated messages omit source-controlled details. */
   message: string;
   /** Original location when established. */
-  location: SchemaLocation | null;
+  location: SchemaOrigin | null;
 }
 /** One reference keyword in a supported schema position. Opaque content is not interpreted as schema; located is static resolution, and dynamicLookup still requires evaluation-time scope handling. */
 export interface Reference {
   /** Original reference-keyword location. */
-  location: SchemaLocation;
+  location: SchemaOrigin;
   /** Reference keyword spelling, such as $ref or $dynamicRef. */
   keyword: string;
   /** Original scalar string, or null when not representable. */
@@ -415,7 +415,7 @@ export interface Reference {
         /** Located establishes a static target; unresolved preserves the refusal. */
         status: "located";
         /** Original source target coordinate. */
-        target: SchemaLocation;
+        target: SchemaOrigin;
         /** Whether runtime dynamic-anchor scope must still be applied. */
         dynamicLookup: boolean;
       }
@@ -464,14 +464,14 @@ export interface EvaluatorLimits {
 /** Inputs for one preparation with the built-in JSON Schema 2020-12 evaluator, which performs no resource I/O, treats format as annotation and matches patterns with a linear-time engine. It prepares a stand-in for a resource that was not supplied, a schema that could apply again without consuming the instance, and a pattern that is invalid with Unicode semantics, needs a backtracking engine, applies a Unicode property escape or holds the non-word boundary `\B`: a value whose verdict depends on how a stand-in comes out returns a no-verdict naming it (resource-unavailable, in-place-cycle, schema-pattern-compilation, pattern-backtracking, unicode-property-matching or pattern-non-word-boundary), and every other value keeps the verdict that holds however the stand-ins come out. It refuses a value contract in which an unevaluatedProperties or unevaluatedItems keyword's annotation sources reach a stand-in for a missing resource, a cycle or patternProperties names, or a reference to a fragment of a missing resource. A pre-aborted signal returns no-verdict. */
 export interface PrepareOptions extends WorkOptions {
   /** Explicit resources borrowed for this preparation; omitted means none. No URI is fetched and the passed owner remains caller-owned. */
-  resources?: SchemaResources;
+  resources?: ExternalSchemas;
   /** Overrides for built-in evaluator budgets; unspecified entries use evaluatorLimits(). */
   limits?: Partial<EvaluatorLimits>;
 }
 /** Explicit resources and cooperative cancellation for reference inspection; no retrieval or global resource registry is used. */
 export interface ReferenceOptions extends WorkOptions {
   /** Explicit resource set borrowed for inspection; no owner is transferred and no URI is fetched. */
-  resources?: SchemaResources;
+  resources?: ExternalSchemas;
 }
 /** Return a fresh frozen copy of default evaluator budgets. Requires initialization; values describe work/depth/retention units rather than elapsed-time deadlines. */
 export function evaluatorLimits(): Readonly<EvaluatorLimits> {
@@ -814,7 +814,7 @@ function conformantRaw(
     throw new SdkError(code, "A conformant document is required.");
   return raw;
 }
-const resourceRaw = (owner: SchemaResources) =>
+const resourceRaw = (owner: ExternalSchemas) =>
   handle<wasm.WasmResources>(owner);
 // A JavaScript receiver's class is never authority for a proof-requiring call.
 function conformantOperationRaw(
@@ -1304,7 +1304,7 @@ abstract class DocumentReads<
   /** Inspect schema references with explicit resources and cooperative cancellation. Returns plain data, including incomplete traversal and per-reference refusal; no acquisition or normative proof. */
   references(options: ReferenceOptions = {}): ReferenceReport {
     const resources = options.resources,
-      empty = resources ? undefined : new SchemaResources();
+      empty = resources ? undefined : new ExternalSchemas();
     try {
       return decode(
         sdkCall(() =>
@@ -1747,15 +1747,15 @@ export class ConformantDocument extends DocumentReads<Schema> {
     return raw ? adopt(raw, ConformantOperationView.fromRaw) : undefined;
   }
   /** Locate a schema location in this document: the node its pointer names, with line and column in the document's text. null for a location in a supplied resource, or a pointer that names no node in this revision. Positions are computed on this call; a prepared value contract keeps none. A malformed location throws SdkError with code invalid-schema-location. */
-  locate(at: SchemaLocation): SourceLocation | null {
+  locate(at: SchemaOrigin): SourceLocation | null {
     const raw = conformantRaw(this);
     return decode(sdkCall(() => raw.locate(schemaLocationText(at))));
   }
 }
 // Exact JSON text for a schema location; JSON.stringify escapes an unpaired
 // UTF-16 unit, so the engine reads the pointer exactly.
-function schemaLocationText(at: SchemaLocation): string {
-  return JSON.stringify({ resource: at?.resource, pointer: at?.pointer });
+function schemaLocationText(at: SchemaOrigin): string {
+  return JSON.stringify({ source_uri: at?.sourceUri, pointer: at?.pointer });
 }
 type OperationRaw = wasm.WasmOperation | wasm.WasmConformantOperation;
 /** Reads shared by plain and conformant operation views. */
@@ -1972,7 +1972,7 @@ export class ExampleView extends Managed {
   }
 }
 /** Immutable explicit resource set. URIs must be absolute without a nonempty fragment; normalized duplicate identities are refused even for equal bytes. Resources are retained, never fetched. Batch failure releases partial state and leaves supplied owners usable. Distinct contexts may associate the same URI with different snapshots. */
-export class SchemaResources extends Managed {
+export class ExternalSchemas extends Managed {
   /** Create an empty set or retain explicit [URI, exact document] pairs. Does not consume supplied owners. Invalid/duplicate URI or duplicate-member document throws SdkError; partial construction is released. */
   constructor(entries?: Iterable<readonly [uri: string, document: ExactJson]>);
   /** @internal */ constructor(raw: wasm.WasmResources, token: symbol);
@@ -2011,24 +2011,24 @@ export class SchemaResources extends Managed {
     super(raw);
   }
 
-  private static fromRaw(raw: wasm.WasmResources): SchemaResources {
-    return new SchemaResources(raw, resourceToken);
+  private static fromRaw(raw: wasm.WasmResources): ExternalSchemas {
+    return new ExternalSchemas(raw, resourceToken);
   }
   /** Return a NEW independently disposable resource-set owner with one added resource; the original and supplied document stay usable. Invalid/duplicate identity throws; no acquisition. */
-  with(uri: string, document: ExactJson): SchemaResources {
+  with(uri: string, document: ExactJson): ExternalSchemas {
     scalar(uri);
-    return SchemaResources.fromRaw(
+    return ExternalSchemas.fromRaw(
       sdkCall(() =>
         handle<wasm.WasmResources>(this).add(uri, jsonRaw(document)),
       ),
     );
   }
   /** Return a NEW independently disposable owner of this immutable set. */
-  retain(): SchemaResources {
-    return SchemaResources.fromRaw(handle<wasm.WasmResources>(this).retain());
+  retain(): ExternalSchemas {
+    return ExternalSchemas.fromRaw(handle<wasm.WasmResources>(this).retain());
   }
   /** Locate a schema location in one of these resources: the node its pointer names in the resource with its URI, with line and column in that resource's own text. A resource built from a subtree of a larger value is admitted as its own text, so its coordinates count from the subtree's start, where ExactJson.locate on that subtree counts in the whole text it was parsed from. null for a document location, a URI this set does not hold (such as a packaged meta-schema's), or a pointer that names no node. Positions are computed on this call. A malformed location throws SdkError with code invalid-schema-location. */
-  locate(at: SchemaLocation): SourceLocation | null {
+  locate(at: SchemaOrigin): SourceLocation | null {
     const raw = handle<wasm.WasmResources>(this);
     return decode(sdkCall(() => raw.locate(schemaLocationText(at))));
   }
@@ -2085,7 +2085,7 @@ export class Schema extends Managed {
   }
 }
 function prepareOptions(options: PrepareOptions): {
-  resources?: SchemaResources;
+  resources?: ExternalSchemas;
   limits?: Partial<EvaluatorLimits>;
   signal?: AbortSignal;
 } {

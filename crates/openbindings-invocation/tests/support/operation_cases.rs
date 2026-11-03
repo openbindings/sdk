@@ -1,5 +1,5 @@
 use openbindings::{
-    Document, JsonValue, NoVerdict, PreparedSchema, ResourceSet, SchemaEvaluator, SchemaLocation,
+    Document, ExternalSchemas, JsonValue, NoVerdict, PreparedSchema, SchemaEvaluator, SchemaOrigin,
     SchemaRequest, UndefinedResult, ValueOutcome,
 };
 use openbindings_invocation::CancellationToken;
@@ -160,7 +160,10 @@ fn checked<'a, 'b>(document: Document, provider: &'a Provider<'b>) -> Invoker<&'
             .expect("conformant invocation document"),
         provider,
     )
-    .with_evaluator(Arc::new(DefaultEvaluator::new()), ResourceSet::default())
+    .with_evaluator(
+        Arc::new(DefaultEvaluator::new()),
+        ExternalSchemas::default(),
+    )
 }
 
 #[tokio::test(flavor = "current_thread")]
@@ -483,7 +486,7 @@ async fn prepared_value_contracts_reused_across_values_and_attempts() {
                 prepares: prepares.clone(),
                 evaluations: evaluations.clone(),
             }),
-            ResourceSet::default(),
+            ExternalSchemas::default(),
         ),
     );
     let prepared = i.prepare("echo").unwrap();
@@ -631,7 +634,7 @@ fn failed_or_cancelled_prepare_releases_partial_work_and_can_retry() {
                     .expect("conformant invocation document"),
                 &p,
             )
-            .with_evaluator(probe.clone(), ResourceSet::default()),
+            .with_evaluator(probe.clone(), ExternalSchemas::default()),
         );
         let cancelled = CancellationToken::new();
         cancelled.cancel();
@@ -729,7 +732,7 @@ async fn shared_prepared_attempts_keep_selection_context_and_cancellation_separa
         r#"{"echo":{"aliases":["say"],"input":{"type":"integer"},"output":true},"other":{}}"#,
         r#"{"a":{"operation":"echo","source":"s","content":1},"b":{"operation":"echo","source":"s","content":2},"foreign":{"operation":"other","source":"s","content":3}}"#,
         r#"{"s":{"kind":"fixture"}}"#,
-    ).validate().unwrap().conformant().expect("conformant invocation document"), ContextEcho).with_evaluator(Arc::new(Counted { prepares: prepares.clone(), evaluations: Arc::default() }), ResourceSet::default()));
+    ).validate().unwrap().conformant().expect("conformant invocation document"), ContextEcho).with_evaluator(Arc::new(Counted { prepares: prepares.clone(), evaluations: Arc::default() }), ExternalSchemas::default()));
     // Preparing does not require a sole supported binding.
     let prepared = i.prepare("say").unwrap();
     let first_context = json(r#"{"attempt":1}"#);
@@ -965,7 +968,7 @@ impl PreparedSchema for Undefined {
         _: &dyn openbindings::WorkControl,
     ) -> ValueOutcome {
         let mut detail = UndefinedResult::new("static-reference-defect", "undefined");
-        detail.location = Some(SchemaLocation::new(None, self.0.parse().unwrap()));
+        detail.location = Some(SchemaOrigin::new(None, self.0.parse().unwrap()));
         ValueOutcome::Undefined { detail }
     }
 }
@@ -989,7 +992,10 @@ async fn undefined_withholds_values_and_retains_the_semantic_result() {
                 .expect("conformant invocation document"),
             &provider,
         )
-        .with_evaluator(Arc::new(UndefinedResults(location)), ResourceSet::default());
+        .with_evaluator(
+            Arc::new(UndefinedResults(location)),
+            ExternalSchemas::default(),
+        );
         let mut call = invoker.invoke(Request::operation("echo"));
         if direction == Direction::Input {
             call.write(json("1")).await.unwrap();

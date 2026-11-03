@@ -2,7 +2,7 @@ use openbindings::*;
 use openbindings_json_schema_evaluator::{DefaultEvaluator, Limits};
 use serde_json::{Value, json};
 
-fn prepared(schema: Value, limits: Limits, resources: ResourceSet) -> PreparedValueContract {
+fn prepared(schema: Value, limits: Limits, resources: ExternalSchemas) -> PreparedValueContract {
     let doc = Document::parse(
         json!({"openbindings":"0.2.0","operations":{"op":{"input":schema}}}).to_string(),
     )
@@ -35,7 +35,11 @@ fn prepare_input(doc: &Document) -> Result<PreparedValueContract, NoVerdict> {
 fn cheap_checks_are_value_free_and_explanations_are_one_first_error() {
     let schema = json!({"allOf":[{"type":"string"},false]});
     let value = JsonValue::parse("42").unwrap();
-    let contract = prepared(schema.clone(), Limits::default(), ResourceSet::default());
+    let contract = prepared(
+        schema.clone(),
+        Limits::default(),
+        ExternalSchemas::default(),
+    );
     let outcome = contract.validate(&value);
     let ValueOutcome::Fails {
         message,

@@ -13,7 +13,7 @@ retain the earlier revision. `ConformantDocument` exposes no mutable access. Sou
 buffers; standalone document views rebase byte locations correctly.
 
 A conformant operation hands out its `Schema`s; preparation borrows an
-evaluator and an explicit immutable `ResourceSet`. Each preparation compiles
+evaluator and an explicit immutable `ExternalSchemas`. Each preparation compiles
 independently. A caller-retained `PreparedValueContract` owns required compiled state
 and survives document, resource and evaluator disposal. Cancellation and transient failures do
 not poison healthy subsequent preparation. Resources with the same URI in distinct

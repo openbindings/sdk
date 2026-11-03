@@ -91,7 +91,7 @@ test("source editor requires conformance and retains prepared partial snapshots"
     assert.equal(negated.status, "updated");
     assert.equal(negated.result.status, "no-verdict");
     assert.equal(
-      negated.result.detail.location.resource,
+      negated.result.detail.location.sourceUri,
       "https://schema.example/missing",
     );
     const declined = editor.update(
@@ -156,7 +156,7 @@ test("editor presentation quotes original pointers and reports diagnostic trunca
           {
             instance: "/id",
             schema: {
-              resource: null,
+              sourceUri: null,
               pointer: "/operations/lookup/input",
             },
             message:

@@ -1,5 +1,6 @@
 //! Original-context resource graph. No URI here acquires bytes.
 mod library;
+mod original;
 use crate::{
     schema_index::{DIALECT, SchemaIndex},
     uri, *,
@@ -8,6 +9,7 @@ use openbindings_internal_json::backend::{
     has_unpaired, location_pointer_size, node_id, pointer_into, push_pointer, ref_id,
     relative_pointer,
 };
+pub use original::QueryFailure;
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 
 pub struct SpaceNode {
@@ -201,6 +203,7 @@ pub struct SchemaSpace {
     // meta-schemas follow them as one immutable layer that every space in the
     // process shares.
     local: Layer,
+    identity_bytes: usize,
     packaged: &'static Layer,
     inspection: std::sync::OnceLock<library::Inspection>,
 }
@@ -312,6 +315,19 @@ impl Layer {
         origin: ResourceOrigin,
         protected: &HashSet<String>,
     ) {
+        self.add_source_controlled(retrieval, value, index, origin, protected, &|| false)
+            .expect("uncancelled assembly");
+    }
+    fn add_source_controlled(
+        &mut self,
+        retrieval: Option<String>,
+        value: JsonValue,
+        index: &SchemaIndex,
+        origin: ResourceOrigin,
+        protected: &HashSet<String>,
+        control: &dyn Control,
+    ) -> Result<(), Failure> {
+        control.check()?;
         let source = self.base + self.sources.len();
         let start = self.nodes.len();
         let mut resources = HashMap::new();
@@ -335,6 +351,7 @@ impl Layer {
         self.nodes.reserve(index.nodes.len());
         let mut positions = HashMap::with_capacity(index.nodes.len());
         for (at, node) in index.nodes.iter().enumerate() {
+            control.check()?;
             let value = index.value(node);
             let resource = if let Some(&id) = resources.get(&(node.resource as usize)) {
                 id
@@ -406,6 +423,7 @@ impl Layer {
             value,
             positions,
         });
+        Ok(())
     }
     fn add_name(&mut self, name: String, resource: usize, protected: &HashSet<String>) {
         let Some(canonical) = crate::input_policy::canonical_uri(&name) else {
@@ -556,28 +574,71 @@ fn select(
 
 impl SchemaSpace {
     pub fn new(document: RawDocument, supplied: Supplied) -> Self {
+        Self::new_bounded(document, supplied, usize::MAX, usize::MAX, &|| false)
+            .expect("unbounded uncancelled assembly")
+    }
+    /// Assemble original sources with a node bound and cooperative cancellation.
+    /// Incomplete work never enters the shared resolution cache.
+    pub fn new_bounded(
+        document: RawDocument,
+        supplied: Supplied,
+        maximum: usize,
+        maximum_identity: usize,
+        control: &dyn Control,
+    ) -> Result<Self, Failure> {
+        control.check()?;
         let packaged = packaged();
+        let remaining = maximum
+            .checked_sub(packaged.nodes.len())
+            .and_then(|count| count.checked_sub(document.schema_index().nodes.len()))
+            .ok_or_else(|| {
+                Failure::new(
+                    FailureReason::LimitExceeded,
+                    "schema-nodes",
+                    "schema inventory exceeds its configured node limit",
+                )
+            })?;
+        let supplied_nodes = supplied.nodes_bounded(remaining, control)?;
+        let packaged_bytes: usize = packaged
+            .resources
+            .iter()
+            .map(|resource| resource.base.as_ref().map_or(0, String::len))
+            .sum();
+        let reserved = supplied
+            .policy
+            .identity_bytes
+            .checked_add(packaged_bytes)
+            .filter(|bytes| *bytes <= maximum_identity)
+            .ok_or_else(crate::identity_budget::exceeded)?;
+        let document_bytes = crate::identity_budget::measure(
+            document.schema_index(),
+            None,
+            maximum_identity - reserved,
+            control,
+        )?;
+        let identity_bytes = reserved + document_bytes;
         let mut local = Layer::default();
         let protected = &supplied.policy.protected;
-        local.add_source(
+        local.add_source_controlled(
             None,
             document.value().clone(),
             document.schema_index(),
             ResourceOrigin::Contained,
             protected,
-        );
-        for (resource, index) in supplied.iter().zip(supplied.nodes()) {
-            local.add_source(
+            control,
+        )?;
+        for (resource, index) in supplied.iter().zip(supplied_nodes) {
+            local.add_source_controlled(
                 Some(resource.uri.clone()),
                 resource.document.clone(),
                 index,
                 ResourceOrigin::Supplied,
                 protected,
-            );
+                control,
+            )?;
         }
-        // Canonical/retrieval associations and protected standard identities
-        // originate in the immutable supplied-resource input policy.
         for (name, holders) in &supplied.policy.names {
+            control.check()?;
             for &(source, node) in holders {
                 if let Some(&id) = local.sources[source + 1].positions.get(&node) {
                     let resource = local.nodes[id].resource;
@@ -586,13 +647,19 @@ impl SchemaSpace {
             }
         }
         local.finalize(|names, name| select(names, packaged, name));
-        Self {
+        control.check()?;
+        Ok(Self {
             document,
             supplied,
             local,
+            identity_bytes,
             packaged,
             inspection: std::sync::OnceLock::new(),
-        }
+        })
+    }
+    /// Conservative expanded-identity spelling cost established before allocation.
+    pub fn identity_bytes(&self) -> usize {
+        self.identity_bytes
     }
     // Local identifiers index the local layer directly; any other identifier
     // is the packaged layer's.
@@ -1876,6 +1943,7 @@ mod projection_tests {
                 document,
                 supplied,
                 local,
+                identity_bytes: 0,
                 packaged,
                 inspection: std::sync::OnceLock::new(),
             }

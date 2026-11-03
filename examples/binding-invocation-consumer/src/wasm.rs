@@ -240,7 +240,7 @@ impl InvocationBridge {
         if validate {
             facade = facade.with_evaluator(
                 std::sync::Arc::new(openbindings_json_schema_evaluator::DefaultEvaluator::new()),
-                openbindings::ResourceSet::default(),
+                openbindings::ExternalSchemas::default(),
             );
         }
         let shared = Shared::default();

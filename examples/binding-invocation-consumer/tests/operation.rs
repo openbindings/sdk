@@ -1,7 +1,7 @@
 //! External-consumer checks: literal catalog expectations, public APIs only.
 use binding_invocation_consumer::{Catalog, KIND, yield_once};
 use openbindings::{
-    Document, JsonValue, NoVerdict, NoVerdictReason, PreparedSchema, ResourceSet, SchemaEvaluator,
+    Document, JsonValue, NoVerdict, NoVerdictReason, PreparedSchema, ExternalSchemas, SchemaEvaluator,
     SchemaRequest, Source, ValueOutcome, ValueProblem,
 };
 use openbindings_interface_synthesis::{
@@ -45,7 +45,7 @@ struct Booleans {
     preparations: AtomicUsize,
 }
 // The schema's value and its original location, for explanations.
-struct BooleanContract(bool, openbindings::SchemaLocation);
+struct BooleanContract(bool, openbindings::SchemaOrigin);
 impl SchemaEvaluator for Booleans {
     fn prepare(
         &self,
@@ -137,7 +137,7 @@ async fn inspect_synthesize_and_invoke_operation_preserves_exact_values() {
     // Preparing shares the invoker, so it is held in an `Arc`.
     let invoker = Arc::new(
         Invoker::new(synthesized.clone(), &provider)
-            .with_evaluator(evaluator.clone(), ResourceSet::default()),
+            .with_evaluator(evaluator.clone(), ExternalSchemas::default()),
     );
     assert!(
         invoker
@@ -290,7 +290,7 @@ async fn rejection_withholds_values(explain: bool) {
             document(operation, r#"{"units":[{"id":"manual"}]}"#),
             &provider,
         )
-        .with_evaluator(Arc::new(Booleans::default()), ResourceSet::default())
+        .with_evaluator(Arc::new(Booleans::default()), ExternalSchemas::default())
         .with_validation_detail(detail);
         let mut call = invoker.invoke(Request::operation("run"));
         let control = call.control();
@@ -407,7 +407,7 @@ async fn invalid_synthesized_units_and_malformed_manual_catalog_never_effect() {
         CoverageStatus::Invalid
     );
     let invoker = Invoker::new(synthesized.document().clone(), &provider)
-        .with_evaluator(Arc::new(Booleans::default()), ResourceSet::default());
+        .with_evaluator(Arc::new(Booleans::default()), ExternalSchemas::default());
     for request in [Request::operation("s0.u0"), Request::binding("s0.u0")] {
         let mut call = invoker.invoke(request);
         assert!(call.write(JsonValue::null()).await.is_err());

@@ -7,12 +7,15 @@
 use openbindings::*;
 use openbindings_json_schema_evaluator::{DefaultEvaluator, Limits};
 
-fn prepare_with(text: &str, resources: &ResourceSet) -> Result<PreparedValueContract, NoVerdict> {
+fn prepare_with(
+    text: &str,
+    resources: &ExternalSchemas,
+) -> Result<PreparedValueContract, NoVerdict> {
     prepare_within(text, resources, Limits::default())
 }
 fn prepare_within(
     text: &str,
-    resources: &ResourceSet,
+    resources: &ExternalSchemas,
     limits: Limits,
 ) -> Result<PreparedValueContract, NoVerdict> {
     let proof = Document::parse(text)
@@ -29,7 +32,7 @@ fn prepare_within(
         .prepare_with(&DefaultEvaluator::with_limits(limits), resources)
 }
 fn prepare(text: &str) -> Result<PreparedValueContract, NoVerdict> {
-    prepare_with(text, &ResourceSet::default())
+    prepare_with(text, &ExternalSchemas::default())
 }
 fn document(schemas: &[String], input: &str) -> String {
     format!(
@@ -37,8 +40,8 @@ fn document(schemas: &[String], input: &str) -> String {
         schemas.join(",")
     )
 }
-fn resources(entries: Vec<(String, String)>) -> ResourceSet {
-    ResourceSet::new(entries.into_iter().map(|(uri, text)| SchemaResource {
+fn resources(entries: Vec<(String, String)>) -> ExternalSchemas {
+    ExternalSchemas::new(entries.into_iter().map(|(uri, text)| ExternalSchema {
         uri,
         document: JsonValue::parse(text).unwrap(),
     }))
@@ -383,7 +386,7 @@ fn the_program_budget_scales_dynamic_specialization() {
     let within = |levels: usize, program_bytes: usize| {
         prepare_within(
             &dynamic_choices(levels),
-            &ResourceSet::default(),
+            &ExternalSchemas::default(),
             Limits {
                 program_bytes,
                 ..Limits::default()
@@ -412,7 +415,7 @@ fn the_program_budget_scales_dynamic_specialization() {
     // No budget refuses a contract that specializes nothing.
     let unspecialized = prepare_within(
         &chain(3),
-        &ResourceSet::default(),
+        &ExternalSchemas::default(),
         Limits {
             program_bytes: 0,
             ..Limits::default()
@@ -425,7 +428,7 @@ fn the_program_budget_scales_dynamic_specialization() {
 fn a_specialization_refusal_states_its_arithmetic() {
     let refused = prepare_within(
         &dynamic_choices(8),
-        &ResourceSet::default(),
+        &ExternalSchemas::default(),
         Limits {
             program_bytes: 4 << 20,
             ..Limits::default()
@@ -476,7 +479,7 @@ struct GeneratedResource {
 fn generated_cases() -> Vec<GeneratedCase> {
     serde_json::from_str(include_str!("fixtures/preparation-generated-walks.json")).unwrap()
 }
-fn generated_resources(case: &GeneratedCase) -> ResourceSet {
+fn generated_resources(case: &GeneratedCase) -> ExternalSchemas {
     resources(
         case.resources
             .iter()
@@ -581,14 +584,14 @@ fn a_projection_keeps_its_own_bounds_whatever_the_document_was_admitted_under() 
     }
     // Supplied resources together past the document's byte limit prepare.
     let pad = "a".repeat(17 << 20);
-    let resource = |uri: &str, body: &str| SchemaResource {
+    let resource = |uri: &str, body: &str| ExternalSchema {
         uri: uri.into(),
         document: JsonValue::parse(format!(
             r#"{{"$schema":"https://json-schema.org/draft/2020-12/schema",{body},"x-pad":"{pad}"}}"#
         ))
         .unwrap(),
     };
-    let supplied = ResourceSet::new([
+    let supplied = ExternalSchemas::new([
         resource(
             "https://e.test/a",
             r#""allOf":[{"$ref":"https://e.test/b"}]"#,
@@ -651,7 +654,7 @@ fn a_schema_nested_more_than_256_levels_deep_refuses_whatever_the_limits() {
         for limits in [Limits::default(), raised.clone()] {
             refused(prepare_within(
                 &document(&[], &schema(257)),
-                &ResourceSet::default(),
+                &ExternalSchemas::default(),
                 limits,
             ));
         }

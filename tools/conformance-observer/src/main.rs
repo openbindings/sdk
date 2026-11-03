@@ -88,12 +88,12 @@ fn observe(request: &Value) -> String {
         }
         "validate-operation-values" | "check-examples" => {
             let doc = Document::parse(&data).unwrap();
-            let resources = ResourceSet::new(
+            let resources = ExternalSchemas::new(
                 given["resources"]
                     .as_array()
                     .into_iter()
                     .flatten()
-                    .map(|r| SchemaResource {
+                    .map(|r| ExternalSchema {
                         uri: r["uri"].as_str().unwrap().into(),
                         document: JsonValue::parse(r["documentJson"].as_str().unwrap()).unwrap(),
                     }),
@@ -231,7 +231,7 @@ fn prepare(
     operation: &str,
     side: &str,
     evaluator: &dyn SchemaEvaluator,
-    resources: &ResourceSet,
+    resources: &ExternalSchemas,
 ) -> Preparation {
     let Some(operation) = proof.resolve_operation(operation) else {
         return Preparation::OperationMissing;

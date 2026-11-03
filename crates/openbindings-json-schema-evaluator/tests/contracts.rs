@@ -226,20 +226,13 @@ fn retained_contracts_outlive_documents_and_distinguish_absent_sides() {
     assert!(document.resolve_operation("missing").is_none());
 }
 #[test]
-fn anonymous_scope_selects_outer_dynamic_anchor() {
+fn document_resource_dynamic_anchor_is_an_obi14_admission_violation() {
     let document=Document::parse(r##"{"openbindings":"0.2.0","operations":{"op":{"input":{"$ref":"https://review.invalid/list"}}},"schemas":{"List":{"$id":"https://review.invalid/list","type":"array","items":{"$dynamicRef":"#element"},"$defs":{"element":{"$dynamicAnchor":"element","type":"string"}}},"Override":{"$dynamicAnchor":"element","type":"integer"}}}"##).unwrap();
-    let prepared = prepare_op(&conformant(&document), &DefaultEvaluator::new());
-    assert!(matches!(
-        prepared.explain(&value("[7]")),
-        ValueOutcome::Satisfies
-    ));
-    let result = prepared.explain(&value(r#"["x"]"#));
-    let ValueOutcome::Fails { problems, .. } = result else {
-        panic!("{result:?}");
-    };
-    assert_eq!(problems[0].instance, "/0");
-    assert_eq!(problems[0].schema.pointer, "/schemas/Override/type");
+    let assessment = document.validate().unwrap();
+    assert!(assessment.conformant().is_none());
+    assert_eq!(assessment.report().evidence["OBI-14"], Evidence::Violated);
 }
+
 #[test]
 fn same_uri_resources_are_isolated_and_precancellation_does_not_poison() {
     let proof = conformant(&doc(r#"{"$ref":"https://review.invalid/shared"}"#));
@@ -248,7 +241,7 @@ fn same_uri_resources_are_isolated_and_precancellation_does_not_poison() {
     let evaluator = DefaultEvaluator::new();
     // Two resource sets supply different snapshots for the same retrieval URI.
     let snapshot = |schema: &str| {
-        ResourceSet::new([SchemaResource {
+        ExternalSchemas::new([ExternalSchema {
             uri: "https://review.invalid/shared".into(),
             document: value(schema),
         }])
@@ -325,7 +318,7 @@ fn cancellation_during_preparation_allows_independent_retries() {
     let operation = proof.resolve_operation("op").expect("declared operation");
     let contract = operation.input().expect("declared input");
     let cancelled =
-        contract.prepare_with_control(&evaluator, &ResourceSet::default(), control.as_ref());
+        contract.prepare_with_control(&evaluator, &ExternalSchemas::default(), control.as_ref());
     assert!(matches!(
         cancelled,
         Err(NoVerdict {
@@ -403,7 +396,7 @@ fn a_missing_resource_gives_no_verdict_only_where_evaluation_reaches_it() {
         assert_eq!(detail.code, "resource-unavailable");
         assert_eq!(
             detail.location,
-            Some(SchemaLocation::new(
+            Some(SchemaOrigin::new(
                 Some("https://absent.invalid/x".into()),
                 "".parse().unwrap()
             ))
@@ -650,12 +643,12 @@ fn preparation_separates_setup_from_value_and_keeps_ready_healthy() {
 fn resources_reject_compared_uri_duplicates_even_for_equal_bytes() {
     let schema = value("true");
     assert!(
-        ResourceSet::new([
-            SchemaResource {
+        ExternalSchemas::new([
+            ExternalSchema {
                 uri: "https://example.invalid/a/../b".into(),
                 document: schema.clone()
             },
-            SchemaResource {
+            ExternalSchema {
                 uri: "https://example.invalid/b#".into(),
                 document: schema
             }

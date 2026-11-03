@@ -1,7 +1,7 @@
 //! Document conformance: rule evidence, findings, admission and proof creation.
 use crate::{
     fixed_schema,
-    schema_index::{self, DIALECT, SameDocument},
+    schema::inventory::{self, DIALECT, SameDocument},
     *,
 };
 use openbindings_internal_json::backend;
@@ -595,7 +595,7 @@ impl<'a> Checks<'a> {
     }
     // OBI-10 for the next indexed schema, checked through the index, which
     // records whether every indexed schema satisfies the meta-schemas.
-    fn meta_fixed(&mut self, meta: &mut schema_index::MetaChecks<'a>) {
+    fn meta_fixed(&mut self, meta: &mut inventory::MetaChecks<'a>) {
         let rule = Rule::Obi10;
         let (value, checked) = meta.check_next(
             MAX_FINDINGS.saturating_sub(self.findings.len()),

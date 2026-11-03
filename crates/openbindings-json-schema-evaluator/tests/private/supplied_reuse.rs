@@ -21,7 +21,7 @@ impl SchemaEvaluator for Capture {
         ))
     }
 }
-fn request(input: &str, resources: &ResourceSet) -> SchemaRequest {
+fn request(input: &str, resources: &ExternalSchemas) -> SchemaRequest {
     let proof = Document::parse(format!(
         r#"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{input}}}}},"schemas":{{"c":{{"$id":"https://reuse.test/contained","type":"string"}}}}}}"#
     ))
@@ -39,8 +39,8 @@ fn request(input: &str, resources: &ResourceSet) -> SchemaRequest {
         .prepare_with(&capture, resources);
     capture.0.lock().unwrap().take().unwrap()
 }
-fn set(entries: &[(&str, &str)]) -> ResourceSet {
-    ResourceSet::new(entries.iter().map(|(uri, text)| SchemaResource {
+fn set(entries: &[(&str, &str)]) -> ExternalSchemas {
+    ExternalSchemas::new(entries.iter().map(|(uri, text)| ExternalSchema {
         uri: (*uri).into(),
         document: JsonValue::parse(*text).unwrap(),
     }))
@@ -71,7 +71,12 @@ fn preparation_shares_the_sets_admitted_resources() {
     ]);
     let request = request(r#"{"$ref":"https://reuse.test/b"}"#, &resources);
     for _ in 0..2 {
-        let (space, _) = space(&request, Vec::new()).unwrap();
+        let (space, _) = space(
+            &request,
+            Vec::new(),
+            &std::sync::atomic::AtomicBool::new(false),
+        )
+        .unwrap();
         // The same admitted resources in memory, not a copy of them.
         let shared: Vec<_> = space.supplied.iter().map(std::ptr::from_ref).collect();
         let held: Vec<_> = resources
@@ -120,7 +125,12 @@ fn shared_and_freshly_admitted_resources_project_identically() {
             .collect();
         let resources = set(&entries);
         let request = request(&input, &resources);
-        let (shared, _) = space(&request, Vec::new()).unwrap();
+        let (shared, _) = space(
+            &request,
+            Vec::new(),
+            &std::sync::atomic::AtomicBool::new(false),
+        )
+        .unwrap();
         let fresh = embedding::SchemaSpace::new(
             embedding::RawDocument::new(request.document().document().value().clone()),
             embedding::Supplied::new(request.supplied_resources().iter().map(|r| {

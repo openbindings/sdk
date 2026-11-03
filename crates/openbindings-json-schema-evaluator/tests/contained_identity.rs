@@ -24,9 +24,9 @@ fn contained_identities_and_fragments_preserve_the_specified_resource() {
             .unwrap()
             .conformant()
             .expect("admitted identity witness");
-        let resources = ResourceSet::new(case["resources"].as_array().unwrap().iter().map(
+        let resources = ExternalSchemas::new(case["resources"].as_array().unwrap().iter().map(
             |resource| {
-                SchemaResource {
+                ExternalSchema {
                     uri: resource["uri"].as_str().unwrap().to_owned(),
                     document: JsonValue::parse(
                         resource["document"]

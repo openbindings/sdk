@@ -6,7 +6,7 @@ fn prepare(schema: &str, extra: &str) -> PreparedValueContract {
     // governs the interface document, not supplied schemas or caller values.
     let text = r#"{"openbindings":"0.2.0","operations":{"op":{"input":{"$ref":"https://strings.invalid/schema#/$defs/target"}}}}"#;
     let resource = format!(r#"{{"$defs":{{"target":{schema}}},"examples":["\ud800"]{extra}}}"#);
-    let resources = ResourceSet::new([SchemaResource {
+    let resources = ExternalSchemas::new([ExternalSchema {
         uri: "https://strings.invalid/schema".into(),
         document: JsonValue::parse(resource).unwrap(),
     }])

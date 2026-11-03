@@ -170,14 +170,14 @@ additional numeric and error cases.
 
 ## Resources, diagnostics and lifetime
 
-`prepare_with` borrows a `&dyn SchemaEvaluator` and a `ResourceSet`;
+`prepare_with` borrows a `&dyn SchemaEvaluator` and a `ExternalSchemas`;
 the [replacement example](../crates/openbindings-json-schema-evaluator/examples/replacement.rs)
 shows supplied resources and retained work. Schema resources are explicit and immutable. The SDK never fetches missing
 references. Prepare again with a new set to change resources; prepared value contracts keep
 their original snapshots. An application can prepare a candidate before replacing
 its active value contract and keep serving old work if preparation fails.
 
-A `ResourceSet` indexes its resource identities once when it is built, and clones
+A `ExternalSchemas` indexes its resource identities once when it is built, and clones
 share that index. Evaluators that request the core projection reuse one resolution
 space per live document revision and set, including when preparations alternate
 between sets. The space without supplied resources stays with the revision; a
@@ -206,7 +206,7 @@ more (see [host support](support.md)). An explained problem names the failing
 node by its exact pointer from the value passed (`instance`) and the failing
 keyword by resource and exact pointer (`schema`). Line and column come from the
 text's holder when asked: `JsonValue::locate` for the value, `ConformantDocument::locate`
-and `ResourceSet::locate` for the schema. A prepared value contract keeps a compact copy
+and `ExternalSchemas::locate` for the schema. A prepared value contract keeps a compact copy
 of the keywords it compiled for explanations, never its document or resources, and
 no positions. See the [evaluator guide](../crates/openbindings-json-schema-evaluator/README.md)
 and [host support](support.md).

@@ -2,7 +2,7 @@
 #[cfg(test)]
 mod tests {
     use openbindings::{
-        Document, JsonValue, NoVerdict, PreparedSchema, ResourceSet, SchemaEvaluator,
+        Document, ExternalSchemas, JsonValue, NoVerdict, PreparedSchema, SchemaEvaluator,
         SchemaRequest, ValueOutcome, ValueProblem,
     };
     use openbindings_invocation::CancellationToken;
@@ -32,7 +32,7 @@ mod tests {
     struct Prepared {
         barrier: Option<Arc<Barrier>>,
         saw_cancel: Arc<AtomicBool>,
-        schema: openbindings::SchemaLocation,
+        schema: openbindings::SchemaOrigin,
     }
     impl SchemaEvaluator for Evaluator {
         fn prepare(
@@ -127,7 +127,7 @@ mod tests {
                 barrier: Some(barrier.clone()),
                 saw_cancel: saw_cancel.clone(),
             }),
-            ResourceSet::default(),
+            ExternalSchemas::default(),
         );
         let control = CancellationToken::new();
         let mut call = invoker.invoke_with_control(Request::binding("b"), &control);
@@ -171,7 +171,7 @@ mod tests {
                 barrier: None,
                 saw_cancel: Arc::default(),
             }),
-            ResourceSet::default(),
+            ExternalSchemas::default(),
         );
         let mut call = invoker.invoke(Request::binding("b"));
         assert!(
@@ -294,7 +294,7 @@ mod tests {
                 barrier: None,
                 saw_cancel: Arc::default(),
             }),
-            ResourceSet::default(),
+            ExternalSchemas::default(),
         );
         let mut call = invoker.invoke_with_control(Request::binding("b"), &external);
         let result = std::pin::pin!(call.next()).poll(&mut Context::from_waker(Waker::noop()));
@@ -358,7 +358,10 @@ mod tests {
                 eof: Arc::default(),
             },
         )
-        .with_evaluator(Arc::new(Preparing(barrier.clone())), ResourceSet::default());
+        .with_evaluator(
+            Arc::new(Preparing(barrier.clone())),
+            ExternalSchemas::default(),
+        );
         let external = CancellationToken::new();
         let mut call = invoker.invoke_with_control(Request::binding("b"), &external);
         assert!(

@@ -3,7 +3,7 @@ use openbindings::*;
 use std::sync::Arc;
 struct BooleanEvaluator;
 // The schema's value and its original location, for explanations.
-struct BooleanContract(bool, SchemaLocation);
+struct BooleanContract(bool, SchemaOrigin);
 impl SchemaEvaluator for BooleanEvaluator {
     fn prepare(
         &self,

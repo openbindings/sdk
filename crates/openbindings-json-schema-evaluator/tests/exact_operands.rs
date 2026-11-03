@@ -17,7 +17,7 @@ impl Checked {
         Ok(self.validate(&JsonValue::parse(input)?))
     }
 }
-fn prepare(schema: &str, mode: Detail, resources: ResourceSet) -> Checked {
+fn prepare(schema: &str, mode: Detail, resources: ExternalSchemas) -> Checked {
     let document = Document::parse(format!(
         r#"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{schema}}}}}}}"#
     ))
@@ -100,7 +100,7 @@ fn every_numeric_family_uses_exact_values_in_both_detail_modes() {
     ];
     for mode in [Detail::Outcome, Detail::Explain] {
         for (schema, input, expected) in cases {
-            let contract = prepare(schema, mode, ResourceSet::default());
+            let contract = prepare(schema, mode, ExternalSchemas::default());
             let outcome = contract.validate(&JsonValue::parse(input).unwrap());
             match &outcome {
                 ValueOutcome::Satisfies => assert!(expected, "{schema}: {input}"),
@@ -132,7 +132,7 @@ fn exact_bounds_and_choices_fail_at_their_original_keywords() {
     let huge = format!("1e{}", "9".repeat(100_000));
     for bound in ["1e400", "9007199254740993", "-0.00", huge.as_str()] {
         let schema = format!(r#"{{"exclusiveMinimum":{bound}}}"#);
-        let contract = prepare(&schema, Detail::Explain, ResourceSet::default());
+        let contract = prepare(&schema, Detail::Explain, ExternalSchemas::default());
         let ValueOutcome::Fails { problems, .. } =
             contract.validate(&JsonValue::parse(bound).unwrap())
         else {
@@ -147,7 +147,7 @@ fn exact_bounds_and_choices_fail_at_their_original_keywords() {
         );
     }
     let schema = format!(r#"{{"enum":[1e400,{huge},9007199254740993,-0.00]}}"#);
-    let contract = prepare(&schema, Detail::Explain, ResourceSet::default());
+    let contract = prepare(&schema, Detail::Explain, ExternalSchemas::default());
     let ValueOutcome::Fails { problems, .. } =
         contract.validate(&JsonValue::parse("-1e400").unwrap())
     else {
@@ -165,7 +165,7 @@ fn substituted_resource_nodes_keep_distinct_original_provenance() {
             ("https://exact.test/root#/%24defs/b", "/$defs/b/maximum"),
             ("https://exact.test/nested", "/$defs/b/maximum"),
         ] {
-            let resources = ResourceSet::new([SchemaResource {
+            let resources = ExternalSchemas::new([ExternalSchema {
                 uri: "https://exact.test/root".into(),
                 document: resource.clone(),
             }])
@@ -179,7 +179,7 @@ fn substituted_resource_nodes_keep_distinct_original_provenance() {
             if mode == Detail::Explain {
                 let location = &problems[0].schema;
                 assert_eq!(
-                    location.resource.as_deref(),
+                    location.source_uri.as_deref(),
                     Some("https://exact.test/root")
                 );
                 assert_eq!(location.pointer, pointer);
@@ -205,14 +205,14 @@ fn compact_exponents_public_equality_and_arithmetic_refusal_remain_separate() {
     }
     for mode in [Detail::Outcome, Detail::Explain] {
         for token in [huge.as_str(), &"7".repeat(4097)] {
-            let contract = prepare(r#"{"multipleOf":3}"#, mode, ResourceSet::default());
+            let contract = prepare(r#"{"multipleOf":3}"#, mode, ExternalSchemas::default());
             let ValueOutcome::NoVerdict { detail } =
                 contract.validate(&JsonValue::parse(token).unwrap())
             else {
                 panic!()
             };
             assert_eq!(detail.code, "numeric-arithmetic-limit");
-            let contract = prepare(r#"{"minimum":0}"#, mode, ResourceSet::default());
+            let contract = prepare(r#"{"minimum":0}"#, mode, ExternalSchemas::default());
             assert!(matches!(
                 contract.validate(&JsonValue::parse(token).unwrap()),
                 ValueOutcome::Satisfies
@@ -256,7 +256,7 @@ fn integer_fast_path_edges_preserve_exact_bounds_and_equality() {
                     let contract = prepare(
                         &format!(r#"{{"{keyword}":{spelling}}}"#),
                         mode,
-                        ResourceSet::default(),
+                        ExternalSchemas::default(),
                     );
                     for (j, input) in tokens.iter().enumerate() {
                         let same = i == j || (i == 5 && j == 6) || (i == 6 && j == 5);
@@ -307,7 +307,7 @@ fn integer_fast_path_edges_preserve_exact_bounds_and_equality() {
             let contract = prepare(
                 &format!(r#"{{"multipleOf":{divisor}}}"#),
                 mode,
-                ResourceSet::default(),
+                ExternalSchemas::default(),
             );
             let outcome = contract.validate_json(input).unwrap();
             assert!(matches!(
@@ -320,7 +320,7 @@ fn integer_fast_path_edges_preserve_exact_bounds_and_equality() {
                 "{divisor}: {input}"
             );
         }
-        let integer = prepare(r#"{"type":"integer"}"#, mode, ResourceSet::default());
+        let integer = prepare(r#"{"type":"integer"}"#, mode, ExternalSchemas::default());
         for token in tokens.into_iter().map(str::to_owned).chain([
             "9".repeat(10_000),
             "-0".into(),
@@ -341,7 +341,7 @@ fn integer_fast_path_edges_preserve_exact_bounds_and_equality() {
                 ValueOutcome::Fails { .. }
             ));
         }
-        let unique = prepare(r#"{"uniqueItems":true}"#, mode, ResourceSet::default());
+        let unique = prepare(r#"{"uniqueItems":true}"#, mode, ExternalSchemas::default());
         for (input, expected) in [
             (
                 "[-9223372036854775808,9223372036854775807,9223372036854775808]",

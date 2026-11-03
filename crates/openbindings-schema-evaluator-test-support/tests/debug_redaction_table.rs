@@ -23,8 +23,8 @@ fn row(label: &'static str, value: &(impl Debug + ?Sized)) -> Row {
         ],
     }
 }
-fn location() -> SchemaLocation {
-    SchemaLocation::new(Some(SECRET.into()), format!("/{SECRET}").parse().unwrap())
+fn location() -> SchemaOrigin {
+    SchemaOrigin::new(Some(SECRET.into()), format!("/{SECRET}").parse().unwrap())
 }
 fn refusal() -> NoVerdict {
     NoVerdict::new(

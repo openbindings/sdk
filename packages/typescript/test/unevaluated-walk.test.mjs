@@ -29,7 +29,7 @@ test("patternProperties subschemas reached through references stay evaluable thr
       r.uri,
       sdk.parseJson(JSON.stringify(r.schema)).value,
     ]);
-    const resources = new sdk.SchemaResources(values);
+    const resources = new sdk.ExternalSchemas(values);
     let contract;
     try {
       const setup = prepareInput(parsed.value, "op", { resources });

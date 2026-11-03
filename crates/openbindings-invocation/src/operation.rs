@@ -12,8 +12,8 @@ use crate::{
     value::source_from_json,
 };
 use openbindings::{
-    ConformantBindingView, ConformantDocument, ConformantOperationView, Detail, JsonKind,
-    JsonValue, NoVerdict, NoVerdictReason, PreparedValueContract, ResourceSet, Schema,
+    ConformantBindingView, ConformantDocument, ConformantOperationView, Detail, ExternalSchemas,
+    JsonKind, JsonValue, NoVerdict, NoVerdictReason, PreparedValueContract, Schema,
     SchemaEvaluator, Source, ValueOutcome,
 };
 use std::{
@@ -63,7 +63,7 @@ impl Direction {
 #[derive(Clone)]
 struct Evaluation {
     evaluator: Arc<dyn SchemaEvaluator>,
-    resources: ResourceSet,
+    resources: ExternalSchemas,
 }
 impl Evaluation {
     fn prepare(
@@ -300,7 +300,7 @@ impl<P: BindingInvoker> Invoker<P> {
     pub fn with_evaluator(
         mut self,
         evaluator: Arc<dyn SchemaEvaluator>,
-        resources: ResourceSet,
+        resources: ExternalSchemas,
     ) -> Self {
         self.evaluation = Some(Evaluation {
             evaluator,

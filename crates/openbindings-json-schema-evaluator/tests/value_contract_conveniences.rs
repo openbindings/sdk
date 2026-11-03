@@ -36,7 +36,7 @@ fn default_preparation_matches_explicit_policy_and_retains_ready_work() {
         let contract = operation.input().expect("declared input");
         let ready = contract.prepare(&DefaultEvaluator::new()).unwrap();
         let expected = contract
-            .prepare_with(&DefaultEvaluator::new(), &ResourceSet::default())
+            .prepare_with(&DefaultEvaluator::new(), &ExternalSchemas::default())
             .unwrap();
         drop(operation);
         drop(proof);
@@ -229,7 +229,7 @@ fn preparation_refusal_is_the_original_record_and_propagates_as_an_error() {
         NoVerdictReason::Cancelled,
         NoVerdictReason::EvaluatorFailure,
     ] {
-        let location = SchemaLocation::new(
+        let location = SchemaOrigin::new(
             Some("https://example.invalid/schema".into()),
             "/input".parse().unwrap(),
         );

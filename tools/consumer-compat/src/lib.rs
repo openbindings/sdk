@@ -228,7 +228,7 @@ mod tests {
             ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
                 let program: EvaluationProgram = request.evaluation_program(control)?;
                 let _: &str = program.entry_uri();
-                let resources: &[SchemaResource] = program.resources();
+                let resources: &[ExternalSchema] = program.resources();
                 assert!(!resources.is_empty());
                 for resource in resources {
                     let document: &JsonValue = &resource.document;
@@ -241,7 +241,7 @@ mod tests {
                     .find(|resource| resource.uri == program.entry_uri())
                     .unwrap();
                 let reference = entry.document.get("$ref").unwrap();
-                let location: SchemaLocation = program
+                let location: SchemaOrigin = program
                     .original_location(reference.as_str().unwrap())
                     .unwrap();
                 assert_eq!(location.pointer, request.entry_location().pointer);

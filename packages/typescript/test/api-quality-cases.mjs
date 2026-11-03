@@ -402,10 +402,10 @@ export async function apiQualityCases(sdk, http) {
     const intSchema = exact('{"type":"integer"}');
     const stringSchema = exact('{"type":"string"}');
     const resources = own(
-      new sdk.SchemaResources([["https://schema.test/id", intSchema]]),
+      new sdk.ExternalSchemas([["https://schema.test/id", intSchema]]),
     );
     const others = own(
-      new sdk.SchemaResources([["https://schema.test/id", stringSchema]]),
+      new sdk.ExternalSchemas([["https://schema.test/id", stringSchema]]),
     );
     const a = ready(conformant, "remote", { resources }),
       b = ready(conformant, "remote", { resources: others });
@@ -429,7 +429,7 @@ export async function apiQualityCases(sdk, http) {
       ],
     ]) {
       throws(
-        () => new sdk.SchemaResources(entries),
+        () => new sdk.ExternalSchemas(entries),
         () => true,
         "batch refusal",
       );
@@ -444,12 +444,12 @@ export async function apiQualityCases(sdk, http) {
       throw trap;
     }
     throws(
-      () => new sdk.SchemaResources(throwing()),
+      () => new sdk.ExternalSchemas(throwing()),
       (e) => e === trap,
       "iterator exception preserved",
     );
     check(testing.liveStorageOwners() === beforeBatch, "iterator cleanup");
-    own(new sdk.SchemaResources([["https://schema.test/healthy", intSchema]]));
+    own(new sdk.ExternalSchemas([["https://schema.test/healthy", intSchema]]));
     const checked = document.validate();
     check(checked.status === "conformant", "proof");
     const proof = own(checked.document);

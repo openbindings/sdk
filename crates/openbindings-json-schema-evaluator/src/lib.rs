@@ -263,7 +263,7 @@ impl SchemaEvaluator for DefaultEvaluator {
         control: &dyn WorkControl,
     ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
         control.check()?;
-        let (space, entry) = space(request, Vec::new())?;
+        let (space, entry) = space(request, Vec::new(), control)?;
         let cancellation = || control.is_cancelled();
         let projected = match space.program_definitions(entry, &cancellation) {
             Err(failure)
@@ -277,7 +277,8 @@ impl SchemaEvaluator for DefaultEvaluator {
                 if missing.is_empty() {
                     return Err(projection_failure(failure));
                 }
-                let (space, entry) = self::space(request, missing::stand_ins(&missing).collect())?;
+                let (space, entry) =
+                    self::space(request, missing::stand_ins(&missing).collect(), control)?;
                 let projected = space
                     .program_definitions(entry, &cancellation)
                     .map_err(|_| projection_failure(failure))?;
@@ -297,18 +298,28 @@ impl SchemaEvaluator for DefaultEvaluator {
 fn space(
     request: &SchemaRequest,
     stand_ins: Vec<openbindings_internal_schema::ProjectedResource>,
+    control: &dyn WorkControl,
 ) -> Result<(SchemaSpace, usize), NoVerdict> {
     let supplied = request.supplied_resources().supplied();
     let supplied = if stand_ins.is_empty() {
         supplied.clone()
     } else {
-        openbindings_internal_schema::Supplied::new(supplied.iter().cloned().chain(stand_ins))
-            .map_err(|_| program_failure())?
+        openbindings_internal_schema::Supplied::new_bounded(
+            supplied.iter().cloned().chain(stand_ins),
+            100_000,
+            openbindings_internal_schema::DEFAULT_IDENTITY_BYTES,
+            &|| control.is_cancelled(),
+        )
+        .map_err(projection_failure)?
     };
-    let space = SchemaSpace::new(
+    let space = SchemaSpace::new_bounded(
         openbindings_internal_schema::IndexedDocument::indexed(request.document()),
         supplied,
-    );
+        100_000,
+        openbindings_internal_schema::DEFAULT_IDENTITY_BYTES,
+        &|| control.is_cancelled(),
+    )
+    .map_err(projection_failure)?;
     let entry = space
         .document_node(request.entry())
         .expect("validated entry is a schema");
@@ -652,7 +663,7 @@ impl DefaultEvaluator {
         // is a stand-in, which names that schema's original location.
         // Its copies share what specialization leaves of the program budget.
         let mut budget = self.limits.program_bytes.saturating_sub(bundle.grown);
-        let cycles: Vec<Option<SchemaLocation>> = if cyclic {
+        let cycles: Vec<Option<SchemaOrigin>> = if cyclic {
             let (stand_ins, charged) = cycles::unfold(&mut bundle, budget, control)?;
             budget = budget.saturating_sub(charged);
             stand_ins
@@ -693,7 +704,7 @@ impl DefaultEvaluator {
                 "static preparation requires a resource that was not supplied",
             );
             detail.location = missing.get(at as usize).map(|uri| {
-                SchemaLocation::new(
+                SchemaOrigin::new(
                     Some(uri.clone()),
                     Pointer::from_utf16(&[]).expect("the root pointer"),
                 )
@@ -944,7 +955,7 @@ fn distinct_names(schemas: &[Value]) -> usize {
 // location.
 struct UnmatchedNames {
     unsupported: pattern::Unsupported,
-    location: Option<SchemaLocation>,
+    location: Option<SchemaOrigin>,
 }
 fn in_place_cycle(message: &str) -> NoVerdict {
     no_verdict(
@@ -960,7 +971,7 @@ fn program_failure() -> NoVerdict {
         "the projected program has an unexpected shape",
     )
 }
-fn keyword_location(space: &SchemaSpace, node: usize, keyword: &str) -> SchemaLocation {
+fn keyword_location(space: &SchemaSpace, node: usize, keyword: &str) -> SchemaOrigin {
     let mut at = space.location(node);
     backend::push_pointer(&mut at.pointer, &format!("/{keyword}"));
     original_location(at)
@@ -1456,7 +1467,7 @@ struct StandIns {
     missing: Vec<String>,
     // The original location of each schema that would apply again, by the
     // index its stand-in's keyword holds.
-    cycles: Vec<Option<SchemaLocation>>,
+    cycles: Vec<Option<SchemaOrigin>>,
     // Each schema's unmatched `patternProperties` names, likewise.
     names: Vec<UnmatchedNames>,
     bounds: Option<Bounds>,
@@ -1725,7 +1736,7 @@ impl Compiled {
                 detail.location = stand_ins
                     .and_then(|stand_ins| stand_ins.missing.get(at as usize))
                     .map(|uri| {
-                        SchemaLocation::new(
+                        SchemaOrigin::new(
                             Some(uri.clone()),
                             Pointer::from_utf16(&[]).expect("the root pointer"),
                         )
@@ -1993,8 +2004,8 @@ fn diagnostic_message(kind: &jsonschema::error::ValidationErrorKind) -> String {
     message.into()
 }
 
-fn original_location(at: openbindings_internal_schema::Location) -> SchemaLocation {
-    SchemaLocation::new(at.resource, at.pointer)
+fn original_location(at: openbindings_internal_schema::Location) -> SchemaOrigin {
+    SchemaOrigin::new(at.resource, at.pointer)
 }
 fn projection_failure(f: openbindings_internal_schema::Failure) -> NoVerdict {
     use openbindings_internal_schema::FailureReason as F;

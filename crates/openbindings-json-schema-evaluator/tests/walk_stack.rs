@@ -69,7 +69,7 @@ fn schema(kind: &str, nested: bool, levels: usize, nesting: usize) -> String {
     holder.to_string()
 }
 fn prepare(schema: &str, evaluator: &DefaultEvaluator) -> Result<PreparedValueContract, NoVerdict> {
-    let resources = ResourceSet::new([SchemaResource {
+    let resources = ExternalSchemas::new([ExternalSchema {
         uri: "https://stack.test/s".into(),
         document: JsonValue::parse(schema).unwrap(),
     }])

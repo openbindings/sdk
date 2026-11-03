@@ -8,8 +8,8 @@ use std::sync::Arc;
 const ITEM: &str = "https://example.test/item";
 const OTHER: &str = "https://example.test/other";
 
-fn resources(uri: &str, schema: &str) -> ResourceSet {
-    ResourceSet::new([SchemaResource {
+fn resources(uri: &str, schema: &str) -> ExternalSchemas {
+    ExternalSchemas::new([ExternalSchema {
         uri: uri.into(),
         document: JsonValue::parse(schema).unwrap(),
     }])
@@ -82,7 +82,7 @@ fn explaining_contracts_keep_neither_documents_nor_resources() {
         panic!("expected failure")
     };
     let location = &problems[0].schema;
-    assert_eq!(location.resource.as_deref(), Some(ITEM));
+    assert_eq!(location.source_uri.as_deref(), Some(ITEM));
     assert_eq!(location.pointer, "/properties/id/minimum");
     drop(value);
     // Explaining builds no arena either.

@@ -200,7 +200,7 @@ fn contract(
     schema: &str,
     evaluator: &DefaultEvaluator,
 ) -> Result<PreparedValueContract, NoVerdict> {
-    let resources = ResourceSet::new([SchemaResource {
+    let resources = ExternalSchemas::new([ExternalSchema {
         uri: "https://stack.test/s".into(),
         document: JsonValue::parse(schema).unwrap(),
     }])

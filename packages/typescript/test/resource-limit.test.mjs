@@ -26,7 +26,7 @@ const supplied = (count) => {
     sdk.ExactJson.from(integer),
   );
   try {
-    const resources = new sdk.SchemaResources(
+    const resources = new sdk.ExternalSchemas(
       values.map((value, i) => [uri(i), value]),
     );
     return { text: document({}, input), resources };

@@ -16,17 +16,10 @@ pub mod conformance;
 pub mod document;
 pub use conformance::*;
 mod fixed_schema;
-mod schema_index;
 pub use document::*;
 
 pub mod schema;
-pub use schema::Schema;
+pub use schema::*;
 
-mod contracts;
-pub use contracts::*;
-mod work_control;
-pub use work_control::*;
-mod schema_space;
-pub use schema_space::{
-    Reference, ReferenceRefusal, ReferenceRefusalReason, ReferenceReport, ReferenceResolution,
-};
+pub mod control;
+pub use control::*;

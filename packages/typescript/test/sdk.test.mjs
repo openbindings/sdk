@@ -360,7 +360,7 @@ test("explicit resources, evaluator limits and pre-cancellation keep their disti
     '{"openbindings":"0.2.0","operations":{"run":{"input":{"$ref":"https://example.test/schema"}}}}',
   );
   const schema = exact('{"type":"integer"}'),
-    empty = new sdk.SchemaResources(),
+    empty = new sdk.ExternalSchemas(),
     resources = empty.with("https://example.test/schema", schema);
   empty.dispose();
   schema.dispose();
@@ -465,21 +465,21 @@ test("schema resources admit every entry in one pass", () => {
   };
   try {
     const uri = (i) => `https://example.test/s${i}`;
-    const set = new sdk.SchemaResources(documents.map((d, i) => [uri(i), d]));
+    const set = new sdk.ExternalSchemas(documents.map((d, i) => [uri(i), d]));
     assert.deepEqual(calls, { add: 0, build: 1 });
     for (const i of [0, 31, 63])
       assert.equal(
-        set.locate({ resource: uri(i), pointer: "/title" }).pointer,
+        set.locate({ sourceUri: uri(i), pointer: "/title" }).pointer,
         "/title",
       );
     set.dispose();
-    new sdk.SchemaResources([]).dispose();
-    new sdk.SchemaResources().dispose();
+    new sdk.ExternalSchemas([]).dispose();
+    new sdk.ExternalSchemas().dispose();
     assert.deepEqual(calls, { add: 0, build: 1 });
     // Refusals release collected entries and leave supplied owners usable.
     assert.throws(
       () =>
-        new sdk.SchemaResources([
+        new sdk.ExternalSchemas([
           [uri(0), documents[0]],
           [uri(0), documents[1]],
         ]),
@@ -487,7 +487,7 @@ test("schema resources admit every entry in one pass", () => {
     );
     assert.throws(
       () =>
-        new sdk.SchemaResources([
+        new sdk.ExternalSchemas([
           [uri(0), documents[0]],
           ["https://example.test/\ud800", documents[1]],
         ]),
@@ -497,7 +497,7 @@ test("schema resources admit every entry in one pass", () => {
       yield [uri(0), documents[0]];
       throw new Error("caller iterable failed");
     }
-    assert.throws(() => new sdk.SchemaResources(failing()), /caller iterable/);
+    assert.throws(() => new sdk.ExternalSchemas(failing()), /caller iterable/);
     assert.equal(documents[0].text, '{"type":"integer","title":"s0"}');
     assert.equal(testing.liveStorageOwners(), before);
   } finally {

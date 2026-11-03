@@ -19,7 +19,7 @@ fn prepare(contract: &str, resource: &str) -> Result<PreparedValueContract, NoVe
         .unwrap()
         .conformant()
         .expect("conformant");
-    let resources = ResourceSet::new([SchemaResource {
+    let resources = ExternalSchemas::new([ExternalSchema {
         uri: RESOURCE.into(),
         document: JsonValue::parse(resource).unwrap(),
     }])

@@ -1,7 +1,7 @@
 //! Immutable exact document snapshots and retained conformance evidence.
 use crate::{
     conformance::{assess_value, version_refusal},
-    schema_index::SchemaIndex,
+    schema::inventory::SchemaIndex,
     *,
 };
 use openbindings_internal_json::backend;
@@ -9,7 +9,7 @@ mod edit;
 mod read_views;
 pub use edit::{Edit, EditError, PointerRef};
 mod conformant_views;
-use crate::{contracts::ResourceSetInner, schema_space::SchemaSpace};
+use crate::{schema::references::SchemaSpace, schema::resources::ExternalSchemasInner};
 pub use conformant_views::*;
 use read_views::NamespaceCache;
 pub use read_views::{BindingView, DependencyView, ExampleView, SourceView};
@@ -36,7 +36,7 @@ pub(crate) struct DocumentInner {
     // a space with a nonempty set lives in that set, which this revision tells
     // to release it when the revision is dropped.
     resolution: OnceLock<Arc<SchemaSpace>>,
-    spaces_in: Mutex<Vec<Weak<ResourceSetInner>>>,
+    spaces_in: Mutex<Vec<Weak<ExternalSchemasInner>>>,
     validation: OnceLock<Result<Arc<ValidationReport>, VersionRefusal>>,
     interpretation: OnceLock<Result<(), InterpretationError>>,
     names: OnceLock<Result<NameIndex, InterpretationError>>,
@@ -46,7 +46,7 @@ pub(crate) struct DocumentInner {
 }
 impl DocumentInner {
     /// Stop tracking a set that is being dropped.
-    pub(crate) fn forget_set(&self, set: *const ResourceSetInner) {
+    pub(crate) fn forget_set(&self, set: *const ExternalSchemasInner) {
         let mut sets = self
             .spaces_in
             .lock()
@@ -626,22 +626,37 @@ impl ConformantDocument {
     /// revision, and a space with a nonempty set lives with that set until
     /// either the set or the revision is dropped. Alternating live sets reuses
     /// each set's space; nothing retains a space beyond its pair.
-    pub(crate) fn resolution(&self, resources: &ResourceSet) -> Arc<SchemaSpace> {
+    pub(crate) fn resolution_bounded(
+        &self,
+        resources: &ExternalSchemas,
+        maximum: usize,
+        maximum_identity: usize,
+        control: &dyn WorkControl,
+    ) -> Result<Arc<SchemaSpace>, openbindings_internal_schema::Failure> {
         let inner = &self.document.inner;
+        let cached = if resources.is_empty() {
+            inner.resolution.get().cloned()
+        } else {
+            resources.kept_space(inner)
+        };
+        if let Some(space) = cached {
+            space.check_inventory_limits(maximum, maximum_identity, control)?;
+            return Ok(space);
+        }
+        // Failed or cancelled assembly never poisons either cache. Work and
+        // allocation happen outside locks; a concurrent complete space may win.
+        let built = Arc::new(SchemaSpace::new_bounded(
+            &self.document,
+            resources,
+            maximum,
+            maximum_identity,
+            control,
+        )?);
         if resources.is_empty() {
-            return inner
-                .resolution
-                .get_or_init(|| Arc::new(SchemaSpace::new(&self.document, resources)))
-                .clone();
+            let _ = inner.resolution.set(built);
+            return Ok(inner.resolution.get().expect("completed space").clone());
         }
-        if let Some(space) = resources.kept_space(inner) {
-            return space;
-        }
-        // Assemble outside every lock; a concurrent preparation's space may win.
-        let space =
-            resources.keep_space(inner, Arc::new(SchemaSpace::new(&self.document, resources)));
-        // The caller holds this revision, so it cannot be dropped before the set
-        // learns to release the space with it.
+        let space = resources.keep_space(inner, built);
         let mut sets = inner
             .spaces_in
             .lock()
@@ -651,7 +666,7 @@ impl ConformantDocument {
         if !sets.iter().any(|known| known.ptr_eq(&set)) {
             sets.push(set);
         }
-        space
+        Ok(space)
     }
     /// Borrow the exact snapshot certified by this proof, for plain fallible reads.
     pub fn document(&self) -> &Document {
@@ -759,7 +774,7 @@ mod name_index_storage_tests {
 #[cfg(test)]
 mod resolution_reuse {
     use super::*;
-    use crate::schema_space::ASSEMBLED;
+    use crate::schema::references::ASSEMBLED;
     use std::sync::Weak;
     /// Projects the core resolution space on every preparation, as custom
     /// evaluators may, and retains its request, as diagnostics-bearing
@@ -802,8 +817,8 @@ mod resolution_reuse {
         .conformant()
         .unwrap()
     }
-    fn snapshot(minimum: u32) -> ResourceSet {
-        ResourceSet::new([SchemaResource {
+    fn snapshot(minimum: u32) -> ExternalSchemas {
+        ExternalSchemas::new([ExternalSchema {
             uri: "https://example.test/item".into(),
             document: JsonValue::parse(format!(r#"{{"type":"integer","minimum":{minimum}}}"#))
                 .unwrap(),
@@ -814,7 +829,7 @@ mod resolution_reuse {
         ASSEMBLED.with(std::cell::Cell::get)
     }
     /// The space kept for a live pair, without assembling one.
-    fn kept(proof: &ConformantDocument, set: &ResourceSet) -> Option<Weak<SchemaSpace>> {
+    fn kept(proof: &ConformantDocument, set: &ExternalSchemas) -> Option<Weak<SchemaSpace>> {
         set.kept_space(&proof.document.inner)
             .map(|space| Arc::downgrade(&space))
     }
@@ -853,7 +868,7 @@ mod resolution_reuse {
             drop(output.prepare(&Projecting).unwrap());
             drop(
                 output
-                    .prepare_with(&Projecting, &ResourceSet::default())
+                    .prepare_with(&Projecting, &ExternalSchemas::default())
                     .unwrap(),
             );
         }

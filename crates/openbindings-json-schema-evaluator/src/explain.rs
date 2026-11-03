@@ -88,10 +88,7 @@ impl Locations {
     /// bounds program, whose copies hold their keywords below a guard's `then`
     /// (`bundle::guard_definition`), and the keyword a transform's definition
     /// stands for.
-    pub(crate) fn locate_bounds(
-        &self,
-        uri: &str,
-    ) -> Option<(SchemaLocation, Option<&'static str>)> {
+    pub(crate) fn locate_bounds(&self, uri: &str) -> Option<(SchemaOrigin, Option<&'static str>)> {
         let rest = uri
             .strip_prefix(bundle::BOUNDS_URI)?
             .strip_prefix("#/$defs/")?;
@@ -107,7 +104,7 @@ impl Locations {
     }
     /// The original location of the keyword the library names by `uri`, and
     /// the keyword a transform's definition stands for.
-    pub(crate) fn locate(&self, uri: &str) -> Option<(SchemaLocation, Option<&'static str>)> {
+    pub(crate) fn locate(&self, uri: &str) -> Option<(SchemaOrigin, Option<&'static str>)> {
         let fragment = uri.strip_prefix(bundle::URI)?.strip_prefix('#')?;
         let decoded;
         let fragment = if fragment.contains('%') {
@@ -144,7 +141,7 @@ impl Locations {
             backend::push_pointer(&mut pointer, &format!("/{segment}"));
         }
         let resource = self.resources[resource as usize].clone();
-        Some((SchemaLocation::new(resource, pointer), keyword))
+        Some((SchemaOrigin::new(resource, pointer), keyword))
     }
 }
 

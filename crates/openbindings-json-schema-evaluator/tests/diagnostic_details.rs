@@ -1,7 +1,7 @@
 use openbindings::*;
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 
-fn prepare(text: &str, resources: ResourceSet) -> PreparedValueContract {
+fn prepare(text: &str, resources: ExternalSchemas) -> PreparedValueContract {
     let doc = Document::parse(text).unwrap();
     let doc = doc
         .validate()
@@ -22,7 +22,7 @@ fn prepare(text: &str, resources: ResourceSet) -> PreparedValueContract {
 /// Check a value cheaply, or explain it when `details` is set.
 fn run(schema: &str, input: &str, details: bool) -> ValueOutcome {
     let text = format!(r#"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{schema}}}}}}}"#);
-    let contract = prepare(&text, ResourceSet::default());
+    let contract = prepare(&text, ExternalSchemas::default());
     let value = JsonValue::parse(input).unwrap();
     if details {
         contract.explain(&value)
@@ -96,14 +96,14 @@ fn explained_locations_exist_in_original_document_and_supplied_resources() {
             let (entry, resources) = if external {
                 (
                     format!(r#"{{"$ref":"{uri}"}}"#),
-                    ResourceSet::new([SchemaResource {
+                    ExternalSchemas::new([ExternalSchema {
                         uri: uri.into(),
                         document: JsonValue::parse(schema).unwrap(),
                     }])
                     .unwrap(),
                 )
             } else {
-                (schema.to_owned(), ResourceSet::default())
+                (schema.to_owned(), ExternalSchemas::default())
             };
             let text =
                 format!(r#"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{entry}}}}}}}"#);
@@ -113,7 +113,7 @@ fn explained_locations_exist_in_original_document_and_supplied_resources() {
             assert!(failure(&coarse).0.is_empty());
             let upstream = contract.explain(&value);
             let location = &failure(&upstream).0[0].schema;
-            assert_eq!(location.resource.as_deref(), external.then_some(uri));
+            assert_eq!(location.source_uri.as_deref(), external.then_some(uri));
             assert_eq!(
                 location.pointer,
                 if external {
@@ -306,7 +306,7 @@ fn every_keyword_is_explained_at_its_original_location() {
         let problem = &problems[0];
         assert_eq!(problem.code, code, "{schema}");
         assert_eq!(problem.instance, instance, "{schema}");
-        assert_eq!(problem.schema.resource, None, "{schema}");
+        assert_eq!(problem.schema.source_uri, None, "{schema}");
         assert_eq!(
             problem.schema.pointer,
             format!("/operations/op/input{pointer}"),
@@ -319,7 +319,7 @@ fn every_keyword_is_explained_at_its_original_location() {
 fn nested_coordinates_and_escaped_names_in_a_supplied_resource() {
     let document = r#"{"openbindings":"0.2.0","operations":{"op":{"input":{"$ref":"https://example.test/schema"}}}}"#;
     let resource = |schema: &str| {
-        ResourceSet::new([SchemaResource {
+        ExternalSchemas::new([ExternalSchema {
             uri: "https://example.test/schema".into(),
             document: JsonValue::parse(schema).unwrap(),
         }])
@@ -335,7 +335,7 @@ fn nested_coordinates_and_escaped_names_in_a_supplied_resource() {
     assert_eq!(problem.instance, "/a~1~0");
     assert_eq!(problem.schema.pointer, "/allOf/0/properties/a~1~0/minimum");
     assert_eq!(
-        problem.schema.resource.as_deref(),
+        problem.schema.source_uri.as_deref(),
         Some("https://example.test/schema")
     );
 }

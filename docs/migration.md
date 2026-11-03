@@ -46,7 +46,7 @@ plain data, while `schemas()` and schema access methods acquire new owners.
 
 | Legacy API | Replacement |
 | --- | --- |
-| Go `NewValueContractCompiler(evaluator, resources...)`, `Resolve(ctx, doc)`, `CompileInput` / `CompileOutput` | Select a `SchemaEvaluator`, create an immutable `ResourceSet`, resolve the operation on a `ConformantDocument`, then call `input()` or `output()` and `prepare_with(&evaluator, &resources)`. |
+| Go `NewValueContractCompiler(evaluator, resources...)`, `Resolve(ctx, doc)`, `CompileInput` / `CompileOutput` | Select a `SchemaEvaluator`, create an immutable `ExternalSchemas`, resolve the operation on a `ConformantDocument`, then call `input()` or `output()` and `prepare_with(&evaluator, &resources)`. |
 | Go `Schema.Validate(ctx, value)` / `ValidateJSON(ctx, bytes)` and error classification | Admit ordinary data with `JsonValue::from_serializable` or exact bytes with `JsonValue::parse`; match `ValueOutcome::Satisfies`, `Fails`, `Undefined` or `NoVerdict`. |
 | TypeScript `compileOperationSchema(iface, name, position)` and `CompiledSchema.validate(value)` returning `valid` and failures | Call `conformant.resolveOperation(name)`, then `input()` or `output()` and `prepare(options)`, narrow to ready, then call `contract.validate(value)`. Handle `satisfies`, `fails`, `undefined`, `no-verdict` and ordinary-input admission errors. |
 

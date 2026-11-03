@@ -25,7 +25,7 @@ fn prepare(
         json!({"openbindings":"0.2.0","operations":{"op":{"input":schema}}}).to_string(),
     )
     .unwrap();
-    let resources = ResourceSet::new(resources.iter().map(|(uri, schema)| SchemaResource {
+    let resources = ExternalSchemas::new(resources.iter().map(|(uri, schema)| ExternalSchema {
         uri: (*uri).into(),
         document: JsonValue::parse(schema.to_string()).unwrap(),
     }))
@@ -310,7 +310,7 @@ fn a_decided_failure_names_the_keyword_that_decides_it() {
         assert_eq!(problems.len(), 1, "{schema}");
         assert_eq!(
             problems[0].schema,
-            SchemaLocation::new(
+            SchemaOrigin::new(
                 None,
                 format!("/operations/op/input{keyword}").parse().unwrap()
             ),
@@ -349,7 +349,7 @@ fn a_cycle_stands_in_where_a_schema_would_apply_again() {
         assert_eq!(detail.reason, NoVerdictReason::ConservativePreparation);
         assert_eq!(
             detail.location,
-            Some(SchemaLocation::new(None, location.parse().unwrap()))
+            Some(SchemaOrigin::new(None, location.parse().unwrap()))
         );
     }
     let contract = prepare(&json!({"$defs": defs, "$ref": a}), &[]).unwrap();
@@ -518,7 +518,7 @@ fn an_explanation_that_reaches_a_stand_in_falls_back_to_the_upper_bound() {
             assert_eq!(problems.len(), 1, "{schema}");
             assert_eq!(
                 problems[0].schema,
-                SchemaLocation::new(None, "/operations/op/input/oneOf".parse().unwrap()),
+                SchemaOrigin::new(None, "/operations/op/input/oneOf".parse().unwrap()),
                 "{schema}"
             );
         } else {

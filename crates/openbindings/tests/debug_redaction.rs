@@ -49,7 +49,7 @@ impl SchemaEvaluator for PrivateEvaluator {
             "test-only",
             "test evaluator",
         )
-        .with_location(SchemaLocation::new(None, "".parse().unwrap())))
+        .with_location(SchemaOrigin::new(None, "".parse().unwrap())))
     }
 }
 
@@ -60,12 +60,12 @@ fn evaluator_requests_and_resources_redact_original_snapshots_and_identifiers() 
     ))
     .unwrap();
     let document = parsed.validate().unwrap().conformant().unwrap();
-    let resource = SchemaResource {
+    let resource = ExternalSchema {
         uri: format!("https://example.invalid/{SECRET}"),
         document: JsonValue::parse(format!(r#"{{"const":"{SECRET}"}}"#)).unwrap(),
     };
     redacted(&resource);
-    let resources = ResourceSet::new([resource]).unwrap();
+    let resources = ExternalSchemas::new([resource]).unwrap();
     redacted(&resources);
     let operation = document.resolve_operation("op").unwrap();
     let contract = operation.input().unwrap();

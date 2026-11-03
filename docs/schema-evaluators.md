@@ -31,7 +31,7 @@ the default evaluator; it does not expose custom evaluator callbacks.
 ## Bring your own
 
 Implement `SchemaEvaluator::prepare` and return an owned `PreparedSchema`.
-Pass a borrowed implementation, and an immutable `ResourceSet` when resources are
+Pass a borrowed implementation, and an immutable `ExternalSchemas` when resources are
 supplied, to a conformant operation's `Schema::prepare_with`. Implement
 `PreparedSchema::validate` to return satisfies, fails, undefined or no-verdict.
 Each call passes a `Detail`. With `Detail::Outcome`, the caller's cheap check, a
@@ -73,11 +73,11 @@ also when it is part of a larger text); `JsonValue::at_pointer` checks one and
 and exact pointer from that source's root: `SchemaRequest::location(node)` builds
 one for a node of the request's document or supplied resources, and
 `entry_location()` names the selected schema; do this at preparation, since the
-prepared object must not keep the request. `SchemaLocation::new(resource,
+prepared object must not keep the request. `SchemaOrigin::new(resource,
 pointer)` takes any exact `Pointer`. When a keyword cannot be mapped to an
 original source, name the selected schema rather than guessing. Callers find line
 and column on demand with `JsonValue::locate`, `ConformantDocument::locate` and
-`ResourceSet::locate`.
+`ExternalSchemas::locate`.
 
 These records may gain fields in later versions, so they have no struct-literal
 form outside the SDK; their fields stay public to read and assign. `ValueOutcome`

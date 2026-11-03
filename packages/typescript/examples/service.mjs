@@ -1,5 +1,5 @@
 // Application-owned service lifetime, shared by Node and workerd adapters.
-import { SchemaResources, Document, parseJson } from "@openbindings/sdk";
+import { ExternalSchemas, Document, parseJson } from "@openbindings/sdk";
 
 export function prepareService(documentBytes, entries = []) {
   const parsed = Document.parse(documentBytes);
@@ -13,7 +13,7 @@ export function prepareService(documentBytes, entries = []) {
     if (!operation) return { status: "operation-missing" };
     contract = operation.input();
     if (!contract) return { status: "no-value-contract" };
-    resources = new SchemaResources(entries); // borrowed schema owners
+    resources = new ExternalSchemas(entries); // borrowed schema owners
     // A ready result owns its prepared value contract independently of setup locals.
     return contract.prepare({ resources });
   } finally {

@@ -17,7 +17,7 @@ fn prepare(schema: &str, completion: Option<&str>) -> Result<PreparedValueContra
         .unwrap()
         .conformant()
         .expect("conformant");
-    let resources = ResourceSet::new(completion.map(|schema| SchemaResource {
+    let resources = ExternalSchemas::new(completion.map(|schema| ExternalSchema {
         uri: MISSING.into(),
         document: JsonValue::parse(schema).unwrap(),
     }))
@@ -111,7 +111,7 @@ fn check(schema: &str) -> Result<(usize, usize), NoVerdict> {
 fn refused_for_the_resource(detail: &NoVerdict) -> bool {
     detail.code == "resource-unavailable"
         && detail.location
-            == Some(SchemaLocation::new(
+            == Some(SchemaOrigin::new(
                 Some(MISSING.into()),
                 Pointer::from_utf16(&[]).unwrap(),
             ))

@@ -16,7 +16,7 @@ fn document(schemas: &[String], input: &str) -> String {
 }
 fn prepare_limited(
     text: &str,
-    resources: &ResourceSet,
+    resources: &ExternalSchemas,
     limits: Limits,
 ) -> Result<PreparedValueContract, NoVerdict> {
     let proof = Document::parse(text)
@@ -34,7 +34,7 @@ fn prepare_limited(
 }
 fn prepare(
     text: &str,
-    resources: &ResourceSet,
+    resources: &ExternalSchemas,
     cap: Option<usize>,
 ) -> Result<PreparedValueContract, NoVerdict> {
     let limits = Limits {
@@ -44,13 +44,13 @@ fn prepare(
     prepare_limited(text, resources, limits)
 }
 // An input that references each of `count` supplied integer resources.
-fn supplied(count: usize) -> (String, ResourceSet) {
+fn supplied(count: usize) -> (String, ExternalSchemas) {
     let uri = |i: usize| format!("https://set.test/r{i}");
     let references: Vec<_> = (0..count)
         .map(|i| format!(r#"{{"$ref":"{}"}}"#, uri(i)))
         .collect();
     let input = format!(r#"{{"allOf":[{}]}}"#, references.join(","));
-    let resources = ResourceSet::new((0..count).map(|i| SchemaResource {
+    let resources = ExternalSchemas::new((0..count).map(|i| ExternalSchema {
         uri: uri(i),
         document: JsonValue::parse(r#"{"type":"integer"}"#).unwrap(),
     }))
@@ -76,7 +76,7 @@ fn assert_refused(refused: NoVerdict) {
 }
 // A cap of `reached` admits the contract, and so does no cap; one less refuses it.
 // The admitted contract decides `value`, which satisfies it.
-fn assert_reaches_deciding(text: &str, resources: &ResourceSet, reached: usize, value: &str) {
+fn assert_reaches_deciding(text: &str, resources: &ExternalSchemas, reached: usize, value: &str) {
     let admitted = prepare(text, resources, Some(reached)).expect("admitted at its count");
     assert!(matches!(
         admitted.validate(&JsonValue::parse(value).unwrap()),
@@ -85,7 +85,7 @@ fn assert_reaches_deciding(text: &str, resources: &ResourceSet, reached: usize, 
     prepare(text, resources, None).expect("admitted without a cap");
     assert_refused(prepare(text, resources, Some(reached - 1)).unwrap_err());
 }
-fn assert_reaches(text: &str, resources: &ResourceSet, reached: usize) {
+fn assert_reaches(text: &str, resources: &ExternalSchemas, reached: usize) {
     assert_reaches_deciding(text, resources, reached, "7");
 }
 
@@ -96,7 +96,7 @@ fn the_default_sets_no_resource_cap() {
 
 #[test]
 fn a_cap_admits_exactly_the_resources_a_contract_reaches() {
-    let none = ResourceSet::default();
+    let none = ExternalSchemas::default();
     // The document resource alone.
     assert_reaches(&document(&[], r#"{"type":"integer"}"#), &none, 1);
     // The document resource and each supplied resource.
@@ -117,7 +117,12 @@ fn packaged_meta_schema_resources_count_when_reached() {
         &[],
         r#"{"$ref":"https://json-schema.org/draft/2020-12/schema"}"#,
     );
-    assert_reaches_deciding(&text, &ResourceSet::default(), 9, r#"{"type":"integer"}"#);
+    assert_reaches_deciding(
+        &text,
+        &ExternalSchemas::default(),
+        9,
+        r#"{"type":"integer"}"#,
+    );
 }
 
 #[test]
@@ -125,7 +130,7 @@ fn zero_refuses_every_contract() {
     assert_refused(
         prepare(
             &document(&[], r#"{"type":"integer"}"#),
-            &ResourceSet::default(),
+            &ExternalSchemas::default(),
             Some(0),
         )
         .unwrap_err(),
@@ -138,7 +143,7 @@ fn a_refusal_precedes_preparing_any_resource() {
     // over the byte limit refuses a contract within the cap. Over the cap, the
     // same contract refuses for its resources before any of them is prepared.
     let text = document(&[], r#"{"type":"string","pattern":"^(ab)+$"}"#);
-    let none = ResourceSet::default();
+    let none = ExternalSchemas::default();
     let limits = |cap| Limits {
         pattern_bytes: 4,
         schema_resources: cap,
@@ -184,7 +189,7 @@ fn a_contract_s_patterns_are_bounded_together() {
         &[],
         r#"{"properties":{"a":{"pattern":"^aaaaaa$"},"b":{"patternProperties":{"^bbbbbb$":true}},"c":{"pattern":"^cccccc$"}}}"#,
     );
-    let none = ResourceSet::default();
+    let none = ExternalSchemas::default();
     let limits = |total| Limits {
         total_pattern_bytes: total,
         ..Limits::default()
@@ -206,7 +211,7 @@ fn a_contract_s_patterns_are_bounded_together() {
 // `patternProperties` name from its own copy of the form, so each counts.
 #[test]
 fn the_pattern_total_counts_the_forms_kept() {
-    let none = ResourceSet::default();
+    let none = ExternalSchemas::default();
     let limits = |total| Limits {
         total_pattern_bytes: total,
         ..Limits::default()

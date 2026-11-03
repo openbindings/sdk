@@ -38,8 +38,8 @@ impl fmt::Display for LoadFailure {
 }
 impl Error for LoadFailure {}
 
-fn resources(schema: &str) -> Result<ResourceSet, Box<dyn Error>> {
-    Ok(ResourceSet::new([SchemaResource {
+fn resources(schema: &str) -> Result<ExternalSchemas, Box<dyn Error>> {
+    Ok(ExternalSchemas::new([ExternalSchema {
         uri: "https://example.invalid/input".into(),
         document: JsonValue::parse(schema)?,
     }])?)
@@ -49,7 +49,7 @@ fn resources(schema: &str) -> Result<ResourceSet, Box<dyn Error>> {
 // Inspection is an application policy, not a proof that every value is decidable.
 fn candidate(
     text: &str,
-    resources: ResourceSet,
+    resources: ExternalSchemas,
     control: &dyn WorkControl,
 ) -> Result<PreparedValueContract, LoadFailure> {
     let document = Document::parse(text).map_err(LoadFailure::Parse)?;
@@ -166,7 +166,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     old_job.join().expect("old preparation remains usable");
 
     let malformed = DOCUMENT.replace("[\"find\"]", "[false]");
-    match candidate(&malformed, ResourceSet::default(), &healthy) {
+    match candidate(&malformed, ExternalSchemas::default(), &healthy) {
         Err(LoadFailure::Conformance(report)) => {
             println!("replacement rejected: {:?}", report.findings)
         }
@@ -175,7 +175,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     satisfies(&active, &new_value); // failure never assigns to the active slot
     // Preparation can succeed with partial resources; this application checks
     // declared completeness before accepting the candidate, without a probe value.
-    match candidate(DOCUMENT, ResourceSet::default(), &healthy) {
+    match candidate(DOCUMENT, ExternalSchemas::default(), &healthy) {
         Err(LoadFailure::UnresolvedReferences(report)) => {
             assert!(report.references.iter().any(|r| matches!(
                 &r.resolution,

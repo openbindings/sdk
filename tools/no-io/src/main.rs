@@ -2,7 +2,7 @@ use openbindings::*;
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 use serde_json::json;
 
-fn evaluate(document: &Document, resources: ResourceSet) -> ValueOutcome {
+fn evaluate(document: &Document, resources: ExternalSchemas) -> ValueOutcome {
     let proof = document
         .validate()
         .unwrap()
@@ -43,14 +43,14 @@ fn main() {
         let (input, resources) = if key == "$schema" {
             (
                 json!({"$ref":"urn:no-io:boundary"}),
-                ResourceSet::new([SchemaResource {
+                ExternalSchemas::new([ExternalSchema {
                     uri: "urn:no-io:boundary".into(),
                     document: JsonValue::parse(schema.to_string()).unwrap(),
                 }])
                 .unwrap(),
             )
         } else {
-            (schema, ResourceSet::default())
+            (schema, ExternalSchemas::default())
         };
         let document = Document::parse(
             json!({"openbindings":"0.2.0","operations":{"op":{"input":input}}}).to_string(),
@@ -65,11 +65,11 @@ fn main() {
     ).unwrap();
     assert!(document.validate().unwrap().conformant().is_some());
     assert!(matches!(
-        evaluate(&document, ResourceSet::default()),
+        evaluate(&document, ExternalSchemas::default()),
         ValueOutcome::Satisfies
     ));
     observations.push(json!({"name":"kind/content ignored","outcome":"satisfies"}));
-    let resource = SchemaResource {
+    let resource = ExternalSchema {
         uri: uri.clone(),
         document: JsonValue::parse("false").unwrap(),
     };
@@ -78,7 +78,7 @@ fn main() {
     )
     .unwrap();
     assert!(matches!(
-        evaluate(&document, ResourceSet::new([resource]).unwrap()),
+        evaluate(&document, ExternalSchemas::new([resource]).unwrap()),
         ValueOutcome::Fails { .. }
     ));
     observations.push(json!({"name":"explicit resource only","outcome":"fails"}));

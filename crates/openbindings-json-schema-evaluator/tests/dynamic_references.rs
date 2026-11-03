@@ -24,11 +24,12 @@ fn dynamic_references_follow_each_paths_scope_through_reference_cycles() {
         serde_json::from_str(include_str!("fixtures/dynamic-references.json")).unwrap();
     assert_eq!(cases.len(), 9);
     for case in cases {
-        let resources = ResourceSet::new(case.resources.iter().map(|(uri, text)| SchemaResource {
-            uri: uri.clone(),
-            document: JsonValue::parse(text).unwrap(),
-        }))
-        .unwrap();
+        let resources =
+            ExternalSchemas::new(case.resources.iter().map(|(uri, text)| ExternalSchema {
+                uri: uri.clone(),
+                document: JsonValue::parse(text).unwrap(),
+            }))
+            .unwrap();
         let proof = Document::parse(&case.document)
             .unwrap()
             .validate()

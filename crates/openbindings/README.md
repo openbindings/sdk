@@ -52,7 +52,7 @@ Select the optional `openbindings-json-schema-evaluator` or implement the trait.
 A conformant operation's `input()` and `output()` return its `Schema`s, or
 `None` when it declares none. `prepare(&evaluator)` borrows the evaluator and
 supplies no resources; `prepare_with(&evaluator, &resources)` adds an immutable
-`ResourceSet`. Core does not depend on the companion.
+`ExternalSchemas`. Core does not depend on the companion.
 The [evaluator integration guide](https://github.com/openbindings/sdk/blob/main/docs/schema-evaluators.md)
 explains the no-evaluator behavior and custom implementations.
 
@@ -65,7 +65,7 @@ repeated checks or custom admission limits. `validate` is the cheap check; call
 `explain` on the same value contract to learn why a value fails. Undefined means the value-contract
 rules leave whether the value satisfies its value contract undefined; no-verdict means
 the evaluator could not answer. Each preparation compiles independently; cloning a
-prepared value contract shares its compiled state. A `ResourceSet` indexes its resource
+prepared value contract shares its compiled state. A `ExternalSchemas` indexes its resource
 identities once. For evaluators that request the core projection, a resolution
 space is assembled once per live document revision and set, and released when
 either is dropped.

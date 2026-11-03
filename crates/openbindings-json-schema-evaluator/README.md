@@ -46,15 +46,15 @@ default JSON limits; `Err` means admission failed and `Ok` contains any of the
 four value outcomes. Duplicate members yield no-verdict after admission.
 
 Configure the evaluator or supply resources with `prepare_with`. The evaluator is
-borrowed for the call, and one `ResourceSet` can serve many preparations:
+borrowed for the call, and one `ExternalSchemas` can serve many preparations:
 
 ```rust,edition2024
-use openbindings::{NoVerdict, PreparedValueContract, ResourceSet, Schema};
+use openbindings::{NoVerdict, PreparedValueContract, ExternalSchemas, Schema};
 use openbindings_json_schema_evaluator::{DefaultEvaluator, Limits};
 
 fn with_resources(
     contract: Schema,
-    resources: &ResourceSet,
+    resources: &ExternalSchemas,
 ) -> Result<PreparedValueContract, NoVerdict> {
     let evaluator = DefaultEvaluator::with_limits(Limits {
         evaluation_steps: Some(10_000_000),
@@ -75,7 +75,7 @@ keeps old work usable while installing a new document and resource set.
 
 ## Limits
 
-The evaluator never fetches references. Supply resources through `ResourceSet`;
+The evaluator never fetches references. Supply resources through `ExternalSchemas`;
 new resources require a new preparation. A value contract prepares despite what
 the evaluator cannot evaluate, with a stand-in in its place: a resource that was
 not supplied, a schema that could apply again without consuming the instance
@@ -343,7 +343,7 @@ value nested deeper than half the nesting `stack_bytes` admits is reported as
 failing without its problem; keep `validate` on paths that check untrusted input. The
 explained problem names the failing node by its exact pointer from the value
 passed (`instance`) and the failing keyword by resource and exact pointer
-(`schema`). `JsonValue::locate`, `ConformantDocument::locate` and `ResourceSet::locate`
+(`schema`). `JsonValue::locate`, `ConformantDocument::locate` and `ExternalSchemas::locate`
 find line and column on demand, so an explanation costs no position. A prepared
 value contract keeps only the original locations of the schemas it reached,
 never their text, the document, its supplied resources or any position.

@@ -80,7 +80,7 @@ fn inspect() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 fn value_contracts(document: &Document) -> Result<(), Box<dyn std::error::Error>> {
-    let resources = ResourceSet::new([SchemaResource {
+    let resources = ExternalSchemas::new([ExternalSchema {
         uri: "https://example.invalid/integer".into(),
         document: exact(r#"{"type":"integer","minimum":0}"#),
     }])?;

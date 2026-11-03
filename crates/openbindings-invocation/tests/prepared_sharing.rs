@@ -1,6 +1,6 @@
 //! A long-running service prepares an operation once and shares the handle
 //! with spawned tasks, so attempts reuse its compiled contracts.
-use openbindings::{Document, JsonValue, ResourceSet};
+use openbindings::{Document, ExternalSchemas, JsonValue};
 use openbindings_invocation::{
     BindingRequest, CancellationToken, InvocationError, ProviderIo,
     binding::BindingInvoker,
@@ -68,10 +68,10 @@ async fn prepared_operation_moves_into_spawned_tasks_and_outlives_its_invoker() 
     .unwrap()
     .conformant()
     .expect("conformant invocation document");
-    let invoker = Arc::new(
-        Invoker::new(document, Echo)
-            .with_evaluator(Arc::new(DefaultEvaluator::new()), ResourceSet::default()),
-    );
+    let invoker = Arc::new(Invoker::new(document, Echo).with_evaluator(
+        Arc::new(DefaultEvaluator::new()),
+        ExternalSchemas::default(),
+    ));
     let prepared = Arc::new(invoker.prepare("echo").unwrap());
     shareable(&*prepared);
     shareable(&*invoker);

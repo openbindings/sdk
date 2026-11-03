@@ -8,7 +8,7 @@ const BASE: &str = "https://probe.invalid/root";
 /// Prepare operation `op` input of a conformant document with the default evaluator.
 fn prepare_input(
     doc: &Document,
-    resources: &ResourceSet,
+    resources: &ExternalSchemas,
 ) -> Result<PreparedValueContract, NoVerdict> {
     doc.validate()
         .unwrap()
@@ -21,18 +21,18 @@ fn prepare_input(
         .prepare_with(&DefaultEvaluator::new(), resources)
 }
 
-fn fixture(schema: &str, reference: &str, supplied: bool) -> (Document, ResourceSet) {
+fn fixture(schema: &str, reference: &str, supplied: bool) -> (Document, ExternalSchemas) {
     let (schemas, resources) = if supplied {
         (
             "{}".into(),
-            ResourceSet::new([SchemaResource {
+            ExternalSchemas::new([ExternalSchema {
                 uri: BASE.into(),
                 document: JsonValue::parse(schema).unwrap(),
             }])
             .unwrap(),
         )
     } else {
-        (format!(r#"{{"R":{schema}}}"#), ResourceSet::default())
+        (format!(r#"{{"R":{schema}}}"#), ExternalSchemas::default())
     };
     let reference = serde_json::to_string(reference).unwrap();
     let doc = Document::parse(format!(r#"{{"openbindings":"0.2.0","schemas":{schemas},"operations":{{"op":{{"input":{{"$ref":{reference}}}}}}}}}"#)).unwrap();
@@ -97,7 +97,7 @@ fn contained_draft_and_supplied_surrogate_collision_preserves_each_original_targ
                     };
                     assert!(
                         matches!(&found.resolution, ReferenceResolution::Located { target, .. }
-                        if target.pointer == expected_target && target.resource.as_deref() == supplied.then_some(BASE)),
+                        if target.pointer == expected_target && target.source_uri.as_deref() == supplied.then_some(BASE)),
                         "{found:?}"
                     );
                     // Retain draft reference inspection above. Evaluation uses
@@ -122,7 +122,7 @@ fn contained_draft_and_supplied_surrogate_collision_preserves_each_original_targ
                         problems
                             .iter()
                             .any(|p| p.schema.pointer == format!("{literal_pointer}/type")
-                                && p.schema.resource.as_deref() == Some(BASE)),
+                                && p.schema.source_uri.as_deref() == Some(BASE)),
                         "{problems:?}"
                     );
                 }
@@ -158,7 +158,7 @@ fn inspection_root_never_masks_missing_references_including_suffix_candidates() 
             assert!(report.references.iter().all(|r| matches!(&r.resolution, ReferenceResolution::Unresolved { detail } if detail.reason == ReferenceRefusalReason::ResourceUnavailable && detail.code == "resource-unavailable")), "{report:?}");
             // A dominating branch decides without the missing resource; a
             // value reaching it gives no verdict.
-            let Ok(contract) = prepare_input(&doc, &ResourceSet::default()) else {
+            let Ok(contract) = prepare_input(&doc, &ExternalSchemas::default()) else {
                 panic!("expected ready")
             };
             for value in ["null", r#""s""#, "3", "{}", "[]"] {

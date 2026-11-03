@@ -2,7 +2,7 @@ use openbindings::*;
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 use serde_json::{Value, json};
 
-fn prepare(schema: Value, resources: ResourceSet) -> Result<PreparedValueContract, NoVerdict> {
+fn prepare(schema: Value, resources: ExternalSchemas) -> Result<PreparedValueContract, NoVerdict> {
     let document = Document::parse(
         json!({"openbindings":"0.2.0","operations":{"op":{"input":schema}}}).to_string(),
     )
@@ -41,7 +41,7 @@ fn node_surrogate_differential_for_both_pattern_keywords() {
                 json!({*input:null}),
             ),
         ] {
-            let contract = match prepare(schema, ResourceSet::default()) {
+            let contract = match prepare(schema, ExternalSchemas::default()) {
                 Ok(contract) => contract,
                 Err(detail) => panic!("{id}/{keyword}: {detail:?}"),
             };
@@ -79,7 +79,7 @@ fn invalid_patterns_locate_authored_keywords_in_document_and_supplied_resources(
             let (entry, resources, resource, prefix) = if supplied {
                 (
                     json!({"$ref":URI}),
-                    ResourceSet::new([SchemaResource {
+                    ExternalSchemas::new([ExternalSchema {
                         uri: URI.into(),
                         document: JsonValue::parse(schema.to_string()).unwrap(),
                     }])
@@ -88,7 +88,12 @@ fn invalid_patterns_locate_authored_keywords_in_document_and_supplied_resources(
                     "",
                 )
             } else {
-                (schema, ResourceSet::default(), None, "/operations/op/input")
+                (
+                    schema,
+                    ExternalSchemas::default(),
+                    None,
+                    "/operations/op/input",
+                )
             };
             let contract = prepare(entry, resources).unwrap_or_else(|d| panic!("{d:?}"));
             let value = JsonValue::parse(json!({ "a/b~c": reaching }).to_string()).unwrap();
@@ -99,7 +104,7 @@ fn invalid_patterns_locate_authored_keywords_in_document_and_supplied_resources(
             assert_eq!(detail.code, "schema-pattern-compilation");
             assert_eq!(
                 detail.location,
-                Some(SchemaLocation::new(
+                Some(SchemaOrigin::new(
                     resource,
                     format!("{prefix}/properties/a~1b~0c/{keyword}")
                         .parse()
@@ -173,8 +178,11 @@ fn combined(rows: &[(usize, &EcmaRow)], schema: impl Fn(&str) -> Value) -> Prepa
         .iter()
         .map(|(index, row)| (member(*index), schema(&row.pattern)))
         .collect();
-    prepare(json!({ "properties": properties }), ResourceSet::default())
-        .unwrap_or_else(|detail| panic!("{detail:?}"))
+    prepare(
+        json!({ "properties": properties }),
+        ExternalSchemas::default(),
+    )
+    .unwrap_or_else(|detail| panic!("{detail:?}"))
 }
 
 // Generated patterns, matched as V8's `RegExp` with the `u` flag matches them,
@@ -201,7 +209,7 @@ fn generated_patterns_match_as_ecmascript_does_through_both_keywords() {
                 json!({"x": 0}),
             ),
         ] {
-            let contract = prepare(schema, ResourceSet::default())
+            let contract = prepare(schema, ExternalSchemas::default())
                 .unwrap_or_else(|detail| panic!("{:?}: {detail:?}", row.pattern));
             let value = JsonValue::parse(value.to_string()).unwrap();
             let ValueOutcome::NoVerdict { detail } = contract.validate(&value) else {
@@ -272,7 +280,7 @@ fn generated_patterns_match_as_ecmascript_does_through_both_keywords() {
     for (_, row) in alone {
         let contract = prepare(
             json!({"patternProperties": {row.pattern.as_str(): false}}),
-            ResourceSet::default(),
+            ExternalSchemas::default(),
         )
         .unwrap_or_else(|detail| panic!("{:?}: {detail:?}", row.pattern));
         let mut unmatched = 0;
@@ -300,7 +308,7 @@ fn generated_patterns_match_as_ecmascript_does_through_both_keywords() {
         } else {
             let marked = prepare(
                 json!({"patternProperties": {row.pattern.as_str(): true}, "unevaluatedProperties": false}),
-                ResourceSet::default(),
+                ExternalSchemas::default(),
             ).unwrap();
             for (at, string) in row.strings.iter().enumerate() {
                 let value = JsonValue::parse(json!({ string: 0 }).to_string()).unwrap();
@@ -380,7 +388,7 @@ fn a_non_word_boundary_is_not_matched_and_a_word_boundary_is() {
         ("\\W|\\B", "a😀a"),
         ("\\B", "abc"),
     ] {
-        let contract = prepare(json!({"pattern": pattern}), ResourceSet::default()).unwrap();
+        let contract = prepare(json!({"pattern": pattern}), ExternalSchemas::default()).unwrap();
         let text = value;
         let value = JsonValue::parse(json!(text).to_string()).unwrap();
         let ValueOutcome::NoVerdict { detail } = contract.validate(&value) else {
@@ -390,7 +398,7 @@ fn a_non_word_boundary_is_not_matched_and_a_word_boundary_is() {
         assert_eq!(detail.reason, NoVerdictReason::UnsupportedCapability);
         let contract = prepare(
             json!({"patternProperties": {pattern: {"type": "integer"}}}),
-            ResourceSet::default(),
+            ExternalSchemas::default(),
         )
         .unwrap();
         let object = JsonValue::parse(json!({ text: "s" }).to_string()).unwrap();
@@ -404,7 +412,7 @@ fn a_non_word_boundary_is_not_matched_and_a_word_boundary_is() {
         ));
         let Err(detail) = prepare(
             json!({"patternProperties": {pattern: true}, "unevaluatedProperties": false}),
-            ResourceSet::default(),
+            ExternalSchemas::default(),
         ) else {
             panic!("{pattern}")
         };
@@ -420,7 +428,7 @@ fn a_non_word_boundary_is_not_matched_and_a_word_boundary_is() {
         ("é\\b", "éé", false),
         ("a\\b", "a😀", true),
     ] {
-        let contract = prepare(json!({"pattern": pattern}), ResourceSet::default()).unwrap();
+        let contract = prepare(json!({"pattern": pattern}), ExternalSchemas::default()).unwrap();
         let outcome = contract.validate(&JsonValue::parse(json!(value).to_string()).unwrap());
         assert_eq!(
             matches!(outcome, ValueOutcome::Satisfies),
@@ -438,7 +446,7 @@ fn unmatched_patterns_keep_their_own_reasons() {
     for (first, second) in [("(?!a)", wide.as_str()), (wide.as_str(), "(?!a)")] {
         let contract = prepare(
             json!({"properties": {"a": {"pattern": first}, "b": {"pattern": second}, "c": {"pattern": "\\Bx"}}}),
-            ResourceSet::default(),
+            ExternalSchemas::default(),
         )
         .unwrap();
         for (member, pattern) in [("a", first), ("b", second), ("c", "\\Bx")] {
@@ -476,7 +484,7 @@ fn independently_reviewed_property_and_assertion_capabilities() {
             if is_name && capability != "linear" {
                 continue;
             }
-            let prepared = prepare(schema, ResourceSet::default()).unwrap();
+            let prepared = prepare(schema, ExternalSchemas::default()).unwrap();
             for (at, string) in fixture["strings"].as_array().unwrap().iter().enumerate() {
                 let value = if is_name {
                     json!({string.as_str().unwrap():null})

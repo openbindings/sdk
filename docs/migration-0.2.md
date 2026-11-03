@@ -57,3 +57,17 @@ open gates and the unattended work policy.
 No release, compatibility promise or completion of the migration is implied by this
 checkpoint. The canonical plan, frozen inputs, design reviews and measurement receipts
 are maintained in the adjacent sdk-migration repository.
+
+The original-schema environment is implemented and independently reviewed. Resource
+inputs are `ExternalSchema`/`ExternalSchemas`; original diagnostic coordinates are
+`SchemaOrigin { source_uri, pointer }` in Rust and `{ sourceUri, pointer }` in
+TypeScript. These coordinates identify original source text, independently of the
+resolved `$id` base and opaque environment-scoped resource identity.
+
+`Schema::environment` takes explicit external inputs, `PreparationLimits`, and a
+cooperative work control. Original nodes retain their owners, and queries do not fetch.
+Unknown external dialect roots remain inspectable, while operations requiring an
+unsupported inventory return a capability failure. Construction is bounded before
+URI expansion, including external registration and cached-environment reuse. The
+remaining generic evaluator migration will replace the old projection-based seam;
+this checkpoint does not claim complete value-evaluation qualification.

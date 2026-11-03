@@ -34,7 +34,7 @@ fn controls_reject_wrong_verdict_refusal_and_bogus_paths() {
         ),
     };
     assert!(!judge(case, &value, &refusal).is_empty());
-    let schema = SchemaLocation::new(None, "/operations/op/input".parse().unwrap());
+    let schema = SchemaOrigin::new(None, "/operations/op/input".parse().unwrap());
     let failure = |instance: &str| ValueOutcome::Fails {
         message: "value does not satisfy the value contract".into(),
         problems: vec![ValueProblem::new(
@@ -167,7 +167,7 @@ impl PreparedSchema for FaultyContract {
                     ..
                 } => {
                     for problem in &mut problems {
-                        problem.schema = SchemaLocation::new(
+                        problem.schema = SchemaOrigin::new(
                             Some("https://not-an-original-resource.invalid/fabricated".into()),
                             "".parse().unwrap(),
                         );
@@ -260,7 +260,7 @@ fn cheap_checks_report_no_problems_and_agree_with_explanations() {
     };
     let problem = ValueProblem::new(
         "".parse().unwrap(),
-        SchemaLocation::new(None, "".parse().unwrap()),
+        SchemaOrigin::new(None, "".parse().unwrap()),
         "type",
         "expected string",
     );

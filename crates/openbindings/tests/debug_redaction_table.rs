@@ -79,8 +79,8 @@ fn evidence() -> BTreeMap<String, JsonValue> {
         JsonValue::string(SECRET).unwrap(),
     )])
 }
-fn location() -> SchemaLocation {
-    SchemaLocation::new(Some(SECRET.into()), format!("/{SECRET}").parse().unwrap())
+fn location() -> SchemaOrigin {
+    SchemaOrigin::new(Some(SECRET.into()), format!("/{SECRET}").parse().unwrap())
 }
 fn refusal() -> NoVerdict {
     NoVerdict::new(
@@ -255,7 +255,7 @@ fn debug_redacts_caller_text_at_every_boundary() {
         problems_complete: true,
     };
     let mut rows = vec![
-        row("SchemaLocation", &location()),
+        row("SchemaOrigin", &location()),
         row("Finding", &finding),
         row("ValidationReport", &report),
         row("VersionRefusal", &version),
@@ -310,7 +310,7 @@ fn debug_redacts_caller_text_at_every_boundary() {
     );
     // Both locations are shown structurally, without their pointers.
     assert!(format!("{problem:?}").contains("instance: Pointer"));
-    assert!(format!("{problem:?}").contains("schema: SchemaLocation"));
+    assert!(format!("{problem:?}").contains("schema: SchemaOrigin"));
     assert!(format!("{:?}", refusal()).contains("EvaluatorFailure"));
     for detail in [
         ValueProblemDetails::Type {
@@ -331,14 +331,14 @@ fn debug_redacts_caller_text_at_every_boundary() {
     ] {
         rows.push(row("ValueProblemDetails", &detail));
     }
-    let resource = SchemaResource {
+    let resource = ExternalSchema {
         uri: reference.clone(),
         document: context.clone(),
     };
-    let resources = ResourceSet::new([resource.clone()]).unwrap();
+    let resources = ExternalSchemas::new([resource.clone()]).unwrap();
     rows.extend([
-        row("SchemaResource", &resource),
-        row("ResourceSet", &resources),
+        row("ExternalSchema", &resource),
+        row("ExternalSchemas", &resources),
     ]);
     let capture = Capture::default();
     let operation = validated.resolve_operation("op").unwrap();
@@ -374,7 +374,7 @@ fn debug_redacts_caller_text_at_every_boundary() {
             "resource repeats JSON member names",
         ),
     ] {
-        let error = ResourceSet::new(texts.into_iter().map(|text| SchemaResource {
+        let error = ExternalSchemas::new(texts.into_iter().map(|text| ExternalSchema {
             uri: uri.into(),
             document: JsonValue::parse(text).unwrap(),
         }))
@@ -382,20 +382,20 @@ fn debug_redacts_caller_text_at_every_boundary() {
         assert_eq!(error.message, reason);
         assert_eq!(error.to_string(), reason);
         assert!(error.uri.contains(SECRET));
-        let item = row("actual ResourceError", &error);
+        let item = row("actual ExternalSchemaError", &error);
         assert!(item.text.iter().all(|text| text.contains(reason)));
         rows.push(item);
     }
-    let mut error = ResourceSet::new([SchemaResource {
+    let mut error = ExternalSchemas::new([ExternalSchema {
         uri: SECRET.into(),
         document: JsonValue::null(),
     }])
     .unwrap_err();
     error.message = "invalid retrieval URI".into();
     assert!(format!("{error:?}").contains("invalid retrieval URI"));
-    rows.push(row("ResourceError::invalid", &error));
+    rows.push(row("ExternalSchemaError::invalid", &error));
     error.message = SECRET.into();
-    rows.push(row("ResourceError::custom", &error));
+    rows.push(row("ExternalSchemaError::custom", &error));
 
     let draft = Document::new();
     let mut operation = Operation::default();

@@ -14,13 +14,14 @@ fn observe(case: &Value) -> Value {
     let Some(proof) = validation.conformant() else {
         return json!({"stage":"admission","outcome":validation.report().conclusion,"evidence":validation.report().evidence});
     };
-    let supplied = ResourceSet::new(case["resources"].as_array().into_iter().flatten().map(|r| {
-        SchemaResource {
-            uri: r["uri"].as_str().unwrap().into(),
-            document: JsonValue::parse(r["schema"].to_string()).unwrap(),
-        }
-    }))
-    .unwrap();
+    let supplied =
+        ExternalSchemas::new(case["resources"].as_array().into_iter().flatten().map(|r| {
+            ExternalSchema {
+                uri: r["uri"].as_str().unwrap().into(),
+                document: JsonValue::parse(r["schema"].to_string()).unwrap(),
+            }
+        }))
+        .unwrap();
     let limits: Limits =
         serde_json::from_value(case.get("limits").cloned().unwrap_or(json!({}))).unwrap();
     let operation = proof.resolve_operation("op").expect("declared operation");
@@ -38,10 +39,10 @@ fn observe(case: &Value) -> Value {
         ValueOutcome::Fails { .. } => json!({"stage":stage,"outcome":"F"}),
         ValueOutcome::Undefined { detail } => {
             json!({"stage":stage,"outcome":"undefined", "detail":{
-            "code":detail.code,"location":detail.location}})
+            "code":detail.code,"location":detail.location.map(|at| json!({"resource":at.source_uri,"pointer":at.pointer}))}})
         }
         ValueOutcome::NoVerdict { detail } => json!({"stage":stage,"outcome":"N", "detail":{
-            "reason":detail.reason,"code":detail.code,"location":detail.location}}),
+            "reason":detail.reason,"code":detail.code,"location":detail.location.map(|at| json!({"resource":at.source_uri,"pointer":at.pointer}))}}),
     }
 }
 fn assert_subset(expected: &Value, actual: &Value, id: &str) {
@@ -117,7 +118,7 @@ fn preparation_and_validation_honor_cancellation() {
     let defective = proof.resolve_operation("op").unwrap();
     let unprepared = defective.input().unwrap();
     assert!(
-        matches!(unprepared.prepare_with_control(&evaluator, &ResourceSet::default(), &cancelled), Err(detail) if detail.reason == NoVerdictReason::Cancelled)
+        matches!(unprepared.prepare_with_control(&evaluator, &ExternalSchemas::default(), &cancelled), Err(detail) if detail.reason == NoVerdictReason::Cancelled)
     );
     assert!(
         matches!(unprepared.prepare(&evaluator), Err(detail) if detail.reason == NoVerdictReason::ResourceUnavailable)
@@ -189,7 +190,7 @@ fn values_reaching_a_missing_resource_give_no_verdict_naming_it() {
     assert_eq!(detail.code, "resource-unavailable");
     assert_eq!(
         detail.location,
-        Some(SchemaLocation::new(
+        Some(SchemaOrigin::new(
             Some("https://missing.test/b".into()),
             "".parse().unwrap()
         ))
@@ -202,7 +203,7 @@ fn values_reaching_a_missing_resource_give_no_verdict_naming_it() {
     assert_eq!(detail.reason, NoVerdictReason::ResourceUnavailable);
     assert_eq!(
         detail.location,
-        Some(SchemaLocation::new(
+        Some(SchemaOrigin::new(
             None,
             "/operations/op/input/properties/b".parse().unwrap()
         ))
