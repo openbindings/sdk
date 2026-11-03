@@ -1,0 +1,552 @@
+# Aligning the SDK with OpenBindings 0.2
+
+Current implementation continues on `codex/sdk-02-foundation`; no release or merge
+is authorized. The normative pins and implementation sequence below remain in force.
+The source architecture is still malleable, and no compatibility work is required.
+
+The generic evaluator, original schema environment, current context/invocation
+carriers, standard external dialects and custom vocabulary interpretation are
+implemented. Custom consumers are admitted against their selected original
+meta-schema, under the same bounded preparation attempt. Required formats cover
+all 19 standard attributes. Independent review has corrected namespace selection,
+meta admission, native predicate, date/time and allocation findings. Current
+qualification and exact review boundaries are retained in
+[custom-profile progress](../receipts/2026-11-02-preparation/external-schema-dialects/custom-progress/README.md).
+
+The current native document/evaluator controls pass 505 production cases,
+1,546 required values, and 502 package checks on both Rust 1.99 and Rust 1.88.
+The 2,348 auxiliary reference inputs use the existing independently adjudicated
+current ledger; the old inability diagnostics are historical evidence. Rust 1.88
+also builds the WebAssembly bridge. Current host and packaging results are in the
+progress receipt; these overlapping inventories are not additive coverage.
+
+The [custom-meta budget review](../receipts/2026-11-02-preparation/external-schema-dialects/custom-meta-budget-review/review.md)
+closes its 66 cumulative allocation/work controls with no allowance waiver.
+The [compact profile layout review](../receipts/2026-11-02-preparation/external-schema-dialects/profile-layout-review/review.md)
+verifies fixed contained interpretation and exact external inheritance. Removing
+redundant contained profile storage restores the existing Wasm memory caps.
+Ordinary user-schema backend allocation qualification remains separate and open.
+
+The canonical document/domain model now uses owned `Operation`, `Source`, `Binding`,
+`Dependency` and `Example` entries from `ConformantDocument` in Rust and TypeScript.
+Detached authoring parts, raw typed views, redundant proof-view names and typed
+setters are removed. [Canonical checkpoint evidence](../receipts/2026-11-02-preparation/canonical-domain-progress/README.md)
+records independent Rust/host reviews, all 32-field coverage, 659 tests on each Rust
+toolchain, 178 Node tests, 505-case exact parity and a tightened memory bound. Test
+inventories overlap and are not additive; source identities delimit every receipt.
+
+The bounded recursive extension is implemented and independently reviewed.
+[Recursive checkpoint evidence](../receipts/2026-11-02-preparation/recursive-extension-progress/README.md)
+records the original 33 controls, 71 coordinate/identifier controls, full Rust/host
+qualification and the corrected identifier-dependence adjudication. The existing
+2,348-case auxiliary ledger remains unchanged. Complete producer formulas and
+between-attempt coordinate certificates preserve annotation meaning; narrow
+original-graph certificates settle the supported direct cycles. General recursive
+capability remains explicitly bounded. Ordinary compiled-backend allocation is the
+next foundation gate; independent review has reproduced an accounting gap.
+The kind-description companion is implemented and independently reviewed.
+[Kind-description evidence](../receipts/2026-11-02-preparation/kind-description-progress/README.md)
+records exact carriers, distinct provider failures, cancellation handoff and both
+Rust/native/WebAssembly checks. The independently reviewed schema-identity companion
+passes all 24 applicable published groups and 64 additional controls, with exact
+reference contexts and shared resource limits; directional comparison is not claimed.
+[Comparison checkpoint evidence](../receipts/2026-11-02-preparation/comparison-progress/README.md)
+records its scope and explicit capability refusals. Source pulling, remaining consumers,
+TypeScript organization, all-host packaging, ordinary backend allocation and final
+matched-toolchain performance qualification remain active. No whole-SDK completion
+claim is made. Older progress receipts remain historical.
+
+No decision currently requires Matthew. If a real decision arises, record it
+and continue every independent unblocked path before considering a stop.
+
+Matthew's direction is to treat the unpublished SDK as greenfield: no old API, type, crate,
+wire carrier, or implementation arrangement needs compatibility protection. The objective is
+high terminological, semantic, conceptual, and organizational alignment with the current
+specification and adopted interfaces. Reuse code where it serves that objective; replace it
+where it does not. A rewrite is available, not a goal in itself.
+
+This file is the single current plan. It replaces the October 28 plan and the October 30
+amendment. The latter is preserved in [history](history/2026-10-30-amendment.md). Old review
+reports and inventories are evidence of earlier designs, not current architectural decisions.
+
+## 1. Exact target and authority
+
+[TARGETS.json](TARGETS.json) records full revisions and source hashes. GitHub branch tips were
+checked on 2026-11-02; local checkout names are not evidence of currency.
+
+| Input | Revision | Use |
+| --- | --- | --- |
+| [SDK `main`](https://github.com/openbindings/sdk/tree/18a66957d038431a5caf0db340d96f60bc1decdf) | `18a66957d038431a5caf0db340d96f60bc1decdf` | Starting code and measurement baseline |
+| [Specification `release/0.2`](https://github.com/openbindings/spec/tree/c1419c9fc3ae5a00c2b83da710c11bf67dab7934) | `c1419c9fc3ae5a00c2b83da710c11bf67dab7934` | Target document model, derived schema, corpus, and HTTP discovery companion |
+| [Interfaces `main`](https://github.com/openbindings/interfaces/tree/5815fb106bddd2c85ff4e93e0077570b3f6b9e74) | `5815fb106bddd2c85ff4e93e0077570b3f6b9e74` | Target invocation, source-puller, kind-descriptor, context, and comparison publications |
+| Specification currently applied by SDK | `30416ef1ca626e58eb8c383a0c71422a68f9243f` | Historical comparison only |
+| Interfaces currently applied by SDK role crates | `f158f4f345301668ccb8fd555586b04ca823e732` | Historical comparison only |
+
+The SDK checkout at `openbindings/sdk` is behind `main`. Do not restart this work from its
+`78724ae` commit or downgrade the applied spec to `2f7d754`. The retained checkout at
+`openbindings/sdk-migration/sdk` is the active feature-branch working copy based on the starting revision above. Integration refs were reverified before implementation; the normative target remains pinned. Any deliberate target update requires a recorded delta and requalification.
+
+Authority follows responsibility, rather than a single pipeline:
+
+- The specification defines the document model. For OBI-02, its published derived schema
+  governs structural validity as §10 specifies. Referenced JSON Schema and URI standards have
+  the standing the specification gives them.
+- Each voluntarily adopted interface defines that capability's observable meaning. The context
+  document and schema-comparison profile apply where those interfaces adopt them. They do not
+  add requirements to core document conformance or prescribe Rust types and algorithms.
+- The HTTP discovery companion governs discovery/publication. A kind's definition governs its
+  source and binding data. Applications own trust, provider choice, acquisition, and retry policy.
+- Tests, current code, old design rulings, and reference implementations are evidence. None
+  overrides its governing publication. Resolve a real publication ambiguity explicitly; if an
+  unpublished contract changes, update its examples/corpus and re-pin before claiming alignment.
+
+The interfaces' vendored structural schema already matches the target spec byte-for-byte.
+The current core manifest contains 372 document tests and 133 scenarios, covering 14 rules.
+Its migration is complete as reference material; SDK qualification against it is still work.
+The older 440-case SDK inventory and 1,566-case evaluator kit require reconciliation, not blind
+replacement of expected answers. See [input provenance](../inputs/README.md).
+
+Planning checks verified these pins, the matching schema and the manifest counts. Eight of
+eight current interface documents passed the target structural schema; a `data`/`content`
+witness was accepted oppositely by the target and SDK-applied schemas. These are source and
+structural checks, not a full semantic audit or a run of a migrated SDK.
+
+## 2. Scope and completion claim
+
+Migrate the maintained Rust SDK, its default evaluator, evaluator qualification kit, HTTP
+companion, interface companions, private Wasm bridge, and existing public TypeScript surface.
+Replace the retired inspection/synthesis companions with the current source-puller and
+kind-descriptor capabilities. Migrate SDK-owned examples, consumers, docs, tests, package
+metadata, and qualification tooling with them.
+
+TypeScript's existing document, evaluation, and discovery capabilities must match Rust's
+semantics. Public TypeScript adapters for the optional role interfaces do not exist today;
+adding them is a distinct host-API work item, not an implicit result of compiling the Rust
+roles to Wasm. Record their absence in the capability matrix. Rust role portability still
+needs its promised Wasm checks. No documentation may imply role parity that has not shipped.
+
+The standalone OpenAPI kind implementation is a downstream integration, not a dependency of
+core or of the SDK workspace. Its migration is tracked separately and requires its own exact
+revision, kind definition, and evidence before any cross-project claim. Legacy Go/independent
+TypeScript repositories, CLI/application migration, publication, and deployment are outside
+this SDK plan. Other optional interfaces (document-store, delegate-manager, software-descriptor,
+token-provider) remain readable OBI contracts; they do not require new runtime products here.
+
+Document-model alignment and evaluator capability are separate claims. Stage 0 freezes an
+explicit capability matrix: required document answers, supported value-evaluation cases,
+declared evaluator limits, role APIs, and hosts. A truthful no-verdict can be sound without
+meeting an expected value-evaluation capability. Record that as a gap, never a corpus pass or
+an excuse to redefine the specification. Reassess inherited limits rather than treating them
+as protected behavior.
+
+## 3. Alignment is a design constraint
+
+Derive the target model from the publications first, then compare the code to it. Do not start
+by assigning every existing class a new name. Do not assume that the old inventory's 1,522
+"SDK-necessary" classifications entitle those concepts to survive.
+
+Every public concept, substantive internal subsystem, taught term, and policy gets one entry
+in an alignment map with:
+
+| Entry field | Required content |
+| --- | --- |
+| Concept and meaning | One definition and its relationships, independent of implementation |
+| Authority | Pinned section/rule/interface, or an explicit implementation justification |
+| Classification | Spec concept; interface/profile concept; implementation mechanism; SDK policy; or obsolete |
+| Representation and owner | Rust/TypeScript API, owning module/crate, and retained data/proof |
+| Behavior | Invariants, transitions, effects, failure outcomes, and limits |
+| Evidence | Positive/negative witnesses and the checks that establish the claim |
+| Disposition | Keep, reshape, merge, move, replace, or remove; reason and completion status |
+
+For an implementation mechanism, name the concrete need: Rust ownership/lifetimes, exact JSON,
+revision-safe views, asynchronous I/O, bounded work, source diagnostics, compilation, host
+interop, or another demonstrated requirement. Also state why a simpler representation fails,
+why the mechanism is public if it is public, and which domain relationship it implements.
+"The code uses it" and "the spec does not forbid it" are not sufficient reasons.
+
+SDK policies are a separate category. Examples include requiring conformance before a checked
+invocation, rejecting a malformed provider result, or imposing a size limit. They are useful
+choices, not necessary consequences of Rust or new specification requirements. Give them an
+owner, an explicit outcome, and tests; do not present them as portable contract semantics.
+
+Acceptance has five dimensions:
+
+1. **Terminology:** the same concept uses the same term across code, docs, diagnostics and
+   examples. A language-specific casing convention is fine. A synonym with no distinct meaning
+   is not. Legitimate uses of "source", "resource", "content" or "contract" are judged in context.
+2. **Meaning:** invariants, references, presence, claims, and failure distinctions match their
+   authority. A convenient representation must not change what an OBI says.
+3. **Organization:** the code's ownership and dependency graph follows the domain's boundaries.
+   Related concepts have discoverable homes; unrelated role behavior does not collect in core.
+4. **Representation:** builder, view, proof and wire forms of one concept have explicit,
+   lossless relationships. Keep multiple forms only for a demonstrated ownership or workflow
+   need. Avoid a second independently maintained semantic model.
+5. **Experience:** a reader of the spec can find the corresponding SDK capability, and a reader
+   of a public SDK concept can find its authority or implementation rationale.
+
+Alignment does not mean one file per spec paragraph, exposing every internal stage, or giving
+all languages identical object lifetimes. It means that those extra structures explain the
+same model and do not become competing domain concepts.
+
+## 4. Target conceptual organization
+
+```mermaid
+flowchart TD
+  D[OBI document] --> O[Operations]
+  D --> S[Sources: kind and optional data]
+  D --> B[Bindings: operation, source and optional data]
+  D --> P[Dependencies: operation and optional kinds]
+  D --> M[Named schemas]
+  B -->|names by key| O
+  B -->|names by key| S
+  P -->|names by key| O
+  O -->|optional input and output| V[Schemas and reference environment]
+  M --> V
+  K[Kind implementation] -->|interprets| S
+  K -->|interprets binding data with source data| B
+```
+
+The document declares relationships. It is not a runtime, a registry, an execution plan, or
+proof that a realization works. A dependency does not select a provider. A schema reference
+never turns arbitrary source data into one of the document's schemas.
+
+| Responsibility | Intended home and boundary |
+| --- | --- |
+| Document vocabulary | Core document/model area: operation, source, binding, dependency, schema and example; authoring/read forms grouped around those concepts |
+| Exact representation and editing | Supporting JSON/storage/edit machinery; preserves values, absence, untouched bytes and revision ownership without interpreting kind data |
+| Conformance | One rule inventory and evidence model for OBI-01–14; structural checking and semantic rule checking remain distinguishable |
+| Schemas and references | Core schema area for placement, identity, references and evaluation requests; optional evaluator implements value judgment |
+| Default evaluation | Separate companion; compilation, projections, caches and limits are implementation mechanisms, not OBI objects |
+| Schema comparison | Optional `openbindings-schema-comparison` companion for the adopted profile; implement the identity slice needed for pulling before claiming broader compatibility support |
+| Binding/operation invocation | `openbindings-invocation`, with distinct binding and operation responsibilities and a shared bounded lifecycle where justified |
+| Source pulling | `openbindings-source-pull`, exposing `SourcePuller` and the current additions/report vocabulary |
+| Kind description/checking | `openbindings-kind-description`, exposing separate `KindDescriptor` queries and `SourceChecker::check_source` |
+| Shared role values | A narrowly scoped shared home for context/challenges and genuinely shared carriers; never a miscellaneous domain framework |
+| HTTP discovery | Separate companion; acquisition does not supply a base URI to document semantics |
+| Wasm and TypeScript | Host representation and ownership adapters over the same semantic implementation |
+
+These are responsibility and package decisions; exact internal module splits are established
+by the model/API exercise in stage 1. Core has no dependency on invocation, pulling, kind
+description, comparison, HTTP, a concrete kind, or an async runtime. Companions depend inward.
+Concrete kind implementations depend on the SDK; applications compose providers and hosts.
+
+Use small role-specific provider traits and checked callers. Implementing invocation must not
+force implementation of checking, describing, or pulling. Do not introduce an all-purpose
+`Kind` supertrait, registry, public projection language, or execution framework without an
+actual consumer need and an alignment-map justification. Shared helpers can implement common
+policy without turning every helper into an extension contract.
+
+### Vocabulary and representation decisions
+
+| Existing surface | Target direction |
+| --- | --- |
+| `Source`, source views/edits, `Binding.source` | Keep the concepts; their current type layout may be replaced |
+| Source/binding `content` | `data` in authoring, reads, serialized field sets, diagnostics and TypeScript |
+| `ValueContract`, `PreparedValueContract` | `Schema`, `PreparedSchema`; distinguish a contextual schema from arbitrary JSON and a compiled evaluator |
+| Evaluator trait currently named `PreparedSchema` | `SchemaValidator`, so the provider's validator is not confused with the caller's prepared schema |
+| `ValueContract::schema()` | `Schema::value()` for its exact schema value; retain original reference context independently |
+| Supplied-schema `ResourceSet` family | `ExternalSchemas` / `ExternalSchema` / `ExternalSchemaError`; names reflect supplied external schemas, not a deleted document field |
+| JSON Schema resource identities and locations | Retain "schema resource" where that is the actual concept; do not globally rename `resource` |
+| `ContextChallenge` | Current `{message, schema}` shape; remove old requirement-family interpretation |
+| `BindingValue` and source-plus-binding request | Replace with document-plus-key requests and views of that same revision; no detached legacy carrier as a second binding model |
+| Inspector/synthesizer targets and coverage wrappers | Remove; introduce only the current source-puller report concepts and necessary implementation mechanisms |
+| Per-role `SupportedKind` / `KindSupportVerdict` APIs | Replace public support-query surface with the kind-descriptor operations; internal provider routing remains an explicitly owned mechanism |
+
+Validate the proposed signatures with small Rust and TypeScript callers before implementing
+internals. Names are not a reason to preserve an unsuitable old object graph. No deprecated
+aliases, dual `content`/`data` reading, old role adapters, or old wire envelopes are required.
+
+## 5. Required semantic changes
+
+### Document and schemas
+
+- Source is `{kind, data?, description?}`; binding is `{operation, source, data?, ...}`.
+  Sources remain, and kind remains on the source. Reject old unprefixed `content`, binding
+  `kind`, and root `resources` through the current structural rule. Allow their literal names
+  inside opaque data where appropriate. Absence and present `null` remain different.
+- Retain OBI-04's actual named maps and aliases. OBI-07 checks the binding's source key;
+  missing/empty/non-string source `kind` belongs to OBI-02, not a redefined OBI-07.
+- Resolve operation aliases in their flat namespace. Binding/dependency operation references
+  name operation keys. A dependency's kinds constrain the kind of the binding's source by
+  exact equality; no normalization, version negotiation, ranking, or automatic provider choice.
+- Implement current OBI-12 throughout conformance, reference inspection and evaluation: allow
+  pointers into identified/nested resources with their proper bases; check references into
+  contained resources from all contained schemas; use initial `$dynamicRef` resolution;
+  distinguish invalid contained targets from external references and malformed URI references.
+  Respect the final rule's exclusion when OBI-13 supplies no compared base.
+- Implement OBI-14 for every schema in the document resource, including unused named schemas
+  and a malformed `$dynamicAnchor` member. An identified resource is outside that prohibition.
+  Schema-shaped data under source/binding data, examples, extensions, `const`, `enum` or unknown
+  keywords is not admitted to schema inventory merely because it looks like a schema.
+- Reconcile OBI-01–13, not only the visibly changed rules: escaped surrogate exclusions,
+  version declaration, exact strings/numbers, meta-schema behavior, relative/absolute IDs,
+  anchors, and rule applicability all follow the target text. Reports cover all 14 rules.
+- Keep document conformance, a value's validity, an undefined result, unavailable information,
+  evaluator capability failure, and author-claim truth distinct. Limits must not manufacture
+  conformance violations or false satisfies/fails answers. Core never fetches references.
+- There is no generic shared-value lookup/expansion, document `resources` API, automatic
+  source/binding merge, or document-pruning algorithm to implement. A kind owns data references.
+  A schema copied from an artifact needs the kind's dialect/reference translation, not in-place
+  promotion into the OBI schema environment.
+
+Generated output should follow §5's table order for readability: `openbindings`, `name`,
+`version`, `description`, `operations`, `sources`, `bindings`, `dependencies`, `schemas`.
+This is an SDK presentation convention, not semantic JSON member order or JCS canonicalization.
+Parsed documents and untouched edit regions keep their authored order and bytes.
+
+### Current optional interfaces
+
+- **Binding invocation:** accept `{interface, binding, context?}` with a binding key. Deliver
+  the document and key without losing context or exact data. The kind interprets source data,
+  binding data and what they reference; binding invocation neither selects an operation binding
+  nor validates operation values. It does not inspect the operation on the kind's behalf.
+- **Operation invocation:** resolve operation names/aliases or an explicit binding, honor the
+  ordered selection contract, reject unresolved multiplicity, validate each declared input and
+  output before forwarding, and invoke the selected document/key. No silent preference ranking.
+  Relay unsuccessful completion and context challenges without output-schema validation.
+- **Context:** use an opaque supplied object and `{message, schema}` challenges, with the
+  documented `oauth2` annotation. Preserve challenges through operation invocation and preflight.
+  `CONTEXT_REQUIRED` is permitted only before output and observable operation effects. The SDK
+  does not acquire credentials, open URLs, store secrets, or retry automatically.
+- **Kind description:** implement `listKinds`, `describeKind`, `checkSource`; support is per
+  operation key, not a universal kind boolean. Preserve source-data/binding-data schemas and
+  `check.description` / `check.executes`. A check keeps the input kind and returns the source
+  entry the kind stands behind. Invocation alone does not require a descriptor. Disclosing an
+  executing check is distinct from application consent and from performing that check.
+- **Source pulling:** take `{interface, source, context?}` and return `{additions, report}`.
+  Add only new operations/schemas/bindings, with bindings naming that source. Report existing
+  entries as current/stale/unmatched, proposals and their change classes, omissions, reuse,
+  dependencies through `uses`, loss and exhaustiveness. Never apply a proposal, overwrite an
+  existing entry, remove an unmatched binding, or perform a source operation during a pull.
+- **Pull ownership:** the kind projects source offerings without reading the destination's
+  operations to choose names/shapes; kind-neutral assembly owns collision/reuse rules. Kind
+  code supplies interpretation of existing data, dependency information for opaque data, and
+  fidelity/change judgments. SDK code cannot infer `uses` by scanning unknown data for `$ref`.
+  The API exercise must show how those responsibilities compose without inventing a universal
+  target-address format. Check verifiable report relationships without claiming to certify
+  fidelity, exhaustiveness or the truth of a kind's change classification.
+- **Reuse comparison:** use the profile's normalized identity, including exact values and
+  the specified handling of unions and annotations; not byte equality, generic JSON equality,
+  hash equality alone, or general schema equivalence. Identity has equal/different results,
+  not the subsumption profile's `indeterminate`. Normalization/reference/resource failures
+  remain explicit failures and cannot justify a false reuse or a false claim of difference.
+  Default SDK policy is to fail a pull whose necessary comparison cannot complete, with an
+  implementation diagnostic; any later partial-result policy must fit the interface explicitly.
+- **Complete pull:** `exhaustive` and no `implementation-unsupported` omission, exactly as the
+  interface defines it. Invalid/excluded/conflict omissions and disclosed loss do not by
+  themselves negate that condition. Stricter caller requirements are separate policies.
+
+Default checked SDK entry points may require a conformant document and refuse malformed
+provider results. Document that as SDK admission policy: the interfaces' open document carriers
+are not conformance certificates and do not prescribe validation timing or error precedence.
+
+## 6. Implementation sequence
+
+Stages 0 and 1 are complete for the recorded native preparation scope. The
+[preparation receipt](../receipts/2026-11-02-preparation/README.md) records all 440 historical
+core and 1,566 evaluator dispositions, the 77-module subsystem audit, native performance
+baselines, and passing independent design and adjudication reviews. No unresolved semantic
+choice blocks implementation. Host portability and candidate performance remain runtime gates.
+Stage 2 has started on `codex/sdk-02-foundation`; stages 3–6 have not started.
+Signature/shape checks do not close runtime gates.
+
+Use an isolated integration checkout based on the actual SDK `main`, following current project
+repository policy. Keep the user's old checkouts intact. Use reviewable checkpoints and an
+atomic final integration; do not publish an intermediate package. No requirement to keep old
+consumers compiling should dictate the design. At each checkpoint, however, the declared
+workspace and its enabled checks must build: migrate affected callers together or explicitly
+remove retired crates/consumers with their retirement record. Never leave placeholder
+implementations, disabled checks, or unaccounted failures as the final migration result.
+
+| Stage | Work and deliverable | Exit gate |
+| --- | --- | --- |
+| 0. Reproducible inputs | Freeze the target spec/schema/corpus, discovery companion and interface/profile inputs with hashes. Record baseline toolchains, hosts, public APIs, behavior and performance. Set the capability matrix and reconcile old evidence with the target. | Exact pins verified; current corpus inventory reconciles to its manifest; required capabilities, baseline results and limitations recorded |
+| 1. Domain and API design | Derive the independent concept graph and obligation map, classify existing concepts afresh, design ownership/module boundaries, and write small consumer sketches for parse/edit/validate, schema evaluation, invoke, describe/check and pull. Select the minimal role hooks using at least two contrasting illustrative kinds. | Every public concept and subsystem has authority or necessity/policy rationale; dependency graph is acyclic; no unanswered semantic design choice blocks implementation |
+| 2. Document/schema foundation | Implement current vocabulary, exact model/read/edit forms, OBI-01–14, resource resolution and evaluator changes. Change Rust, Wasm and the existing TypeScript core API together. Re-pin schema, corpus, observers, judges and applied-version metadata in the same checkpoint. | Full current core corpus; focused schema rules; exact-value/lifetime/edit tests; native/TS parity against independent expectations |
+| 3. Profile identity | Implement the comparison profile's normalization and identity needed by pulling, with explicit resources and errors. No claim of general directional compatibility until implemented and qualified. | Applicable identity/normalization/exact-value corpus plus failure controls pass; profile scope and unsupported work stated |
+| 4a. Context and kind description | Implement the shared challenge once and the descriptor/check capability with small provider traits. Remove old requirement-family carriers and public support queries. | Current context and kind-descriptor corpora; same-kind checking; per-operation support; effect disclosure; provider boundary checks |
+| 4b. Invocation | Replace detached carriers with document/key requests; adapt selection, value validation, lifecycle, preflight and errors. Reuse mechanisms only after checking their current responsibilities. | Current selection/context/composition cases; framing, cancellation, terminal outcomes, and pre-effect challenge controls |
+| 4c. Source pulling | Implement source projection/assembly seams, profile-based reuse, additions and report checks. Delete old inspection/synthesis crates and their APIs instead of retaining compatibility wrappers. | Current pull-report cases; selective application, repeated pull, drift, conflict and complete-pull witnesses; no mutation/effect violations |
+| 5. Consumer and host qualification | Run complete examples through the public APIs; finish discovery re-pin, Wasm portability, TypeScript packaging and host checks. Audit public dependencies, docs and examples against the alignment map. | End-to-end traces, advertised host checks, archive/import checks and terminology/organization review pass |
+| 6. Final integration | Review the whole candidate against the target publications, performance evidence and all gates below; produce a bounded capability and migration receipt. | No unresolved semantic/organizational gap in the claimed scope; all required CI green at the recorded candidate revision |
+
+Stages 3 and 4a can be developed independently after stage 2. Pulling depends on identity and
+context; operation invocation depends on the schema foundation and binding invocation. Carry
+semantic names and documentation along with each change rather than leaving a final rename
+pass to hide an obsolete architecture. Avoid speculative host or kind frameworks before the
+consumer sketches demonstrate their need.
+
+The final review should be independent of implementation. Use the team's available review
+process; do not equate passing tests or agreement between two wrappers over one engine with
+independent semantic evidence.
+
+## 7. Validation gates
+
+### G1. Provenance and traceability
+
+- All published claims name exact applied spec/interface/companion/profile revisions, separately
+  from package versions. Embedded schemas and frozen inputs match their declared sources.
+- The obligation map covers every specification rule and each adopted interface capability.
+  Each implementation mechanism and policy has a reviewed justification and an owner.
+- Reconcile all old 440 core cases and 1,566 evaluator-kit IDs: retained, rewritten for the new
+  rule, moved to the appropriate layer, or retired with an explicit reason and replacement
+  coverage where needed. Old expected answers are not invariants. Do not delete a failing case
+  merely to obtain a pass or demand that a now-nonconformant document reach value evaluation.
+- Historical model-check outputs are used only after their witnesses are re-expressed and
+  adjudicated under the target. Repair/qualify any checker actually used as an oracle; its old
+  conversion and classification counts are not fresh evidence.
+
+### G2. Document rules and reference semantics
+
+Run the entire current 505-case manifest, preserving its text/base64 carriage and independent
+expectations. Add focused witnesses for:
+
+- `data` accepted and `content` rejected on both sides; arbitrary scalar/array/object/null data;
+  legitimate same-named members inside data; no root resources or binding-owned kind.
+- Correct OBI-02/07 separation, unknown source keys, absent sources, shared sources, unused
+  sources, exact kind comparisons, namespace collisions and prototype-like names.
+- OBI-12 valid/invalid targets inside identified and nested relative resources, roots and
+  anchors, initial dynamic resolution, exact URI identity, invalid UTF-8 fragments and excluded
+  compared bases. A pointer into a resource must keep that resource's interpretation.
+- OBI-14 on used and unused document-resource schemas, malformed anchor values, and allowed
+  identified resources. Negative controls place identical-looking keywords in ordinary data.
+- All 14 rule findings, applicability and bounded diagnostics; unsupported versions kept apart
+  from malformed/versionless input; exact numbers/strings and escaped surrogate cases.
+- No reference acquisition, no retrieval URL as base, no interpretation of kind data, no
+  conformance conclusion about author-claim truth.
+
+A structural-schema pass proves only the structural check. Rust/TypeScript agreement proves
+parity, not truth. Retain negative controls that deliberately corrupt observer results and
+show that the independent judge rejects them.
+
+### G3. Schema evaluation and comparison
+
+- Preserve the distinction between absent schema, boolean schema, undecided evaluation,
+  established undefined result, missing external information and an actual mismatch.
+- Exercise dynamic scope, retained resource identity, partial resources and verdict independence
+  from irrelevant missing/unsupported branches. Resource/capability refusals must state limits;
+  they may not replace required definite corpus answers without an explicit unmet-capability
+  record. No new unexplained refusal of a previously supported current-model case.
+- For identity, cover normalized references with each document's context, cycles/unavailable
+  references as failures, annotations, exact decimals, boolean forms, union ordering and
+  multiplicity, literal arrays in `const`/`enum`, and outside-profile keywords. Identity remains
+  separate from directional subsumption and from JSON Schema evaluation.
+- Preserve schema origins in errors and verify evaluator/reference inspection agree with
+  conformance about contained resources. Differential engines are witnesses only within their
+  known applicable dialect and resource model.
+
+### G4. Role semantics and boundaries
+
+- Binding requests contain the actual document and key; a missing key has the current error.
+  Operation alias resolution, explicit binding, ordered selection, zero/one/many candidates,
+  and unsupported-provider cases follow the interface without implicit ranking.
+- Input/output schemas gate forwarded values; unsuccessful terminal payloads and context
+  challenges are relayed unchanged. Cover all interaction cardinalities, close/input_closed,
+  cancellation, one terminal result, and failures after earlier outputs.
+- Challenge shape, preflight behavior and no-output/no-operation-effect boundaries hold.
+  Descriptor `supports` is per operation; descriptor absence does not prevent binding invocation.
+  Checks keep kind/data exact and disclose executing checks without moving consent into core.
+- Pull additions are disjoint from existing map keys and the operation alias namespace; each
+  binding names the selected source; each added binding has exactly one report entry; `uses`
+  names additions with the required closure using kind-supplied dependency facts for opaque data.
+  Selectively applying a reported addition produces the claimed valid document.
+- Reuse occurs only on established profile identity; repeated pulls do not duplicate current
+  or stale bindings. Test schemas shared across sources, reused operations, name conflicts,
+  incomplete reads, stale/unmatched entries, change proposals and author-owned metadata.
+- A pull leaves the input document unchanged, does not refresh source data in place, performs
+  no source operation, and offers no invented fidelity certificate. Applying additions/proposals
+  is an explicit caller edit. Complete-pull and stricter acceptance policies stay separate.
+
+Use the current `conformance/selection`, `context`, `composition`, `kind-descriptor`,
+`pull-report`, and applicable `comparison` fixtures. Audit each fixture's assertion scope;
+shape validation alone does not execute a provider or establish its effect promises.
+
+### G5. Architecture, language and public API
+
+- Compare the final graph with the independently derived model, in both directions. Check that
+  a responsibility has not migrated into a convenient but conceptually wrong subsystem.
+- Inspect actual Cargo/module dependencies, exports, signatures, docs, diagnostics and examples.
+  Core remains independent of optional roles/hosts; kinds retain data interpretation; operations
+  retain schemas; source pulling does not introduce a second invocation/validation model.
+- Every inventoried concept has a disposition, including internals. New concepts have the same
+  burden of justification. Generic names such as manager/processor/context do not conceal
+  several unrelated responsibilities. Shared code is shared for meaning, not merely similar text.
+- Remove retired crates, exports, carriers, package entries, examples and generated documentation.
+  Search results are manually classified: do not replace protocol `Content-Type`, input-text
+  source locations, legitimate JSON Schema resources, or historical quotations mechanically.
+- Compile and execute minimal consumers written from the new guides. Review whether a reader
+  can locate each domain capability without learning an unnecessary SDK-specific vocabulary.
+
+### G6. Ownership, performance and host behavior
+
+- Verify atomic edits and failure, retained revision/proof correctness, original bytes and exact
+  values, authoring order, evaluator/resource lifetimes, and TypeScript disposal. Prove the
+  promised behavior without preserving an obsolete internal ownership arrangement.
+- Benchmark semantically matched old/new document validation, reference inventory, schema
+  preparation/evaluation, authoring/edits, repeated metadata reads, invocation and pulling where
+  comparable. Record time, allocations/peak memory, stack, cancellation and package-size costs.
+- Freeze workload, machine/toolchain and noise-derived tolerance before implementation. Default
+  acceptance is no regression beyond that tolerance on matched work. New mandated work and new
+  capabilities are reported separately with their own bounds. Any accepted tradeoff is explicit
+  in the receipt; never weaken semantics to satisfy an old benchmark.
+- Run required native platforms, Wasm, Node, Chromium/WebKit and other advertised hosts under
+  the current support policy. Distinguish required CI from separately qualified hosts; a skipped
+  lane is not a pass. Check packed public artifacts as consumers, not just source builds.
+
+### G7. End-to-end and final review
+
+Use at least two illustrative kinds in SDK-owned tests: one with no source data and simple
+binding data, and one with embedded source data, references, context and multiple operations.
+They test generic responsibilities, not a claim to implement a published protocol kind.
+
+A public-API workflow must: describe/check a source; author and validate its document; pull;
+selectively apply additions; pull again without duplication; report a source change without
+silently applying it; choose a binding; negotiate context; validate values and invoke. Record
+what each step establishes and which kind/application claims it cannot prove.
+
+The final receipt names revisions, artifact hashes, completed map entries, executed commands,
+rule/interface results, hosts, measured limits and accepted tradeoffs. No required gate remains
+red or silently skipped. Full SDK alignment and downstream adapter/application alignment are
+separate claims. Publication remains separate work.
+
+## 8. Evidence and implementation handoff
+
+Stage 0 has materialized fresh inputs in [a directory named for the target revisions](../inputs/current-c1419c9-5815fb1/).
+Leave
+`inputs/spec-now`, `inputs/interfaces`, `inputs/REVISIONS`, existing inventories and review
+reports intact as historical evidence. Keep current inputs and generated observations visibly
+separate, with hashes and commands attached to each receipt.
+
+The following are execution entry points. The receipt names which have run and their exact scope;
+entries without a receipt remain pending:
+
+| Check | Entry point and condition |
+| --- | --- |
+| Spec corpus consistency | `node scripts/verify-corpus.mjs` in the target spec snapshot |
+| Focused spec design checks | Target `conformance/draft-checks/README.md` and its scripts; supplementary to full corpus execution |
+| Interface structural/profile/shared-shape controls | Target `.github/workflows/ci.yml` and `.github/scripts/`; execute with its pinned dependencies |
+| SDK frozen-spec identity | `node tools/verify-spec.mjs . <target-spec-checkout> <full-target-sha> --self-test` after re-pin |
+| SDK native and browser qualification | Current `docs/maintainers.md`, `tools/verify.py`, `tools/verify.py --browser`, and required CI; update renamed-crate references with implementation |
+| Evaluator qualification | Existing replay and completion/parity tooling, with reconciled current-model expectations |
+| Packaged consumers and hosts | Current package/release-candidate and support guides, updated for the final public surface |
+
+Do not leave an unimplemented plan command standing in for a gate. Each stage's receipt records
+exact working commands, candidate SHA, output locations and outcome. The alignment map and
+capability matrix are maintained alongside implementation and reviewed whenever a target pin
+changes, rather than recreated only at the next large migration.
+
+## 9. Superseded assumptions and settled direction
+
+- Sources are present; binding kinds, root resources, §7.6 shared-value lookup and resource
+  pruning are not the target. Old D3/D4 work based on that intermediate model is retired.
+- Current source-puller, kind-descriptor and context publications settle the old interface-design
+  prerequisite. Their SDK implementations are pending; their designs need not be reopened merely
+  to preserve old SDK code.
+- "Schema", external-schema terminology and readable generated order remain the API direction,
+  but old signatures and layouts have no compatibility protection. Field order is presentation.
+- There is no pending permission to break old APIs. Matthew's 2026-11-02 greenfield direction
+  authorizes that approach. New abstractions still need an actual reason; neither blanket reuse
+  nor blanket rewriting is justified by this authorization.
+- Prior staffing/model recommendations and old concept classifications do not decide the
+  architecture or constitute completion evidence. Use a separate implementation/review process
+  when execution starts.

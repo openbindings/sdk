@@ -1060,6 +1060,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "openbindings-source-pull"
+version = "0.2.0-alpha.1"
+dependencies = [
+ "openbindings",
+ "openbindings-context",
+ "openbindings-internal-cancellation",
+ "openbindings-internal-json",
+ "openbindings-schema-comparison",
+ "serde_json",
+]
+
+[[package]]
 name = "openbindings-wasm"
 version = "0.2.0-alpha.1"
 dependencies = [

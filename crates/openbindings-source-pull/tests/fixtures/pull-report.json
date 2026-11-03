@@ -1,0 +1,981 @@
+{
+  "format": "openbindings.source-pull-report-cases@1",
+  "tests": [
+    {
+      "description": "A minimal result",
+      "interface": {
+        "openbindings": "0.2.0",
+        "operations": {},
+        "sources": {
+          "api": {
+            "kind": "example.report@1",
+            "data": {
+              "location": "https://example.com/openapi.json"
+            }
+          }
+        }
+      },
+      "source": "api",
+      "additions": {},
+      "report": {
+        "exhaustive": true,
+        "added": []
+      },
+      "schemaValid": true,
+      "completePull": true
+    },
+    {
+      "description": "An added binding names its operation and every addition it uses, directly or through another; the source entry is reported current",
+      "interface": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "UserId": {
+            "type": "string"
+          }
+        },
+        "operations": {},
+        "sources": {
+          "api": {
+            "kind": "example.report@1",
+            "data": {
+              "location": "https://example.com/openapi.json"
+            }
+          }
+        }
+      },
+      "source": "api",
+      "additions": {
+        "schemas": {
+          "User": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "address": {
+                "$ref": "#/schemas/Address"
+              }
+            }
+          },
+          "Address": {
+            "type": "object",
+            "properties": {
+              "city": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "operations": {
+          "getUser": {
+            "input": {
+              "$ref": "#/schemas/UserId"
+            },
+            "output": {
+              "$ref": "#/schemas/User"
+            }
+          }
+        },
+        "bindings": {
+          "getUser.api": {
+            "operation": "getUser",
+            "source": "api",
+            "data": {
+              "selector": "#/paths/~1users~1{id}/get"
+            }
+          }
+        }
+      },
+      "report": {
+        "exhaustive": true,
+        "added": [
+          {
+            "binding": "getUser.api",
+            "operation": "getUser",
+            "uses": [
+              "schemas/User",
+              "schemas/Address"
+            ]
+          }
+        ],
+        "existing": [
+          {
+            "source": "api",
+            "status": "current"
+          }
+        ]
+      },
+      "schemaValid": true,
+      "completePull": true
+    },
+    {
+      "description": "A reused binding names an operation the document already has, because the source offers it with the same input and output",
+      "interface": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "User": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "operations": {
+          "getUser": {
+            "input": {
+              "type": "string"
+            },
+            "output": {
+              "$ref": "#/schemas/User"
+            }
+          }
+        },
+        "sources": {
+          "legacy": {
+            "kind": "example.report@1",
+            "data": {
+              "location": "https://legacy.example.com/openapi.json"
+            }
+          },
+          "api": {
+            "kind": "example.report@1",
+            "data": {
+              "location": "https://example.com/openapi.json"
+            }
+          }
+        },
+        "bindings": {
+          "getUser.legacy": {
+            "operation": "getUser",
+            "source": "legacy",
+            "data": {
+              "selector": "#/paths/~1user~1{id}/get"
+            }
+          }
+        }
+      },
+      "source": "api",
+      "additions": {
+        "bindings": {
+          "getUser.api": {
+            "operation": "getUser",
+            "source": "api",
+            "data": {
+              "selector": "#/paths/~1users~1{id}/get"
+            }
+          }
+        }
+      },
+      "report": {
+        "exhaustive": true,
+        "added": [
+          {
+            "binding": "getUser.api",
+            "operation": "getUser",
+            "reused": true
+          }
+        ]
+      },
+      "schemaValid": true,
+      "completePull": true
+    },
+    {
+      "description": "A lossy addition still meets the complete-pull condition",
+      "interface": {
+        "openbindings": "0.2.0",
+        "operations": {},
+        "sources": {
+          "api": {
+            "kind": "example.report@1",
+            "data": {
+              "location": "https://example.com/openapi.json"
+            }
+          }
+        }
+      },
+      "source": "api",
+      "additions": {
+        "operations": {
+          "getUser": {
+            "output": {
+              "type": "object"
+            }
+          }
+        },
+        "bindings": {
+          "getUser.api": {
+            "operation": "getUser",
+            "source": "api",
+            "data": {
+              "selector": "#/paths/~1users~1{id}/get"
+            }
+          }
+        }
+      },
+      "report": {
+        "exhaustive": true,
+        "added": [
+          {
+            "binding": "getUser.api",
+            "operation": "getUser",
+            "lossy": {
+              "reasonCode": "example.schema-approximated",
+              "message": "The response schema is approximated as an object.",
+              "details": {
+                "construct": "discriminator"
+              }
+            }
+          }
+        ]
+      },
+      "schemaValid": true,
+      "completePull": true
+    },
+    {
+      "description": "Current and unmatched existing bindings add nothing",
+      "interface": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "getUser": {},
+          "getLegacy": {}
+        },
+        "sources": {
+          "api": {
+            "kind": "example.report@1",
+            "data": {
+              "location": "https://example.com/openapi.json"
+            }
+          }
+        },
+        "bindings": {
+          "getUser.api": {
+            "operation": "getUser",
+            "source": "api",
+            "data": {
+              "selector": "#/paths/~1users~1{id}/get"
+            }
+          },
+          "getLegacy.api": {
+            "operation": "getLegacy",
+            "source": "api",
+            "data": {
+              "selector": "#/paths/~1legacy/get"
+            }
+          }
+        }
+      },
+      "source": "api",
+      "additions": {},
+      "report": {
+        "exhaustive": true,
+        "added": [],
+        "existing": [
+          {
+            "binding": "getUser.api",
+            "status": "current"
+          },
+          {
+            "binding": "getLegacy.api",
+            "status": "unmatched",
+            "reasonCode": "example.path-removed",
+            "message": "The source no longer declares this path."
+          }
+        ]
+      },
+      "schemaValid": true,
+      "completePull": true
+    },
+    {
+      "description": "A stale binding proposes an output schema and names the additions the proposal uses",
+      "interface": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "getUser": {
+            "output": {
+              "type": "object"
+            }
+          }
+        },
+        "sources": {
+          "api": {
+            "kind": "example.report@1",
+            "data": {
+              "location": "https://example.com/openapi.json"
+            }
+          }
+        },
+        "bindings": {
+          "getUser.api": {
+            "operation": "getUser",
+            "source": "api",
+            "data": {
+              "selector": "#/paths/~1users~1{id}/get"
+            }
+          }
+        }
+      },
+      "source": "api",
+      "additions": {
+        "schemas": {
+          "User": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "report": {
+        "exhaustive": true,
+        "added": [],
+        "existing": [
+          {
+            "binding": "getUser.api",
+            "status": "stale",
+            "change": "non-breaking",
+            "message": "The response is now described by a User schema.",
+            "proposal": {
+              "output": {
+                "$ref": "#/schemas/User"
+              },
+              "uses": [
+                "schemas/User"
+              ]
+            }
+          }
+        ]
+      },
+      "schemaValid": true,
+      "completePull": true
+    },
+    {
+      "description": "A stale binding may propose only its data",
+      "interface": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "getUser": {}
+        },
+        "sources": {
+          "api": {
+            "kind": "example.report@1",
+            "data": {
+              "location": "https://example.com/openapi.json"
+            }
+          }
+        },
+        "bindings": {
+          "getUser.api": {
+            "operation": "getUser",
+            "source": "api",
+            "data": {
+              "selector": "#/paths/~1users~1{userId}/get"
+            }
+          }
+        }
+      },
+      "source": "api",
+      "additions": {},
+      "report": {
+        "exhaustive": true,
+        "added": [],
+        "existing": [
+          {
+            "binding": "getUser.api",
+            "status": "stale",
+            "change": "non-breaking",
+            "message": "The operation is now served at /users/{id}.",
+            "proposal": {
+              "data": {
+                "selector": "#/paths/~1users~1{id}/get"
+              }
+            }
+          }
+        ]
+      },
+      "schemaValid": true,
+      "completePull": true
+    },
+    {
+      "description": "A stale schema proposes its replacement",
+      "interface": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "User": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name"
+            ]
+          }
+        },
+        "operations": {
+          "getUser": {
+            "output": {
+              "$ref": "#/schemas/User"
+            }
+          }
+        },
+        "sources": {
+          "api": {
+            "kind": "example.report@1",
+            "data": {
+              "location": "https://example.com/openapi.json"
+            }
+          }
+        },
+        "bindings": {
+          "getUser.api": {
+            "operation": "getUser",
+            "source": "api",
+            "data": {
+              "selector": "#/paths/~1users~1{id}/get"
+            }
+          }
+        }
+      },
+      "source": "api",
+      "additions": {},
+      "report": {
+        "exhaustive": true,
+        "added": [],
+        "existing": [
+          {
+            "binding": "getUser.api",
+            "status": "current"
+          },
+          {
+            "schema": "User",
+            "status": "stale",
+            "change": "non-breaking",
+            "message": "The component gained an optional email.",
+            "proposal": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "email": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name"
+              ]
+            }
+          }
+        ]
+      },
+      "schemaValid": true,
+      "completePull": true
+    },
+    {
+      "description": "A kind whose definition lets it refresh its source data may propose new data for the source entry",
+      "interface": {
+        "openbindings": "0.2.0",
+        "operations": {},
+        "sources": {
+          "api": {
+            "kind": "example.report@1",
+            "data": {
+              "location": "https://example.com/openapi.json",
+              "etag": "\"v1\""
+            }
+          }
+        }
+      },
+      "source": "api",
+      "additions": {},
+      "report": {
+        "exhaustive": true,
+        "added": [],
+        "existing": [
+          {
+            "source": "api",
+            "status": "stale",
+            "change": "non-breaking",
+            "message": "The origin serves a newer document.",
+            "proposal": {
+              "data": {
+                "location": "https://example.com/openapi.json",
+                "etag": "\"v2\""
+              }
+            }
+          }
+        ]
+      },
+      "schemaValid": true,
+      "completePull": true
+    },
+    {
+      "description": "Kind-defined exclusions and invalid parts still meet the complete-pull condition",
+      "interface": {
+        "openbindings": "0.2.0",
+        "operations": {},
+        "sources": {
+          "api": {
+            "kind": "example.report@1",
+            "data": {
+              "location": "https://example.com/openapi.json"
+            }
+          }
+        }
+      },
+      "source": "api",
+      "additions": {
+        "operations": {
+          "getUser": {}
+        },
+        "bindings": {
+          "getUser.api": {
+            "operation": "getUser",
+            "source": "api",
+            "data": {
+              "selector": "#/paths/~1users~1{id}/get"
+            }
+          }
+        }
+      },
+      "report": {
+        "exhaustive": true,
+        "added": [
+          {
+            "binding": "getUser.api",
+            "operation": "getUser"
+          }
+        ],
+        "omitted": [
+          {
+            "status": "excluded",
+            "reasonCode": "example.probe-excluded",
+            "message": "The kind does not admit health probes.",
+            "rule": "example.report@1 section 3",
+            "details": {
+              "path": "/health",
+              "method": "get"
+            }
+          },
+          {
+            "status": "invalid",
+            "reasonCode": "example.contradictory-body",
+            "message": "The source declares contradictory request bodies.",
+            "details": {
+              "path": "/users",
+              "method": "post"
+            }
+          }
+        ]
+      },
+      "schemaValid": true,
+      "completePull": true
+    },
+    {
+      "description": "A conflict with an existing operation is omitted for the author to decide and still meets the complete-pull condition",
+      "interface": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "getUser": {
+            "input": {
+              "type": "string"
+            },
+            "output": {
+              "type": "object"
+            }
+          }
+        },
+        "sources": {
+          "legacy": {
+            "kind": "example.report@1",
+            "data": {
+              "location": "https://legacy.example.com/openapi.json"
+            }
+          },
+          "api": {
+            "kind": "example.report@1",
+            "data": {
+              "location": "https://example.com/openapi.json"
+            }
+          }
+        },
+        "bindings": {
+          "getUser.legacy": {
+            "operation": "getUser",
+            "source": "legacy",
+            "data": {
+              "selector": "#/paths/~1user~1{id}/get"
+            }
+          }
+        }
+      },
+      "source": "api",
+      "additions": {},
+      "report": {
+        "exhaustive": true,
+        "added": [],
+        "omitted": [
+          {
+            "status": "conflict",
+            "reasonCode": "openbindings.source-puller.operation-conflict",
+            "message": "The source offers getUser with a different input; the document's getUser takes a string.",
+            "details": {
+              "operation": "getUser"
+            }
+          }
+        ]
+      },
+      "schemaValid": true,
+      "completePull": true
+    },
+    {
+      "description": "An implementation gap does not meet the complete-pull condition",
+      "interface": {
+        "openbindings": "0.2.0",
+        "operations": {},
+        "sources": {
+          "api": {
+            "kind": "example.report@1",
+            "data": {
+              "location": "https://example.com/openapi.json"
+            }
+          }
+        }
+      },
+      "source": "api",
+      "additions": {
+        "operations": {
+          "getUser": {}
+        },
+        "bindings": {
+          "getUser.api": {
+            "operation": "getUser",
+            "source": "api",
+            "data": {
+              "selector": "#/paths/~1users~1{id}/get"
+            }
+          }
+        }
+      },
+      "report": {
+        "exhaustive": true,
+        "added": [
+          {
+            "binding": "getUser.api",
+            "operation": "getUser"
+          }
+        ],
+        "omitted": [
+          {
+            "status": "implementation-unsupported",
+            "reasonCode": "example.listing-unavailable",
+            "message": "This puller does not generate the user listing.",
+            "details": {
+              "path": "/users",
+              "method": "get"
+            }
+          }
+        ]
+      },
+      "schemaValid": true,
+      "completePull": false
+    },
+    {
+      "description": "A non-exhaustive report does not meet the complete-pull condition, and an unmatched binding may correspond to something unread",
+      "interface": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "getLegacy": {}
+        },
+        "sources": {
+          "api": {
+            "kind": "example.report@1",
+            "data": {
+              "location": "https://example.com/openapi.json"
+            }
+          }
+        },
+        "bindings": {
+          "getLegacy.api": {
+            "operation": "getLegacy",
+            "source": "api",
+            "data": {
+              "selector": "#/paths/~1legacy/get"
+            }
+          }
+        }
+      },
+      "source": "api",
+      "additions": {
+        "operations": {
+          "getUser": {}
+        },
+        "bindings": {
+          "getUser.api": {
+            "operation": "getUser",
+            "source": "api",
+            "data": {
+              "selector": "#/paths/~1users~1{id}/get"
+            }
+          }
+        }
+      },
+      "report": {
+        "exhaustive": false,
+        "limitation": {
+          "code": "example.unread-reference",
+          "message": "An external reference was not read, so further paths may exist."
+        },
+        "added": [
+          {
+            "binding": "getUser.api",
+            "operation": "getUser"
+          }
+        ],
+        "existing": [
+          {
+            "binding": "getLegacy.api",
+            "status": "unmatched"
+          }
+        ]
+      },
+      "schemaValid": true,
+      "completePull": false
+    },
+    {
+      "description": "Application-owned report members are allowed",
+      "interface": {
+        "openbindings": "0.2.0",
+        "operations": {},
+        "sources": {
+          "api": {
+            "kind": "example.report@1"
+          }
+        }
+      },
+      "source": "api",
+      "additions": {},
+      "report": {
+        "exhaustive": true,
+        "added": [],
+        "applicationNote": "example"
+      },
+      "schemaValid": true,
+      "completePull": true
+    },
+    {
+      "description": "A report without added does not match the report shape",
+      "interface": {
+        "openbindings": "0.2.0",
+        "operations": {},
+        "sources": {
+          "api": {
+            "kind": "example.report@1"
+          }
+        }
+      },
+      "source": "api",
+      "additions": {},
+      "report": {
+        "exhaustive": true
+      },
+      "schemaValid": false
+    },
+    {
+      "description": "An added entry names a binding, never a dependency",
+      "interface": {
+        "openbindings": "0.2.0",
+        "operations": {},
+        "sources": {
+          "api": {
+            "kind": "example.report@1"
+          }
+        }
+      },
+      "source": "api",
+      "additions": {
+        "operations": {
+          "onJobDone": {}
+        }
+      },
+      "report": {
+        "exhaustive": true,
+        "added": [
+          {
+            "dependency": "jobDone",
+            "operation": "onJobDone"
+          }
+        ]
+      },
+      "schemaValid": false
+    },
+    {
+      "description": "A stale binding's proposal carries data, an input or an output",
+      "interface": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "getUser": {}
+        },
+        "sources": {
+          "api": {
+            "kind": "example.report@1"
+          }
+        },
+        "bindings": {
+          "getUser.api": {
+            "operation": "getUser",
+            "source": "api",
+            "data": {
+              "selector": "#/paths/~1users~1{id}/get"
+            }
+          }
+        }
+      },
+      "source": "api",
+      "additions": {},
+      "report": {
+        "exhaustive": true,
+        "added": [],
+        "existing": [
+          {
+            "binding": "getUser.api",
+            "status": "stale",
+            "change": "non-breaking",
+            "proposal": {}
+          }
+        ]
+      },
+      "schemaValid": false
+    },
+    {
+      "description": "A stale entry carries the kind's judgment of the change",
+      "interface": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "getUser": {}
+        },
+        "sources": {
+          "api": {
+            "kind": "example.report@1"
+          }
+        },
+        "bindings": {
+          "getUser.api": {
+            "operation": "getUser",
+            "source": "api",
+            "data": {
+              "selector": "#/paths/~1users~1{id}/get"
+            }
+          }
+        }
+      },
+      "source": "api",
+      "additions": {},
+      "report": {
+        "exhaustive": true,
+        "added": [],
+        "existing": [
+          {
+            "binding": "getUser.api",
+            "status": "stale",
+            "proposal": {
+              "data": {
+                "selector": "#/paths/~1users~1{userId}/get"
+              }
+            }
+          }
+        ]
+      },
+      "schemaValid": false
+    },
+    {
+      "description": "An existing entry names exactly one of binding, schema or source",
+      "interface": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "User": {
+            "type": "object"
+          }
+        },
+        "operations": {
+          "getUser": {}
+        },
+        "sources": {
+          "api": {
+            "kind": "example.report@1"
+          }
+        },
+        "bindings": {
+          "getUser.api": {
+            "operation": "getUser",
+            "source": "api"
+          }
+        }
+      },
+      "source": "api",
+      "additions": {},
+      "report": {
+        "exhaustive": true,
+        "added": [],
+        "existing": [
+          {
+            "binding": "getUser.api",
+            "schema": "User",
+            "status": "current"
+          }
+        ]
+      },
+      "schemaValid": false
+    },
+    {
+      "description": "An excluded omission names its rule",
+      "interface": {
+        "openbindings": "0.2.0",
+        "operations": {},
+        "sources": {
+          "api": {
+            "kind": "example.report@1"
+          }
+        }
+      },
+      "source": "api",
+      "additions": {},
+      "report": {
+        "exhaustive": true,
+        "added": [],
+        "omitted": [
+          {
+            "status": "excluded",
+            "reasonCode": "example.probe-excluded",
+            "message": "The kind does not admit health probes."
+          }
+        ]
+      },
+      "schemaValid": false
+    },
+    {
+      "description": "A non-exhaustive report carries a limitation",
+      "interface": {
+        "openbindings": "0.2.0",
+        "operations": {},
+        "sources": {
+          "api": {
+            "kind": "example.report@1"
+          }
+        }
+      },
+      "source": "api",
+      "additions": {},
+      "report": {
+        "exhaustive": false,
+        "added": []
+      },
+      "schemaValid": false
+    }
+  ]
+}

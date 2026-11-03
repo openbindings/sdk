@@ -1,0 +1,903 @@
+{
+    "openbindings": "0.2.0",
+    "name": "Source Puller",
+    "version": "0.1.0",
+    "description": "Pull one source of an OpenBindings interface document: read the source's data under its kind, express what the source offers as operations, schemas and bindings naming the source, reconcile with the entries that already name that source, and return additions plus a report of the same pull. A complete pull is a condition on that report that callers apply; a partial result makes its gaps explicit.\n\nThis operation is offered for voluntary adoption by name. Its schemas and descriptions identify the exchanged values and the capability they describe; they do not prescribe an SDK, internal algorithm, validation or recovery policy, or process architecture. Correspondence is an author claim, not verification of an implementation.\n\nInterface documents and added entries are OpenBindings 0.2 values. Their core fields have their core meanings and types; x- members are extensions. Source data and binding data preserve absence versus JSON null and are read under the source's kind. What that data means, and what the kind consults to read it, is the kind's definition; this interface exchanges documents and keys and says nothing about it. The open carrier schemas are not complete document-conformance checks. Handling malformed carriers is implementation policy; it does not make those carriers conformant.",
+    "schemas": {
+        "OpenBindingsInterface": {
+            "type": "object",
+            "description": "A valid OpenBindings interface document.",
+            "additionalProperties": true
+        },
+        "PullContext": {
+            "type": "object",
+            "description": "Opaque context supplied by value for one pull, as the context document defines it: values the source's kind needs to read the source. Which values a kind needs and what they mean is the kind's; this interface defines none of them. A pull that cannot proceed without a value it was not given completes unsuccessfully with CONTEXT_REQUIRED and the context document's challenge, message and schema, as its data, and a later call carries the values the schema described here.",
+            "additionalProperties": true
+        },
+        "PullSourceInput": {
+            "type": "object",
+            "description": "The document to add to, the key of the source in it to pull, and context to apply.",
+            "properties": {
+                "interface": {
+                    "$ref": "#/schemas/OpenBindingsInterface",
+                    "description": "The document to add to. A new document starts as a minimal document plus the sources entry to pull. The document carries its own name, version, description and specification version."
+                },
+                "source": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Key of a sources entry in interface. The puller reads that entry's data under its kind. A key that names no sources entry fails the call."
+                },
+                "context": {
+                    "$ref": "#/schemas/PullContext"
+                }
+            },
+            "required": [
+                "interface",
+                "source"
+            ],
+            "additionalProperties": false
+        },
+        "Binding": {
+            "type": "object",
+            "description": "A binding as an OpenBindings 0.2 document carries it. It names a source; the source's kind gives the binding's data meaning. Absent data and present JSON null are distinct. Only core binding fields and x- extensions may appear; the open carrier schema does not fully check that boundary. Handling malformed carriers is implementation policy.",
+            "properties": {
+                "operation": {
+                    "type": "string",
+                    "description": "Key of the operation this binding realizes."
+                },
+                "source": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Key of the sources entry this binding names."
+                },
+                "data": {
+                    "description": "Binding data read under the source's kind: any JSON value, absent when the binding has none."
+                },
+                "idempotent": {
+                    "type": "boolean",
+                    "description": "The binding author's idempotency claim, carried as information."
+                },
+                "preference": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991,
+                    "description": "The author's preference signal, carried as information."
+                },
+                "description": {
+                    "type": "string",
+                    "description": "Human-readable description."
+                },
+                "deprecated": {
+                    "type": "boolean",
+                    "description": "The author's deprecation signal, carried as information."
+                }
+            },
+            "required": [
+                "operation",
+                "source"
+            ],
+            "additionalProperties": true
+        },
+        "JSONSchemaValue": {
+            "type": [
+                "object",
+                "boolean"
+            ],
+            "description": "A JSON Schema 2020-12 schema in object or boolean form, as a schemas entry or an operation's input or output carries it."
+        },
+        "PullAdditions": {
+            "type": "object",
+            "description": "Entries to add to the input document, by map. Each key is new to the corresponding map of the input document, and each added operation key is also new to its operation identifier namespace (keys and aliases). Added bindings name the pulled source. Added schemas and binding data may refer to entries already in the input document and to other additions, as the kind defines. Inserting the additions into the input document gives the pulled document.",
+            "properties": {
+                "operations": {
+                    "type": "object",
+                    "description": "Added operations.",
+                    "additionalProperties": {
+                        "type": "object"
+                    }
+                },
+                "schemas": {
+                    "type": "object",
+                    "description": "Added schemas entries.",
+                    "additionalProperties": {
+                        "$ref": "#/schemas/JSONSchemaValue"
+                    }
+                },
+                "bindings": {
+                    "type": "object",
+                    "description": "Added bindings. Each names the pulled source and realizes an added operation or, when its added entry says reused, an operation already in the input document.",
+                    "additionalProperties": {
+                        "$ref": "#/schemas/Binding"
+                    }
+                }
+            }
+        },
+        "PullUses": {
+            "type": "array",
+            "description": "Labels of the additions an entry needs besides itself, each <map>/<key> naming a key of that map in additions: schemas/User, operations/getUser, bindings/getUser.api. The list is closed: it names everything the entry needs directly or through another addition, so a caller keeps an entry by inserting it, its operation when that operation is added, and everything the list names. Absent means none. No label appears twice.",
+            "items": {
+                "type": "string",
+                "minLength": 1
+            }
+        },
+        "PullLoss": {
+            "type": "object",
+            "description": "Disclosed loss of fidelity in an addition, such as an approximated schema. The addition is still an added path; the loss marks what it does not represent exactly.",
+            "properties": {
+                "reasonCode": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Stable namespaced reason code for this kind or implementation."
+                },
+                "message": {
+                    "type": "string",
+                    "description": "Human-readable explanation."
+                },
+                "details": {
+                    "type": "object",
+                    "description": "Kind-specific structured evidence.",
+                    "additionalProperties": true
+                }
+            },
+            "required": [
+                "reasonCode",
+                "message"
+            ]
+        },
+        "PullAddedEntry": {
+            "type": "object",
+            "description": "One added binding. Each added binding has exactly one entry. operation names the operation it realizes: an added operation, or, when reused is present, an operation already in the input document whose input and output equal what the source offers. uses names every other addition the entry needs. A caller keeps the entry by inserting it, its operation when that operation is added, and its uses.",
+            "properties": {
+                "binding": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Key of the added binding."
+                },
+                "operation": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Key of the operation the binding realizes; it equals the added binding's operation."
+                },
+                "reused": {
+                    "const": true,
+                    "description": "Present when the operation already existed in the input document and the puller bound the source to it because the offered input and output equal the existing ones under the schema-comparison profile's identical mode. Absent when the operation is an addition."
+                },
+                "uses": {
+                    "$ref": "#/schemas/PullUses"
+                },
+                "lossy": {
+                    "$ref": "#/schemas/PullLoss"
+                }
+            },
+            "required": [
+                "binding",
+                "operation"
+            ]
+        },
+        "PullBindingProposal": {
+            "type": "object",
+            "description": "How the puller would write a stale binding and the operation it realizes now, carrying only what the kind owns. data is the binding data it would write; input and output are the operation's schemas it would write; each appears where the puller would write it differently, and at least one appears. uses names the additions the proposal needs. The operation's description, preference and idempotent are the author's and are not in a proposal. A caller applies a proposal by copying what it carries onto the existing binding and operation and inserting what uses names.",
+            "properties": {
+                "data": {
+                    "description": "Proposed binding data, read under the source's kind: any JSON value."
+                },
+                "input": {
+                    "$ref": "#/schemas/JSONSchemaValue",
+                    "description": "Proposed input schema for the operation the binding realizes."
+                },
+                "output": {
+                    "$ref": "#/schemas/JSONSchemaValue",
+                    "description": "Proposed output schema for the operation the binding realizes."
+                },
+                "uses": {
+                    "$ref": "#/schemas/PullUses"
+                }
+            },
+            "anyOf": [
+                {
+                    "required": [
+                        "data"
+                    ]
+                },
+                {
+                    "required": [
+                        "input"
+                    ]
+                },
+                {
+                    "required": [
+                        "output"
+                    ]
+                }
+            ]
+        },
+        "PullSourceProposal": {
+            "type": "object",
+            "description": "How the puller would write the source entry's data now. Only a kind whose definition treats its source data as something the kind may refresh proposes this; the interface takes no stance on what a kind's data means.",
+            "properties": {
+                "data": {
+                    "description": "Proposed source data, read under the source's kind: any JSON value."
+                }
+            },
+            "required": [
+                "data"
+            ]
+        },
+        "PullExistingEntry": {
+            "type": "object",
+            "description": "How one entry of the input document that the pulled source accounts for compares with what the puller read: a binding naming the source, a schema the source offers under a key the document already has, or the source entry itself. Exactly one of binding, schema or source names the entry. current: the puller would write the entry unchanged. stale: the entry still corresponds to something the source offers, but the puller would write it differently now; the entry carries a proposal and the kind's judgment of the change. unmatched: nothing the puller read and would write corresponds to the entry any more; when exhaustive is false, it may correspond to something unread.",
+            "properties": {
+                "binding": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Key of a binding in the input document that names the pulled source."
+                },
+                "schema": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Key of a schemas entry in the input document that the source offers under the same key."
+                },
+                "source": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "The pulled source's key. A kind whose definition lets it refresh its source data may report the source stale with a proposal; a kind that does not, never does."
+                },
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "current",
+                        "stale",
+                        "unmatched"
+                    ],
+                    "description": "current: the puller would write the entry unchanged; stale: it still corresponds to something the source offers, but the puller would write it differently now; unmatched: nothing the puller read and would write corresponds to it any more, and when exhaustive is false it may correspond to something unread."
+                },
+                "change": {
+                    "type": "string",
+                    "enum": [
+                        "breaking",
+                        "dangerous",
+                        "non-breaking"
+                    ],
+                    "description": "Only on a stale entry: the kind's judgment of the proposal's effect on a caller of the affected operation. breaking: a caller that satisfied the old input or relied on the old output may fail. dangerous: a caller may fail depending on how it was written. non-breaking: no caller is affected. A kind that cannot classify a change says dangerous. A label for agents and policy, not an instruction to apply."
+                },
+                "proposal": {
+                    "description": "Only on a stale entry: what the puller would write now, carrying only what the kind owns. For a binding, a PullBindingProposal; for a schema, the schema itself; for the source, a PullSourceProposal."
+                },
+                "reasonCode": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Stable namespaced reason code for a stale or unmatched entry."
+                },
+                "message": {
+                    "type": "string",
+                    "description": "Human-readable explanation of a stale or unmatched entry."
+                },
+                "details": {
+                    "type": "object",
+                    "description": "Kind-specific structured evidence about a stale or unmatched entry.",
+                    "additionalProperties": true
+                }
+            },
+            "required": [
+                "status"
+            ],
+            "allOf": [
+                {
+                    "oneOf": [
+                        {
+                            "required": [
+                                "binding"
+                            ],
+                            "properties": {
+                                "schema": false,
+                                "source": false,
+                                "proposal": {
+                                    "$ref": "#/schemas/PullBindingProposal"
+                                }
+                            }
+                        },
+                        {
+                            "required": [
+                                "schema"
+                            ],
+                            "properties": {
+                                "binding": false,
+                                "source": false,
+                                "proposal": {
+                                    "$ref": "#/schemas/JSONSchemaValue"
+                                }
+                            }
+                        },
+                        {
+                            "required": [
+                                "source"
+                            ],
+                            "properties": {
+                                "binding": false,
+                                "schema": false,
+                                "proposal": {
+                                    "$ref": "#/schemas/PullSourceProposal"
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
+                    "oneOf": [
+                        {
+                            "properties": {
+                                "status": {
+                                    "const": "current"
+                                },
+                                "proposal": false,
+                                "change": false,
+                                "reasonCode": false,
+                                "message": false,
+                                "details": false
+                            }
+                        },
+                        {
+                            "properties": {
+                                "status": {
+                                    "const": "stale"
+                                }
+                            },
+                            "required": [
+                                "proposal",
+                                "change"
+                            ]
+                        },
+                        {
+                            "properties": {
+                                "status": {
+                                    "const": "unmatched"
+                                },
+                                "proposal": false,
+                                "change": false
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        "PullOmittedEntry": {
+            "type": "object",
+            "description": "Something the source offers that the pull did not represent. details describes it but is not an address: no request names an item by it.",
+            "properties": {
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "excluded",
+                        "invalid",
+                        "implementation-unsupported",
+                        "conflict"
+                    ],
+                    "description": "excluded: left out under a kind-defined rule, identified by rule; invalid: a malformed or contradictory part of the source; implementation-unsupported: something the kind admits that this implementation did not represent; conflict: the item would add an operation under a key the document already has whose input or output differ from the item's, so the puller leaves it out and the author decides. An implementation's restriction of a kind defined elsewhere is implementation-unsupported, not excluded."
+                },
+                "reasonCode": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Stable namespaced reason code for this kind, implementation or puller."
+                },
+                "message": {
+                    "type": "string",
+                    "description": "Human-readable explanation."
+                },
+                "rule": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Evidence identifying the kind-owned rule governing the exclusion, including enough revision information to locate its defining document or code. Required for excluded."
+                },
+                "details": {
+                    "type": "object",
+                    "description": "Kind-specific structured evidence describing the omitted item; for a conflict, the existing operation's key. It is not an address.",
+                    "additionalProperties": true
+                }
+            },
+            "required": [
+                "status",
+                "reasonCode",
+                "message"
+            ],
+            "oneOf": [
+                {
+                    "properties": {
+                        "status": {
+                            "const": "excluded"
+                        }
+                    },
+                    "required": [
+                        "rule"
+                    ]
+                },
+                {
+                    "properties": {
+                        "status": {
+                            "enum": [
+                                "invalid",
+                                "implementation-unsupported",
+                                "conflict"
+                            ]
+                        }
+                    }
+                }
+            ]
+        },
+        "PullLimitation": {
+            "type": "object",
+            "description": "Machine-readable evidence explaining why a pull is not exhaustive.",
+            "properties": {
+                "code": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Stable namespaced reason code."
+                },
+                "message": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Human-readable explanation of what may be missing and why."
+                },
+                "details": {
+                    "type": "object",
+                    "description": "Optional implementation- or kind-specific structured evidence.",
+                    "additionalProperties": true
+                }
+            },
+            "required": [
+                "code",
+                "message"
+            ]
+        },
+        "PullReport": {
+            "type": "object",
+            "description": "The report of one pull: whether the puller read the whole source, what it added, how the entries the source accounts for compare, and what it left out. The report is an author claim that consumers may assess independently.",
+            "properties": {
+                "exhaustive": {
+                    "type": "boolean",
+                    "description": "True when the puller read the whole source. False leaves a possible remainder, explained by limitation."
+                },
+                "limitation": {
+                    "$ref": "#/schemas/PullLimitation"
+                },
+                "added": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/schemas/PullAddedEntry"
+                    },
+                    "description": "One entry per added binding, each appearing exactly once."
+                },
+                "existing": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/schemas/PullExistingEntry"
+                    },
+                    "description": "One entry for each binding of the input document naming the pulled source, each schema the source offers under a key the document already has, and, when the kind has something to report about it, the source entry itself. Absent or empty means none."
+                },
+                "omitted": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/schemas/PullOmittedEntry"
+                    },
+                    "description": "What the source offers that the pull did not represent. Absent or empty means none."
+                }
+            },
+            "required": [
+                "exhaustive",
+                "added"
+            ],
+            "oneOf": [
+                {
+                    "properties": {
+                        "exhaustive": {
+                            "const": true
+                        }
+                    }
+                },
+                {
+                    "properties": {
+                        "exhaustive": {
+                            "const": false
+                        }
+                    },
+                    "required": [
+                        "limitation"
+                    ]
+                }
+            ]
+        },
+        "PullSourceResult": {
+            "type": "object",
+            "description": "Additions to the input document and the report of the same pull.",
+            "properties": {
+                "additions": {
+                    "$ref": "#/schemas/PullAdditions"
+                },
+                "report": {
+                    "$ref": "#/schemas/PullReport"
+                }
+            },
+            "required": [
+                "additions",
+                "report"
+            ]
+        }
+    },
+    "operations": {
+        "openbindings.source-puller.pullSource": {
+            "description": "Pull the named source of the supplied interface document and return what it offers as additions, with a report of the same pull. source is the key of a sources entry in interface; a key that names no sources entry fails the call. The puller reads the source's data under the source's kind, and whatever that data refers to as the kind defines; what the data means and what the kind consults to read it is the kind's definition alone. A kind that needs values it was not given to read the source completes unsuccessfully with CONTEXT_REQUIRED, carrying the context document's challenge (message and schema), and a later call supplies them as context. The pull expresses each item the source offers as an operation, the schemas it needs and a binding naming the source, and adds what no current or stale binding of that source already binds. It never adds a second binding for something already bound: a stale binding gets a proposal, not a duplicate. Only bindings naming the pulled source take part. When an offered operation's key is already in the document, the puller compares the offered input and output with the existing operation's: equal under the schema-comparison profile's identical mode, the added binding realizes the existing operation and its added entry says reused; otherwise the item is omitted as a conflict and the author decides. Added operation keys are new to the document's operation identifier namespace, which holds operation keys and aliases; added schema and binding keys are new to their maps; added bindings name the pulled source. Inserting the additions into the input document gives the pulled document. The report's added entries account for each added binding exactly once, naming the operation it realizes, whether that operation already existed, every other addition it needs and any disclosed loss of fidelity. Its existing entries report each binding naming the source, each schema the source offers under a key the document already has, and the source entry itself where the kind has something to report, as current, stale with a proposal and the kind's judgment of the change, or unmatched. A proposal carries only what the kind owns: a binding's data, the input or output of the operation it realizes, and the additions they use; a schema; the source's data. Its omitted entries report what the source offers that was not represented: excluded under a kind-defined rule, invalid, implementation-unsupported, or a conflict with an existing operation. exhaustive says whether the puller read the whole source; a non-exhaustive report carries limitation evidence. The result is a complete pull when exhaustive is true and no omitted entry is implementation-unsupported; kind-defined exclusions, invalid parts, conflicts and lossy additions still meet it. Callers apply that condition or their own policy, and a partial result makes its gaps explicit without claiming a complete pull. Inspection is a pull whose result is read and discarded. To keep only some of the result, a caller keeps the chosen added entries, inserting each one, its operation when that operation is added, and what its uses name. Drift is read from existing and added. The report is an author claim that consumers may assess independently, and disclosure does not make an unsound binding faithful. Editing an added or existing entry afterward creates a new author claim. A pull changes neither the input document nor the source, and performs none of the source's operations. Naming, composition, report construction, validation strategy and failure recovery remain implementation choices.",
+            "input": {
+                "$ref": "#/schemas/PullSourceInput"
+            },
+            "output": {
+                "$ref": "#/schemas/PullSourceResult"
+            },
+            "examples": {
+                "textTools": {
+                    "description": "A complete pull of a source of the illustrative kind example.text@1, whose sources carry no data and offer two targets: echo returns its input string; length counts Unicode code points. Binding data names the target. The pull starts from a minimal document that carries the interface's name and the source, and adds an operation and a binding for each target. Added keys are example choices.",
+                    "input": {
+                        "interface": {
+                            "openbindings": "0.2.0",
+                            "name": "Text tools",
+                            "operations": {},
+                            "sources": {
+                                "text": {
+                                    "kind": "example.text@1"
+                                }
+                            }
+                        },
+                        "source": "text"
+                    },
+                    "output": {
+                        "additions": {
+                            "operations": {
+                                "repeat": {
+                                    "description": "Return the input string.",
+                                    "input": {
+                                        "type": "string"
+                                    },
+                                    "output": {
+                                        "type": "string"
+                                    }
+                                },
+                                "count": {
+                                    "description": "Count Unicode code points in the input string.",
+                                    "input": {
+                                        "type": "string"
+                                    },
+                                    "output": {
+                                        "type": "integer",
+                                        "minimum": 0
+                                    }
+                                }
+                            },
+                            "bindings": {
+                                "repeatText": {
+                                    "operation": "repeat",
+                                    "source": "text",
+                                    "data": "echo"
+                                },
+                                "countText": {
+                                    "operation": "count",
+                                    "source": "text",
+                                    "data": "length"
+                                }
+                            }
+                        },
+                        "report": {
+                            "exhaustive": true,
+                            "added": [
+                                {
+                                    "binding": "repeatText",
+                                    "operation": "repeat"
+                                },
+                                {
+                                    "binding": "countText",
+                                    "operation": "count"
+                                }
+                            ]
+                        }
+                    }
+                },
+                "partialTextTools": {
+                    "description": "The same source and request, from a puller that adds only echo and cannot confirm the kind's full target list. The non-exhaustive report and the implementation-unsupported omission each mean the result is not a complete pull. The omission's details describe the target; they are not an address.",
+                    "input": {
+                        "interface": {
+                            "openbindings": "0.2.0",
+                            "name": "Text tools",
+                            "operations": {},
+                            "sources": {
+                                "text": {
+                                    "kind": "example.text@1"
+                                }
+                            }
+                        },
+                        "source": "text"
+                    },
+                    "output": {
+                        "additions": {
+                            "operations": {
+                                "repeat": {
+                                    "description": "Return the input string.",
+                                    "input": {
+                                        "type": "string"
+                                    },
+                                    "output": {
+                                        "type": "string"
+                                    }
+                                }
+                            },
+                            "bindings": {
+                                "repeatText": {
+                                    "operation": "repeat",
+                                    "source": "text",
+                                    "data": "echo"
+                                }
+                            }
+                        },
+                        "report": {
+                            "exhaustive": false,
+                            "limitation": {
+                                "code": "example.inventory-unconfirmed",
+                                "message": "This puller cannot confirm the kind's full target list, so further targets may exist."
+                            },
+                            "added": [
+                                {
+                                    "binding": "repeatText",
+                                    "operation": "repeat"
+                                }
+                            ],
+                            "omitted": [
+                                {
+                                    "status": "implementation-unsupported",
+                                    "reasonCode": "example.length-unavailable",
+                                    "message": "This puller does not generate the length target.",
+                                    "details": {
+                                        "target": "length"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                },
+                "existingTextTools": {
+                    "description": "The same source pulled into a document that already binds echo as repeatText and also has shoutText, whose data names a target the kind does not offer. repeatText is current, shoutText is unmatched, and the pull adds only length. Added keys are example choices.",
+                    "input": {
+                        "interface": {
+                            "openbindings": "0.2.0",
+                            "name": "Text tools",
+                            "operations": {
+                                "repeat": {
+                                    "description": "Return the input string.",
+                                    "input": {
+                                        "type": "string"
+                                    },
+                                    "output": {
+                                        "type": "string"
+                                    }
+                                },
+                                "shout": {
+                                    "description": "Return the input string in upper case.",
+                                    "input": {
+                                        "type": "string"
+                                    },
+                                    "output": {
+                                        "type": "string"
+                                    }
+                                }
+                            },
+                            "sources": {
+                                "text": {
+                                    "kind": "example.text@1"
+                                }
+                            },
+                            "bindings": {
+                                "repeatText": {
+                                    "operation": "repeat",
+                                    "source": "text",
+                                    "data": "echo"
+                                },
+                                "shoutText": {
+                                    "operation": "shout",
+                                    "source": "text",
+                                    "data": "shout"
+                                }
+                            }
+                        },
+                        "source": "text"
+                    },
+                    "output": {
+                        "additions": {
+                            "operations": {
+                                "count": {
+                                    "description": "Count Unicode code points in the input string.",
+                                    "input": {
+                                        "type": "string"
+                                    },
+                                    "output": {
+                                        "type": "integer",
+                                        "minimum": 0
+                                    }
+                                }
+                            },
+                            "bindings": {
+                                "countText": {
+                                    "operation": "count",
+                                    "source": "text",
+                                    "data": "length"
+                                }
+                            }
+                        },
+                        "report": {
+                            "exhaustive": true,
+                            "added": [
+                                {
+                                    "binding": "countText",
+                                    "operation": "count"
+                                }
+                            ],
+                            "existing": [
+                                {
+                                    "binding": "repeatText",
+                                    "status": "current"
+                                },
+                                {
+                                    "binding": "shoutText",
+                                    "status": "unmatched",
+                                    "reasonCode": "example.unknown-target",
+                                    "message": "The kind offers no shout target."
+                                }
+                            ]
+                        }
+                    }
+                },
+                "staleTextTools": {
+                    "description": "The same source pulled into a document that binds both targets but declares no output schema for repeat. The puller would write repeat with its output schema, so repeatText is stale with a proposal carrying only the output and the kind's judgment that declaring it breaks no caller. Nothing is added.",
+                    "input": {
+                        "interface": {
+                            "openbindings": "0.2.0",
+                            "name": "Text tools",
+                            "operations": {
+                                "repeat": {
+                                    "description": "Return the input string.",
+                                    "input": {
+                                        "type": "string"
+                                    }
+                                },
+                                "count": {
+                                    "description": "Count Unicode code points in the input string.",
+                                    "input": {
+                                        "type": "string"
+                                    },
+                                    "output": {
+                                        "type": "integer",
+                                        "minimum": 0
+                                    }
+                                }
+                            },
+                            "sources": {
+                                "text": {
+                                    "kind": "example.text@1"
+                                }
+                            },
+                            "bindings": {
+                                "repeatText": {
+                                    "operation": "repeat",
+                                    "source": "text",
+                                    "data": "echo"
+                                },
+                                "countText": {
+                                    "operation": "count",
+                                    "source": "text",
+                                    "data": "length"
+                                }
+                            }
+                        },
+                        "source": "text"
+                    },
+                    "output": {
+                        "additions": {},
+                        "report": {
+                            "exhaustive": true,
+                            "added": [],
+                            "existing": [
+                                {
+                                    "binding": "repeatText",
+                                    "status": "stale",
+                                    "change": "non-breaking",
+                                    "message": "The operation declares no output schema; the kind would declare a string.",
+                                    "proposal": {
+                                        "output": {
+                                            "type": "string"
+                                        }
+                                    }
+                                },
+                                {
+                                    "binding": "countText",
+                                    "status": "current"
+                                }
+                            ]
+                        }
+                    }
+                },
+                "reusedTextTools": {
+                    "description": "A second source of the same kind pulled into a document whose repeat is already realized through another source. The offered repeat has the same input and output as the existing operation, so the pull binds the new source to it and says reused, adding no second operation; count is new and is added with its operation. Added keys are example choices.",
+                    "input": {
+                        "interface": {
+                            "openbindings": "0.2.0",
+                            "name": "Text tools",
+                            "operations": {
+                                "repeat": {
+                                    "description": "Return the input string.",
+                                    "input": {
+                                        "type": "string"
+                                    },
+                                    "output": {
+                                        "type": "string"
+                                    }
+                                }
+                            },
+                            "sources": {
+                                "legacy": {
+                                    "kind": "example.text@1"
+                                },
+                                "text": {
+                                    "kind": "example.text@1"
+                                }
+                            },
+                            "bindings": {
+                                "repeatLegacy": {
+                                    "operation": "repeat",
+                                    "source": "legacy",
+                                    "data": "echo"
+                                }
+                            }
+                        },
+                        "source": "text"
+                    },
+                    "output": {
+                        "additions": {
+                            "operations": {
+                                "count": {
+                                    "description": "Count Unicode code points in the input string.",
+                                    "input": {
+                                        "type": "string"
+                                    },
+                                    "output": {
+                                        "type": "integer",
+                                        "minimum": 0
+                                    }
+                                }
+                            },
+                            "bindings": {
+                                "repeatText": {
+                                    "operation": "repeat",
+                                    "source": "text",
+                                    "data": "echo"
+                                },
+                                "countText": {
+                                    "operation": "count",
+                                    "source": "text",
+                                    "data": "length"
+                                }
+                            }
+                        },
+                        "report": {
+                            "exhaustive": true,
+                            "added": [
+                                {
+                                    "binding": "repeatText",
+                                    "operation": "repeat",
+                                    "reused": true
+                                },
+                                {
+                                    "binding": "countText",
+                                    "operation": "count"
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

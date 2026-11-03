@@ -1,0 +1,23 @@
+[package]
+name = "openbindings-source-pull"
+description = "Exact source-pull additions, reports and checked callers for OpenBindings"
+readme = "README.md"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+openbindings = { version = "=0.2.0-alpha.1", path = "../openbindings" }
+openbindings-context = { version = "=0.2.0-alpha.1", path = "../openbindings-context" }
+openbindings-internal-json = { version = "=0.2.0-alpha.1", path = "../openbindings-internal-json" }
+openbindings-internal-cancellation = { version = "=0.2.0-alpha.1", path = "../openbindings-internal-cancellation" }
+
+[dev-dependencies]
+openbindings-schema-comparison = { version = "=0.2.0-alpha.1", path = "../openbindings-schema-comparison" }
+serde_json.workspace = true

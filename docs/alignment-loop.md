@@ -34,16 +34,20 @@ dependency.
 
 ## Implementation sequence
 
+The [current saved checkpoint](alignment-checkpoint.md) records exact completed
+slices, unfinished code, remaining gates and where to resume. It supersedes the
+older incremental statuses below.
+
 | Stage | Status and next gate |
 | --- | --- |
-| Inputs, adjudication and design | Complete; independent reviews pass, native baselines frozen |
-| Document/schema foundation | Admission slice passes the 505 current core cases; continue immutable documents, concrete proofs, owned domain views, schema environment and evaluator integration |
-| Schema identity | Implement profile normalization/identity with contextual resources and exact values |
-| Context and kind description | Implement shared challenges and separate descriptor/check provider traits |
-| Invocation | Replace old carriers with document/key requests; qualify selection, preflight, value gating and lifecycle |
-| Source pulling | Replace inspection/synthesis with additions/report, identity reuse and kind-specific projection hooks |
-| Consumers and hosts | Qualify Rust, Wasm, TypeScript, package archives, documentation and full examples |
-| Final review | Close semantic/organizational gaps and all required CI/performance gates against the recorded candidate |
+| Inputs, adjudication and design | Pinned and reviewed; preserve current authorities |
+| Document/schema foundation | Canonical Rust/TypeScript model and major evaluator semantics implemented; ordinary compiler allocation gate remains open |
+| Schema identity | Reviewed and pushed at 42cd6f0; bounded identity only, no directional claim |
+| Context and kind description | Reviewed and pushed; current exact carriers and separate query/check providers |
+| Invocation | Current interfaces implemented; remaining consumers and final integration checks remain |
+| Source pulling | Carrier foundation checkpointed; document relationships, clients and consumers remain |
+| Consumers and hosts | Finish remaining migration, full workspace/host/CI checks and matched performance |
+| Final review | Audit the complete specification-to-code map and all required gates |
 
 ## Decisions and unattended work
 
@@ -56,92 +60,9 @@ The remaining work is implementation and qualification, not permission to change
 APIs. Keep the canonical specification terminology and conceptual organization visible
 in the code even where Rust needs additional internal mechanisms.
 
-## Ownership checkpoint
+## Evidence
 
-The concrete document proof, conformance module, exact object access, and immutable
-Rust/TypeScript edits pass bounded independent review. Core/schema/JSON/bridge tests:
-271 passed, zero failed, one preexisting ignored. All 505 pinned core cases pass.
-Workspace lint passes with warnings denied. TypeScript type checks and Rust prose
-examples pass. The unchanged Wasm memory bounds pass after reference registration
-was split into declarations followed by queries.
-
-## Current evaluator and contextual-schema work
-
-The reviewed 1546 value cases and 20 negative admission cases are now repository-local,
-with a checked 1566-ID partition and nine input-mutation controls. Capability refusal
-no longer substitutes for a required semantic answer. The auxiliary 2348 cases preserve
-all original inputs: 194 are current OBI-12 admission negatives, and one historical
-Unicode-capability expectation now requires its specified satisfying verdict. The
-independent completion oracle checks 1552 complete values and 182 completion groups.
-
-Unicode property matching and safe terminal positive lookahead have passed independent
-correctness and allocation review. Exact contained identities and original-inventory
-fragment lookup pass independent review after corrections for supplied base spelling
-and nested normalized-ID anchor collisions. The strict evaluator suite retains 10 open
-external dialect/vocabulary cases. Eight additional external-to-contained reference
-cases require semantic undefinedness but currently refuse preparation. Neither group
-is a passing semantic gate.
-
-Owned Rust Edit inputs and contextual Schema views are being qualified. Schema views
-include named schemas and operation slots and survive document/operation disposal.
-The TypeScript Schema facade mirrors that ownership. Typed draft models, parallel
-views, the old evaluator seam, and obsolete companion interfaces remain scheduled
-for replacement. Full workspace/host and final performance gates remain open.
-No user decision is pending.
-
-## Original-schema environment checkpoint
-
-Core now separates `schema::inventory`, `schema::resources`,
-`schema::references`, `schema::evaluation`, and `control`. `ExternalSchemas`
-replaces the old resource-set names without aliases. `SchemaOrigin` identifies an
-original source URI plus exact pointer; TypeScript uses `sourceUri`. Resource bases
-and environment-scoped identities remain separate from those coordinates.
-
-The owned `SchemaEnvironment` exposes original nodes, checked subschemas, effective
-dialects, optional resource roots, general URI resolution, and dynamic-anchor lookup.
-A document resource has no schema root. Unsupported external dialect roots remain
-observable; inventory-dependent operations refuse locally instead of inventing
-2020-12 positions beneath them. Reference defects, unavailable resources, unsupported
-capabilities, caller misuse, limits and cancellation have distinct structured causes.
-
-Independent implementation review passed after fixing two allocation findings.
-`PreparationLimits` bounds inventory nodes and conservative expanded-identity spelling
-(default 100,000 nodes and 8 MiB). Identity lengths are checked before expanded URI
-indexes are built, including registration of external schemas. Registration stops
-consuming its iterator at the first over-budget input. The spelling budget is not an
-RSS promise; existing host memory gates remain unchanged. Failed/cancelled attempts
-and tighter limits on a warm cache cannot bypass those bounds or poison a retry.
-
-Current validation: 505/505 core corpus cases, 210 native core/internal tests and
-examples (one pre-existing ignored test), 16 focused host jobs including memory,
-24 focused evaluator tests, TypeScript type/build checks, formatting and workspace
-Clippy. The strict evaluator replay still has 10 required dialect/vocabulary gaps
-out of 1,546 cases; the 8 contained-reference evaluation gaps also remain open.
-The obsolete test expecting an anonymous document-resource dynamic anchor to capture
-references is now an OBI-14 admission-negative witness. This retires its invalid
-assumption without weakening the current specification.
-
-The generic evaluator replacement is described below. Canonical owned domain views,
-companion interfaces, full hosts, MSRV/Wasm, matched performance comparisons and final
-qualification remain unfinished.
-
-## Generic evaluator migration and stricter completion judgment
-
-The generic core/default/Wasm/TypeScript seam is implemented and independently reviewed;
-consumer migration is ongoing. `SchemaEvaluator` has an associated `SchemaValidator`, and
-`PreparedSchema<V>` inherits ownership/thread capabilities from V. Preparation failures have
-structured resolution causes and are never fabricated instance no-verdicts. The TypeScript
-preparation union returns ready `schema` or refused `failure`; evaluation uses `evaluate`.
-
-The earlier 505/505 full-core result allowed capability refusals for required undefined and
-dialect-sensitive results. It is capability-profile evidence only. The tightened completion
-judge requires actual semantic answers, including previously optional declines. An unavailable
-resource is accepted only for an explicit external-content requirement. All 48 judge controls
-pass. Current results: admission/resolution 423/423; strict full core 489/505; required evaluator
-values 1536/1546; Node targets 166/168 (both strict evaluator replays remain failing). Additional
-contained-reference and auxiliary obligations remain open. No full alignment claim is made.
-
-Rust 1.88 now executes 29 core/generic and two default-boundary witnesses. Core/default/kit/Wasm
-all-target clippy, Wasm/TS builds and TypeScript types pass. Canonical domain views, the concrete
-generic operation driver, companion replacement, remaining consumers, full hosts/MSRV/Wasm and
-matched performance remain required. The current edits are not yet a pushed checkpoint.
+Historical incremental evidence is retained in the coordinator receipts; it is not
+current completion status. Use [migration status](migration-0.2.md), the
+[current checkpoint](alignment-checkpoint.md), and package-specific guides for
+implemented claims. The final all-workspace/host/performance audit is still open.
