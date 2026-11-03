@@ -42,15 +42,18 @@ Comparison failure and unrepresentable removal-only drift remain operational
 inability. Core owns preference/idempotent on bindings, despite loose wording in
 the source-puller prose; operation descriptions and binding author fields survive.
 
-Independent implementation review is in progress. Legacy inspection/synthesis
+[Independent implementation review](alignment-checkpoint/source-pull-review.md)
+passes at the recorded source hashes, with 500 additional closure cases, 48
+allocation lanes and cancellation/ownership controls. Its annotation-drift finding
+in the illustrative provider is resolved. Legacy inspection/synthesis
 crates and external consumers have not yet been retired. Core prospective
 edit/validation internals retain core limits and are explicitly outside the pull
 relationship ledger; this is not a whole-call allocation or interruptibility claim.
 
 ## Resume implementation
 
-1. Resolve independent source-pull implementation review and finalize current/MSRV,
-   Wasm, docs and cancellation/resource evidence. Finish external packaged/host
+1. Source-pull implementation review and current/MSRV, Wasm, docs and
+   cancellation/resource gates pass. Finish external packaged/host
    consumers before retiring legacy inspection/synthesis crates, support records,
    obsolete verification tools and performance adapters.
 2. Close ordinary compiler allocation accounting. The independent construction

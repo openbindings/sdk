@@ -45,7 +45,7 @@ older incremental statuses below.
 | Schema identity | Reviewed and pushed at 42cd6f0; bounded identity only, no directional claim |
 | Context and kind description | Reviewed and pushed; current exact carriers and separate query/check providers |
 | Invocation | Current interfaces implemented; remaining consumers and final integration checks remain |
-| Source pulling | Carriers, requests, relationships, prospective conformance and lazy clients implemented; independent review and legacy consumer retirement remain |
+| Source pulling | Carriers, requests, relationships, prospective conformance and lazy clients reviewed; external consumer migration and legacy retirement remain |
 | Consumers and hosts | Finish remaining migration, full workspace/host/CI checks and matched performance |
 | Final review | Audit the complete specification-to-code map and all required gates |
 
