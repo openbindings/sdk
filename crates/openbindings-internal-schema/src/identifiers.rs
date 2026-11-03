@@ -184,18 +184,21 @@ impl<'a> Walk<'a> {
     }
     /// Room for `more` bytes of this walk's copy. When the block lacks it
     /// and holds text earlier walks kept, the copy so far moves to a new
-    /// block and the earlier text stays where it is. The new block is as
-    /// large as all the copied text before it, so the blocks double in
-    /// total without kept text moving, but never larger than the text the
-    /// identifiers still to come can copy. A copy alone in its block grows
-    /// as a string does.
+    /// block and the earlier text stays where it is. Routine block growth
+    /// doubles up to a 1 MiB target, bounded by the remaining identifier
+    /// text budget. Smaller blocks avoid requiring large contiguous heap
+    /// holes without moving kept text. A single identifier may exceed the
+    /// target; a copy alone in its block grows as a string does.
     fn reserve(&mut self, more: usize) {
         if self.base == 0 || self.copy.capacity() - self.copy.len() >= more {
             return;
         }
         debug_assert!(self.retired.is_none(), "a moved copy is alone in its block");
         let written = &self.copy[self.base..];
-        let total = (self.from + self.base).min(self.budget);
+        const COPIED_BLOCK_TARGET: usize = 1024 * 1024;
+        let total = (self.from + self.base)
+            .min(self.budget)
+            .min(COPIED_BLOCK_TARGET);
         let mut block = String::with_capacity((written.len() + more).max(total));
         block.push_str(written);
         self.copy.truncate(self.base);
@@ -1476,5 +1479,49 @@ mod tests {
             duplicates.iter().map(|&(_, h)| h).collect::<Vec<_>>(),
             [base.unwrap(), again]
         );
+    }
+}
+
+#[cfg(test)]
+mod bounded_block_tests {
+    use super::*;
+    #[test]
+    fn capped_blocks_preserve_every_original_identifier_and_duplicate_handle() {
+        let texts: Vec<String> = (0..50_000)
+            .map(|i| format!("s://{i:x}/q/a/../b/{}/x?z#", "c".repeat(100 + i % 31)))
+            .collect();
+        let mut ids = Identifiers::new(texts.iter().map(String::len).sum());
+        let handles: Vec<u32> = texts
+            .iter()
+            .map(|t| ids.compared(None, t).unwrap())
+            .collect();
+        assert!(ids.retired.len() > 5);
+        for (text, h) in texts.iter().zip(handles) {
+            assert_eq!(Some(ids.spelled(h)), crate::uri::compared_id(None, text));
+        }
+        assert!(ids.retired.iter().all(|(_, s)| s.len() <= 1024 * 1024));
+        assert!(ids.duplicates().is_empty());
+        for i in (0..50_000).step_by(1000) {
+            ids.compared(None, &texts[i]).unwrap();
+        }
+        let d = ids.duplicates();
+        assert_eq!(d.len(), 100);
+        assert!(d.chunk_by(|a, b| a.0 == b.0).all(|g| g.len() == 2));
+    }
+    #[test]
+    fn a_single_large_identifier_can_exceed_chunk_target_without_losing_text() {
+        let first = String::from("s://first/q/a/../b/short/x");
+        let big = format!("s://big/q/a/../b/{}/x", "long/".repeat(300_000));
+        let tail = String::from("s://tail/q/a/../b/last/x");
+        let texts = [first, big, tail];
+        let mut ids = Identifiers::new(texts.iter().map(String::len).sum());
+        let h: Vec<_> = texts
+            .iter()
+            .map(|t| ids.compared(None, t).unwrap())
+            .collect();
+        for (t, h) in texts.iter().zip(h) {
+            assert_eq!(Some(ids.spelled(h)), crate::uri::compared_id(None, t));
+        }
+        assert!(ids.duplicates().is_empty());
     }
 }

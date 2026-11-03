@@ -29,7 +29,13 @@ export class DocumentEditor {
       const checked = parsed.value.validate();
       if (checked.status !== "conformant") return checked;
       proof = checked.document;
-      const operations = proof.operations;
+      const entries = proof.operations();
+      let operations;
+      try {
+        operations = entries.map((entry) => ({ key: entry.key }));
+      } finally {
+        for (const entry of entries) entry.dispose();
+      }
       operation = proof.resolveOperation("find");
       if (!operation) return { status: "operation-missing" };
       contract = operation.input();

@@ -364,7 +364,7 @@ fn draft_references_beneath_unpaired_names_are_exact() {
         r##"{"openbindings":"0.2.0","operations":{"op":{"input":{"properties":{"\ud800":{"properties":{"q":{"$ref":"#/missing"}}}}}}}}"##,
     )
     .unwrap();
-    let report = draft.references().unwrap();
+    let report = draft.references();
     let reference = &report.references[0];
     let at = unpaired("/operations/op/input/properties/\0/properties/q/$ref");
     assert_eq!(reference.location, SchemaOrigin::new(None, at.clone()));

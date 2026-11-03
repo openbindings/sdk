@@ -32,7 +32,6 @@ test("author every normative object; absence/null and exact opaque values surviv
   const large = exact("9007199254740993");
   const document = constructDocument(sdk, {
     name: "example",
-    description: undefined,
     operations: {
       run: {
         aliases: ["execute"],
@@ -55,7 +54,7 @@ test("author every normative object; absence/null and exact opaque values surviv
       dep: { operation: "run", kinds: ["https://kind.example/raw"] },
     },
     schemas: { extra: true },
-    additionalFields: { "x-extra": { large } },
+    "x-extra": { large },
   });
   large.dispose();
   const validation = document.validate();
@@ -79,24 +78,13 @@ test("author every normative object; absence/null and exact opaque values surviv
   document.dispose();
   const edited = sdk.Document.create();
   assert.throws(
-    () => edited.setOperation("run", { additionalFields: { input: {} } }),
+    () => edited.set("/operations/run", { "x-missing": undefined }),
     (e) =>
-      e.code === "field-collision" &&
-      e.partPointer === "/operations/run/additionalFields/input",
+      e.code === "unsupported-value" && e.inputPointer === "/0/value/x-missing",
   );
-  assert.throws(
-    () =>
-      edited.setOperation("run", {
-        additionalFields: { "x-missing": undefined },
-      }),
-    (e) =>
-      e.code === "unsupported-value" &&
-      e.partPointer === "/operations/run/additionalFields/x-missing",
-  );
-  assert.throws(
-    () => edited.setOperation("run", { description: null }),
-    sdk.EditError,
-  );
+  const malformed = edited.set("/operations/run", { description: null });
+  assert.equal(malformed.validate().status, "report");
+  malformed.dispose();
   edited.dispose();
 });
 test("ordinary conversion rejects lossy/side-effecting values and exact handles retain ownership", () => {
@@ -145,16 +133,15 @@ test("retained contracts and metadata support repeated native-feeling caller use
   const before = testing.liveStorageOwners();
   for (let i = 0; i < 1000; i++) {
     const document = parsed(text);
-    assert.equal(document.operations, document.operations);
-    assert.ok(Object.isFrozen(document.operations));
-    const selection = document.resolveOperation("execute");
-    assert.equal(selection.status, "found");
-    const op = selection.operation;
-    assert.equal(op.key, "run");
-    assert.deepEqual(op.bindings, []);
-    op.dispose();
     const checked = document.validate();
     assert.equal(checked.status, "conformant");
+    const entries = checked.document.operations();
+    assert.ok(Object.isFrozen(entries));
+    for (const entry of entries) entry.dispose();
+    const op = checked.document.resolveOperation("execute");
+    assert.equal(op.key, "run");
+    assert.deepEqual(op.bindings(), []);
+    op.dispose();
     const run = checked.document.resolveOperation("run");
     const contract = run.input();
     const input = ready(contract.prepare());
@@ -507,37 +494,30 @@ test("schema resources admit every entry in one pass", () => {
   }
 });
 
-// a view outlives its original owner, and a conformant one keeps its contracts.
-test("operation views retain independent owners", () => {
-  const before = testing.liveStorageOwners();
-  const document = parsed(text);
-  const selection = document.resolveOperation("execute");
-  assert.equal(selection.status, "found");
-  const plain = selection.operation.retain();
-  assert.ok(plain instanceof sdk.OperationView);
-  assert.notEqual(plain, selection.operation);
-  selection.operation.dispose();
-  assert.equal(plain.key, "run");
-  const schema = plain.input();
-  assert.equal(schema.text, '{"type":"integer"}');
-  schema.dispose();
+test("canonical operations retain their proof and contracts independently", () => {
+  const before = testing.liveStorageOwners(),
+    document = parsed(text);
   const checked = document.validate();
   assert.equal(checked.status, "conformant");
-  const original = checked.document.resolveOperation("execute");
-  const retained = original.retain();
-  assert.ok(retained instanceof sdk.ConformantOperationView);
-  // A plain view's handle cannot be retained as a conformant one.
+  const original = checked.document.resolveOperation("execute"),
+    retained = original.retain();
+  assert.ok(retained instanceof sdk.Operation);
+  assert.notEqual(retained, original);
+  const raw = document.value();
   assert.throws(
-    () => sdk.ConformantOperationView.prototype.retain.call(plain),
-    (e) => e instanceof sdk.SdkError && e.code === "document-conformance",
+    () => sdk.Operation.prototype.retain.call(raw),
+    (e) => e.code === "invalid-domain-owner",
   );
+  raw.dispose();
   original.dispose();
-  plain.dispose();
   checked.document.dispose();
   document.dispose();
   assert.equal(retained.key, "run");
   const contract = retained.input();
   retained.dispose();
+  const json = contract.json();
+  assert.equal(json.text, '{"type":"integer"}');
+  json.dispose();
   const prepared = ready(contract.prepare());
   contract.dispose();
   assert.equal(prepared.evaluate(7).status, "satisfies");

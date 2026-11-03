@@ -9,9 +9,6 @@ mod version;
 pub use json::*;
 pub use version::*;
 
-mod authoring;
-pub use authoring::*;
-
 pub mod conformance;
 pub mod document;
 pub use conformance::*;

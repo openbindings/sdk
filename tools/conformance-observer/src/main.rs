@@ -39,48 +39,33 @@ fn observe(request: &Value) -> String {
         },
         "resolve-operation" => {
             let doc = Document::parse(&data).unwrap();
-            match doc
-                .resolve_operation(given["name"].as_str().unwrap())
+            let proof = doc
+                .validate()
                 .unwrap()
-            {
-                OperationSelection::Found(op) => {
+                .conformant()
+                .expect("conformant fixture");
+            match proof.resolve_operation(given["name"].as_str().unwrap()) {
+                Some(op) => {
                     out["outcome"] = json!("resolved");
-                    out["bindingKeys"] = json!(op.bindings().unwrap());
+                    out["bindingKeys"] =
+                        json!(op.bindings().iter().map(Binding::key).collect::<Vec<_>>());
                     out["operationKey"] = json!(op.key());
                 }
-                OperationSelection::Missing | OperationSelection::Ambiguous { .. } => {
-                    out["outcome"] = json!("not-found")
-                }
+                None => out["outcome"] = json!("not-found"),
             }
         }
         "check-dependency-kind" => {
             let doc = Document::parse(&data).unwrap();
-            let binding = given["binding"].as_str().unwrap();
-            let source = doc
-                .value()
-                .get("bindings")
+            let proof = doc
+                .validate()
                 .unwrap()
-                .get(binding)
-                .unwrap()
-                .get("source")
-                .unwrap()
-                .as_str()
+                .conformant()
+                .expect("conformant fixture");
+            let binding = proof.binding(given["binding"].as_str().unwrap()).unwrap();
+            let dependency = proof
+                .dependency(given["dependency"].as_str().unwrap())
                 .unwrap();
-            let kind = doc
-                .value()
-                .get("sources")
-                .unwrap()
-                .get(source)
-                .unwrap()
-                .get("kind")
-                .unwrap()
-                .as_str()
-                .unwrap();
-            out["outcome"] = json!(if doc
-                .dependency_accepts_kind(given["dependency"].as_str().unwrap(), kind)
-                .unwrap()
-                .unwrap()
-            {
+            out["outcome"] = json!(if dependency.accepts_kind(binding.source().kind()) {
                 "meets"
             } else {
                 "does-not-meet"
@@ -88,17 +73,14 @@ fn observe(request: &Value) -> String {
         }
         "validate-operation-values" | "check-examples" => {
             let doc = Document::parse(&data).unwrap();
-            let resources = ExternalSchemas::new(
-                given["resources"]
-                    .as_array()
-                    .into_iter()
-                    .flatten()
-                    .map(|r| ExternalSchema {
+            let resources =
+                ExternalSchemas::new(given["resources"].as_array().into_iter().flatten().map(
+                    |r| ExternalSchema {
                         uri: r["uri"].as_str().unwrap().into(),
                         document: JsonValue::parse(r["documentJson"].as_str().unwrap()).unwrap(),
-                    }),
-            )
-            .unwrap();
+                    },
+                ))
+                .unwrap();
             let proof = doc
                 .validate()
                 .unwrap()
@@ -126,26 +108,24 @@ fn observe(request: &Value) -> String {
                     &[("values", format!("[{}]", values.join(",")))],
                 );
             } else {
-                let OperationSelection::Found(op) = doc.resolve_operation(operation).unwrap()
-                else {
-                    panic!("fixture operation must resolve")
-                };
+                let op = proof
+                    .resolve_operation(operation)
+                    .expect("fixture operation must resolve");
                 let mut results = Vec::new();
-                if let Some(examples) = op.value().get("examples").and_then(|v| v.members()) {
+                if let Some(examples) = op.examples() {
                     for example in examples {
-                        for side in ["input", "output"] {
-                            if let Some(value) = example.value.get(side) {
+                        for (side, value) in
+                            [("input", example.input()), ("output", example.output())]
+                        {
+                            if let Some(value) = value {
                                 let result = observe_value(
                                     &prepare(&proof, operation, side, &evaluator, &resources),
-                                    &value.to_owned(),
+                                    &value,
                                 );
                                 results.push(extended(
                                     result,
                                     &[
-                                        (
-                                            "example",
-                                            json!(example.name.as_str().unwrap()).to_string(),
-                                        ),
+                                        ("example", json!(example.key()).to_string()),
                                         ("side", json!(side).to_string()),
                                     ],
                                 ));
@@ -224,7 +204,12 @@ fn main() {
 enum Preparation {
     OperationMissing,
     NoContract,
-    Prepared(Result<PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator>, PreparationFailure>),
+    Prepared(
+        Result<
+            PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator>,
+            PreparationFailure,
+        >,
+    ),
 }
 fn prepare(
     proof: &ConformantDocument,
@@ -242,7 +227,11 @@ fn prepare(
         operation.output()
     };
     match contract {
-        Some(contract) => Preparation::Prepared(contract.prepare(evaluator, resources, &openbindings::PreparationLimits::default())),
+        Some(contract) => Preparation::Prepared(contract.prepare(
+            evaluator,
+            resources,
+            &openbindings::PreparationLimits::default(),
+        )),
         None => Preparation::NoContract,
     }
 }

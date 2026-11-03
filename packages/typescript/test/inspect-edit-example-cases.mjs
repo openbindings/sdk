@@ -30,8 +30,8 @@ export function inspectEditExampleCases(sdk, example) {
     '"source":"missing"',
   );
   assert.equal(
-    example.inspectBindings(missingSource, "read").rows[0].source,
-    null,
+    example.inspectBindings(missingSource, "read").report.conclusion,
+    "non-conformant",
   );
   const edited = edit();
   assert.equal(edited.status, "edited");
@@ -59,7 +59,14 @@ export function inspectEditExampleCases(sdk, example) {
         }
       }
       assert.equal(new TextDecoder().decode(before.value.toBytes()), text);
-      assert.deepEqual(after.value.operations[0].tags, ["read", "reviewed"]);
+      const proof = after.value.validate().document;
+      const operation = proof.operation("read");
+      try {
+        assert.deepEqual(operation.tags, ["read", "reviewed"]);
+      } finally {
+        operation.dispose();
+        proof.dispose();
+      }
     } finally {
       revised.dispose();
       original.dispose();
@@ -83,7 +90,7 @@ export function inspectEditExampleCases(sdk, example) {
       "read",
       "x",
     ).status,
-    "edit-error",
+    "report",
   );
   const raw = sdk.parseJson(
     String.raw`{"a":900719925474099312345,"a":-0,"\ud800":true}`,

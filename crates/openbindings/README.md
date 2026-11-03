@@ -27,18 +27,20 @@ version is a separate refusal.
 To author, create an OBI with `Document::new()` or parse exact JSON with
 `Document::parse`, which retains a snapshot for inspection, including invalid
 editor drafts, and refuses text that is not JSON as an `InputError`;
-`Document::validate` then returns the same validation. Edits borrow the original and return a new immutable snapshot: use `set_description`, whole-part setters
-such as `set_operation(key, &operation)`, or RFC 6901 `set` and `remove`.
+`Document::validate` then returns the same validation. Edits borrow the original and return a new immutable snapshot: use RFC 6901
+`set` and `remove` with exact JSON values. Set a complete namespace when absent;
+editing does not fabricate intermediate containers.
 `edit(&[Edit])` commits one atomic batch with one splice and one parse. Sibling
 insertions coalesce in batch order; untouched bytes remain exact. The byte budget
 is checked before allocating replacement bytes. Final parsing enforces the default
 JSON limits. Both successful and failed batches leave the original document unchanged. Retain the returned document to use an edit.
 
 A `ConformantDocument` has infallible reads and no mutable access. Use
-`document()` for plain fallible reads, or consume it with `into_inner()` to keep the underlying snapshot. Clones, views, validation reports and proofs retain their own revision;
+`document()` for exact draft reads, or consume it with `into_inner()` to keep the underlying snapshot. Clones, views, validation reports and proofs retain their own revision;
 editing another owner cannot change them. Positions refer to each revision's
 current bytes, available from `as_bytes()`. Duplicate-member input remains
-inspectable but is refused by typed reads, editing and conformance proof.
+inspectable but is refused by editing and conformance proof. Canonical domain entries are acquired
+only from a `ConformantDocument`.
 
 The [Rust first-use guide](https://github.com/openbindings/sdk/blob/main/docs/rust-first-use.md)
 shows value validation and an exact opaque-member edit.
@@ -50,25 +52,20 @@ normative schema checks are part of core. Operation value validation requires an
 explicit `SchemaEvaluator`, including for `true`, `false` and empty schemas.
 Select the optional `openbindings-json-schema-evaluator` or implement the trait.
 A conformant operation's `input()` and `output()` return its `Schema`s, or
-`None` when it declares none. `prepare(&evaluator)` borrows the evaluator and
-supplies no resources; `prepare_with(&evaluator, &resources)` adds an immutable
-`ExternalSchemas`. Core does not depend on the companion.
-The [evaluator integration guide](https://github.com/openbindings/sdk/blob/main/docs/schema-evaluators.md)
-explains the no-evaluator behavior and custom implementations.
+`None` when it declares none. Named schemas come from `ConformantDocument::schema`.
+`prepare(&evaluator, &external_schemas, &preparation_limits)` borrows explicit inputs
+and returns `Result<PreparedSchema<E::Validator>, PreparationFailure>`. Core does
+not depend on the evaluator companion. Original schema inventory and resolution
+are available through `SchemaEnvironment`; evaluator projections remain private.
 
-Prepare a value contract, retain the `PreparedSchema`, and handle satisfies, fails,
-undefined and no-verdict for each value. Preparation returns
-`Result<PreparedSchema, NoVerdict>`, so `?` propagates a refusal with its
-payload. Use `PreparedSchema::validate_json` for exact JSON text or bytes; only
-admission failure returns `Err`. Retain a `JsonValue` and use `validate` for
-repeated checks or custom admission limits. `validate` is the cheap check; call
-`explain` on the same value contract to learn why a value fails. Undefined means the value-contract
-rules leave whether the value satisfies its value contract undefined; no-verdict means
-the evaluator could not answer. Each preparation compiles independently; cloning a
-prepared value contract shares its compiled state. A `ExternalSchemas` indexes its resource
-identities once. For evaluators that request the core projection, a resolution
-space is assembled once per live document revision and set, and released when
-either is dropped.
+Retain a prepared schema and handle satisfies, fails, undefined and no-verdict for
+each value. Preparation failure judges no value. `evaluate_json` admits exact JSON
+text or bytes; only admission failure is `Err`. Retain a `JsonValue` and call
+`evaluate` for repeated checks or custom admission limits. `explain` requests
+diagnostics for the same verdict. Undefined establishes semantic dependence on a
+known undefined result; no-verdict means the implementation could not answer.
+Each preparation is independent. Ownership and thread-safety follow the concrete
+validator; the default evaluator shares compiled state when cloned.
 
 Core performs no resource acquisition, binding selection or invocation. Source
 and binding data remain opaque. Kind implementations interpret them outside

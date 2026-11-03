@@ -130,38 +130,34 @@ export async function apiQualityCases(sdk, http) {
     const document = parsed(
       '{"openbindings":"0.2.0","operations":{"run":{"aliases":["execute"],"input":{"type":"integer"}},"empty":{},"never":{"input":false},"object":{"input":{"const":{"n":9007199254740993}}},"remote":{"input":{"$ref":"https://schema.test/id"}}}}',
     );
-    check(document.operations === document.operations, "metadata cache");
+    const inspected = own(document.validate().document);
+    const operation = own(inspected.resolveOperation("execute"));
+    check(operation instanceof sdk.Operation, "canonical selected operation");
+    check(operation.aliases === operation.aliases, "frozen scalar list cache");
     throws(
       () => {
-        document.operations[0].key = "edit";
+        operation.key = "edit";
       },
       (e) => e instanceof TypeError,
       "runtime readonly",
     );
-    const selected = document.resolveOperation("execute");
-    check(selected.status === "found", "found selection");
-    const operation = own(selected.operation);
     check(
-      document.resolveOperation("missing").status === "missing",
+      inspected.resolveOperation("missing") === undefined,
       "missing selection",
     );
     const ambiguous = parsed(
       '{"openbindings":"0.2.0","operations":{"z":{"aliases":["x"]},"a":{"aliases":["x"]}}}',
     );
-    const ambiguity = ambiguous.resolveOperation("x");
     check(
-      ambiguity.status === "ambiguous" &&
-        ambiguity.candidates.join(",") === "a,z",
-      "lexical ambiguous keys",
+      ambiguous.validate().report.evidence["OBI-05"] === "violated",
+      "alias collision excludes proof",
     );
-    check(Object.isFrozen(ambiguity.candidates), "immutable candidates");
     const duplicate = parsed(
       '{"openbindings":"0.2.0","operations":{"a":{"aliases":["x","x"]}}}',
     );
-    const repeated = duplicate.resolveOperation("x");
     check(
-      repeated.status === "ambiguous" && repeated.candidates.join(",") === "a",
-      "same operation repetition unresolved",
+      duplicate.validate().report.evidence["OBI-05"] === "violated",
+      "same operation repetition excludes proof",
     );
     for (const text of [
       '{"openbindings":"0.2.0"}',
@@ -169,14 +165,17 @@ export async function apiQualityCases(sdk, http) {
       '{"openbindings":"0.2.0","operations":{"run":7}}',
     ]) {
       const invalid = parsed(text);
-      throws(
-        () => invalid.operations,
-        (e) =>
-          e instanceof sdk.SdkError &&
-          e.code === "interpretation" &&
-          e.location &&
-          Number.isInteger(e.location.byteOffset),
-        "located structure refusal",
+      const validation = invalid.validate();
+      check(
+        validation.status === "report" &&
+          validation.report.conclusion === "non-conformant",
+        "invalid structure excludes proof",
+      );
+      check(
+        validation.report.findings.some((finding) =>
+          Number.isInteger(finding.location?.byteOffset),
+        ),
+        "located conformance evidence",
       );
       const raw = own(invalid.value());
       check(raw.text === text, "raw invalid evidence preserved");
@@ -184,12 +183,13 @@ export async function apiQualityCases(sdk, http) {
     const aliases = parsed(
       '{"openbindings":"0.2.0","operations":{"run":{"aliases":7}}}',
     );
-    throws(
-      () => aliases.resolveOperation("run"),
-      (e) =>
-        e.code === "interpretation" &&
-        e.location?.pointer === "/operations/run/aliases",
-      "malformed alias primary lookup",
+    check(
+      aliases
+        .validate()
+        .report.findings.some(
+          (finding) => finding.location?.pointer === "/operations/run/aliases",
+        ),
+      "malformed alias original location",
     );
     const validated = document.validate();
     check(validated.status === "conformant", "document proof");
@@ -387,7 +387,7 @@ export async function apiQualityCases(sdk, http) {
     check(
       editFailure instanceof sdk.EditError &&
         editFailure.code === "depth-limit" &&
-        editFailure.partPointer === null,
+        editFailure.inputPointer === null,
       "real encoded edit limit",
     );
     check(

@@ -75,7 +75,7 @@ test("finalizing an editable document preserves separately acquired exact owners
   let rebuilt = sdk.Document.create();
   rebuilt = replaceDocument(
     rebuilt,
-    rebuilt.setOperation("run", { input: leaf }),
+    rebuilt.set("/operations/" + "run", { input: leaf }),
   );
   rebuilt.dispose();
   deliver(removedRecord);

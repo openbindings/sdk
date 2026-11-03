@@ -31,7 +31,17 @@ export function firstUse(
     const checked = parsed.value.validate();
     if (checked.status !== "conformant") return checked;
     proof = checked.document;
-    const operations = proof.operations;
+    const entries = proof.operations();
+    let operations;
+    try {
+      operations = entries.map((entry) => ({
+        key: entry.key,
+        aliases: entry.aliases,
+        description: entry.description,
+      }));
+    } finally {
+      for (const entry of entries) entry.dispose();
+    }
     selected = proof.resolveOperation(operation); // primary name or alias
     if (!selected) return { status: "operation-missing" };
     contract = selected.input();

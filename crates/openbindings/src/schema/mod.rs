@@ -45,10 +45,10 @@ impl Schema {
             value,
         }
     }
-    pub(crate) fn declared(operation: &ConformantOperationView, side: Side) -> Option<Self> {
+    pub(crate) fn declared(operation: &Operation, side: Side) -> Option<Self> {
         operation
             .field(side)
-            .map(|value| Self::contained(operation.proof(), value.to_owned()))
+            .map(|value| Self::contained(operation.document(), value.to_owned()))
     }
     /// Retain the original exact schema value. Absence is represented by the
     /// document slot's `None`, never by a fabricated true schema.

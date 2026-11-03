@@ -12,7 +12,7 @@ await sdk.initialize(
   ),
 );
 
-test("owned selection and preparation wrappers release untaken children on decode/take failure", () => {
+test("owned preparation wrappers release untaken children on decode/take failure", () => {
   const document = sdk.Document.parse(
     '{"openbindings":"0.2.0","operations":{"run":{"input":{"type":"integer"}}}}',
   ).value;
@@ -29,11 +29,6 @@ test("owned selection and preparation wrappers release untaken children on decod
     assert.equal(warm.status, "ready");
     warm.schema.dispose();
     for (const [prototype, invoke, take] of [
-      [
-        bridge.WasmOperationSelection.prototype,
-        () => document.resolveOperation("run"),
-        "takeOperation",
-      ],
       [
         bridge.WasmPreparation.prototype,
         () => contract.prepare(),
@@ -84,9 +79,11 @@ test("owned selection and preparation wrappers release untaken children on decod
         }
       }
     }
-    const selected = document.resolveOperation("run");
-    assert.equal(selected.status, "found");
-    selected.operation.dispose();
+    const proof = document.validate().document,
+      selected = proof.operation("run");
+    assert.equal(selected.key, "run");
+    selected.dispose();
+    proof.dispose();
     const prepared = contract.prepare();
     assert.equal(prepared.status, "ready");
     assert.equal(prepared.schema.evaluate(7).status, "satisfies");
@@ -133,4 +130,72 @@ test("ordinary admission maps only known engine limits and preserves unexpected 
     prepared.dispose();
     document.dispose();
   }
+});
+
+test("canonical collections release adopted and untaken owners on partial transfer failure", () => {
+  const text = JSON.stringify({
+    openbindings: "0.2.0",
+    operations: {
+      a: { examples: { a: {}, b: {}, c: {} } },
+      b: {},
+      c: {},
+    },
+    sources: { a: { kind: "k" }, b: { kind: "k" }, c: { kind: "k" } },
+    bindings: Object.fromEntries(
+      ["a", "b", "c"].map((key) => [key, { operation: "a", source: key }]),
+    ),
+    dependencies: Object.fromEntries(
+      ["a", "b", "c"].map((key) => [key, { operation: key }]),
+    ),
+  });
+  const warm = sdk.Document.parse(text).value,
+    warmProof = warm.validate().document;
+  warmProof.dispose();
+  warm.dispose();
+  for (const [type, method, onOperation] of [
+    [sdk.Operation, "operations", false],
+    [sdk.Source, "sources", false],
+    [sdk.Binding, "bindings", false],
+    [sdk.Dependency, "dependencies", false],
+    [sdk.Binding, "bindings", true],
+    [sdk.Example, "examples", true],
+  ])
+    for (const failAt of [1, 2, 3]) {
+      const baseline = testing.liveStorageOwners();
+      const draft = sdk.Document.parse(text).value,
+        proof = draft.validate().document;
+      const parent = onOperation ? proof.operation("a") : proof;
+      const original = type.fromRaw,
+        adopted = [],
+        rawOwners = [];
+      const thrown = new Error("injected collection adoption failure");
+      let attempts = 0;
+      type.fromRaw = (raw) => {
+        rawOwners.push(raw);
+        if (++attempts === failAt) throw thrown;
+        const owner = original(raw);
+        adopted.push(owner);
+        return owner;
+      };
+      try {
+        assert.throws(
+          () => parent[method](),
+          (error) => error === thrown,
+        );
+        assert.equal(attempts, failAt);
+        assert.equal(adopted.length, failAt - 1);
+        assert.ok(adopted.every((owner) => owner.disposed));
+        assert.ok(rawOwners.every((owner) => owner.__wbg_ptr === 0));
+      } finally {
+        type.fromRaw = original;
+        parent.dispose();
+        proof.dispose();
+        draft.dispose();
+      }
+      assert.equal(
+        testing.liveStorageOwners(),
+        baseline,
+        `${type.name}.${method}: no unadopted retained document`,
+      );
+    }
 });

@@ -46,7 +46,7 @@ const refusedEdit = (call, code, message) =>
       e instanceof sdk.EditError &&
       e.code === code &&
       e.message === message &&
-      e.partPointer === null,
+      e.inputPointer === null,
   );
 
 test("validateDocument admits 32 MiB and names the byte limit's setting one byte past it", () => {
@@ -157,7 +157,7 @@ test("edits on a document admitted with raised limits parse under them, and ever
     grown,
     grown.edit([{ op: "set", pointer: "/x-other", value: { n: 1 } }]),
   );
-  grown = replaceDocument(grown, grown.setDescription("d".repeat(512)));
+  grown = replaceDocument(grown, grown.set("/description", "d".repeat(512)));
   const validation = grown.validate();
   assert.equal(validation.status, "conformant");
   assert.deepEqual(validation.document.limits, grown.limits);
@@ -166,7 +166,7 @@ test("edits on a document admitted with raised limits parse under them, and ever
   grown = replaceDocument(grown, grown.remove("/x-fill"));
   grown = replaceDocument(
     grown,
-    grown.setDescription("e".repeat(DEFAULT_BYTES)),
+    grown.set("/description", "e".repeat(DEFAULT_BYTES)),
   );
   assert.ok(grown.toBytes().length > DEFAULT_BYTES);
   // A document parsed with the defaults refuses each of them, by every route,
@@ -180,12 +180,12 @@ test("edits on a document admitted with raised limits parse under them, and ever
     bytes,
   );
   refusedEdit(
-    () => plain.setOperation("o", { input: large }),
+    () => plain.set("/operations/" + "o", { input: large }),
     "byte-limit",
     bytes,
   );
   refusedEdit(
-    () => plain.setDescription("e".repeat(DEFAULT_BYTES)),
+    () => plain.set("/description", "e".repeat(DEFAULT_BYTES)),
     "byte-limit",
     bytes,
   );
@@ -212,7 +212,7 @@ test("edit limits apply to what the edit writes, as in Rust, not to the edit's o
   );
   shallow = replaceDocument(
     shallow,
-    shallow.setOperation("o", { input: { type: "string" } }),
+    shallow.set("/operations/" + "o", { input: { type: "string" } }),
   );
   const nesting = editRefusal("nesting", "max_depth", "maxDepth");
   refusedEdit(() => shallow.set("/x-b", [[[[1]]]]), "depth-limit", nesting);
@@ -220,7 +220,7 @@ test("edit limits apply to what the edit writes, as in Rust, not to the edit's o
   // bridge, the same way.
   refusedEdit(() => shallow.set("/x-b", [[[[[1]]]]]), "depth-limit", nesting);
   refusedEdit(
-    () => shallow.setOperation("p", { input: [[[[[1]]]]] }),
+    () => shallow.set("/operations/" + "p", { input: [[[[[1]]]]] }),
     "depth-limit",
     nesting,
   );
@@ -380,7 +380,7 @@ test("a document reports the limits it keeps", () => {
   };
   let created = sdk.Document.create();
   assert.deepEqual(created.limits, defaults);
-  created = replaceDocument(created, created.setName("kept"));
+  created = replaceDocument(created, created.set("/name", "kept"));
   assert.deepEqual(created.limits, defaults);
   created.dispose();
   const parsedDefault = parsed(sdk.Document.parse(empty));

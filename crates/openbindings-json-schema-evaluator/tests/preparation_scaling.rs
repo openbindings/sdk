@@ -698,10 +698,7 @@ fn a_schema_nested_more_than_256_levels_deep_refuses_whatever_the_limits() {
             |inner, _| format!(r#"{{"not":{inner}}}"#),
         );
         let input = format!(r#"{{"$ref":"https://depth.test/r","allOf":[{inner}]}}"#);
-        Document::parse(document(&[], &input))
-            .unwrap()
-            .references()
-            .unwrap()
+        Document::parse(document(&[], &input)).unwrap().references()
     };
     let report = inspect(255);
     assert!(report.complete && report.limitation.is_none());

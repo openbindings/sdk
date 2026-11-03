@@ -114,16 +114,23 @@ fn meta_checks_find_local_errors_before_a_depth_limit() {
 fn immutable_snapshot_is_independent_of_authoring_mutation() {
     let mut builder = Document::new();
     builder = builder
-        .set_operation("first", &Operation::default())
+        .set("/operations/first", &JsonValue::parse("{}").unwrap())
         .unwrap();
     let snapshot = builder.clone();
-    builder = builder.set_operations(&Default::default()).unwrap();
-    assert!(builder.operations().unwrap().is_empty());
+    builder = builder
+        .set("/operations", &JsonValue::parse("{}").unwrap())
+        .unwrap();
+    assert!(
+        builder
+            .validate()
+            .unwrap()
+            .conformant()
+            .unwrap()
+            .operations()
+            .is_empty()
+    );
     let valid = snapshot.validate().unwrap().conformant().unwrap();
-    assert!(matches!(
-        valid.document().resolve_operation("first").unwrap(),
-        OperationSelection::Found(_)
-    ));
+    assert!(valid.resolve_operation("first").is_some());
     fn send_sync<T: Send + Sync>() {}
     send_sync::<Document>();
     send_sync::<ConformantDocument>();

@@ -1,18 +1,13 @@
 //! Immutable exact document snapshots and retained conformance evidence.
-use crate::{
-    conformance::{assess_value, version_refusal},
-    schema::inventory::SchemaIndex,
-    *,
-};
+use crate::{conformance::assess_value, schema::inventory::SchemaIndex, *};
 use openbindings_internal_json::backend;
 mod edit;
-mod read_views;
-pub use edit::{Edit, EditError, PointerRef};
-mod conformant_views;
+mod index;
+mod model;
 use crate::{schema::references::SchemaSpace, schema::resources::ExternalSchemasInner};
-pub use conformant_views::*;
-use read_views::NamespaceCache;
-pub use read_views::{BindingView, DependencyView, ExampleView, SourceView};
+pub use edit::{Edit, EditError, PointerRef};
+use index::NamespaceCache;
+pub use model::{Binding, Dependency, Example, Operation, Source};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     fmt,
@@ -38,9 +33,8 @@ pub(crate) struct DocumentInner {
     resolution: OnceLock<Arc<SchemaSpace>>,
     spaces_in: Mutex<Vec<Weak<ExternalSchemasInner>>>,
     validation: OnceLock<Result<Arc<ValidationReport>, VersionRefusal>>,
-    interpretation: OnceLock<Result<(), InterpretationError>>,
-    names: OnceLock<Result<NameIndex, InterpretationError>>,
-    bindings: NamespaceCache,
+    operations: OnceLock<index::Operations>,
+    bindings: OnceLock<index::Bindings>,
     sources: NamespaceCache,
     dependencies: NamespaceCache,
 }
@@ -81,11 +75,10 @@ impl fmt::Debug for Document {
 #[derive(Clone, Debug)]
 /// Retained proof that a document revision met every applicable normative rule.
 ///
-/// Its reads hand out one conformant view per document part,
-/// [`ConformantOperationView`], [`ConformantBindingView`], [`ConformantSourceView`],
-/// [`ConformantDependencyView`] and [`ConformantExampleView`]: each is the plain
-/// view of the same name, such as [`OperationView`], read with this proof, so its
-/// field reads are infallible.
+/// Its canonical [`Operation`], [`Binding`], [`Source`], [`Dependency`] and
+/// [`Example`] values retain this proof and their original entries. Field reads
+/// and declared relationships are infallible; no detached authoring model or
+/// partially interpreted draft is needed.
 ///
 /// Proof has no public unchecked constructor or deserializer:
 /// ```compile_fail
@@ -95,7 +88,9 @@ impl fmt::Debug for Document {
 /// A proof exposes only its validated snapshot; editing produces a new document:
 /// ```compile_fail
 /// use openbindings::{ConformantDocument, Document};
-/// fn edit(mut proof: ConformantDocument) { proof.set_description("changed").unwrap(); }
+/// fn edit(proof: ConformantDocument) {
+///     let _: ConformantDocument = proof.document().edit(&[]).unwrap();
+/// }
 /// ```
 /// ```compile_fail
 /// use openbindings::{ConformantDocument, Document};
@@ -103,81 +98,12 @@ impl fmt::Debug for Document {
 /// ```
 /// Only a conformant operation hands out value contracts:
 /// ```compile_fail,E0599
-/// use openbindings::{Document, SchemaEvaluator};
-/// fn contracts(doc: Document, evaluator: &dyn SchemaEvaluator) {
-///     let operations = doc.operations().unwrap();
-///     let _ = operations[0].input().unwrap().prepare(evaluator);
-/// }
+/// use openbindings::Document;
+/// fn contracts(doc: Document) { let _ = doc.operation("op"); }
 /// ```
 /// Obtain it through [`DocumentValidation::conformant`]; value contract preparation is still a separate evaluator-dependent step.
 pub struct ConformantDocument {
     pub(crate) document: Document,
-}
-#[derive(Clone, PartialEq, Eq)]
-/// Structured refusal to interpret typed fields. Causes are extensible; match specific cases or `code()` and retain a fallback. Exact parsed JSON remains available after this error.
-#[non_exhaustive]
-pub enum InterpretationError {
-    /// The declaration is unsupported; contains the distinct version refusal.
-    Version(VersionRefusal),
-    /// The required version declaration is absent, malformed or not a scalar string.
-    MalformedVersion,
-    /// Duplicate member names make typed interpretation ambiguous.
-    DuplicateMembers,
-    /// A retained JSON string contains an unpaired UTF-16 unit that typed interpretation cannot represent.
-    UnpairedString,
-    /// A typed field has an invalid shape, with an original source location.
-    InvalidField {
-        /// Specific stable identifier for the invalid typed field.
-        code: &'static str,
-        /// Original coordinate of the offending field/value, not a generated schema location.
-        location: SourceLocation,
-    },
-}
-impl std::fmt::Debug for InterpretationError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Version(value) => f.debug_tuple("Version").field(value).finish(),
-            Self::MalformedVersion => f.write_str("MalformedVersion"),
-            Self::DuplicateMembers => f.write_str("DuplicateMembers"),
-            Self::UnpairedString => f.write_str("UnpairedString"),
-            Self::InvalidField { location, .. } => f
-                .debug_struct("InvalidField")
-                .field("location", location)
-                .finish_non_exhaustive(),
-        }
-    }
-}
-
-impl fmt::Display for InterpretationError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "document cannot be interpreted: {}", self.code())
-    }
-}
-impl std::error::Error for InterpretationError {}
-impl InterpretationError {
-    /// Return the specific stable interpretation code; messages are not identifiers.
-    pub fn code(&self) -> &'static str {
-        match self {
-            Self::Version(_) => "unsupported-version",
-            Self::MalformedVersion => "malformed-version",
-            Self::DuplicateMembers => "duplicate-members",
-            Self::UnpairedString => "unpaired-string",
-            Self::InvalidField { code, .. } => code,
-        }
-    }
-    /// Borrow a located field error's original coordinates; global interpretation refusals have no invented location.
-    pub fn source_location(&self) -> Option<&SourceLocation> {
-        match self {
-            Self::InvalidField { location, .. } => Some(location),
-            _ => None,
-        }
-    }
-    fn invalid(code: &'static str, value: JsonRef<'_>) -> Self {
-        Self::InvalidField {
-            code,
-            location: value.location(),
-        }
-    }
 }
 
 impl Document {
@@ -192,7 +118,7 @@ impl Document {
         Self::parse_with_limits(input, JsonLimits::default())
     }
     /// Parse under caller-selected byte, node and nesting admission limits, which
-    /// the document keeps: its edits and typed setters parse the edited document
+    /// the document keeps: its edits parse the edited document
     /// under the same limits.
     ///
     /// # Errors
@@ -236,8 +162,7 @@ impl Document {
                 resolution: OnceLock::new(),
                 spaces_in: Mutex::default(),
                 validation: OnceLock::new(),
-                interpretation: OnceLock::new(),
-                names: OnceLock::new(),
+                operations: OnceLock::new(),
                 bindings: OnceLock::new(),
                 sources: OnceLock::new(),
                 dependencies: OnceLock::new(),
@@ -248,8 +173,7 @@ impl Document {
     pub fn value(&self) -> &JsonValue {
         &self.inner.value
     }
-    /// The admission limits this document was admitted under, which its edits and
-    /// typed setters apply: [`JsonLimits::default`] for [`Self::parse`],
+    /// The admission limits this document was admitted under, which its edits apply: [`JsonLimits::default`] for [`Self::parse`],
     /// [`Self::new`] and [`Self::from_json`], the caller's for
     /// [`Self::parse_with_limits`] and [`validate_document_with_limits`], and no
     /// nesting cap for [`validate_document`].
@@ -298,326 +222,6 @@ impl Document {
             Some(index) => openbindings_internal_schema::RawDocument::shared(index.clone()),
             None => openbindings_internal_schema::RawDocument::new(self.value().clone()),
         }
-    }
-    pub(crate) fn interpretable(&self) -> Result<(), InterpretationError> {
-        self.inner
-            .interpretation
-            .get_or_init(|| self.check_interpretation())
-            .clone()
-    }
-    fn check_interpretation(&self) -> Result<(), InterpretationError> {
-        if let Some(refusal) = version_refusal(self.value()) {
-            return Err(InterpretationError::Version(refusal));
-        }
-        if self.value().has_duplicate_names() {
-            return Err(InterpretationError::DuplicateMembers);
-        }
-        if self
-            .value()
-            .get("openbindings")
-            .and_then(|v| v.as_str())
-            .is_none_or(|s| check_version(s) != VersionDecision::Supported)
-        {
-            return Err(InterpretationError::MalformedVersion);
-        }
-        Ok(())
-    }
-    pub(crate) fn names(&self) -> Result<&NameIndex, InterpretationError> {
-        self.inner
-            .names
-            .get_or_init(|| NameIndex::build(self.value()))
-            .as_ref()
-            .map_err(Clone::clone)
-    }
-    /// Exact keys and aliases share one namespace. Every repeated occurrence is
-    /// unresolved; candidate primary keys are distinct and lexically ordered.
-    ///
-    /// # Errors
-    /// Returns an interpretation error for an unsupported or malformed version, duplicate members, or an invalid shape in the fields read by this method. This does not require document conformance.
-    pub fn resolve_operation(&self, name: &str) -> Result<OperationSelection, InterpretationError> {
-        self.interpretable()?;
-        let index = self.names()?;
-        let Some(matches) = index.names.get(name) else {
-            return Ok(OperationSelection::Missing);
-        };
-        if matches.len() > 1 {
-            // Deduplicate cheap operation indices before copying public names.
-            // Repeated aliases of a long primary key must not copy it per occurrence.
-            let mut candidates = matches
-                .iter()
-                .copied()
-                .collect::<std::collections::BTreeSet<_>>()
-                .into_iter()
-                .map(|id| index.primary_keys[id].to_string())
-                .collect::<Vec<_>>();
-            candidates.sort();
-            return Ok(OperationSelection::Ambiguous { candidates });
-        }
-        let key = &index.primary_keys[matches[0]];
-        self.operation_view(key, &index.operations[key])
-            .map(OperationSelection::Found)
-    }
-    fn operation_view(
-        &self,
-        key: &Arc<str>,
-        entry: &OperationEntry,
-    ) -> Result<OperationView, InterpretationError> {
-        let value = &entry.value;
-        if value.kind() != JsonKind::Object {
-            return Err(InterpretationError::invalid(
-                "invalid-operation-object",
-                value.view(),
-            ));
-        }
-        Ok(OperationView {
-            document: self.clone(),
-            key: key.clone(),
-            value: value.clone(),
-            examples: entry.examples.clone(),
-        })
-    }
-    /// Allocate retained operation views in lexical key order. Each view remains
-    /// valid after this handle is dropped. Malformed entries refuse
-    /// typed enumeration; `value()` remains available for exact inspection.
-    ///
-    /// # Errors
-    /// Returns an interpretation error for an unsupported or malformed version, duplicate members, or an invalid shape in the fields read by this method. This does not require document conformance.
-    pub fn operations(&self) -> Result<Vec<OperationView>, InterpretationError> {
-        self.interpretable()?;
-        self.names()?
-            .operations
-            .iter()
-            .map(|(key, value)| self.operation_view(key, value))
-            .collect()
-    }
-    /// Lexical presentation order; this does not select or rank bindings.
-    ///
-    /// # Errors
-    /// Returns an interpretation error for an unsupported or malformed version, duplicate members, or an invalid shape in the fields read by this method. This does not require document conformance.
-    pub fn operation_bindings(&self, key: &str) -> Result<Vec<String>, InterpretationError> {
-        self.interpretable()?;
-        let index = self.names()?;
-        if index.unpaired_binding_key {
-            return Err(InterpretationError::UnpairedString);
-        }
-        if !index.operations.contains_key(key) {
-            return Ok(Vec::new());
-        }
-        Ok(index.bindings.get(key).cloned().unwrap_or_default())
-    }
-    /// Return `None` when the dependency is absent, otherwise test its kind filter.
-    /// Absence of `kinds` accepts all; an empty list matches none but is nonconformant.
-    /// Interpretation may refuse the document; this method is not normative proof.
-    ///
-    /// # Errors
-    /// Returns an interpretation error for an unsupported or malformed version, duplicate members, or an invalid shape in the fields read by this method. This does not require document conformance.
-    pub fn dependency_accepts_kind(
-        &self,
-        dependency: &str,
-        kind: &str,
-    ) -> Result<Option<bool>, InterpretationError> {
-        let Some(view) = self.dependency(dependency)? else {
-            return Ok(None);
-        };
-        Ok(Some(match view.kinds()? {
-            None => true,
-            Some(mut kinds) => kinds.any(|candidate| candidate == kind),
-        }))
-    }
-}
-#[derive(Default)]
-pub(crate) struct NameIndex {
-    operations: BTreeMap<Arc<str>, OperationEntry>,
-    // Operation identities share primary bytes; alias occurrences store only indices.
-    primary_keys: Vec<Arc<str>>,
-    names: HashMap<String, Vec<usize>>,
-    bindings: HashMap<String, Vec<String>>,
-    // Like the bindings namespace, binding names refuse when a key cannot be text.
-    unpaired_binding_key: bool,
-}
-struct OperationEntry {
-    value: JsonValue,
-    examples: Arc<NamespaceCache>,
-}
-impl NameIndex {
-    fn build(value: &JsonValue) -> Result<Self, InterpretationError> {
-        let mut index = Self::default();
-        let operations = value
-            .get("operations")
-            .ok_or_else(|| InterpretationError::invalid("missing-operations", value.view()))?;
-        let operations = operations
-            .members()
-            .ok_or_else(|| InterpretationError::invalid("invalid-operations-object", operations))?;
-        {
-            for member in operations {
-                let key = member
-                    .name
-                    .as_str()
-                    .ok_or(InterpretationError::UnpairedString)?;
-                if member.value.kind() != JsonKind::Object {
-                    return Err(InterpretationError::invalid(
-                        "invalid-operation-object",
-                        member.value,
-                    ));
-                }
-                let primary = Arc::<str>::from(key);
-                let id = index.primary_keys.len();
-                index.operations.insert(
-                    primary.clone(),
-                    OperationEntry {
-                        value: member.value.to_owned(),
-                        examples: Arc::new(OnceLock::new()),
-                    },
-                );
-                index.primary_keys.push(primary);
-                index.add_name(key, id);
-                if let Some(aliases) = member.value.get("aliases") {
-                    let values = aliases.elements().ok_or_else(|| {
-                        InterpretationError::invalid("invalid-operation-aliases", aliases)
-                    })?;
-                    for alias in values {
-                        let name = alias.as_str().ok_or_else(|| {
-                            InterpretationError::invalid("invalid-operation-alias", alias)
-                        })?;
-                        index.add_name(name, id);
-                    }
-                }
-            }
-        }
-        if let Some(bindings) = value.get("bindings").and_then(|v| v.members()) {
-            for member in bindings {
-                let Some(name) = member.name.as_str() else {
-                    index.unpaired_binding_key = true;
-                    index.bindings = HashMap::new();
-                    break;
-                };
-                if let Some(operation) = member.value.get("operation").and_then(|v| v.as_str()) {
-                    index
-                        .bindings
-                        .entry(operation.into())
-                        .or_default()
-                        .push(name.into());
-                }
-            }
-        }
-        for names in index.bindings.values_mut() {
-            names.sort();
-        }
-        Ok(index)
-    }
-    fn add_name(&mut self, name: &str, primary: usize) {
-        self.names.entry(name.into()).or_default().push(primary);
-    }
-}
-#[derive(Clone)]
-/// Name-resolution result after successful interpretation; missing and ambiguous names are not schema verdicts.
-///
-/// This closed partition may be exhaustively matched:
-/// ```
-/// use openbindings::OperationSelection;
-/// fn found(selection: &OperationSelection) -> bool {
-///     match selection {
-///         OperationSelection::Found(_) => true,
-///         OperationSelection::Missing | OperationSelection::Ambiguous { .. } => false,
-///     }
-/// }
-/// ```
-pub enum OperationSelection {
-    /// One retained operation view selected by primary key or alias; the view must still be assessed/prepared as needed.
-    Found(OperationView),
-    /// No occurrence of the requested name exists.
-    Missing,
-    /// The name occurs more than once, including a repeated alias in one operation.
-    Ambiguous {
-        #[doc = "Distinct primary keys in lexical order; a single key can still represent repeated occurrences."]
-        candidates: Vec<String>,
-    },
-}
-impl std::fmt::Debug for OperationSelection {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Found(value) => f.debug_tuple("Found").field(value).finish(),
-            Self::Missing => f.write_str("Missing"),
-            Self::Ambiguous { .. } => f.debug_struct("Ambiguous").finish_non_exhaustive(),
-        }
-    }
-}
-
-/// Immutable retained operation object. Its exact value is not conformance proof.
-#[derive(Clone)]
-pub struct OperationView {
-    pub(crate) document: Document,
-    key: Arc<str>,
-    value: JsonValue,
-    examples: Arc<NamespaceCache>,
-}
-impl OperationView {
-    /// Borrow the selected primary key, even when selection used an alias.
-    pub fn key(&self) -> &str {
-        &self.key
-    }
-    /// Borrow the original exact operation object without creating a proof or evaluating schemas.
-    pub fn value(&self) -> JsonRef<'_> {
-        self.value.view()
-    }
-    /// The exact input field, without interpreting or preparing its schema.
-    /// `None` means absence; JSON null and false remain present exact values.
-    /// Only a conformant operation's [`crate::ConformantOperationView::input`]
-    /// yields a value contract that can be prepared.
-    pub fn input(&self) -> Option<JsonRef<'_>> {
-        self.value.get("input")
-    }
-    /// The exact output field, with the same absence/interpretation distinction
-    /// as [`Self::input`]. A present value is not proof of a supported value contract.
-    pub fn output(&self) -> Option<JsonRef<'_>> {
-        self.value.get("output")
-    }
-    /// Interpret an optional string description. Unlike exact [`Self::input`]
-    /// access, this can refuse a malformed field with its original location.
-    ///
-    /// # Errors
-    /// Returns an interpretation error if the present description is not a string.
-    pub fn description(&self) -> Result<Option<JsonStringRef<'_>>, InterpretationError> {
-        self.value
-            .get("description")
-            .map(|v| {
-                v.as_string()
-                    .ok_or_else(|| InterpretationError::invalid("invalid-operation-description", v))
-            })
-            .transpose()
-    }
-    /// Interpret optional string aliases, preserving absence separately from an
-    /// empty array. A malformed array or item is a located interpretation error.
-    ///
-    /// # Errors
-    /// Returns an interpretation error if aliases is not an array of scalar strings, including a string with an unpaired UTF-16 unit.
-    pub fn aliases(
-        &self,
-    ) -> Result<Option<impl ExactSizeIterator<Item = &str>>, InterpretationError> {
-        self.value
-            .get("aliases")
-            .map(|v| {
-                let values = v
-                    .elements()
-                    .ok_or_else(|| InterpretationError::invalid("invalid-operation-aliases", v))?;
-                for alias in v.elements().expect("checked array") {
-                    if alias.as_str().is_none() {
-                        return Err(InterpretationError::invalid(
-                            "invalid-operation-alias",
-                            alias,
-                        ));
-                    }
-                }
-                Ok(values.map(|v| v.as_str().expect("checked alias")))
-            })
-            .transpose()
-    }
-    /// Allocate binding keys in lexical presentation order; does not rank or invoke bindings.
-    ///
-    /// # Errors
-    /// Returns an interpretation error for an unsupported or malformed version, duplicate members, or an invalid shape in the fields read by this method. This does not require document conformance.
-    pub fn bindings(&self) -> Result<Vec<String>, InterpretationError> {
-        self.document.operation_bindings(&self.key)
     }
 }
 impl ConformantDocument {
@@ -668,7 +272,7 @@ impl ConformantDocument {
         }
         Ok(space)
     }
-    /// Borrow the exact snapshot certified by this proof, for plain fallible reads.
+    /// Borrow the exact snapshot certified by this proof, for raw inspection and editing.
     pub fn document(&self) -> &Document {
         &self.document
     }
@@ -681,96 +285,6 @@ impl ConformantDocument {
         self.document.as_bytes()
     }
 }
-impl std::fmt::Debug for OperationView {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("OperationView")
-            .field("value", &self.value)
-            .finish_non_exhaustive()
-    }
-}
-#[cfg(test)]
-mod name_index_storage_tests {
-    use super::*;
-    use std::collections::HashSet;
-
-    #[test]
-    fn alias_occurrences_share_primary_storage_without_scaling_its_bytes() {
-        // Small, deterministic representation check, not a peak-memory benchmark.
-        let primary = "p".repeat(4096);
-        for count in [0, 1, 64, 256] {
-            let aliases: Vec<_> = (0..count).map(|i| format!("a{i}")).collect();
-            let source = serde_json::json!({
-                "openbindings": "0.2.0",
-                "operations": { &primary: { "aliases": aliases } },
-            });
-            let document = Document::parse(source.to_string()).unwrap();
-            let index = document.names().unwrap();
-            assert_eq!(index.primary_keys.len(), 1);
-            let key = &index.primary_keys[0];
-            assert!(Arc::ptr_eq(index.operations.keys().next().unwrap(), key));
-            assert_eq!(index.names.len(), count + 1);
-            let occurrences: Vec<_> = index.names.values().flatten().copied().collect();
-            assert_eq!(occurrences.len(), count + 1);
-            assert!(occurrences.iter().all(|&id| id == 0));
-
-            // Count distinct retained primary allocations reached by all index
-            // owners/occurrences, plus its independent namespace lookup string.
-            let mut addresses = HashSet::new();
-            let primary_bytes: usize = index
-                .operations
-                .keys()
-                .chain(&index.primary_keys)
-                .chain(occurrences.iter().map(|&id| &index.primary_keys[id]))
-                .filter(|key| addresses.insert(Arc::as_ptr(key)))
-                .map(|key| key.len())
-                .sum();
-            assert_eq!(addresses.len(), 1);
-            assert_eq!(primary_bytes, primary.len());
-            let lookup_bytes = index.names.get_key_value(&primary).unwrap().0.len();
-            assert_eq!(primary_bytes + lookup_bytes, 2 * primary.len());
-
-            let selected = aliases.last().map(String::as_str).unwrap_or(&primary);
-            let OperationSelection::Found(operation) =
-                document.resolve_operation(selected).unwrap()
-            else {
-                panic!("every unique alias selects its primary")
-            };
-            assert_eq!(operation.key(), primary);
-        }
-    }
-
-    #[test]
-    fn repeated_aliases_stay_ambiguous_with_distinct_lexical_candidates() {
-        let primary = "p".repeat(4096);
-        let mut aliases = vec!["shared"; 256];
-        aliases.push(&primary); // primary/alias collision is another occurrence.
-        let source = serde_json::json!({
-            "openbindings": "0.2.0",
-            "operations": {
-                &primary: { "aliases": aliases },
-                "z": { "aliases": ["shared"] },
-                "a": { "aliases": ["shared"] },
-            },
-        });
-        let document = Document::parse(source.to_string()).unwrap();
-        let OperationSelection::Ambiguous { candidates } =
-            document.resolve_operation("shared").unwrap()
-        else {
-            panic!("repeated declarations stay ambiguous")
-        };
-        assert_eq!(
-            candidates,
-            ["a".to_owned(), primary.clone(), "z".to_owned()]
-        );
-        let OperationSelection::Ambiguous { candidates } =
-            document.resolve_operation(&primary).unwrap()
-        else {
-            panic!("primary/alias collision stays ambiguous")
-        };
-        assert_eq!(candidates, [primary]);
-    }
-}
-
 #[cfg(test)]
 mod resolution_reuse {
     use super::*;

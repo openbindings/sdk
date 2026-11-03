@@ -82,19 +82,18 @@ fn namespace_is_checked_before_preparation_or_any_selection() {
         let calls = Arc::new(AtomicUsize::new(0));
         let validation = doc.validate().unwrap();
         assert!(validation.conformant().is_none());
-        let error = doc.resolve_operation("op").unwrap_err();
-        assert_eq!(error.code(), code);
-        let at = error.source_location().unwrap();
-        assert_eq!(
-            at.pointer.as_ref().and_then(openbindings::Pointer::as_str),
-            Some(pointer)
-        );
+        let at = validation
+            .report()
+            .findings
+            .iter()
+            .filter_map(|finding| finding.location.as_ref())
+            .find(|location| location.pointer.as_ref().and_then(Pointer::as_str) == Some(pointer))
+            .unwrap_or_else(|| {
+                panic!("missing original conformance location for {code} at {pointer}")
+            });
         let raw = doc.value().at(pointer).unwrap();
         assert_eq!(at, &raw.location());
         assert_eq!(calls.load(Ordering::SeqCst), 0);
-        let error = doc.resolve_operation("op").unwrap_err();
-        assert_eq!(error.code(), code);
-        assert_eq!(error.source_location(), Some(at));
     }
 }
 #[test]
@@ -105,10 +104,10 @@ fn draft_metadata_and_semantic_setup_partitions_remain_distinct() {
         Conformance::NonConformant
     );
     assert!(doc.validate().unwrap().conformant().is_none());
-    assert!(matches!(
-        doc.resolve_operation("shared").unwrap(),
-        OperationSelection::Ambiguous { .. }
-    ));
+    assert_eq!(
+        doc.validate().unwrap().report().evidence["OBI-05"],
+        Evidence::Violated
+    );
     let doc = Document::parse(
         r#"{"openbindings":"0.2.0","operations":{"op":{"input":false},"other":{}}}"#,
     )
@@ -254,7 +253,7 @@ fn reference_and_resource_messages_do_not_echo_source_identifiers() {
         format!("https://example.invalid/{}", "SECRET-long".repeat(2000)),
     ] {
         let doc = document(serde_json::json!({"$ref":reference}));
-        let references = doc.references().unwrap();
+        let references = doc.references();
         let ReferenceResolution::Unresolved { detail } = &references.references[0].resolution
         else {
             panic!()
@@ -304,7 +303,7 @@ fn reference_and_resource_messages_do_not_echo_source_identifiers() {
     let doc = document(
         serde_json::json!({"$ref":"https://example.invalid/SECRET-id", "$defs":{"a":{"$id":"https://example.invalid/SECRET-id"},"b":{"$id":"https://example.invalid/SECRET-id"}}}),
     );
-    let refs = doc.references().unwrap();
+    let refs = doc.references();
     let ReferenceResolution::Unresolved { detail } = &refs.references[0].resolution else {
         panic!()
     };
@@ -420,9 +419,9 @@ fn reason_name(reason: NoVerdictReason) -> &'static str {
         _ => "other-or-future",
     }
 }
-fn interpretation_name(reason: InterpretationError) -> &'static str {
+fn edit_name(reason: EditError) -> &'static str {
     match reason {
-        InterpretationError::DuplicateMembers => "duplicates",
+        EditError::DuplicateMembers => "duplicates",
         _ => "other-or-future",
     }
 }
@@ -456,10 +455,7 @@ fn external_evaluator_construction_and_matching_stay_supported() {
         reason_name(NoVerdictReason::UnsupportedCapability),
         "unsupported-capability"
     );
-    assert_eq!(
-        interpretation_name(InterpretationError::DuplicateMembers),
-        "duplicates"
-    );
+    assert_eq!(edit_name(EditError::DuplicateMembers), "duplicates");
     assert_eq!(calls.load(Ordering::SeqCst), 1);
 }
 

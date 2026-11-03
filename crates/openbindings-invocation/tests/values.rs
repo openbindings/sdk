@@ -1,5 +1,5 @@
 //! Current document/key requests and shared context replace legacy copied carriers.
-use openbindings::{Document, JsonLimits, JsonValue, Preference};
+use openbindings::{Document, JsonLimits, JsonValue};
 use openbindings_invocation::{
     BindingRequest, BoundaryFailureKind, ContextChallenge, InvocationError,
 };
@@ -117,13 +117,7 @@ fn document_preference_is_read_by_core_without_a_second_invocation_parser() {
             BindingRequest::from_json(&request(&format!(r#", "preference":{token}"#), "", ""));
         match expected {
             Some(expected) => assert_eq!(
-                input
-                    .unwrap()
-                    .interface
-                    .binding("b")
-                    .unwrap()
-                    .preference()
-                    .map(Preference::get),
+                input.unwrap().interface.binding("b").unwrap().preference(),
                 Some(expected)
             ),
             None => assert!(input.is_err(), "{token}"),

@@ -1,7 +1,5 @@
 //! Atomic edits against the current exact source revision.
 use super::*;
-use crate::authoring::Part;
-use serde::Serialize;
 use std::{io::Write, ops::Range};
 
 /// The RFC 6901 pointer an edit addresses, borrowed from escaped text such as
@@ -142,87 +140,15 @@ impl Document {
     }
 }
 
-/// One edit in an atomic batch. All pointers address the revision before the batch.
-/// Parents must exist. Missing object members and array `-` append compactly.
-#[derive(Clone, Copy)]
-#[non_exhaustive]
-enum Change<'a> {
-    /// Replace a value or insert a missing member; preserve the value's exact token bytes.
-    Set {
-        /// RFC 6901 pointer, from text or an exact [`Pointer`].
-        pointer: PointerRef<'a>,
-        /// Exact replacement value. Duplicate members are refused.
-        value: &'a JsonValue,
-    },
-    /// Replace the complete operations map using checked typed parts.
-    SetOperations {
-        /// Borrowed parts, serialized once directly into the bounded splice buffer.
-        value: &'a BTreeMap<String, Operation>,
-    },
-    /// Replace the complete sources map using checked typed parts.
-    SetSources {
-        /// Borrowed parts, serialized once directly into the bounded splice buffer.
-        value: &'a BTreeMap<String, Source>,
-    },
-    /// Replace the complete bindings map using checked typed parts.
-    SetBindings {
-        /// Borrowed parts, serialized once directly into the bounded splice buffer.
-        value: &'a BTreeMap<String, Binding>,
-    },
-    /// Replace the complete dependencies map using checked typed parts.
-    SetDependencies {
-        /// Borrowed parts, serialized once directly into the bounded splice buffer.
-        value: &'a BTreeMap<String, Dependency>,
-    },
-    /// Remove an existing member or array element, including an adjacent separator.
-    Remove {
-        /// RFC 6901 pointer, from text or an exact [`Pointer`]. Removing the root
-        /// is refused.
-        pointer: PointerRef<'a>,
-    },
-}
-
-impl fmt::Debug for Change<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Set { value, .. } => f
-                .debug_struct("Set")
-                .field("value", value)
-                .finish_non_exhaustive(),
-            Self::Remove { .. } => f.debug_struct("Remove").finish_non_exhaustive(),
-            Self::SetOperations { .. } => f.debug_struct("SetOperations").finish_non_exhaustive(),
-            Self::SetSources { .. } => f.debug_struct("SetSources").finish_non_exhaustive(),
-            Self::SetBindings { .. } => f.debug_struct("SetBindings").finish_non_exhaustive(),
-            Self::SetDependencies { .. } => {
-                f.debug_struct("SetDependencies").finish_non_exhaustive()
-            }
-        }
-    }
-}
-
 /// Atomic editing failure. The document and all its caches remain unchanged.
 ///
-/// Every editing method returns this one error, for pointer edits and typed parts
-/// alike; [`Self::code`] gives each case a stable identifier. `Debug` shows the
-/// case and never a typed part's pointer, which holds caller-chosen keys.
+/// [`Self::code`] gives each case a stable identifier. `Debug` shows no caller
+/// values or pointer segments.
 #[derive(Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum EditError {
-    /// Rebuilt JSON exceeded admission limits or could not be parsed, including a
-    /// typed part that does not fit the remaining byte budget (`byte-limit`).
+    /// Rebuilt JSON exceeded admission limits or could not be parsed.
     Input(InputError),
-    /// A typed part's additional field shadows one of its typed members, such as
-    /// an `input` entry in an operation's `additional_fields`.
-    #[non_exhaustive]
-    FieldCollision {
-        /// Logical pointer into the typed part input, through `additional_fields`,
-        /// such as `/operations/lookup/additional_fields/input`; it addresses the
-        /// caller's Rust value, not document source bytes. `None` when its escaped
-        /// spelling would exceed 4,096 bytes; it is never the root.
-        part_pointer: Option<String>,
-    },
-    /// A typed part could not be encoded as supported exact JSON.
-    Serialization,
     /// Invalid RFC 6901 syntax, array index, or removal of the root.
     InvalidPointer,
     /// The pointer's parent does not exist.
@@ -241,8 +167,6 @@ impl EditError {
     pub fn code(&self) -> &'static str {
         match self {
             Self::Input(error) => error.code(),
-            Self::FieldCollision { .. } => "field-collision",
-            Self::Serialization => "serialization",
             Self::InvalidPointer => "invalid-pointer",
             Self::MissingParent => "missing-parent",
             Self::MissingValue => "missing-value",
@@ -256,11 +180,6 @@ impl fmt::Debug for EditError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Input(error) => f.debug_tuple("Input").field(error).finish(),
-            Self::FieldCollision { part_pointer } => f
-                .debug_struct("FieldCollision")
-                .field("part_pointer_omitted", &part_pointer.is_none())
-                .finish_non_exhaustive(),
-            Self::Serialization => f.write_str("Serialization"),
             Self::InvalidPointer => f.write_str("InvalidPointer"),
             Self::MissingParent => f.write_str("MissingParent"),
             Self::MissingValue => f.write_str("MissingValue"),
@@ -308,9 +227,6 @@ impl From<InputError> for EditError {
 fn limit(limits: JsonLimits) -> EditError {
     backend::input_error(InputErrorKind::Limit, "byte-limit", limits.max_bytes).into()
 }
-fn escape(s: &str) -> String {
-    s.replace('~', "~0").replace('/', "~1")
-}
 fn decode(s: &str) -> Result<String, EditError> {
     let mut out = String::with_capacity(s.len());
     let mut chars = s.chars();
@@ -328,9 +244,8 @@ fn decode(s: &str) -> Result<String, EditError> {
     Ok(out)
 }
 
-// Exact inputs have a known byte extent. Typed parts stream once into the final
-// splice buffer; every write reserves the untouched bytes and known replacements
-// still to come, and refuses before growing beyond the final byte budget.
+// Exact inputs have a known byte extent. Every write reserves the untouched
+// bytes and replacements still to come before growing the final splice buffer.
 trait WriteJson {
     fn size(&self) -> Result<Option<usize>, EditError> {
         Ok(None)
@@ -348,7 +263,6 @@ impl WriteJson for JsonValue {
         out.write_all(self.bytes()).map_err(|_| limit(out.limits))
     }
 }
-struct Typed<'a, T: ?Sized>(&'a T);
 struct BoundedWriter {
     bytes: Vec<u8>,
     reserved: usize,
@@ -381,37 +295,6 @@ impl BoundedWriter {
     fn known(&mut self, bytes: &[u8]) -> Result<(), EditError> {
         self.reserved -= bytes.len();
         self.write_all(bytes).map_err(|_| limit(self.limits))
-    }
-}
-impl<T: Serialize + ?Sized> WriteJson for Typed<'_, T> {
-    fn write(&self, out: &mut BoundedWriter) -> Result<(), EditError> {
-        let limits = out.limits;
-        serde_json::to_writer(out, self.0).map_err(|error| {
-            // The bounded writer's only failure is the byte budget.
-            if error.is_io() {
-                limit(limits)
-            } else {
-                EditError::Serialization
-            }
-        })
-    }
-}
-impl WriteJson for Change<'_> {
-    fn size(&self) -> Result<Option<usize>, EditError> {
-        match self {
-            Self::Set { value, .. } => value.size(),
-            _ => Ok(None),
-        }
-    }
-    fn write(&self, out: &mut BoundedWriter) -> Result<(), EditError> {
-        match self {
-            Self::Set { value, .. } => value.write(out),
-            Self::SetOperations { value } => Typed(value).write(out),
-            Self::SetSources { value } => Typed(value).write(out),
-            Self::SetBindings { value } => Typed(value).write(out),
-            Self::SetDependencies { value } => Typed(value).write(out),
-            Self::Remove { .. } => Ok(()),
-        }
     }
 }
 fn key_size(key: &str) -> usize {
@@ -533,7 +416,11 @@ impl Name {
     }
     fn write(&self, out: &mut BoundedWriter) -> Result<(), EditError> {
         match self {
-            Self::Text(name) => Typed(name).write(out),
+            Self::Text(name) => {
+                let limits = out.limits;
+                // A scalar string has no serialization failure except writer capacity.
+                serde_json::to_writer(out, name).map_err(|_| limit(limits))
+            }
             Self::Token(token) => out
                 .write_all(token.as_bytes())
                 .map_err(|_| limit(out.limits)),
@@ -685,10 +572,7 @@ impl Document {
         pointer: impl Into<PointerRef<'p>>,
         value: &JsonValue,
     ) -> Result<Self, EditError> {
-        self.apply_changes(&[Change::Set {
-            pointer: pointer.into(),
-            value,
-        }])
+        self.edit(&[Edit::set_at(pointer, value.clone())])
     }
     /// Remove an existing member or array element at an RFC 6901 pointer:
     /// escaped text, or an exact [`Pointer`] such as a finding's.
@@ -696,58 +580,7 @@ impl Document {
     /// # Errors
     /// Returns an editing error without changing the document.
     pub fn remove<'p>(&self, pointer: impl Into<PointerRef<'p>>) -> Result<Self, EditError> {
-        self.apply_changes(&[Change::Remove {
-            pointer: pointer.into(),
-        }])
-    }
-    /// Return a new snapshot with one splice and one parse, under the admission limits the
-    /// document was admitted under ([`Self::limits`]).
-    /// All paths refer to the pre-edit revision. Sibling insertions share a boundary
-    /// in batch order. Removing adjacent siblings, up to every member of a container,
-    /// is not an overlap. Overlapping replacements/removals are refused. Untouched bytes
-    /// retain their exact spelling, formatting and order. Positions describe current
-    /// bytes; retained views and proofs continue to describe their earlier revision.
-    ///
-    /// # Errors
-    /// Invalid paths, duplicates, overlap and admission failures leave the document
-    /// unchanged. Known byte extents are preflighted; typed parts serialize once
-    /// into a bounded writer that reserves all remaining known bytes before growing.
-    fn apply_changes(&self, edits: &[Change<'_>]) -> Result<Self, EditError> {
-        let limits = self.limits();
-        if edits.len() > limits.max_nodes {
-            return Err(backend::input_error(InputErrorKind::Limit, "node-limit", 0).into());
-        }
-        let mut requests = Vec::with_capacity(edits.len());
-        for edit in edits {
-            let pointer = match edit {
-                Change::Set { pointer, .. } | Change::Remove { pointer } => *pointer,
-                Change::SetOperations { value } => {
-                    value.check(&["operations"])?;
-                    "/operations".into()
-                }
-                Change::SetSources { value } => {
-                    value.check(&["sources"])?;
-                    "/sources".into()
-                }
-                Change::SetBindings { value } => {
-                    value.check(&["bindings"])?;
-                    "/bindings".into()
-                }
-                Change::SetDependencies { value } => {
-                    value.check(&["dependencies"])?;
-                    "/dependencies".into()
-                }
-            };
-            requests.push(Request {
-                pointer,
-                value: if matches!(edit, Change::Remove { .. }) {
-                    None
-                } else {
-                    Some(edit)
-                },
-            });
-        }
-        self.apply(&requests, limits)
+        self.edit(&[Edit::remove_at(pointer)])
     }
     fn apply(&self, edits: &[Request<'_>], limits: JsonLimits) -> Result<Self, EditError> {
         if edits.is_empty() {
@@ -900,136 +733,7 @@ impl Document {
         }
         Ok(Self::admitted(next, limits))
     }
-    fn set_typed<T: Serialize + ?Sized>(
-        &self,
-        pointer: &str,
-        value: &T,
-    ) -> Result<Self, EditError> {
-        self.apply(
-            &[Request {
-                pointer: pointer.into(),
-                value: Some(&Typed(value)),
-            }],
-            self.limits(),
-        )
-    }
-    fn set_part<T: Part>(&self, namespace: &str, key: &str, value: &T) -> Result<Self, EditError> {
-        value.check(&[namespace, key])?;
-        if self.value().get(namespace).is_some() {
-            self.set_typed(&format!("/{namespace}/{}", escape(key)), value)
-        } else {
-            self.set_typed(&format!("/{namespace}"), &BTreeMap::from([(key, value)]))
-        }
-    }
-    /// Set the specification version declaration. Conformance is assessed separately.
-    /// # Errors
-    /// Returns an editing error without changing the document.
-    pub fn set_openbindings(&self, value: &str) -> Result<Self, EditError> {
-        self.set_typed("/openbindings", value)
-    }
-    /// Set the interface name.
-    /// # Errors
-    /// Returns an editing error without changing the document.
-    pub fn set_name(&self, value: &str) -> Result<Self, EditError> {
-        self.set_typed("/name", value)
-    }
-    /// Set the interface version label.
-    /// # Errors
-    /// Returns an editing error without changing the document.
-    pub fn set_version(&self, value: &str) -> Result<Self, EditError> {
-        self.set_typed("/version", value)
-    }
-    /// Set the interface description.
-    /// # Errors
-    /// Returns an editing error without changing the document.
-    pub fn set_description(&self, value: &str) -> Result<Self, EditError> {
-        self.set_typed("/description", value)
-    }
-    /// Set an existing operation's description, escaping its key as an RFC 6901 token.
-    /// # Errors
-    /// Returns an editing error without changing the document.
-    pub fn set_operation_description(&self, key: &str, value: &str) -> Result<Self, EditError> {
-        self.set_typed(&format!("/operations/{}/description", escape(key)), value)
-    }
-    /// Set an existing operation's exact input schema. Validation is separate.
-    /// # Errors
-    /// Returns an editing error without changing the document.
-    pub fn set_operation_input(&self, key: &str, value: &JsonValue) -> Result<Self, EditError> {
-        self.set(&format!("/operations/{}/input", escape(key)), value)
-    }
-    /// Set an existing operation's exact output schema. Validation is separate.
-    /// # Errors
-    /// Returns an editing error without changing the document.
-    pub fn set_operation_output(&self, key: &str, value: &JsonValue) -> Result<Self, EditError> {
-        self.set(&format!("/operations/{}/output", escape(key)), value)
-    }
-    /// Set one whole operation, creating its namespace if absent.
-    /// # Errors
-    /// Returns an editing error, including a typed part's field collision, without changing the document.
-    pub fn set_operation(&self, key: &str, value: &Operation) -> Result<Self, EditError> {
-        self.set_part("operations", key, value)
-    }
-    /// Return a new snapshot with a complete operations map in one splice and parse, for bulk synthesis.
-    /// # Errors
-    /// Returns an editing error, including a typed part's field collision, without changing the document.
-    pub fn set_operations(&self, value: &BTreeMap<String, Operation>) -> Result<Self, EditError> {
-        self.apply_changes(&[Change::SetOperations { value }])
-    }
-    /// Set one whole binding, creating its namespace if absent.
-    /// # Errors
-    /// Returns an editing error, including a typed part's field collision, without changing the document.
-    pub fn set_binding(&self, key: &str, value: &Binding) -> Result<Self, EditError> {
-        self.set_part("bindings", key, value)
-    }
-    /// Set one whole source, creating its namespace if absent.
-    /// # Errors
-    /// Returns an editing error, including a typed part's field collision, without changing the document.
-    pub fn set_source(&self, key: &str, value: &Source) -> Result<Self, EditError> {
-        self.set_part("sources", key, value)
-    }
-    /// Set one whole dependency, creating its namespace if absent.
-    /// # Errors
-    /// Returns an editing error, including a typed part's field collision, without changing the document.
-    pub fn set_dependency(&self, key: &str, value: &Dependency) -> Result<Self, EditError> {
-        self.set_part("dependencies", key, value)
-    }
-    /// Set an example on an existing operation, creating its examples map if absent.
-    /// # Errors
-    /// Returns an editing error, including a typed part's field collision, without changing the document.
-    pub fn set_example(
-        &self,
-        operation: &str,
-        key: &str,
-        value: &Example,
-    ) -> Result<Self, EditError> {
-        value.check(&["operations", operation, "examples", key])?;
-        let namespace = format!("/operations/{}/examples", escape(operation));
-        if self.value().at(&namespace).is_some() {
-            self.set_typed(&format!("{namespace}/{}", escape(key)), value)
-        } else {
-            self.set_typed(&namespace, &BTreeMap::from([(key, value)]))
-        }
-    }
 }
-
-macro_rules! set_namespace {
-    ($method:ident, $field:literal, $part:ty, $variant:ident) => {
-        impl Document {
-            #[doc = concat!("Return a new snapshot with a complete `", $field, "` map in one splice and parse.\n\n# Errors\nReturns an editing error, including a typed part's field collision, without changing the document.")]
-            pub fn $method(&self, value: &BTreeMap<String, $part>) -> Result<Self, EditError> {
-                self.apply_changes(&[Change::$variant { value }])
-            }
-        }
-    };
-}
-set_namespace!(set_bindings, "bindings", Binding, SetBindings);
-set_namespace!(set_sources, "sources", Source, SetSources);
-set_namespace!(
-    set_dependencies,
-    "dependencies",
-    Dependency,
-    SetDependencies
-);
 
 #[cfg(test)]
 mod tests {
@@ -1038,7 +742,7 @@ mod tests {
 
     #[test]
     fn byte_budget_is_preflighted_before_writing_any_replacement() {
-        // Known extents refuse before encoding; typed writes stop at the budget.
+        // Known extents refuse before any replacement write.
         struct Witness(Cell<bool>);
         impl WriteJson for Witness {
             fn size(&self) -> Result<Option<usize>, EditError> {
@@ -1071,7 +775,7 @@ mod tests {
             .apply(
                 &[Request {
                     pointer: "/description".into(),
-                    value: Some(&Typed(&"a".repeat(100))),
+                    value: Some(&JsonValue::parse(format!("\"{}\"", "a".repeat(100))).unwrap()),
                 }],
                 JsonLimits {
                     max_bytes: original.len() + 5,
@@ -1141,14 +845,9 @@ mod tests {
                     }
                 })
                 .collect();
-            let edits: Vec<_> = paths
-                .iter()
-                .map(|pointer| Change::Remove {
-                    pointer: pointer.into(),
-                })
-                .collect();
+            let edits: Vec<_> = paths.iter().map(Edit::remove_at).collect();
             PLANNING_WORK.with(|work| work.set((0, 0, 0)));
-            document = document.apply_changes(&edits).unwrap();
+            document = document.edit(&edits).unwrap();
             assert_eq!(PLANNING_WORK.with(Cell::get), (1, 1000, 500));
             let remaining = items
                 .iter()
@@ -1166,52 +865,7 @@ mod tests {
         }
     }
     #[test]
-    fn typed_serialization_runs_once_and_stops_before_the_byte_budget() {
-        // No counting serialization pass and no over-budget write.
-        struct Witness {
-            calls: Cell<usize>,
-            fields: Cell<usize>,
-        }
-        impl Serialize for Witness {
-            fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-                use serde::ser::SerializeSeq;
-                self.calls.set(self.calls.get() + 1);
-                let mut seq = serializer.serialize_seq(Some(100))?;
-                for _ in 0..100 {
-                    self.fields.set(self.fields.get() + 1);
-                    seq.serialize_element("0123456789")?;
-                }
-                seq.end()
-            }
-        }
-        let witness = Witness {
-            calls: Cell::new(0),
-            fields: Cell::new(0),
-        };
-        let mut document = Document::new();
-        document = document.set_typed("/x", &witness).unwrap();
-        assert_eq!(witness.calls.get(), 1);
-        let before = document.as_bytes().to_vec();
-        witness.calls.set(0);
-        witness.fields.set(0);
-        let error = document
-            .apply(
-                &[Request {
-                    pointer: "/x".into(),
-                    value: Some(&Typed(&witness)),
-                }],
-                JsonLimits {
-                    max_bytes: 100,
-                    ..Default::default()
-                },
-            )
-            .unwrap_err();
-        assert_eq!(error.code(), "byte-limit");
-        // A typed part over budget is the same admission limit as any other edit.
-        assert!(matches!(&error, EditError::Input(input) if input.kind() == InputErrorKind::Limit));
-        assert_eq!(witness.calls.get(), 1);
-        assert!(witness.fields.get() < 10);
-        assert_eq!(document.as_bytes(), before);
+    fn bounded_writer_reserves_remaining_exact_bytes() {
         let limits = JsonLimits {
             max_bytes: 7,
             ..Default::default()

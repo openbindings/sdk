@@ -594,10 +594,10 @@ fn preparation_separates_setup_from_value_and_keeps_ready_healthy() {
     let validation = d.validate().unwrap();
     assert!(validation.conformant().is_none());
     assert_eq!(validation.report().evidence["OBI-05"], Evidence::Violated);
-    assert!(matches!(
-        d.resolve_operation("shared").unwrap(),
-        OperationSelection::Ambiguous { .. }
-    ));
+    assert_eq!(
+        d.value().at("/operations/yes/aliases/0").unwrap().as_str(),
+        Some("shared")
+    );
     let d = Document::parse(r#"{"openbindings":"0.2.0","operations":{"absent":{},"yes":{"input":true},"no":{"input":false}}}"#).unwrap();
     let c = conformant(&d);
     let evaluator = DefaultEvaluator::new();
@@ -664,15 +664,15 @@ fn preparation_separates_setup_from_value_and_keeps_ready_healthy() {
         let d = Document::parse(text).unwrap();
         let validation = d.validate().unwrap();
         assert!(validation.conformant().is_none());
-        let error = d.operations().unwrap_err();
-        assert_eq!(
-            error
-                .source_location()
-                .unwrap()
-                .pointer
-                .as_ref()
-                .and_then(openbindings::Pointer::as_str),
-            Some(pointer)
+        assert!(
+            validation
+                .report()
+                .findings
+                .iter()
+                .filter_map(|finding| finding.location.as_ref())
+                .any(
+                    |location| location.pointer.as_ref().and_then(Pointer::as_str) == Some(pointer)
+                )
         );
     }
 }

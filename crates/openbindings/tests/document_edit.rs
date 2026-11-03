@@ -1,10 +1,7 @@
 //! Document edits preserve exact bytes and retained proof ownership.
 use openbindings::*;
-use std::{collections::BTreeMap, ops::Range, path::Path};
+use std::{ops::Range, path::Path};
 
-fn encoded(value: &impl serde::Serialize) -> JsonValue {
-    JsonValue::parse(serde_json::to_vec(value).unwrap()).unwrap()
-}
 fn exact(text: &str) -> JsonValue {
     JsonValue::parse(text).unwrap()
 }
@@ -17,7 +14,7 @@ fn atomic_failure_keeps_bytes_caches_views_and_proof() {
     let mut doc =
         Document::parse(" {\n\"openbindings\":\"0.2.0\",\"operations\":{\"go\":{}}} ").unwrap();
     let proof = doc.validate().unwrap().conformant().unwrap();
-    let view = doc.resolve_operation("go").unwrap();
+    let view = proof.resolve_operation("go").unwrap();
     let bytes = doc.as_bytes().to_vec();
     let value = exact("42");
     for edits in [
@@ -43,7 +40,12 @@ fn atomic_failure_keeps_bytes_caches_views_and_proof() {
             Conformance::Conformant
         );
     }
-    doc = doc.set_operation_description("go", "new\nline").unwrap();
+    doc = doc
+        .edit(&[Edit::set(
+            &["operations", "go", "description"],
+            JsonValue::string("new\nline").unwrap(),
+        )])
+        .unwrap();
     assert_eq!(
         doc.value()
             .at("/operations/go/description")
@@ -52,14 +54,13 @@ fn atomic_failure_keeps_bytes_caches_views_and_proof() {
         Some("new\nline")
     );
     assert_eq!(proof.document().as_bytes(), bytes);
-    let OperationSelection::Found(view) = view else {
-        panic!()
-    };
-    assert!(view.description().unwrap().is_none());
+    assert!(view.description().is_none());
     let mut doc = proof.into_inner();
-    doc = doc.set_name("editable again").unwrap();
+    doc = doc
+        .set("/name", &JsonValue::string("editable again").unwrap())
+        .unwrap();
     assert_eq!(
-        doc.name().unwrap().unwrap().as_str(),
+        doc.value().get("name").unwrap().as_str(),
         Some("editable again")
     );
 }
@@ -101,7 +102,15 @@ fn sibling_insertions_coalesce_in_batch_order_and_escape_keys() {
                 .collect::<Vec<_>>(),
         )
         .unwrap();
-    assert_eq!(doc.operations().unwrap().len(), 1000);
+    assert_eq!(
+        doc.validate()
+            .unwrap()
+            .conformant()
+            .unwrap()
+            .operations()
+            .len(),
+        1000
+    );
     assert!(doc.validate().unwrap().conformant().is_some());
 }
 
@@ -110,7 +119,6 @@ fn duplicates_remain_inspectable_but_cannot_be_edited_or_proven() {
     let doc =
         Document::parse(r#"{"openbindings":"0.2.0","operations":{},"x":1,"\u0078":2}"#).unwrap();
     let before = doc.as_bytes().to_vec();
-    assert!(doc.operations().is_err());
     assert!(doc.validate().unwrap().conformant().is_none());
     assert_eq!(
         doc.set("/x", &exact("3")).unwrap_err().code(),
@@ -130,7 +138,12 @@ fn duplicates_remain_inspectable_but_cannot_be_edited_or_proven() {
 fn positions_follow_current_bytes_and_untouched_extensions_stay_exact() {
     let mut doc = Document::parse("{\n\"openbindings\":\"0.2.0\",\"description\":\"old\",\n\"operations\":{}, \"x\" : [ -0, 1e+002, 9007199254740993, \"\\ud800\" ]\n}").unwrap();
     let extension = doc.value().get("x").unwrap().text().to_owned();
-    doc = doc.set_description("different length").unwrap();
+    doc = doc
+        .set(
+            "/description",
+            &JsonValue::string("different length").unwrap(),
+        )
+        .unwrap();
     assert_eq!(doc.value().get("x").unwrap().text(), extension);
     let operations = doc.value().get("operations").unwrap().location();
     assert_eq!(
@@ -139,8 +152,8 @@ fn positions_follow_current_bytes_and_untouched_extensions_stay_exact() {
     );
     assert_eq!(operations.line, 3);
     doc = doc.set("/operations", &exact("null")).unwrap();
-    let error = doc.operations().unwrap_err();
-    let location = error.source_location().unwrap();
+    let location = doc.value().get("operations").unwrap().location();
+    assert!(doc.validate().unwrap().conformant().is_none());
     assert_eq!(
         &doc.as_bytes()[location.byte_offset..location.byte_offset + 4],
         b"null"
@@ -153,63 +166,31 @@ fn positions_follow_current_bytes_and_untouched_extensions_stay_exact() {
 }
 
 #[test]
-fn whole_parts_preserve_absence_null_exact_values_and_collision_paths() {
-    let mut doc = Document::new();
-    doc = doc
-        .set_operation(
-            "go",
-            &Operation {
-                input: Some(exact("true")),
-                ..Default::default()
-            },
-        )
+fn exact_parts_preserve_absence_null_and_original_values() {
+    let doc = Document::new()
+        .edit(&[
+            Edit::set(
+                &["operations", "go"],
+                exact(r#"{"input":true,"examples":{"one":{"input":null}}}"#),
+            ),
+            Edit::set(
+                &["sources"],
+                exact(r#"{"s":{"kind":"custom","data":null}}"#),
+            ),
+            Edit::set(
+                &["bindings"],
+                exact(r#"{"b":{"operation":"go","source":"s"}}"#),
+            ),
+            Edit::set(&["dependencies"], exact(r#"{"d":{"operation":"go"}}"#)),
+            Edit::set(&["x-number"], exact("1e9999999999999999")),
+        ])
         .unwrap();
-    doc = doc
-        .set_example(
-            "go",
-            "one",
-            &Example {
-                input: Some(exact("null")),
-                ..Default::default()
-            },
-        )
-        .unwrap();
-    doc = doc
-        .set_source(
-            "s",
-            &Source {
-                kind: "custom".into(),
-                data: Some(exact("null")),
-                ..Default::default()
-            },
-        )
-        .unwrap();
-    doc = doc
-        .set_binding(
-            "b",
-            &Binding {
-                operation: "go".into(),
-                source: "s".into(),
-                ..Default::default()
-            },
-        )
-        .unwrap();
-    doc = doc
-        .set_dependency(
-            "d",
-            &Dependency {
-                operation: "go".into(),
-                ..Default::default()
-            },
-        )
-        .unwrap();
-    doc = doc.set("/x-number", &exact("1e9999999999999999")).unwrap();
     let proof = doc.validate().unwrap().conformant().unwrap();
     assert!(proof.name().is_none());
     assert_eq!(proof.source("s").unwrap().data().unwrap().text(), "null");
     assert_eq!(
         proof
-            .resolve_operation("go")
+            .operation("go")
             .unwrap()
             .example("one")
             .unwrap()
@@ -222,20 +203,8 @@ fn whole_parts_preserve_absence_null_exact_values_and_collision_paths() {
         doc.value().get("x-number").unwrap().text(),
         "1e9999999999999999"
     );
-    let before = doc.as_bytes().to_vec();
-    let bad = Source {
-        additional_fields: BTreeMap::from([("kind".into(), exact("null"))]),
-        ..Default::default()
-    };
-    let EditError::FieldCollision { part_pointer, .. } = doc.set_source("s~/", &bad).unwrap_err()
-    else {
-        panic!()
-    };
-    assert_eq!(
-        part_pointer.as_deref(),
-        Some("/sources/s~0~1/additional_fields/kind")
-    );
-    assert_eq!(doc.as_bytes(), before);
+    assert!(proof.binding("b").unwrap().data().is_none());
+    assert!(proof.dependency("d").unwrap().kinds().is_none());
 }
 
 // Independent text reference: parse the expected revision for every step, edit
@@ -389,32 +358,22 @@ fn generated_edit_sequences_over_every_corpus_document_match_reparsed_text() {
                 "{\"opaque\": [ true, 3.00 ]}",
                 "\"\\ud800\"",
             ][(seed as usize >> 8) % 6];
-            let (pointer, replacement, part) = if step % 5 == 0 {
-                let op = Operation {
-                    input: Some(exact(value)),
-                    ..Default::default()
-                };
-                let mut operations = BTreeMap::new();
-                operations.insert(format!("op{step}"), op);
+            let (pointer, replacement) = if step % 5 == 0 {
                 (
                     "/operations".to_owned(),
-                    Some(String::from_utf8(serde_json::to_vec(&operations).unwrap()).unwrap()),
-                    Some(operations),
+                    Some(format!(r#"{{"op{step}":{{"input":{value}}}}}"#)),
                 )
             } else if !choices.is_empty() && !seed.is_multiple_of(3) {
                 (
                     choices[seed as usize % choices.len()].clone(),
                     (seed & 4 != 0).then(|| value.to_owned()),
-                    None,
                 )
             } else {
-                (format!("/x~1{step}~0"), Some(value.to_owned()), None)
+                (format!("/x~1{step}~0"), Some(value.to_owned()))
             };
             let before = expected.clone();
             let (next, range, inserted) = reference(&expected, &pointer, replacement.as_deref());
-            if let Some(operations) = part {
-                doc = doc.set_operations(&operations).unwrap();
-            } else if let Some(value) = replacement {
+            if let Some(value) = replacement {
                 doc = doc.set(&pointer, &exact(&value)).unwrap();
             } else {
                 doc = doc.remove(&pointer).unwrap();
@@ -546,7 +505,7 @@ fn overlapping_edits_are_refused_without_changing_bytes() {
 }
 
 #[test]
-fn every_typed_part_setter_matches_an_exact_reference_sequence() {
+fn every_namespace_edit_matches_an_exact_reference_sequence() {
     // Exercise all construction namespaces with escaped keys.
     let mut seed = 0x9876_5432u64;
     let mut document = Document::new();
@@ -556,29 +515,18 @@ fn every_typed_part_setter_matches_an_exact_reference_sequence() {
         seed ^= seed >> 7;
         seed ^= seed << 17;
         let key = format!("item{}/~", seed % 7);
-        let operation = Operation {
-            description: Some(format!("step {step}")),
-            ..Default::default()
-        };
-        let source = Source {
-            kind: "custom".into(),
-            data: Some(exact("[-0,1e+3]")),
-            ..Default::default()
-        };
-        let binding = Binding {
-            operation: key.clone(),
-            source: key.clone(),
-            ..Default::default()
-        };
-        let dependency = Dependency {
-            operation: key.clone(),
-            ..Default::default()
-        };
+        let encoded_key = serde_json::to_string(&key).unwrap();
         let (namespace, part) = match seed % 4 {
-            0 => ("operations", serde_json::to_string(&operation).unwrap()),
-            1 => ("sources", serde_json::to_string(&source).unwrap()),
-            2 => ("bindings", serde_json::to_string(&binding).unwrap()),
-            _ => ("dependencies", serde_json::to_string(&dependency).unwrap()),
+            0 => ("operations", format!(r#"{{"description":"step {step}"}}"#)),
+            1 => (
+                "sources",
+                String::from(r#"{"kind":"custom","data":[-0,1e+3]}"#),
+            ),
+            2 => (
+                "bindings",
+                format!(r#"{{"operation":{encoded_key},"source":{encoded_key}}}"#),
+            ),
+            _ => ("dependencies", format!(r#"{{"operation":{encoded_key}}}"#)),
         };
         let (pointer, replacement) = if exact(&expected).get(namespace).is_some() {
             (format!("/{namespace}/{}", escape(&key)), part)
@@ -589,12 +537,9 @@ fn every_typed_part_setter_matches_an_exact_reference_sequence() {
             )
         };
         let (next, range, inserted) = reference(&expected, &pointer, Some(&replacement));
-        document = match seed % 4 {
-            0 => document.set_operation(&key, &operation).unwrap(),
-            1 => document.set_source(&key, &source).unwrap(),
-            2 => document.set_binding(&key, &binding).unwrap(),
-            _ => document.set_dependency(&key, &dependency).unwrap(),
-        };
+        document = document
+            .edit(&[Edit::set_at(&pointer, exact(&replacement))])
+            .unwrap();
         assert_eq!(document.as_bytes(), next.as_bytes());
         assert_eq!(
             &document.as_bytes()[..range.start],
@@ -611,50 +556,23 @@ fn every_typed_part_setter_matches_an_exact_reference_sequence() {
 }
 
 #[test]
-fn typed_namespace_batch_preserves_exact_bytes_and_is_atomic() {
-    // Typed maps and pointer edits share a single atomic revision.
+fn exact_namespace_batch_preserves_exact_bytes_and_is_atomic() {
+    // Complete maps and leaf edits share a single atomic revision.
     let mut document =
         Document::parse(" {\n\"openbindings\":\"0.2.0\",\"operations\":{},\"x-keep\": 1e+00 } ")
             .unwrap();
-    let operations: BTreeMap<String, Operation> = BTreeMap::from([(
-        "run".into(),
-        Operation {
-            input: Some(exact("true")),
-            additional_fields: BTreeMap::from([("x-number".into(), exact("1e+003"))]),
-            ..Default::default()
-        },
-    )]);
-    let sources: BTreeMap<String, Source> = BTreeMap::from([(
-        "s".into(),
-        Source {
-            kind: "custom".into(),
-            data: Some(exact("9007199254740993")),
-            ..Default::default()
-        },
-    )]);
-    let bindings: BTreeMap<String, Binding> = BTreeMap::from([(
-        "b".into(),
-        Binding {
-            operation: "run".into(),
-            source: "s".into(),
-            ..Default::default()
-        },
-    )]);
-    let dependencies: BTreeMap<String, Dependency> = BTreeMap::from([(
-        "d".into(),
-        Dependency {
-            operation: "run".into(),
-            ..Default::default()
-        },
-    )]);
+    let operations = exact(r#"{"run":{"input":true,"x-number":1e+003}}"#);
+    let sources = exact(r#"{"s":{"kind":"custom","data":9007199254740993}}"#);
+    let bindings = exact(r#"{"b":{"operation":"run","source":"s"}}"#);
+    let dependencies = exact(r#"{"d":{"operation":"run"}}"#);
     let name = exact("\"Batch\"");
     document = document
         .edit(&[
-            Edit::set(&["operations"], encoded(&operations)),
+            Edit::set(&["operations"], operations),
             Edit::set_at("/name", (name).clone()),
-            Edit::set(&["dependencies"], encoded(&dependencies)),
-            Edit::set(&["sources"], encoded(&sources)),
-            Edit::set(&["bindings"], encoded(&bindings)),
+            Edit::set(&["dependencies"], dependencies),
+            Edit::set(&["sources"], sources),
+            Edit::set(&["bindings"], bindings),
         ])
         .unwrap();
     assert!(document.validate().unwrap().conformant().is_some());
@@ -668,18 +586,6 @@ fn typed_namespace_batch_preserves_exact_bytes_and_is_atomic() {
                 Edit::remove_at("/missing")
             ])
             .is_err()
-    );
-    assert_eq!(document.as_bytes(), before);
-    let invalid = BTreeMap::from([(
-        "run".into(),
-        Operation {
-            additional_fields: BTreeMap::from([("input".into(), exact("true"))]),
-            ..Default::default()
-        },
-    )]);
-    assert_eq!(
-        document.set_operations(&invalid).unwrap_err().code(),
-        "field-collision"
     );
     assert_eq!(document.as_bytes(), before);
 }

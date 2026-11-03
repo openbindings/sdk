@@ -12,16 +12,13 @@ const text = String.raw`{"openbindings":"0.2.0","name":"\ud800\udc00","version":
 
 test("Rust proof transfer is single-use and unavailable to parsed or forged handles", () => {
   const parsed = bridge.WasmDocument.parseBytes(new TextEncoder().encode(text));
-  // A parsed document's operation carries exact schema values, never contracts.
-  const selection = parsed.resolveOperation("go");
-  const plain = selection.takeOperation();
-  selection.free();
-  assert.ok(!(plain instanceof bridge.WasmConformantOperation));
-  const plainInput = plain.input();
+  assert.equal(typeof parsed.resolveOperation, "undefined");
+  const rawDocument = parsed.value(),
+    plainInput = rawDocument.at("/operations/run/input");
   assert.ok(plainInput instanceof bridge.WasmJson);
   assert.equal(typeof plainInput.prepare, "undefined");
   plainInput.free();
-  plain.free();
+  rawDocument.free();
   const transfer = parsed.validate();
   assert.equal(JSON.parse(transfer.report()).report.conclusion, "conformant");
   const proof = transfer.takeConformant();
@@ -33,7 +30,7 @@ test("Rust proof transfer is single-use and unavailable to parsed or forged hand
   proof.free();
   const resources = new bridge.WasmResources();
   const operation = retained.resolveOperation("go");
-  assert.ok(operation instanceof bridge.WasmConformantOperation);
+  assert.ok(operation instanceof bridge.WasmOperation);
   const contract = operation.input();
   assert.ok(contract instanceof bridge.WasmSchema);
   const preparation = contract.prepareWith(resources, "{}", false);
@@ -57,14 +54,13 @@ test("Rust proof transfer is single-use and unavailable to parsed or forged hand
     unproven.free();
   }
   const unproven = sdk.Document.parse(text).value;
-  const selected = unproven.resolveOperation("go");
-  assert.equal(selected.status, "found");
-  assert.ok(!(selected.operation instanceof sdk.ConformantOperationView));
-  const exactInput = selected.operation.input();
+  assert.equal(typeof unproven.resolveOperation, "undefined");
+  const rawValue = unproven.value(),
+    exactInput = rawValue.at("/operations/run/input");
   assert.ok(exactInput instanceof sdk.ExactJson);
   assert.equal(typeof exactInput.prepare, "undefined");
   exactInput.dispose();
-  selected.operation.dispose();
+  rawValue.dispose();
   assert.throws(() =>
     sdk.ConformantDocument.prototype.resolveOperation.call(unproven, "go"),
   );
@@ -202,22 +198,7 @@ test("raw document receiver substitution rechecks proof at every authority entry
   }
 });
 
-test("top-level editor reads preserve field-local errors, exact text and absence", () => {
-  // Claude's metadata-parity probe: only the version field is malformed.
-  const parsed = sdk.Document.parse(
-    '{"openbindings":"0.2.0","name":"readable","version":7,"operations":{}}',
-  ).value;
-  assert.equal(parsed.openbindings, "0.2.0");
-  assert.equal(parsed.name, "readable");
-  assert.equal(parsed.description, undefined);
-  assert.throws(
-    () => parsed.version,
-    (error) =>
-      error.code === "interpretation" &&
-      error.interpretationCode === "invalid-version" &&
-      error.location.pointer === "/version",
-  );
-  parsed.dispose();
+test("raw draft inspection preserves malformed fields, exact text and absence", () => {
   for (const bad of ["name", "version", "description"]) {
     const values = {
       openbindings: "0.2.0",
@@ -227,29 +208,18 @@ test("top-level editor reads preserve field-local errors, exact text and absence
     };
     const source = JSON.stringify({ ...values, [bad]: 7, operations: {} });
     const doc = sdk.Document.parse(source).value;
-    const raw = bridge.WasmDocument.parseBytes(
-      new TextEncoder().encode(source),
-    );
+    const root = doc.value();
     try {
       for (const [field, expected] of Object.entries(values)) {
-        if (field === bad) {
-          assert.throws(
-            () => doc[field],
-            (error) =>
-              error.interpretationCode === `invalid-${bad}` &&
-              error.location.pointer === `/${bad}`,
-          );
-          assert.throws(
-            () => raw[field](),
-            (error) => JSON.parse(error).location.pointer === `/${bad}`,
-          );
-        } else {
-          assert.equal(doc[field], expected);
-          assert.equal(JSON.parse(raw[field]()), expected);
-        }
+        const value = root.get(field);
+        assert.equal(JSON.parse(value.text), field === bad ? 7 : expected);
+        assert.equal(value.metadata.location.pointer, `/${field}`);
+        value.dispose();
       }
+      assert.equal(doc.validate().status, "report");
+      assert.equal(typeof doc.resolveOperation, "undefined");
     } finally {
-      raw.free();
+      root.dispose();
       doc.dispose();
     }
   }
@@ -265,14 +235,24 @@ test("validated text and retained reads preserve decoded text and presence", () 
   assert.equal(proof.version.charCodeAt(0), 0xffff);
   assert.equal(proof.description.charCodeAt(0), 0xd800);
   const parsed = proof.asDocument();
-  assert.equal(parsed.name.charCodeAt(0), 0xd800);
+  const parsedValue = parsed.value(),
+    parsedName = parsedValue.get("name");
+  assert.equal(JSON.parse(parsedName.text).charCodeAt(0), 0xd800);
+  parsedName.dispose();
+  parsedValue.dispose();
   parsed.dispose();
-  assert.equal(proof.operations[0].description.charCodeAt(0), 0xd800);
-  assert.equal(proof.operations[0].tags[0].charCodeAt(0), 0xd800);
-  assert.equal(proof.sources[0].kind.charCodeAt(0), 0xd800);
-  assert.equal(proof.dependencies[0].kinds[0].charCodeAt(0), 0xd800);
-  assert.equal(proof.bindings[0].description.charCodeAt(0), 0xd800);
-  assert.equal(proof.dependencyAcceptsKind("d", "\ud800\udc00"), true);
+  const operations = proof.operations(),
+    sources = proof.sources(),
+    dependencies = proof.dependencies(),
+    bindings = proof.bindings();
+  assert.equal(operations[0].description.charCodeAt(0), 0xd800);
+  assert.equal(operations[0].tags[0].charCodeAt(0), 0xd800);
+  assert.equal(sources[0].kind.charCodeAt(0), 0xd800);
+  assert.equal(dependencies[0].kinds[0].charCodeAt(0), 0xd800);
+  assert.equal(bindings[0].description.charCodeAt(0), 0xd800);
+  assert.equal(dependencies[0].acceptsKind("\ud800\udc00"), true);
+  for (const entry of [...operations, ...sources, ...dependencies, ...bindings])
+    entry.dispose();
   const schemas = proof.schemas();
   assert.deepEqual([...schemas.keys()], ["f", "o", "t"]);
   const operation = proof.resolveOperation("go");
@@ -285,7 +265,7 @@ test("validated text and retained reads preserve decoded text and presence", () 
   outputContract.dispose();
   const exampleInput = example.input();
   assert.equal(example.output(), undefined);
-  assert.equal(example.metadata.description.charCodeAt(0), 0xd800);
+  assert.equal(example.description.charCodeAt(0), 0xd800);
   example.dispose();
   operation.dispose();
   proof.dispose();
@@ -312,15 +292,25 @@ test("validated text and retained reads preserve decoded text and presence", () 
       const doc = sdk.Document.parse(
         `{"openbindings":"0.2.0","operations":{"run":{"description":"x"${field}}}}`,
       ).value;
-      const op = doc.resolveOperation("run").operation;
-      const acquired = op[direction]();
-      assert.equal(acquired?.text, value);
-      assert.equal(
-        op.metadata[direction === "input" ? "hasInput" : "hasOutput"],
-        value !== undefined,
-      );
-      acquired?.dispose();
-      op.dispose();
+      const root = doc.value(),
+        raw = root.at(`/operations/run/${direction}`);
+      assert.equal(raw?.text, value);
+      raw?.dispose();
+      root.dispose();
+      const validation = doc.validate();
+      if (value === "null") assert.equal(validation.status, "report");
+      else {
+        assert.equal(validation.status, "conformant");
+        const proof = validation.document,
+          op = proof.operation("run");
+        const acquired = op[direction](),
+          exact = acquired?.json();
+        assert.equal(exact?.text, value);
+        exact?.dispose();
+        acquired?.dispose();
+        op.dispose();
+        proof.dispose();
+      }
       doc.dispose();
     }
   }
@@ -339,6 +329,14 @@ test("validated text and retained reads preserve decoded text and presence", () 
   }
 });
 
+function accepts(document, key, kind) {
+  const dependency = document.dependency(key);
+  try {
+    return dependency?.acceptsKind(kind);
+  } finally {
+    dependency?.dispose();
+  }
+}
 test("conformant kind filters compare decoded text and handle unpaired caller strings", () => {
   const parsed = sdk.Document.parse(
     String.raw`{"openbindings":"0.2.0","name":"caf\u00e9","description":"\ud834\udd1e","version":"\uffff","operations":{"run":{}},"sources":{"s":{"kind":"caf\u00e9\ud834\udd1e"}},"dependencies":{"escaped":{"operation":"run","kinds":["caf\u00e9\uD834\uDD1E"]},"literal":{"operation":"run","kinds":["café𝄞"]},"all":{"operation":"run"}}}`,
@@ -350,14 +348,16 @@ test("conformant kind filters compare decoded text and handle unpaired caller st
     assert.equal(proof.name, "café");
     assert.equal(proof.description, "𝄞");
     assert.equal(proof.version, "\uffff");
-    assert.equal(proof.sources[0].kind, "café𝄞");
+    const source = proof.source("s");
+    assert.equal(source.kind, "café𝄞");
+    source.dispose();
     for (const key of ["escaped", "literal", "all"]) {
-      assert.equal(proof.dependencyAcceptsKind(key, "café𝄞"), true);
+      assert.equal(accepts(proof, key, "café𝄞"), true);
     }
-    assert.equal(proof.dependencyAcceptsKind("escaped", "cafe𝄞"), false);
-    assert.equal(proof.dependencyAcceptsKind("literal", "\ud800"), false);
-    assert.equal(proof.dependencyAcceptsKind("all", "\ud800"), true);
-    assert.equal(proof.dependencyAcceptsKind("missing", "café𝄞"), undefined);
+    assert.equal(accepts(proof, "escaped", "cafe𝄞"), false);
+    assert.equal(accepts(proof, "literal", "\ud800"), false);
+    assert.equal(accepts(proof, "all", "\ud800"), true);
+    assert.equal(accepts(proof, "missing", "café𝄞"), undefined);
   } finally {
     proof.dispose();
     parsed.dispose();

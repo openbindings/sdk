@@ -1,30 +1,33 @@
 // Initialize @openbindings/sdk for your host before calling this editor example.
 import { Document, EditError } from "@openbindings/sdk";
-export function recoverPartSerialization() {
-  const operation = { additionalFields: { input: {} } };
-  let document = Document.create();
+export function recoverEncoding() {
+  const operation = { input: { minimum: NaN } };
+  const document = Document.create();
   try {
     let first;
     try {
-      document.setOperation("run", operation);
+      const unexpected = document.set("/operations/run", operation);
+      unexpected.dispose();
     } catch (error) {
       if (!(error instanceof EditError)) throw error;
       first = error;
     }
     if (
-      first?.code !== "field-collision" ||
-      first.partPointer !== "/operations/run/additionalFields/input"
+      first?.code !== "non-finite-number" ||
+      first.inputPointer !== "/0/value/input/minimum"
     )
-      throw new Error("Expected the example's field collision.");
-    // Focus the caller's typed part field; no message parsing or byte offset.
-    delete operation.additionalFields.input;
-    const changed = document.setOperation("run", operation);
-    document.dispose();
-    document = changed;
-    const checked = document.validate();
-    if (checked.status !== "conformant")
-      throw new Error("Conformance was not established.");
-    return { focus: first.partPointer, document: checked.document };
+      throw new Error("Expected the example's non-finite JSON input.");
+    // Focus the caller's JSON input; no message parsing or invented byte offset.
+    operation.input.minimum = 0;
+    const changed = document.set("/operations/run", operation);
+    try {
+      const checked = changed.validate();
+      if (checked.status !== "conformant")
+        throw new Error("Conformance was not established.");
+      return { focus: first.inputPointer, document: checked.document };
+    } finally {
+      changed.dispose();
+    }
   } finally {
     document.dispose();
   }

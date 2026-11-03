@@ -67,42 +67,32 @@ export function diagnosticPolicyCases(sdk) {
       );
       const raw = own(doc.value());
       const source = own(raw.at(pointer));
-      for (const call of [() => doc.resolveOperation("op")]) {
-        const error = thrown(call);
-        check(
-          error instanceof sdk.SdkError &&
-            error.code === "interpretation" &&
-            error.interpretationCode === code,
-          "specific interpretation code survives facade",
+      const finding = doc
+        .validate()
+        .report.findings.find(
+          (finding) => finding.location?.pointer === pointer,
         );
-        check(
-          error.location?.pointer === pointer &&
-            error.location.byteOffset === source.metadata.location.byteOffset,
-          "original source location survives facade",
-        );
-        check(
-          Object.isFrozen(error.location),
-          "error source location remains immutable",
-        );
-      }
+      check(
+        finding?.location?.byteOffset === source.metadata.location.byteOffset,
+        "original conformance source location survives facade",
+      );
     }
     const duplicate = document(
       '{"openbindings":"0.2.0","operations":{"op":{"input":true,"input":false}}}',
     );
-    const duplicateError = thrown(() => duplicate.resolveOperation("op"));
     check(
       duplicate.validate().status === "report",
       "duplicate document cannot construct contracts",
     );
+    const duplicateReport = duplicate.references();
     check(
-      duplicateError instanceof sdk.SdkError &&
-        duplicateError.code === "interpretation" &&
-        duplicateError.interpretationCode === "duplicate-members",
-      "duplicate interpretation code survives without fabricating a location",
+      !duplicateReport.complete &&
+        duplicateReport.limitation.code === "duplicate-members",
+      "duplicate reference precondition remains structured",
     );
     check(
-      duplicateError.location === undefined,
-      "unlocated broad refusal remains unlocated",
+      duplicateReport.limitation.location === null,
+      "precondition does not invent a schema location",
     );
     const input = document({
       openbindings: "0.2.0",
@@ -123,8 +113,8 @@ export function diagnosticPolicyCases(sdk) {
       "nonconformant metadata cannot construct contracts",
     );
     check(
-      input.resolveOperation("shared").status === "ambiguous",
-      "parsed ambiguity remains visible",
+      input.validate().report.evidence["OBI-05"] === "violated",
+      "alias ambiguity remains conformance evidence",
     );
     const validated = document({
       openbindings: "0.2.0",

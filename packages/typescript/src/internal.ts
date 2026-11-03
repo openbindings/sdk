@@ -310,29 +310,12 @@ export type ValueOutcome =
       /** Structured no-verdict reason; no satisfaction/failure is claimed. */
       detail: NoVerdict;
     };
-/** Name lookup after successful interpretation. Found transfers a disposable OperationView; missing means no occurrence; ambiguous retains distinct primary keys in lexical order, possibly one key for repeated aliases. Invalid typed namespace structure throws SdkError. */
-export type OperationSelection =
-  | {
-      /** Result discriminant; narrow this before reading branch-specific fields. */
-      status: "found";
-      /** Caller-owned selected operation view; dispose independently. */
-      operation: OperationView;
-    }
-  | {
-      /** Result discriminant; narrow this before reading branch-specific fields. */
-      status: "missing";
-    }
-  | {
-      /** Result discriminant; narrow this before reading branch-specific fields. */
-      status: "ambiguous";
-      /** Distinct primary keys in lexical order; repeated occurrences can yield one key. */
-      candidates: readonly string[];
-    };
-/** Preparation result: ready transfers a disposable PreparedSchema; no-verdict is a preparation refusal that judges no instance. Ready means prepared, not decidable: a prepared value contract can return no-verdict for every value. A missing operation or an absent value contract is undefined before preparation, never a preparation result. */
 /** Original-context lookup failure. Undefined describes a local reference defect, not an instance verdict. */
 export type ResolutionFailureKind =
   | {
+      /** A reference defect whose meaning is undefined by the schema rules. */
       kind: "undefined";
+      /** The original reference defect; this judges no instance. */
       details:
         | "malformed-reference"
         | "missing-target"
@@ -342,12 +325,32 @@ export type ResolutionFailureKind =
         | "invalid-identifier";
     }
   | {
+      /** A resource or dialect the current environment cannot supply. */
       kind: "resource-unavailable" | "unsupported-dialect";
-      details: { uri: string };
+      /** Identity of the unavailable resource or dialect. */
+      details: {
+        /** Original requested resource URI or dialect identifier; resolution performs no implicit resource acquisition. */
+        uri: string;
+      };
     }
-  | { kind: "unsupported-capability"; details: { capability: string } }
-  | { kind: "limit"; details: { resource: string } }
   | {
+      /** The implementation cannot perform a required schema capability. */
+      kind: "unsupported-capability";
+      /** Capability that prevented resolution. */
+      details: {
+        /** Stable unsupported capability identifier. */ capability: string;
+      };
+    }
+  | {
+      /** Resolution exceeded an implementation work or storage budget. */
+      kind: "limit";
+      /** Budget that prevented resolution. */
+      details: {
+        /** Stable exhausted resource identifier. */ resource: string;
+      };
+    }
+  | {
+      /** Other closed resolution refusals; none establishes a value verdict. */
       kind:
         | "invalid-external-schema"
         | "cancelled"
@@ -356,17 +359,50 @@ export type ResolutionFailureKind =
         | "invalid-anchor-name";
     };
 /** A failed preparation attempt, distinct from every per-value outcome. */
-export type PreparationFailure = { origin: SchemaOrigin | null } & (
-  | { kind: "resolution"; details: { cause: ResolutionFailureKind } }
-  | { kind: "unsupported-capability"; details: { capability: string } }
-  | { kind: "limit"; details: { resource: string } }
-  | { kind: "cancelled" | "invalid-external-schema" }
-  | { kind: "implementation"; details: { message: string } }
+export type PreparationFailure = {
+  /** Original schema coordinate when known; no generated coordinate is substituted. */
+  origin: SchemaOrigin | null;
+} & (
+  | {
+      /** Original-context schema resolution failed. */ kind: "resolution";
+      /** Retained structured resolution cause. */ details: {
+        /** Resolution refusal in the original schema environment. */ cause: ResolutionFailureKind;
+      };
+    }
+  | {
+      /** A required evaluator capability is unavailable. */ kind: "unsupported-capability";
+      /** Capability that prevented preparation. */ details: {
+        /** Stable unsupported capability identifier. */ capability: string;
+      };
+    }
+  | {
+      /** Preparation exhausted a work or storage budget. */ kind: "limit";
+      /** Budget that prevented preparation. */ details: {
+        /** Stable exhausted resource identifier. */ resource: string;
+      };
+    }
+  | {
+      /** Cancellation or invalid supplied schema prevented preparation. */ kind:
+        | "cancelled"
+        | "invalid-external-schema";
+    }
+  | {
+      /** The evaluator encountered an implementation failure. */ kind: "implementation";
+      /** Explanatory implementation information. */ details: {
+        /** Human-readable explanation; not a value verdict. */ message: string;
+      };
+    }
 );
-/** Preparation either returns an owned validator or a structured preparation failure. */
+/** Preparation transfers an owned PreparedSchema or a refusal that judges no instance. Ready means prepared, not decidable: evaluation may still return no-verdict. */
 export type SchemaPreparation =
-  | { status: "ready"; schema: PreparedSchema }
-  | { status: "refused"; failure: PreparationFailure };
+  | {
+      /** Preparation succeeded; dispose the transferred schema. */ status: "ready";
+      /** Independent prepared schema owner. */ schema: PreparedSchema;
+    }
+  | {
+      /** Preparation failed before evaluating any instance. */ status: "refused";
+      /** Structured preparation refusal with its original origin when known. */ failure: PreparationFailure;
+    };
 /** Expected refusal while converting an ordinary caller value into exact JSON, before schema evaluation. The code identifies the unsupported shape; instancePointer is a logical ordinary-value path, never invented source coordinates. */
 export interface ValueAdmissionFailure {
   /** Stable ordinary-value admission category; returned before schema evaluation. */
@@ -598,79 +634,42 @@ function limitsOption(options: unknown): Uint32Array | undefined {
   }
   return admissionLimits(limits);
 }
-/** Frozen metadata snapshot in lexical primary-key order. It contains no disposable owners and is not evidence of conformance, schema support or binding priority. */
-export interface OperationMetadata {
-  /** Primary operation key, independent of the alias used to select it. */
-  readonly key: string;
-  /** Optional decoded description; null means absent. */
-  readonly description: string | null;
-  /** Frozen aliases preserving declaration order; null means absent. */
-  readonly aliases: readonly string[] | null;
-  /** Frozen declared tags in order; null means absent. */
-  readonly tags: readonly string[] | null;
-  /** Declared deprecation annotation; null means absent. */
-  readonly deprecated: boolean | null;
-  /** Whether an input member is present, without proving it is a supported schema. */
-  readonly hasInput: boolean;
-  /** Whether an output member is present, without proving it is a supported schema. */
-  readonly hasOutput: boolean;
+// Private scalar transfers for canonical owners. Exact data never passes through them.
+interface OperationMetadata {
+  key: string;
+  description: string | null;
+  aliases: readonly string[] | null;
+  tags: readonly string[] | null;
+  deprecated: boolean | null;
 }
-/** Frozen binding declaration metadata; annotations do not select or execute a realization. */
-export interface BindingMetadata {
-  /** Binding declaration key. */ readonly key: string;
-  /** Declared primary operation key. */ readonly operation: string;
-  /** Declared key into the `sources` map; no source need be present under it. */ readonly source: string;
-  /** Declared description or null for absence. */ readonly description:
-    | string
-    | null;
-  /** Exact interoperable preference integer or null; no ranking is performed. */ readonly preference:
-    | number
-    | null;
-  /** Declared idempotence or null for absence. */ readonly idempotent:
-    | boolean
-    | null;
-  /** Declared deprecation or null for absence. */ readonly deprecated:
-    | boolean
-    | null;
-  /** Presence of data, including explicit JSON null. */ readonly hasData: boolean;
+interface BindingMetadata {
+  key: string;
+  operation: string;
+  source: string;
+  description: string | null;
+  preference: number | null;
+  idempotent: boolean | null;
+  deprecated: boolean | null;
 }
-/** Frozen source declaration metadata, excluding opaque data. */
-export interface SourceMetadata {
-  /** Source declaration key. */ readonly key: string;
-  /** Exact declared kind string; no normalization or execution. */ readonly kind: string;
-  /** Declared description or null for absence. */ readonly description:
-    | string
-    | null;
-  /** Presence of data, including explicit JSON null. */ readonly hasData: boolean;
+interface SourceMetadata {
+  key: string;
+  kind: string;
+  description: string | null;
 }
-/** Frozen dependency declaration metadata; no provider is selected. */
-export interface DependencyMetadata {
-  /** Dependency declaration key. */ readonly key: string;
-  /** Declared operation key. */ readonly operation: string;
-  /** Declared description or null for absence. */ readonly description:
-    | string
-    | null;
-  /** Frozen declared kind strings; null accepts all. An empty list matches none but is nonconformant: a present kinds list must be nonempty. */ readonly kinds:
-    | readonly string[]
-    | null;
+interface DependencyMetadata {
+  key: string;
+  operation: string;
+  description: string | null;
+  kinds: readonly string[] | null;
 }
-/** Frozen named-example metadata; values and their truth are separate. */
-export interface ExampleMetadata {
-  /** Example declaration key. */ readonly key: string;
-  /** Declared description or null for absence. */ readonly description:
-    | string
-    | null;
-  /** Presence of input, including explicit null. */ readonly hasInput: boolean;
-  /** Presence of output, including explicit null. */ readonly hasOutput: boolean;
+interface ExampleMetadata {
+  key: string;
+  description: string | null;
 }
 function freezeMetadata<T extends object>(row: T): T {
   for (const value of Object.values(row))
     if (Array.isArray(value)) Object.freeze(value);
   return Object.freeze(row);
-}
-function metadataRows<T extends object>(text: string): readonly T[] | null {
-  const rows = decode<T[] | null>(text);
-  return rows === null ? null : Object.freeze(rows.map(freezeMetadata));
 }
 function camel(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(camel);
@@ -686,7 +685,7 @@ function camel(value: unknown): unknown {
 function decode<T>(text: string): T {
   return camel(JSON.parse(text)) as T;
 }
-/** Thrown SDK misuse, configuration or typed-interpretation failure. Expected parse, authoring, conformance and schema outcomes use result unions. code is the broad category; interpretationCode, when present, preserves a specific interpretation cause. location holds original byte coordinates. Error messages are explanatory. */
+/** Thrown SDK misuse or configuration failure. Expected parse, conformance and schema outcomes use result unions. Messages explain; codes identify. */
 export class SdkError extends Error {
   /** Construct a structured thrown error with a broad code, explanatory message and optional original-source location. */
   constructor(
@@ -695,8 +694,6 @@ export class SdkError extends Error {
     message: string,
     /** Optional frozen original UTF-8 source coordinates. */
     readonly location?: Readonly<SourceLocation>,
-    /** Specific interpretation refusal; broad code remains "interpretation". */
-    readonly interpretationCode?: string,
   ) {
     super(message);
     if (location) this.location = Object.freeze({ ...location });
@@ -713,16 +710,12 @@ function sdkCall<T>(call: () => T): T {
           code: string;
           message: string;
           location?: SourceLocation | null;
-          interpretationCode?: string;
         }>(error);
         if (typeof info.code === "string" && typeof info.message === "string")
           throw new SdkError(
             info.code,
             info.message,
             info.location ?? undefined,
-            typeof info.interpretationCode === "string"
-              ? info.interpretationCode
-              : undefined,
           );
       } catch (decoded) {
         if (decoded instanceof SdkError) throw decoded;
@@ -817,11 +810,9 @@ function isExact(value: unknown): value is ExactJson {
   return typeof value === "object" && value !== null && exactOwners.has(value);
 }
 const jsonRaw = (owner: ExactJson) => handle<wasm.WasmJson>(owner);
-const documentRaw = (owner: DocumentReads<ExactJson | Schema>) =>
+const documentRaw = (owner: DocumentSnapshot) =>
   handle<wasm.WasmDocument | wasm.WasmConformantDocument>(owner);
-function editableRaw(
-  owner: DocumentReads<ExactJson | Schema>,
-): wasm.WasmDocument {
+function editableRaw(owner: DocumentSnapshot): wasm.WasmDocument {
   const raw = handle<wasm.WasmDocument>(owner);
   if (!(raw instanceof wasm.WasmDocument))
     throw new SdkError(
@@ -839,14 +830,24 @@ function conformantRaw(
     throw new SdkError(code, "A conformant document is required.");
   return raw;
 }
+function canonicalRaw<R extends Raw>(
+  owner: Managed,
+  type: Function & { prototype: R },
+): R {
+  const raw = handle<R>(owner);
+  if (!(raw instanceof type))
+    throw new SdkError(
+      "invalid-domain-owner",
+      "This method requires the matching canonical domain owner.",
+    );
+  return raw;
+}
 const resourceRaw = (owner: ExternalSchemas) =>
   handle<wasm.WasmResources>(owner);
 // A JavaScript receiver's class is never authority for a proof-requiring call.
-function conformantOperationRaw(
-  owner: ConformantOperationView,
-): wasm.WasmConformantOperation {
-  const raw = handle<wasm.WasmConformantOperation>(owner);
-  if (!(raw instanceof wasm.WasmConformantOperation))
+function operationRaw(owner: Operation): wasm.WasmOperation {
+  const raw = handle<wasm.WasmOperation>(owner);
+  if (!(raw instanceof wasm.WasmOperation))
     throw new SdkError(
       "document-conformance",
       "A conformant operation is required.",
@@ -858,13 +859,13 @@ function schemaRaw(owner: Schema): wasm.WasmSchema {
   if (!(raw instanceof wasm.WasmSchema))
     throw new SdkError(
       "document-conformance",
-      "A value contract of a conformant operation is required.",
+      "A schema retained from a conformant document is required.",
     );
   return raw;
 }
 /** Ordinary JSON scalar types; runtime admission additionally requires finite numbers. JavaScript number precision already lost before admission cannot be reconstructed. */
 export type JsonPrimitive = null | boolean | number | string;
-/** Checked ordinary JSON input, including nested borrowed ExactJson owners for precise subtrees. Arrays must be dense; objects plain with enumerable data properties; cycles, accessors, symbols, bigint and undefined are refused. Admission never invokes toJSON or getters. Ordinary encoding admits at most 33,554,432 UTF-16 code units of serialized text, 1,000,000 nodes counting member names as Rust does, and 10,000 container levels; subsequent exact parsing also enforces 32 MiB UTF-8 and 1,000,000 total nodes, including member-name tokens. A document's edits and typed setters apply the limits the document was admitted with to the values they write, not to the edit's own structure. Check a larger value as exact JSON from parseJson with larger limits. */
+/** Checked ordinary JSON input, including nested borrowed ExactJson owners for precise subtrees. Arrays must be dense; objects plain with enumerable data properties; cycles, accessors, symbols, bigint and undefined are refused. Admission never invokes toJSON or getters. Ordinary encoding admits at most 33,554,432 UTF-16 code units of serialized text, 1,000,000 nodes counting member names as Rust does, and 10,000 container levels; subsequent exact parsing also enforces 32 MiB UTF-8 and 1,000,000 total nodes, including member-name tokens. A document's edits apply the limits the document was admitted with to the values they write, not to the edit's own structure. Check a larger value as exact JSON from parseJson with larger limits. */
 export type JsonInput =
   | JsonPrimitive
   | ExactJson
@@ -1153,7 +1154,7 @@ export function validateDocument(
 }
 /** Return authoring default, supported specification line and exact applied specification revision. These identities are independent of the npm package version. */
 export function versionPolicy(): {
-  /** Default version emitted by typed authoring. */
+  /** Default specification version emitted by Document.create(). */
   authoringVersion: string;
   /** Supported stable specification line. */
   supportedVersions: string;
@@ -1171,33 +1172,21 @@ export function checkVersion(
   scalar(version);
   return wasm.checkVersion(version) as ReturnType<typeof checkVersion>;
 }
-/** Shared reads for a document revision. Document reads can refuse malformed typed fields; ConformantDocument already establishes their shape. Owner-producing methods create fresh handles and require separate disposal. */
-abstract class DocumentReads<
-  S extends ExactJson | Schema = ExactJson,
-> extends Managed {
-  #operations?: readonly OperationMetadata[];
-  #bindings?: readonly BindingMetadata[] | null;
-  #sources?: readonly SourceMetadata[] | null;
-  #dependencies?: readonly DependencyMetadata[] | null;
+/** Exact snapshot operations shared by draft and conformant owners. */
+abstract class DocumentSnapshot extends Managed {
   /** @internal */
   protected constructor(raw: wasm.WasmDocument | wasm.WasmConformantDocument) {
     super(raw);
   }
-  protected invalidateMetadata(): void {
-    this.#operations = undefined;
-    this.#bindings = undefined;
-    this.#sources = undefined;
-    this.#dependencies = undefined;
-  }
-  /** Allocate detached exact UTF-8 bytes of the current revision, including formatting. */
+  /** Copy the original UTF-8 bytes, including formatting. */
   toBytes(): Uint8Array {
-    return handle<wasm.WasmDocument>(this).toBytes();
+    return documentRaw(this).toBytes();
   }
-  /** Return a NEW independently disposable ExactJson owner on every call. Cache it locally and dispose it; disposing this document does not release that separate owner. */
+  /** Retain an independent exact JSON owner. Dispose it separately. */
   value(): ExactJson {
-    return new ExactJson(handle<wasm.WasmDocument>(this).value());
+    return new ExactJson(documentRaw(this).value());
   }
-  /** The admission limits this revision was admitted under, which its edits and typed setters apply, as Rust's `Document::limits` reports them: the defaults for `Document.parse` without limits and `Document.create()`, the caller's for `Document.parse` with limits, and for a discovered document the bytes of `maxDocumentBytes` (at least the default), the default nodes and no nesting cap (maxDepth 4294967295). */
+  /** The admission limits retained by this snapshot and applied to its edits. */
   get limits(): Readonly<JsonLimits> {
     const [maxBytes, maxNodes, maxDepth] = documentRaw(this).limits();
     return Object.freeze({
@@ -1206,134 +1195,14 @@ abstract class DocumentReads<
       maxDepth: maxDepth!,
     });
   }
-  /** Read the declaration as exact JavaScript UTF-16 text. Invalid typed fields throw. */
-  get openbindings(): string | undefined {
-    return (
-      decode<string | null>(sdkCall(() => documentRaw(this).openbindings())) ??
-      undefined
-    );
-  }
-  /** Read optional exact interface name; undefined means absent. */
-  get name(): string | undefined {
-    return (
-      decode<string | null>(sdkCall(() => documentRaw(this).name())) ??
-      undefined
-    );
-  }
-  /** Read the optional opaque interface version label. */
-  get version(): string | undefined {
-    return (
-      decode<string | null>(sdkCall(() => documentRaw(this).version())) ??
-      undefined
-    );
-  }
-  /** Read optional exact description, including lone UTF-16 units. */
-  get description(): string | undefined {
-    return (
-      decode<string | null>(sdkCall(() => documentRaw(this).description())) ??
-      undefined
-    );
-  }
-  /** Acquire a NEW independent ExactJson owner for each declared schema on every call. Dispose each value. Undefined means absent; an empty map means present-empty. */
-  protected abstract readSchema(name: string): S | undefined;
-  /** Retain one schema by exact name. */
-  schema(name: string): S | undefined {
-    return this.readSchema(name);
-  }
-  schemas(): ReadonlyMap<string, S> | undefined {
-    const raw = documentRaw(this);
-    const names = decode<string[] | null>(sdkCall(() => raw.schemaNames()));
-    if (names === null) return undefined;
-    const values = new Map<string, S>();
-    try {
-      for (const name of names) {
-        const value = this.readSchema(name);
-        if (value) values.set(name, value);
-      }
-      return values;
-    } catch (error) {
-      for (const value of values.values()) value.dispose();
-      throw error;
-    }
-  }
-  /** Return cached frozen plain metadata in lexical primary-key order. No handles are created. Document throws a located error for malformed typed fields; ConformantDocument reads are infallible while live. */
-  get operations(): readonly OperationMetadata[] {
-    handle<wasm.WasmDocument>(this);
-    return (this.#operations ??= Object.freeze(
-      decode<OperationMetadata[]>(
-        sdkCall(() => handle<wasm.WasmDocument>(this).operations()),
-      ).map((op) =>
-        Object.freeze({
-          ...op,
-          aliases: op.aliases ? Object.freeze(op.aliases) : null,
-          tags: op.tags ? Object.freeze(op.tags) : null,
-        }),
-      ),
-    ));
-  }
-  /** Cached frozen binding metadata in lexical key order; null means absent. Never copies opaque payloads. Document can throw located interpretation errors; a live ConformantDocument cannot. */
-  get bindings(): readonly BindingMetadata[] | null {
-    const raw = documentRaw(this);
-    if (this.#bindings === undefined)
-      this.#bindings = metadataRows<BindingMetadata>(
-        sdkCall(() => raw.bindings()),
-      );
-    return this.#bindings;
-  }
-  /** Acquire an independent binding view by declaration key, or undefined when missing. Checks selected shape without interpreting unrelated row metadata. */
-  binding(key: string): BindingView | undefined {
-    scalar(key);
-    const raw = sdkCall(() => documentRaw(this).binding(key));
-    return raw ? adopt(raw, BindingView.fromRaw) : undefined;
-  }
-  /** Cached frozen source metadata in lexical key order; null means absent. Never copies opaque payloads. Document can throw located interpretation errors; a live ConformantDocument cannot. */
-  get sources(): readonly SourceMetadata[] | null {
-    const raw = documentRaw(this);
-    if (this.#sources === undefined)
-      this.#sources = metadataRows<SourceMetadata>(
-        sdkCall(() => raw.sources()),
-      );
-    return this.#sources;
-  }
-  /** Acquire an independent source view by declaration key, or undefined when missing. Checks selected shape without interpreting unrelated row metadata. */
-  source(key: string): SourceView | undefined {
-    scalar(key);
-    const raw = sdkCall(() => documentRaw(this).source(key));
-    return raw ? adopt(raw, SourceView.fromRaw) : undefined;
-  }
-  /** Cached frozen dependency metadata in lexical key order; null means absent. Never copies opaque payloads. Document can throw located interpretation errors; a live ConformantDocument cannot. */
-  get dependencies(): readonly DependencyMetadata[] | null {
-    const raw = documentRaw(this);
-    if (this.#dependencies === undefined)
-      this.#dependencies = metadataRows<DependencyMetadata>(
-        sdkCall(() => raw.dependencies()),
-      );
-    return this.#dependencies;
-  }
-  /** Acquire an independent dependency view by declaration key, or undefined when missing. Checks selected shape without interpreting unrelated row metadata. */
-  dependency(key: string): DependencyView | undefined {
-    scalar(key);
-    const raw = sdkCall(() => documentRaw(this).dependency(key));
-    return raw ? adopt(raw, DependencyView.fromRaw) : undefined;
-  }
-  /** Return undefined for absent dependency; otherwise test its kind filter. Absent kinds accepts all; an empty list matches none but is nonconformant. This helper does not establish normative conformance. */
-  dependencyAcceptsKind(dependency: string, kind: string): boolean | undefined {
-    scalar(dependency);
-    return sdkCall(() =>
-      handle<wasm.WasmDocument>(this).dependencyAcceptsKind(
-        dependency,
-        JSON.stringify(kind),
-      ),
-    );
-  }
-  /** Inspect schema references with explicit resources and cooperative cancellation. Returns plain data, including incomplete traversal and per-reference refusal; no acquisition or normative proof. */
+  /** Inspect original schema references without fetching resources or claiming conformance. */
   references(options: ReferenceOptions = {}): ReferenceReport {
     const resources = options.resources,
       empty = resources ? undefined : new ExternalSchemas();
     try {
       return decode(
         sdkCall(() =>
-          handle<wasm.WasmDocument>(this).references(
+          documentRaw(this).references(
             resourceRaw(resources ?? empty!),
             options.signal?.aborted ?? false,
           ),
@@ -1344,54 +1213,21 @@ abstract class DocumentReads<
     }
   }
 }
-/** One exact pointer edit or typed namespace replacement. All pointers address the revision before the atomic batch. */
+/** One exact JSON edit. Paths address the snapshot before the entire atomic batch. */
 export type Edit =
   | {
-      /** Replace or insert a JSON value at the specified pointer. */
-      op: "set";
-      /** RFC 6901 path into the revision before the batch; a segment may hold an unpaired UTF-16 unit, as a finding's pointer can. */
-      pointer: string;
-      /** Borrowed exact or checked ordinary JSON; never consumed. */
-      value: JsonInput;
+      /** Replace or insert one value in the original revision. */ readonly op: "set";
+      /** RFC 6901 pointer in the revision before this batch. */ readonly pointer: string;
+      /** Borrowed exact value or checked ordinary JSON input. */ readonly value: JsonInput;
     }
   | {
-      /** Remove an existing member or array element. */
-      op: "remove";
-      /** RFC 6901 path, which may hold an unpaired UTF-16 unit; removing the root is refused. */
-      pointer: string;
-    }
-  | {
-      /** Replace the complete operations map using typed parts. */
-      op: "set-operations";
-      /** Borrowed typed inputs; opaque exact values retain their spelling. */
-      value: Readonly<Record<string, Operation>>;
-    }
-  | {
-      /** Replace the complete sources map using typed parts. */
-      op: "set-sources";
-      /** Borrowed typed inputs; opaque exact values retain their spelling. */
-      value: Readonly<Record<string, Source>>;
-    }
-  | {
-      /** Replace the complete bindings map using typed parts. */
-      op: "set-bindings";
-      /** Borrowed typed inputs; opaque exact values retain their spelling. */
-      value: Readonly<Record<string, Binding>>;
-    }
-  | {
-      /** Replace the complete dependencies map using typed parts. */
-      op: "set-dependencies";
-      /** Borrowed typed inputs; opaque exact values retain their spelling. */
-      value: Readonly<Record<string, Dependency>>;
+      /** Remove one existing value from the original revision. */ readonly op: "remove";
+      /** RFC 6901 pointer in the revision before this batch. */ readonly pointer: string;
     };
 let adoptDocument: (raw: wasm.WasmDocument) => Document;
 const documentToken = Symbol("document owner");
-/** One exact, immutable OBI snapshot. Reads may refuse malformed typed fields. Edits return a new snapshot; owners, views and proofs keep their original revision. */
-export class Document extends DocumentReads {
-  protected readSchema(name: string): ExactJson | undefined {
-    const raw = sdkCall(() => documentRaw(this).schema(name));
-    return raw ? new ExactJson(raw) : undefined;
-  }
+/** One exact, immutable OBI snapshot. Edits return a new snapshot; owners, views and proofs keep their original revision. */
+export class Document extends DocumentSnapshot {
   private constructor(raw: wasm.WasmDocument, token: symbol) {
     if (token !== documentToken)
       throw new TypeError("Use Document.parse() or Document.create().");
@@ -1400,7 +1236,7 @@ export class Document extends DocumentReads {
   static {
     adoptDocument = (raw) => new Document(raw, documentToken);
   }
-  /** Admit exact JSON, including broken documents, without conformance proof, under admission limits: by default 32 MiB UTF-8, 1,000,000 nodes and 10,000 container levels, and `limits` overrides them, unspecified entries keeping those defaults, as Rust's `Document::parse_with_limits` does. The document keeps its limits (`limits`): its edits and typed setters apply them to what they write, as Rust's do. Value-contract preparation keeps its own fixed bounds. Expected input refusal uses input-error; initialization and API misuse throw. */
+  /** Admit exact JSON, including broken documents, without conformance proof, under admission limits: by default 32 MiB UTF-8, 1,000,000 nodes and 10,000 container levels, and `limits` overrides them, unspecified entries keeping those defaults, as Rust's `Document::parse_with_limits` does. The document keeps its limits (`limits`): its edits apply them to what they write, as Rust's do. Value-contract preparation keeps its own fixed bounds. Expected input refusal uses input-error; initialization and API misuse throw. */
   static parse(
     input: ExactInput,
     options: {
@@ -1433,35 +1269,6 @@ export class Document extends DocumentReads {
   retain(): Document {
     return adoptDocument(handle<wasm.WasmDocument>(this).retain());
   }
-  /** Resolve an exact primary key or alias; found transfers a new disposable view. Repeated occurrences remain ambiguous, including repeats within one operation. Invalid typed namespace throws SdkError. */
-  resolveOperation(name: string): OperationSelection {
-    scalar(name);
-    const selection = sdkCall(() =>
-      handle<wasm.WasmDocument>(this).resolveOperation(name),
-    );
-    try {
-      const result = decode<
-        Exclude<OperationSelection, { status: "found" }> | { status: "found" }
-      >(selection.result());
-      if (result.status !== "found") {
-        if (result.status === "ambiguous") freezeCandidates(result.candidates);
-        else if (result.status !== "missing")
-          throw new Error("Invalid operation selection result.");
-        return result;
-      }
-      const raw = selection.takeOperation();
-      if (!raw)
-        throw new Error("Selection invariant: found operation missing.");
-      try {
-        return { status: "found", operation: new OperationView(raw) };
-      } catch (error) {
-        raw.free();
-        throw error;
-      }
-    } finally {
-      selection.free();
-    }
-  }
   /** Assess all rules; the conformant branch owns a new ConformantDocument. The original owner keeps its revision. Other branches retain evidence or a version refusal. */
   validate(): DocumentValidation {
     return assessDocument(this);
@@ -1479,11 +1286,7 @@ export class Document extends DocumentReads {
     }
     return next;
   }
-  #encoded(
-    value: unknown,
-    context?: AuthorContext,
-    destination?: { namespace: string; key: string },
-  ): Document {
+  #encoded(value: readonly Edit[]): Document {
     handle(this);
     const exact: EditEncoding = {
       chunks: [],
@@ -1495,26 +1298,21 @@ export class Document extends DocumentReads {
     };
     // What the edit writes is bounded by the limits this document keeps.
     exact.chunks.push(
-      encodeOrdinary(value, context, exact, {
+      encodeOrdinary(value, { editBatch: true }, exact, {
         limits: handle<wasm.WasmDocument>(this).limits(),
         document: true,
       }),
     );
     const values = exact.owners.map(jsonRaw);
-    // A batch carries its envelope's measure; a typed part has none.
-    const envelope = destination
-      ? undefined
-      : new Uint32Array([
-          Math.min(exact.envelopeBytes, 0xffffffff),
-          Math.min(exact.envelopeNodes, 0xffffffff),
-        ]);
+    const envelope = new Uint32Array([
+      Math.min(exact.envelopeBytes, 0xffffffff),
+      Math.min(exact.envelopeNodes, 0xffffffff),
+    ]);
     return this.#commit((raw) => {
       const result = raw.editEncoded(
         exact.chunks,
         new Uint32Array(exact.indices),
         values,
-        destination?.namespace,
-        destination?.key,
         envelope,
       );
       // The native call returns every temporarily transferred owner on failure too.
@@ -1527,11 +1325,11 @@ export class Document extends DocumentReads {
       if (result[0] !== null) throw result[0];
     });
   }
-  /** Atomically apply pointer edits and typed namespace replacements in request order at shared insertion boundaries, with one bridge call including exact inputs. Untouched bytes stay exact. Invalid paths, duplicates, overlaps and admission limits throw EditError and leave the document unchanged. */
+  /** Atomically apply exact JSON edits in request order at shared insertion boundaries, with one bridge call including exact inputs. Untouched bytes stay exact. Invalid paths, duplicates, overlaps and admission limits throw EditError and leave the document unchanged. */
   edit(edits: readonly Edit[]): Document {
     handle(this);
     editableRaw(this);
-    return this.#encoded(edits, { origins: new WeakMap(), editBatch: true });
+    return this.#encoded(edits);
   }
   /** Replace or insert a value at an RFC 6901 pointer. A segment may hold an unpaired UTF-16 unit, so a finding's pointer addresses the member it reports. Exact owners are borrowed; ordinary values are checked without invoking getters/toJSON. */
   set(pointer: string, value: JsonInput): Document {
@@ -1546,148 +1344,6 @@ export class Document extends DocumentReads {
     if (wellFormed(pointer)) return this.#commit((raw) => raw.remove(pointer));
     else return this.edit([{ op: "remove", pointer }]);
   }
-  /** Set the version declaration; conformance is assessed separately. */
-  setOpenbindings(value: string): Document {
-    return this.set("/openbindings", checkedText(value));
-  }
-  /** Set the interface name. */
-  setName(value: string): Document {
-    return this.set("/name", checkedText(value));
-  }
-  /** Set the interface version label. */
-  setVersion(value: string): Document {
-    return this.set("/version", checkedText(value));
-  }
-  /** Set descriptive text, including escaped unpaired UTF-16 units. */
-  setDescription(value: string): Document {
-    return this.set("/description", checkedText(value));
-  }
-  /** Set a description on an existing operation, escaping its key. */
-  setOperationDescription(key: string, value: string): Document {
-    return this.set(
-      pointerChild("/operations", key) + "/description",
-      checkedText(value),
-    );
-  }
-  /** Set an existing operation's input schema. Absence and explicit null remain distinct. */
-  setOperationInput(key: string, value: JsonInput): Document {
-    return this.set(pointerChild("/operations", key) + "/input", value);
-  }
-  /** Set an existing operation's output schema. */
-  setOperationOutput(key: string, value: JsonInput): Document {
-    return this.set(pointerChild("/operations", key) + "/output", value);
-  }
-  #part(
-    namespace: string,
-    key: string,
-    kind: AuthorKind,
-    value: unknown,
-  ): Document {
-    scalar(key);
-    handle(this);
-    const context: AuthorContext = { origins: new WeakMap() };
-    const object = authorObject(
-      value,
-      kind,
-      pointerChild("/" + namespace, key),
-      context,
-    );
-    return this.#encoded(object, context, { namespace: "/" + namespace, key });
-  }
-  #parts(namespace: string, values: unknown): Document {
-    return this.edit([{ op: "set-" + namespace, value: values } as Edit]);
-  }
-  /** Set a whole typed operation, creating its namespace if absent. Collisions and invalid typed input throw EditError with a logical partPointer. */
-  setOperation(key: string, value: Operation): Document {
-    return this.#part("operations", key, "operation", value);
-  }
-  /** Commit a whole operations map once, for bulk synthesis. */
-  setOperations(value: Readonly<Record<string, Operation>>): Document {
-    return this.#parts("operations", value);
-  }
-  /** Set a whole typed binding, creating its namespace if absent. */
-  setBinding(key: string, value: Binding): Document {
-    return this.#part("bindings", key, "binding", value);
-  }
-  /** Commit a whole bindings map once. */
-  setBindings(value: Readonly<Record<string, Binding>>): Document {
-    return this.#parts("bindings", value);
-  }
-  /** Set a whole typed source, creating its namespace if absent. */
-  setSource(key: string, value: Source): Document {
-    return this.#part("sources", key, "source", value);
-  }
-  /** Commit a whole sources map once. */
-  setSources(value: Readonly<Record<string, Source>>): Document {
-    return this.#parts("sources", value);
-  }
-  /** Set a whole typed dependency, creating its namespace if absent. */
-  setDependency(key: string, value: Dependency): Document {
-    return this.#part("dependencies", key, "dependency", value);
-  }
-  /** Commit a whole dependencies map once. */
-  setDependencies(value: Readonly<Record<string, Dependency>>): Document {
-    return this.#parts("dependencies", value);
-  }
-  /** Set a typed example on an existing operation, creating its examples map if absent. */
-  setExample(operation: string, key: string, value: Example): Document {
-    scalar(operation);
-    scalar(key);
-    handle(this);
-    const context: AuthorContext = { origins: new WeakMap() };
-    const object = authorObject(
-      value,
-      "example",
-      pointerChild(pointerChild("/operations", operation) + "/examples", key),
-      context,
-    );
-    return this.#encoded(object, context, {
-      namespace: pointerChild("/operations", operation) + "/examples",
-      key,
-    });
-  }
-}
-function checkedText(value: string): string {
-  if (typeof value !== "string") throw new TypeError("Expected a string.");
-  return value;
-}
-function checkPartField(
-  kind: AuthorKind,
-  key: string,
-  value: unknown,
-  path: string,
-): void {
-  if (!typedFields[kind].includes(key)) return;
-  let valid = true;
-  if (["description", "kind", "operation", "source"].includes(key))
-    valid = typeof value === "string";
-  if (["deprecated", "idempotent"].includes(key))
-    valid = typeof value === "boolean";
-  if (key === "preference")
-    valid = typeof value === "number" && Number.isSafeInteger(value);
-  if (["tags", "aliases", "kinds"].includes(key)) {
-    // Read descriptors, never getters. The ordinary encoder checks dense arrays.
-    valid = Array.isArray(value);
-    if (valid)
-      for (const [name, d] of Object.entries(
-        Object.getOwnPropertyDescriptors(value),
-      )) {
-        if (name === "length") continue;
-        if (!("value" in d))
-          throw new PartSerializationError(
-            "accessor-property",
-            pointerChild(path, name),
-            "Typed lists cannot contain accessors.",
-          );
-        if (typeof d.value !== "string") valid = false;
-      }
-  }
-  if (!valid)
-    throw new PartSerializationError(
-      "invalid-authoring-object",
-      path,
-      "Field does not have its typed representation.",
-    );
 }
 
 /** Document validation, as Rust's DocumentValidation is: the conformant branch transfers an independent ConformantDocument owner, the proof, with its report. Otherwise a DocumentReport branch explains refusal, nonconformance or uncertainty; no proof owner is created. */
@@ -1702,17 +1358,10 @@ export type DocumentValidation =
     }
   | DocumentReport;
 const conformanceToken = Symbol("established conformance");
-let assessDocument: (
-  document: DocumentReads<ExactJson | Schema>,
-) => DocumentValidation;
+let adoptConformant: (raw: wasm.WasmConformantDocument) => ConformantDocument;
+let assessDocument: (document: DocumentSnapshot) => DocumentValidation;
 /** Retained proof for one immutable snapshot whose normative OBI rules were established. Obtain via Document.validate(); preparation remains evaluator-dependent. It shares read-only inspection and deterministic disposal, without inheriting Document or its setters. */
-export class ConformantDocument extends DocumentReads<Schema> {
-  protected readSchema(name: string): Schema | undefined {
-    const raw = sdkCall(() =>
-      handle<wasm.WasmConformantDocument>(this).ownedSchema(name),
-    );
-    return raw ? adopt(raw, Schema.fromRaw) : undefined;
-  }
+export class ConformantDocument extends DocumentSnapshot {
   declare private readonly conformantDocumentBrand: void;
   private constructor(raw: wasm.WasmConformantDocument, token: symbol) {
     if (token !== conformanceToken)
@@ -1720,9 +1369,8 @@ export class ConformantDocument extends DocumentReads<Schema> {
     super(raw);
   }
   static {
-    assessDocument = (
-      document: DocumentReads<ExactJson | Schema>,
-    ): DocumentValidation => {
+    adoptConformant = (raw) => new ConformantDocument(raw, conformanceToken);
+    assessDocument = (document: DocumentSnapshot): DocumentValidation => {
       const transfer = documentRaw(document).validate();
       try {
         const result = decode<DocumentReport>(transfer.report());
@@ -1760,16 +1408,103 @@ export class ConformantDocument extends DocumentReads<Schema> {
     finalizer?.unregister(this);
     return adoptDocument(raw);
   }
-  /** The supported scalar specification declaration established by OBI-03. */
-  override get openbindings(): string {
-    conformantRaw(this);
-    return super.openbindings!;
+  /** The supported specification version, distinct from the interface version label. */
+  get openbindings(): string {
+    return decode(sdkCall(() => conformantRaw(this).openbindings()));
   }
-  /** Select a primary key or alias; undefined means missing, because OBI-05 excludes ambiguity. Transfers a new disposable ConformantOperationView whose input() and output() hand out value contracts. */
-  resolveOperation(name: string): ConformantOperationView | undefined {
+  /** Optional document name; undefined preserves absence. */
+  get name(): string | undefined {
+    return (
+      decode<string | null>(sdkCall(() => conformantRaw(this).name())) ??
+      undefined
+    );
+  }
+  /** Optional interface version label, independent of the specification version. */
+  get version(): string | undefined {
+    return (
+      decode<string | null>(sdkCall(() => conformantRaw(this).version())) ??
+      undefined
+    );
+  }
+  /** Optional document description; undefined preserves absence. */
+  get description(): string | undefined {
+    return (
+      decode<string | null>(sdkCall(() => conformantRaw(this).description())) ??
+      undefined
+    );
+  }
+  /** Retain all operations in lexical key order. Dispose each independently. */
+  operations(): readonly Operation[] {
+    return adoptMany(
+      sdkCall(() => conformantRaw(this).operations()),
+      Operation.fromRaw,
+    );
+  }
+  /** Select by exact primary key; aliases do not match here. */
+  operation(key: string): Operation | undefined {
+    scalar(key);
+    const raw = sdkCall(() => conformantRaw(this).operation(key));
+    return raw ? adopt(raw, Operation.fromRaw) : undefined;
+  }
+  /** Select by primary key or alias in the proved shared namespace. */
+  resolveOperation(name: string): Operation | undefined {
     scalar(name);
     const raw = sdkCall(() => conformantRaw(this).resolveOperation(name));
-    return raw ? adopt(raw, ConformantOperationView.fromRaw) : undefined;
+    return raw ? adopt(raw, Operation.fromRaw) : undefined;
+  }
+  /** Retain each declared binding; undefined means absent, an empty array means present-empty. */
+  bindings(): readonly Binding[] | undefined {
+    const rows = sdkCall(() => conformantRaw(this).bindings());
+    return rows ? adoptMany(rows, Binding.fromRaw) : undefined;
+  }
+  /** Retain a binding selected by exact key; undefined when absent. */
+  binding(key: string): Binding | undefined {
+    scalar(key);
+    const raw = sdkCall(() => conformantRaw(this).binding(key));
+    return raw ? adopt(raw, Binding.fromRaw) : undefined;
+  }
+  /** Retain each declared source; undefined means absent, an empty array means present-empty. */
+  sources(): readonly Source[] | undefined {
+    const rows = sdkCall(() => conformantRaw(this).sources());
+    return rows ? adoptMany(rows, Source.fromRaw) : undefined;
+  }
+  /** Retain a source selected by exact key; undefined when absent. */
+  source(key: string): Source | undefined {
+    scalar(key);
+    const raw = sdkCall(() => conformantRaw(this).source(key));
+    return raw ? adopt(raw, Source.fromRaw) : undefined;
+  }
+  /** Retain each declared dependency; undefined means absent, an empty array means present-empty. */
+  dependencies(): readonly Dependency[] | undefined {
+    const rows = sdkCall(() => conformantRaw(this).dependencies());
+    return rows ? adoptMany(rows, Dependency.fromRaw) : undefined;
+  }
+  /** Retain a dependency selected by exact key; undefined when absent. */
+  dependency(key: string): Dependency | undefined {
+    scalar(key);
+    const raw = sdkCall(() => conformantRaw(this).dependency(key));
+    return raw ? adopt(raw, Dependency.fromRaw) : undefined;
+  }
+  /** Retain a named schema in its original context, without preparation or evaluation. */
+  schema(key: string): Schema | undefined {
+    scalar(key);
+    const raw = sdkCall(() => conformantRaw(this).schema(key));
+    return raw ? adopt(raw, Schema.fromRaw) : undefined;
+  }
+  /** Retain named schemas in lexical order. Dispose each value independently. */
+  schemas(): ReadonlyMap<string, Schema> | undefined {
+    const names = decode<string[] | null>(
+      sdkCall(() => conformantRaw(this).schemaNames()),
+    );
+    if (names === null) return undefined;
+    const result = new Map<string, Schema>();
+    try {
+      for (const name of names) result.set(name, this.schema(name)!);
+      return result;
+    } catch (error) {
+      for (const value of result.values()) value.dispose();
+      throw error;
+    }
   }
   /** Locate a schema location in this document: the node its pointer names, with line and column in the document's text. null for a location in a supplied resource, or a pointer that names no node in this revision. Positions are computed on this call; a prepared value contract keeps none. A malformed location throws SdkError with code invalid-schema-location. */
   locate(at: SchemaOrigin): SourceLocation | null {
@@ -1782,220 +1517,347 @@ export class ConformantDocument extends DocumentReads<Schema> {
 function schemaLocationText(at: SchemaOrigin): string {
   return JSON.stringify({ source_uri: at?.sourceUri, pointer: at?.pointer });
 }
-type OperationRaw = wasm.WasmOperation | wasm.WasmConformantOperation;
-/** Reads shared by plain and conformant operation views. */
-abstract class OperationReads extends Managed {
+function adoptMany<R extends Raw, T extends Managed>(
+  raws: R[],
+  construct: (raw: R) => T,
+): readonly T[] {
+  const result: T[] = [];
+  let index = 0;
+  try {
+    for (; index < raws.length; index++)
+      result.push(adopt(raws[index]!, construct));
+    return Object.freeze(result);
+  } catch (error) {
+    for (const owner of result) owner.dispose();
+    // adopt frees the current raw owner if construction fails.
+    for (let remaining = index + 1; remaining < raws.length; remaining++)
+      raws[remaining]!.free();
+    throw error;
+  }
+}
+/** A canonical operation in a conformant immutable document. Child owners survive disposal of their parents. */
+export class Operation extends Managed {
   #metadata?: OperationMetadata;
-  #examples?: readonly ExampleMetadata[] | null;
-  /** @internal */
-  protected constructor(
-    raw: wasm.WasmOperation | wasm.WasmConformantOperation,
-  ) {
+  private constructor(raw: wasm.WasmOperation) {
     super(raw);
   }
-  /** Allocate the selected primary key, even when lookup used an alias. */
-  get key(): string {
-    return handle<OperationRaw>(this).key();
+  /** @internal */ static fromRaw(raw: wasm.WasmOperation): Operation {
+    return new Operation(raw);
   }
-  /** Return a NEW independently disposable ExactJson owner on every call. It survives operation/document disposal and can retain the original arena. */
-  value(): ExactJson {
-    return new ExactJson(handle<OperationRaw>(this).value());
-  }
-  /** Cached frozen metadata for this selected operation only; no disposable owner is created. */
-  get metadata(): OperationMetadata {
-    const raw = handle<OperationRaw>(this);
-    return (this.#metadata ??= freezeMetadata(
-      decode<OperationMetadata>(sdkCall(() => raw.metadata())),
-    ));
-  }
-  /** Cached frozen example metadata in lexical key order; null means absent, empty means present-empty. Checks every example row but transports no values. */
-  get examples(): readonly ExampleMetadata[] | null {
-    const raw = handle<OperationRaw>(this);
-    if (this.#examples === undefined)
-      this.#examples = metadataRows<ExampleMetadata>(
-        sdkCall(() => raw.examples()),
-      );
-    return this.#examples;
-  }
-  /** Acquire a selected independent example view, or undefined for absence; unrelated row metadata is not interpreted. */
-  example(key: string): ExampleView | undefined {
-    scalar(key);
-    const raw = sdkCall(() => handle<OperationRaw>(this).example(key));
-    return raw ? adopt(raw, ExampleView.fromRaw) : undefined;
-  }
-  /** Allocate a plain array of binding keys in lexical order. No owner disposal, ranking or invocation is involved. */
-  get bindings(): readonly string[] {
-    return decode(sdkCall(() => handle<OperationRaw>(this).bindings()));
-  }
-}
-/** Retained operation of a Document, selected by primary key or alias. It survives parent disposal; dispose it independently. Exact value inspection is not normative proof or a prepared schema. */
-export class OperationView extends OperationReads {
-  /** @internal */ constructor(raw: wasm.WasmOperation) {
-    super(raw);
-  }
-  /** Acquire a separate owner sharing this immutable selected operation. */
-  retain(): OperationView {
-    return new OperationView(handle<wasm.WasmOperation>(this).retain());
-  }
-  /** Acquire a NEW independently disposable input value; undefined means absent. JSON null, true, false and objects remain present values. */
-  input(): ExactJson | undefined {
-    const raw = handle<wasm.WasmOperation>(this).input();
-    return raw ? new ExactJson(raw) : undefined;
-  }
-  /** Acquire a NEW independently disposable output value; undefined means absent. */
-  output(): ExactJson | undefined {
-    const raw = handle<wasm.WasmOperation>(this).output();
-    return raw ? new ExactJson(raw) : undefined;
-  }
-}
-/** Retained operation of a ConformantDocument. Its input() and output() hand out value contracts; the plain OperationView of a Document cannot. It survives parent disposal; dispose it independently. */
-export class ConformantOperationView extends OperationReads {
-  private constructor(raw: wasm.WasmConformantOperation) {
-    super(raw);
-  }
-  /** @internal */ static fromRaw(
-    raw: wasm.WasmConformantOperation,
-  ): ConformantOperationView {
-    return new ConformantOperationView(raw);
-  }
-  /** Acquire a separate owner of this conformant operation, which hands out value contracts as this one does. */
-  retain(): ConformantOperationView {
-    return ConformantOperationView.fromRaw(
-      conformantOperationRaw(this).retain(),
+  /** Retain an independent owner of this same immutable declaration. */
+  retain(): Operation {
+    return adopt(
+      canonicalRaw(this, wasm.WasmOperation).retain(),
+      Operation.fromRaw,
     );
   }
-  /** Acquire a NEW disposable input value contract; undefined means the operation declares no input. Present true, false and object schemas are all value contracts. Nothing is prepared here. */
+  /** Retain the same document proof as a separately disposable owner. */
+  document(): ConformantDocument {
+    return adopt(
+      canonicalRaw(this, wasm.WasmOperation).document(),
+      adoptConformant,
+    );
+  }
+  /** Retain the original declaration, including extension fields and exact tokens. */
+  value(): ExactJson {
+    return new ExactJson(canonicalRaw(this, wasm.WasmOperation).value());
+  }
+  get #fields(): OperationMetadata {
+    const raw = canonicalRaw(this, wasm.WasmOperation);
+    return (this.#metadata ??= freezeMetadata(
+      decode<OperationMetadata>(raw.metadata()),
+    ));
+  }
+  /** Exact primary key in this declaration’s namespace. */
+  get key(): string {
+    return this.#fields.key;
+  }
+  /** Optional description; undefined preserves absence. */
+  get description(): string | undefined {
+    return this.#fields.description ?? undefined;
+  }
+  /** Optional declared deprecation flag; absence remains undefined, distinct from false. */
+  get deprecated(): boolean | undefined {
+    return this.#fields.deprecated ?? undefined;
+  }
+  /** Declared aliases in declaration order; frozen, with undefined for absence. */
+  get aliases(): readonly string[] | undefined {
+    return this.#fields.aliases ?? undefined;
+  }
+  /** Declared tags in declaration order; frozen, with undefined for absence. */
+  get tags(): readonly string[] | undefined {
+    return this.#fields.tags ?? undefined;
+  }
+  /** Retain the input schema in its original context; undefined when absent. Does not prepare or evaluate it. */
   input(): Schema | undefined {
-    const raw = conformantOperationRaw(this).input();
+    const raw = operationRaw(this).input();
     return raw ? adopt(raw, Schema.fromRaw) : undefined;
   }
-  /** Acquire a NEW disposable output value contract; undefined means the operation declares no output. Nothing is prepared here. */
+  /** Retain the output schema in its original context; undefined when absent. Does not prepare or evaluate it. */
   output(): Schema | undefined {
-    const raw = conformantOperationRaw(this).output();
+    const raw = operationRaw(this).output();
     return raw ? adopt(raw, Schema.fromRaw) : undefined;
+  }
+  /** Retain bindings in lexical order, without ranking or selection. */
+  bindings(): readonly Binding[] {
+    return adoptMany(operationRaw(this).bindings(), Binding.fromRaw);
+  }
+  /** Retain examples in lexical key order; undefined means absent and an empty array means present-empty. Dispose each owner. */
+  examples(): readonly Example[] | undefined {
+    const rows = operationRaw(this).examples();
+    return rows ? adoptMany(rows, Example.fromRaw) : undefined;
+  }
+  /** Retain an example by its operation-local key; undefined when absent. */
+  example(key: string): Example | undefined {
+    scalar(key);
+    const raw = operationRaw(this).example(key);
+    return raw ? adopt(raw, Example.fromRaw) : undefined;
   }
 }
-const resourceToken = Symbol("retained resource set");
-/** Retained binding declaration view. Metadata is plain; each exact method acquires a separate owner. Neither reading nor retaining establishes conformance. */
-export class BindingView extends Managed {
+/** A canonical binding in a conformant immutable document. Child owners survive disposal of their parents. */
+export class Binding extends Managed {
   #metadata?: BindingMetadata;
   private constructor(raw: wasm.WasmBinding) {
     super(raw);
   }
-  /** @internal */ static fromRaw(raw: wasm.WasmBinding): BindingView {
-    return new BindingView(raw);
+  /** @internal */ static fromRaw(raw: wasm.WasmBinding): Binding {
+    return new Binding(raw);
   }
-  /** Acquire a separate owner sharing this immutable selected declaration. */
-  retain(): BindingView {
-    return BindingView.fromRaw(handle<wasm.WasmBinding>(this).retain());
+  /** Retain an independent owner of this same immutable declaration. */
+  retain(): Binding {
+    return adopt(
+      canonicalRaw(this, wasm.WasmBinding).retain(),
+      Binding.fromRaw,
+    );
   }
-  /** Cached frozen metadata; checks this selected row and no unrelated row. */
-  get metadata(): BindingMetadata {
-    const raw = handle<wasm.WasmBinding>(this);
+  /** Retain the same document proof as a separately disposable owner. */
+  document(): ConformantDocument {
+    return adopt(
+      canonicalRaw(this, wasm.WasmBinding).document(),
+      adoptConformant,
+    );
+  }
+  /** Retain the original declaration, including extension fields and exact tokens. */
+  value(): ExactJson {
+    return new ExactJson(canonicalRaw(this, wasm.WasmBinding).value());
+  }
+  get #fields(): BindingMetadata {
+    const raw = canonicalRaw(this, wasm.WasmBinding);
     return (this.#metadata ??= freezeMetadata(
-      decode<BindingMetadata>(sdkCall(() => raw.metadata())),
+      decode<BindingMetadata>(raw.metadata()),
     ));
   }
-  /** Acquire a NEW independent exact owner for the complete declaration, including unknown fields. */
-  value(): ExactJson {
-    return new ExactJson(handle<wasm.WasmBinding>(this).value());
+  /** Exact primary key in this declaration’s namespace. */
+  get key(): string {
+    return this.#fields.key;
   }
-  /** Acquire a NEW exact data owner; undefined means absent, while present null remains an exact value. */
+  /** Optional description; undefined preserves absence. */
+  get description(): string | undefined {
+    return this.#fields.description ?? undefined;
+  }
+  /** Retain exact opaque data. Undefined means absent; explicit null remains a value. */
   data(): ExactJson | undefined {
-    const raw = handle<wasm.WasmBinding>(this).data();
+    const raw = canonicalRaw(this, wasm.WasmBinding).data();
     return raw ? new ExactJson(raw) : undefined;
   }
+  /** Declared primary operation key; never an alias. */
+  get operationKey(): string {
+    return this.#fields.operation;
+  }
+  /** Declared primary source key in the same document. */
+  get sourceKey(): string {
+    return this.#fields.source;
+  }
+  /** Optional interoperable integer preference. Reading it performs no ranking or binding selection. */
+  get preference(): number | undefined {
+    return this.#fields.preference ?? undefined;
+  }
+  /** Optional declared idempotence flag; undefined preserves absence, distinct from false. */
+  get idempotent(): boolean | undefined {
+    return this.#fields.idempotent ?? undefined;
+  }
+  /** Optional declared deprecation flag; absence remains undefined, distinct from false. */
+  get deprecated(): boolean | undefined {
+    return this.#fields.deprecated ?? undefined;
+  }
+  /** Retain the referenced operation from this same conformant snapshot. */
+  operation(): Operation {
+    return adopt(
+      canonicalRaw(this, wasm.WasmBinding).operation(),
+      Operation.fromRaw,
+    );
+  }
+  /** Retain the referenced source from this same conformant snapshot. */
+  source(): Source {
+    return adopt(canonicalRaw(this, wasm.WasmBinding).source(), Source.fromRaw);
+  }
 }
-/** Retained source declaration view. Metadata is plain; each exact method acquires a separate owner. Neither reading nor retaining establishes conformance. */
-export class SourceView extends Managed {
+/** A canonical source in a conformant immutable document. Child owners survive disposal of their parents. */
+export class Source extends Managed {
   #metadata?: SourceMetadata;
   private constructor(raw: wasm.WasmSource) {
     super(raw);
   }
-  /** @internal */ static fromRaw(raw: wasm.WasmSource): SourceView {
-    return new SourceView(raw);
+  /** @internal */ static fromRaw(raw: wasm.WasmSource): Source {
+    return new Source(raw);
   }
-  /** Acquire a separate owner sharing this immutable selected declaration. */
-  retain(): SourceView {
-    return SourceView.fromRaw(handle<wasm.WasmSource>(this).retain());
+  /** Retain an independent owner of this same immutable declaration. */
+  retain(): Source {
+    return adopt(canonicalRaw(this, wasm.WasmSource).retain(), Source.fromRaw);
   }
-  /** Cached frozen metadata; checks this selected row and no unrelated row. */
-  get metadata(): SourceMetadata {
-    const raw = handle<wasm.WasmSource>(this);
+  /** Retain the same document proof as a separately disposable owner. */
+  document(): ConformantDocument {
+    return adopt(
+      canonicalRaw(this, wasm.WasmSource).document(),
+      adoptConformant,
+    );
+  }
+  /** Retain the original declaration, including extension fields and exact tokens. */
+  value(): ExactJson {
+    return new ExactJson(canonicalRaw(this, wasm.WasmSource).value());
+  }
+  get #fields(): SourceMetadata {
+    const raw = canonicalRaw(this, wasm.WasmSource);
     return (this.#metadata ??= freezeMetadata(
-      decode<SourceMetadata>(sdkCall(() => raw.metadata())),
+      decode<SourceMetadata>(raw.metadata()),
     ));
   }
-  /** Acquire a NEW independent exact owner for the complete declaration, including unknown fields. */
-  value(): ExactJson {
-    return new ExactJson(handle<wasm.WasmSource>(this).value());
+  /** Exact primary key in this declaration’s namespace. */
+  get key(): string {
+    return this.#fields.key;
   }
-  /** Acquire a NEW exact data owner; undefined means absent, while present null remains an exact value. */
+  /** Optional description; undefined preserves absence. */
+  get description(): string | undefined {
+    return this.#fields.description ?? undefined;
+  }
+  /** Retain exact opaque data. Undefined means absent; explicit null remains a value. */
   data(): ExactJson | undefined {
-    const raw = handle<wasm.WasmSource>(this).data();
+    const raw = canonicalRaw(this, wasm.WasmSource).data();
     return raw ? new ExactJson(raw) : undefined;
   }
+  /** Exact declared kind name, without URI normalization or kind interpretation. */
+  get kind(): string {
+    return this.#fields.kind;
+  }
 }
-/** Retained dependency declaration view. Metadata is plain; each exact method acquires a separate owner. Neither reading nor retaining establishes conformance. */
-export class DependencyView extends Managed {
+/** A canonical dependency in a conformant immutable document. Child owners survive disposal of their parents. */
+export class Dependency extends Managed {
   #metadata?: DependencyMetadata;
   private constructor(raw: wasm.WasmDependency) {
     super(raw);
   }
-  /** @internal */ static fromRaw(raw: wasm.WasmDependency): DependencyView {
-    return new DependencyView(raw);
+  /** @internal */ static fromRaw(raw: wasm.WasmDependency): Dependency {
+    return new Dependency(raw);
   }
-  /** Acquire a separate owner sharing this immutable selected declaration. */
-  retain(): DependencyView {
-    return DependencyView.fromRaw(handle<wasm.WasmDependency>(this).retain());
+  /** Retain an independent owner of this same immutable declaration. */
+  retain(): Dependency {
+    return adopt(
+      canonicalRaw(this, wasm.WasmDependency).retain(),
+      Dependency.fromRaw,
+    );
   }
-  /** Cached frozen metadata; checks this selected row and no unrelated row. */
-  get metadata(): DependencyMetadata {
-    const raw = handle<wasm.WasmDependency>(this);
+  /** Retain the same document proof as a separately disposable owner. */
+  document(): ConformantDocument {
+    return adopt(
+      canonicalRaw(this, wasm.WasmDependency).document(),
+      adoptConformant,
+    );
+  }
+  /** Retain the original declaration, including extension fields and exact tokens. */
+  value(): ExactJson {
+    return new ExactJson(canonicalRaw(this, wasm.WasmDependency).value());
+  }
+  get #fields(): DependencyMetadata {
+    const raw = canonicalRaw(this, wasm.WasmDependency);
     return (this.#metadata ??= freezeMetadata(
-      decode<DependencyMetadata>(sdkCall(() => raw.metadata())),
+      decode<DependencyMetadata>(raw.metadata()),
     ));
   }
-  /** Acquire a NEW independent exact owner for the complete declaration, including unknown fields. */
-  value(): ExactJson {
-    return new ExactJson(handle<wasm.WasmDependency>(this).value());
+  /** Exact primary key in this declaration’s namespace. */
+  get key(): string {
+    return this.#fields.key;
+  }
+  /** Optional description; undefined preserves absence. */
+  get description(): string | undefined {
+    return this.#fields.description ?? undefined;
+  }
+  /** Declared primary operation key; never an alias. */
+  get operationKey(): string {
+    return this.#fields.operation;
+  }
+  /** Optional frozen kind-name filter; absent accepts every kind. Present filters are nonempty. */
+  get kinds(): readonly string[] | undefined {
+    return this.#fields.kinds ?? undefined;
+  }
+  /** Retain the referenced operation from this same conformant snapshot. */
+  operation(): Operation {
+    return adopt(
+      canonicalRaw(this, wasm.WasmDependency).operation(),
+      Operation.fromRaw,
+    );
+  }
+  /** Exact kind-name comparison. An absent filter accepts all names. */
+  acceptsKind(kind: string): boolean {
+    if (typeof kind !== "string")
+      throw new TypeError("Expected a kind name string.");
+    return sdkCall(() =>
+      canonicalRaw(this, wasm.WasmDependency).acceptsKind(JSON.stringify(kind)),
+    );
   }
 }
-/** Retained example declaration view. Metadata is plain; each exact method acquires a separate owner. Neither reading nor retaining establishes conformance. */
-export class ExampleView extends Managed {
+/** A canonical example in a conformant immutable document. Child owners survive disposal of their parents. */
+export class Example extends Managed {
   #metadata?: ExampleMetadata;
   private constructor(raw: wasm.WasmExample) {
     super(raw);
   }
-  /** @internal */ static fromRaw(raw: wasm.WasmExample): ExampleView {
-    return new ExampleView(raw);
+  /** @internal */ static fromRaw(raw: wasm.WasmExample): Example {
+    return new Example(raw);
   }
-  /** Acquire a separate owner sharing this immutable selected declaration. */
-  retain(): ExampleView {
-    return ExampleView.fromRaw(handle<wasm.WasmExample>(this).retain());
+  /** Retain an independent owner of this same immutable declaration. */
+  retain(): Example {
+    return adopt(
+      canonicalRaw(this, wasm.WasmExample).retain(),
+      Example.fromRaw,
+    );
   }
-  /** Cached frozen metadata; checks this selected row and no unrelated row. */
-  get metadata(): ExampleMetadata {
-    const raw = handle<wasm.WasmExample>(this);
+  /** Retain the same document proof as a separately disposable owner. */
+  document(): ConformantDocument {
+    return adopt(
+      canonicalRaw(this, wasm.WasmExample).document(),
+      adoptConformant,
+    );
+  }
+  /** Retain the original declaration, including extension fields and exact tokens. */
+  value(): ExactJson {
+    return new ExactJson(canonicalRaw(this, wasm.WasmExample).value());
+  }
+  get #fields(): ExampleMetadata {
+    const raw = canonicalRaw(this, wasm.WasmExample);
     return (this.#metadata ??= freezeMetadata(
-      decode<ExampleMetadata>(sdkCall(() => raw.metadata())),
+      decode<ExampleMetadata>(raw.metadata()),
     ));
   }
-  /** Acquire a NEW independent exact owner for the complete declaration, including unknown fields. */
-  value(): ExactJson {
-    return new ExactJson(handle<wasm.WasmExample>(this).value());
+  /** Exact example key, local to its declaring operation. */
+  get key(): string {
+    return this.#fields.key;
   }
-  /** Acquire a NEW exact input owner; undefined means absent, while present null remains an exact value. */
+  /** Optional description; undefined preserves absence. */
+  get description(): string | undefined {
+    return this.#fields.description ?? undefined;
+  }
+  /** Retain the exact example input, without validating it against the operation schema. Undefined means absent; null remains a value. */
   input(): ExactJson | undefined {
-    const raw = handle<wasm.WasmExample>(this).input();
+    const raw = canonicalRaw(this, wasm.WasmExample).input();
     return raw ? new ExactJson(raw) : undefined;
   }
-  /** Acquire a NEW exact output owner; undefined means absent, while present null remains an exact value. */
+  /** Retain the exact example output, without validating it against the operation schema. Undefined means absent; null remains a value. */
   output(): ExactJson | undefined {
-    const raw = handle<wasm.WasmExample>(this).output();
+    const raw = canonicalRaw(this, wasm.WasmExample).output();
     return raw ? new ExactJson(raw) : undefined;
   }
 }
+const resourceToken = Symbol("retained resource set");
 /** Immutable explicit resource set. URIs must be absolute without a nonempty fragment; normalized duplicate identities are refused even for equal bytes. Resources are retained, never fetched. Batch failure releases partial state and leaves supplied owners usable. Distinct contexts may associate the same URI with different snapshots. */
 export class ExternalSchemas extends Managed {
   /** Create an empty set or retain explicit [URI, exact document] pairs. Does not consume supplied owners. Invalid/duplicate URI or duplicate-member document throws SdkError; partial construction is released. */
@@ -2058,7 +1920,7 @@ export class ExternalSchemas extends Managed {
     return decode(sdkCall(() => raw.locate(schemaLocationText(at))));
   }
 }
-/** A conformant operation's input or output value contract, not yet prepared. Obtain it from ConformantOperationView.input() or output(); it retains its proved revision and survives operation and document disposal. Each prepare() compiles anew; retain the PreparedSchema for repeated validation. */
+/** An original contextual schema, not yet prepared. Obtain it from Operation.input(), output(), or ConformantDocument.schema(); it retains its proved revision and survives operation and document disposal. Each prepare() compiles anew; retain the PreparedSchema for repeated validation. */
 export class Schema extends Managed {
   private constructor(raw: wasm.WasmSchema) {
     super(raw);
@@ -2126,14 +1988,7 @@ function prepareOptions(options: PrepareOptions): {
     );
   return { resources, limits, signal: workSignal(work) };
 }
-function freezeCandidates(candidates: readonly string[]): void {
-  if (
-    !Array.isArray(candidates) ||
-    candidates.some((key) => typeof key !== "string")
-  )
-    throw new Error("Invalid operation candidates.");
-  Object.freeze(candidates);
-}
+
 function workSignal(options: WorkOptions): AbortSignal | undefined {
   if (!options || typeof options !== "object" || Array.isArray(options))
     throw new SdkError(
@@ -2260,16 +2115,16 @@ function checkValue(
   try {
     let text: string;
     try {
-      text = encodeOrdinary(value, { origins: new WeakMap() });
+      text = encodeOrdinary(value, {});
     } catch (error) {
-      if (!(error instanceof PartSerializationError)) throw error;
+      if (!(error instanceof JsonEncodingError)) throw error;
       return {
         status: "input-error",
         error: {
-          code: (error.code === "authoring-limit"
+          code: (error.code === "encoding-limit"
             ? "input-limit"
             : error.code) as ValueAdmissionFailure["code"],
-          instancePointer: error.partPointer,
+          instancePointer: error.inputPointer,
           message: error.message,
         },
       };
@@ -2927,7 +2782,7 @@ function utf8Length(text: string): number {
 /** Iterative, checked serialization. No getters, toJSON hooks, omission, or implicit coercion. */
 function encodeOrdinary(
   value: unknown,
-  authoring?: AuthorContext,
+  context?: EncodingContext,
   exact?: EditEncoding,
   encoding: EncodingLimits = valueEncoding(),
 ): string {
@@ -2936,17 +2791,15 @@ function encodeOrdinary(
     number,
     number,
   ];
-  const childPath = (owner: object, name: string, parent: string) =>
-    authoring
-      ? (authoring.origins.get(owner)?.get(name) ?? pointerChild(parent, name))
-      : "";
+  const childPath = (_owner: object, name: string, parent: string) =>
+    context ? pointerChild(parent, name) : "";
   function reject(
-    code: AuthoringErrorCode,
+    code: JsonEncodingErrorCode,
     pointer: string,
     message: string,
     limit = false,
   ): never {
-    if (authoring) throw new PartSerializationError(code, pointer, message);
+    if (context) throw new JsonEncodingError(code, pointer, message);
     if (limit) throw new RangeError(message);
     throw new TypeError(message);
   }
@@ -2963,7 +2816,7 @@ function encodeOrdinary(
       maxDepth: `${limit}-level nesting`,
     }[setting];
     reject(
-      "authoring-limit",
+      "encoding-limit",
       pointer,
       `Ordinary value exceeds the ${what} limit; parse it with parseJson and a larger limits.${setting}.`,
       true,
@@ -2982,7 +2835,7 @@ function encodeOrdinary(
       }
     | { text: string; pointer: string; content: boolean }
     | { leave: object };
-  const batch = authoring?.editBatch === true;
+  const batch = context?.editBatch === true;
   const jobs: Job[] = [
       { value, depth: 0, pointer: "", content: !batch, base: 0 },
     ],
@@ -3020,9 +2873,7 @@ function encodeOrdinary(
     }
     const { pointer, content } = job;
     const value =
-      batch && job.depth === 1
-        ? normalizeEdit(job.value, authoring!)
-        : job.value;
+      batch && job.depth === 1 ? normalizeEdit(job.value) : job.value;
     counted(1, pointer, content);
     if (isExact(value)) {
       if (exact) {
@@ -3147,96 +2998,8 @@ function encodeOrdinary(
   return parts.join("");
 }
 
-/** Editable normative operation fields. Typed optional undefined means absence; opaque JSON fields preserve explicit null and reject undefined. The edited document still requires normative assessment and separate schema preparation. */
-export interface Operation {
-  /** Optional operation description. */
-  description?: string;
-  /** Optional deprecation annotation. */
-  deprecated?: boolean;
-  /** Optional ordered application-facing tags. */
-  tags?: readonly string[];
-  /** Optional names in the shared operation namespace. */
-  aliases?: readonly string[];
-  /** Optional exact input schema; absence differs from present false or null. */
-  input?: JsonInput;
-  /** Optional exact output schema; absence differs from present false or null. */
-  output?: JsonInput;
-  /** Named exact example instances. */
-  examples?: Readonly<Record<string, Example>>;
-  /** Extension/unknown members retained as exact JSON. Normative assessment decides permission; collisions with typed members return a part serialization error. */
-  additionalFields?: Readonly<Record<string, JsonInput>>;
-}
-/** Exact input/output example instances, not schemas or proof that an operation accepts them. */
-export interface Example {
-  /** Optional example explanation. */
-  description?: string;
-  /** Optional exact input instance, including explicit null. */
-  input?: JsonInput;
-  /** Optional exact output instance, including explicit null. */
-  output?: JsonInput;
-  /** Extension/unknown members retained as exact JSON. Normative assessment decides permission; collisions with typed members return a part serialization error. */
-  additionalFields?: Readonly<Record<string, JsonInput>>;
-}
-/** Binding source vocabulary; kind-specific data is exact opaque JSON and is never executed or acquired by core. */
-export interface Source {
-  /** Source-kind identifier selecting external interpretation. */
-  kind: string;
-  /** Optional exact kind-specific data; not interpreted by core. */
-  data?: JsonInput;
-  /** Optional source explanation. */
-  description?: string;
-  /** Extension/unknown members retained as exact JSON. Normative assessment decides permission; collisions with typed members return a part serialization error. */
-  additionalFields?: Readonly<Record<string, JsonInput>>;
-}
-/** Link from an operation to a source with opaque kind-specific data and annotations. Core does not rank or invoke bindings. */
-export interface Binding {
-  /** Referenced primary operation name. */
-  operation: string;
-  /** Referenced source key. */
-  source: string;
-  /** Optional exact kind-specific binding data. */
-  data?: JsonInput;
-  /** Optional interoperable integer in inclusive ±9,007,199,254,740,991; no ranking is performed. */
-  preference?: number;
-  /** Optional idempotence annotation; does not trigger retries. */
-  idempotent?: boolean;
-  /** Optional binding deprecation annotation. */
-  deprecated?: boolean;
-  /** Optional binding explanation. */
-  description?: string;
-  /** Extension/unknown members retained as exact JSON. Normative assessment decides permission; collisions with typed members return a part serialization error. */
-  additionalFields?: Readonly<Record<string, JsonInput>>;
-}
-/** Dependency declaration with an optional exact source-kind filter. Absence accepts all; a conformant present filter must be nonempty. */
-export interface Dependency {
-  /** Referenced operation name. */
-  operation: string;
-  /** Exact permitted source kinds; absence accepts all. An empty array is representable for inspection but fails normative assessment. */
-  kinds?: readonly string[];
-  /** Optional dependency explanation. */
-  description?: string;
-  /** Extension/unknown members retained as exact JSON. Normative assessment decides permission; collisions with typed members return a part serialization error. */
-  additionalFields?: Readonly<Record<string, JsonInput>>;
-}
-/**
- * Typed part serialization refusal codes for this package. This is a closed TypeScript union; later releases may add codes. Messages explain; codes identify.
- * - field-collision: additionalFields shadows a typed member.
- * - duplicate-field: an input represents the same emitted field more than once.
- * - non-finite-number: NaN or infinity cannot enter JSON.
- * - unsupported-value: undefined, bigint, function or symbol appears in opaque JSON.
- * - sparse-array / array-property: an array has holes or extra named properties.
- * - cyclic-value: an object refers to an active ancestor.
- * - non-plain-object: an object has a custom prototype.
- * - accessor-property / non-enumerable-property / symbol-key: admission would require
- *   executing or silently dropping a property, so the value is refused.
- * - invalid-authoring-object: a typed part container or known field is not representable.
- * - authoring-limit: encoded output exceeds a finite character/byte/node/depth limit.
- * A partPointer addresses the caller's input, including additionalFields, rather
- * than the emitted JSON. Initialization/owner misuse and unexpected exceptions throw.
- */
-type AuthoringErrorCode =
-  | "field-collision"
-  | "duplicate-field"
+/** Closed host JSON encoding refusal codes; source coordinates are not invented. */
+type JsonEncodingErrorCode =
   | "non-finite-number"
   | "unsupported-value"
   | "sparse-array"
@@ -3246,124 +3009,68 @@ type AuthoringErrorCode =
   | "accessor-property"
   | "non-enumerable-property"
   | "symbol-key"
-  | "invalid-authoring-object"
-  | "authoring-limit";
-/** An atomic edit was refused. code is stable; partPointer locates a typed part input when available. The document remains unchanged. */
+  | "invalid-json-object"
+  | "encoding-limit";
+/** An atomic edit was refused. code is stable; inputPointer locates invalid caller JSON input when available. The document remains unchanged. */
 export class EditError extends SdkError {
-  /** Logical pointer into a typed part input; null when unavailable, including for an exceeded document limit, which is the edited document's. */
-  readonly partPointer: string | null;
+  /** Logical pointer into caller JSON input; null when unavailable, including for an exceeded document limit, which is the edited document's. */
+  readonly inputPointer: string | null;
   /** Construct an edit refusal without inventing source byte coordinates. */
   constructor(
     code: string,
     message: string,
-    partPointer: string | null = null,
+    inputPointer: string | null = null,
   ) {
     super(code, message);
     this.name = "EditError";
-    this.partPointer = partPointer;
+    this.inputPointer = inputPointer;
   }
 }
-class PartSerializationError extends EditError {
+class JsonEncodingError extends EditError {
   constructor(
-    code: AuthoringErrorCode,
+    code: JsonEncodingErrorCode,
     pointer: string | null,
     message: string,
   ) {
     super(code, message, pointer);
   }
 }
-interface AuthorContext {
-  origins: WeakMap<object, Map<string, string>>;
+interface EncodingContext {
   editBatch?: boolean;
 }
-function normalizeEdit(value: unknown, context: AuthorContext): unknown {
+function normalizeEdit(value: unknown): unknown {
   const entries = ownEntries(value, "");
   const fields = Object.fromEntries(entries);
-  const namespaces: Record<string, AuthorKind> = {
-    "set-operations": "operation",
-    "set-sources": "source",
-    "set-bindings": "binding",
-    "set-dependencies": "dependency",
-  };
-  const kind =
-    typeof fields.op === "string" && Object.hasOwn(namespaces, fields.op)
-      ? namespaces[fields.op]
-      : undefined;
-  // A row holds only the members its op takes, so nothing beside what the
-  // edit writes enters the batch.
-  const only = (members: readonly string[], message: string) => {
-    if (entries.some(([key]) => !members.includes(key)))
-      throw new EditError("invalid-edits", message);
-  };
-  if (!kind) {
-    if (fields.op === "set")
-      only(
-        ["op", "pointer", "value"],
-        "Set edits accept op, pointer and value only.",
-      );
-    else if (fields.op === "remove")
-      only(["op", "pointer"], "Remove edits accept op and pointer only.");
-    else
-      throw new EditError(
-        "invalid-edits",
-        "Expected an edit op of set, remove, set-operations, set-sources, set-bindings or set-dependencies.",
-      );
-    if (typeof fields.pointer !== "string")
-      throw new EditError("invalid-pointer", "Edit pointers must be strings.");
-    return value;
-  }
-  only(["op", "value"], "Typed namespace edits accept op and value only.");
-  const pointer = "/" + (fields.op as string).slice(4);
-  const parts = Object.fromEntries(
-    ownEntries(fields.value, pointer).map(([key, part]) => [
-      key,
-      authorObject(part, kind, pointerChild(pointer, key), context),
-    ]),
-  );
-  return { op: "set", pointer, value: parts };
+  const allowed =
+    fields.op === "set"
+      ? ["op", "pointer", "value"]
+      : fields.op === "remove"
+        ? ["op", "pointer"]
+        : undefined;
+  if (!allowed)
+    throw new EditError(
+      "invalid-edits",
+      "Expected an edit op of set or remove.",
+    );
+  if (entries.some(([key]) => !allowed.includes(key)))
+    throw new EditError("invalid-edits", "Unexpected edit member.");
+  if (typeof fields.pointer !== "string")
+    throw new EditError("invalid-pointer", "Edit pointers must be strings.");
+  if (fields.op === "set" && !Object.hasOwn(fields, "value"))
+    throw new EditError("invalid-edits", "Set edits require a value.");
+  return value;
 }
 function pointerChild(parent: string, name: string): string {
   return parent + "/" + name.replace(/~/g, "~0").replace(/\//g, "~1");
 }
-type AuthorKind = "operation" | "example" | "source" | "binding" | "dependency";
-const typedFields: Record<AuthorKind, readonly string[]> = {
-  operation: [
-    "description",
-    "deprecated",
-    "tags",
-    "aliases",
-    "input",
-    "output",
-    "examples",
-  ],
-  example: ["description", "input", "output"],
-  source: ["kind", "data", "description"],
-  binding: [
-    "operation",
-    "source",
-    "data",
-    "preference",
-    "idempotent",
-    "deprecated",
-    "description",
-  ],
-  dependency: ["operation", "kinds", "description"],
-};
-const requiredFields: Record<AuthorKind, readonly string[]> = {
-  operation: [],
-  example: [],
-  source: ["kind"],
-  binding: ["operation", "source"],
-  dependency: ["operation"],
-};
 function ownEntries(object: unknown, pointer?: string): [string, unknown][] {
   function invalid(
-    code: AuthoringErrorCode,
+    code: JsonEncodingErrorCode,
     at: string,
     message: string,
   ): never {
     if (pointer === undefined) throw new TypeError(message);
-    throw new PartSerializationError(code, at, message);
+    throw new JsonEncodingError(code, at, message);
   }
   if (
     !object ||
@@ -3372,15 +3079,15 @@ function ownEntries(object: unknown, pointer?: string): [string, unknown][] {
     ![null, Object.prototype].includes(Object.getPrototypeOf(object))
   )
     invalid(
-      "invalid-authoring-object",
+      "invalid-json-object",
       pointer ?? "",
-      "Authoring objects and maps must be plain objects.",
+      "JSON objects must be plain objects.",
     );
   if (Reflect.ownKeys(object).some((key) => typeof key === "symbol"))
     invalid(
       "symbol-key",
       pointer ?? "",
-      "Authoring objects cannot contain symbol keys.",
+      "JSON objects cannot contain symbol keys.",
     );
   return Object.entries(Object.getOwnPropertyDescriptors(object)).map(
     ([key, d]) => {
@@ -3388,76 +3095,9 @@ function ownEntries(object: unknown, pointer?: string): [string, unknown][] {
         invalid(
           "value" in d ? "non-enumerable-property" : "accessor-property",
           pointerChild(pointer ?? "", key),
-          "Authoring requires enumerable data properties.",
+          "JSON encoding requires enumerable data properties.",
         );
       return [key, d.value];
     },
   );
-}
-function authorObject(
-  object: unknown,
-  kind: AuthorKind,
-  pointer: string,
-  context: AuthorContext,
-): Record<string, JsonInput> {
-  const out = Object.create(null) as Record<string, JsonInput>;
-  const origins = new Map<string, string>();
-  context.origins.set(out, origins);
-  for (const [key, value] of ownEntries(object, pointer)) {
-    const fieldPath = pointerChild(pointer, key);
-    if (key === "additionalFields") {
-      if (value === undefined) continue;
-      for (const [name, content] of ownEntries(value, fieldPath)) {
-        const contentPath = pointerChild(fieldPath, name);
-        if (typedFields[kind].includes(name))
-          throw new PartSerializationError(
-            "field-collision",
-            contentPath,
-            "Additional field shadows a typed member.",
-          );
-        if (Object.hasOwn(out, name))
-          throw new PartSerializationError(
-            "duplicate-field",
-            contentPath,
-            "The input supplies the same member twice.",
-          );
-        out[name] = content as JsonInput;
-        origins.set(name, contentPath);
-      }
-      continue;
-    }
-    if (
-      value === undefined &&
-      typedFields[kind].includes(key) &&
-      !requiredFields[kind].includes(key)
-    )
-      continue;
-    const child: AuthorKind | undefined =
-      kind === "operation" && key === "examples" ? "example" : undefined;
-    checkPartField(kind, key, value, fieldPath);
-    if (Object.hasOwn(out, key))
-      throw new PartSerializationError(
-        "duplicate-field",
-        fieldPath,
-        "The input supplies the same member twice.",
-      );
-    origins.set(key, fieldPath);
-    out[key] = child
-      ? Object.fromEntries(
-          ownEntries(value, fieldPath).map(([name, v]) => [
-            name,
-            authorObject(v, child, pointerChild(fieldPath, name), context),
-          ]),
-        )
-      : (value as JsonInput);
-  }
-  for (const key of requiredFields[kind]) {
-    if (!Object.hasOwn(out, key))
-      throw new PartSerializationError(
-        "invalid-authoring-object",
-        pointerChild(pointer, key),
-        "Required typed field is absent.",
-      );
-  }
-  return out;
 }

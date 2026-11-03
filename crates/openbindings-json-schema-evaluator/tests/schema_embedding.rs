@@ -80,9 +80,8 @@ fn contained_draft_and_supplied_surrogate_collision_preserves_each_original_targ
                         format!("{BASE}#/$defs/{fragment}")
                     };
                     let (doc, resources) = fixture(&schema, &reference, supplied);
-                    let report = doc
-                        .references_with_resources(resources.clone(), &AtomicBool::new(false))
-                        .unwrap();
+                    let report =
+                        doc.references_with_resources(resources.clone(), &AtomicBool::new(false));
                     let found = report
                         .references
                         .iter()
@@ -158,7 +157,7 @@ fn inspection_root_never_masks_missing_references_including_suffix_candidates() 
                 .collect::<Vec<_>>()
                 .join(",");
             let doc = Document::parse(format!(r#"{{"openbindings":"0.2.0","schemas":{{{schemas}}},"operations":{{"op":{{"input":{input}}}}}}}"#)).unwrap();
-            let report = doc.references().unwrap();
+            let report = doc.references();
             assert!(report.complete);
             assert!(report.references.iter().all(|r| matches!(&r.resolution, ReferenceResolution::Unresolved { detail } if detail.reason == ReferenceRefusalReason::ResourceUnavailable && detail.code == "resource-unavailable")), "{report:?}");
             // A dominating branch decides without the missing resource; a
@@ -187,9 +186,7 @@ fn unused_malformed_siblings_do_not_change_the_selected_schema() {
             let schema =
                 format!(r#"{{"$id":"{BASE}","$defs":{{"good":{{"type":"string"}},"bad":{bad}}}}}"#);
             let (doc, resources) = fixture(&schema, &format!("{BASE}#/$defs/good"), supplied);
-            let report = doc
-                .references_with_resources(resources.clone(), &AtomicBool::new(false))
-                .unwrap();
+            let report = doc.references_with_resources(resources.clone(), &AtomicBool::new(false));
             let reference = report
                 .references
                 .iter()

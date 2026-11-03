@@ -10,8 +10,6 @@ await sdk.initialize(
   ),
 );
 for (const id of [
-  "A01",
-  "A02",
   "A03",
   "A04",
   "A05",

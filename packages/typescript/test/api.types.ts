@@ -23,13 +23,13 @@ async function caller(
 ): Promise<Response | undefined> {
   await initialize(bytes);
   using created = Document.create();
-  created.setOperations({
+  created.set("/operations", {
     run: {
       input: { type: "integer" },
       examples: { a: { input: 1, output: null } },
     },
   });
-  created.setSource("local", { kind: "test", data: null });
+  created.set("/sources/" + "local", { kind: "test", data: null });
   // DocumentValidation names what Rust's does: the result that can carry proof.
   const checked: DocumentValidation = created.validate();
   // @ts-expect-error a DocumentReport has no conformant branch to carry a proof
@@ -126,7 +126,7 @@ void invalidAssignment;
 // Proof is nominal and has no editing or unchecked construction surface.
 declare const proofOnly: ConformantDocument;
 // @ts-expect-error a proof cannot be edited
-proofOnly.setDescription("changed");
+proofOnly.set("/description", "changed");
 // @ts-expect-error a plain object is not a conformance proof
 const plainProof: ConformantDocument = {};
 // @ts-expect-error proof and editable document are separate classes
@@ -135,8 +135,8 @@ using editableAgain = proofOnly.intoDocument();
 using independentDocument = proofOnly.asDocument();
 void [plainProof, proofAsEditable, editableAgain, independentDocument];
 
-// @ts-expect-error metadata fields match the immutable runtime snapshot
-parsedOnly.operations[0]!.key = "changed";
+// @ts-expect-error canonical keys are immutable fields of the proved snapshot
+proofOnly.operation("run")!.key = "changed";
 // @ts-expect-error proof construction has one public method
 ConformantDocument.fromParsed(parsedOnly);
 // @ts-expect-error root no longer exports the HTTP companion
@@ -187,26 +187,17 @@ const untypedOutcome: ValueOutcome = preparedSchema.evaluate(untyped);
 const untypedExplanation: ValueOutcome = preparedSchema.explain(untyped);
 const exactExplanation: ValueOutcome = preparedSchema.explain(exactInput);
 void [untypedOutcome, untypedExplanation, exactExplanation];
-const selection = parsedOnly.resolveOperation("run");
-if (selection.status === "ambiguous") {
-  // @ts-expect-error ambiguity candidates are immutable
-  selection.candidates.push("another");
-}
+// @ts-expect-error Raw drafts expose exact JSON, not partially interpreted operations.
+parsedOnly.resolveOperation("run");
 using batchResources = new ExternalSchemas([
   ["https://schema.test", exactInput] as const,
 ]);
 void exactOutcome;
 void incompleteOutcome;
 
-// Specific interpretation causes are optional; broad error categories remain stable.
 import { SdkError } from "../dist/index.js";
-const detailed = new SdkError(
-  "interpretation",
-  "invalid namespace",
-  undefined,
-  "invalid-operation-alias",
-);
-const specificCode: string | undefined = detailed.interpretationCode;
+const detailed = new SdkError("configuration", "invalid setting");
+const specificCode: string = detailed.code;
 void specificCode;
 const obsoleteOutcome: ValueOutcome = {
   // @ts-expect-error old value verdict spelling is intentionally not a synonym
@@ -224,14 +215,16 @@ void outcomeDiscriminant;
 // Check actual emitted declarations.
 import {
   ExactMember,
-  BindingView,
-  SourceView,
-  DependencyView,
-  ExampleView,
+  Operation,
+  Binding,
+  Source,
+  Dependency,
+  Example,
   type JsonInput,
   type ExactIterator,
 } from "../dist/index.js";
-function roundOneTypes(document: Document) {
+function roundOneTypes(proof: ConformantDocument) {
+  using document = proof.asDocument();
   using root = document.value();
   using members = root.members();
   if (members) {
@@ -248,62 +241,59 @@ function roundOneTypes(document: Document) {
   }
   using elements = root.elements();
   if (elements) for (using element of elements) element.text satisfies string;
-  for (const metadata of document.operations) {
-    metadata.tags satisfies readonly string[] | null;
-    metadata.deprecated satisfies boolean | null;
+  for (using metadata of proof.operations()) {
+    metadata.tags satisfies readonly string[] | undefined;
+    metadata.deprecated satisfies boolean | undefined;
     // @ts-expect-error Immutable metadata is not editable input data.
     metadata.tags?.push("x");
   }
-  using source = document.source("a");
-  using binding = document.binding("b");
-  using dependency = document.dependency("d");
+  using source = proof.source("a");
+  using binding = proof.binding("b");
+  using dependency = proof.dependency("d");
   if (source) {
-    source.metadata.kind satisfies string;
+    source.kind satisfies string;
     using content = source.data();
   }
   if (binding) {
-    binding.metadata.preference satisfies number | null;
+    binding.preference satisfies number | undefined;
     using retained = binding.retain();
   }
-  if (dependency) dependency.metadata.kinds satisfies readonly string[] | null;
-  const selected = document.resolveOperation("run");
-  if (selected.status === "found") {
-    using operation = selected.operation;
-    using example = operation.example("example");
-    if (example) {
-      using value = example.input();
-      example.metadata.hasInput satisfies boolean;
-    }
-  }
-  document.setOperation("added", {
+  if (dependency) dependency.kinds satisfies readonly string[] | undefined;
+  using operation = proof.resolveOperation("run");
+  using example = operation?.example("example");
+  using exampleInput = example?.input();
+  example?.description satisfies string | undefined;
+  document.set("/operations/" + "added", {
     aliases: ["alias"],
     tags: ["tag"],
     examples: {},
   });
-  document.setExample("added", "one", { input: null });
-  document.setDependency("d", { operation: "added", kinds: ["a"] });
-  document.setSource("s", { kind: "a" });
-  document.setBinding("b", { operation: "added", source: "s" });
+  document.set("/operations/" + "added" + "/examples/" + "one", {
+    input: null,
+  });
+  document.set("/dependencies/" + "d", { operation: "added", kinds: ["a"] });
+  document.set("/sources/" + "s", { kind: "a" });
+  document.set("/bindings/" + "b", { operation: "added", source: "s" });
   document.set("/schemas", { a: true });
   document.remove("/operations/added");
   const opaque: JsonInput = { nested: [1, 2] as const };
   document.set("/x-opaque", opaque);
   // @ts-expect-error opaque values do not promise an exact owner
   opaque.retain();
-  // @ts-expect-error typed part fields do not accept null in place of description
-  document.setOperation("bad", { description: null });
+  // Exact editing can produce invalid drafts; conformance is separate.
+  document.set("/operations/" + "bad", { description: null });
 }
 function inaccessibleConstructors() {
   // @ts-expect-error Acquire through exact members().
   new ExactMember();
   // @ts-expect-error Acquire through keyed lookup.
-  new BindingView();
+  new Binding();
   // @ts-expect-error Acquire through keyed lookup.
-  new SourceView();
+  new Source();
   // @ts-expect-error Acquire through keyed lookup.
-  new DependencyView();
+  new Dependency();
   // @ts-expect-error Acquire through example lookup.
-  new ExampleView();
+  new Example();
 }
 const readonlyRoundOneInput = {
   operations: {
@@ -311,8 +301,8 @@ const readonlyRoundOneInput = {
   },
   dependencies: { d: { operation: "run", kinds: ["k"] } },
 } as const;
-parsedOnly.setOperations(readonlyRoundOneInput.operations);
-parsedOnly.setDependencies(readonlyRoundOneInput.dependencies);
+parsedOnly.set("/operations", readonlyRoundOneInput.operations);
+parsedOnly.set("/dependencies", readonlyRoundOneInput.dependencies);
 void roundOneTypes;
 void inaccessibleConstructors;
 
@@ -357,17 +347,12 @@ const omittedAllowOrigin: import("../dist/http-discovery.js").AllowOrigin =
 const oldAllowOrigin: import("../dist/http-discovery.js").AllowOrigin = "*";
 void [exactAllowOrigin, omittedAllowOrigin, oldAllowOrigin];
 
-declare const parsedOperation: import("../dist/index.js").OperationView;
-// @ts-expect-error unproven documents cannot construct normative value contracts
-parsedOperation.input()?.prepare();
-// @ts-expect-error a parsed operation view is not a conformant operation view
-const forgedOperation: import("../dist/index.js").ConformantOperationView =
-  parsedOperation;
-// @ts-expect-error retaining a parsed operation view keeps it unproven
-const retainedForgery: import("../dist/index.js").ConformantOperationView =
-  parsedOperation.retain();
-void [forgedOperation, retainedForgery];
-
+// @ts-expect-error No second raw operation model is exported.
+import type { OperationView } from "../dist/index.js";
+// @ts-expect-error No extra conformant view naming layer is exported.
+import type { ConformantOperationView } from "../dist/index.js";
+// @ts-expect-error No ambiguous raw-domain lookup carrier is exported.
+import type { OperationSelection } from "../dist/index.js";
 function validatedReads(proof: ConformantDocument, parsed: Document) {
   proof.openbindings satisfies string;
   proof.name satisfies string | undefined;
@@ -385,15 +370,11 @@ function validatedReads(proof: ConformantDocument, parsed: Document) {
   schema satisfies ExactJson | undefined;
   // @ts-expect-error the contract already names its field; prepare takes options only
   contract?.prepare("input");
-  const selection = parsed.resolveOperation("run");
-  if (selection.status === "found") {
-    using operation = selection.operation;
-    using input = operation.input();
-    using output = operation.output();
-    input satisfies ExactJson | undefined;
-    output satisfies ExactJson | undefined;
-  }
-  return editor.name;
+  // @ts-expect-error Drafts have no domain metadata getters.
+  parsed.name;
+  using raw = editor.value();
+  using name = raw.get("name");
+  return name?.text;
 }
 void validatedReads;
 
@@ -433,25 +414,41 @@ function exhaustiveValueOutcome(value: ValueOutcome): string {
   }
 }
 
-// Part names match the specification vocabulary, with no retired aliases.
-import type {
-  Operation,
-  Binding,
-  Source,
-  Dependency,
-  Example,
-} from "../dist/index.js";
-function namedParts(document: Document) {
-  const example: Example = { input: null };
-  const operation: Operation = { input: true, examples: { sample: example } };
-  const source: Source = { kind: "custom", data: null };
-  const binding: Binding = { operation: "run", source: "local" };
-  const dependency: Dependency = { operation: "run" };
-  document.setOperation("run", operation);
-  document.setBinding("binding", binding);
-  document.setSource("local", source);
-  document.setDependency("dependency", dependency);
-  document.setExample("run", "sample", example);
+// Canonical names denote owned proved entries, not detached authoring records.
+function namedParts(document: ConformantDocument) {
+  for (using operation of document.operations()) {
+    operation satisfies Operation;
+    using owner = operation.document();
+    using input = operation.input();
+    using output = operation.output();
+    operation.tags satisfies readonly string[] | undefined;
+    operation.aliases satisfies readonly string[] | undefined;
+    operation.deprecated satisfies boolean | undefined;
+    for (using binding of operation.bindings()) {
+      binding satisfies Binding;
+      using relatedOperation = binding.operation();
+      using source = binding.source();
+      source satisfies Source;
+      using data = source.data();
+      binding.operationKey satisfies string;
+      binding.sourceKey satisfies string;
+      binding.preference satisfies number | undefined;
+      binding.idempotent satisfies boolean | undefined;
+    }
+    for (using example of operation.examples() ?? []) {
+      example satisfies Example;
+      using input = example.input();
+      using output = example.output();
+    }
+  }
+  for (using dependency of document.dependencies() ?? []) {
+    dependency satisfies Dependency;
+    dependency.acceptsKind("kind") satisfies boolean;
+    using operation = dependency.operation();
+  }
+  // @ts-expect-error Canonical entries cannot be forged as document-shaped records.
+  const forged: Operation = { input: true };
+  void forged;
 }
 void namedParts;
 // @ts-expect-error retired part name has no alias
@@ -465,29 +462,29 @@ import type { DependencyDraft } from "../dist/index.js";
 // @ts-expect-error retired part name has no alias
 import type { ExampleDraft } from "../dist/index.js";
 declare const partError: import("../dist/index.js").EditError;
-partError.partPointer satisfies string | null;
+partError.inputPointer satisfies string | null;
+// @ts-expect-error Removed authoring-part diagnostic has no compatibility alias.
+partError.partPointer;
 // @ts-expect-error retired pointer name has no alias
 partError.draftPointer;
 
-// Typed maps and exact pointer edits share the existing batch API.
-function typedBatch(
-  document: Document,
-  operation: Operation,
-  source: Source,
-  binding: Binding,
-  dependency: Dependency,
-) {
-  document.edit([
-    { op: "set-operations", value: { run: operation } },
-    { op: "set-sources", value: { local: source } },
-    { op: "set-bindings", value: { binding } },
-    { op: "set-dependencies", value: { dependency } },
+// All authoring is exact JSON editing; a batch does not interpret domain fields.
+function exactBatch(document: Document, value: JsonInput) {
+  using edited = document.edit([
+    { op: "set", pointer: "/operations", value: { run: { input: true } } },
+    {
+      op: "set",
+      pointer: "/sources",
+      value: { local: { kind: "example", data: value } },
+    },
     { op: "set", pointer: "/name", value: "Batch" },
   ]);
-  // @ts-expect-error typed source kind is required in a batch, too
+  // @ts-expect-error Retired typed namespace replacement is not a batch op.
   document.edit([{ op: "set-sources", value: { local: {} } }]);
+  // @ts-expect-error Retired typed setter has no compatibility alias.
+  document.setOperation("run", {});
 }
-void typedBatch;
+void exactBatch;
 
 // Edits return independently owned immutable snapshots.
 using changedSnapshot: Document = parsedOnly.set("/description", "changed");

@@ -168,8 +168,9 @@ console.log("Installed README TypeScript first-use block compiled and ran verbat
     join(installed, "dist/internal.d.ts"),
     "utf8",
   );
-  assert.match(declaration, /interpretationCode\?: string/);
-  assert.match(declaration, /Specific interpretation refusal/);
+  assert.doesNotMatch(declaration, /interpretationCode/);
+  assert.match(declaration, /readonly inputPointer: string \| null/);
+  assert.match(declaration, /class Operation extends Managed/);
   writeFileSync(
     join(temporary, "consumer.mjs"),
     `

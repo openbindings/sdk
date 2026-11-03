@@ -11,18 +11,29 @@ export function inspectBindings(text: string, operationName: string) {
   const parsed = Document.parse(text);
   if (parsed.status !== "parsed") return parsed;
   using document = parsed.value;
-  const selected = document.resolveOperation(operationName);
-  if (selected.status !== "found") return selected;
-  using operation = selected.operation;
+  const checked = document.validate();
+  if (checked.status !== "conformant") return checked;
+  using proof = checked.document;
+  using operation = proof.resolveOperation(operationName);
+  if (!operation) return { status: "missing" as const };
   const rows = [];
-  for (const key of operation.bindings) {
-    using binding = document.binding(key);
-    if (!binding) throw new Error("An associated binding disappeared.");
-    const metadata = binding.metadata;
-    using source = document.source(metadata.source);
-    rows.push({ binding: metadata, source: source?.metadata ?? null });
+  const bindings = operation.bindings();
+  try {
+    for (const binding of bindings) {
+      using source = binding.source();
+      rows.push({
+        binding: { key: binding.key, preference: binding.preference },
+        source: { key: source.key, kind: source.kind },
+      });
+    }
+  } finally {
+    for (const binding of bindings) binding.dispose();
   }
-  return { status: "inspected" as const, operation: operation.metadata, rows };
+  return {
+    status: "inspected" as const,
+    operation: { key: operation.key },
+    rows,
+  };
 }
 
 const pointer = (name: string) =>
@@ -33,7 +44,10 @@ export function addTag(
   primaryKey: string,
   tag: string,
 ): Document | undefined {
-  const operation = document.operations.find((row) => row.key === primaryKey);
+  const checked = document.validate();
+  if (checked.status !== "conformant") return undefined;
+  using proof = checked.document;
+  using operation = proof.operation(primaryKey);
   if (!operation) return undefined;
   return document.set(`/operations/${pointer(primaryKey)}/tags`, [
     ...new Set([...(operation.tags ?? []), tag]),
@@ -60,7 +74,10 @@ export function editMetadata(
   if (opened.status !== "parsed") return opened;
   using document = opened.value;
   try {
-    const operation = document.operations.find((row) => row.key === primaryKey);
+    const checked = document.validate();
+    if (checked.status !== "conformant") return checked;
+    using proof = checked.document;
+    using operation = proof.operation(primaryKey);
     if (!operation) return { status: "operation-missing" as const };
     using changed = document.edit([
       { op: "set", pointer: "/description", value: description },

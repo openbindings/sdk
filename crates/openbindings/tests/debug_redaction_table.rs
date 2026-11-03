@@ -90,12 +90,6 @@ fn preparation_refusals_redact_payloads_like_no_verdict() {
     ));
     check_rows(rows, 7);
 }
-fn evidence() -> BTreeMap<String, JsonValue> {
-    BTreeMap::from([(
-        format!("credential-{SECRET}"),
-        JsonValue::string(SECRET).unwrap(),
-    )])
-}
 fn location() -> SchemaOrigin {
     SchemaOrigin::new(Some(SECRET.into()), format!("/{SECRET}").parse().unwrap())
 }
@@ -176,39 +170,25 @@ impl SchemaEvaluator for Capture {
         )
     }
 }
-fn authoring_rows(source: &Source, operation: &Operation, context: &JsonValue) -> Vec<Row> {
-    let binding = Binding {
-        operation: SECRET.into(),
-        source: SECRET.into(),
-        data: Some(context.clone()),
-        description: Some(SECRET.into()),
-        additional_fields: evidence(),
-        ..Default::default()
-    };
-    let dependency = Dependency {
-        operation: SECRET.into(),
-        kinds: Some(vec![SECRET.into()]),
-        description: Some(SECRET.into()),
-        additional_fields: evidence(),
-    };
-    let document = Document::parse(
-        serde_json::json!({
-            "openbindings": SECRET, "name": SECRET, "version": SECRET,
-            "description": SECRET, "operations": {SECRET: &operation},
-            "schemas": {SECRET: &context}, "sources": {SECRET: &source},
-            "bindings": {SECRET: &binding}, "dependencies": {SECRET: &dependency},
-            "x-private": &context,
-        })
-        .to_string(),
-    )
-    .unwrap();
+fn domain_rows(context: &JsonValue) -> Vec<Row> {
+    let document = Document::parse(serde_json::json!({
+        "openbindings":"0.2.0", "name":SECRET, "version":SECRET, "description":SECRET,
+        "operations":{SECRET:{"description":SECRET,"tags":[SECRET],"aliases":[format!("alias-{SECRET}")],
+            "input":{"const":context},"output":{"const":context},
+            "examples":{SECRET:{"description":SECRET,"input":context,"output":context,"x-private":context}},"x-private":context}},
+        "sources":{SECRET:{"kind":SECRET,"data":context,"description":SECRET,"x-private":context}},
+        "bindings":{SECRET:{"operation":SECRET,"source":SECRET,"data":context,"description":SECRET,"x-private":context}},
+        "dependencies":{SECRET:{"operation":SECRET,"kinds":[SECRET],"description":SECRET,"x-private":context}},
+        "schemas":{SECRET:{"const":context}}, "x-private":context,
+    }).to_string()).unwrap().validate().unwrap().conformant().unwrap();
+    let operation = document.operation(SECRET).unwrap();
     vec![
-        row("Document", &document),
-        row("Source", source),
-        row("Operation", operation),
-        row("Example", &operation.examples.as_ref().unwrap()[SECRET]),
-        row("Binding", &binding),
-        row("Dependency", &dependency),
+        row("Document", document.document()),
+        row("Source", &document.source(SECRET).unwrap()),
+        row("Operation", &operation),
+        row("Example", &operation.example(SECRET).unwrap()),
+        row("Binding", &document.binding(SECRET).unwrap()),
+        row("Dependency", &document.dependency(SECRET).unwrap()),
     ]
 }
 
@@ -250,7 +230,7 @@ fn debug_redacts_caller_text_at_every_boundary() {
     let mut version = VersionRefusal::new("0.3.0").unwrap();
     version.declared = SECRET.into();
     version.supported = SECRET;
-    let mut references = parsed_ref.references().unwrap();
+    let mut references = parsed_ref.references();
     let mut reference_item = references.references[0].clone();
     let ReferenceResolution::Unresolved { detail } = &reference_item.resolution else {
         panic!("an unsupplied resource leaves its reference unresolved")
@@ -288,26 +268,9 @@ fn debug_redacts_caller_text_at_every_boundary() {
         row("Finding", &finding),
         row("ValidationReport", &report),
         row("VersionRefusal", &version),
-        row(
-            "InterpretationError::Version",
-            &InterpretationError::Version(version.clone()),
-        ),
-        row(
-            "InterpretationError::InvalidField",
-            &InterpretationError::InvalidField {
-                code: SECRET,
-                location: source_location,
-            },
-        ),
         row("Document", &parsed),
         row("DocumentValidation", &validation),
         row("ConformantDocument", &validated),
-        row(
-            "OperationSelection",
-            &OperationSelection::Ambiguous {
-                candidates: vec![SECRET.into()],
-            },
-        ),
         row("ReferenceRefusal", &reference_refusal),
         row("Reference", &reference_item),
         row(
@@ -318,7 +281,7 @@ fn debug_redacts_caller_text_at_every_boundary() {
             },
         ),
         row("ReferenceReport", &references),
-        row("actual reference report", &parsed_ref.references().unwrap()),
+        row("actual reference report", &parsed_ref.references()),
         row("NoVerdict", &refusal()),
         row("ValueProblem", &problem),
         row("ValueOutcome::Fails", &outcome),
@@ -331,7 +294,7 @@ fn debug_redacts_caller_text_at_every_boundary() {
     assert!(refusal().to_string().contains(SECRET));
     assert!(version.to_string().contains(SECRET));
     assert!(
-        parsed_ref.references().unwrap().references[0]
+        parsed_ref.references().references[0]
             .spelling
             .as_ref()
             .unwrap()
@@ -431,42 +394,11 @@ fn debug_redacts_caller_text_at_every_boundary() {
     error.message = SECRET.into();
     rows.push(row("ExternalSchemaError::custom", &error));
 
-    let draft = Document::new();
-    let mut operation = Operation::default();
-    operation
-        .additional_fields
-        .insert("description".into(), JsonValue::null());
-    let collision = draft.set_operation(SECRET, &operation).unwrap_err();
-    let EditError::FieldCollision { part_pointer, .. } = &collision else {
-        panic!()
-    };
-    assert!(part_pointer.as_deref().unwrap().contains(SECRET));
-    rows.push(row("EditError::FieldCollision", &collision));
-    let source = Source {
-        kind: SECRET.into(),
-        data: Some(context.clone()),
-        description: Some(SECRET.into()),
-        additional_fields: BTreeMap::from([(format!("x-{SECRET}"), context.clone())]),
-    };
-    let operation = Operation {
-        description: Some(SECRET.into()),
-        tags: Some(vec![SECRET.into()]),
-        aliases: Some(vec![SECRET.into()]),
-        input: Some(context.clone()),
-        output: Some(context.clone()),
-        examples: Some(BTreeMap::from([(
-            SECRET.into(),
-            Example {
-                description: Some(SECRET.into()),
-                input: Some(context.clone()),
-                output: Some(context.clone()),
-                additional_fields: evidence(),
-            },
-        )])),
-        additional_fields: evidence(),
-        ..Default::default()
-    };
-    rows.extend(authoring_rows(&source, &operation, &context));
+    let missing = Document::new()
+        .remove(format!("/{SECRET}").as_str())
+        .unwrap_err();
+    rows.push(row("EditError::MissingValue", &missing));
+    rows.extend(domain_rows(&context));
 
     // Public records accept custom codes; only exact fixed vocabulary is shown.
     for code in ["type", "required", "enum"] {
@@ -570,7 +502,7 @@ fn debug_redacts_caller_text_at_every_boundary() {
         ));
     }
 
-    check_rows(rows, 74);
+    check_rows(rows, 71);
 }
 
 fn row_with_fields(label: &'static str, value: &impl Debug, fields: &[(&str, &str)]) -> Row {
@@ -644,41 +576,24 @@ fn debug_and_display_write_their_structure() {
             text.len()
         )
     );
-    let field = InterpretationError::InvalidField {
-        code: "invalid-description",
-        location: probe_location(),
-    };
-    for (error, debug, display) in [
+    for (error, debug, code) in [
+        (EditError::MissingParent, "MissingParent", "missing-parent"),
+        (EditError::MissingValue, "MissingValue", "missing-value"),
         (
-            InterpretationError::Version(refusal),
-            "Version(VersionRefusal { .. })",
-            "unsupported-version",
+            EditError::InvalidPointer,
+            "InvalidPointer",
+            "invalid-pointer",
         ),
         (
-            InterpretationError::MalformedVersion,
-            "MalformedVersion",
-            "malformed-version",
-        ),
-        (
-            InterpretationError::DuplicateMembers,
+            EditError::DuplicateMembers,
             "DuplicateMembers",
             "duplicate-members",
         ),
-        (
-            InterpretationError::UnpairedString,
-            "UnpairedString",
-            "unpaired-string",
-        ),
-        (
-            field,
-            "InvalidField { location: SourceLocation { byte_offset: 42, line: 2, byte_column: 3, .. }, .. }",
-            "invalid-description",
-        ),
+        (EditError::NotContainer, "NotContainer", "not-container"),
+        (EditError::Overlap, "Overlap", "overlapping-edits"),
     ] {
         assert_eq!(format!("{error:?}"), debug);
-        assert_eq!(
-            error.to_string(),
-            format!("document cannot be interpreted: {display}")
-        );
+        assert_eq!(error.code(), code);
+        assert_eq!(error.to_string(), format!("document edit refused: {code}"));
     }
 }

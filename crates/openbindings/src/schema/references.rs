@@ -114,7 +114,7 @@ pub enum ReferenceRefusalReason {
     LimitExceeded,
     /// The caller cancelled inspection.
     Cancelled,
-    /// The resolver could not complete inspection.
+    /// Document preconditions or the resolver prevented inspection; `code` identifies the cause.
     ResolverFailure,
 }
 
@@ -253,24 +253,62 @@ pub struct ReferenceReport {
 use serde::Serialize;
 
 impl Document {
-    /// Inspect references with no caller resources and a fresh uncancelled control. No network or filesystem access; success is not conformance proof.
-    ///
-    /// # Errors
-    /// Returns an interpretation error for an unsupported or malformed version, duplicate members, or an invalid shape in the fields read by this method. This does not require document conformance. Unresolved references and cancellation are recorded in the returned report.
-    pub fn references(&self) -> Result<ReferenceReport, InterpretationError> {
+    /// Inspect schema references in an admitted draft without claiming conformance.
+    /// Opaque data is not traversed. No resource is fetched. An unsupported or
+    /// malformed version, duplicate member names, cancellation and traversal
+    /// limits produce an incomplete report with a structured limitation.
+    pub fn references(&self) -> ReferenceReport {
         self.references_with_resources(ExternalSchemas::default(), &crate::control::NeverCancelled)
     }
-    /// Inspect schema references in this exact snapshot plus supplied resources, with cooperative cancellation. Interpretation errors refuse the document; traversal limits are represented in [`ReferenceReport`].
-    ///
-    /// # Errors
-    /// Returns an interpretation error for an unsupported or malformed version, duplicate members, or an invalid shape in the fields read by this method. This does not require document conformance. Unresolved references and cancellation are recorded in the returned report.
+    /// Inspect the draft plus an immutable supplied resource set. The report is
+    /// diagnostic evidence, not a canonical domain view or a prepared contract.
     pub fn references_with_resources(
         &self,
         resources: ExternalSchemas,
         control: &dyn WorkControl,
-    ) -> Result<ReferenceReport, InterpretationError> {
-        self.interpretable()?;
-        Ok(inspect(self, &resources, control))
+    ) -> ReferenceReport {
+        use ReferenceRefusalReason::{Cancelled, ResolverFailure, UnsupportedCapability};
+        let refusal = if control.is_cancelled() {
+            Some((Cancelled, "cancelled", "reference inspection was cancelled"))
+        } else if crate::conformance::version_refusal(self.value()).is_some() {
+            Some((
+                UnsupportedCapability,
+                "unsupported-version",
+                "reference inspection requires a supported specification version",
+            ))
+        } else if self.value().has_duplicate_names() {
+            Some((
+                ResolverFailure,
+                "duplicate-members",
+                "duplicate member names prevent unambiguous reference inspection",
+            ))
+        } else if self
+            .value()
+            .get("openbindings")
+            .and_then(JsonRef::as_str)
+            .is_none_or(|version| check_version(version) != VersionDecision::Supported)
+        {
+            Some((
+                ResolverFailure,
+                "malformed-version",
+                "reference inspection requires a valid specification version declaration",
+            ))
+        } else {
+            None
+        };
+        if let Some((reason, code, message)) = refusal {
+            return ReferenceReport {
+                complete: false,
+                references: Vec::new(),
+                limitation: Some(ReferenceRefusal {
+                    reason,
+                    code: code.into(),
+                    message: message.into(),
+                    location: None,
+                }),
+            };
+        }
+        inspect(self, &resources, control)
     }
 }
 

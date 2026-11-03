@@ -253,7 +253,7 @@ fn a_raised_byte_limit_admits_documents_to_it_and_they_keep_it_for_edits() {
             .to_string()
             .ends_with("; raise JsonLimits::max_bytes (limits.maxBytes in TypeScript)")
     );
-    // Edits and typed setters parse under the document's limits: a small
+    // Exact edits parse under the document's limits: a small
     // document admitted with them grows past the default, one parsed with the
     // defaults does not.
     let empty = r#"{"openbindings":"0.2.0","operations":{}}"#;
@@ -263,7 +263,12 @@ fn a_raised_byte_limit_admits_documents_to_it_and_they_keep_it_for_edits() {
     grown = grown.set("/x-fill", &large).unwrap();
     assert!(grown.as_bytes().len() > default);
     assert_eq!(grown.limits(), raised);
-    grown = grown.set_description(&"d".repeat(512)).unwrap();
+    grown = grown
+        .set(
+            "/description",
+            &JsonValue::string(&"d".repeat(512)).unwrap(),
+        )
+        .unwrap();
     assert_eq!(
         grown.validate().unwrap().report().conclusion,
         Conformance::Conformant
@@ -280,9 +285,17 @@ fn a_raised_byte_limit_admits_documents_to_it_and_they_keep_it_for_edits() {
     // A proof's document keeps its limits for editing again: at the raised
     // limit it cannot grow, and once smaller it can.
     let mut again = proof.into_inner();
-    assert_eq!(again.set_name("raised").unwrap_err().code(), "byte-limit");
+    assert_eq!(
+        again
+            .set("/name", &JsonValue::string("raised").unwrap())
+            .unwrap_err()
+            .code(),
+        "byte-limit"
+    );
     again = again.remove("/x-fill").unwrap();
-    again = again.set_name("raised").unwrap();
+    again = again
+        .set("/name", &JsonValue::string("raised").unwrap())
+        .unwrap();
     assert_eq!(again.limits(), raised);
     // Each entry's default: the JsonLimits defaults for parsing, construction
     // and from_json, and no nesting cap for validate_document.

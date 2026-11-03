@@ -238,17 +238,30 @@ fn selection_distinguishes_absent_contracts_missing_and_ambiguous_operations() {
     let operation = proof.resolve_operation("find").expect("declared alias");
     assert!(operation.output().is_none());
     assert!(proof.resolve_operation("missing").is_none());
-    // Conformance excludes ambiguity; a plain document still reports its candidates.
+    // Conformance excludes ambiguity; exact draft declarations remain inspectable.
     let plain = Document::parse(
         r#"{"openbindings":"0.2.0","operations":{"a":{"aliases":["shared"]},"b":{"aliases":["shared"]}}}"#,
     )
     .unwrap();
     assert!(plain.validate().unwrap().conformant().is_none());
-    let candidates = vec!["a".to_owned(), "b".to_owned()];
-    assert!(
-        matches!(plain.resolve_operation("shared").unwrap(), OperationSelection::Ambiguous { candidates: actual }
-        if actual == candidates)
+    assert_eq!(
+        plain.validate().unwrap().report().evidence["OBI-05"],
+        Evidence::Violated
     );
+    for key in ["a", "b"] {
+        assert_eq!(
+            plain
+                .value()
+                .get("operations")
+                .unwrap()
+                .get(key)
+                .unwrap()
+                .get("aliases")
+                .unwrap()
+                .text(),
+            r#"["shared"]"#
+        );
+    }
     let ready = operation
         .input()
         .expect("declared input")

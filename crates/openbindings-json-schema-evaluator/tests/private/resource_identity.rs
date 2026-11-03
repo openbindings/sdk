@@ -169,7 +169,6 @@ fn identity_refusal(doc: &Document, supplied: &ExternalSchemas, operation: &str)
 }
 fn reference(doc: &Document, supplied: &ExternalSchemas, pointer: &str) -> ReferenceResolution {
     doc.references_with_resources(supplied.clone(), &std::sync::atomic::AtomicBool::new(false))
-        .unwrap()
         .references
         .into_iter()
         .find(|r| r.location.pointer == pointer)
@@ -1068,7 +1067,6 @@ fn ri30_precancellation_and_fresh_retry_preserve_identity_policy() {
     );
     assert!(
         !doc.references_with_resources(supplied.clone(), &control)
-            .unwrap()
             .complete
     );
     verdicts(&ready(&proof, &supplied, "op"), &[("2", "satisfies")]);

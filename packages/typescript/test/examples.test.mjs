@@ -106,7 +106,9 @@ test("source editor requires conformance and retains prepared partial snapshots"
       current.dispose();
     }
     editor.dispose();
-    assert.equal(retained.operations[0].key, "lookup");
+    const operation = retained.operation("lookup");
+    assert.equal(operation.key, "lookup");
+    operation.dispose();
   } finally {
     retained?.dispose();
     editor.dispose();

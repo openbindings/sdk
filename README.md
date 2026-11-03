@@ -34,13 +34,12 @@ for operation in conformant.operations() {
 OBI-01 violation in the report, located like any other finding, and only an
 unsupported version is an `Err`. Continue with [Rust first use](docs/rust-first-use.md) to prepare a value contract,
 validate input, edit opaque values and retain prepared work. Rust needs no runtime
-initialization. A conformant operation hands out its value contracts:
-`operation.input().ok_or("no input contract")?.prepare(&DefaultEvaluator::new())?`
-uses default budgets and no supplied resources, then
-`contract.validate_json(input)?` checks JSON text or bytes; `contract.explain(&value)`
-reports why an admitted value fails, by exact pointers into the value and the
-schema that `value.locate(..)` and `proof.locate(..)` place at a line and column. `prepare_with` borrows a
-configured evaluator and a `ResourceSet`. The [TypeScript guide](packages/typescript/README.md) starts with a
+initialization. Canonical operations expose contextual `Schema` owners.
+`schema.prepare(&evaluator, &external_schemas, &preparation_limits)` returns a
+prepared validator or a preparation failure, separately from value results.
+`prepared.evaluate_json(input)?` admits and checks exact JSON; `explain(&value)`
+requests diagnostics at original instance and schema locations. The
+[TypeScript guide](packages/typescript/README.md) starts with a
 complete document-to-verdict example and covers initialization and disposal.
 
 To edit, parse a `Document` with `Document::parse` (or create one with

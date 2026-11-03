@@ -8,157 +8,49 @@ fn parsed(operations: &str) -> Document {
     .unwrap()
 }
 #[test]
-fn typed_inspection_checks_the_namespace_and_retains_unrelated_metadata() {
-    let doc = parsed(
+fn malformed_operation_fields_and_alias_collisions_never_acquire_proof() {
+    for operations in [
         r#"{"z":{"description":"last","aliases":["go"],"input":false,"output":null},"a":{}}"#,
-    );
-    let keys = doc
-        .operations()
-        .unwrap()
-        .iter()
-        .map(|v| v.key().to_owned())
-        .collect::<Vec<_>>();
-    assert_eq!(keys, ["a", "z"]);
-    let OperationSelection::Found(op) = doc.resolve_operation("go").unwrap() else {
-        panic!()
-    };
-    drop(doc);
-    assert_eq!(op.key(), "z");
-    assert_eq!(
-        op.description()
-            .unwrap()
-            .map(|s| s.as_str().expect("scalar fixture")),
-        Some("last")
-    );
-    assert_eq!(op.aliases().unwrap().unwrap().collect::<Vec<_>>(), ["go"]);
-    assert_eq!(op.input().unwrap().as_bool(), Some(false));
-    assert_eq!(op.output().unwrap().kind(), JsonKind::Null);
-    assert_eq!(
-        op.input()
-            .unwrap()
-            .location()
-            .pointer
-            .as_ref()
-            .and_then(openbindings::Pointer::as_str),
-        Some("/operations/z/input")
-    );
-    let held = op.input().unwrap().to_owned();
-    drop(op);
-    assert_eq!(held.text(), "false");
-    let unrelated = parsed(r#"{"good":{"description":12},"bad":{}}"#);
-    let OperationSelection::Found(good) = unrelated.resolve_operation("good").unwrap() else {
-        panic!()
-    };
-    assert_eq!(
-        good.description()
-            .unwrap_err()
-            .source_location()
-            .unwrap()
-            .pointer
-            .as_ref()
-            .and_then(openbindings::Pointer::as_str),
-        Some("/operations/good/description")
-    );
-    assert!(unrelated.operations().is_ok());
-    let malformed = parsed(r#"{"good":{"description":12},"bad":false}"#);
-    for name in ["good", "bad", "absent"] {
-        assert_eq!(
-            malformed.resolve_operation(name).unwrap_err().code(),
-            "invalid-operation-object"
-        );
-    }
-    assert!(matches!(
-        unrelated.resolve_operation("absent").unwrap(),
-        OperationSelection::Missing
-    ));
-    for operations in ["null", "[]", "false"] {
-        assert!(parsed(operations).operations().is_err());
-    }
-    assert!(
-        Document::parse(r#"{"openbindings":"0.2.0"}"#)
-            .unwrap()
-            .resolve_operation("x")
-            .is_err()
-    );
-}
-#[test]
-fn namespace_counts_occurrences_and_refuses_malformed_aliases_everywhere() {
-    for (ops, name, expected) in [
-        (r#"{"a":{"aliases":["x","x"]}}"#, "x", vec!["a"]),
-        (r#"{"a":{"aliases":["a"]}}"#, "a", vec!["a"]),
-        (
-            r#"{"z":{"aliases":["x"]},"a":{"aliases":["x"]}}"#,
-            "x",
-            vec!["a", "z"],
-        ),
+        r#"{"good":{"description":12},"bad":{}}"#,
+        r#"{"good":{"description":12},"bad":false}"#,
+        r#"{"a":{"aliases":["x","x"]}}"#,
+        r#"{"a":{"aliases":["a"]}}"#,
+        r#"{"z":{"aliases":["x"]},"a":{"aliases":["x"]}}"#,
+        "null",
+        "[]",
+        "false",
     ] {
-        let OperationSelection::Ambiguous { candidates } =
-            parsed(ops).resolve_operation(name).unwrap()
-        else {
-            panic!()
-        };
-        assert_eq!(candidates, expected);
+        let doc = parsed(operations);
+        assert_eq!(doc.value().get("operations").unwrap().text(), operations);
+        assert!(doc.validate().unwrap().conformant().is_none());
     }
     for aliases in ["null", "false", r#"["valid",2]"#] {
         let doc = parsed(&format!(r#"{{"good":{{}},"bad":{{"aliases":{aliases}}}}}"#));
-        assert!(doc.resolve_operation("good").is_err());
-        assert!(doc.operations().is_err());
+        assert!(doc.validate().unwrap().conformant().is_none());
     }
-}
-#[test]
-fn authoring_collision_has_native_draft_path_and_source_is_separate() {
-    let b = Document::new();
-    let mut op = Operation::default();
-    let mut ex = Example::default();
-    ex.additional_fields
-        .insert("input".into(), JsonValue::null());
-    op.examples = Some(BTreeMap::from([("a~/b".into(), ex)]));
-    let error = b.set_operation("x~/y", &op).unwrap_err();
-    assert_eq!(error.code(), "field-collision");
-    let EditError::FieldCollision { part_pointer, .. } = error else {
-        panic!()
-    };
+    for source in [
+        r#"{"openbindings":"0.2.0"}"#,
+        r#"{"openbindings":"0.2.0","operations":{"x":{"aliases":false}}}"#,
+    ] {
+        assert!(
+            Document::parse(source)
+                .unwrap()
+                .validate()
+                .unwrap()
+                .conformant()
+                .is_none()
+        );
+    }
+    let doc = Document::new().set("/unknown", &JsonValue::null()).unwrap();
     assert_eq!(
-        part_pointer.as_deref(),
-        Some("/operations/x~0~1y/examples/a~0~1b/additional_fields/input")
-    );
-    let wrong =
-        JsonValue::parse(r#"{"openbindings":"0.2.0","operations":{"x":{"aliases":false}}}"#)
-            .unwrap();
-    let e = Document::from_json(wrong).operations().unwrap_err();
-    assert_eq!(e.code(), "invalid-operation-aliases");
-    assert_eq!(
-        e.source_location()
-            .unwrap()
-            .pointer
-            .as_ref()
-            .and_then(openbindings::Pointer::as_str),
-        Some("/operations/x/aliases")
-    );
-    let mut b = Document::new();
-    b = b.set("/unknown", &JsonValue::null()).unwrap();
-    assert_eq!(
-        b.clone().validate().unwrap().report().conclusion,
+        doc.validate().unwrap().report().conclusion,
         Conformance::NonConformant
     );
-    let op = Operation {
-        additional_fields: BTreeMap::from([("input".into(), JsonValue::null())]),
-        ..Default::default()
-    };
-    let b = Document::new();
-    // A pointer whose escaped spelling would exceed 4,096 bytes is omitted.
-    let EditError::FieldCollision { part_pointer, .. } =
-        b.set_operation(&"x".repeat(5000), &op).unwrap_err()
-    else {
-        panic!()
-    };
-    assert!(part_pointer.is_none());
 }
 #[test]
 fn errors_are_owned_send_sync_without_bounds_on_serialized_values() {
     fn bound<T: std::error::Error + Send + Sync + 'static>() {}
     bound::<EditError>();
-    bound::<InterpretationError>();
     bound::<ValueConversionError>();
     let local = std::rc::Rc::new(std::cell::Cell::new(7));
     struct Local<'a>(&'a std::cell::Cell<i32>);
@@ -780,12 +672,9 @@ fn outcome_and_report_records_compare_by_value() {
     let mut other = report.clone();
     other.findings[0].message.push('.');
     assert_ne!(report, other);
-    let references = Document::parse(text).unwrap().references().unwrap();
+    let references = Document::parse(text).unwrap().references();
     eq(&references);
-    assert_eq!(
-        references,
-        Document::parse(text).unwrap().references().unwrap()
-    );
+    assert_eq!(references, Document::parse(text).unwrap().references());
     let location = SchemaOrigin::new(None, "/operations/op/input".parse().unwrap());
     let refusal = NoVerdict::new(NoVerdictReason::LimitExceeded, "budget", "limit")
         .with_location(location.clone());

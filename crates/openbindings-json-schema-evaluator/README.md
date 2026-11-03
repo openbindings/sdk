@@ -5,7 +5,7 @@ conformance, original schema identity and reference resolution; this companion
 implements per-value evaluation with exact numbers and explicit external schemas.
 It never fetches resources. This unpublished package requires Rust 1.88.
 
-```rust,edition2024
+```rust
 use openbindings::*;
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 

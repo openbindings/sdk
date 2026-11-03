@@ -9,7 +9,7 @@ fn redacted(value: &dyn std::fmt::Debug) {
 }
 
 #[test]
-fn exact_views_and_authoring_owners_do_not_print_source_data() {
+fn exact_json_and_canonical_owners_do_not_print_source_data() {
     let value = JsonValue::parse(format!(r#"{{"{SECRET}":"{SECRET}"}}"#)).unwrap();
     let member = value.view().members().unwrap().next().unwrap();
     redacted(&value);
@@ -24,11 +24,13 @@ fn exact_views_and_authoring_owners_do_not_print_source_data() {
     .unwrap();
     redacted(&parsed);
     redacted(&parsed.clone());
-    redacted(&Source {
-        kind: SECRET.into(),
-        data: Some(value),
-        ..Source::default()
-    });
+    let document = Document::parse(format!(r#"{{"openbindings":"0.2.0","operations":{{"{SECRET}":{{"description":"{SECRET}","examples":{{"{SECRET}":{{"input":"{SECRET}"}}}}}}}},"sources":{{"{SECRET}":{{"kind":"{SECRET}","data":"{SECRET}"}}}},"bindings":{{"{SECRET}":{{"operation":"{SECRET}","source":"{SECRET}"}}}},"dependencies":{{"{SECRET}":{{"operation":"{SECRET}"}}}}}}"#)).unwrap().validate().unwrap().conformant().unwrap();
+    redacted(&document);
+    redacted(&document.operation(SECRET).unwrap());
+    redacted(&document.operation(SECRET).unwrap().example(SECRET).unwrap());
+    redacted(&document.source(SECRET).unwrap());
+    redacted(&document.binding(SECRET).unwrap());
+    redacted(&document.dependency(SECRET).unwrap());
 }
 
 // No Debug requirement is imposed on an application evaluator or work control.

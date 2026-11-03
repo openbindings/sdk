@@ -8,9 +8,9 @@ use crate::{
     channel::{self, Shared},
 };
 use openbindings::{
-    ConformantDocument, ConformantOperationView, Detail, ExternalSchemas, JsonValue,
-    NoVerdictReason, PreparationFailure, PreparationFailureKind, PreparationLimits, PreparedSchema,
-    Schema, SchemaEvaluator, SchemaValidator, ValueOutcome,
+    ConformantDocument, Detail, ExternalSchemas, JsonValue, NoVerdictReason, Operation,
+    PreparationFailure, PreparationFailureKind, PreparationLimits, PreparedSchema, Schema,
+    SchemaEvaluator, SchemaValidator, ValueOutcome,
 };
 pub use prepared::{BindingChoice, OperationPreparationFailure, PreparedOperation};
 pub use request::{OperationAddress, OperationRequest};
@@ -200,7 +200,7 @@ impl<P: BindingInvoker + InvocationSupport, E: SchemaEvaluator> OperationClient<
 fn resolve<P: InvocationSupport>(
     provider: &P,
     request: OperationRequest,
-) -> Result<(BindingRequest, ConformantOperationView), InvocationError> {
+) -> Result<(BindingRequest, Operation), InvocationError> {
     let OperationRequest {
         interface,
         address,
@@ -213,9 +213,7 @@ fn resolve<P: InvocationSupport>(
             let binding = interface
                 .binding(&key)
                 .ok_or_else(|| error("ERR_BINDING_NOT_FOUND"))?;
-            let operation = interface
-                .resolve_operation(binding.operation())
-                .expect("conformance proves operation");
+            let operation = binding.operation();
             (operation, key)
         }
         OperationAddress::Operation { name, selection } => {
@@ -228,7 +226,7 @@ fn resolve<P: InvocationSupport>(
                     for key in &keys {
                         if !interface
                             .binding(key)
-                            .is_some_and(|binding| binding.operation() == operation.key())
+                            .is_some_and(|binding| binding.operation_key() == operation.key())
                         {
                             return Err(error("ERR_BINDING_NOT_FOUND"));
                         }
@@ -242,7 +240,8 @@ fn resolve<P: InvocationSupport>(
                     let mut supported = operation
                         .bindings()
                         .into_iter()
-                        .filter(|key| supported(provider, &interface, key));
+                        .filter(|binding| provider.can_invoke(binding.source().kind()))
+                        .map(|binding| binding.key().to_owned());
                     let first = supported.next();
                     (first, supported.next().is_some())
                 }
@@ -267,9 +266,7 @@ fn resolve<P: InvocationSupport>(
 }
 fn supported<P: InvocationSupport>(provider: &P, document: &ConformantDocument, key: &str) -> bool {
     let binding = document.binding(key).expect("candidate key established");
-    let source = document
-        .source(binding.source())
-        .expect("conformance proves source");
+    let source = binding.source();
     provider.can_invoke(source.kind())
 }
 struct Gate<'a, E: SchemaEvaluator> {

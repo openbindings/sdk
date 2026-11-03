@@ -54,7 +54,10 @@ function checkInput(input: JsonInput) {
   const checked = document.validate();
   if (checked.status !== "conformant") return checked;
   using proof = checked.document;
-  const operations = proof.operations; // plain metadata: key, aliases, tags...
+  const entries = proof.operations(); // independently owned canonical entries
+  let operations;
+  try { operations = entries.map(entry => ({ key: entry.key, aliases: entry.aliases })); }
+  finally { for (const entry of entries) entry.dispose(); }
   using operation = proof.resolveOperation("find"); // primary name or alias
   if (!operation) return { status: "operation-missing" } as const;
   using contract = operation.input();
@@ -81,26 +84,26 @@ platform types that `DOM` declares, such as `Response`, `URL`, `AbortSignal` and
 `DocumentValidation`, as Rust's `validate()` does: a `conformant` branch carrying a
 `ConformantDocument`, or a version refusal or conformance report.
 `validateDocument(bytes)` returns only the plain `DocumentReport`, with no proof
-and nothing to dispose. `operations` lists every operation's frozen metadata in
-lexical key order, its primary `key` and declared `aliases` (`null` when absent)
-among them; an operation view's `metadata` holds the same record. Only a
-conformant document's operations hand out value contracts: `resolveOperation`
-returns `undefined` for a missing operation, and `input()` or `output()` returns
-`undefined` when no value contract is declared. `prepare()` returns a ready
-`PreparedValueContract` or a no-verdict refusal. Handle each result before
+and nothing to dispose. `operations()` acquires canonical `Operation` owners in
+lexical key order. Fields such as `key`, `aliases` and `tags` are direct reads;
+optional fields preserve absence as `undefined`. `operation(key)` selects an exact
+primary key; `resolveOperation(name)` also accepts aliases. Both return `undefined`
+when absent. `input()` and `output()` acquire contextual `Schema` owners when
+declared. `prepare()` returns an owned `PreparedSchema` or a structured preparation
+refusal. Handle each result before
 validating a value. Every result narrows on `status`. A value result's is
 `satisfies`, `fails`, `undefined` (the specification gives the value no defined
 validity), `no-verdict` (the SDK could not answer) or `input-error` when ordinary
 JavaScript data cannot be admitted.
-`validate` reads a string as a JSON string value; check JSON text or bytes, such as
+`evaluate` reads a string as a JSON string value; check JSON text or bytes, such as
 a request body, with `evaluateJson`, which admits them as `parseJson` does.
 
 ## Browser resource management
 
 Use `using` or `try`/`finally` with `dispose()` for timely release. Methods such as
 `value()`, `schemas()`, `input()` and `output()` acquire independent owners. Dispose
-each returned owner, including every value in a schema map. Metadata getters
-return plain data. `retain()` acquires another owner when work must outlive a scope.
+each returned owner, including every element of a domain collection and every
+value in a schema map. Scalar field getters and frozen string arrays return plain data. `retain()` acquires another owner when work must outlive a scope.
 
 For `using` in a browser without `Symbol.dispose`, load the SDK from a separate
 application module after this bootstrap. Static imports run before statements:
@@ -154,32 +157,30 @@ identifies a refusal and the document remains unchanged. The admission limits
 the document was parsed with apply. Renaming operations leaves reference updates
 to the caller.
 
-Use `Document.create()` and typed setters such as `setOperation(key, operation)`,
-`setSource`, `setBinding`, `setDependency` and `setExample` for construction.
-`setOperations(operations)` commits a complete operations map once for synthesis.
-The other namespaces have corresponding map setters. To construct several namespaces
-with one bridge call, splice and parse, include typed maps in the same batch:
+Use `Document.create()` and exact path edits for construction. Set a whole namespace
+when it is absent; edits do not fabricate intermediate containers. A single batch
+can construct related namespaces while retaining unrelated bytes:
 
 ```typescript
 using changed = document.edit([
-  { op: "set-operations", value: { run: { input: true } } },
-  { op: "set-dependencies", value: { dep: { operation: "run" } } },
-  { op: "set-sources", value: { local: { kind: "custom" } } },
+  { op: "set", pointer: "/operations", value: { run: { input: true } } },
+  { op: "set", pointer: "/dependencies", value: { dep: { operation: "run" } } },
+  { op: "set", pointer: "/sources", value: { local: { kind: "custom" } } },
   {
-    op: "set-bindings",
+    op: "set", pointer: "/bindings",
     value: { local: { operation: "run", source: "local" } },
   },
   { op: "set", pointer: "/name", value: "Example" },
 ]);
 ```
 
-Each typed map receives the same input checks as its standalone setter. A failed
-batch leaves the document unchanged. All pointers address the original revision. Typed parts keep the existing
-`Operation`, `Source`, `Binding`, `Dependency` and `Example`
-input types. Their opaque fields accept borrowed exact owners; callers retain and
-dispose those owners. `EditError.partPointer` locates a refused typed part field.
-The [inspection/editing example](examples/inspect-edit.ts) demonstrates both pointer
-edits and typed reads without an intermediate object projection.
+All pointers address the original revision. JSON input can contain borrowed exact
+owners; callers retain and dispose them. `EditError.inputPointer` identifies a
+refused ordinary input inside the edit batch, without inventing source coordinates.
+The [inspection/editing example](examples/inspect-edit.ts) demonstrates exact edits
+and canonical reads after conformance. `Operation`, `Source`, `Binding`, `Dependency`
+and `Example` are owned entries of that proved snapshot. Relationships such as
+`binding.source()` acquire another owner from the same snapshot.
 
 `ConformantDocument` is a separate class with infallible reads and no setters.
 `asDocument()` creates an independent immutable document owner. `intoDocument()` consumes the
@@ -197,12 +198,12 @@ unspecified entries keep those defaults, so `validateDocument` with `limits`
 applies the 10,000-level cap unless `maxDepth` raises it. Validation memory
 grows with the document, so raise them only where the process has the memory.
 Malformed limits or options throw `SdkError` with code `invalid-json-limits`.
-A document keeps the limits it was parsed with (`limits`): its edits and typed
-setters apply them to the edited document, as Rust's do, whatever route writes
+A document keeps the limits it was parsed with (`limits`): its edits
+apply them to the edited document, as Rust's do, whatever route writes
 the value. `discover` raises only the byte limit, to `maxDocumentBytes`; a body
 past the default 1,000,000 nodes comes back undetermined, and `validateDocument`
 with a larger `maxNodes` admits it. `Document.create()`, `ExactJson.from`,
-`evaluateJson` and a prepared value contract's `validate` and `explain` of an ordinary
+`evaluateJson` and a prepared schema's `evaluate` and `explain` of an ordinary
 value use the defaults. Value-contract preparation keeps fixed bounds of its own,
 which no setting raises, such as its 100,000 schema positions and a reached schema
 nested at most 256 schemas below the schema position or resource root holding it
