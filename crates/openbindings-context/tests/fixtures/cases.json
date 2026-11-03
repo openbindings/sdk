@@ -1,0 +1,197 @@
+{
+  "format": "openbindings.context-challenge-cases@1",
+  "tests": [
+    {
+      "description": "Two ways to satisfy the requirement, one of them an OAuth 2.0 token carrying the acquisition annotation",
+      "challenge": {
+        "message": "The Tasks API needs an access token or an API key.",
+        "schema": {
+          "oneOf": [
+            {
+              "title": "Access token",
+              "type": "object",
+              "properties": {
+                "accessToken": {
+                  "type": "string",
+                  "writeOnly": true,
+                  "description": "A bearer token for api.tasks.example.",
+                  "oauth2": {
+                    "authorizationUrl": "https://auth.tasks.example/authorize",
+                    "tokenUrl": "https://auth.tasks.example/token",
+                    "scopes": {
+                      "tasks:read": "Read tasks",
+                      "tasks:write": "Create and change tasks"
+                    }
+                  }
+                }
+              },
+              "required": [
+                "accessToken"
+              ]
+            },
+            {
+              "title": "API key",
+              "type": "object",
+              "properties": {
+                "apiKey": {
+                  "type": "string",
+                  "writeOnly": true,
+                  "description": "Create one under Settings, API keys, at https://app.tasks.example/settings."
+                }
+              },
+              "required": [
+                "apiKey"
+              ]
+            }
+          ]
+        }
+      },
+      "schemaValid": true
+    },
+    {
+      "description": "One secret",
+      "challenge": {
+        "message": "The Tasks API needs an API key.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "apiKey": {
+              "type": "string",
+              "writeOnly": true,
+              "description": "Create one under Settings, API keys."
+            }
+          },
+          "required": [
+            "apiKey"
+          ]
+        }
+      },
+      "schemaValid": true
+    },
+    {
+      "description": "A configuration value the artifact does not supply; nothing here is secret",
+      "challenge": {
+        "message": "The description declares no server; supply the base URL of the deployment to call.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "baseUrl": {
+              "type": "string",
+              "format": "uri",
+              "title": "Base URL",
+              "description": "Where this deployment of the API is served, such as https://api.example.com."
+            }
+          },
+          "required": [
+            "baseUrl"
+          ]
+        }
+      },
+      "schemaValid": true
+    },
+    {
+      "description": "Two values needed together",
+      "challenge": {
+        "message": "The service needs a username and a password.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "username": {
+              "type": "string"
+            },
+            "password": {
+              "type": "string",
+              "writeOnly": true
+            }
+          },
+          "required": [
+            "username",
+            "password"
+          ]
+        }
+      },
+      "schemaValid": true
+    },
+    {
+      "description": "An approval, a prerequisite that is neither a credential nor configuration",
+      "challenge": {
+        "message": "Deleting a task cannot be undone. Confirm to proceed.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "confirmDelete": {
+              "type": "boolean",
+              "const": true,
+              "title": "Confirm deletion"
+            }
+          },
+          "required": [
+            "confirmDelete"
+          ]
+        }
+      },
+      "schemaValid": true
+    },
+    {
+      "description": "A challenge without a schema is not a challenge",
+      "challenge": {
+        "message": "The Tasks API needs an API key."
+      },
+      "schemaValid": false
+    },
+    {
+      "description": "A challenge without a message is not a challenge",
+      "challenge": {
+        "schema": {
+          "type": "object"
+        }
+      },
+      "schemaValid": false
+    },
+    {
+      "description": "The message is for a person to read, so it is not empty",
+      "challenge": {
+        "message": "",
+        "schema": {
+          "type": "object"
+        }
+      },
+      "schemaValid": false
+    },
+    {
+      "description": "The schema is in object form; a boolean schema requests nothing",
+      "challenge": {
+        "message": "Anything will do.",
+        "schema": true
+      },
+      "schemaValid": false
+    },
+    {
+      "description": "A challenge carries nothing beyond message and schema",
+      "challenge": {
+        "message": "The service needs a token.",
+        "schema": {
+          "type": "object"
+        },
+        "target": "example:text-service"
+      },
+      "schemaValid": false
+    },
+    {
+      "description": "The earlier target-and-alternatives shape is not a challenge",
+      "challenge": {
+        "target": "example:text-service",
+        "alternatives": [
+          {
+            "requirements": [
+              {
+                "type": "auth.bearer"
+              }
+            ]
+          }
+        ]
+      },
+      "schemaValid": false
+    }
+  ]
+}

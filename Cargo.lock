@@ -907,6 +907,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "openbindings-context"
+version = "0.2.0-alpha.1"
+dependencies = [
+ "openbindings",
+ "serde_json",
+]
+
+[[package]]
 name = "openbindings-http-discovery"
 version = "0.2.0-alpha.1"
 dependencies = [

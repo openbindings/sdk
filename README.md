@@ -67,6 +67,7 @@ Start with the crate guide for
 [value evaluation](crates/openbindings-json-schema-evaluator/README.md),
 [evaluator qualification](crates/openbindings-schema-evaluator-test-support/README.md),
 [HTTP discovery](crates/openbindings-http-discovery/README.md),
+[shared context](crates/openbindings-context/README.md),
 [source inspection](crates/openbindings-source-inspection/README.md),
 [interface synthesis](crates/openbindings-interface-synthesis/README.md) or
 [invocation](crates/openbindings-invocation/README.md).
