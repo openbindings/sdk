@@ -3,6 +3,7 @@ import {
   Document,
   SchemaResources,
   ExactJson,
+  Schema,
   ConformantDocument,
   initialize,
   type JsonOutput,
@@ -373,7 +374,7 @@ function validatedReads(proof: ConformantDocument, parsed: Document) {
   proof.name satisfies string | undefined;
   proof.version satisfies string | undefined;
   proof.description satisfies string | undefined;
-  const schemas: ReadonlyMap<string, ExactJson> | undefined = proof.schemas();
+  const schemas: ReadonlyMap<string, Schema> | undefined = proof.schemas();
   for (const value of schemas?.values() ?? []) value.dispose();
   using editor = proof.asDocument();
   // Conformance excludes ambiguity: selection is the view or undefined.
@@ -381,7 +382,7 @@ function validatedReads(proof: ConformantDocument, parsed: Document) {
   using retainedOperation = conformantOperation?.retain();
   retainedOperation?.input()?.dispose();
   using contract = conformantOperation?.input();
-  using schema = contract?.schema();
+  using schema = contract?.json();
   schema satisfies ExactJson | undefined;
   // @ts-expect-error the contract already names its field; prepare takes options only
   contract?.prepare("input");

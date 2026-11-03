@@ -589,9 +589,9 @@ impl ConformantDocument {
 /// helper or evaluate this request directly; generated identifiers are never API identity.
 #[derive(Clone)]
 pub struct SchemaRequest {
-    document: ConformantDocument,
-    resources: ResourceSet,
-    entry: JsonValue,
+    pub(crate) document: ConformantDocument,
+    pub(crate) resources: ResourceSet,
+    pub(crate) entry: JsonValue,
 }
 impl std::fmt::Debug for SchemaRequest {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -810,143 +810,13 @@ pub trait PreparedSchema: Send + Sync {
         control: &dyn WorkControl,
     ) -> ValueOutcome;
 }
-/// An operation's input or output schema as a normative value contract, not yet
-/// prepared. Only a conformant operation hands one out, through
-/// [`ConformantOperationView::input`] and [`ConformantOperationView::output`]; a
-/// plain [`OperationView`] exposes the exact schema value without preparation:
-/// ```compile_fail,E0599
-/// use openbindings::*;
-/// fn draft(operation: OperationView, evaluator: &dyn SchemaEvaluator) {
-///     let _ = operation.input().unwrap().prepare(evaluator);
-/// }
-/// ```
-/// Neither a value contract nor a prepared value contract can be assembled by hand:
-/// ```compile_fail,E0451
-/// use openbindings::*;
-/// fn forge(operation: &ConformantOperationView) {
-///     let _ = ValueContract { operation, side: todo!() };
-/// }
-/// ```
-/// ```compile_fail,E0451
-/// use openbindings::*;
-/// fn raw(schema: std::sync::Arc<dyn PreparedSchema>) { let _ = PreparedValueContract { schema }; }
-/// ```
-/// Preparation borrows the evaluator and any supplied resources. Each call
-/// prepares anew; retain the [`PreparedValueContract`] to validate repeatedly. The
-/// document's resolution space is assembled only when an evaluator requests the
-/// core projection, once per live revision and resource set. See the
-/// [Rust lifecycle guide](https://github.com/openbindings/sdk/blob/main/docs/rust-first-use.md#resources-diagnostics-and-lifetime).
-#[derive(Clone, Copy)]
-pub struct ValueContract<'a> {
-    // Two words, like the exact schema reference it replaces in conformant reads.
-    operation: &'a ConformantOperationView,
-    side: Side,
-}
-/// Which declared field of its operation a contract is.
-#[derive(Clone, Copy)]
-pub(crate) enum Side {
-    Input,
-    Output,
-}
-impl fmt::Debug for ValueContract<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("ValueContract { .. }")
-    }
-}
-impl<'a> ValueContract<'a> {
-    /// The contract of a field the operation declares, or `None` when it is absent.
-    pub(crate) fn declared(operation: &'a ConformantOperationView, side: Side) -> Option<Self> {
-        operation.field(side).map(|_| Self { operation, side })
-    }
-    /// Borrow the exact schema without preparing it. Present `true`, `false` and
-    /// objects remain distinct original values.
-    pub fn schema(&self) -> JsonRef<'a> {
-        self.operation
-            .field(self.side)
-            .expect("a contract exists only for a declared field")
-    }
-    /// Prepare with no supplied resources. Ready means prepared, not decidable:
-    /// a prepared value contract can still return any of the four [`ValueOutcome`]
-    /// variants, including no-verdict for every value.
-    ///
-    /// # Errors
-    /// Returns a [`NoVerdict`] refusal when preparation is not established. A
-    /// refusal judges no instance and does not prove semantic undefinedness.
-    pub fn prepare(
-        &self,
-        evaluator: &dyn SchemaEvaluator,
-    ) -> Result<PreparedValueContract, NoVerdict> {
-        self.prepare_with(evaluator, ResourceSet::empty())
-    }
-    /// Prepare with immutable supplied resources; nothing is fetched. An
-    /// evaluator that calls [`SchemaRequest::evaluation_program`] reuses the
-    /// set's index, and its resolution space with this document while both are
-    /// alive. The default evaluator reuses the set's index and assembles its
-    /// resolution space again on every preparation.
-    ///
-    /// # Errors
-    /// Returns a [`NoVerdict`] refusal when preparation is not established. A
-    /// refusal judges no instance and does not prove semantic undefinedness.
-    pub fn prepare_with(
-        &self,
-        evaluator: &dyn SchemaEvaluator,
-        resources: &ResourceSet,
-    ) -> Result<PreparedValueContract, NoVerdict> {
-        self.prepare_with_control(evaluator, resources, &crate::work_control::NeverCancelled)
-    }
-    /// Prepare with cooperative cancellation. A cancelled attempt returns no
-    /// prepared owner. Cancellation and transient evaluator failures do not
-    /// poison a retry; use a fresh [`WorkControl`] after cancellation.
-    ///
-    /// # Errors
-    /// Returns a [`NoVerdict`] refusal when preparation is not established,
-    /// including `Cancelled` when cancellation is observed before a prepared
-    /// owner is returned. A refusal judges no instance.
-    pub fn prepare_with_control(
-        &self,
-        evaluator: &dyn SchemaEvaluator,
-        resources: &ResourceSet,
-        control: &dyn WorkControl,
-    ) -> Result<PreparedValueContract, NoVerdict> {
-        control.check()?;
-        let schema = self.schema();
-        let entry = schema.to_owned();
-        let document = self.operation.proof();
-        if !document
-            .document()
-            .schema_index()
-            .position(openbindings_internal_json::backend::node_id(&entry))
-            .is_some()
-        {
-            return Err(NoVerdict::new(
-                NoVerdictReason::ConservativePreparation,
-                "non-schema-entry",
-                "the operation direction is not a schema position",
-            )
-            .with_location(SchemaLocation {
-                resource: None,
-                pointer: openbindings_internal_json::backend::exact_pointer(schema),
-            }));
-        }
-        let request = SchemaRequest {
-            document: document.clone(),
-            resources: resources.clone(),
-            entry,
-        };
-        let prepared = evaluator.prepare(&request, control);
-        // An evaluator may finish while the caller cancels; no ready owner is returned.
-        control.check()?;
-        prepared.map(|schema| PreparedValueContract { schema })
-    }
-}
-
 /// A prepared value contract that retains its required compiled state
 /// independently of the document, resources and evaluator. It is
 /// `Clone + Send + Sync + 'static`; cloning shares immutable state, and dropping
 /// the final owner releases it, without promising lower RSS.
 #[derive(Clone)]
 pub struct PreparedValueContract {
-    schema: Arc<dyn PreparedSchema>,
+    pub(crate) schema: Arc<dyn PreparedSchema>,
 }
 impl fmt::Debug for PreparedValueContract {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

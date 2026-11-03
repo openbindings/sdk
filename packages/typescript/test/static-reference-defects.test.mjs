@@ -19,6 +19,16 @@ const cases = (
     ),
   )
 ).flat();
+const admission = JSON.parse(
+  await readFile(new URL("reference-admission.json", input), "utf8"),
+);
+const capabilities = new Map(
+  JSON.parse(
+    await readFile(new URL("reference-capabilities.json", input), "utf8"),
+  ).cases.map((c) => [c.id, c]),
+);
+const negatives = new Map(admission.cases.map((c) => [c.id, c]));
+assert.equal(negatives.size, 194);
 function subset(expected, actual, id) {
   if (expected && typeof expected === "object") {
     for (const [key, value] of Object.entries(expected))
@@ -37,6 +47,35 @@ test("static reference matrix and concrete completions through Wasm", async () =
       ),
     );
     assert.equal(parsed.status, "parsed", c.id);
+    const assessed = parsed.value.validate();
+    if (assessed.status !== "conformant") {
+      try {
+        const negative = negatives.get(c.id);
+        assert.ok(negative, "Unexpected admission refusal: " + c.id);
+        assert.deepEqual(c, negative.historical_case, c.id);
+        assert.equal(assessed.status, "report", c.id);
+        assert.equal(assessed.report.conclusion, "non-conformant", c.id);
+        for (const rule of negative.required_violated_rules)
+          assert.equal(assessed.report.evidence[rule], "violated", c.id);
+        receipt.push({
+          id: c.id,
+          actual: {
+            stage: "admission",
+            outcome: "non-conformant",
+            evidence: assessed.report.evidence,
+          },
+        });
+      } finally {
+        parsed.value.dispose();
+      }
+      continue;
+    }
+    assessed.document.dispose();
+    assert.equal(
+      negatives.has(c.id),
+      false,
+      "Expected admission refusal: " + c.id,
+    );
     const values = (c.resources ?? []).map((r) => [
       r.uri,
       sdk.parseJson(JSON.stringify(r.schema)).value,
@@ -76,7 +115,9 @@ test("static reference matrix and concrete completions through Wasm", async () =
               }
             : null,
         };
-      const expected = structuredClone(c.expected);
+      const capability = capabilities.get(c.id);
+      if (capability) assert.deepEqual(c, capability.historical_case);
+      const expected = structuredClone(capability?.expected ?? c.expected);
       if (expected.outcome === "N" && expected.detail?.reason === "undefined") {
         expected.outcome = "undefined";
         delete expected.detail.reason;

@@ -6,55 +6,17 @@ import corpus
 
 
 def current_fixture(fixture):
-    """Apply recorded admission changes only to the exact historical inputs."""
-    provenance=Path(__file__).resolve().parents[3]/'crates/openbindings-schema-evaluator-test-support/fixtures/provenance.json'
-    translated=copy.deepcopy(fixture)
-    for change in json.loads(provenance.read_text(encoding='utf-8'))['runtime_policy_translations']:
-        selected=[(g,c) for g in translated['groups'] for c in g['cases'] if c['id']==change['case']]
-        assert len(selected)==1, 'policy translation must identify one existing case'
-        group,case=selected[0]
-        assert group['document']==change['original_document']
-        assert [translated['resources'][r] for r in group['resources']]==change['original_resources']
-        assert case['value']==change['original_value']
-        assert case['expected']==change['from_expected']
-        assert case['refusal_kind']==change['from_refusal_kind']
-        assert change['to_expected'] in ('satisfies', 'fails', 'no-verdict')
-        # A verdict may also accept an unsupported-capability refusal.
-        if change['to_expected']=='no-verdict':
-            assert change.get('to_refusal_kind') is not None
-        else:
-            assert change.get('to_refusal_kind') in (None, 'unsupported-capability')
-        case.update(expected=change['to_expected'],refusal_kind=change.get('to_refusal_kind'),refusal_reason=change.get('to_refusal_reason',''))
-    migrations=json.loads((provenance.parent/'document-admission.json').read_text(encoding='utf-8'))
-    for change in migrations['reexpressions']:
-        group=next(g for g in translated['groups'] if g['id']==change['group'])
-        assert group['document']==change['original_document']
-        assert [c['id'] for c in group['cases']]==change['case_ids']
-        group['document']=change['document']
-        assert change['resource_key'] not in translated['resources']
-        translated['resources'][change['resource_key']]=change['resource']
-        group['resources'].append(change['resource_key'])
-    for change in migrations['core_rejections']:
-        group=next(g for g in translated['groups'] if g['id']==change['group'])
-        assert group['document']==change['original_document']
-        assert [c['id'] for c in group['cases']]==change['case_ids']
-        translated['groups'].remove(group)
-    for group in translated['groups']:
-        for case in group['cases']:
-            if case['expected']=='no-verdict' and case.get('refusal_kind')=='undefined':
-                case.update(expected='undefined',refusal_kind=None)
-    # Optional capabilities the suite declares for current outcomes: the stated
-    # refusal is accepted beside the outcome.
-    for change in json.loads(provenance.read_text(encoding='utf-8'))['capability_declarations']:
-        selected=[(g,c) for g in translated['groups'] for c in g['cases'] if c['id']==change['case']]
-        assert len(selected)==1, 'capability declaration must identify one existing case'
-        group,case=selected[0]
-        assert group['document']==change['original_document']
-        assert case['value']==change['original_value']
-        assert case['expected']==change['expected']
-        assert case['optional_capability'] is None and case.get('refusal_kind') is None
-        case.update(optional_capability=change['optional_capability'],refusal_kind=change['refusal_kind'])
-    return translated
+    """Read the current reviewed suite; historical input identity must agree exactly."""
+    import hashlib
+    directory=Path(__file__).resolve().parents[3]/'crates/openbindings-schema-evaluator-test-support/fixtures'
+    manifest=json.loads((directory/'alignment.json').read_text(encoding='utf-8'))
+    for name,digest in manifest['sha256'].items():
+        assert hashlib.sha256((directory/name).read_bytes()).hexdigest()==digest, 'qualification input drift: '+name
+    assert fixture==json.loads((directory/'cases.json').read_text(encoding='utf-8')), 'historical fixture identity changed'
+    current=json.loads((directory/'current-suite.json').read_text(encoding='utf-8'))
+    assert len(current['groups'])==manifest['value_groups']
+    assert sum(len(g['cases']) for g in current['groups'])==manifest['value_cases']
+    return current
 
 
 def pointer_exists(value,pointer):
@@ -70,10 +32,8 @@ def pointer_exists(value,pointer):
 
 def judge_value(case,result,sources):
     failures=[];tag=result.get('status');detail=result.get('detail',{})
-    # Optional capabilities, and dialects an evaluator may not read, accept the stated refusal beside their outcome.
-    accepts_refusal=case['expected']!='no-verdict' and case.get('refusal_kind') is not None and (case['optional_capability'] is not None or case.get('refusal_kind')=='unsupported-capability')
-    permitted=accepts_refusal and tag=='no-verdict' and detail.get('reason')==case.get('refusal_kind')
-    if tag!=('fails' if case['expected']=='mismatch' else case['expected']) and not permitted:failures.append('wrong verdict')
+    # Capability refusal remains an observed gap, not a semantic pass.
+    if tag!=case['expected']:failures.append('expected '+case['expected']+', observed '+str(tag))
     if tag=='no-verdict':
         if detail.get('reason')!=case.get('refusal_kind'):failures.append('wrong refusal distinction')
         if not detail.get('code','').strip() or not detail.get('message','').strip():failures.append('unexplained refusal')
@@ -138,7 +98,7 @@ def controls():
         assert judge_value(optional,{'status':'no-verdict','detail':{'reason':reason,'code':'x','message':'x'}},sources)
     # An undefined result an evaluator declines gives the stated refusal only.
     declined={**case,'expected':'undefined','optional_capability':'undefined-results','refusal_kind':'conservative-preparation'}
-    assert not judge_value(declined,{'status':'no-verdict','detail':{'reason':'conservative-preparation','code':'x','message':'x'}},sources)
+    assert judge_value(declined,{'status':'no-verdict','detail':{'reason':'conservative-preparation','code':'x','message':'x'}},sources)
     assert judge_value(declined,{'status':'no-verdict','detail':{'reason':'unsupported-capability','code':'x','message':'x'}},sources)
     undefined={'status':'undefined','detail':{'code':'proof','message':'established undefined result','location':{'resource':None,'pointer':'/type'}}}
     semantic={**case,'expected':'undefined','refusal_kind':None}
@@ -161,12 +121,12 @@ def controls():
     assert raw_group['cases'][0]['expected']=='no-verdict' and new_case['expected']=='satisfies'
     assert not judge_value(new_case,{'status':'satisfies'}, {})
     assert judge_value(new_case,{'status':'no-verdict','detail':{'reason':'conservative-preparation','code':'old','message':'old policy'}}, {})
-    # A schema in another dialect expects JSON Schema's verdict or a truthful refusal.
+    # A schema in another dialect expects its semantic verdict; a truthful refusal is still a gap.
     dialect=next(c for g in changed['groups'] for c in g['cases'] if c['id'].startswith('suite/draft2020-12/optional/cross-draft.json#0/0 '))
     refusal={'status':'no-verdict','detail':{'reason':'unsupported-capability','code':'schema-dialect','message':'dialect not read'}}
     assert dialect['expected']=='satisfies' and dialect['optional_capability'] is None
     assert not judge_value(dialect,{'status':'satisfies'},{})
-    assert not judge_value(dialect,refusal,{})
+    assert judge_value(dialect,refusal,{})
     assert judge_value(dialect,{'status':'fails','problems':[]},{})
     assert judge_value(dialect,{**refusal,'detail':{**refusal['detail'],'reason':'conservative-preparation'}},{})
     for field in ['id','expected','refusal_kind','value','document','resource_uri','resource_document']:

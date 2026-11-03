@@ -15,6 +15,7 @@ run([sys.executable, 'tools/verify-product-labels.py', '--self-test',
      *(['--tracked-files', a.tracked_files.resolve()] if a.tracked_files else [])])
 run([sys.executable, 'tools/verify-doc-links.py'])
 run([sys.executable, 'tools/verify-fixture-digests.py', '--self-test'])
+run([sys.executable, 'tools/verify-evaluator-inputs.py', '--self-test'])
 run([sys.executable, 'tools/verify-advisory-policy.py', '--self-test'])
 run([sys.executable, 'tools/verify-publication-guards.py', '--self-test'])
 run([sys.executable, 'tools/package-candidate.py', '--self-test'])

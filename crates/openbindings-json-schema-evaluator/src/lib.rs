@@ -1134,7 +1134,7 @@ fn unsupported_pattern(unsupported: pattern::Unsupported, keyword: &str) -> NoVe
         pattern::Unsupported::PropertyEscape => no_verdict(
             NoVerdictReason::UnsupportedCapability,
             "unicode-property-matching",
-            "Unicode property-escape matching is outside the qualified evaluator capability",
+            "the valid Unicode property is absent from the pinned engine tables",
         ),
         pattern::Unsupported::NonWordBoundary => no_verdict(
             NoVerdictReason::UnsupportedCapability,

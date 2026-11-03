@@ -323,12 +323,7 @@ fn edit_limits_apply_to_the_edited_document() {
     let three = JsonValue::parse("[[[1]]]").unwrap();
     shallow = shallow.set("/x-a", &three).unwrap();
     shallow = shallow.remove("/x-a").unwrap();
-    shallow = shallow
-        .edit(&[Edit::Set {
-            pointer: "/x-a".into(),
-            value: &three,
-        }])
-        .unwrap();
+    shallow = shallow.edit(&[Edit::set(&["x-a"], three.clone())]).unwrap();
     let error = shallow
         .set("/x-b", &JsonValue::parse("[[[[1]]]]").unwrap())
         .unwrap_err();

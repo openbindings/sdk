@@ -19,6 +19,9 @@ mod fixed_schema;
 mod schema_index;
 pub use document::*;
 
+pub mod schema;
+pub use schema::Schema;
+
 mod contracts;
 pub use contracts::*;
 mod work_control;

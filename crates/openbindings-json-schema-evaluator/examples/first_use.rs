@@ -64,7 +64,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!("{:?}: {:?}", operation.key(), operation.description());
     let contract = operation.input().ok_or("operation has no input contract")?;
     // ConformantDocument reads preserve presence; schema preparation remains separate.
-    let schema = contract.schema().location();
+    let schema = contract.json().location();
     println!(
         "input schema at {:?}, line {}",
         schema.pointer.as_ref().map(ToString::to_string),

@@ -1001,6 +1001,7 @@ dependencies = [
  "openbindings-internal-schema",
  "openbindings-json-schema-evaluator",
  "regex",
+ "regex-syntax",
  "serde",
  "serde_json",
 ]

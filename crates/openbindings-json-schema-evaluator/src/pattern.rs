@@ -8,11 +8,12 @@
 //! valid pattern is matched by a linear-time engine (the `regex` crate) when it
 //! has a form in that engine's syntax with the same meaning:
 //! [`Reading::Linear`] holds that form, which spells every character set out as
-//! code points so the two dialects read it alike. Three kinds of valid pattern
-//! are not matched: one that only a backtracking engine can match (lookaround
-//! and backreferences), one with a Unicode property escape, whose character
-//! tables the evaluator does not qualify, and one with a non-word-boundary
-//! assertion `\B`. The word boundary `\b` has a form: ECMA-262 reads it with
+//! code points so the two dialects read it alike. Strict ECMA property names
+//! select scalar ranges from the pinned engine's Unicode tables. A terminal
+//! positive lookahead at the top level can consume its body because only match
+//! existence is observed. Other lookaround, backreferences, properties absent
+//! from those tables, and non-word-boundary assertions remain unsupported.
+//! The word boundary `\b` has a form: ECMA-262 reads it with
 //! `\w` as `[A-Za-z0-9_]`, as the regex crate's ASCII word boundary does, and
 //! an ASCII word boundary never falls inside a multi-byte character. Its
 //! complement `(?-u:\B)` does, and the regex crate's `is_match` then answers no
@@ -51,7 +52,7 @@ pub(crate) enum Unsupported {
     Invalid,
     /// It needs a backtracking engine.
     Backtracking,
-    /// It has a Unicode property escape.
+    /// Its valid Unicode property is absent from the pinned engine tables.
     PropertyEscape,
     /// It has a non-word-boundary assertion, `\B`.
     NonWordBoundary,
@@ -656,8 +657,20 @@ impl Parser<'_> {
                 return Ok(());
             }
             (Some('('), Some('?'), Some('=' | '!')) => {
+                let positive = self.peek_at(2) == Some('=');
                 self.at += 3;
-                return self.lookaround(depth);
+                self.out.push_str("(?:");
+                self.group_body(depth)?;
+                self.out.push(')');
+                // Only existence of a match is observable. A positive lookahead
+                // ending a top-level alternative is equivalent to consuming its
+                // body there. Nested/negative/nonterminal assertions retain the
+                // explicit unsupported result; they cannot use this equivalence.
+                if !(positive && depth == 0 && matches!(self.peek(), None | Some('|'))) {
+                    self.unsupported(Unsupported::Backtracking);
+                }
+                self.shape = None;
+                return Ok(());
             }
             (Some('('), Some('?'), Some('<')) if matches!(self.peek_at(3), Some('=' | '!')) => {
                 self.at += 4;
@@ -771,11 +784,13 @@ impl Parser<'_> {
             'd' | 'D' => set(DIGIT, c == 'D'),
             's' | 'S' => set(SPACE, c == 'S'),
             'w' | 'W' => set(WORD, c == 'W'),
-            'p' | 'P' => {
-                self.property()?;
-                self.unsupported(Unsupported::PropertyEscape);
-                Member::Set(Vec::new())
-            }
+            'p' | 'P' => match self.property()? {
+                Some(ranges) => set(&ranges, c == 'P'),
+                None => {
+                    self.unsupported(Unsupported::PropertyEscape);
+                    Member::Set(Vec::new())
+                }
+            },
             'f' => Member::Char(0x0C),
             'n' => Member::Char(0x0A),
             'r' => Member::Char(0x0D),
@@ -804,7 +819,7 @@ impl Parser<'_> {
         })
     }
     // `{Name=Value}` or `{NameOrValue}` after `\p` or `\P`.
-    fn property(&mut self) -> Result<(), Refusal> {
+    fn property(&mut self) -> Result<Option<Vec<(u32, u32)>>, Refusal> {
         if !self.eat('{') {
             return Err(Refusal::Invalid);
         }
@@ -820,10 +835,34 @@ impl Parser<'_> {
             Some((name, value)) => (Some(name), value),
             None => (None, body.as_str()),
         };
-        if crate::es2020_properties::valid(value, name) {
-            Ok(())
-        } else {
-            Err(Refusal::Invalid)
+        if !crate::es2020_properties::valid(value, name) {
+            return Err(Refusal::Invalid);
+        }
+        // ECMA names are case-sensitive and admit no loose matching. Validate
+        // them above before asking the engine for its Unicode scalar ranges.
+        // Expanding a single property cannot introduce engine-only syntax into
+        // the caller's pattern. The ordinary form/automaton memory limits apply.
+        let expression = format!("\\p{{{body}}}");
+        let Ok(hir) = regex_syntax::Parser::new().parse(&expression) else {
+            return Ok(None); // Valid ECMA property absent from this table set.
+        };
+        match hir.kind() {
+            regex_syntax::hir::HirKind::Class(regex_syntax::hir::Class::Unicode(class)) => {
+                Ok(Some(
+                    class
+                        .iter()
+                        .map(|range| (range.start() as u32, range.end() as u32))
+                        .collect(),
+                ))
+            }
+            regex_syntax::hir::HirKind::Literal(literal) => {
+                let text = std::str::from_utf8(&literal.0).expect("Unicode property literal");
+                let mut chars = text.chars();
+                let only = chars.next().expect("nonempty property literal");
+                assert!(chars.next().is_none());
+                Ok(Some(vec![(only as u32, only as u32)]))
+            }
+            _ => Ok(None),
         }
     }
     fn class(&mut self) -> Result<Vec<(u32, u32)>, Refusal> {
@@ -848,7 +887,15 @@ impl Parser<'_> {
             } else {
                 match first {
                     Member::Char(c) => ranges.push((c, c)),
-                    Member::Set(set) => ranges.extend(set),
+                    Member::Set(set) => {
+                        ranges.extend(set);
+                        // A short property escape can expand to hundreds of
+                        // ranges. Merge each expansion immediately so repeated
+                        // properties hold a union, never a copy per occurrence.
+                        // Literal members between expansions remain bounded by
+                        // the source length, as before property matching.
+                        ranges = scalar(&ranges);
+                    }
                 }
             }
         }
@@ -1742,19 +1789,17 @@ mod tests {
         }
     }
     #[test]
-    fn backtracking_and_property_patterns_are_read_but_not_matched() {
+    fn unsupported_assertions_and_backreferences_are_read_but_not_matched() {
         for (pattern, kind) in [
-            ("^(?=a)", Unsupported::Backtracking),
+            ("^(?=a)b", Unsupported::Backtracking),
             ("(?<=a)b", Unsupported::Backtracking),
             (r"(a)\1", Unsupported::Backtracking),
             (r"\1(a)", Unsupported::Backtracking),
             (r"(?<x>a)\k<x>", Unsupported::Backtracking),
-            (r"\p{Lu}", Unsupported::PropertyEscape),
-            (r"[\P{Script=Greek}]", Unsupported::PropertyEscape),
-            (r"\p{L}(?=a)", Unsupported::Backtracking),
+            (r"\p{L}(?=a)b", Unsupported::Backtracking),
             (r"\Bx", Unsupported::NonWordBoundary),
             (r"^.*$|\B", Unsupported::NonWordBoundary),
-            (r"\B(?=a)", Unsupported::Backtracking),
+            (r"\B(?=a)b", Unsupported::Backtracking),
         ] {
             assert_eq!(
                 read(pattern, 32, 1 << 20),

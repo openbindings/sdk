@@ -281,6 +281,7 @@ fn same_uri_resources_are_isolated_and_precancellation_does_not_poison() {
     ));
     std::thread::scope(|scope| {
         for _ in 0..8 {
+            let contract = contract.clone();
             let resources = integer.clone();
             let evaluator = &evaluator;
             scope.spawn(move || {
@@ -471,7 +472,7 @@ fn diagnostics_are_original_and_do_not_expose_instance_values() {
     assert_eq!(problems.len(), 1);
 }
 #[test]
-fn property_escape_refusal_is_lazy_and_does_not_poison_thread_state() {
+fn property_escape_matching_is_lazy_and_does_not_poison_thread_state() {
     let prepared = prepare(r#"{"pattern":"\\p{Lu}"}"#);
     assert!(matches!(
         prepared.explain(&value("3")),
@@ -479,12 +480,7 @@ fn property_escape_refusal_is_lazy_and_does_not_poison_thread_state() {
     ));
     assert!(matches!(
         prepared.explain(&value(r#""A""#)),
-        ValueOutcome::NoVerdict {
-            detail: NoVerdict {
-                reason: NoVerdictReason::UnsupportedCapability,
-                ..
-            }
-        }
+        ValueOutcome::Satisfies
     ));
     assert!(matches!(
         prepared.explain(&value("3")),
@@ -559,20 +555,11 @@ fn upstream_test_dispositions_use_the_supported_exact_ecma_u_path() {
             ValueOutcome::Satisfies
         ));
     }
-    // Raw dependency APIs lack the SDK's enclosing refusal guard. Through the
-    // public adapter, selected property matching can never become false validity.
+    // Unicode properties supply evaluated-name annotations through the SDK.
     let schema = serde_json::json!({"patternProperties": {r"^\p{L}{300}$": {"type":"integer"}}, "unevaluatedProperties": false}).to_string();
     let result =
         prepare(&schema).explain(&value(&serde_json::json!({"a".repeat(300): 1}).to_string()));
-    assert!(matches!(
-        result,
-        ValueOutcome::NoVerdict {
-            detail: NoVerdict {
-                reason: NoVerdictReason::UnsupportedCapability,
-                ..
-            }
-        }
-    ));
+    assert!(matches!(result, ValueOutcome::Satisfies));
 }
 
 #[test]

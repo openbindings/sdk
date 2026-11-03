@@ -792,9 +792,11 @@ function isExact(value: unknown): value is ExactJson {
   return typeof value === "object" && value !== null && exactOwners.has(value);
 }
 const jsonRaw = (owner: ExactJson) => handle<wasm.WasmJson>(owner);
-const documentRaw = (owner: DocumentReads) =>
+const documentRaw = (owner: DocumentReads<ExactJson | Schema>) =>
   handle<wasm.WasmDocument | wasm.WasmConformantDocument>(owner);
-function editableRaw(owner: DocumentReads): wasm.WasmDocument {
+function editableRaw(
+  owner: DocumentReads<ExactJson | Schema>,
+): wasm.WasmDocument {
   const raw = handle<wasm.WasmDocument>(owner);
   if (!(raw instanceof wasm.WasmDocument))
     throw new SdkError(
@@ -826,9 +828,9 @@ function conformantOperationRaw(
     );
   return raw;
 }
-function contractRaw(owner: ValueContract): wasm.WasmValueContract {
-  const raw = handle<wasm.WasmValueContract>(owner);
-  if (!(raw instanceof wasm.WasmValueContract))
+function schemaRaw(owner: Schema): wasm.WasmSchema {
+  const raw = handle<wasm.WasmSchema>(owner);
+  if (!(raw instanceof wasm.WasmSchema))
     throw new SdkError(
       "document-conformance",
       "A value contract of a conformant operation is required.",
@@ -1145,7 +1147,9 @@ export function checkVersion(
   return wasm.checkVersion(version) as ReturnType<typeof checkVersion>;
 }
 /** Shared reads for a document revision. Document reads can refuse malformed typed fields; ConformantDocument already establishes their shape. Owner-producing methods create fresh handles and require separate disposal. */
-abstract class DocumentReads extends Managed {
+abstract class DocumentReads<
+  S extends ExactJson | Schema = ExactJson,
+> extends Managed {
   #operations?: readonly OperationMetadata[];
   #bindings?: readonly BindingMetadata[] | null;
   #sources?: readonly SourceMetadata[] | null;
@@ -1206,15 +1210,20 @@ abstract class DocumentReads extends Managed {
     );
   }
   /** Acquire a NEW independent ExactJson owner for each declared schema on every call. Dispose each value. Undefined means absent; an empty map means present-empty. */
-  schemas(): ReadonlyMap<string, ExactJson> | undefined {
+  protected abstract readSchema(name: string): S | undefined;
+  /** Retain one schema by exact name. */
+  schema(name: string): S | undefined {
+    return this.readSchema(name);
+  }
+  schemas(): ReadonlyMap<string, S> | undefined {
     const raw = documentRaw(this);
     const names = decode<string[] | null>(sdkCall(() => raw.schemaNames()));
     if (names === null) return undefined;
-    const values = new Map<string, ExactJson>();
+    const values = new Map<string, S>();
     try {
       for (const name of names) {
-        const value = sdkCall(() => raw.schema(name));
-        if (value) values.set(name, new ExactJson(value));
+        const value = this.readSchema(name);
+        if (value) values.set(name, value);
       }
       return values;
     } catch (error) {
@@ -1354,6 +1363,10 @@ let adoptDocument: (raw: wasm.WasmDocument) => Document;
 const documentToken = Symbol("document owner");
 /** One exact, immutable OBI snapshot. Reads may refuse malformed typed fields. Edits return a new snapshot; owners, views and proofs keep their original revision. */
 export class Document extends DocumentReads {
+  protected readSchema(name: string): ExactJson | undefined {
+    const raw = sdkCall(() => documentRaw(this).schema(name));
+    return raw ? new ExactJson(raw) : undefined;
+  }
   private constructor(raw: wasm.WasmDocument, token: symbol) {
     if (token !== documentToken)
       throw new TypeError("Use Document.parse() or Document.create().");
@@ -1664,9 +1677,17 @@ export type DocumentValidation =
     }
   | DocumentReport;
 const conformanceToken = Symbol("established conformance");
-let assessDocument: (document: DocumentReads) => DocumentValidation;
+let assessDocument: (
+  document: DocumentReads<ExactJson | Schema>,
+) => DocumentValidation;
 /** Retained proof for one immutable snapshot whose normative OBI rules were established. Obtain via Document.validate(); preparation remains evaluator-dependent. It shares read-only inspection and deterministic disposal, without inheriting Document or its setters. */
-export class ConformantDocument extends DocumentReads {
+export class ConformantDocument extends DocumentReads<Schema> {
+  protected readSchema(name: string): Schema | undefined {
+    const raw = sdkCall(() =>
+      handle<wasm.WasmConformantDocument>(this).ownedSchema(name),
+    );
+    return raw ? adopt(raw, Schema.fromRaw) : undefined;
+  }
   declare private readonly conformantDocumentBrand: void;
   private constructor(raw: wasm.WasmConformantDocument, token: symbol) {
     if (token !== conformanceToken)
@@ -1674,7 +1695,9 @@ export class ConformantDocument extends DocumentReads {
     super(raw);
   }
   static {
-    assessDocument = (document: DocumentReads): DocumentValidation => {
+    assessDocument = (
+      document: DocumentReads<ExactJson | Schema>,
+    ): DocumentValidation => {
       const transfer = documentRaw(document).validate();
       try {
         const result = decode<DocumentReport>(transfer.report());
@@ -1817,14 +1840,14 @@ export class ConformantOperationView extends OperationReads {
     );
   }
   /** Acquire a NEW disposable input value contract; undefined means the operation declares no input. Present true, false and object schemas are all value contracts. Nothing is prepared here. */
-  input(): ValueContract | undefined {
+  input(): Schema | undefined {
     const raw = conformantOperationRaw(this).input();
-    return raw ? adopt(raw, ValueContract.fromRaw) : undefined;
+    return raw ? adopt(raw, Schema.fromRaw) : undefined;
   }
   /** Acquire a NEW disposable output value contract; undefined means the operation declares no output. Nothing is prepared here. */
-  output(): ValueContract | undefined {
+  output(): Schema | undefined {
     const raw = conformantOperationRaw(this).output();
-    return raw ? adopt(raw, ValueContract.fromRaw) : undefined;
+    return raw ? adopt(raw, Schema.fromRaw) : undefined;
   }
 }
 const resourceToken = Symbol("retained resource set");
@@ -2011,21 +2034,21 @@ export class SchemaResources extends Managed {
   }
 }
 /** A conformant operation's input or output value contract, not yet prepared. Obtain it from ConformantOperationView.input() or output(); it retains its proved revision and survives operation and document disposal. Each prepare() compiles anew; retain the PreparedValueContract for repeated validation. */
-export class ValueContract extends Managed {
-  private constructor(raw: wasm.WasmValueContract) {
+export class Schema extends Managed {
+  private constructor(raw: wasm.WasmSchema) {
     super(raw);
   }
-  /** @internal */ static fromRaw(raw: wasm.WasmValueContract): ValueContract {
-    return new ValueContract(raw);
+  /** @internal */ static fromRaw(raw: wasm.WasmSchema): Schema {
+    return new Schema(raw);
   }
   /** Acquire a NEW independently disposable owner for the exact schema, without preparing it. */
-  schema(): ExactJson {
-    return new ExactJson(contractRaw(this).schema());
+  json(): ExactJson {
+    return new ExactJson(schemaRaw(this).json());
   }
   /** Prepare with the built-in evaluator. Ready transfers a new disposable PreparedValueContract independent of this owner; it does not promise every value is decidable. The default evaluator prepares a value contract with a stand-in for a resource that was not supplied, a schema that could apply again without consuming the instance, and a pattern it does not match. Validation returns the stand-in's no-verdict, such as resource-unavailable, when the verdict depends on how the stand-in comes out, and otherwise the verdict that holds however it comes out. A value contract in which an unevaluatedProperties or unevaluatedItems keyword's annotation sources reach a stand-in for a missing resource, a cycle or patternProperties names, a reference to a fragment of a missing resource, and known errors still refuse preparation; prepare again with resources to recover, while existing prepared owners retain their original snapshot. Cancelled/transient failures do not poison retries. Pre-aborted work returns no-verdict. */
   prepare(options: PrepareOptions = {}): ValueContractPreparation {
     requireReady();
-    const raw = contractRaw(this);
+    const raw = schemaRaw(this);
     const { resources, limits, signal } = prepareOptions(options);
     // Omitted resources and limits cross the bridge as absent: the engine uses
     // its shared empty set and default budgets without building either.
@@ -2057,8 +2080,8 @@ export class ValueContract extends Managed {
     }
   }
   /** Return a NEW independently disposable owner of this unprepared value contract. */
-  retain(): ValueContract {
-    return ValueContract.fromRaw(contractRaw(this).retain());
+  retain(): Schema {
+    return Schema.fromRaw(schemaRaw(this).retain());
   }
 }
 function prepareOptions(options: PrepareOptions): {

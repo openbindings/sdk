@@ -34,19 +34,25 @@ historical admission cases, core/internal-schema tests and document-rule control
 The regression suite includes a 4,000-level relative-ID/reference chain.
 These results do not establish complete evaluator capability or host parity.
 
-The ownership slice now makes Rust and TypeScript edits return new immutable
-snapshots, replaces the generic proof with concrete ConformantDocument, exposes a
-separate conformance module, and adds exact owning JsonObject access. Independent
-ownership review passes. Native core/schema/JSON/bridge tests pass (271 tests and
-one preexisting ignored test), all 505 core cases pass, and the unchanged Wasm
-memory bounds pass. The full host run has 161 passes and three evaluator replay
-failures whose inputs still assume earlier document admission.
+The ownership work makes edits return immutable snapshots, replaces the generic
+proof with concrete ConformantDocument, exposes a conformance module, and adds exact
+owning JsonObject access. Rust Edit values now own paths and values. Contextual Schema
+views replace borrowed ValueContract handles, cover named schemas and operation slots,
+and retain their document after caller handles are dropped. TypeScript exposes the
+same retained Schema capability. Independent ownership reviews pass for these slices.
 
-The next slices replace parallel typed parts/views with owned domain views, expose
-the original schema environment to evaluators, and integrate the adjudicated
-1,546-case value corpus and 20 moved negative admission cases. Retired role
-companions still await replacement by current invocation, context, kind description
-and source pulling. See [the development loop](alignment-loop.md) for open gates.
+The reviewed 1,546 value cases and 20 moved admission negatives are now checked into
+the SDK with exact input-accounting controls. Unicode property/terminal-lookahead
+support and exact contained-resource selection pass separate independent reviews.
+The current strict evaluator gate still has 10 external dialect/vocabulary gaps;
+an additional independent identity corpus exposes 8 semantic-undefined capability
+gaps. The full workspace and final performance gates remain open.
+
+The next slices replace parallel typed parts/views with owned domain views and expose
+the original schema environment through the redesigned evaluator interface. Retired
+role companions still await replacement by current invocation, context, kind
+description and source pulling. See [the development loop](alignment-loop.md) for
+open gates and the unattended work policy.
 
 No release, compatibility promise or completion of the migration is implied by this
 checkpoint. The canonical plan, frozen inputs, design reviews and measurement receipts

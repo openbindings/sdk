@@ -49,7 +49,7 @@ fn preparation_refusals_redact_payloads_like_no_verdict() {
             .unwrap();
     let operation = document.resolve_operation("op").unwrap();
     let contract = operation.input().unwrap();
-    let mut rows = vec![row("ValueContract", &contract)];
+    let mut rows = vec![row("Schema", &contract)];
     for code in [
         "caller-cancelled",
         "resource-unavailable",
@@ -343,7 +343,7 @@ fn debug_redacts_caller_text_at_every_boundary() {
     let capture = Capture::default();
     let operation = validated.resolve_operation("op").unwrap();
     let contract = operation.input().unwrap();
-    rows.push(row("ValueContract", &contract));
+    rows.push(row("Schema", &contract));
     let captured = contract.prepare_with(&capture, &resources);
     rows.push(row("capturing preparation", &captured));
     let prepared = contract.prepare(&Accept).unwrap();

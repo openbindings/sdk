@@ -35,12 +35,9 @@ impl InterfaceSynthesizer for Skeleton {
             .map_err(openbindings::EditError::from)?;
             let edits: Vec<_> = fields
                 .iter()
-                .map(|(pointer, value)| Edit::Set {
-                    pointer: (*pointer).into(),
-                    value,
-                })
+                .map(|(pointer, value)| Edit::set_at(*pointer, value.clone()))
                 .collect();
-            document.edit(&edits)?;
+            document = document.edit(&edits)?;
             Ok(SynthesisCandidate::new(
                 document,
                 CoverageClaim::complete(Vec::new()),

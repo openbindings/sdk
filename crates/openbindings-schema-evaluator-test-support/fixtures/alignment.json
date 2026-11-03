@@ -1,0 +1,19 @@
+{
+  "format": "openbindings.sdk-evaluator-alignment@1",
+  "spec_revision": "c1419c9fc3ae5a00c2b83da710c11bf67dab7934",
+  "interfaces_revision": "5815fb106bddd2c85ff4e93e0077570b3f6b9e74",
+  "historical_cases": 1566,
+  "value_cases": 1546,
+  "value_groups": 486,
+  "moved_admission_cases": 20,
+  "policy": "A capability refusal is a qualification gap, never a passing semantic answer.",
+  "sha256": {
+    "cases.json": "de2b34abd3e8e8591e49ab55ab9ce0b2007ef01647abe398380667555b549a53",
+    "provenance.json": "09b4402e853a97a9e5ec676267a6a0315393c7ad858ef51b1eea5bbc17e2962c",
+    "document-admission.json": "cec222e3e44fceb772cb8c4effb5689708964c5c6c7725b1e8854c55993a9532",
+    "current-suite.json": "93a5e15f2795e8f43d9b62c5cb0932aebe767ccec34ce08ad1b9eab8263c0d48",
+    "current-admission.json": "9ae3671ae775bd6f034c95fb2151480138337735bb317d678c903fc67816cf96",
+    "current-adjudication.json": "268a5f3fb9b4072cb7a9fb68ae0c61807fdbb7f1fa28cbc113b79149e0971f32",
+    "current-reexpressions.json": "30dd9892c29d9e72e26efc1511c3762e97944a22b208cb6f6c7007f13699e33d"
+  }
+}

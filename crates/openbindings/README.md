@@ -49,7 +49,7 @@ Document validation works without a caller-supplied schema evaluator. Its fixed
 normative schema checks are part of core. Operation value validation requires an
 explicit `SchemaEvaluator`, including for `true`, `false` and empty schemas.
 Select the optional `openbindings-json-schema-evaluator` or implement the trait.
-A conformant operation's `input()` and `output()` return its `ValueContract`s, or
+A conformant operation's `input()` and `output()` return its `Schema`s, or
 `None` when it declares none. `prepare(&evaluator)` borrows the evaluator and
 supplies no resources; `prepare_with(&evaluator, &resources)` adds an immutable
 `ResourceSet`. Core does not depend on the companion.

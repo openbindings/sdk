@@ -1,6 +1,6 @@
 //! Reads whose field shapes are established by the retained document proof.
 use super::*;
-use crate::contracts::Side;
+use crate::schema::Side;
 
 fn text<'a>(value: JsonRef<'a>, field: &str) -> Option<&'a str> {
     value
@@ -64,14 +64,25 @@ impl ConformantDocument {
     }
     /// Borrow optional schema declarations in lexical order; no evaluation occurs.
     /// None means absent; Some(empty) means a present empty namespace.
-    pub fn schemas(&self) -> Option<Vec<(&str, JsonRef<'_>)>> {
+    pub fn schemas(&self) -> Option<Vec<(String, Schema)>> {
         self.document
             .schemas()
             .expect("conformant schema namespace")
+            .map(|schemas| {
+                schemas
+                    .into_iter()
+                    .map(|(name, value)| {
+                        (name.to_owned(), Schema::contained(self, value.to_owned()))
+                    })
+                    .collect()
+            })
     }
     /// Borrow one exact object or boolean schema by primary key.
-    pub fn schema(&self, name: &str) -> Option<JsonRef<'_>> {
-        self.value().get("schemas").and_then(|v| v.get(name))
+    pub fn schema(&self, name: &str) -> Option<Schema> {
+        self.value()
+            .get("schemas")
+            .and_then(|v| v.get(name))
+            .map(|value| Schema::contained(self, value.to_owned()))
     }
     /// Retain all operations in lexical primary-key order, including an empty namespace.
     pub fn operations(&self) -> Vec<ConformantOperationView> {
@@ -146,14 +157,14 @@ impl ConformantOperationView {
     }
     /// The input value contract, or `None` when the operation declares no input.
     /// Present `true`, `false` and object schemas are all value contracts; read the exact
-    /// schema with [`ValueContract::schema`]. Nothing is prepared here.
-    pub fn input(&self) -> Option<ValueContract<'_>> {
-        ValueContract::declared(self, Side::Input)
+    /// schema with [`Schema::json`]. Nothing is prepared here.
+    pub fn input(&self) -> Option<Schema> {
+        Schema::declared(self, Side::Input)
     }
     /// The output value contract, or `None` when the operation declares no output.
     /// Nothing is prepared here.
-    pub fn output(&self) -> Option<ValueContract<'_>> {
-        ValueContract::declared(self, Side::Output)
+    pub fn output(&self) -> Option<Schema> {
+        Schema::declared(self, Side::Output)
     }
     pub(crate) fn field(&self, side: Side) -> Option<JsonRef<'_>> {
         match side {

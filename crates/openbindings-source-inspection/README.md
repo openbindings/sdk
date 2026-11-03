@@ -25,7 +25,7 @@ impl SourceInspector for EchoInspector {
         ready(Ok(SourceInspection::complete(vec![BindableTarget::new(
             "value",
             BindingValue {
-                content: source.content.clone(),
+                content: source.data.clone(),
                 ..Default::default()
             },
         )])))

@@ -1,8 +1,8 @@
 //! Unicode property names and values that ECMA-262 11th edition admits in
 //! `\p{...}` and `\P{...}` (Tables 56 to 58 of
 //! <https://262.ecma-international.org/11.0/>). Names only: whether a pattern
-//! with a property escape is valid depends on them, while the evaluator does
-//! not match property escapes.
+//! with a property escape is valid depends on them. Matching reads scalar
+//! ranges from the pinned engine only after these exact names are admitted.
 pub(crate) fn valid(value: &str, name: Option<&str>) -> bool {
     match name {
         Some("General_Category" | "gc") => CATEGORY.binary_search(&value).is_ok(),
@@ -124,7 +124,6 @@ const CATEGORY: &[&str] = &[
     "Enclosing_Mark",
     "Final_Punctuation",
     "Format",
-    "General_Category",
     "Initial_Punctuation",
     "L",
     "LC",
@@ -423,8 +422,6 @@ const SCRIPT: &[&str] = &[
     "Sarb",
     "Saur",
     "Saurashtra",
-    "Script",
-    "Script_Extensions",
     "Sgnw",
     "Sharada",
     "Shavian",

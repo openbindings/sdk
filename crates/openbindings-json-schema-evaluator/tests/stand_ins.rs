@@ -409,7 +409,7 @@ fn an_unevaluated_keyword_reading_a_stand_in_refuses() {
             Some("schema-pattern-compilation"),
         ),
         (
-            json!({"patternProperties": {"(?=a)": true}}),
+            json!({"patternProperties": {"(?=a)a": true}}),
             Some("pattern-backtracking"),
         ),
         (json!({"$ref": MISSING}), Some("resource-unavailable")),
@@ -456,7 +456,7 @@ fn additional_properties_beside_an_unmatched_name() {
 fn nested_keywords_written_from_both_bounds_cost_a_multiple_of_the_verdict_pass() {
     let leaves = [
         (json!({"$ref": MISSING}), "resource-unavailable"),
-        (json!({"pattern": "(?=a)"}), "pattern-backtracking"),
+        (json!({"pattern": "(?=a)a"}), "pattern-backtracking"),
         (json!({"$ref": "#/operations/op/input"}), "in-place-cycle"),
     ];
     let wraps: [fn(Value) -> Value; 3] = [
@@ -503,7 +503,7 @@ fn an_explanation_that_reaches_a_stand_in_falls_back_to_the_upper_bound() {
         (json!({"pattern": "["}), true),
         (json!({"$ref": "#/operations/op/input"}), true),
         (json!({"$ref": MISSING}), false),
-        (json!({"pattern": "(?=a)"}), false),
+        (json!({"pattern": "(?=a)a"}), false),
     ] {
         let schema = json!({"oneOf": [{"type": "string"}, {"type": "string"}, third]});
         let contract = prepare(&schema, &[]).unwrap();

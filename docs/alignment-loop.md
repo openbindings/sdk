@@ -65,10 +65,26 @@ Workspace lint passes with warnings denied. TypeScript type checks and Rust pros
 examples pass. The unchanged Wasm memory bounds pass after reference registration
 was split into declarations followed by queries.
 
-The complete host run has 161 passing tests and three open evaluator replay tests:
-two still require all historical evaluator documents to be conformant, and one uses
-the earlier admission expectations for the auxiliary reference matrix. The reviewed
-1546-case evaluator suite and 20 moved negative admission cases are the next inputs
-to integrate. These failures remain open gates; the ownership review does not accept
-them or qualify the full foundation. Typed draft models, parallel views, and the old
-evaluator seam also remain scheduled for replacement. No user decision is pending.
+## Current evaluator and contextual-schema work
+
+The reviewed 1546 value cases and 20 negative admission cases are now repository-local,
+with a checked 1566-ID partition and nine input-mutation controls. Capability refusal
+no longer substitutes for a required semantic answer. The auxiliary 2348 cases preserve
+all original inputs: 194 are current OBI-12 admission negatives, and one historical
+Unicode-capability expectation now requires its specified satisfying verdict. The
+independent completion oracle checks 1552 complete values and 182 completion groups.
+
+Unicode property matching and safe terminal positive lookahead have passed independent
+correctness and allocation review. Exact contained identities and original-inventory
+fragment lookup pass independent review after corrections for supplied base spelling
+and nested normalized-ID anchor collisions. The strict evaluator suite retains 10 open
+external dialect/vocabulary cases. Eight additional external-to-contained reference
+cases require semantic undefinedness but currently refuse preparation. Neither group
+is a passing semantic gate.
+
+Owned Rust Edit inputs and contextual Schema views are being qualified. Schema views
+include named schemas and operation slots and survive document/operation disposal.
+The TypeScript Schema facade mirrors that ownership. Typed draft models, parallel
+views, the old evaluator seam, and obsolete companion interfaces remain scheduled
+for replacement. Full workspace/host and final performance gates remain open.
+No user decision is pending.

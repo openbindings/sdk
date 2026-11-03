@@ -268,7 +268,7 @@ mod tests {
             .conformant()
             .expect("conformant document");
         let operation = proof.resolve_operation("read").expect("declared operation");
-        let input: ValueContract<'_> = operation.input().expect("declared input");
+        let input: Schema = operation.input().expect("declared input");
         let contract: PreparedValueContract = input
             .prepare(&ExactConstant)
             .expect("custom evaluator must prepare");

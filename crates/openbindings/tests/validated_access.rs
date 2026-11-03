@@ -33,11 +33,14 @@ fn decoded_text_and_exact_tokens_survive_in_retained_conformant_views() {
             .schemas()
             .unwrap()
             .iter()
-            .map(|(key, _)| *key)
+            .map(|(key, _)| key.as_str())
             .collect::<Vec<_>>(),
         ["a", "z"]
     );
-    assert_eq!(document.schema("z").unwrap().as_bool(), Some(false));
+    assert_eq!(
+        document.schema("z").unwrap().json().view().as_bool(),
+        Some(false)
+    );
     let operation = document.resolve_operation("go").unwrap();
     let binding = document.binding("b").unwrap();
     let source = document.source("s").unwrap();
@@ -62,8 +65,14 @@ fn decoded_text_and_exact_tokens_survive_in_retained_conformant_views() {
     assert_eq!(operation.aliases().unwrap().collect::<Vec<_>>(), ["go"]);
     assert_eq!(operation.tags().unwrap().collect::<Vec<&str>>(), ["𐀀", "𝄞"]);
     assert_eq!(operation.deprecated(), Some(false));
-    assert_eq!(operation.input().unwrap().schema().as_bool(), Some(true));
-    assert_eq!(operation.output().unwrap().schema().as_bool(), Some(false));
+    assert_eq!(
+        operation.input().unwrap().json().view().as_bool(),
+        Some(true)
+    );
+    assert_eq!(
+        operation.output().unwrap().json().view().as_bool(),
+        Some(false)
+    );
     assert_eq!(binding.source(), "s");
     assert_eq!(binding.operation(), "run");
     assert_eq!(binding.preference().unwrap().get(), 0);
@@ -111,7 +120,7 @@ fn presence_and_field_local_editor_errors_remain_distinct() {
     assert!(empty.sources().unwrap().is_empty());
     assert!(empty.dependencies().unwrap().is_empty());
     let op = empty.resolve_operation("run").unwrap();
-    assert_eq!(op.input().unwrap().schema().kind(), JsonKind::Object);
+    assert_eq!(op.input().unwrap().json().kind(), JsonKind::Object);
     assert_eq!(op.tags().unwrap().len(), 0);
     assert_eq!(op.aliases().unwrap().len(), 0);
     assert!(op.examples().unwrap().is_empty());

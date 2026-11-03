@@ -135,8 +135,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let note = JsonValue::string("Reviewed")?;
     let description = JsonValue::string("Ready for review")?;
     let changed = document.edit(&[
-        Edit::Set { pointer: "/x-editor/note".into(), value: &note },
-        Edit::Set { pointer: "/description".into(), value: &description },
+        Edit::set(&["x-editor", "note"], note),
+        Edit::set(&["description"], description),
     ])?;
     assert_eq!(document.value().at("/x-editor/id").unwrap().text(), "9007199254740993");
     let proven = changed.validate()?.conformant().ok_or("nonconformant")?;

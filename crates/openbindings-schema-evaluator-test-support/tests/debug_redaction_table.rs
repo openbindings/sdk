@@ -56,9 +56,6 @@ fn kit_rows(outcome: &ValueOutcome) -> Vec<Row> {
     case.value = SECRET.into();
     case.expected = SECRET.into();
     case.acceptable_paths = Some(vec![vec![SECRET.into()]]);
-    case.optional_capability = Some(SECRET.into());
-    case.refusal_reason = SECRET.into();
-    case.refusal_kind = Some(SECRET.into());
     group.id = SECRET.into();
     group.document = SECRET.into();
     group.resources = vec![SECRET.into()];
@@ -69,7 +66,7 @@ fn kit_rows(outcome: &ValueOutcome) -> Vec<Row> {
     suite.resources = BTreeMap::from([(SECRET.into(), resource.clone())]);
     suite.groups = vec![group.clone()];
     suite.builtin_resources = BTreeMap::from([(SECRET.into(), SECRET.into())]);
-    let mut report = kit::run(&Refuse, &kit::Options::default());
+    let mut report = kit::run(&Refuse);
     let mut observation = report.observations[0].clone();
     observation.id = SECRET.into();
     observation.expected = SECRET.into();
@@ -84,12 +81,6 @@ fn kit_rows(outcome: &ValueOutcome) -> Vec<Row> {
         row("kit Group", &group),
         row("kit Resource", &resource),
         row("kit Suite", &suite),
-        row(
-            "kit Options",
-            &kit::Options {
-                permitted_refusals: BTreeMap::from([(SECRET.into(), SECRET.into())]),
-            },
-        ),
         row("kit Observation", &observation),
         row("kit Report", &report),
     ]
@@ -128,5 +119,5 @@ fn debug_redacts_caller_text_at_every_boundary() {
     };
     let rows = kit_rows(&outcome);
 
-    check_rows(rows, 7);
+    check_rows(rows, 6);
 }

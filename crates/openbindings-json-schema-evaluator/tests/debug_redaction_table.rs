@@ -45,7 +45,7 @@ fn debug_redacts_caller_text_at_every_boundary() {
     let mut rows = Vec::new();
     for detail in [Detail::Outcome, Detail::Explain] {
         let unprepared = operation.input().unwrap();
-        rows.push(row("ValueContract", &unprepared));
+        rows.push(row("Schema", &unprepared));
         let prepared = unprepared.prepare(&DefaultEvaluator::new());
         rows.push(row("Ok(PreparedValueContract)", &prepared));
         let Ok(contract) = prepared else {

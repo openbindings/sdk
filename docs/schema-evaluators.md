@@ -12,7 +12,7 @@ conformant fields, authors documents, resolves operation names and inspects
 references. Its fixed document-schema and meta-schema checks are included.
 They do not evaluate examples or runtime values against an operation's schemas.
 
-Preparing a `ValueContract` requires an explicit evaluator. There is
+Preparing a `Schema` requires an explicit evaluator. There is
 no fallback value evaluator in core. A stated `true`, `false` or `{}` schema
 still requires an evaluator. Absence alone means no value contract is stated.
 
@@ -32,7 +32,7 @@ the default evaluator; it does not expose custom evaluator callbacks.
 
 Implement `SchemaEvaluator::prepare` and return an owned `PreparedSchema`.
 Pass a borrowed implementation, and an immutable `ResourceSet` when resources are
-supplied, to a conformant operation's `ValueContract::prepare_with`. Implement
+supplied, to a conformant operation's `Schema::prepare_with`. Implement
 `PreparedSchema::validate` to return satisfies, fails, undefined or no-verdict.
 Each call passes a `Detail`. With `Detail::Outcome`, the caller's cheap check, a
 failure carries no problems and `problems_complete` is false. With
@@ -88,8 +88,7 @@ Run the [boolean evaluator example](../crates/openbindings-schema-evaluator-test
 for a minimal implementation. It supports boolean schemas and explicitly refuses
 other forms. Qualify a broader implementation with
 [`openbindings-schema-evaluator-test-support`](../crates/openbindings-schema-evaluator-test-support/README.md).
-The suite checks and explains every value. It distinguishes permitted refusals
-from wrong verdicts, checks that both calls agree and that a cheap check reports
+The suite checks and explains every value. It records capability refusals as gaps, distinguishes them from wrong verdicts, checks that both calls agree and that a cheap check reports
 no problems, checks that reported schema locations exist in the original
 sources and instance pointers in the value, and explains each failing value again
 inside a larger text, which must not change its problems.

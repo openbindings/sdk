@@ -354,7 +354,7 @@ fn a_small_pattern_memory_refuses_a_pattern_beyond_what_it_leaves() {
          0 bytes total_pattern_memory holds for them once search caches take a quarter; \
          raise total_pattern_memory (totalPatternMemory in TypeScript)"
     );
-    let unmatched = prepare(&json!({"pattern": "^(?=a)"}), none.clone()).unwrap();
+    let unmatched = prepare(&json!({"pattern": "^(?=a)a"}), none.clone()).unwrap();
     assert_eq!(
         no_verdict(&unmatched, r#""a""#).code,
         "pattern-backtracking"

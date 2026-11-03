@@ -13,8 +13,8 @@ use crate::{
 };
 use openbindings::{
     ConformantBindingView, ConformantDocument, ConformantOperationView, Detail, JsonKind,
-    JsonValue, NoVerdict, NoVerdictReason, PreparedValueContract, ResourceSet, SchemaEvaluator,
-    Source, ValueContract, ValueOutcome,
+    JsonValue, NoVerdict, NoVerdictReason, PreparedValueContract, ResourceSet, Schema,
+    SchemaEvaluator, Source, ValueOutcome,
 };
 use std::{
     collections::HashMap,
@@ -52,7 +52,7 @@ impl Direction {
             Self::Output => "output",
         }
     }
-    fn contract(self, operation: &ConformantOperationView) -> Option<ValueContract<'_>> {
+    fn contract(self, operation: &ConformantOperationView) -> Option<Schema> {
         match self {
             Self::Input => operation.input(),
             Self::Output => operation.output(),
@@ -68,7 +68,7 @@ struct Evaluation {
 impl Evaluation {
     fn prepare(
         &self,
-        contract: ValueContract<'_>,
+        contract: Schema,
         control: &dyn openbindings::WorkControl,
     ) -> Result<PreparedValueContract, NoVerdict> {
         contract.prepare_with_control(&*self.evaluator, &self.resources, control)

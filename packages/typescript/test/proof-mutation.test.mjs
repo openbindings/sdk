@@ -101,11 +101,8 @@ test("a plain operation view cannot be borrowed as a conformant one to hand out 
       conformance,
     );
   const input = plain.input();
-  for (const method of ["schema", "prepare", "retain"])
-    assert.throws(
-      () => sdk.ValueContract.prototype[method].call(input),
-      conformance,
-    );
+  for (const method of ["json", "prepare", "retain"])
+    assert.throws(() => sdk.Schema.prototype[method].call(input), conformance);
   input.dispose();
   plain.dispose();
   document.dispose();

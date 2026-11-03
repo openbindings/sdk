@@ -14,11 +14,11 @@ use std::{
 };
 
 #[derive(Clone, Deserialize)]
-/// One frozen evaluator observation. Exact JSON text avoids host numeric conversion; expected outcome and capability exceptions come from packaged provenance.
+/// One frozen evaluator observation. Exact JSON text avoids host numeric conversion; the reviewed current ledger fixes expected outcomes.
 /// Later versions may add fields: read them by name and match with `..`.
 #[non_exhaustive]
 pub struct Case {
-    /// Stable case identity, also used for explicit capability allowances.
+    /// Stable case identity, retained across historical adjudication.
     pub id: String,
     /// Exact instance JSON text parsed independently for this case.
     pub value: String,
@@ -26,16 +26,6 @@ pub struct Case {
     pub expected: String,
     /// Alternative complete sets of instance pointers accepted for an established failure; absent means no specific set constraint.
     pub acceptable_paths: Option<Vec<Vec<String>>>,
-    /// Capability explanation eligible for a case-specific unsupported-capability allowance.
-    pub optional_capability: Option<String>,
-    /// Human-readable fixture explanation for its refusal expectation.
-    pub refusal_reason: String,
-    /// No-verdict reason wire spelling a refusal must give: the expected
-    /// outcome's when `expected` is `no-verdict`, otherwise a refusal the case
-    /// also accepts. Beside an `optional_capability` that refusal needs the
-    /// caller's allowance; without one it is accepted as it is, for a schema in
-    /// a dialect an evaluator may not read.
-    pub refusal_kind: Option<String>,
 }
 impl std::fmt::Debug for Case {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -102,227 +92,14 @@ impl std::fmt::Debug for Suite {
     }
 }
 
-#[derive(Deserialize)]
-struct PolicyTranslation {
-    case: String,
-    from_expected: String,
-    from_refusal_kind: Option<String>,
-    to_expected: String,
-    #[serde(default)]
-    to_refusal_kind: Option<String>,
-    #[serde(default)]
-    to_refusal_reason: String,
-    original_document: String,
-    original_value: String,
-    original_resources: Vec<Resource>,
-}
-// A case whose stated outcome an evaluator may decline, giving the stated
-// refusal, when the caller permits the capability it names.
-#[derive(Deserialize)]
-struct CapabilityDeclaration {
-    case: String,
-    expected: String,
-    optional_capability: String,
-    refusal_kind: String,
-    original_document: String,
-    original_value: String,
-}
-#[derive(Deserialize)]
-struct Provenance {
-    runtime_policy_translations: Vec<PolicyTranslation>,
-    capability_declarations: Vec<CapabilityDeclaration>,
-}
-fn declare_capabilities(suite: &mut Suite) {
-    let provenance: Provenance = serde_json::from_str(include_str!("../fixtures/provenance.json"))
-        .expect("packaged policy provenance");
-    for declaration in provenance.capability_declarations {
-        let group = suite
-            .groups
-            .iter_mut()
-            .find(|group| group.cases.iter().any(|case| case.id == declaration.case))
-            .expect("capability declaration names an existing group");
-        assert_eq!(group.document, declaration.original_document);
-        let case = group
-            .cases
-            .iter_mut()
-            .find(|case| case.id == declaration.case)
-            .expect("capability declaration names an existing case");
-        assert_eq!(case.value, declaration.original_value);
-        assert_eq!(case.expected, declaration.expected);
-        assert!(case.optional_capability.is_none() && case.refusal_kind.is_none());
-        case.optional_capability = Some(declaration.optional_capability);
-        case.refusal_kind = Some(declaration.refusal_kind);
-    }
-}
-fn translate_policy(suite: &mut Suite) {
-    let provenance: Provenance = serde_json::from_str(include_str!("../fixtures/provenance.json"))
-        .expect("packaged policy provenance");
-    for translation in provenance.runtime_policy_translations {
-        let group = suite
-            .groups
-            .iter()
-            .find(|group| group.cases.iter().any(|case| case.id == translation.case))
-            .expect("policy translation names an existing group");
-        assert_eq!(group.document, translation.original_document);
-        assert_eq!(group.resources.len(), translation.original_resources.len());
-        for (id, original) in group.resources.iter().zip(&translation.original_resources) {
-            let actual = &suite.resources[id];
-            assert_eq!(actual.uri, original.uri);
-            assert_eq!(actual.document, original.document);
-        }
-        let cases = suite.groups.iter_mut().flat_map(|group| &mut group.cases);
-        let mut selected = cases.filter(|case| case.id == translation.case);
-        let case = selected
-            .next()
-            .expect("policy translation names an existing case");
-        assert!(selected.next().is_none(), "policy translation is unique");
-        assert_eq!(case.value, translation.original_value);
-        let from_expected = match translation.from_expected.as_str() {
-            "mismatch" => "fails",
-            other => other,
-        };
-        assert_eq!(case.expected, from_expected);
-        assert_eq!(case.refusal_kind, translation.from_refusal_kind);
-        assert!(matches!(
-            translation.to_expected.as_str(),
-            "satisfies" | "fails" | "no-verdict"
-        ));
-        // A verdict may also accept an unsupported-capability refusal.
-        assert!(match translation.to_expected.as_str() {
-            "no-verdict" => translation.to_refusal_kind.is_some(),
-            _ => translation
-                .to_refusal_kind
-                .as_deref()
-                .is_none_or(|kind| kind == "unsupported-capability"),
-        });
-        case.expected = translation.to_expected;
-        case.refusal_kind = translation.to_refusal_kind;
-        case.refusal_reason = translation.to_refusal_reason;
-    }
-}
-#[derive(Deserialize)]
-struct DocumentMigrations {
-    reexpressions: Vec<Reexpression>,
-    core_rejections: Vec<CoreRejection>,
-}
-#[derive(Deserialize)]
-struct Reexpression {
-    group: String,
-    case_ids: Vec<String>,
-    original_document: String,
-    document: String,
-    resource_key: String,
-    resource: Resource,
-}
-#[derive(Deserialize)]
-struct CoreRejection {
-    group: String,
-    case_ids: Vec<String>,
-    original_document: String,
-}
-fn translate_documents(suite: &mut Suite) {
-    let migrations: DocumentMigrations =
-        serde_json::from_str(include_str!("../fixtures/document-admission.json"))
-            .expect("document migrations");
-    for m in migrations.reexpressions {
-        let group = suite
-            .groups
-            .iter_mut()
-            .find(|g| g.id == m.group)
-            .expect("migrated group");
-        assert_eq!(group.document, m.original_document);
-        assert_eq!(
-            group.cases.iter().map(|c| &c.id).collect::<Vec<_>>(),
-            m.case_ids.iter().collect::<Vec<_>>()
-        );
-        group.document = m.document;
-        group.resources.push(m.resource_key.clone());
-        assert!(suite.resources.insert(m.resource_key, m.resource).is_none());
-    }
-    for m in migrations.core_rejections {
-        let i = suite
-            .groups
-            .iter()
-            .position(|g| g.id == m.group)
-            .expect("core rejection group");
-        let group = suite.groups.remove(i);
-        assert_eq!(group.document, m.original_document);
-        assert_eq!(
-            group.cases.iter().map(|c| &c.id).collect::<Vec<_>>(),
-            m.case_ids.iter().collect::<Vec<_>>()
-        );
-        let validation = Document::parse(&group.document)
-            .unwrap()
-            .validate()
-            .unwrap();
-        assert_eq!(validation.report().evidence["OBI-12"], Evidence::Violated);
-        assert!(validation.conformant().is_none());
-    }
-}
-/// Frozen inputs. No network access, environment variables, or sibling checkout is needed.
+/// Current adjudicated inputs. Historical cases and their dispositions are
+/// packaged alongside them; no network or sibling checkout is needed.
 pub fn suite() -> &'static Suite {
     static SUITE: OnceLock<Suite> = OnceLock::new();
     SUITE.get_or_init(|| {
-        let mut suite: Suite = serde_json::from_str(include_str!("../fixtures/cases.json"))
-            .expect("packaged fixture JSON is verified by build tests");
-        // The frozen Go-derived inputs predate the specification-aligned Fails name.
-        for case in suite.groups.iter_mut().flat_map(|group| &mut group.cases) {
-            if case.expected == "mismatch" {
-                case.expected = "fails".into();
-            }
-        }
-        // Preserve the raw historical fixture. Admission changes are explicit
-        // provenance shared with the independent browser qualification judge.
-        translate_policy(&mut suite);
-        translate_documents(&mut suite);
-        // Historical semantic undefinedness was carried as a refusal reason.
-        for case in suite.groups.iter_mut().flat_map(|group| &mut group.cases) {
-            if case.expected == "no-verdict" && case.refusal_kind.as_deref() == Some("undefined") {
-                case.expected = "undefined".into();
-                case.refusal_kind = None;
-            }
-        }
-        declare_capabilities(&mut suite);
-        suite
+        serde_json::from_str(include_str!("../fixtures/current-suite.json"))
+            .expect("packaged current fixture JSON")
     })
-}
-/// Exact optional case IDs. Unknown, blank and unused declarations fail the run.
-#[derive(Clone, Default)]
-pub struct Options {
-    /// Exact optional case IDs mapped to their declared capability explanation. Unknown, mismatched, blank or unused allowances make the report fail.
-    pub permitted_refusals: BTreeMap<String, String>,
-}
-impl std::fmt::Debug for Options {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Options").finish_non_exhaustive()
-    }
-}
-
-impl Options {
-    /// Permit, case by case, the refusals of every case that declares one of
-    /// `capabilities`: `unicode-property-matching` (Unicode property escapes
-    /// in patterns), `backtracking-pattern-matching` (patterns with
-    /// lookaround or backreferences) or `undefined-results`
-    /// (establishing that a value's validity is undefined).
-    pub fn without(capabilities: &[&str]) -> Self {
-        Self {
-            permitted_refusals: suite()
-                .groups
-                .iter()
-                .flat_map(|g| &g.cases)
-                .filter_map(|c| {
-                    c.optional_capability
-                        .as_ref()
-                        .filter(|capability| capabilities.contains(&capability.as_str()))
-                        .map(|capability| (c.id.clone(), capability.clone()))
-                })
-                .collect(),
-        }
-    }
-    /// Permit the refusals of Unicode property matching, case by case.
-    pub fn without_unicode_property_matching() -> Self {
-        Self::without(&["unicode-property-matching"])
-    }
 }
 #[derive(Clone, Serialize)]
 /// Receipt for one case, preserving verdicts and refusals separately from contract-check failures.
@@ -339,7 +116,7 @@ pub struct Observation {
     pub outcome: Option<ValueOutcome>,
     /// Actual explanation outcome for the same value when preparation succeeded.
     pub explanation: Option<ValueOutcome>,
-    /// Contract-check failures for this observation; empty can include an allowed refusal.
+    /// Contract-check failures for this observation; empty means the expected semantic answer was established.
     pub failures: Vec<String>,
 }
 impl std::fmt::Debug for Observation {
@@ -354,7 +131,7 @@ impl std::fmt::Debug for Observation {
 }
 
 #[derive(Clone, Serialize)]
-/// Finite suite receipt. Success permits explicitly declared capability refusals; inspect verdict/refusal counts before claiming coverage.
+/// Finite suite receipt. A refusal remains a qualification gap when a case expects a semantic answer.
 ///
 /// Only [`run`] builds reports. Later versions may add fields: read them by name
 /// and match with `..`.
@@ -374,7 +151,7 @@ impl std::fmt::Debug for Observation {
 pub struct Report {
     /// Actual observations in fixture order.
     pub observations: Vec<Observation>,
-    /// Invalid or unused allowance declarations and setup invariant failures.
+    /// Setup invariant failures and invalid fixture configuration.
     pub configuration_failures: Vec<String>,
 }
 impl std::fmt::Debug for Report {
@@ -430,27 +207,12 @@ impl Report {
 /// more control observations (see [`judge_interruptions`]), and again as a
 /// member of a larger text, which must not change its problems: instance
 /// pointers start at the value passed.
-pub fn run(evaluator: &dyn SchemaEvaluator, options: &Options) -> Report {
+pub fn run(evaluator: &dyn SchemaEvaluator) -> Report {
     let suite = suite();
     let mut report = Report {
         observations: Vec::new(),
         configuration_failures: Vec::new(),
     };
-    let mut used = BTreeSet::new();
-    for (id, reason) in &options.permitted_refusals {
-        let case = suite
-            .groups
-            .iter()
-            .flat_map(|g| &g.cases)
-            .find(|c| &c.id == id);
-        if reason.trim().is_empty()
-            || case.is_none_or(|c| c.optional_capability.as_deref() != Some(reason))
-        {
-            report
-                .configuration_failures
-                .push(format!("unknown or unsupported refusal declaration: {id}"));
-        }
-    }
     for group in &suite.groups {
         let document = Document::parse(&group.document).expect("packaged document JSON");
         let resources = ResourceSet::new(group.resources.iter().map(|id| {
@@ -487,15 +249,8 @@ pub fn run(evaluator: &dyn SchemaEvaluator, options: &Options) -> Report {
                     (refusal.clone(), refusal, Some(detail.clone()))
                 }
             };
-            let allowed = options
-                .permitted_refusals
-                .get(&case.id)
-                .filter(|reason| case.optional_capability.as_ref() == Some(reason));
-            if allowed.is_some() && matches!(outcome, ValueOutcome::NoVerdict { .. }) {
-                used.insert(case.id.clone());
-            }
-            let mut failures = judge(case, &value, &outcome, allowed.is_some());
-            for failure in judge(case, &value, &explanation, allowed.is_some()) {
+            let mut failures = judge(case, &value, &outcome);
+            for failure in judge(case, &value, &explanation) {
                 if !failures.contains(&failure) {
                     failures.push(failure);
                 }
@@ -569,13 +324,6 @@ pub fn run(evaluator: &dyn SchemaEvaluator, options: &Options) -> Report {
                 preparation_refusal,
                 failures,
             });
-        }
-    }
-    for id in options.permitted_refusals.keys() {
-        if !used.contains(id) {
-            report
-                .configuration_failures
-                .push(format!("unused refusal declaration: {id}"));
         }
     }
     report
@@ -671,12 +419,7 @@ pub fn judge_interruptions(
 /// Judge one observation independently. Useful for host harnesses and controls.
 /// Each problem's instance pointer must name a node of `value`, from `value`
 /// itself.
-pub fn judge(
-    case: &Case,
-    value: &JsonValue,
-    outcome: &ValueOutcome,
-    permitted_refusal: bool,
-) -> Vec<String> {
+pub fn judge(case: &Case, value: &JsonValue, outcome: &ValueOutcome) -> Vec<String> {
     let mut failures = Vec::new();
     let tag = match outcome {
         ValueOutcome::Satisfies => "satisfies",
@@ -684,28 +427,10 @@ pub fn judge(
         ValueOutcome::Undefined { .. } => "undefined",
         ValueOutcome::NoVerdict { .. } => "no-verdict",
     };
-    // A case with an outcome can accept the refusal it states: one the caller
-    // permits for an optional capability, or an unsupported-capability refusal
-    // for a dialect an evaluator may not read, which JSON Schema has it refuse.
-    let refusal_accepted = case.expected != "no-verdict"
-        && match (&case.optional_capability, case.refusal_kind.as_deref()) {
-            (Some(_), Some(_)) => permitted_refusal,
-            (None, Some(kind)) => kind == "unsupported-capability",
-            _ => false,
-        };
-    let permitted_refusal = refusal_accepted
-        && matches!(outcome, ValueOutcome::NoVerdict { detail }
-            if serde_json::to_value(detail.reason).ok().as_ref().and_then(|r| r.as_str())
-                == case.refusal_kind.as_deref());
-    if tag != case.expected && !(tag == "no-verdict" && permitted_refusal) {
+    if tag != case.expected {
         failures.push(format!("expected {}, observed {tag}", case.expected));
     }
     if let ValueOutcome::NoVerdict { detail } = outcome {
-        let reason = serde_json::to_value(detail.reason).expect("reason serializes");
-        if case.refusal_kind.as_deref() != reason.as_str() {
-            failures
-                .push("refusal reason differs from the fixture's established distinction".into());
-        }
         if detail.code.trim().is_empty() || detail.message.trim().is_empty() {
             failures.push("refusal lacks a stable code or useful explanation".into());
         }
@@ -751,66 +476,4 @@ pub fn judge(
         }
     }
     failures
-}
-
-#[cfg(test)]
-mod policy_translation_tests {
-    use super::*;
-
-    #[test]
-    fn policy_translation_requires_exact_historical_inputs() {
-        let original: Suite = serde_json::from_str(include_str!("../fixtures/cases.json")).unwrap();
-        for field in [
-            "id",
-            "expected",
-            "refusal_kind",
-            "value",
-            "document",
-            "resource_uri",
-            "resource_document",
-        ] {
-            let mut altered = original.clone();
-            let group = altered
-                .groups
-                .iter_mut()
-                .find(|g| g.id == "adversarial/resource-uri-names-another-id")
-                .unwrap();
-            let case = &mut group.cases[0];
-            match field {
-                "id" => case.id = "changed".into(),
-                "expected" => case.expected = "satisfies".into(),
-                "refusal_kind" => case.refusal_kind = None,
-                "value" => case.value = "2".into(),
-                "document" => group.document = "{}".into(),
-                "resource_uri" => {
-                    altered.resources.get_mut(&group.resources[0]).unwrap().uri =
-                        "https://changed.invalid/".into()
-                }
-                "resource_document" => {
-                    altered
-                        .resources
-                        .get_mut(&group.resources[0])
-                        .unwrap()
-                        .document = "true".into()
-                }
-                _ => unreachable!(),
-            }
-            assert!(
-                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| translate_policy(
-                    &mut altered
-                )))
-                .is_err(),
-                "{field}"
-            );
-        }
-        let group = original
-            .groups
-            .iter()
-            .find(|g| g.id == "adversarial/resource-uri-names-another-id")
-            .unwrap();
-        assert_eq!(group.cases[0].expected, "no-verdict");
-        let translated = suite().groups.iter().find(|g| g.id == group.id).unwrap();
-        assert_eq!(translated.cases[0].expected, "satisfies");
-        assert!(translated.cases[0].refusal_kind.is_none());
-    }
 }

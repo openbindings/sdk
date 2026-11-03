@@ -51,6 +51,8 @@ struct NameSelection {
     origin: ResourceOrigin,
     // None denotes multiple carriers at the winning priority, never absence.
     carrier: Option<usize>,
+    // An OBI-13 spelling outranks a URI-library normalization alias.
+    exact_contained: bool,
 }
 pub struct Source {
     pub uri: Option<String>,
@@ -319,7 +321,7 @@ impl Layer {
             root: None,
             base: retrieval
                 .as_deref()
-                .and_then(crate::input_policy::canonical_uri),
+                .and_then(|name| uri::compared_id(None, name)),
             anonymous: retrieval.is_none(),
             dialect: Some(DIALECT.into()),
             anchors: BTreeMap::new(),
@@ -344,10 +346,10 @@ impl Layer {
                 resources.insert(node.resource as usize, id);
                 let dialect = declared_dialect(value, self.resource(parent).dialect.as_deref());
                 let base = value.get("$id").and_then(|v| v.as_str()).and_then(|id| {
-                    crate::input_policy::resolve_identifier(
-                        self.resource(parent).base.as_deref(),
-                        id,
-                    )
+                    // Preserve the resolved spelling for contained-resource
+                    // comparison, including references originating externally.
+                    // Input associations retain their separate alias policy.
+                    uri::compared_id(self.resource(parent).base.as_deref(), id)
                 });
                 self.resources.push(Resource {
                     root: Some(self.base + self.nodes.len()),
@@ -406,9 +408,23 @@ impl Layer {
         });
     }
     fn add_name(&mut self, name: String, resource: usize, protected: &HashSet<String>) {
-        let Some(name) = crate::input_policy::canonical_uri(&name) else {
+        let Some(canonical) = crate::input_policy::canonical_uri(&name) else {
             return;
         };
+        let contained = self.resource(resource).origin == ResourceOrigin::Contained;
+        if contained && name != canonical {
+            self.associate_name(name, resource, true, protected);
+        }
+        let exact = contained && self.resource(resource).base.as_deref() == Some(&canonical);
+        self.associate_name(canonical, resource, exact, protected);
+    }
+    fn associate_name(
+        &mut self,
+        name: String,
+        resource: usize,
+        exact_contained: bool,
+        protected: &HashSet<String>,
+    ) {
         let origin = self.resource(resource).origin;
         if origin == ResourceOrigin::Supplied
             && protected.contains(&name)
@@ -422,6 +438,7 @@ impl Layer {
                 NameSelection {
                     origin,
                     carrier: None,
+                    exact_contained: false,
                 },
             );
             return;
@@ -439,18 +456,25 @@ impl Layer {
                 ) {
                     selected.origin = ResourceOrigin::Supplied;
                     selected.carrier = None;
-                } else if origin < selected.origin {
+                } else if origin < selected.origin
+                    || (origin == selected.origin && exact_contained && !selected.exact_contained)
+                {
                     *selected = NameSelection {
                         origin,
                         carrier: Some(resource),
+                        exact_contained,
                     };
-                } else if origin == selected.origin && selected.carrier != Some(resource) {
+                } else if origin == selected.origin
+                    && exact_contained == selected.exact_contained
+                    && selected.carrier != Some(resource)
+                {
                     selected.carrier = None;
                 }
             })
             .or_insert(NameSelection {
                 origin,
                 carrier: Some(resource),
+                exact_contained,
             });
     }
     // Finalize once, after every alias and canonical association is known.
@@ -469,7 +493,15 @@ impl Layer {
             if !resource.anonymous
                 && let Some(name) = &resource.base
             {
-                resource.eligible = select(names, name).and_then(|name| name.carrier) == Some(id);
+                let canonical;
+                let association = if resource.origin == ResourceOrigin::Contained {
+                    name.as_str()
+                } else {
+                    canonical = crate::input_policy::canonical_uri(name);
+                    canonical.as_deref().unwrap_or(name)
+                };
+                resource.eligible =
+                    select(names, association).and_then(|name| name.carrier) == Some(id);
             }
         }
     }
@@ -514,6 +546,7 @@ fn select(
             Some(NameSelection {
                 origin: ResourceOrigin::Supplied,
                 carrier: None,
+                exact_contained: false,
             })
         }
         (Some(selected), _) => Some(*selected),

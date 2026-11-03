@@ -11,7 +11,9 @@ fn observe(case: &Value) -> Value {
     });
     let parsed = Document::parse(document.to_string()).unwrap();
     let validation = parsed.validate().unwrap();
-    let proof = validation.conformant().expect("conformant fixture");
+    let Some(proof) = validation.conformant() else {
+        return json!({"stage":"admission","outcome":validation.report().conclusion,"evidence":validation.report().evidence});
+    };
     let supplied = ResourceSet::new(case["resources"].as_array().into_iter().flatten().map(|r| {
         SchemaResource {
             uri: r["uri"].as_str().unwrap().into(),
@@ -54,6 +56,23 @@ fn assert_subset(expected: &Value, actual: &Value, id: &str) {
 #[test]
 fn matrix_and_concrete_reference_completions() {
     let mut receipt = Vec::new();
+    let adjudication: Value =
+        serde_json::from_str(include_str!("fixtures/reference-admission.json")).unwrap();
+    let negatives: std::collections::BTreeMap<_, _> = adjudication["cases"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|case| (case["id"].as_str().unwrap(), case))
+        .collect();
+    assert_eq!(negatives.len(), 194);
+    let capabilities: Value =
+        serde_json::from_str(include_str!("fixtures/reference-capabilities.json")).unwrap();
+    let capabilities: std::collections::BTreeMap<_, _> = capabilities["cases"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| (c["id"].as_str().unwrap(), c))
+        .collect();
     for text in [
         include_str!("fixtures/reference-matrix.json"),
         include_str!("fixtures/reference-completions.json"),
@@ -61,7 +80,21 @@ fn matrix_and_concrete_reference_completions() {
         let cases: Vec<Value> = serde_json::from_str(text).unwrap();
         for case in cases {
             let actual = observe(&case);
-            let mut expected = case["expected"].clone();
+            let mut expected = if let Some(negative) = negatives.get(case["id"].as_str().unwrap()) {
+                assert_eq!(case, negative["historical_case"]);
+                let evidence: serde_json::Map<String, Value> = negative["required_violated_rules"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|rule| (rule.as_str().unwrap().to_owned(), json!("violated")))
+                    .collect();
+                json!({"stage":"admission","outcome":"non-conformant","evidence":evidence})
+            } else if let Some(capability) = capabilities.get(case["id"].as_str().unwrap()) {
+                assert_eq!(case, capability["historical_case"]);
+                capability["expected"].clone()
+            } else {
+                case["expected"].clone()
+            };
             if expected["outcome"] == "N" && expected["detail"]["reason"] == "undefined" {
                 expected["outcome"] = json!("undefined");
                 expected["detail"].as_object_mut().unwrap().remove("reason");
@@ -76,7 +109,7 @@ fn matrix_and_concrete_reference_completions() {
 }
 #[test]
 fn preparation_and_validation_honor_cancellation() {
-    let parsed = Document::parse(r##"{"openbindings":"0.2.0","operations":{"op":{"input":{"$id":"https://controls.test/root","$ref":"#missing"}},"ok":{"input":{"type":"integer"}}}}"##).unwrap();
+    let parsed = Document::parse(r##"{"openbindings":"0.2.0","operations":{"op":{"input":{"$ref":"https://controls.test/missing#anchor"}},"ok":{"input":{"type":"integer"}}}}"##).unwrap();
     let validation = parsed.validate().unwrap();
     let proof = validation.conformant().unwrap();
     let evaluator = DefaultEvaluator::new();
@@ -87,7 +120,7 @@ fn preparation_and_validation_honor_cancellation() {
         matches!(unprepared.prepare_with_control(&evaluator, &ResourceSet::default(), &cancelled), Err(detail) if detail.reason == NoVerdictReason::Cancelled)
     );
     assert!(
-        matches!(unprepared.prepare(&evaluator), Err(detail) if detail.code == "anchor-missing")
+        matches!(unprepared.prepare(&evaluator), Err(detail) if detail.reason == NoVerdictReason::ResourceUnavailable)
     );
     let operation = proof.resolve_operation("ok").unwrap();
     let Ok(contract) = operation.input().unwrap().prepare(&evaluator) else {
@@ -112,26 +145,21 @@ fn refusal_at(document: String) -> NoVerdict {
     detail
 }
 #[test]
-fn defective_references_refuse_preparation_naming_the_reference() {
-    let defective = |properties: &str| {
-        refusal_at(format!(
+fn defective_contained_references_are_admission_negatives_before_preparation() {
+    for properties in [
+        r##"{"b":{"$ref":"#nope"}}"##,
+        r##"{"a":{"$ref":"#/$defs/missing"},"b":{"$ref":"#nope"}}"##,
+    ] {
+        let source = format!(
             r#"{{"openbindings":"0.2.0","schemas":{{"T":{{"$id":"https://defects.test/r","properties":{properties}}}}},"operations":{{"op":{{"input":{{"$ref":"https://defects.test/r"}}}}}}}}"#
-        ))
-    };
-    let detail = defective(r##"{"b":{"$ref":"#nope"}}"##);
-    assert_eq!(detail.reason, NoVerdictReason::ConservativePreparation);
-    assert_eq!(detail.code, "anchor-missing");
-    assert_eq!(
-        detail.location,
-        Some(SchemaLocation::new(
-            None,
-            "/schemas/T/properties/b".parse().unwrap()
-        ))
-    );
-    let detail = defective(r##"{"a":{"$ref":"#/$defs/missing"},"b":{"$ref":"#nope"}}"##);
-    assert_eq!(detail.reason, NoVerdictReason::ConservativePreparation);
-    assert!(detail.location.is_some());
+        );
+        let document = Document::parse(source).unwrap();
+        let checked = document.validate().unwrap();
+        assert_eq!(checked.report().evidence["OBI-12"], Evidence::Violated);
+        assert!(checked.conformant().is_none());
+    }
 }
+
 #[test]
 fn values_reaching_a_missing_resource_give_no_verdict_naming_it() {
     let document = |properties: &str| {

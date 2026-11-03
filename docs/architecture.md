@@ -12,7 +12,7 @@ typed part setters. Editing commits a new arena and fresh caches; clones and pro
 retain the earlier revision. `ConformantDocument` exposes no mutable access. Source views keep their owner's storage, not borrowed external
 buffers; standalone document views rebase byte locations correctly.
 
-A conformant operation hands out its `ValueContract`s; preparation borrows an
+A conformant operation hands out its `Schema`s; preparation borrows an
 evaluator and an explicit immutable `ResourceSet`. Each preparation compiles
 independently. A caller-retained `PreparedValueContract` owns required compiled state
 and survives document, resource and evaluator disposal. Cancellation and transient failures do

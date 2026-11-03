@@ -684,19 +684,25 @@ fn static_struct_fields_keep_duplicate_and_fused_admission_checks() {
     assert_eq!(calls.get(), 0);
 }
 #[test]
-fn prepared_value_contracts_are_owned_and_value_contract_reads_stay_two_words() {
-    // A prepared value contract outlives its document, resources and evaluator, across threads.
+fn contextual_schemas_and_prepared_validators_own_their_inputs() {
     fn owned<T: Clone + Send + Sync + 'static>() {}
     owned::<PreparedValueContract>();
-    fn borrowed<T: Copy + Send + Sync>() {}
-    borrowed::<ValueContract<'static>>();
-    // Asking whether an operation declares a contract costs what reading its exact
-    // schema did: both answers are two machine words.
+    owned::<Schema>();
+    let schema = {
+        let document =
+            Document::parse(r#"{"openbindings":"0.2.0","operations":{"read":{"input":false}}}"#)
+                .unwrap();
+        let proof = document.validate().unwrap().conformant().unwrap();
+        proof.resolve_operation("read").unwrap().input().unwrap()
+    };
+    assert_eq!(schema.json().text(), "false");
     assert_eq!(
-        std::mem::size_of::<Option<ValueContract<'static>>>(),
-        std::mem::size_of::<Option<JsonRef<'static>>>()
+        schema.location().pointer.as_str(),
+        Some("/operations/read/input")
     );
+    assert!(schema.document().resolve_operation("read").is_some());
 }
+
 #[test]
 fn version_refusals_are_built_only_for_unsupported_declarations() {
     // A tool checking a declaration before any document exists refuses with the

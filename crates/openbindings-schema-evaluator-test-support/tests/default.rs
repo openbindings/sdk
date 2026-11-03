@@ -1,29 +1,9 @@
 use openbindings::*;
 use openbindings_schema_evaluator_test_support::*;
 use std::sync::Arc;
-// The default evaluator's qualified limitations. It decides the four cases of
-// those capabilities whose verdicts do not depend on a property escape's match.
-fn default_options() -> Options {
-    let mut options = Options::without(&[
-        "unicode-property-matching",
-        "backtracking-pattern-matching",
-        "undefined-results",
-    ]);
-    options.permitted_refusals.retain(|id, _| {
-        !id.starts_with("suite/draft2020-12/patternProperties.json#5/")
-            && !matches!(
-                id.as_str(),
-                "adversarial/lazy-pattern-properties/0" | "adversarial/lazy-pattern-properties/1"
-            )
-    });
-    options
-}
 #[test]
 fn pinned_suite_and_adversarial_contracts() {
-    let report = run(
-        &openbindings_json_schema_evaluator::DefaultEvaluator::new(),
-        &default_options(),
-    );
+    let report = run(&openbindings_json_schema_evaluator::DefaultEvaluator::new());
     for observation in &report.observations {
         if !observation.failures.is_empty() {
             eprintln!(
@@ -33,20 +13,8 @@ fn pinned_suite_and_adversarial_contracts() {
         }
     }
     assert!(report.is_success(), "{:?}", report.configuration_failures);
-    assert_eq!(report.observations.len(), 1564);
-    // 30 permitted refusals, with 11 more for its pattern engine and its
-    // undefined results: 10 undefined results and one lookahead. The values a
-    // property-escape `patternProperties` name does not reach, and those
-    // whose verdict holds whether the name matches or not, are decided.
-    assert_eq!(report.refusal_count(), 41);
-    assert_eq!(
-        report
-            .observations
-            .iter()
-            .filter(|o| matches!(o.outcome, Some(ValueOutcome::Undefined { .. })))
-            .count(),
-        0
-    );
+    assert_eq!(report.observations.len(), 1546);
+    assert_eq!(report.refusal_count(), 0);
 }
 #[test]
 fn controls_reject_wrong_verdict_refusal_and_bogus_paths() {
@@ -57,7 +25,7 @@ fn controls_reject_wrong_verdict_refusal_and_bogus_paths() {
         .unwrap();
     let case = &group.cases[0];
     let value = JsonValue::parse(&case.value).unwrap();
-    assert!(!judge(case, &value, &ValueOutcome::Satisfies, false).is_empty());
+    assert!(!judge(case, &value, &ValueOutcome::Satisfies).is_empty());
     let refusal = ValueOutcome::NoVerdict {
         detail: NoVerdict::new(
             NoVerdictReason::Cancelled,
@@ -65,7 +33,7 @@ fn controls_reject_wrong_verdict_refusal_and_bogus_paths() {
             "not actually cancelled",
         ),
     };
-    assert!(!judge(case, &value, &refusal, true).is_empty());
+    assert!(!judge(case, &value, &refusal).is_empty());
     let schema = SchemaLocation::new(None, "/operations/op/input".parse().unwrap());
     let failure = |instance: &str| ValueOutcome::Fails {
         message: "value does not satisfy the value contract".into(),
@@ -78,9 +46,9 @@ fn controls_reject_wrong_verdict_refusal_and_bogus_paths() {
         problems_complete: true,
     };
     for path in ["/absent", "", "/a/absent"] {
-        assert!(!judge(case, &value, &failure(path), false).is_empty());
+        assert!(!judge(case, &value, &failure(path)).is_empty());
     }
-    assert!(judge(case, &value, &failure("/a"), false).is_empty());
+    assert!(judge(case, &value, &failure("/a")).is_empty());
 }
 
 /// An adapter can consume original source identity without depending on a bundler.
@@ -104,7 +72,7 @@ impl SchemaEvaluator for OriginalContextAdapter {
 }
 #[test]
 fn external_adapter_receives_original_context_and_passes_the_kit() {
-    let report = run(&OriginalContextAdapter, &default_options());
+    let report = run(&OriginalContextAdapter);
     assert!(report.is_success());
 }
 struct Wrong;
@@ -124,25 +92,10 @@ impl PreparedSchema for WrongPrepared {
     }
 }
 #[test]
-fn controls_exercise_real_runner_and_reject_bad_options() {
-    let mut options = Options::default();
-    options
-        .permitted_refusals
-        .insert("not-a-case".into(), "unsupported".into());
-    let report = run(&Wrong, &options);
+fn controls_exercise_real_runner_and_reject_wrong_answers() {
+    let report = run(&Wrong);
     assert!(!report.is_success());
-    assert!(
-        report
-            .configuration_failures
-            .iter()
-            .any(|s| s.contains("unknown"))
-    );
-    assert!(
-        report
-            .configuration_failures
-            .iter()
-            .any(|s| s.contains("unused"))
-    );
+    assert!(report.configuration_failures.is_empty());
     assert!(report.observations.iter().any(|o| !o.failures.is_empty()));
 }
 
@@ -270,7 +223,7 @@ fn real_runner_rejects_malformed_outcomes_fabricated_sources_and_broad_refusals(
         Fault::InterruptedSatisfies,
         Fault::SourceRootedInstance,
     ] {
-        let report = run(&FaultyAdapter(fault), &default_options());
+        let report = run(&FaultyAdapter(fault));
         assert!(!report.is_success(), "missed {fault:?}");
         assert!(report.observations.iter().any(|o| !o.failures.is_empty()));
     }
@@ -294,10 +247,7 @@ impl SchemaEvaluator for LeakyAdapter {
 }
 #[test]
 fn real_runner_rejects_cross_context_compiled_state_leaks() {
-    let report = run(
-        &LeakyAdapter(std::sync::Mutex::new(None)),
-        &Options::default(),
-    );
+    let report = run(&LeakyAdapter(std::sync::Mutex::new(None)));
     assert!(!report.is_success());
     assert!(report.observations.iter().any(|o| !o.failures.is_empty()));
 }
@@ -335,15 +285,11 @@ fn cheap_checks_report_no_problems_and_agree_with_explanations() {
     }
 }
 #[test]
-fn optional_capability_declaration_does_not_authorize_other_refusal_reasons() {
-    let case = suite()
-        .groups
-        .iter()
-        .flat_map(|g| &g.cases)
-        .find(|c| c.optional_capability.is_some())
-        .unwrap();
+fn capability_refusals_are_gaps_for_every_finite_semantic_case() {
+    let case = &suite().groups[0].cases[0];
     let value = JsonValue::parse(&case.value).unwrap();
     for reason in [
+        NoVerdictReason::UnsupportedCapability,
         NoVerdictReason::ConservativePreparation,
         NoVerdictReason::ResourceUnavailable,
         NoVerdictReason::Cancelled,
@@ -353,126 +299,31 @@ fn optional_capability_declaration_does_not_authorize_other_refusal_reasons() {
         let outcome = ValueOutcome::NoVerdict {
             detail: NoVerdict::new(reason, "refusal", "cannot establish"),
         };
-        assert!(!judge(case, &value, &outcome, true).is_empty());
+        assert!(!judge(case, &value, &outcome).is_empty());
     }
 }
 
 #[test]
-fn undefined_is_an_answer_and_declining_it_needs_the_declaration() {
-    let case = suite()
-        .groups
-        .iter()
-        .flat_map(|g| &g.cases)
-        .find(|c| c.expected == "undefined")
-        .unwrap();
-    assert_eq!(
-        case.optional_capability.as_deref(),
-        Some("undefined-results")
-    );
+fn undefined_is_an_answer_and_declining_it_is_not_that_answer() {
+    let mut case = suite().groups[0].cases[0].clone();
+    case.expected = "undefined".into();
     let value = JsonValue::parse(&case.value).unwrap();
     let outcome = ValueOutcome::Undefined {
         detail: UndefinedResult::new("proof", "established undefined result"),
     };
-    assert!(judge(case, &value, &outcome, false).is_empty());
-    let refusal = |reason| ValueOutcome::NoVerdict {
-        detail: NoVerdict::new(reason, "unknown", "not proved"),
+    assert!(judge(&case, &value, &outcome).is_empty());
+    let refusal = ValueOutcome::NoVerdict {
+        detail: NoVerdict::new(
+            NoVerdictReason::ConservativePreparation,
+            "unknown",
+            "not proved",
+        ),
     };
-    // Declining to establish the undefined result is the stated refusal, and
-    // only with the caller's declaration.
-    assert!(
-        !judge(
-            case,
-            &value,
-            &refusal(NoVerdictReason::ConservativePreparation),
-            false
-        )
-        .is_empty()
-    );
-    assert!(
-        judge(
-            case,
-            &value,
-            &refusal(NoVerdictReason::ConservativePreparation),
-            true
-        )
-        .is_empty()
-    );
-    assert!(
-        !judge(
-            case,
-            &value,
-            &refusal(NoVerdictReason::UnsupportedCapability),
-            true
-        )
-        .is_empty()
-    );
-    let optional = suite()
-        .groups
-        .iter()
-        .flat_map(|g| &g.cases)
-        .find(|c| c.optional_capability.as_deref() == Some("unicode-property-matching"))
-        .unwrap();
-    assert!(
-        !judge(
-            optional,
-            &JsonValue::parse(&optional.value).unwrap(),
-            &outcome,
-            true
-        )
-        .is_empty()
-    );
+    assert!(!judge(&case, &value, &refusal).is_empty());
     let unexplained = ValueOutcome::Undefined {
         detail: UndefinedResult::new("", ""),
     };
-    assert!(!judge(case, &value, &unexplained, false).is_empty());
-}
-
-#[test]
-fn other_dialect_cases_accept_the_specification_verdict_or_a_truthful_refusal() {
-    // A schema reached through an external URI follows its own dialect, so a
-    // capable evaluator answers with JSON Schema's verdict; one that does not
-    // read the dialect may refuse it, needing no declaration.
-    let cases: Vec<_> = suite()
-        .groups
-        .iter()
-        .flat_map(|g| &g.cases)
-        .filter(|c| {
-            c.optional_capability.is_none()
-                && c.expected != "no-verdict"
-                && c.refusal_kind.as_deref() == Some("unsupported-capability")
-        })
-        .collect();
-    assert_eq!(cases.len(), 10);
-    let failure = || ValueOutcome::Fails {
-        message: "value does not satisfy the value contract".into(),
-        problems: vec![],
-        problems_complete: false,
-    };
-    let refusal = |reason| ValueOutcome::NoVerdict {
-        detail: NoVerdict::new(reason, "schema-dialect", "the dialect is not read"),
-    };
-    for case in cases {
-        let value = JsonValue::parse(&case.value).unwrap();
-        let (right, wrong) = match case.expected.as_str() {
-            "satisfies" => (ValueOutcome::Satisfies, failure()),
-            "fails" => (failure(), ValueOutcome::Satisfies),
-            other => panic!("{other}"),
-        };
-        assert!(judge(case, &value, &right, false).is_empty(), "{}", case.id);
-        assert!(
-            !judge(case, &value, &wrong, false).is_empty(),
-            "{}",
-            case.id
-        );
-        let truthful = refusal(NoVerdictReason::UnsupportedCapability);
-        assert!(
-            judge(case, &value, &truthful, false).is_empty(),
-            "{}",
-            case.id
-        );
-        let other = refusal(NoVerdictReason::ConservativePreparation);
-        assert!(!judge(case, &value, &other, true).is_empty(), "{}", case.id);
-    }
+    assert!(!judge(&case, &value, &unexplained).is_empty());
 }
 
 #[test]
@@ -491,13 +342,13 @@ fn format_is_an_annotation_where_the_assertion_vocabulary_is_declared_false() {
         .unwrap();
     assert_eq!(case.expected, "satisfies");
     let value = JsonValue::parse(&case.value).unwrap();
-    assert!(judge(case, &value, &ValueOutcome::Satisfies, false).is_empty());
+    assert!(judge(case, &value, &ValueOutcome::Satisfies).is_empty());
     let failure = ValueOutcome::Fails {
         message: "value does not satisfy the value contract".into(),
         problems: vec![],
         problems_complete: false,
     };
-    assert!(!judge(case, &value, &failure, false).is_empty());
+    assert!(!judge(case, &value, &failure).is_empty());
     let refusal = ValueOutcome::NoVerdict {
         detail: NoVerdict::new(
             NoVerdictReason::UnsupportedCapability,
@@ -505,5 +356,5 @@ fn format_is_an_annotation_where_the_assertion_vocabulary_is_declared_false() {
             "the dialect is not read",
         ),
     };
-    assert!(judge(case, &value, &refusal, false).is_empty());
+    assert!(!judge(case, &value, &refusal).is_empty());
 }

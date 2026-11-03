@@ -812,6 +812,14 @@ impl WasmConformantDocument {
     pub fn schema(&self, key: &str) -> Result<Option<WasmJson>, JsValue> {
         self.document().schema(key)
     }
+    #[wasm_bindgen(js_name=ownedSchema)]
+    pub fn owned_schema(&self, key: &str) -> Result<Option<WasmSchema>, JsValue> {
+        Ok(self
+            .handle
+            .proof("document-conformance")?
+            .schema(key)
+            .map(|schema| WasmSchema { schema }))
+    }
     pub fn operations(&self) -> Result<String, JsValue> {
         self.document().operations()
     }
@@ -931,8 +939,8 @@ impl WasmDocument {
                     Err(exact) => PointerRef::from(exact),
                 };
                 match value {
-                    Some(value) => Edit::Set { pointer, value },
-                    None => Edit::Remove { pointer },
+                    Some(value) => Edit::set_at(pointer, value.clone()),
+                    None => Edit::remove_at(pointer),
                 }
             })
             .collect();
@@ -1444,10 +1452,10 @@ impl WasmConformantOperation {
             value: self.operation.value().to_owned(),
         }
     }
-    pub fn input(&self) -> Option<WasmValueContract> {
+    pub fn input(&self) -> Option<WasmSchema> {
         self.contract(Side::Input)
     }
-    pub fn output(&self) -> Option<WasmValueContract> {
+    pub fn output(&self) -> Option<WasmSchema> {
         self.contract(Side::Output)
     }
     // Proof establishes these shapes; exact tokens come from the original members.
@@ -1489,26 +1497,25 @@ impl WasmConformantOperation {
     }
 }
 impl WasmConformantOperation {
-    fn contract(&self, side: Side) -> Option<WasmValueContract> {
-        WasmValueContract::select(&self.operation, side)?;
-        Some(WasmValueContract {
-            operation: self.operation.clone(),
-            side,
-        })
+    fn contract(&self, side: Side) -> Option<WasmSchema> {
+        let schema = match side {
+            Side::Input => self.operation.input(),
+            Side::Output => self.operation.output(),
+        }?;
+        Some(WasmSchema { schema })
     }
 }
 /// One declared value contract, retained with its proved operation.
 #[wasm_bindgen]
-pub struct WasmValueContract {
-    operation: ConformantOperationView,
-    side: Side,
+pub struct WasmSchema {
+    schema: Schema,
 }
-impl std::fmt::Debug for WasmValueContract {
+impl std::fmt::Debug for WasmSchema {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("WasmValueContract").finish_non_exhaustive()
+        f.debug_struct("WasmSchema").finish_non_exhaustive()
     }
 }
-impl WasmValueContract {
+impl WasmSchema {
     fn prepare_in(
         &self,
         resources: &ResourceSet,
@@ -1517,29 +1524,19 @@ impl WasmValueContract {
     ) -> Result<WasmPreparation, JsValue> {
         let evaluator = evaluator(limits)?;
         Ok(WasmPreparation {
-            preparation: Some(self.contract().prepare_with_control(
+            preparation: Some(self.schema.prepare_with_control(
                 &evaluator,
                 resources,
                 &control(cancelled),
             )),
         })
     }
-    fn select(operation: &ConformantOperationView, side: Side) -> Option<ValueContract<'_>> {
-        match side {
-            Side::Input => operation.input(),
-            Side::Output => operation.output(),
-        }
-    }
-    fn contract(&self) -> ValueContract<'_> {
-        Self::select(&self.operation, self.side)
-            .expect("a handle exists only for a declared contract")
-    }
 }
 #[wasm_bindgen]
-impl WasmValueContract {
-    pub fn schema(&self) -> WasmJson {
+impl WasmSchema {
+    pub fn json(&self) -> WasmJson {
         WasmJson {
-            value: self.contract().schema().to_owned(),
+            value: self.schema.json(),
         }
     }
     /// Prepare without supplied resources, sharing one empty set.
@@ -1561,10 +1558,9 @@ impl WasmValueContract {
         self.prepare_in(&resources.resources, limits, cancelled)
     }
     #[must_use]
-    pub fn retain(&self) -> WasmValueContract {
+    pub fn retain(&self) -> WasmSchema {
         Self {
-            operation: self.operation.clone(),
-            side: self.side,
+            schema: self.schema.clone(),
         }
     }
 }

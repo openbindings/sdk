@@ -1,5 +1,5 @@
-//! Static inspection through documented library APIs. Resource selection is
-//! embedding/input policy; all ordinary pointer and anchor lookups are delegated.
+//! Static inspection with original contained-resource identity and fragment
+//! lookup. External carriers use documented library APIs under input policy.
 use super::*;
 use jsonschema::{Draft, Registry, Retrieve, Uri};
 use serde_json::Value;
@@ -466,6 +466,20 @@ impl SchemaSpace {
         base: &str,
         found: impl FnOnce(Lookup<&str>),
     ) {
+        // OBI-13 comparison preserves spelling. Select a contained resource
+        // by that comparison before asking the library for normalized aliases.
+        // Fragment lookup retains that selected carrier's resource boundary.
+        if let Some(compared) = uri::compared_id(Some(base), reference) {
+            let name = compared
+                .split_once('#')
+                .map_or(compared.as_str(), |(name, _)| name);
+            if self
+                .name(name)
+                .is_some_and(|selection| selection.exact_contained)
+            {
+                return found(Lookup::Name(name));
+            }
+        }
         let absolute = Uri::parse(base)
             .ok()
             .and_then(|base| registry.resolve_uri(&base, reference).ok());
@@ -665,8 +679,83 @@ impl SchemaSpace {
         }
         targets
     }
-    fn inspect_carrier(&self, resource_id: usize, queries: Queries) -> Targets {
+    // Fragment interpretation within a selected contained resource uses the
+    // original inventory. URI-library normalization must not merge a nested
+    // resource's anchors into its parent's independently compared identity.
+    fn contained_target(&self, resource_id: usize, reference: &str) -> Result<Target, Refusal> {
+        let resource = self.resource(resource_id);
+        let root = resource.root.expect("contained resource root");
+        let fragment = reference
+            .split_once('#')
+            .map_or("", |(_, fragment)| fragment);
+        let decoded = uri::decode_fragment(fragment).ok_or_else(|| {
+            Refusal::invalid(
+                "invalid-reference-fragment",
+                "the URI fragment cannot be decoded as scalar text",
+            )
+        })?;
+        if decoded.is_empty() {
+            return Ok(Target {
+                node: root,
+                dynamic_name: None,
+            });
+        }
+        if decoded.starts_with('/') {
+            let node = &self.node(root);
+            let selected = node
+                .value
+                .at(&decoded)
+                .filter(|value| matches!(value.kind(), JsonKind::Object | JsonKind::Boolean))
+                .and_then(|value| {
+                    self.source(node.source)
+                        .positions
+                        .get(&ref_id(value))
+                        .copied()
+                });
+            return selected
+                .map(|node| Target {
+                    node,
+                    dynamic_name: None,
+                })
+                .ok_or_else(|| {
+                    Refusal::invalid(
+                        "non-schema-target",
+                        "resource pointer does not identify an indexed schema",
+                    )
+                    .semantic(StaticReferenceDefect::PointerToNoSchema)
+                });
+        }
+        match resource.anchors.get(&decoded).map(Vec::as_slice) {
+            Some([(node, dynamic)]) => Ok(Target {
+                node: *node,
+                dynamic_name: dynamic.then_some(decoded),
+            }),
+            Some(_) => Err(Refusal::invalid(
+                "ambiguous-anchor",
+                "resource declares this plain name more than once",
+            )
+            .semantic(StaticReferenceDefect::DuplicatePlainName)),
+            None => Err(
+                Refusal::invalid("anchor-missing", "resource declares no such plain name")
+                    .semantic(StaticReferenceDefect::MissingPlainName),
+            ),
+        }
+    }
+    fn inspect_carrier(&self, resource_id: usize, mut queries: Queries) -> Targets {
         let mut targets = Targets::new();
+        if self.resource(resource_id).origin == ResourceOrigin::Contained {
+            queries.references.retain(|key| {
+                let reference = self.inspection_reference(*key);
+                if !uri::valid(reference) {
+                    return true; // The malformed-reference isolation check still runs below.
+                }
+                targets.insert(*key, self.contained_target(resource_id, reference));
+                false
+            });
+            if queries.references.is_empty() {
+                return targets;
+            }
+        }
 
         let resource = self.resource(resource_id);
         let Some(root) = resource.root else {

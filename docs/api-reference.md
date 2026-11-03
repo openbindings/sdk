@@ -77,7 +77,7 @@ inspected target's binding as it is, or assign the author's keys with
 
 Input records, which callers build and the SDK reads, keep struct-literal
 construction: typed authoring parts and `BindingValue`, `SchemaResource`,
-`JsonLimits`, evaluator `Limits`, kit `Options`, discovery `ClientOptions`,
+`JsonLimits`, evaluator `Limits`, discovery `ClientOptions`,
 `PublicationOptions`, `HttpResponse`, synthesis requests, invocation carriers and
 `InvocationLimits`. Add `..Default::default()` where a record implements
 `Default`. Discovery's `Header`, a name and a value built on both sides, stays
@@ -131,8 +131,8 @@ for diagnostics and are refused by typed interpretation, editing and proof.
 | `validateDocument(bytes, { limits })` | Assesses exact source directly, including text that is not JSON, and returns a `DocumentReport`: plain data with a `report` or `version-refused` branch and no handle to dispose. Without `limits` it admits as Rust's `validate_document` does; with them, as `validate_document_with_limits` does. |
 | `parseJson(bytes, { limits })` | Rust's `JsonValue::parse_with_limits`: an `ExactJson` or `input-error`. A value past the default limits is checked by parsing it here with larger limits and passing the `ExactJson` to `validate` or `explain`. |
 | `ConformantDocument` | Nominal, privately constructed proof with infallible typed reads. `resolveOperation(name)` returns a `ConformantOperationView` or `undefined`. It has no setters and does not inherit `Document`. |
-| `ConformantOperationView` | `input()` and `output()` return a disposable `ValueContract` or `undefined`; the plain `OperationView` of a `Document` returns exact values instead. Both views have `retain()`. |
-| `ValueContract` | `schema()` acquires the exact schema; `prepare(options)` takes `resources`, `limits` and `signal` and returns `{ status: "ready", valueContract }` or `{ status: "no-verdict", detail }`. |
+| `ConformantOperationView` | `input()` and `output()` return a disposable `Schema` or `undefined`; the plain `OperationView` of a `Document` returns exact values instead. Both views have `retain()`. |
+| `Schema` | `json()` acquires the exact schema; `prepare(options)` takes `resources`, `limits` and `signal` and returns `{ status: "ready", valueContract }` or `{ status: "no-verdict", detail }`. |
 | `PreparedValueContract` | Disposable prepared value contract with `validate(value, options)`, the cheap check, `explain(value, options)`, which adds problems to a failure, and `retain()`; independent of its document, operation, resources and contract owners. `validateJson(input, options)` is Rust's `validate_json`: it admits JSON text or bytes as `parseJson` does and returns a `JsonCheck`, whose `input-error` carries the `parseJson` error. `validate` reads a string as a JSON string value. |
 | `ExactJson.locate(pointer)`, `ConformantDocument.locate(at)`, `SchemaResources.locate(at)` | The `SourceLocation` of the node a problem's instance pointer or a `SchemaLocation` names, in the value, the document or the supplied resource with its URI, or `null`. A malformed pointer throws `SdkError` with code `invalid-pointer`, and a malformed schema location with code `invalid-schema-location`. |
 | `asDocument()`, `intoDocument()` | Acquire an independent immutable document owner, or consume the proof. Consumption revokes all JavaScript aliases of that proof; retained owners survive. |
@@ -143,24 +143,19 @@ revision independently, so editing an owner does not change an acquired view or
 proof. `EditError.code` reports stable editing refusals; typed-part input errors
 also expose `partPointer` without inventing source coordinates.
 
-For construction, Rust's `Edit::SetOperations`, `SetDependencies`, `SetSources`
-and `SetBindings` variants each borrow a typed map through their `value` field.
-They can share an `edit(&[Edit])` batch with `Set` and `Remove`. This extends the
-existing enum and whole-map setters without a separate builder or unrestricted
-serialization API. TypeScript mirrors them as `set-operations`, `set-dependencies`,
-`set-sources` and `set-bindings` discriminants with a `value` map. One batch crosses
-the bridge once and commits one revision. Known byte extents are preflighted;
-typed parts serialize once into a bounded writer that reserves all remaining
-known bytes and stops before exceeding the budget. A refusal discards that buffer.
+Rust edits own their decoded path and exact value: `Edit::set(&["sources", key], value)`
+and `Edit::remove(&["sources", key])` can be retained and reused across snapshots.
+`set_at` and `remove_at` also retain RFC 6901 pointers, including exact UTF-16 pointers
+from findings. An atomic batch returns a new document and preserves earlier owners.
 
 ## Rust value contracts
 
 | Public item | Contract |
 | --- | --- |
-| `ConformantOperationView::input(&self)`, `output(&self) -> Option<ValueContract<'_>>` | The operation's declared value contract, or `None` when the field is absent. Reading prepares nothing. Only a conformant view hands one out; a plain `OperationView` returns the exact `JsonRef`. |
-| `ValueContract::schema(&self) -> JsonRef<'a>` | The exact unprepared schema; present `true`, `false` and objects remain distinct. |
-| `ValueContract::prepare(&self, &dyn SchemaEvaluator) -> Result<PreparedValueContract, NoVerdict>` | Prepares with no supplied resources. A `&DefaultEvaluator` coerces; the evaluator is borrowed for the call. |
-| `ValueContract::prepare_with(&self, &dyn SchemaEvaluator, &ResourceSet)`, `prepare_with_control(.., &dyn WorkControl)` | The same with immutable supplied resources and cooperative cancellation. A refusal judges no instance and does not prove undefinedness. |
+| `ConformantOperationView::input(&self)`, `output(&self) -> Option<Schema>` | The operation's declared value contract, or `None` when the field is absent. Reading prepares nothing. Only a conformant view hands one out; a plain `OperationView` returns the exact `JsonRef`. |
+| `Schema::json(&self) -> JsonValue` | The exact unprepared schema; present `true`, `false` and objects remain distinct. |
+| `Schema::prepare(&self, &dyn SchemaEvaluator) -> Result<PreparedValueContract, NoVerdict>` | Prepares with no supplied resources. A `&DefaultEvaluator` coerces; the evaluator is borrowed for the call. |
+| `Schema::prepare_with(&self, &dyn SchemaEvaluator, &ResourceSet)`, `prepare_with_control(.., &dyn WorkControl)` | The same with immutable supplied resources and cooperative cancellation. A refusal judges no instance and does not prove undefinedness. |
 | `PreparedValueContract::validate_json(input: impl AsRef<[u8]>) -> Result<ValueOutcome, InputError>` | Admits through `JsonValue::parse` with default limits, then validates. `Err` is admission failure only; all four value outcomes are `Ok`. Duplicate members yield no-verdict and numbers retain exact semantics. An exceeded limit's message names the route that admits more: `JsonValue::parse_with_limits`, then `validate` (TypeScript: `parseJson` with `limits`, then `validate`). |
 | `PreparedValueContract::validate(&self, &JsonValue)`, `validate_with_control(.., &dyn WorkControl) -> ValueOutcome` | The cheap check: a failure carries no problems and `problems_complete` is false. |
 | `PreparedValueContract::explain(&self, &JsonValue)`, `explain_with_control(.., &dyn WorkControl) -> ValueOutcome` | The same verdict, with problems that explain a failure. Library-bounded; see [value diagnostics](#value-diagnostics). |
@@ -468,7 +463,7 @@ Raw parser admission codes `byte-limit`, `node-limit` and `depth-limit` remain
 
 ## ConformantDocument document reads
 
-A conformant operation's `input()` and `output()` return its `ValueContract`s;
+A conformant operation's `input()` and `output()` return its `Schema`s;
 `operation::Invoker::new` takes `ConformantDocument`; `with_evaluator` and
 `with_validation_detail(Detail)` return `Self`. Preparation still may refuse, and prepared does not mean decidable.
 `SchemaRequest::document()` exposes the conformant document revision to custom evaluators.
@@ -483,7 +478,7 @@ A conformant operation's `input()` and `output()` return its `ValueContract`s;
 | ConformantDocument dependency `accepts_kind(kind)` | Takes `&str` and compares decoded text, independent of escape spelling |
 | `schemas()`, `schema(key)` | Optional exact object/boolean schema views; no preparation |
 | `operations()`, `resolve_operation(name)` | Retained `ConformantOperationView` vector or optional selection |
-| ConformantDocument operation `input()`, `output()` | Optional `ValueContract`; `schema()` borrows the exact schema without preparation |
+| ConformantDocument operation `input()`, `output()` | Optional `Schema`; `schema()` borrows the exact schema without preparation |
 | `bindings()`, `sources()`, `dependencies()` and keyed reads | Optional retained `ConformantBindingView`, `ConformantSourceView`, `ConformantDependencyView`; absent differs from present-empty |
 | ConformantDocument operation `examples()` and `example(key)` | Retained `ConformantExampleView`; example truth is not implied |
 

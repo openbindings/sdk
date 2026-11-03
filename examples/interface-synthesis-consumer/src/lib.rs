@@ -18,6 +18,10 @@ pub struct Catalog {
     pub calls: AtomicUsize,
     pub single_source: bool,
 }
+fn encode_edit(value: &impl serde::Serialize) -> Result<JsonValue, openbindings::EditError> {
+    let bytes = serde_json::to_vec(value).map_err(|_| openbindings::EditError::Serialization)?;
+    JsonValue::parse(bytes).map_err(openbindings::EditError::from)
+}
 fn failure(kind: SynthesisErrorKind, message: &str) -> SynthesisError {
     SynthesisError::new(kind, "example.catalog.refused", message)
 }
@@ -238,23 +242,18 @@ pub fn derive(
     .map(|(pointer, text)| JsonValue::string(text).map(|value| (pointer, value)))
     .collect::<Result<Vec<_>, _>>()
     .map_err(openbindings::EditError::from)?;
-    let mut edits = vec![Edit::SetOperations { value: &operations }];
-    edits.extend(text_fields.iter().map(|(pointer, value)| Edit::Set {
-        pointer: (*pointer).into(),
-        value,
-    }));
+    let mut edits = vec![Edit::set(&["operations"], encode_edit(&operations)?)];
+    edits.extend(text_fields.iter().map(|(pointer, value)| Edit::set_at(*pointer, value.clone())));
     if !dependencies.is_empty() {
-        edits.push(Edit::SetDependencies {
-            value: &dependencies,
-        });
+        edits.push(Edit::set(&["dependencies"], encode_edit(&dependencies)?));
     }
     if !sources.is_empty() {
-        edits.push(Edit::SetSources { value: &sources });
+        edits.push(Edit::set(&["sources"], encode_edit(&sources)?));
     }
     if !bindings.is_empty() {
-        edits.push(Edit::SetBindings { value: &bindings });
+        edits.push(Edit::set(&["bindings"], encode_edit(&bindings)?));
     }
-    doc.edit(&edits)?;
+    doc = doc.edit(&edits)?;
     let coverage = if exhaustive {
         CoverageClaim::complete(entries)
     } else {

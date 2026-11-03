@@ -1,0 +1,84 @@
+{
+  "status": "adjudicated",
+  "scope": "Auxiliary fixture admission partition only; no candidate evaluation claim",
+  "spec_revision": "c1419c9fc3ae5a00c2b83da710c11bf67dab7934",
+  "baseline_sdk_revision": "18a66957d038431a5caf0db340d96f60bc1decdf",
+  "total_cases": 2348,
+  "negative_admission_cases": 194,
+  "retained_value_cases": 2154,
+  "negative_unique_documents": 107,
+  "required_rule_counts": {
+    "OBI-12": 194
+  },
+  "per_file": {
+    "reference-matrix.json": {
+      "retain-value-case": 1050,
+      "negative-document-admission": 36
+    },
+    "reference-completions.json": {
+      "negative-document-admission": 158,
+      "retain-value-case": 1104
+    }
+  },
+  "negative_families": {
+    "reference-matrix.json": {
+      "pointer-missing": 4,
+      "pointer-scalar": 4,
+      "pointer-object": 4,
+      "pointer-invalid": 4,
+      "anchor-missing": 4,
+      "anchor-duplicate": 4,
+      "anchor-mixed-duplicate": 4,
+      "dynamicRef-anchor-missing": 4,
+      "dynamicRef-anchor-duplicate": 4
+    },
+    "reference-completions.json": {
+      "pointer-missing": 8,
+      "pointer-scalar": 8,
+      "pointer-object": 8,
+      "pointer-invalid": 8,
+      "anchor-missing": 8,
+      "anchor-duplicate": 8,
+      "anchor-mixed-duplicate": 8,
+      "influence": 41,
+      "semantic-differential": 48,
+      "migration": 13
+    }
+  },
+  "witness_defects": {
+    "missing-pointer-target": 13,
+    "non-schema-value": 12,
+    "non-schema-location": 23,
+    "invalid-json-pointer": 13,
+    "missing-anchor": 155,
+    "ambiguous-anchor": 30
+  },
+  "control_count": 76,
+  "control_mismatches": [],
+  "ambiguous_admission_decisions": [],
+  "sdk_corroboration_count": 2348,
+  "sdk_mismatches": [],
+  "completion_links": 316,
+  "completion_links_to_negative_partial": 250,
+  "differential_groups": 96,
+  "differential_groups_with_negative_partial": 48,
+  "sources": [
+    {
+      "file": "reference-matrix.json",
+      "case_count": 1086,
+      "sha256": "941ddfb38656d0d0cd5438ec5c7b86ae78796d4a3b43d541841bf8678536d7f4",
+      "baseline_sdk_revision": "18a66957d038431a5caf0db340d96f60bc1decdf",
+      "matches_sdk_at_review": true,
+      "preserved_original": "originals/reference-matrix.json"
+    },
+    {
+      "file": "reference-completions.json",
+      "case_count": 1262,
+      "sha256": "7cdea4140c22a558de8b7d1511635abb9e45f0bb66e67ddad1762dcbcf1cc851",
+      "baseline_sdk_revision": "18a66957d038431a5caf0db340d96f60bc1decdf",
+      "matches_sdk_at_review": true,
+      "preserved_original": "originals/reference-completions.json"
+    }
+  ],
+  "aid_sha256": "3eae697039ce16923be2d30b993bc27488b33d3720ef5170ead844620281eabb"
+}

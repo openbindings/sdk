@@ -35,7 +35,7 @@ test("Rust proof transfer is single-use and unavailable to parsed or forged hand
   const operation = retained.resolveOperation("go");
   assert.ok(operation instanceof bridge.WasmConformantOperation);
   const contract = operation.input();
-  assert.ok(contract instanceof bridge.WasmValueContract);
+  assert.ok(contract instanceof bridge.WasmSchema);
   const preparation = contract.prepareWith(resources, "{}", false);
   assert.equal(JSON.parse(preparation.result()).status, "ready");
   preparation.free();
@@ -279,8 +279,8 @@ test("validated text and retained reads preserve decoded text and presence", () 
   const example = operation.example("e");
   const inputContract = operation.input(),
     outputContract = operation.output();
-  const input = inputContract.schema(),
-    output = outputContract.schema();
+  const input = inputContract.json(),
+    output = outputContract.json();
   inputContract.dispose();
   outputContract.dispose();
   const exampleInput = example.input();
@@ -294,7 +294,14 @@ test("validated text and retained reads preserve decoded text and presence", () 
   assert.equal(output.text, "false");
   assert.equal(exampleInput.text, "null");
   assert.deepEqual(
-    [...schemas.values()].map((v) => v.text),
+    [...schemas.values()].map((v) => {
+      const json = v.json();
+      try {
+        return json.text;
+      } finally {
+        json.dispose();
+      }
+    }),
     ["false", "{}", "true"],
   );
   for (const value of [input, output, exampleInput, ...schemas.values()])

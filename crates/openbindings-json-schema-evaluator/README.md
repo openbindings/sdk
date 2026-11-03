@@ -49,11 +49,11 @@ Configure the evaluator or supply resources with `prepare_with`. The evaluator i
 borrowed for the call, and one `ResourceSet` can serve many preparations:
 
 ```rust,edition2024
-use openbindings::{NoVerdict, PreparedValueContract, ResourceSet, ValueContract};
+use openbindings::{NoVerdict, PreparedValueContract, ResourceSet, Schema};
 use openbindings_json_schema_evaluator::{DefaultEvaluator, Limits};
 
 fn with_resources(
-    contract: ValueContract<'_>,
+    contract: Schema,
     resources: &ResourceSet,
 ) -> Result<PreparedValueContract, NoVerdict> {
     let evaluator = DefaultEvaluator::with_limits(Limits {

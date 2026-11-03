@@ -1,0 +1,7097 @@
+[
+  {
+    "id": "case-and-port/siblings/order0/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://Ex.invalid:443/a"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://Ex.invalid:443/a",
+          "type": "string"
+        },
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "type": "integer"
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "case-and-port/siblings/order0/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/a"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://Ex.invalid:443/a",
+          "type": "string"
+        },
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "type": "integer"
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "case-and-port/siblings/order1/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://Ex.invalid:443/a"
+          }
+        }
+      },
+      "schemas": {
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "type": "integer"
+        },
+        "A": {
+          "$id": "https://Ex.invalid:443/a",
+          "type": "string"
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "case-and-port/siblings/order1/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/a"
+          }
+        }
+      },
+      "schemas": {
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "type": "integer"
+        },
+        "A": {
+          "$id": "https://Ex.invalid:443/a",
+          "type": "string"
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "case-and-port/nested-under-A/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://Ex.invalid:443/a"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://Ex.invalid:443/a",
+          "type": "string",
+          "$defs": {
+            "B": {
+              "$id": "https://ex.invalid/a",
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "case-and-port/nested-under-A/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/a"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://Ex.invalid:443/a",
+          "type": "string",
+          "$defs": {
+            "B": {
+              "$id": "https://ex.invalid/a",
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "case-and-port/nested-under-B/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://Ex.invalid:443/a"
+          }
+        }
+      },
+      "schemas": {
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "type": "integer",
+          "$defs": {
+            "A": {
+              "$id": "https://Ex.invalid:443/a",
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "case-and-port/nested-under-B/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/a"
+          }
+        }
+      },
+      "schemas": {
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "type": "integer",
+          "$defs": {
+            "A": {
+              "$id": "https://Ex.invalid:443/a",
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "case-and-port/fragment-#slot/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://Ex.invalid:443/a#slot"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://Ex.invalid:443/a",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "string"
+            }
+          }
+        },
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "case-and-port/fragment-#slot/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/a#slot"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://Ex.invalid:443/a",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "string"
+            }
+          }
+        },
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "case-and-port/fragment-#/$defs/value/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://Ex.invalid:443/a#/$defs/value"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://Ex.invalid:443/a",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "string"
+            }
+          }
+        },
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "case-and-port/fragment-#/$defs/value/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/a#/$defs/value"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://Ex.invalid:443/a",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "string"
+            }
+          }
+        },
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "case-and-port/supplied-alias-https://Ex.invalid:443/a/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://Ex.invalid:443/a"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://Ex.invalid:443/a",
+          "type": "string"
+        },
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "type": "integer"
+        }
+      }
+    },
+    "resources": [
+      {
+        "uri": "https://Ex.invalid:443/a",
+        "document": {
+          "$id": "https://other.invalid/resource",
+          "type": "boolean"
+        }
+      }
+    ],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "case-and-port/supplied-alias-https://Ex.invalid:443/a/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/a"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://Ex.invalid:443/a",
+          "type": "string"
+        },
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "type": "integer"
+        }
+      }
+    },
+    "resources": [
+      {
+        "uri": "https://Ex.invalid:443/a",
+        "document": {
+          "$id": "https://other.invalid/resource",
+          "type": "boolean"
+        }
+      }
+    ],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "case-and-port/supplied-alias-https://ex.invalid/a/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://Ex.invalid:443/a"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://Ex.invalid:443/a",
+          "type": "string"
+        },
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "type": "integer"
+        }
+      }
+    },
+    "resources": [
+      {
+        "uri": "https://ex.invalid/a",
+        "document": {
+          "$id": "https://other.invalid/resource",
+          "type": "boolean"
+        }
+      }
+    ],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "case-and-port/supplied-alias-https://ex.invalid/a/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/a"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://Ex.invalid:443/a",
+          "type": "string"
+        },
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "type": "integer"
+        }
+      }
+    },
+    "resources": [
+      {
+        "uri": "https://ex.invalid/a",
+        "document": {
+          "$id": "https://other.invalid/resource",
+          "type": "boolean"
+        }
+      }
+    ],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "scheme-case/siblings/order0/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "HTTPS://ex.invalid/a"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "HTTPS://ex.invalid/a",
+          "type": "string"
+        },
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "type": "integer"
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "scheme-case/siblings/order0/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/a"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "HTTPS://ex.invalid/a",
+          "type": "string"
+        },
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "type": "integer"
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "scheme-case/siblings/order1/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "HTTPS://ex.invalid/a"
+          }
+        }
+      },
+      "schemas": {
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "type": "integer"
+        },
+        "A": {
+          "$id": "HTTPS://ex.invalid/a",
+          "type": "string"
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "scheme-case/siblings/order1/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/a"
+          }
+        }
+      },
+      "schemas": {
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "type": "integer"
+        },
+        "A": {
+          "$id": "HTTPS://ex.invalid/a",
+          "type": "string"
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "scheme-case/nested-under-A/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "HTTPS://ex.invalid/a"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "HTTPS://ex.invalid/a",
+          "type": "string",
+          "$defs": {
+            "B": {
+              "$id": "https://ex.invalid/a",
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "scheme-case/nested-under-A/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/a"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "HTTPS://ex.invalid/a",
+          "type": "string",
+          "$defs": {
+            "B": {
+              "$id": "https://ex.invalid/a",
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "scheme-case/nested-under-B/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "HTTPS://ex.invalid/a"
+          }
+        }
+      },
+      "schemas": {
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "type": "integer",
+          "$defs": {
+            "A": {
+              "$id": "HTTPS://ex.invalid/a",
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "scheme-case/nested-under-B/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/a"
+          }
+        }
+      },
+      "schemas": {
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "type": "integer",
+          "$defs": {
+            "A": {
+              "$id": "HTTPS://ex.invalid/a",
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "scheme-case/fragment-#slot/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "HTTPS://ex.invalid/a#slot"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "HTTPS://ex.invalid/a",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "string"
+            }
+          }
+        },
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "scheme-case/fragment-#slot/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/a#slot"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "HTTPS://ex.invalid/a",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "string"
+            }
+          }
+        },
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "scheme-case/fragment-#/$defs/value/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "HTTPS://ex.invalid/a#/$defs/value"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "HTTPS://ex.invalid/a",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "string"
+            }
+          }
+        },
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "scheme-case/fragment-#/$defs/value/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/a#/$defs/value"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "HTTPS://ex.invalid/a",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "string"
+            }
+          }
+        },
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "scheme-case/supplied-alias-HTTPS://ex.invalid/a/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "HTTPS://ex.invalid/a"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "HTTPS://ex.invalid/a",
+          "type": "string"
+        },
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "type": "integer"
+        }
+      }
+    },
+    "resources": [
+      {
+        "uri": "HTTPS://ex.invalid/a",
+        "document": {
+          "$id": "https://other.invalid/resource",
+          "type": "boolean"
+        }
+      }
+    ],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "scheme-case/supplied-alias-HTTPS://ex.invalid/a/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/a"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "HTTPS://ex.invalid/a",
+          "type": "string"
+        },
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "type": "integer"
+        }
+      }
+    },
+    "resources": [
+      {
+        "uri": "HTTPS://ex.invalid/a",
+        "document": {
+          "$id": "https://other.invalid/resource",
+          "type": "boolean"
+        }
+      }
+    ],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "scheme-case/supplied-alias-https://ex.invalid/a/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "HTTPS://ex.invalid/a"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "HTTPS://ex.invalid/a",
+          "type": "string"
+        },
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "type": "integer"
+        }
+      }
+    },
+    "resources": [
+      {
+        "uri": "https://ex.invalid/a",
+        "document": {
+          "$id": "https://other.invalid/resource",
+          "type": "boolean"
+        }
+      }
+    ],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "scheme-case/supplied-alias-https://ex.invalid/a/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/a"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "HTTPS://ex.invalid/a",
+          "type": "string"
+        },
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "type": "integer"
+        }
+      }
+    },
+    "resources": [
+      {
+        "uri": "https://ex.invalid/a",
+        "document": {
+          "$id": "https://other.invalid/resource",
+          "type": "boolean"
+        }
+      }
+    ],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "host-case/siblings/order0/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://EX.invalid/a"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://EX.invalid/a",
+          "type": "string"
+        },
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "type": "integer"
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "host-case/siblings/order0/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/a"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://EX.invalid/a",
+          "type": "string"
+        },
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "type": "integer"
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "host-case/siblings/order1/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://EX.invalid/a"
+          }
+        }
+      },
+      "schemas": {
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "type": "integer"
+        },
+        "A": {
+          "$id": "https://EX.invalid/a",
+          "type": "string"
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "host-case/siblings/order1/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/a"
+          }
+        }
+      },
+      "schemas": {
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "type": "integer"
+        },
+        "A": {
+          "$id": "https://EX.invalid/a",
+          "type": "string"
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "host-case/nested-under-A/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://EX.invalid/a"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://EX.invalid/a",
+          "type": "string",
+          "$defs": {
+            "B": {
+              "$id": "https://ex.invalid/a",
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "host-case/nested-under-A/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/a"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://EX.invalid/a",
+          "type": "string",
+          "$defs": {
+            "B": {
+              "$id": "https://ex.invalid/a",
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "host-case/nested-under-B/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://EX.invalid/a"
+          }
+        }
+      },
+      "schemas": {
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "type": "integer",
+          "$defs": {
+            "A": {
+              "$id": "https://EX.invalid/a",
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "host-case/nested-under-B/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/a"
+          }
+        }
+      },
+      "schemas": {
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "type": "integer",
+          "$defs": {
+            "A": {
+              "$id": "https://EX.invalid/a",
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "host-case/fragment-#slot/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://EX.invalid/a#slot"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://EX.invalid/a",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "string"
+            }
+          }
+        },
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "host-case/fragment-#slot/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/a#slot"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://EX.invalid/a",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "string"
+            }
+          }
+        },
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "host-case/fragment-#/$defs/value/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://EX.invalid/a#/$defs/value"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://EX.invalid/a",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "string"
+            }
+          }
+        },
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "host-case/fragment-#/$defs/value/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/a#/$defs/value"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://EX.invalid/a",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "string"
+            }
+          }
+        },
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "host-case/supplied-alias-https://EX.invalid/a/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://EX.invalid/a"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://EX.invalid/a",
+          "type": "string"
+        },
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "type": "integer"
+        }
+      }
+    },
+    "resources": [
+      {
+        "uri": "https://EX.invalid/a",
+        "document": {
+          "$id": "https://other.invalid/resource",
+          "type": "boolean"
+        }
+      }
+    ],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "host-case/supplied-alias-https://EX.invalid/a/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/a"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://EX.invalid/a",
+          "type": "string"
+        },
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "type": "integer"
+        }
+      }
+    },
+    "resources": [
+      {
+        "uri": "https://EX.invalid/a",
+        "document": {
+          "$id": "https://other.invalid/resource",
+          "type": "boolean"
+        }
+      }
+    ],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "host-case/supplied-alias-https://ex.invalid/a/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://EX.invalid/a"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://EX.invalid/a",
+          "type": "string"
+        },
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "type": "integer"
+        }
+      }
+    },
+    "resources": [
+      {
+        "uri": "https://ex.invalid/a",
+        "document": {
+          "$id": "https://other.invalid/resource",
+          "type": "boolean"
+        }
+      }
+    ],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "host-case/supplied-alias-https://ex.invalid/a/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/a"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://EX.invalid/a",
+          "type": "string"
+        },
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "type": "integer"
+        }
+      }
+    },
+    "resources": [
+      {
+        "uri": "https://ex.invalid/a",
+        "document": {
+          "$id": "https://other.invalid/resource",
+          "type": "boolean"
+        }
+      }
+    ],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "default-port/siblings/order0/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid:443/a"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://ex.invalid:443/a",
+          "type": "string"
+        },
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "type": "integer"
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "default-port/siblings/order0/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/a"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://ex.invalid:443/a",
+          "type": "string"
+        },
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "type": "integer"
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "default-port/siblings/order1/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid:443/a"
+          }
+        }
+      },
+      "schemas": {
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "type": "integer"
+        },
+        "A": {
+          "$id": "https://ex.invalid:443/a",
+          "type": "string"
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "default-port/siblings/order1/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/a"
+          }
+        }
+      },
+      "schemas": {
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "type": "integer"
+        },
+        "A": {
+          "$id": "https://ex.invalid:443/a",
+          "type": "string"
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "default-port/nested-under-A/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid:443/a"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://ex.invalid:443/a",
+          "type": "string",
+          "$defs": {
+            "B": {
+              "$id": "https://ex.invalid/a",
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "default-port/nested-under-A/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/a"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://ex.invalid:443/a",
+          "type": "string",
+          "$defs": {
+            "B": {
+              "$id": "https://ex.invalid/a",
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "default-port/nested-under-B/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid:443/a"
+          }
+        }
+      },
+      "schemas": {
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "type": "integer",
+          "$defs": {
+            "A": {
+              "$id": "https://ex.invalid:443/a",
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "default-port/nested-under-B/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/a"
+          }
+        }
+      },
+      "schemas": {
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "type": "integer",
+          "$defs": {
+            "A": {
+              "$id": "https://ex.invalid:443/a",
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "default-port/fragment-#slot/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid:443/a#slot"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://ex.invalid:443/a",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "string"
+            }
+          }
+        },
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "default-port/fragment-#slot/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/a#slot"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://ex.invalid:443/a",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "string"
+            }
+          }
+        },
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "default-port/fragment-#/$defs/value/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid:443/a#/$defs/value"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://ex.invalid:443/a",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "string"
+            }
+          }
+        },
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "default-port/fragment-#/$defs/value/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/a#/$defs/value"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://ex.invalid:443/a",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "string"
+            }
+          }
+        },
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "default-port/supplied-alias-https://ex.invalid:443/a/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid:443/a"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://ex.invalid:443/a",
+          "type": "string"
+        },
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "type": "integer"
+        }
+      }
+    },
+    "resources": [
+      {
+        "uri": "https://ex.invalid:443/a",
+        "document": {
+          "$id": "https://other.invalid/resource",
+          "type": "boolean"
+        }
+      }
+    ],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "default-port/supplied-alias-https://ex.invalid:443/a/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/a"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://ex.invalid:443/a",
+          "type": "string"
+        },
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "type": "integer"
+        }
+      }
+    },
+    "resources": [
+      {
+        "uri": "https://ex.invalid:443/a",
+        "document": {
+          "$id": "https://other.invalid/resource",
+          "type": "boolean"
+        }
+      }
+    ],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "default-port/supplied-alias-https://ex.invalid/a/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid:443/a"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://ex.invalid:443/a",
+          "type": "string"
+        },
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "type": "integer"
+        }
+      }
+    },
+    "resources": [
+      {
+        "uri": "https://ex.invalid/a",
+        "document": {
+          "$id": "https://other.invalid/resource",
+          "type": "boolean"
+        }
+      }
+    ],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "default-port/supplied-alias-https://ex.invalid/a/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/a"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://ex.invalid:443/a",
+          "type": "string"
+        },
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "type": "integer"
+        }
+      }
+    },
+    "resources": [
+      {
+        "uri": "https://ex.invalid/a",
+        "document": {
+          "$id": "https://other.invalid/resource",
+          "type": "boolean"
+        }
+      }
+    ],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "percent-unreserved/siblings/order0/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/%61"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://ex.invalid/%61",
+          "type": "string"
+        },
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "type": "integer"
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "percent-unreserved/siblings/order0/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/a"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://ex.invalid/%61",
+          "type": "string"
+        },
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "type": "integer"
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "percent-unreserved/siblings/order1/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/%61"
+          }
+        }
+      },
+      "schemas": {
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "type": "integer"
+        },
+        "A": {
+          "$id": "https://ex.invalid/%61",
+          "type": "string"
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "percent-unreserved/siblings/order1/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/a"
+          }
+        }
+      },
+      "schemas": {
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "type": "integer"
+        },
+        "A": {
+          "$id": "https://ex.invalid/%61",
+          "type": "string"
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "percent-unreserved/nested-under-A/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/%61"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://ex.invalid/%61",
+          "type": "string",
+          "$defs": {
+            "B": {
+              "$id": "https://ex.invalid/a",
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "percent-unreserved/nested-under-A/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/a"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://ex.invalid/%61",
+          "type": "string",
+          "$defs": {
+            "B": {
+              "$id": "https://ex.invalid/a",
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "percent-unreserved/nested-under-B/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/%61"
+          }
+        }
+      },
+      "schemas": {
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "type": "integer",
+          "$defs": {
+            "A": {
+              "$id": "https://ex.invalid/%61",
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "percent-unreserved/nested-under-B/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/a"
+          }
+        }
+      },
+      "schemas": {
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "type": "integer",
+          "$defs": {
+            "A": {
+              "$id": "https://ex.invalid/%61",
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "percent-unreserved/fragment-#slot/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/%61#slot"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://ex.invalid/%61",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "string"
+            }
+          }
+        },
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "percent-unreserved/fragment-#slot/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/a#slot"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://ex.invalid/%61",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "string"
+            }
+          }
+        },
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "percent-unreserved/fragment-#/$defs/value/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/%61#/$defs/value"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://ex.invalid/%61",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "string"
+            }
+          }
+        },
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "percent-unreserved/fragment-#/$defs/value/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/a#/$defs/value"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://ex.invalid/%61",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "string"
+            }
+          }
+        },
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "percent-unreserved/supplied-alias-https://ex.invalid/%61/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/%61"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://ex.invalid/%61",
+          "type": "string"
+        },
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "type": "integer"
+        }
+      }
+    },
+    "resources": [
+      {
+        "uri": "https://ex.invalid/%61",
+        "document": {
+          "$id": "https://other.invalid/resource",
+          "type": "boolean"
+        }
+      }
+    ],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "percent-unreserved/supplied-alias-https://ex.invalid/%61/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/a"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://ex.invalid/%61",
+          "type": "string"
+        },
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "type": "integer"
+        }
+      }
+    },
+    "resources": [
+      {
+        "uri": "https://ex.invalid/%61",
+        "document": {
+          "$id": "https://other.invalid/resource",
+          "type": "boolean"
+        }
+      }
+    ],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "percent-unreserved/supplied-alias-https://ex.invalid/a/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/%61"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://ex.invalid/%61",
+          "type": "string"
+        },
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "type": "integer"
+        }
+      }
+    },
+    "resources": [
+      {
+        "uri": "https://ex.invalid/a",
+        "document": {
+          "$id": "https://other.invalid/resource",
+          "type": "boolean"
+        }
+      }
+    ],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "percent-unreserved/supplied-alias-https://ex.invalid/a/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/a"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://ex.invalid/%61",
+          "type": "string"
+        },
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "type": "integer"
+        }
+      }
+    },
+    "resources": [
+      {
+        "uri": "https://ex.invalid/a",
+        "document": {
+          "$id": "https://other.invalid/resource",
+          "type": "boolean"
+        }
+      }
+    ],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "percent-hex-case/siblings/order0/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/%7e"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://ex.invalid/%7e",
+          "type": "string"
+        },
+        "B": {
+          "$id": "https://ex.invalid/%7E",
+          "type": "integer"
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "percent-hex-case/siblings/order0/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/%7E"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://ex.invalid/%7e",
+          "type": "string"
+        },
+        "B": {
+          "$id": "https://ex.invalid/%7E",
+          "type": "integer"
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "percent-hex-case/siblings/order1/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/%7e"
+          }
+        }
+      },
+      "schemas": {
+        "B": {
+          "$id": "https://ex.invalid/%7E",
+          "type": "integer"
+        },
+        "A": {
+          "$id": "https://ex.invalid/%7e",
+          "type": "string"
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "percent-hex-case/siblings/order1/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/%7E"
+          }
+        }
+      },
+      "schemas": {
+        "B": {
+          "$id": "https://ex.invalid/%7E",
+          "type": "integer"
+        },
+        "A": {
+          "$id": "https://ex.invalid/%7e",
+          "type": "string"
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "percent-hex-case/nested-under-A/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/%7e"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://ex.invalid/%7e",
+          "type": "string",
+          "$defs": {
+            "B": {
+              "$id": "https://ex.invalid/%7E",
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "percent-hex-case/nested-under-A/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/%7E"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://ex.invalid/%7e",
+          "type": "string",
+          "$defs": {
+            "B": {
+              "$id": "https://ex.invalid/%7E",
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "percent-hex-case/nested-under-B/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/%7e"
+          }
+        }
+      },
+      "schemas": {
+        "B": {
+          "$id": "https://ex.invalid/%7E",
+          "type": "integer",
+          "$defs": {
+            "A": {
+              "$id": "https://ex.invalid/%7e",
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "percent-hex-case/nested-under-B/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/%7E"
+          }
+        }
+      },
+      "schemas": {
+        "B": {
+          "$id": "https://ex.invalid/%7E",
+          "type": "integer",
+          "$defs": {
+            "A": {
+              "$id": "https://ex.invalid/%7e",
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "percent-hex-case/fragment-#slot/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/%7e#slot"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://ex.invalid/%7e",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "string"
+            }
+          }
+        },
+        "B": {
+          "$id": "https://ex.invalid/%7E",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "percent-hex-case/fragment-#slot/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/%7E#slot"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://ex.invalid/%7e",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "string"
+            }
+          }
+        },
+        "B": {
+          "$id": "https://ex.invalid/%7E",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "percent-hex-case/fragment-#/$defs/value/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/%7e#/$defs/value"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://ex.invalid/%7e",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "string"
+            }
+          }
+        },
+        "B": {
+          "$id": "https://ex.invalid/%7E",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "percent-hex-case/fragment-#/$defs/value/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/%7E#/$defs/value"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://ex.invalid/%7e",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "string"
+            }
+          }
+        },
+        "B": {
+          "$id": "https://ex.invalid/%7E",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "percent-hex-case/supplied-alias-https://ex.invalid/%7e/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/%7e"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://ex.invalid/%7e",
+          "type": "string"
+        },
+        "B": {
+          "$id": "https://ex.invalid/%7E",
+          "type": "integer"
+        }
+      }
+    },
+    "resources": [
+      {
+        "uri": "https://ex.invalid/%7e",
+        "document": {
+          "$id": "https://other.invalid/resource",
+          "type": "boolean"
+        }
+      }
+    ],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "percent-hex-case/supplied-alias-https://ex.invalid/%7e/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/%7E"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://ex.invalid/%7e",
+          "type": "string"
+        },
+        "B": {
+          "$id": "https://ex.invalid/%7E",
+          "type": "integer"
+        }
+      }
+    },
+    "resources": [
+      {
+        "uri": "https://ex.invalid/%7e",
+        "document": {
+          "$id": "https://other.invalid/resource",
+          "type": "boolean"
+        }
+      }
+    ],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "percent-hex-case/supplied-alias-https://ex.invalid/%7E/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/%7e"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://ex.invalid/%7e",
+          "type": "string"
+        },
+        "B": {
+          "$id": "https://ex.invalid/%7E",
+          "type": "integer"
+        }
+      }
+    },
+    "resources": [
+      {
+        "uri": "https://ex.invalid/%7E",
+        "document": {
+          "$id": "https://other.invalid/resource",
+          "type": "boolean"
+        }
+      }
+    ],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "percent-hex-case/supplied-alias-https://ex.invalid/%7E/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/%7E"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://ex.invalid/%7e",
+          "type": "string"
+        },
+        "B": {
+          "$id": "https://ex.invalid/%7E",
+          "type": "integer"
+        }
+      }
+    },
+    "resources": [
+      {
+        "uri": "https://ex.invalid/%7E",
+        "document": {
+          "$id": "https://other.invalid/resource",
+          "type": "boolean"
+        }
+      }
+    ],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "empty-vs-slash-path/siblings/order0/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://ex.invalid",
+          "type": "string"
+        },
+        "B": {
+          "$id": "https://ex.invalid/",
+          "type": "integer"
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "empty-vs-slash-path/siblings/order0/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://ex.invalid",
+          "type": "string"
+        },
+        "B": {
+          "$id": "https://ex.invalid/",
+          "type": "integer"
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "empty-vs-slash-path/siblings/order1/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid"
+          }
+        }
+      },
+      "schemas": {
+        "B": {
+          "$id": "https://ex.invalid/",
+          "type": "integer"
+        },
+        "A": {
+          "$id": "https://ex.invalid",
+          "type": "string"
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "empty-vs-slash-path/siblings/order1/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/"
+          }
+        }
+      },
+      "schemas": {
+        "B": {
+          "$id": "https://ex.invalid/",
+          "type": "integer"
+        },
+        "A": {
+          "$id": "https://ex.invalid",
+          "type": "string"
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "empty-vs-slash-path/nested-under-A/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://ex.invalid",
+          "type": "string",
+          "$defs": {
+            "B": {
+              "$id": "https://ex.invalid/",
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "empty-vs-slash-path/nested-under-A/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://ex.invalid",
+          "type": "string",
+          "$defs": {
+            "B": {
+              "$id": "https://ex.invalid/",
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "empty-vs-slash-path/nested-under-B/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid"
+          }
+        }
+      },
+      "schemas": {
+        "B": {
+          "$id": "https://ex.invalid/",
+          "type": "integer",
+          "$defs": {
+            "A": {
+              "$id": "https://ex.invalid",
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "empty-vs-slash-path/nested-under-B/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/"
+          }
+        }
+      },
+      "schemas": {
+        "B": {
+          "$id": "https://ex.invalid/",
+          "type": "integer",
+          "$defs": {
+            "A": {
+              "$id": "https://ex.invalid",
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "empty-vs-slash-path/fragment-#slot/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid#slot"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://ex.invalid",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "string"
+            }
+          }
+        },
+        "B": {
+          "$id": "https://ex.invalid/",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "empty-vs-slash-path/fragment-#slot/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/#slot"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://ex.invalid",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "string"
+            }
+          }
+        },
+        "B": {
+          "$id": "https://ex.invalid/",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "empty-vs-slash-path/fragment-#/$defs/value/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid#/$defs/value"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://ex.invalid",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "string"
+            }
+          }
+        },
+        "B": {
+          "$id": "https://ex.invalid/",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "empty-vs-slash-path/fragment-#/$defs/value/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/#/$defs/value"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://ex.invalid",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "string"
+            }
+          }
+        },
+        "B": {
+          "$id": "https://ex.invalid/",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "empty-vs-slash-path/supplied-alias-https://ex.invalid/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://ex.invalid",
+          "type": "string"
+        },
+        "B": {
+          "$id": "https://ex.invalid/",
+          "type": "integer"
+        }
+      }
+    },
+    "resources": [
+      {
+        "uri": "https://ex.invalid",
+        "document": {
+          "$id": "https://other.invalid/resource",
+          "type": "boolean"
+        }
+      }
+    ],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "empty-vs-slash-path/supplied-alias-https://ex.invalid/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://ex.invalid",
+          "type": "string"
+        },
+        "B": {
+          "$id": "https://ex.invalid/",
+          "type": "integer"
+        }
+      }
+    },
+    "resources": [
+      {
+        "uri": "https://ex.invalid",
+        "document": {
+          "$id": "https://other.invalid/resource",
+          "type": "boolean"
+        }
+      }
+    ],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "empty-vs-slash-path/supplied-alias-https://ex.invalid//A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://ex.invalid",
+          "type": "string"
+        },
+        "B": {
+          "$id": "https://ex.invalid/",
+          "type": "integer"
+        }
+      }
+    },
+    "resources": [
+      {
+        "uri": "https://ex.invalid/",
+        "document": {
+          "$id": "https://other.invalid/resource",
+          "type": "boolean"
+        }
+      }
+    ],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "empty-vs-slash-path/supplied-alias-https://ex.invalid//B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://ex.invalid",
+          "type": "string"
+        },
+        "B": {
+          "$id": "https://ex.invalid/",
+          "type": "integer"
+        }
+      }
+    },
+    "resources": [
+      {
+        "uri": "https://ex.invalid/",
+        "document": {
+          "$id": "https://other.invalid/resource",
+          "type": "boolean"
+        }
+      }
+    ],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "query-percent-unreserved/siblings/order0/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/a?x=%61"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://ex.invalid/a?x=%61",
+          "type": "string"
+        },
+        "B": {
+          "$id": "https://ex.invalid/a?x=a",
+          "type": "integer"
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "query-percent-unreserved/siblings/order0/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/a?x=a"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://ex.invalid/a?x=%61",
+          "type": "string"
+        },
+        "B": {
+          "$id": "https://ex.invalid/a?x=a",
+          "type": "integer"
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "query-percent-unreserved/siblings/order1/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/a?x=%61"
+          }
+        }
+      },
+      "schemas": {
+        "B": {
+          "$id": "https://ex.invalid/a?x=a",
+          "type": "integer"
+        },
+        "A": {
+          "$id": "https://ex.invalid/a?x=%61",
+          "type": "string"
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "query-percent-unreserved/siblings/order1/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/a?x=a"
+          }
+        }
+      },
+      "schemas": {
+        "B": {
+          "$id": "https://ex.invalid/a?x=a",
+          "type": "integer"
+        },
+        "A": {
+          "$id": "https://ex.invalid/a?x=%61",
+          "type": "string"
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "query-percent-unreserved/nested-under-A/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/a?x=%61"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://ex.invalid/a?x=%61",
+          "type": "string",
+          "$defs": {
+            "B": {
+              "$id": "https://ex.invalid/a?x=a",
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "query-percent-unreserved/nested-under-A/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/a?x=a"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://ex.invalid/a?x=%61",
+          "type": "string",
+          "$defs": {
+            "B": {
+              "$id": "https://ex.invalid/a?x=a",
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "query-percent-unreserved/nested-under-B/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/a?x=%61"
+          }
+        }
+      },
+      "schemas": {
+        "B": {
+          "$id": "https://ex.invalid/a?x=a",
+          "type": "integer",
+          "$defs": {
+            "A": {
+              "$id": "https://ex.invalid/a?x=%61",
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "query-percent-unreserved/nested-under-B/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/a?x=a"
+          }
+        }
+      },
+      "schemas": {
+        "B": {
+          "$id": "https://ex.invalid/a?x=a",
+          "type": "integer",
+          "$defs": {
+            "A": {
+              "$id": "https://ex.invalid/a?x=%61",
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "query-percent-unreserved/fragment-#slot/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/a?x=%61#slot"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://ex.invalid/a?x=%61",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "string"
+            }
+          }
+        },
+        "B": {
+          "$id": "https://ex.invalid/a?x=a",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "query-percent-unreserved/fragment-#slot/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/a?x=a#slot"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://ex.invalid/a?x=%61",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "string"
+            }
+          }
+        },
+        "B": {
+          "$id": "https://ex.invalid/a?x=a",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "query-percent-unreserved/fragment-#/$defs/value/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/a?x=%61#/$defs/value"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://ex.invalid/a?x=%61",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "string"
+            }
+          }
+        },
+        "B": {
+          "$id": "https://ex.invalid/a?x=a",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "query-percent-unreserved/fragment-#/$defs/value/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/a?x=a#/$defs/value"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://ex.invalid/a?x=%61",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "string"
+            }
+          }
+        },
+        "B": {
+          "$id": "https://ex.invalid/a?x=a",
+          "$defs": {
+            "value": {
+              "$anchor": "slot",
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "query-percent-unreserved/supplied-alias-https://ex.invalid/a?x=%61/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/a?x=%61"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://ex.invalid/a?x=%61",
+          "type": "string"
+        },
+        "B": {
+          "$id": "https://ex.invalid/a?x=a",
+          "type": "integer"
+        }
+      }
+    },
+    "resources": [
+      {
+        "uri": "https://ex.invalid/a?x=%61",
+        "document": {
+          "$id": "https://other.invalid/resource",
+          "type": "boolean"
+        }
+      }
+    ],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "query-percent-unreserved/supplied-alias-https://ex.invalid/a?x=%61/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/a?x=a"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://ex.invalid/a?x=%61",
+          "type": "string"
+        },
+        "B": {
+          "$id": "https://ex.invalid/a?x=a",
+          "type": "integer"
+        }
+      }
+    },
+    "resources": [
+      {
+        "uri": "https://ex.invalid/a?x=%61",
+        "document": {
+          "$id": "https://other.invalid/resource",
+          "type": "boolean"
+        }
+      }
+    ],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "query-percent-unreserved/supplied-alias-https://ex.invalid/a?x=a/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/a?x=%61"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://ex.invalid/a?x=%61",
+          "type": "string"
+        },
+        "B": {
+          "$id": "https://ex.invalid/a?x=a",
+          "type": "integer"
+        }
+      }
+    },
+    "resources": [
+      {
+        "uri": "https://ex.invalid/a?x=a",
+        "document": {
+          "$id": "https://other.invalid/resource",
+          "type": "boolean"
+        }
+      }
+    ],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "query-percent-unreserved/supplied-alias-https://ex.invalid/a?x=a/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/a?x=a"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://ex.invalid/a?x=%61",
+          "type": "string"
+        },
+        "B": {
+          "$id": "https://ex.invalid/a?x=a",
+          "type": "integer"
+        }
+      }
+    },
+    "resources": [
+      {
+        "uri": "https://ex.invalid/a?x=a",
+        "document": {
+          "$id": "https://other.invalid/resource",
+          "type": "boolean"
+        }
+      }
+    ],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "relative-nested/order0/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://Ex.invalid:443/base/a"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://Ex.invalid:443/base/",
+          "$defs": {
+            "child": {
+              "$id": "x/../a",
+              "type": "string"
+            }
+          }
+        },
+        "B": {
+          "$id": "https://ex.invalid/base/",
+          "$defs": {
+            "child": {
+              "$id": "a",
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "relative-nested/order0/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/base/a"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://Ex.invalid:443/base/",
+          "$defs": {
+            "child": {
+              "$id": "x/../a",
+              "type": "string"
+            }
+          }
+        },
+        "B": {
+          "$id": "https://ex.invalid/base/",
+          "$defs": {
+            "child": {
+              "$id": "a",
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "relative-reference/order0/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://Ex.invalid:443/base/"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://Ex.invalid:443/base/",
+          "$defs": {
+            "child": {
+              "$id": "x/../a",
+              "type": "string"
+            }
+          },
+          "$ref": "a"
+        },
+        "B": {
+          "$id": "https://ex.invalid/base/",
+          "$defs": {
+            "child": {
+              "$id": "a",
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "relative-reference/order0/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/base/"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://Ex.invalid:443/base/",
+          "$defs": {
+            "child": {
+              "$id": "x/../a",
+              "type": "string"
+            }
+          }
+        },
+        "B": {
+          "$id": "https://ex.invalid/base/",
+          "$defs": {
+            "child": {
+              "$id": "a",
+              "type": "integer"
+            }
+          },
+          "$ref": "a"
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "relative-nested/order1/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://Ex.invalid:443/base/a"
+          }
+        }
+      },
+      "schemas": {
+        "B": {
+          "$id": "https://ex.invalid/base/",
+          "$defs": {
+            "child": {
+              "$id": "a",
+              "type": "integer"
+            }
+          }
+        },
+        "A": {
+          "$id": "https://Ex.invalid:443/base/",
+          "$defs": {
+            "child": {
+              "$id": "x/../a",
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "relative-nested/order1/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/base/a"
+          }
+        }
+      },
+      "schemas": {
+        "B": {
+          "$id": "https://ex.invalid/base/",
+          "$defs": {
+            "child": {
+              "$id": "a",
+              "type": "integer"
+            }
+          }
+        },
+        "A": {
+          "$id": "https://Ex.invalid:443/base/",
+          "$defs": {
+            "child": {
+              "$id": "x/../a",
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "relative-reference/order1/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://Ex.invalid:443/base/"
+          }
+        }
+      },
+      "schemas": {
+        "B": {
+          "$id": "https://ex.invalid/base/",
+          "$defs": {
+            "child": {
+              "$id": "a",
+              "type": "integer"
+            }
+          }
+        },
+        "A": {
+          "$id": "https://Ex.invalid:443/base/",
+          "$defs": {
+            "child": {
+              "$id": "x/../a",
+              "type": "string"
+            }
+          },
+          "$ref": "a"
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "relative-reference/order1/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/base/"
+          }
+        }
+      },
+      "schemas": {
+        "B": {
+          "$id": "https://ex.invalid/base/",
+          "$defs": {
+            "child": {
+              "$id": "a",
+              "type": "integer"
+            }
+          },
+          "$ref": "a"
+        },
+        "A": {
+          "$id": "https://Ex.invalid:443/base/",
+          "$defs": {
+            "child": {
+              "$id": "x/../a",
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "unique-external-alias",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/%7Ea/A"
+          }
+        }
+      },
+      "schemas": {}
+    },
+    "resources": [
+      {
+        "uri": "HTTPS://EX.invalid/%7ea/A",
+        "document": {
+          "type": "string"
+        }
+      }
+    ],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "unique-contained-alias",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/%7Ea/A"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "HTTPS://EX.invalid/%7ea/A",
+          "type": "string"
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy"
+  },
+  {
+    "id": "ambiguous-nonexact-contained-alias",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/a"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "HTTPS://EX.invalid:443/a",
+          "type": "string"
+        },
+        "B": {
+          "$id": "https://Ex.invalid:443/a",
+          "type": "integer"
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "no-verdict",
+      "no-verdict"
+    ],
+    "authority": "Pinned spec \u00a77.2/7.4 exact contained selection, before SDK URI-alias policy",
+    "expected_preparation": "ambiguous-resource"
+  },
+  {
+    "id": "adversarial/case-variant-collision/0",
+    "document": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"$ref\":\"https://ex.invalid/a\"}}},\"schemas\":{\"A\":{\"$id\":\"https://Ex.invalid:443/a\",\"type\":\"string\"},\"B\":{\"$id\":\"https://ex.invalid/a\",\"type\":\"integer\"}}}",
+    "resources": [],
+    "values": [
+      "s"
+    ],
+    "expected": [
+      "fails"
+    ],
+    "authority": "Existing independently adjudicated kit row; unchanged original semantic expectation"
+  },
+  {
+    "id": "adversarial/case-variant-exact/0",
+    "document": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"properties\":{\"a\":{\"$ref\":\"HTTPS://EX.invalid/%7ea/A\"},\"b\":{\"$ref\":\"https://ex.invalid/~a/a\"}}}}},\"schemas\":{\"A\":{\"$id\":\"HTTPS://EX.invalid/%7ea/A\",\"type\":\"string\"},\"B\":{\"$id\":\"https://ex.invalid/~a/a\",\"type\":\"integer\"}}}",
+    "resources": [],
+    "values": [
+      {
+        "a": "s",
+        "b": 1
+      }
+    ],
+    "expected": [
+      "satisfies"
+    ],
+    "authority": "Existing independently adjudicated kit row; unchanged original semantic expectation"
+  },
+  {
+    "id": "adversarial/case-variant-exact/1",
+    "document": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"properties\":{\"a\":{\"$ref\":\"HTTPS://EX.invalid/%7ea/A\"},\"b\":{\"$ref\":\"https://ex.invalid/~a/a\"}}}}},\"schemas\":{\"A\":{\"$id\":\"HTTPS://EX.invalid/%7ea/A\",\"type\":\"string\"},\"B\":{\"$id\":\"https://ex.invalid/~a/a\",\"type\":\"integer\"}}}",
+    "resources": [],
+    "values": [
+      {
+        "a": 1
+      }
+    ],
+    "expected": [
+      "fails"
+    ],
+    "authority": "Existing independently adjudicated kit row; unchanged original semantic expectation"
+  },
+  {
+    "id": "adversarial/case-variant-exact/2",
+    "document": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"properties\":{\"a\":{\"$ref\":\"HTTPS://EX.invalid/%7ea/A\"},\"b\":{\"$ref\":\"https://ex.invalid/~a/a\"}}}}},\"schemas\":{\"A\":{\"$id\":\"HTTPS://EX.invalid/%7ea/A\",\"type\":\"string\"},\"B\":{\"$id\":\"https://ex.invalid/~a/a\",\"type\":\"integer\"}}}",
+    "resources": [],
+    "values": [
+      {
+        "b": "s"
+      }
+    ],
+    "expected": [
+      "fails"
+    ],
+    "authority": "Existing independently adjudicated kit row; unchanged original semantic expectation"
+  },
+  {
+    "id": "adversarial/case-variant-unmatched/0",
+    "document": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"$ref\":\"https://ex.invalid/%7Ea/A\"}}},\"schemas\":{\"A\":{\"$id\":\"HTTPS://EX.invalid/%7ea/A\",\"type\":\"string\"}}}",
+    "resources": [],
+    "values": [
+      "s"
+    ],
+    "expected": [
+      "satisfies"
+    ],
+    "authority": "Existing independently adjudicated kit row; unchanged original semantic expectation"
+  },
+  {
+    "id": "adversarial/resource-uri-names-another-id/0",
+    "document": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"$ref\":\"https://ex.invalid/shared\"}}},\"schemas\":{\"S\":{\"$id\":\"https://ex.invalid/shared\",\"type\":\"integer\"}}}",
+    "resources": [
+      {
+        "uri": "https://ex.invalid/shared",
+        "document": "{\"type\":\"string\"}"
+      }
+    ],
+    "values": [
+      1
+    ],
+    "expected": [
+      "satisfies"
+    ],
+    "authority": "Existing independently adjudicated kit row; unchanged original semantic expectation"
+  },
+  {
+    "id": "adversarial/resource-uri-names-another-id-unreached/0",
+    "document": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"type\":\"boolean\"}}},\"schemas\":{\"S\":{\"$id\":\"https://ex.invalid/shared\",\"type\":\"integer\"}}}",
+    "resources": [
+      {
+        "uri": "https://ex.invalid/shared",
+        "document": "{\"type\":\"string\"}"
+      }
+    ],
+    "values": [
+      true
+    ],
+    "expected": [
+      "satisfies"
+    ],
+    "authority": "Existing independently adjudicated kit row; unchanged original semantic expectation"
+  },
+  {
+    "id": "adversarial/resource-uri-names-another-id-unreached/1",
+    "document": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"type\":\"boolean\"}}},\"schemas\":{\"S\":{\"$id\":\"https://ex.invalid/shared\",\"type\":\"integer\"}}}",
+    "resources": [
+      {
+        "uri": "https://ex.invalid/shared",
+        "document": "{\"type\":\"string\"}"
+      }
+    ],
+    "values": [
+      1
+    ],
+    "expected": [
+      "fails"
+    ],
+    "authority": "Existing independently adjudicated kit row; unchanged original semantic expectation"
+  },
+  {
+    "id": "retrieval-base",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://Ex.invalid:443/base/"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://Ex.invalid:443/base/a",
+          "type": "string"
+        },
+        "B": {
+          "$id": "https://ex.invalid/base/a",
+          "type": "integer"
+        }
+      }
+    },
+    "resources": [
+      {
+        "uri": "https://Ex.invalid:443/base/",
+        "document": {
+          "$ref": "a"
+        }
+      }
+    ],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ]
+  },
+  {
+    "id": "declared-base",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "urn:external"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://Ex.invalid:443/base/a",
+          "type": "string"
+        },
+        "B": {
+          "$id": "https://ex.invalid/base/a",
+          "type": "integer"
+        }
+      }
+    },
+    "resources": [
+      {
+        "uri": "urn:external",
+        "document": {
+          "$id": "https://Ex.invalid:443/base/",
+          "$ref": "a"
+        }
+      }
+    ],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ]
+  },
+  {
+    "id": "nested-declared-base",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "urn:external"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://Ex.invalid:443/base/a",
+          "type": "string"
+        },
+        "B": {
+          "$id": "https://ex.invalid/base/a",
+          "type": "integer"
+        }
+      }
+    },
+    "resources": [
+      {
+        "uri": "urn:external",
+        "document": {
+          "$ref": "#/$defs/nested",
+          "$defs": {
+            "nested": {
+              "$id": "https://Ex.invalid:443/base/",
+              "$ref": "a"
+            }
+          }
+        }
+      }
+    ],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ]
+  },
+  {
+    "id": "retrieval-base-absolute-control",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://Ex.invalid:443/base/"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://Ex.invalid:443/base/a",
+          "type": "string"
+        },
+        "B": {
+          "$id": "https://ex.invalid/base/a",
+          "type": "integer"
+        }
+      }
+    },
+    "resources": [
+      {
+        "uri": "https://Ex.invalid:443/base/",
+        "document": {
+          "$ref": "https://Ex.invalid:443/base/a"
+        }
+      }
+    ],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ]
+  },
+  {
+    "id": "declared-base-absolute-control",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "urn:external"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://Ex.invalid:443/base/a",
+          "type": "string"
+        },
+        "B": {
+          "$id": "https://ex.invalid/base/a",
+          "type": "integer"
+        }
+      }
+    },
+    "resources": [
+      {
+        "uri": "urn:external",
+        "document": {
+          "$id": "https://Ex.invalid:443/base/",
+          "$ref": "https://Ex.invalid:443/base/a"
+        }
+      }
+    ],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ]
+  },
+  {
+    "id": "nested-declared-base-absolute-control",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "urn:external"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://Ex.invalid:443/base/a",
+          "type": "string"
+        },
+        "B": {
+          "$id": "https://ex.invalid/base/a",
+          "type": "integer"
+        }
+      }
+    },
+    "resources": [
+      {
+        "uri": "urn:external",
+        "document": {
+          "$ref": "#/$defs/nested",
+          "$defs": {
+            "nested": {
+              "$id": "https://Ex.invalid:443/base/",
+              "$ref": "https://Ex.invalid:443/base/a"
+            }
+          }
+        }
+      }
+    ],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ]
+  },
+  {
+    "id": "host-port/nested-anchor-under-A/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://Ex.invalid:443/a#slot"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://Ex.invalid:443/a",
+          "$anchor": "slot",
+          "type": "string",
+          "$defs": {
+            "B": {
+              "$id": "https://ex.invalid/a",
+              "$anchor": "slot",
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ]
+  },
+  {
+    "id": "host-port/nested-anchor-under-A/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/a#slot"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://Ex.invalid:443/a",
+          "$anchor": "slot",
+          "type": "string",
+          "$defs": {
+            "B": {
+              "$id": "https://ex.invalid/a",
+              "$anchor": "slot",
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ]
+  },
+  {
+    "id": "host-port/nested-anchor-under-B/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://Ex.invalid:443/a#slot"
+          }
+        }
+      },
+      "schemas": {
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "$anchor": "slot",
+          "type": "integer",
+          "$defs": {
+            "A": {
+              "$id": "https://Ex.invalid:443/a",
+              "$anchor": "slot",
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ]
+  },
+  {
+    "id": "host-port/nested-anchor-under-B/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/a#slot"
+          }
+        }
+      },
+      "schemas": {
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "$anchor": "slot",
+          "type": "integer",
+          "$defs": {
+            "A": {
+              "$id": "https://Ex.invalid:443/a",
+              "$anchor": "slot",
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ]
+  },
+  {
+    "id": "percent/nested-anchor-under-A/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/%61#slot"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://ex.invalid/%61",
+          "$anchor": "slot",
+          "type": "string",
+          "$defs": {
+            "B": {
+              "$id": "https://ex.invalid/a",
+              "$anchor": "slot",
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ]
+  },
+  {
+    "id": "percent/nested-anchor-under-A/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/a#slot"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://ex.invalid/%61",
+          "$anchor": "slot",
+          "type": "string",
+          "$defs": {
+            "B": {
+              "$id": "https://ex.invalid/a",
+              "$anchor": "slot",
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ]
+  },
+  {
+    "id": "percent/nested-anchor-under-B/A",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/%61#slot"
+          }
+        }
+      },
+      "schemas": {
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "$anchor": "slot",
+          "type": "integer",
+          "$defs": {
+            "A": {
+              "$id": "https://ex.invalid/%61",
+              "$anchor": "slot",
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ]
+  },
+  {
+    "id": "percent/nested-anchor-under-B/B",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://ex.invalid/a#slot"
+          }
+        }
+      },
+      "schemas": {
+        "B": {
+          "$id": "https://ex.invalid/a",
+          "$anchor": "slot",
+          "type": "integer",
+          "$defs": {
+            "A": {
+              "$id": "https://ex.invalid/%61",
+              "$anchor": "slot",
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ]
+  },
+  {
+    "id": "root",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://Ex.invalid:443/a"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://Ex.invalid:443/a",
+          "$anchor": "slot",
+          "type": "string",
+          "$defs": {
+            "B": {
+              "$id": "https://ex.invalid/a",
+              "$anchor": "slot",
+              "type": "integer"
+            },
+            "yes": true,
+            "no": false,
+            "a/b": {
+              "type": "string"
+            },
+            "%2F": {
+              "type": "integer"
+            },
+            "hidden": {
+              "const": {
+                "opaque": {}
+              }
+            }
+          },
+          "x-unknown": {
+            "type": "integer"
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ]
+  },
+  {
+    "id": "empty",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://Ex.invalid:443/a#"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://Ex.invalid:443/a",
+          "$anchor": "slot",
+          "type": "string",
+          "$defs": {
+            "B": {
+              "$id": "https://ex.invalid/a",
+              "$anchor": "slot",
+              "type": "integer"
+            },
+            "yes": true,
+            "no": false,
+            "a/b": {
+              "type": "string"
+            },
+            "%2F": {
+              "type": "integer"
+            },
+            "hidden": {
+              "const": {
+                "opaque": {}
+              }
+            }
+          },
+          "x-unknown": {
+            "type": "integer"
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ]
+  },
+  {
+    "id": "encoded-anchor",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://Ex.invalid:443/a#%73lot"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://Ex.invalid:443/a",
+          "$anchor": "slot",
+          "type": "string",
+          "$defs": {
+            "B": {
+              "$id": "https://ex.invalid/a",
+              "$anchor": "slot",
+              "type": "integer"
+            },
+            "yes": true,
+            "no": false,
+            "a/b": {
+              "type": "string"
+            },
+            "%2F": {
+              "type": "integer"
+            },
+            "hidden": {
+              "const": {
+                "opaque": {}
+              }
+            }
+          },
+          "x-unknown": {
+            "type": "integer"
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ]
+  },
+  {
+    "id": "encoded-pointer",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://Ex.invalid:443/a#%2F%24defs%2FB"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://Ex.invalid:443/a",
+          "$anchor": "slot",
+          "type": "string",
+          "$defs": {
+            "B": {
+              "$id": "https://ex.invalid/a",
+              "$anchor": "slot",
+              "type": "integer"
+            },
+            "yes": true,
+            "no": false,
+            "a/b": {
+              "type": "string"
+            },
+            "%2F": {
+              "type": "integer"
+            },
+            "hidden": {
+              "const": {
+                "opaque": {}
+              }
+            }
+          },
+          "x-unknown": {
+            "type": "integer"
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ]
+  },
+  {
+    "id": "pointer-crosses-resource",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://Ex.invalid:443/a#/$defs/B"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://Ex.invalid:443/a",
+          "$anchor": "slot",
+          "type": "string",
+          "$defs": {
+            "B": {
+              "$id": "https://ex.invalid/a",
+              "$anchor": "slot",
+              "type": "integer"
+            },
+            "yes": true,
+            "no": false,
+            "a/b": {
+              "type": "string"
+            },
+            "%2F": {
+              "type": "integer"
+            },
+            "hidden": {
+              "const": {
+                "opaque": {}
+              }
+            }
+          },
+          "x-unknown": {
+            "type": "integer"
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ]
+  },
+  {
+    "id": "pointer-escaped-token",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://Ex.invalid:443/a#/$defs/a~1b"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://Ex.invalid:443/a",
+          "$anchor": "slot",
+          "type": "string",
+          "$defs": {
+            "B": {
+              "$id": "https://ex.invalid/a",
+              "$anchor": "slot",
+              "type": "integer"
+            },
+            "yes": true,
+            "no": false,
+            "a/b": {
+              "type": "string"
+            },
+            "%2F": {
+              "type": "integer"
+            },
+            "hidden": {
+              "const": {
+                "opaque": {}
+              }
+            }
+          },
+          "x-unknown": {
+            "type": "integer"
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "fails"
+    ]
+  },
+  {
+    "id": "decode-once",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://Ex.invalid:443/a#/$defs/%252F"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://Ex.invalid:443/a",
+          "$anchor": "slot",
+          "type": "string",
+          "$defs": {
+            "B": {
+              "$id": "https://ex.invalid/a",
+              "$anchor": "slot",
+              "type": "integer"
+            },
+            "yes": true,
+            "no": false,
+            "a/b": {
+              "type": "string"
+            },
+            "%2F": {
+              "type": "integer"
+            },
+            "hidden": {
+              "const": {
+                "opaque": {}
+              }
+            }
+          },
+          "x-unknown": {
+            "type": "integer"
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ]
+  },
+  {
+    "id": "boolean-true",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://Ex.invalid:443/a#/$defs/yes"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://Ex.invalid:443/a",
+          "$anchor": "slot",
+          "type": "string",
+          "$defs": {
+            "B": {
+              "$id": "https://ex.invalid/a",
+              "$anchor": "slot",
+              "type": "integer"
+            },
+            "yes": true,
+            "no": false,
+            "a/b": {
+              "type": "string"
+            },
+            "%2F": {
+              "type": "integer"
+            },
+            "hidden": {
+              "const": {
+                "opaque": {}
+              }
+            }
+          },
+          "x-unknown": {
+            "type": "integer"
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "satisfies",
+      "satisfies"
+    ]
+  },
+  {
+    "id": "boolean-false",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://Ex.invalid:443/a#/$defs/no"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://Ex.invalid:443/a",
+          "$anchor": "slot",
+          "type": "string",
+          "$defs": {
+            "B": {
+              "$id": "https://ex.invalid/a",
+              "$anchor": "slot",
+              "type": "integer"
+            },
+            "yes": true,
+            "no": false,
+            "a/b": {
+              "type": "string"
+            },
+            "%2F": {
+              "type": "integer"
+            },
+            "hidden": {
+              "const": {
+                "opaque": {}
+              }
+            }
+          },
+          "x-unknown": {
+            "type": "integer"
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "fails"
+    ]
+  },
+  {
+    "id": "missing-anchor",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "urn:external"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://Ex.invalid:443/a",
+          "$anchor": "slot",
+          "type": "string",
+          "$defs": {
+            "B": {
+              "$id": "https://ex.invalid/a",
+              "$anchor": "slot",
+              "type": "integer"
+            },
+            "yes": true,
+            "no": false,
+            "a/b": {
+              "type": "string"
+            },
+            "%2F": {
+              "type": "integer"
+            },
+            "hidden": {
+              "const": {
+                "opaque": {}
+              }
+            }
+          },
+          "x-unknown": {
+            "type": "integer"
+          }
+        }
+      }
+    },
+    "resources": [
+      {
+        "uri": "urn:external",
+        "document": {
+          "$ref": "https://Ex.invalid:443/a#absent"
+        }
+      }
+    ],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "undefined",
+      "undefined"
+    ]
+  },
+  {
+    "id": "missing-pointer",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "urn:external"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://Ex.invalid:443/a",
+          "$anchor": "slot",
+          "type": "string",
+          "$defs": {
+            "B": {
+              "$id": "https://ex.invalid/a",
+              "$anchor": "slot",
+              "type": "integer"
+            },
+            "yes": true,
+            "no": false,
+            "a/b": {
+              "type": "string"
+            },
+            "%2F": {
+              "type": "integer"
+            },
+            "hidden": {
+              "const": {
+                "opaque": {}
+              }
+            }
+          },
+          "x-unknown": {
+            "type": "integer"
+          }
+        }
+      }
+    },
+    "resources": [
+      {
+        "uri": "urn:external",
+        "document": {
+          "$ref": "https://Ex.invalid:443/a#/$defs/absent"
+        }
+      }
+    ],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "undefined",
+      "undefined"
+    ]
+  },
+  {
+    "id": "primitive-pointer",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "urn:external"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://Ex.invalid:443/a",
+          "$anchor": "slot",
+          "type": "string",
+          "$defs": {
+            "B": {
+              "$id": "https://ex.invalid/a",
+              "$anchor": "slot",
+              "type": "integer"
+            },
+            "yes": true,
+            "no": false,
+            "a/b": {
+              "type": "string"
+            },
+            "%2F": {
+              "type": "integer"
+            },
+            "hidden": {
+              "const": {
+                "opaque": {}
+              }
+            }
+          },
+          "x-unknown": {
+            "type": "integer"
+          }
+        }
+      }
+    },
+    "resources": [
+      {
+        "uri": "urn:external",
+        "document": {
+          "$ref": "https://Ex.invalid:443/a#/type"
+        }
+      }
+    ],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "undefined",
+      "undefined"
+    ]
+  },
+  {
+    "id": "map-pointer",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "urn:external"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://Ex.invalid:443/a",
+          "$anchor": "slot",
+          "type": "string",
+          "$defs": {
+            "B": {
+              "$id": "https://ex.invalid/a",
+              "$anchor": "slot",
+              "type": "integer"
+            },
+            "yes": true,
+            "no": false,
+            "a/b": {
+              "type": "string"
+            },
+            "%2F": {
+              "type": "integer"
+            },
+            "hidden": {
+              "const": {
+                "opaque": {}
+              }
+            }
+          },
+          "x-unknown": {
+            "type": "integer"
+          }
+        }
+      }
+    },
+    "resources": [
+      {
+        "uri": "urn:external",
+        "document": {
+          "$ref": "https://Ex.invalid:443/a#/$defs"
+        }
+      }
+    ],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "undefined",
+      "undefined"
+    ]
+  },
+  {
+    "id": "opaque-pointer",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "urn:external"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://Ex.invalid:443/a",
+          "$anchor": "slot",
+          "type": "string",
+          "$defs": {
+            "B": {
+              "$id": "https://ex.invalid/a",
+              "$anchor": "slot",
+              "type": "integer"
+            },
+            "yes": true,
+            "no": false,
+            "a/b": {
+              "type": "string"
+            },
+            "%2F": {
+              "type": "integer"
+            },
+            "hidden": {
+              "const": {
+                "opaque": {}
+              }
+            }
+          },
+          "x-unknown": {
+            "type": "integer"
+          }
+        }
+      }
+    },
+    "resources": [
+      {
+        "uri": "urn:external",
+        "document": {
+          "$ref": "https://Ex.invalid:443/a#/$defs/hidden/const/opaque"
+        }
+      }
+    ],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "undefined",
+      "undefined"
+    ]
+  },
+  {
+    "id": "unknown-pointer",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "urn:external"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://Ex.invalid:443/a",
+          "$anchor": "slot",
+          "type": "string",
+          "$defs": {
+            "B": {
+              "$id": "https://ex.invalid/a",
+              "$anchor": "slot",
+              "type": "integer"
+            },
+            "yes": true,
+            "no": false,
+            "a/b": {
+              "type": "string"
+            },
+            "%2F": {
+              "type": "integer"
+            },
+            "hidden": {
+              "const": {
+                "opaque": {}
+              }
+            }
+          },
+          "x-unknown": {
+            "type": "integer"
+          }
+        }
+      }
+    },
+    "resources": [
+      {
+        "uri": "urn:external",
+        "document": {
+          "$ref": "https://Ex.invalid:443/a#/x-unknown"
+        }
+      }
+    ],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "undefined",
+      "undefined"
+    ]
+  },
+  {
+    "id": "bad-pointer-escape",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "urn:external"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://Ex.invalid:443/a",
+          "$anchor": "slot",
+          "type": "string",
+          "$defs": {
+            "B": {
+              "$id": "https://ex.invalid/a",
+              "$anchor": "slot",
+              "type": "integer"
+            },
+            "yes": true,
+            "no": false,
+            "a/b": {
+              "type": "string"
+            },
+            "%2F": {
+              "type": "integer"
+            },
+            "hidden": {
+              "const": {
+                "opaque": {}
+              }
+            }
+          },
+          "x-unknown": {
+            "type": "integer"
+          }
+        }
+      }
+    },
+    "resources": [
+      {
+        "uri": "urn:external",
+        "document": {
+          "$ref": "https://Ex.invalid:443/a#/$defs/~2"
+        }
+      }
+    ],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "undefined",
+      "undefined"
+    ]
+  },
+  {
+    "id": "invalid-utf8-fragment",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "urn:external"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://Ex.invalid:443/a",
+          "$anchor": "slot",
+          "type": "string",
+          "$defs": {
+            "B": {
+              "$id": "https://ex.invalid/a",
+              "$anchor": "slot",
+              "type": "integer"
+            },
+            "yes": true,
+            "no": false,
+            "a/b": {
+              "type": "string"
+            },
+            "%2F": {
+              "type": "integer"
+            },
+            "hidden": {
+              "const": {
+                "opaque": {}
+              }
+            }
+          },
+          "x-unknown": {
+            "type": "integer"
+          }
+        }
+      }
+    },
+    "resources": [
+      {
+        "uri": "urn:external",
+        "document": {
+          "$ref": "https://Ex.invalid:443/a#%FF"
+        }
+      }
+    ],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "undefined",
+      "undefined"
+    ]
+  },
+  {
+    "id": "cross-resource-pointer-base",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://Ex.invalid:443/base/#/$defs/nested"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://Ex.invalid:443/base/",
+          "$defs": {
+            "nested": {
+              "$id": "https://ex.invalid/base/",
+              "type": "integer",
+              "$defs": {
+                "target": {
+                  "type": "integer"
+                }
+              },
+              "$ref": "#/$defs/target"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      "s",
+      1
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ]
+  },
+  {
+    "id": "dynamic-plain",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://Ex.invalid:443/a"
+          }
+        }
+      },
+      "schemas": {
+        "outer": {
+          "$id": "https://Ex.invalid:443/a",
+          "$dynamicAnchor": "slot",
+          "$ref": "https://ex.invalid/a#/$defs/node",
+          "unevaluatedProperties": false,
+          "$defs": {
+            "inner": {
+              "$id": "https://ex.invalid/a",
+              "$defs": {
+                "node": {
+                  "$dynamicAnchor": "slot",
+                  "type": "object",
+                  "properties": {
+                    "child": {
+                      "$dynamicRef": "https://ex.invalid/a#slot"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      {
+        "child": {
+          "extra": 1
+        }
+      },
+      {
+        "child": {}
+      }
+    ],
+    "expected": [
+      "fails",
+      "satisfies"
+    ]
+  },
+  {
+    "id": "dynamic-pointer",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://Ex.invalid:443/a"
+          }
+        }
+      },
+      "schemas": {
+        "outer": {
+          "$id": "https://Ex.invalid:443/a",
+          "$dynamicAnchor": "slot",
+          "$ref": "https://ex.invalid/a#/$defs/node",
+          "unevaluatedProperties": false,
+          "$defs": {
+            "inner": {
+              "$id": "https://ex.invalid/a",
+              "$defs": {
+                "node": {
+                  "$dynamicAnchor": "slot",
+                  "type": "object",
+                  "properties": {
+                    "child": {
+                      "$dynamicRef": "https://ex.invalid/a#/$defs/node"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      {
+        "child": {
+          "extra": 1
+        }
+      },
+      {
+        "child": {}
+      }
+    ],
+    "expected": [
+      "satisfies",
+      "satisfies"
+    ]
+  },
+  {
+    "id": "dynamic-encoded-pointer",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://Ex.invalid:443/a"
+          }
+        }
+      },
+      "schemas": {
+        "outer": {
+          "$id": "https://Ex.invalid:443/a",
+          "$dynamicAnchor": "slot",
+          "$ref": "https://ex.invalid/a#/$defs/node",
+          "unevaluatedProperties": false,
+          "$defs": {
+            "inner": {
+              "$id": "https://ex.invalid/a",
+              "$defs": {
+                "node": {
+                  "$dynamicAnchor": "slot",
+                  "type": "object",
+                  "properties": {
+                    "child": {
+                      "$dynamicRef": "https://ex.invalid/a#%2F%24defs%2Fnode"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "values": [
+      {
+        "child": {
+          "extra": 1
+        }
+      },
+      {
+        "child": {}
+      }
+    ],
+    "expected": [
+      "satisfies",
+      "satisfies"
+    ]
+  }
+]

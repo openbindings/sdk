@@ -887,6 +887,8 @@ mod resolution_reuse {
         // Every document owner goes; the set it outlives no longer keeps its space.
         drop(operation);
         drop(proof);
+        assert!(b.upgrade().is_some()); // The contextual schema is still an owner.
+        drop(input);
         assert!(b.upgrade().is_none());
         assert_eq!(second.kept_spaces(), 0);
     }

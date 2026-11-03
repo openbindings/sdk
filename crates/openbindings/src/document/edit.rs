@@ -37,11 +37,116 @@ impl fmt::Debug for PointerRef<'_> {
     }
 }
 
+/// One owned, exact JSON edit. Paths address the snapshot before the batch.
+/// Creating an edit does not read or change a document.
+#[derive(Clone)]
+pub struct Edit {
+    pointer: EditPointer,
+    value: Option<JsonValue>,
+}
+#[derive(Clone)]
+enum EditPointer {
+    Text(String),
+    Exact(Pointer),
+}
+impl EditPointer {
+    fn borrow(&self) -> PointerRef<'_> {
+        match self {
+            Self::Text(value) => value.as_str().into(),
+            Self::Exact(value) => value.into(),
+        }
+    }
+    fn retain(pointer: PointerRef<'_>) -> Self {
+        match pointer.0 {
+            PointerRepr::Text(value) => Self::Text(value.to_owned()),
+            PointerRepr::Exact(value) => Self::Exact(value.clone()),
+        }
+    }
+    fn segments(path: &[&str]) -> Self {
+        let mut pointer = String::new();
+        for segment in path {
+            pointer.push('/');
+            for character in segment.chars() {
+                match character {
+                    '~' => pointer.push_str("~0"),
+                    '/' => pointer.push_str("~1"),
+                    other => pointer.push(other),
+                }
+            }
+        }
+        Self::Text(pointer)
+    }
+}
+impl Edit {
+    /// Set an exact value at decoded path segments. Parents must already exist.
+    #[must_use]
+    pub fn set(path: &[&str], value: JsonValue) -> Self {
+        Self {
+            pointer: EditPointer::segments(path),
+            value: Some(value),
+        }
+    }
+    /// Remove an existing value at decoded path segments.
+    #[must_use]
+    pub fn remove(path: &[&str]) -> Self {
+        Self {
+            pointer: EditPointer::segments(path),
+            value: None,
+        }
+    }
+    /// Set at an RFC 6901 pointer, including an exact pointer from a finding.
+    /// The edit owns its path; invalid text is refused when applying the batch.
+    #[must_use]
+    pub fn set_at<'p>(pointer: impl Into<PointerRef<'p>>, value: JsonValue) -> Self {
+        Self {
+            pointer: EditPointer::retain(pointer.into()),
+            value: Some(value),
+        }
+    }
+    /// Remove at an RFC 6901 pointer, retaining exact unpaired path units when present.
+    #[must_use]
+    pub fn remove_at<'p>(pointer: impl Into<PointerRef<'p>>) -> Self {
+        Self {
+            pointer: EditPointer::retain(pointer.into()),
+            value: None,
+        }
+    }
+}
+impl fmt::Debug for Edit {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Edit")
+            .field("sets_value", &self.value.is_some())
+            .finish_non_exhaustive()
+    }
+}
+impl Document {
+    /// Apply an atomic batch and return a new document snapshot.
+    /// Parents must exist; untouched bytes and earlier snapshots stay exact.
+    ///
+    /// # Errors
+    /// Invalid or ambiguous paths, overlapping edits and admission limits return
+    /// an error without changing the document or the reusable edits.
+    pub fn edit(&self, edits: &[Edit]) -> Result<Self, EditError> {
+        let limits = self.limits();
+        if edits.len() > limits.max_nodes {
+            return Err(backend::input_error(InputErrorKind::Limit, "node-limit", 0).into());
+        }
+        let requests: Vec<_> = edits
+            .iter()
+            .map(|edit| Request {
+                pointer: edit.pointer.borrow(),
+                value: edit.value.as_ref().map(|value| value as &dyn WriteJson),
+            })
+            .collect();
+        self.apply(&requests, limits)
+    }
+}
+
 /// One edit in an atomic batch. All pointers address the revision before the batch.
 /// Parents must exist. Missing object members and array `-` append compactly.
 #[derive(Clone, Copy)]
 #[non_exhaustive]
-pub enum Edit<'a> {
+enum Change<'a> {
     /// Replace a value or insert a missing member; preserve the value's exact token bytes.
     Set {
         /// RFC 6901 pointer, from text or an exact [`Pointer`].
@@ -77,7 +182,7 @@ pub enum Edit<'a> {
     },
 }
 
-impl fmt::Debug for Edit<'_> {
+impl fmt::Debug for Change<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Set { value, .. } => f
@@ -291,7 +396,7 @@ impl<T: Serialize + ?Sized> WriteJson for Typed<'_, T> {
         })
     }
 }
-impl WriteJson for Edit<'_> {
+impl WriteJson for Change<'_> {
     fn size(&self) -> Result<Option<usize>, EditError> {
         match self {
             Self::Set { value, .. } => value.size(),
@@ -580,7 +685,7 @@ impl Document {
         pointer: impl Into<PointerRef<'p>>,
         value: &JsonValue,
     ) -> Result<Self, EditError> {
-        self.edit(&[Edit::Set {
+        self.apply_changes(&[Change::Set {
             pointer: pointer.into(),
             value,
         }])
@@ -591,7 +696,7 @@ impl Document {
     /// # Errors
     /// Returns an editing error without changing the document.
     pub fn remove<'p>(&self, pointer: impl Into<PointerRef<'p>>) -> Result<Self, EditError> {
-        self.edit(&[Edit::Remove {
+        self.apply_changes(&[Change::Remove {
             pointer: pointer.into(),
         }])
     }
@@ -607,7 +712,7 @@ impl Document {
     /// Invalid paths, duplicates, overlap and admission failures leave the document
     /// unchanged. Known byte extents are preflighted; typed parts serialize once
     /// into a bounded writer that reserves all remaining known bytes before growing.
-    pub fn edit(&self, edits: &[Edit<'_>]) -> Result<Self, EditError> {
+    fn apply_changes(&self, edits: &[Change<'_>]) -> Result<Self, EditError> {
         let limits = self.limits();
         if edits.len() > limits.max_nodes {
             return Err(backend::input_error(InputErrorKind::Limit, "node-limit", 0).into());
@@ -615,27 +720,27 @@ impl Document {
         let mut requests = Vec::with_capacity(edits.len());
         for edit in edits {
             let pointer = match edit {
-                Edit::Set { pointer, .. } | Edit::Remove { pointer } => *pointer,
-                Edit::SetOperations { value } => {
+                Change::Set { pointer, .. } | Change::Remove { pointer } => *pointer,
+                Change::SetOperations { value } => {
                     value.check(&["operations"])?;
                     "/operations".into()
                 }
-                Edit::SetSources { value } => {
+                Change::SetSources { value } => {
                     value.check(&["sources"])?;
                     "/sources".into()
                 }
-                Edit::SetBindings { value } => {
+                Change::SetBindings { value } => {
                     value.check(&["bindings"])?;
                     "/bindings".into()
                 }
-                Edit::SetDependencies { value } => {
+                Change::SetDependencies { value } => {
                     value.check(&["dependencies"])?;
                     "/dependencies".into()
                 }
             };
             requests.push(Request {
                 pointer,
-                value: if matches!(edit, Edit::Remove { .. }) {
+                value: if matches!(edit, Change::Remove { .. }) {
                     None
                 } else {
                     Some(edit)
@@ -868,7 +973,7 @@ impl Document {
     /// # Errors
     /// Returns an editing error, including a typed part's field collision, without changing the document.
     pub fn set_operations(&self, value: &BTreeMap<String, Operation>) -> Result<Self, EditError> {
-        self.edit(&[Edit::SetOperations { value }])
+        self.apply_changes(&[Change::SetOperations { value }])
     }
     /// Set one whole binding, creating its namespace if absent.
     /// # Errors
@@ -912,7 +1017,7 @@ macro_rules! set_namespace {
         impl Document {
             #[doc = concat!("Return a new snapshot with a complete `", $field, "` map in one splice and parse.\n\n# Errors\nReturns an editing error, including a typed part's field collision, without changing the document.")]
             pub fn $method(&self, value: &BTreeMap<String, $part>) -> Result<Self, EditError> {
-                self.edit(&[Edit::$variant { value }])
+                self.apply_changes(&[Change::$variant { value }])
             }
         }
     };
@@ -1038,12 +1143,12 @@ mod tests {
                 .collect();
             let edits: Vec<_> = paths
                 .iter()
-                .map(|pointer| Edit::Remove {
+                .map(|pointer| Change::Remove {
                     pointer: pointer.into(),
                 })
                 .collect();
             PLANNING_WORK.with(|work| work.set((0, 0, 0)));
-            document = document.edit(&edits).unwrap();
+            document = document.apply_changes(&edits).unwrap();
             assert_eq!(PLANNING_WORK.with(Cell::get), (1, 1000, 500));
             let remaining = items
                 .iter()

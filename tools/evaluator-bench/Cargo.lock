@@ -405,6 +405,7 @@ dependencies = [
  "openbindings-internal-json",
  "openbindings-internal-schema",
  "regex",
+ "regex-syntax",
  "serde",
  "serde_json",
 ]

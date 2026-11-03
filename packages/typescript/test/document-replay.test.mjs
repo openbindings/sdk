@@ -49,9 +49,10 @@ test("the Python exchange carries requests and answers larger than any pipe buff
   assert.equal(result.echo, request.text);
   assert.equal(result.extra.length, 40 * 1024 * 1024);
 });
-const { core, fixture } = python(`
+const { core, fixture, admission } = python(`
 fixture=judge.current_fixture(json.loads(Path("crates/openbindings-schema-evaluator-test-support/fixtures/cases.json").read_text(encoding="utf-8")))
-answer({"core":[corpus.request(c) for c in corpus.load()],"fixture":fixture})
+admission=json.loads(Path("crates/openbindings-schema-evaluator-test-support/fixtures/current-admission.json").read_text(encoding="utf-8"))
+answer({"core":[corpus.request(c) for c in corpus.load()],"fixture":fixture,"admission":admission})
 `);
 const exact = (text) => {
   const result = sdk.parseJson(text);
@@ -88,9 +89,29 @@ test("all 505 corpus documents use the same admission and proof evidence", () =>
     }
   }
 });
+test("all 20 moved evaluator cases retain their exact negative admission evidence", () => {
+  assert.equal(admission.length, 20);
+  assert.equal(new Set(admission.map((c) => c.id)).size, 20);
+  for (const entry of admission) {
+    const document = sdk.Document.parse(entry.documentJson).value;
+    try {
+      const assessed = document.validate();
+      assert.equal(assessed.status, "report", entry.id);
+      assert.equal(assessed.report.conclusion, "non-conformant", entry.id);
+      for (const rule of entry.violates)
+        assert.equal(
+          assessed.report.evidence[rule],
+          "violated",
+          entry.id + ": " + rule,
+        );
+    } finally {
+      document.dispose();
+    }
+  }
+});
 for (const call of ["validate", "explain"]) {
-  test(`all 495 evaluator groups through ConformantDocument, ${call}`, () => {
-    assert.equal(fixture.groups.length, 495);
+  test(`all 486 evaluator groups through ConformantDocument, ${call}`, () => {
+    assert.equal(fixture.groups.length, 486);
     const observations = [];
     for (const group of fixture.groups) {
       const opened = sdk.Document.parse(group.document);
@@ -149,7 +170,7 @@ answer({"cases":len(rows),"failures":failures,"accounting":accounting})
 `,
       [fixture, observations],
     );
-    assert.equal(result.cases, 1564);
+    assert.equal(result.cases, 1546);
     assert.deepEqual(result.accounting, []);
     assert.deepEqual(result.failures, []);
   });

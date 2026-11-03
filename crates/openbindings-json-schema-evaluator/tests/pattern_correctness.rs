@@ -147,7 +147,8 @@ fn ecma_rows() -> Vec<EcmaRow> {
         .collect()
 }
 // Whether a pattern holds a construct the evaluator does not match:
-// lookaround, a backreference, a property escape or a non-word boundary.
+// lookaround, a backreference, a property absent from the pinned tables or a
+// non-word boundary. Some of these patterns have a supported linear form.
 fn may_be_unmatched(pattern: &str) -> bool {
     ["(?=", "(?!", "(?<=", "(?<!", "\\k", "\\p", "\\P", "\\B"]
         .iter()
@@ -181,7 +182,7 @@ fn combined(rows: &[(usize, &EcmaRow)], schema: impl Fn(&str) -> Value) -> Prepa
 // keyword reads as evaluated. The evaluator reads ECMA-262 11th edition, so a
 // pattern V8 accepts may be read as invalid only for a property escape whose
 // name or value that edition lacks; it declines to match only the constructs
-// that need a backtracking engine, property escapes and `\B`, and a string
+// that need a backtracking engine, missing property tables and `\B`, and a string
 // whose verdict depends on an invalid pattern gives no verdict.
 #[test]
 fn generated_patterns_match_as_ecmascript_does_through_both_keywords() {
@@ -296,6 +297,24 @@ fn generated_patterns_match_as_ecmascript_does_through_both_keywords() {
         );
         if unmatched > 0 {
             *counts.entry("patternProperties unmatched").or_default() += 1;
+        } else {
+            let marked = prepare(
+                json!({"patternProperties": {row.pattern.as_str(): true}, "unevaluatedProperties": false}),
+                ResourceSet::default(),
+            ).unwrap();
+            for (at, string) in row.strings.iter().enumerate() {
+                let value = JsonValue::parse(json!({ string: 0 }).to_string()).unwrap();
+                let outcome = marked.validate(&value);
+                assert!(matches!(
+                    outcome,
+                    ValueOutcome::Satisfies | ValueOutcome::Fails { .. }
+                ));
+                assert_eq!(
+                    matches!(outcome, ValueOutcome::Satisfies),
+                    expected(row, at)
+                );
+                *counts.entry("unevaluated marking agrees").or_default() += 1;
+            }
         }
     }
     let contract = combined(&together, |p| json!({"patternProperties": {p: false}}));
@@ -329,7 +348,7 @@ fn generated_patterns_match_as_ecmascript_does_through_both_keywords() {
         }
     }
     // 1,247 generated patterns with eight strings each: 305 V8 refuses,
-    // through both keywords; 135 hold constructs the evaluator does not match.
+    // through both keywords; 88 hold constructs the evaluator does not match.
     // Then 130 fixed patterns with sets that meet across the surrogate gap,
     // with 13 strings each, and 128 with word-boundary assertions, with 15
     // strings each; the 64 holding `\B` are not matched.
@@ -337,11 +356,11 @@ fn generated_patterns_match_as_ecmascript_does_through_both_keywords() {
         counts,
         [
             ("invalid stands in", 610),
-            ("pattern agrees", 9_106),
-            ("pattern unmatched", 2_040),
-            ("patternProperties agrees", 9_106),
-            ("patternProperties unmatched", 199),
-            ("unevaluated marking agrees", 9_106),
+            ("pattern agrees", 9_482),
+            ("pattern unmatched", 1_664),
+            ("patternProperties agrees", 9_482),
+            ("patternProperties unmatched", 152),
+            ("unevaluated marking agrees", 9_482),
         ]
         .into()
     );
@@ -416,7 +435,7 @@ fn a_non_word_boundary_is_not_matched_and_a_word_boundary_is() {
 #[test]
 fn unmatched_patterns_keep_their_own_reasons() {
     let wide = "\\S".repeat(6000);
-    for (first, second) in [("\\p{L}", wide.as_str()), (wide.as_str(), "\\p{L}")] {
+    for (first, second) in [("(?!a)", wide.as_str()), (wide.as_str(), "(?!a)")] {
         let contract = prepare(
             json!({"properties": {"a": {"pattern": first}, "b": {"pattern": second}, "c": {"pattern": "\\Bx"}}}),
             ResourceSet::default(),
@@ -427,14 +446,76 @@ fn unmatched_patterns_keep_their_own_reasons() {
             let ValueOutcome::NoVerdict { detail } = contract.validate(&value) else {
                 panic!("{member}")
             };
-            let expected = if pattern.starts_with("\\p") {
-                "unicode-property-matching"
+            let expected = if pattern.starts_with("(?") {
+                "pattern-backtracking"
             } else if pattern.starts_with("\\B") {
                 "pattern-non-word-boundary"
             } else {
                 "pattern-size-limit"
             };
             assert_eq!(detail.code, expected, "{member}");
+        }
+    }
+}
+
+// Independently generated JS-u observations, with edition11 invalid-name
+// controls kept separate from current Node's wider accepted property table.
+#[test]
+fn independently_reviewed_property_and_assertion_capabilities() {
+    let fixture: Value =
+        serde_json::from_str(include_str!("fixtures/pattern-capabilities.json")).unwrap();
+    for row in fixture["rows"].as_array().unwrap() {
+        let pattern = row["pattern"].as_str().unwrap();
+        let capability = row["expected_capability"].as_str().unwrap();
+        for schema in [
+            json!({"pattern":pattern}),
+            json!({"patternProperties":{pattern:true},"unevaluatedProperties":false}),
+        ] {
+            let is_name = schema.get("patternProperties").is_some();
+            // Unsupported patterns cannot supply the evaluated-name annotation.
+            if is_name && capability != "linear" {
+                continue;
+            }
+            let prepared = prepare(schema, ResourceSet::default()).unwrap();
+            for (at, string) in fixture["strings"].as_array().unwrap().iter().enumerate() {
+                let value = if is_name {
+                    json!({string.as_str().unwrap():null})
+                } else {
+                    string.clone()
+                };
+                let outcome = prepared.validate(&JsonValue::parse(value.to_string()).unwrap());
+                match capability {
+                    "linear" => {
+                        let expected =
+                            row["semantic_matches"].as_str().unwrap().as_bytes()[at] == b'1';
+                        assert!(
+                            matches!(
+                                outcome,
+                                ValueOutcome::Satisfies | ValueOutcome::Fails { .. }
+                            ),
+                            "{}: {outcome:?}",
+                            row["id"]
+                        );
+                        assert_eq!(
+                            matches!(outcome, ValueOutcome::Satisfies),
+                            expected,
+                            "{} at {at}",
+                            row["id"]
+                        );
+                    }
+                    "invalid" => assert!(
+                        matches!(outcome, ValueOutcome::NoVerdict { ref detail } if detail.code == "schema-pattern-compilation"),
+                        "{}: {outcome:?}",
+                        row["id"]
+                    ),
+                    "unsupported" => assert!(
+                        matches!(outcome, ValueOutcome::NoVerdict { ref detail } if detail.reason == NoVerdictReason::UnsupportedCapability),
+                        "{}: {outcome:?}",
+                        row["id"]
+                    ),
+                    _ => panic!("unknown fixture capability"),
+                }
+            }
         }
     }
 }
