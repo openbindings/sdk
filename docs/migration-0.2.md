@@ -15,7 +15,9 @@ resource comparisons, duplicate identities, anchors and original reference
 queries follow the pinned specification. Fixed contained inventories do not
 store an identical dialect profile on every node.
 
-Edits return new snapshots. `ConformantDocument` owns a concrete proof, and
+Edits return new snapshots. `ConformantDocument` owns a concrete proof and canonical
+`Operation`, `Source`, `Binding`, `Dependency` and `Example` entries. Detached
+authoring parts, raw typed views and typed setters have been removed. The
 contextual `Schema` values retain the original document after caller handles are
 dropped. `ExternalSchemas` and `SchemaEnvironment` preserve original sources,
 identities and typed resolution failures. They do not fetch missing content or
@@ -37,7 +39,10 @@ interface carriers. Invocation has owned original-document requests, explicit
 provider/evaluator/resource dependencies, separate invocation and preflight,
 shared context and consuming prepared validators. Consumer migration is ongoing;
 the obsolete source-inspection and interface-synthesis companions remain to be
-replaced by the designed current interfaces.
+replaced by source pulling. `openbindings-kind-description` now implements exact
+kind descriptions, check disclosures and source-check clients against the same
+interface pin. Queries perform no checks, context stays separate from authored
+source data, and transport/admission failures are distinct from kind rejections.
 
 ## Qualification
 
@@ -45,8 +50,12 @@ The current document/evaluator slice passes the 505-case production corpus,
 1,546 required evaluator values and the retained admission negatives. The 2,348
 auxiliary reference inputs retain their independently reviewed current obligations
 and concrete-completion controls. These overlapping inventories are not additive
-coverage. Native and Rust 1.88 core/internal-schema/evaluator suites pass 502
-checks, and Rust 1.88 also builds the WebAssembly bridge.
+coverage. The recursive checkpoint passes 662
+core/internal-schema/evaluator/invocation checks on each Rust toolchain, with four
+existing ignored controls, and 180 Node checks. The subsequent kind-description
+slice passes 187 companion/shared-cancellation/invocation checks on each toolchain,
+including 14 unmodified pinned carrier cases within its carrier tests. Both
+Rust toolchains build the new companion for WebAssembly. These totals overlap.
 
 Independent reviews cover custom profile selection, original meta-schema
 admission, aggregate preparation budgets and the compact inventory layout.
@@ -54,14 +63,18 @@ Semantic primitive/format review and current host/package results are recorded i
 the migration receipts. Finite passing controls do not establish complete JSON
 Schema capability or completion of the SDK migration.
 
+The recursive extension preserves annotation coordinates with complete producer
+formulas and narrow original-graph certificates. All 33 original extension controls
+and 71 coordinate/identifier controls pass; the auxiliary ledger is unchanged.
+Kind-description review resolved support-disclosure, exact extension, operational
+failure and cancellation-handoff findings. These receipts qualify their bounded
+scopes, not arbitrary provider behavior or unrestricted recursion.
+
 ## Remaining work
 
-- Resolve the two harder recursive Undefined obligations and adjudicate the
-  remaining recursive annotation control.
 - Finish ordinary user-schema backend allocation qualification.
-- Replace parallel authoring/plain/conformant representations with canonical
-  owned domain views; complete the planned module and terminology organization.
-- Implement schema comparison, kind description and source pulling against the
+- Complete the remaining module and terminology organization.
+- Implement schema comparison and source pulling against the
   pinned current interfaces, and finish invocation consumers and examples.
 - Complete TypeScript organization, all-host/package qualification, CI and the
   final matched-toolchain performance campaign. No performance threshold is waived.

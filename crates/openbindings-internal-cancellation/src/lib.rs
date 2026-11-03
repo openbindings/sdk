@@ -86,6 +86,30 @@ impl WorkControl for CancellationToken {
         self.is_cancelled()
     }
 }
+
+/// Link external cancellation to a per-call token until the returned registration
+/// is dropped. Cancellation reaches synchronous provider work immediately. It
+/// flows only from external to local; cancelling local never cancels external.
+pub fn relay(external: &CancellationToken, local: &CancellationToken) -> Cancellation {
+    struct Cancel(CancellationToken);
+    impl std::task::Wake for Cancel {
+        fn wake(self: Arc<Self>) {
+            self.0.cancel();
+        }
+        fn wake_by_ref(self: &Arc<Self>) {
+            self.0.cancel();
+        }
+    }
+    let waker = Waker::from(Arc::new(Cancel(local.clone())));
+    let mut registration = external.cancelled();
+    if Pin::new(&mut registration)
+        .poll(&mut Context::from_waker(&waker))
+        .is_ready()
+    {
+        local.cancel();
+    }
+    registration
+}
 #[must_use = "cancellation futures must be polled or awaited"]
 /// Executor-independent future that resolves on [`CancellationToken::cancel`]. Polling registers a scoped waker; dropping the future unregisters it. It owns a clone of the cancellation state, not a task or timer.
 pub struct Cancellation {

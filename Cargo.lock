@@ -1017,6 +1017,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "openbindings-kind-description"
+version = "0.2.0-alpha.1"
+dependencies = [
+ "openbindings",
+ "openbindings-context",
+ "openbindings-internal-cancellation",
+ "serde_json",
+]
+
+[[package]]
 name = "openbindings-schema-evaluator-test-support"
 version = "0.2.0-alpha.1"
 dependencies = [

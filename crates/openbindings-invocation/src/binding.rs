@@ -263,31 +263,8 @@ impl Drop for CancelOnDrop {
         self.0.cancel();
     }
 }
-/// A scoped second registration delivers cancellation into synchronous provider
-/// and evaluator work, without waiting for the driver to regain control.
-pub(crate) fn cancellation_relay(
-    external: &CancellationToken,
-    local: &CancellationToken,
-) -> crate::Cancellation {
-    struct Cancel(CancellationToken);
-    impl std::task::Wake for Cancel {
-        fn wake(self: Arc<Self>) {
-            self.0.cancel();
-        }
-        fn wake_by_ref(self: &Arc<Self>) {
-            self.0.cancel();
-        }
-    }
-    let waker = std::task::Waker::from(Arc::new(Cancel(local.clone())));
-    let mut registration = external.cancelled();
-    if std::pin::Pin::new(&mut registration)
-        .poll(&mut std::task::Context::from_waker(&waker))
-        .is_ready()
-    {
-        local.cancel();
-    }
-    registration
-}
+// Shared with the other asynchronous companions; scoped to this call.
+pub(crate) use openbindings_internal_cancellation::relay as cancellation_relay;
 
 /// External cancellation revokes shared handoffs synchronously. Independently
 /// polled provider handles cannot release accepted values after cancel returns.

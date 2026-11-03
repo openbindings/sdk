@@ -150,12 +150,22 @@ authentication, additional network policy and credentialed CORS. Browser Fetch
 limits what redirect and network facts the SDK can observe. See
 [HTTP policy](docs/http-discovery.md).
 
-Source inspection, interface synthesis and invocation are optional Rust
-companions. They define provider traits and checked callers. Kind implementations
-supply source interpretation, binding behavior and acquisition policy in separate
-projects. Applications choose providers; kinds remain exact opaque strings in core.
-No fixed registry or universal kind-support claim follows from installing the SDK.
-TypeScript does not expose inspection, synthesis or invocation APIs.
+Invocation and [kind description/source checking](crates/openbindings-kind-description/README.md)
+are optional Rust companions. They define provider traits and checked callers.
+Kind descriptions retain per-operation support claims and disclose check execution;
+source checks require an explicit call and never acquire context or retry by
+themselves. Exact carriers retain allowed output members, numbers, strings and
+absent-versus-null data. Neither a description nor a checked source proves document
+conformance, availability or permission to execute. Default carrier handoff bounds
+are 32 MiB per request/response and 100,000 listed kinds; they do not bound work
+inside a provider. Native provider failures remain distinct from kind rejections.
+
+Kind implementations supply source interpretation, binding behavior and acquisition
+policy in separate projects. Applications choose providers; kinds remain exact
+opaque strings in core. No fixed registry or universal kind-support claim follows
+from installing the SDK. TypeScript does not expose role APIs. Source pulling and
+schema comparison remain implementation work; the obsolete inspection/synthesis
+companions are awaiting replacement and are not current-interface claims.
 
 ## Runtime qualifications
 

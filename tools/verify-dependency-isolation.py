@@ -82,7 +82,7 @@ assert set(internal['dependencies']) == {'openbindings'}
 assert internal['dependencies']['openbindings'] == {
     'version': '=0.2.0-alpha.1', 'path': '../openbindings',
 }
-for interface in ['http-discovery', 'invocation', 'source-inspection', 'interface-synthesis']:
+for interface in ['http-discovery', 'invocation', 'kind-description', 'source-inspection', 'interface-synthesis']:
     package = root / 'crates' / ('openbindings-' + interface)
     manifest = tomllib.loads((package / 'Cargo.toml').read_text(encoding='utf-8'))
     assert manifest['dependencies'][cancellation] == {
@@ -116,6 +116,10 @@ invocation_source = ''.join(path.read_text(encoding='utf-8') for path in
 assert 'pub use openbindings_context::{Context, ContextChallenge};' in invocation_source
 for retired in ['BindingValue', 'BindingInvocationInput', 'BindingLifecycle']:
     assert not re.search(r'pub (struct|enum|type) ' + retired + r'\b', invocation_source), retired
+kind = manifests['openbindings-kind-description']['dependencies']
+assert set(kind) == {'openbindings', 'openbindings-context', cancellation}
+for owner in ['openbindings', 'openbindings-invocation', 'openbindings-json-schema-evaluator']:
+    assert 'openbindings-kind-description' not in manifests[owner].get('dependencies', {})
 assert 'openbindings-context' not in core.get('dependencies', {})
 print('Interface records: current invocation uses the shared context contract; remaining legacy companions remain isolated pending replacement.')
 

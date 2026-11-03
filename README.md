@@ -43,8 +43,7 @@ requests diagnostics at original instance and schema locations. The
 complete document-to-verdict example and covers initialization and disposal.
 
 To edit, parse a `Document` with `Document::parse` (or create one with
-`Document::new`) and change it with `set`, `remove`, atomic `edit(&[Edit])`, or typed
-field and part setters. Untouched bytes remain exact. `ConformantDocument`
+`Document::new`) and change it with `set`, `remove`, atomic `edit(&[Edit])`. Untouched bytes remain exact. `ConformantDocument`
 has no mutable access; consume it with `into_inner()` to edit again. Clones,
 views and proofs retain their revision.
 
@@ -54,12 +53,14 @@ Core owns document semantics, exact JSON, typed authoring and operation lookup.
 Value evaluation is an explicit companion or a caller-provided implementation.
 HTTP discovery acquires interface documents and publishes their immutable bytes.
 
-Rust companions define provider traits and checked callers for source inspection,
-interface synthesis and invocation. A source inspector enumerates bindable targets;
-a synthesizer produces an interface with coverage; a binding invoker interacts
-with a realization; an operation invoker applies document selection and value
-contracts. Kind implementations live in separate projects and supply the meaning
-of source and binding data. Applications choose providers and acquisition policy.
+Rust companions define provider traits and checked callers for invocation, kind
+description and source checking. A binding invoker interacts with a realization;
+an operation invoker applies document selection and value contracts. Kind queries
+carry operation-specific support claims and check disclosures. Explicit source
+checks return a source-entry claim or a separate rejection, context challenge or
+operational failure. Kind implementations supply the meaning of source and binding
+data. Applications choose providers, execution permission and acquisition policy.
+Source pulling and schema comparison remain under implementation.
 
 Start with the crate guide for
 [core](crates/openbindings/README.md),
@@ -67,8 +68,7 @@ Start with the crate guide for
 [evaluator qualification](crates/openbindings-schema-evaluator-test-support/README.md),
 [HTTP discovery](crates/openbindings-http-discovery/README.md),
 [shared context](crates/openbindings-context/README.md),
-[source inspection](crates/openbindings-source-inspection/README.md),
-[interface synthesis](crates/openbindings-interface-synthesis/README.md) or
+[kind description and source checking](crates/openbindings-kind-description/README.md) or
 [invocation](crates/openbindings-invocation/README.md).
 
 ## Limits and compatibility
@@ -82,8 +82,7 @@ Rust requires 1.88. The 256 KiB document stack regression is qualified on the
 development toolchain; older supported compilers may need larger debug stacks.
 TypeScript owners require explicit disposal for timely release. Long synchronous
 Wasm work belongs in a Worker when the caller needs responsive cancellation.
-The Rust APIs for source inspection, interface synthesis and invocation are
-provisional. TypeScript does not expose these APIs.
+The Rust role APIs are provisional. TypeScript does not expose these APIs.
 
 Read [capabilities and limits](CAPABILITIES.md), [host support](docs/support.md),
 [performance measurements](docs/performance-boundaries.md) and the

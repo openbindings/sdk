@@ -1,0 +1,340 @@
+{
+  "format": "openbindings.kind-descriptor-cases@1",
+  "tests": [
+    {
+      "description": "A listing names each kind with the operations performed under it, by key",
+      "operation": "listKinds",
+      "output": [
+        {
+          "kind": "example.openapi@1",
+          "description": "An OpenAPI 3.1 document and the HTTP API it describes.",
+          "supports": [
+            "openbindings.binding-invoker.invokeBinding",
+            "openbindings.source-puller.pullSource",
+            "openbindings.kind-descriptor.checkSource"
+          ]
+        },
+        {
+          "kind": "example.usage@1",
+          "supports": [
+            "openbindings.binding-invoker.invokeBinding"
+          ]
+        },
+        {
+          "kind": "example.catalogued@1",
+          "description": "A kind this implementation knows of but performs nothing under.",
+          "supports": []
+        }
+      ],
+      "schemaValid": true
+    },
+    {
+      "description": "An empty listing is a valid answer",
+      "operation": "listKinds",
+      "output": [],
+      "schemaValid": true
+    },
+    {
+      "description": "A listed kind carries its supported operations",
+      "operation": "listKinds",
+      "output": [
+        {
+          "kind": "example.openapi@1",
+          "description": "An OpenAPI 3.1 document and the HTTP API it describes."
+        }
+      ],
+      "schemaValid": false
+    },
+    {
+      "description": "A described kind carries both data schemas and a check that only reads",
+      "operation": "describeKind",
+      "input": {
+        "kind": "example.openapi@1"
+      },
+      "output": {
+        "kind": "example.openapi@1",
+        "description": "An OpenAPI 3.1 document and the HTTP API it describes. An embedded document is the source; nothing is re-fetched for it.",
+        "supports": [
+          "openbindings.binding-invoker.invokeBinding",
+          "openbindings.source-puller.pullSource",
+          "openbindings.kind-descriptor.checkSource"
+        ],
+        "check": {
+          "description": "Fetches the OpenAPI document when asked to embed it, or confirms it is served at origin. Sends no other request.",
+          "executes": false
+        },
+        "sourceData": {
+          "oneOf": [
+            {
+              "title": "Reference the document at a URL",
+              "type": "object",
+              "properties": {
+                "origin": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "required": [
+                "origin"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "title": "Embed the document fetched from a URL",
+              "type": "object",
+              "properties": {
+                "fetch": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "required": [
+                "fetch"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "title": "Embed a document you have",
+              "type": "object",
+              "properties": {
+                "artifact": {
+                  "type": "object"
+                }
+              },
+              "required": [
+                "artifact"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "bindingData": {
+          "type": "object",
+          "properties": {
+            "target": {
+              "type": "string",
+              "description": "A JSON Pointer to the path item and method."
+            }
+          },
+          "required": [
+            "target"
+          ]
+        }
+      },
+      "schemaValid": true
+    },
+    {
+      "description": "A described kind whose check starts a process says so",
+      "operation": "describeKind",
+      "input": {
+        "kind": "example.mcp-stdio@1"
+      },
+      "output": {
+        "kind": "example.mcp-stdio@1",
+        "description": "An MCP server started over standard input and output. Each tool the server lists becomes an operation, with the tool's input schema as the input; a binding's data names the tool.",
+        "supports": [
+          "openbindings.binding-invoker.invokeBinding",
+          "openbindings.source-puller.pullSource",
+          "openbindings.kind-descriptor.checkSource"
+        ],
+        "check": {
+          "description": "Starts the server with the given command, completes the MCP initialize handshake to confirm it works and read its name, then stops it.",
+          "executes": true
+        },
+        "sourceData": {
+          "type": "object",
+          "properties": {
+            "command": {
+              "type": "string",
+              "title": "How the server is started",
+              "description": "The executable to run."
+            },
+            "args": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "title": "Arguments"
+            },
+            "env": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              },
+              "title": "Environment variables",
+              "description": "Set for the server process. Secrets belong in context, not here."
+            }
+          },
+          "required": [
+            "command"
+          ]
+        },
+        "bindingData": {
+          "type": "object",
+          "properties": {
+            "tool": {
+              "type": "string",
+              "title": "The tool's name as the server lists it"
+            }
+          },
+          "required": [
+            "tool"
+          ]
+        }
+      },
+      "schemaValid": true
+    },
+    {
+      "description": "A kind whose sources and bindings carry no data is described without either schema, and without a check this implementation does not offer",
+      "operation": "describeKind",
+      "input": {
+        "kind": "example.catalogued@1"
+      },
+      "output": {
+        "kind": "example.catalogued@1",
+        "description": "A kind this implementation knows of but performs nothing under.",
+        "supports": []
+      },
+      "schemaValid": true
+    },
+    {
+      "description": "A description is required",
+      "operation": "describeKind",
+      "input": {
+        "kind": "example.openapi@1"
+      },
+      "output": {
+        "kind": "example.openapi@1",
+        "supports": []
+      },
+      "schemaValid": false
+    },
+    {
+      "description": "A check disclosure says whether it executes",
+      "operation": "describeKind",
+      "input": {
+        "kind": "example.openapi@1"
+      },
+      "output": {
+        "kind": "example.openapi@1",
+        "description": "An OpenAPI 3.1 document and the HTTP API it describes.",
+        "supports": [
+          "openbindings.kind-descriptor.checkSource"
+        ],
+        "check": {
+          "description": "Fetches the document."
+        }
+      },
+      "schemaValid": false
+    },
+    {
+      "description": "The kind to describe is the only input member",
+      "operation": "describeKind",
+      "input": {
+        "kinds": [
+          "example.openapi@1"
+        ]
+      },
+      "output": {
+        "kind": "example.openapi@1",
+        "description": "An OpenAPI 3.1 document and the HTTP API it describes.",
+        "supports": []
+      },
+      "schemaValid": false
+    },
+    {
+      "description": "A check completes the fetch form into the embedded form and derives a description",
+      "operation": "checkSource",
+      "input": {
+        "kind": "example.openapi@1",
+        "data": {
+          "fetch": "https://api.example.com/openapi.json"
+        }
+      },
+      "output": {
+        "kind": "example.openapi@1",
+        "data": {
+          "artifact": {
+            "openapi": "3.1.0",
+            "info": {
+              "title": "Example API",
+              "version": "1.0.0"
+            },
+            "paths": {}
+          }
+        },
+        "description": "Example API 1.0.0"
+      },
+      "schemaValid": true
+    },
+    {
+      "description": "A check of a kind whose sources carry no data takes only the kind",
+      "operation": "checkSource",
+      "input": {
+        "kind": "example.text@1"
+      },
+      "output": {
+        "kind": "example.text@1",
+        "description": "Text tools"
+      },
+      "schemaValid": true
+    },
+    {
+      "description": "A check may carry context the kind needs to reach what the data names",
+      "operation": "checkSource",
+      "input": {
+        "kind": "example.openapi@1",
+        "data": {
+          "fetch": "https://admin.example.com/openapi.json"
+        },
+        "context": {
+          "accessToken": "placeholder"
+        }
+      },
+      "output": {
+        "kind": "example.openapi@1",
+        "data": {
+          "artifact": {
+            "openapi": "3.1.0",
+            "info": {
+              "title": "Admin API",
+              "version": "2.0.0"
+            },
+            "paths": {}
+          }
+        },
+        "description": "Admin API 2.0.0"
+      },
+      "schemaValid": true
+    },
+    {
+      "description": "A check input carries nothing beyond kind, data and context",
+      "operation": "checkSource",
+      "input": {
+        "kind": "example.openapi@1",
+        "data": {
+          "fetch": "https://api.example.com/openapi.json"
+        },
+        "embed": true
+      },
+      "output": {
+        "kind": "example.openapi@1",
+        "data": {
+          "artifact": {}
+        }
+      },
+      "schemaValid": false
+    },
+    {
+      "description": "The entry the check returns names its kind",
+      "operation": "checkSource",
+      "input": {
+        "kind": "example.text@1"
+      },
+      "output": {
+        "description": "Text tools"
+      },
+      "schemaValid": false
+    }
+  ]
+}
