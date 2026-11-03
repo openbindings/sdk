@@ -1,7 +1,7 @@
 # Saved SDK 0.2 alignment checkpoint
 
 This is a feature-branch recovery checkpoint requested by Matthew. It deliberately
-includes unfinished source-pull work. It is not a merge, release, whole-workspace
+includes unfinished alignment work. It is not a merge, release, final whole-SDK
 qualification or completed-alignment claim. Continue on `codex/sdk-02-foundation`;
 existing unpublished APIs have no compatibility protection.
 
@@ -36,7 +36,8 @@ Current tests cover all 21 unmodified pinned pull-report cases, five published
 example pairs and 74 independent design controls. Duplicate uses are refused at
 the earlier carrier gate rather than the later relationship gate. Two illustrative
 kind implementations project from source alone, then use profile identity for
-reuse/conflict and existing-entry drift. Consumer witnesses cover inspection,
+reuse/conflict and exact kind-owned would-write comparison for existing-entry
+drift (including annotations). Consumer witnesses cover report inspection,
 explicit selective adoption, revalidation, repeated pull and explicit proposals.
 Comparison failure and unrepresentable removal-only drift remain operational
 inability. Core owns preference/idempotent on bindings, despite loose wording in
@@ -45,8 +46,8 @@ the source-puller prose; operation descriptions and binding author fields surviv
 [Independent implementation review](alignment-checkpoint/source-pull-review.md)
 passes at the recorded source hashes, with 500 additional closure cases, 48
 allocation lanes and cancellation/ownership controls. Its annotation-drift finding
-in the illustrative provider is resolved. Legacy inspection/synthesis
-crates and external consumers have not yet been retired. Core prospective
+in the illustrative provider is resolved. Legacy inspection/synthesis crates,
+shared records and old external consumers are removed. Core prospective
 edit/validation internals retain core limits and are explicitly outside the pull
 relationship ledger; this is not a whole-call allocation or interruptibility claim.
 
@@ -62,11 +63,13 @@ toolchain; the MSRV compatibility receipt explicitly records no matching Clippy 
 
 ## Resume implementation
 
-1. Source-pull implementation and external packaged/host consumers pass. Complete
-   the current invocation consumer and remaining current-spec catalog/performance
-   witnesses, then delete obsolete inspection/synthesis crates, support records,
-   verification tools and old consumers. Historical APIs, test counts and incidental
-   behavior have no compatibility protection.
+1. Source-pull and current invocation consumers pass source/archive and Node/Wasm
+   checks. Independent invocation review adds rejected-output, exact context,
+   selection, embedded-kind, late-error and cancellation witnesses. Complete the
+   remaining current-spec catalog/performance jobs and final consumer audit.
+   Obsolete inspection/synthesis crates, records, verifiers and consumers are
+   deleted; package inventories, feature matrices and CI now name current roles.
+   Historical APIs, test counts and incidental behavior have no protection.
 2. Close ordinary compiler allocation accounting. The independent construction
    design calls for one attempt through SDK conversion/projection/diagnostics,
    early semantic routing for uncertified shapes, and a version-locked allocation

@@ -369,19 +369,17 @@ dependencies = [
 ]
 
 [[package]]
-name = "openbindings-internal-cancellation"
+name = "openbindings-context"
 version = "0.2.0-alpha.1"
 dependencies = [
  "openbindings",
 ]
 
 [[package]]
-name = "openbindings-internal-interfaces"
+name = "openbindings-internal-cancellation"
 version = "0.2.0-alpha.1"
 dependencies = [
  "openbindings",
- "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -413,8 +411,8 @@ version = "0.2.0-alpha.1"
 dependencies = [
  "futures-core",
  "openbindings",
+ "openbindings-context",
  "openbindings-internal-cancellation",
- "openbindings-internal-interfaces",
  "serde",
  "serde_json",
 ]

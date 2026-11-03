@@ -725,7 +725,8 @@ and, when the host sets one, `evaluation_steps`.
 ## Stand-ins
 
 A value contract with a stand-in compiles a bounds program beside its own
-program (see the evaluator's [stand-ins](../crates/openbindings-json-schema-evaluator/README.md#stand-ins)),
+program (the current evaluator's [semantic dependence policy](../crates/openbindings-json-schema-evaluator/README.md#results-and-semantic-dependence)
+supersedes this historical implementation),
 so preparing it takes a second compilation, and a pass that reaches a stand-in
 takes two more: one over the contract's own entry in the bounds program, which
 measures the pass's work, and one over a bound, within eight times that work

@@ -11,14 +11,14 @@ import subprocess
 ROOT = Path(__file__).resolve().parents[1]
 PUBLIC_CRATES = (
     "openbindings-internal-cancellation",
-    "openbindings-internal-interfaces",
     "openbindings",
     "openbindings-context",
     "openbindings-json-schema-evaluator",
     "openbindings-http-discovery",
     "openbindings-schema-evaluator-test-support",
-    "openbindings-source-inspection",
-    "openbindings-interface-synthesis",
+    "openbindings-kind-description",
+    "openbindings-schema-comparison",
+    "openbindings-source-pull",
     "openbindings-invocation",
 )
 

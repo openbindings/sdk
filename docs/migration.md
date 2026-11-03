@@ -117,21 +117,20 @@ transport, HTTP and document outcomes separately. Publication defaults to CORS
 `*`; authentication and credentialed CORS remain application policy.
 Read [HTTP policy](http-discovery.md) before porting a custom transport.
 
-## Inspect sources and synthesize interfaces
+## Pull from sources
 
-Legacy TypeScript exposes `SourceInspector.inspectSource`,
-`InterfaceSynthesizer.synthesizeInterface`, the optional
-`CoverageSynthesizer.synthesizeInterfaceWithCoverage`,
-and corresponding `OpenBindingsRuntime` methods. They have no public TypeScript
-replacement here. Rust uses `SourceInspector` with the checked `Inspector`, and
-`InterfaceSynthesizer` with `Synthesizer`. Callers assign source and operation
-keys, inspect coverage, and choose strict or partial-result policy. See the
-[inspection guide](../crates/openbindings-source-inspection/README.md) and
-[synthesis guide](../crates/openbindings-interface-synthesis/README.md).
+The earlier inspector and synthesizer APIs have been removed. Current source
+pulling starts with a conformant original document and a selected source key.
+A `SourcePuller` returns additions and a report; `PullClient` checks relationships
+and prospective conformance. The caller inspects the report and explicitly adopts
+selected additions or proposals through ordinary document edits. There is no
+strict/partial synthesis envelope or compatibility adapter. See the
+[source-pull guide](../crates/openbindings-source-pull/README.md).
 
-The checked Go release line exposes neither inspection nor synthesis. Providers
-must be integrated under their own kind contracts; the SDK does not infer a
-universal provider registry, credential policy or supported-kind set.
+`openbindings-kind-description` separately describes and checks source kinds.
+Applications choose providers and context policy. No universal provider registry,
+credential policy or global supported-kind verdict is implied. These role APIs
+are currently Rust companions; the TypeScript facade does not expose them.
 
 ## Legacy source references
 

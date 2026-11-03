@@ -110,9 +110,8 @@ jobs:
         run: |
           cargo build --locked --manifest-path tools/conformance-observer/Cargo.toml
           python tools/qualification/replay/check-container-findings.py --binary target/debug/sdk-production-observer
-      - run: python tools/verify-source-inspection.py --archives --wasm
-      - run: python tools/verify-interface-synthesis.py --archives --wasm
-      - run: python tools/verify-binding-invocation.py --archives --wasm
+      - run: python tools/verify-source-pull.py --archives --wasm
+      - run: python tools/verify-invocation.py --archives --wasm
       - name: Hand the built package to the browser job
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

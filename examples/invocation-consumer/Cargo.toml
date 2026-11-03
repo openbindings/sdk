@@ -1,0 +1,32 @@
+[package]
+rust-version = "1.88"
+name = "invocation-consumer"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["rlib", "cdylib"]
+
+[features]
+default = ["dep:openbindings-json-schema-evaluator"]
+wasm-probe = ["dep:openbindings-json-schema-evaluator", "dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:js-sys", "dep:futures-util"]
+
+[dependencies]
+serde_json = "=1.0.151"
+openbindings-json-schema-evaluator = { version = "=0.2.0-alpha.1", optional = true }
+openbindings = "=0.2.0-alpha.1"
+openbindings-source-pull = "=0.2.0-alpha.1"
+openbindings-invocation = "=0.2.0-alpha.1"
+source-pull-consumer = "=0.0.0"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+futures-util = { version = "=0.3.34", default-features = false, features = ["std"], optional = true }
+wasm-bindgen = { version = "=0.2.129", optional = true }
+wasm-bindgen-futures = { version = "=0.4.79", optional = true }
+js-sys = { version = "=0.3.106", optional = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+tokio = { version = "1.54.1", features = ["rt", "macros", "time"] }

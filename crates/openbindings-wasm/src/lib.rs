@@ -1453,13 +1453,23 @@ mod proof_mutation_tests {
         let mut independent = proof.document();
         independent
             .handle
-            .edit(|document| document.set_name("changed"))
+            .edit(|document| {
+                document.edit(&[Edit::set(
+                    &["name"],
+                    JsonValue::parse(r#""changed""#).unwrap(),
+                )])
+            })
             .unwrap();
         assert_eq!(proof.to_bytes(), before);
         let mut consumed = proof.into_inner();
         consumed
             .handle
-            .edit(|document| document.set_name("edited"))
+            .edit(|document| {
+                document.edit(&[Edit::set(
+                    &["name"],
+                    JsonValue::parse(r#""edited""#).unwrap(),
+                )])
+            })
             .unwrap();
     }
 }

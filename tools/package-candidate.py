@@ -16,13 +16,14 @@ ROOT = Path(__file__).resolve().parents[1]
 PUBLIC_CRATES = {
     "openbindings", "openbindings-json-schema-evaluator",
     "openbindings-http-discovery", "openbindings-schema-evaluator-test-support",
-    "openbindings-source-inspection",
-    "openbindings-interface-synthesis", "openbindings-invocation",
+    "openbindings-context", "openbindings-kind-description",
+    "openbindings-schema-comparison", "openbindings-source-pull",
+    "openbindings-invocation",
 }
 
 INTERNAL_CRATES = {
     "openbindings-internal-json", "openbindings-internal-schema",
-    "openbindings-internal-cancellation", "openbindings-internal-interfaces",
+    "openbindings-internal-cancellation",
 }
 BUILD_ONLY_CRATES = {"openbindings-wasm"}
 
@@ -112,10 +113,10 @@ def self_test():
         "dependencies": {"openbindings": {"version": "=0.2.0"}},
         "dev-dependencies": {"openbindings-invocation": {"version": "=0.2.0"}},
         "target": {"cfg(unix)": {"dev-dependencies": {
-            "inspection": {"package": "openbindings-source-inspection", "version": "=0.2.0"}}}},
+            "pull": {"package": "openbindings-source-pull", "version": "=0.2.0"}}}},
     }
     assert local_dependencies(dev_only, local) == {
-        "openbindings", "openbindings-invocation", "openbindings-source-inspection"}
+        "openbindings", "openbindings-invocation", "openbindings-source-pull"}
     try:
         local_dependencies({"dev_dependencies": {}}, local)
     except SystemExit:
@@ -124,13 +125,12 @@ def self_test():
         raise AssertionError("Accepted an unrecognized dependency table")
     # Every library builds on core and the internal crates; HTTP discovery
     # depends on invocation only for its tests.
-    dependencies = {name: {"openbindings", "openbindings-internal-cancellation",
-                           "openbindings-internal-interfaces"} for name in PUBLIC_CRATES}
+    dependencies = {name: {"openbindings", "openbindings-internal-cancellation"}
+                    for name in PUBLIC_CRATES}
     dependencies["openbindings"] = {"openbindings-internal-json", "openbindings-internal-schema"}
     dependencies["openbindings-internal-json"] = set()
     dependencies["openbindings-internal-schema"] = {"openbindings-internal-json"}
-    for name in ["openbindings-internal-cancellation", "openbindings-internal-interfaces"]:
-        dependencies[name] = {"openbindings"}
+    dependencies["openbindings-internal-cancellation"] = {"openbindings"}
     dependencies["openbindings-http-discovery"].add("openbindings-invocation")
     order = publication_order(dependencies)
     assert order.index("openbindings-invocation") < order.index("openbindings-http-discovery")
@@ -288,7 +288,7 @@ def main():
     compat = out / "compat-consumer"
     compat_fixture(compat, {item["name"]: item["version"] for item in packages}, patches)
     for features in ["", "ap", "sdk", "sdk,ap", "evaluator", "evaluator,po", "native", "native,ap",
-                     "portable", "inspection", "synthesis", "invocation"]:
+                     "portable", "context", "kinds", "comparison", "pull", "invocation"]:
         feature_args = ["--features", features] if features else []
         label = features.replace(",", "-") or "baseline"
         run("compat-" + label, ["cargo", "test", *offline, "--no-default-features", *feature_args], compat)

@@ -249,15 +249,12 @@
   HTTPS to HTTP discovery redirect refused": the destination's scheme or host,
   credentials in its URL, the ten-redirect limit (which also ends a cycle) or
   credential replay.
-- Provisional Rust provider traits and checked callers for source inspection,
-  interface synthesis, binding invocation and operation invocation. The three
-  kind-facing companions share one `SupportedKind` and `KindSupportVerdict`, so a
-  provider serving several jobs builds one advisory list. Inspection and
-  invocation share one by-value `BindingValue`: an inspected target's binding
-  invokes as it is, and `bind(operation, source)` gives the author's core binding;
-  its `BoundaryError` converts into an `InspectionError` that keeps the boundary
-  code and location. A synthesis provider's typed-part edit over the byte budget
-  refuses as `openbindings.synthesis.byte-limit`.
+- Current optional Rust role APIs for kind description/checking, source pulling,
+  schema identity, and binding/operation invocation. Shared context challenges and
+  original-document requests replace detached inspection/synthesis models. Source
+  pulling returns additions and a report for explicit caller adoption. Old
+  inspection/synthesis crates and shared legacy records are removed with no
+  compatibility adapters.
 - A TypeScript API with bundled Wasm, exact-value editing, disposable owners and
   Fetch discovery for qualified browser, Node ESM and Worker hosts, whose
   declarations import none of the generated Wasm bindings. Its names

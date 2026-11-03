@@ -55,14 +55,6 @@ caller-provided transport and immutable publication from its optional native HTT
 client. The TypeScript companion uses ordinary Fetch callbacks. No acquisition URL
 is injected into document/schema interpretation.
 
-`openbindings-source-inspection` is a separate optional Rust interface companion. Kind
-providers implement an associated-future trait; callers use a checked `Inspector`.
-It reuses core authoring values while enforcing the interface's narrower carrier rules.
-Acquisition stays in providers. A target's binding is the by-value `BindingValue`
-invocation also takes, without author-owned keys. It adds
-no dependency from core to interface behavior; its narrow Wasm probe does not extend the
-published TypeScript surface. See the [interface mapping](../crates/openbindings-source-inspection/README.md).
-
 `openbindings-wasm` is a private bridge behind the first-class TypeScript facade,
 separate from the Rust interface companions.
 Rust owns semantic work and exact values. The facade exposes discriminated outcomes,
@@ -81,47 +73,44 @@ migration remain separate design work.
 `{message, schema}` challenge carrier. It depends only on core exact JSON and
 performs no acquisition, schema evaluation, trust decision or retry. Invocation,
 kind checking and pulling consume this shared interface concept; it adds no OBI
-fields. Integration of the new companion boundaries is in progress.
+fields. Each role consumes this contract without adding a dependency to core.
 
-`openbindings-interface-synthesis` is a separate optional interface companion, with no
-dependency on inspection. Providers return editable candidates; the `Synthesizer`
-facade checks core conformance, source preservation and coverage correspondence
-before delivering immutable results. Strict refusal retains the checked document
-and evidence from that same call. Concrete source analysis and kind soundness
-remain provider responsibilities. See the [synthesis guide](../crates/openbindings-interface-synthesis/README.md).
+`openbindings-kind-description` separates description, check-description and actual
+source checking. Support claims are per operation. Its finite clients retain
+native provider failures, exact carriers and the shared context challenge.
+Queries never trigger a source check or context acquisition.
 
-`openbindings-invocation` adds the optional binding-kind provider seam, document-based operation invocation, and one
-checked input/output lifetime for all cardinalities. It depends on core only,
-without inspection, synthesis, HTTP or a mandatory runtime. Caller polling
-drives bounded I/O; source interpretation and external effects remain provider
-responsibilities. `operation::Invoker` adds explicit document-based selection and
-per-value validation through a caller-selected evaluator, returning that same
-lifecycle. Context provisioning and remote interface transports remain separate work.
-The invocation companion's
-[public guide](../crates/openbindings-invocation/README.md) describes both entry
-points and the maintained lifecycle tests.
+`openbindings-source-pull` owns pull additions and reports, original-document
+requests, borrowed providers and a checked `PullClient`. Providers project from
+the selected source according to its kind. The client checks report relationships
+and core conformance of the prospective additions; the caller explicitly chooses
+what to adopt. Proposals never edit the original document automatically.
+[Source pulling](../crates/openbindings-source-pull/README.md) documents these
+responsibilities and the limits of mechanical validation.
 
-The three kind-facing interfaces define `SupportedKind` and `KindSupportVerdict`
-identically, and the source inspector and binding invoker share one by-value
-`Binding` schema. The SDK defines these records once, in the internal
-`openbindings-internal-interfaces` crate, with the by-value `BindingValue`'s
-structural `BoundaryError` and carrier readers; inspection, synthesis and
-invocation reexport the records as all four async companions reexport
-cancellation. The carrier readers stay hidden delivery internals, and they mint a
-`BoundaryError` only from a closed set of codes, so no dependent can attach an
-arbitrary code to one. Inspection's error converts from it. A
-provider serving several jobs builds one advisory list, and an inspected target's
-binding is the binding an invoker receives. Core stays free of interface records.
-Each companion still refuses an empty requested kind as `empty-kind` in its own
-code namespace and keeps a bounded JSON writer mapped to its own error type.
-`BindingValue` reads `preference` with its own exact parser, since core's document
-reader is private. Tests hold the remaining copies aligned: the published
-kind-support cases run through all three facades, each facade's empty-kind code
-is pinned, the writers share byte-limit tests, and a differential test compares
-the preference parser with core's document reading. Change the copies together.
+`openbindings-schema-comparison` supplies normalized schema identity for authoring
+jobs such as operation reuse. Each side retains its original reference context.
+Identity differs from general equivalence or directional compatibility, and a
+comparison failure is not a negative answer. Existing-entry drift uses the kind's
+would-write comparison, which may include annotations that identity ignores.
 
-The SDK supplies the three interface contracts and checked caller APIs without
-kind-specific instances. Providers own source interpretation, kind soundness and
-external effects. [openbindings/openapi](https://github.com/openbindings/openapi)
-is a separate project that implements these interfaces using the independent client.
-It depends on the SDK; the SDK workspace, tools and examples do not depend on it.
+`openbindings-invocation` supplies `BindingInvoker`, `BindingClient` and
+`OperationClient`. Both clients retain the original conformant document and
+selected authored keys. Operation invocation adds explicit selection and per-value
+checks using the caller's evaluator and external schemas. Bounded streaming I/O
+is driven by caller polling; binding execution and effects belong to the provider.
+Preflight is a separate advisory call. Context acquisition and retries remain
+application decisions. See the [invocation guide](../crates/openbindings-invocation/README.md).
+
+Async companions share the cancellation identity and scoped delivery helper in
+`openbindings-internal-cancellation`. Shared opaque context and challenges belong
+to `openbindings-context`; there is no universal supported-kind verdict or detached
+by-value binding interface. Core depends on none of these role companions. The
+finite clients and streaming invocation driver have distinct lifecycles, and no
+particular runtime or blanket Send/Sync requirement is imposed on providers.
+
+The SDK supplies contracts and checked caller APIs without kind-specific
+instances. Providers own source interpretation, kind soundness and effects.
+[openbindings/openapi](https://github.com/openbindings/openapi) is a separate
+implementation project using an independent client. The SDK workspace, tools and
+examples do not depend on it.

@@ -83,7 +83,8 @@ with tempfile.TemporaryDirectory(prefix='openbindings-consumer-') as temporary:
                 if line.startswith('host: '))
     receipts = []
     baseline = None
-    for features in ['', 'ap', 'sdk', 'sdk,ap', 'evaluator', 'evaluator,ap', 'evaluator,po,check', 'portable', 'inspection', 'synthesis', 'invocation', 'native', 'native,ap']:
+    evaluator_observations = None
+    for features in ['', 'ap', 'sdk', 'sdk,ap', 'evaluator', 'evaluator,ap', 'evaluator,po,check', 'portable', 'context', 'kinds', 'comparison', 'pull', 'invocation', 'native', 'native,ap']:
         label = features.replace(',', '-') or 'baseline'
         selection = ['--no-default-features'] + (['--features', features] if features else [])
         metadata = json.loads(run(['cargo', 'metadata', '--locked', '--format-version', '1', '--filter-platform', host, *selection], fixture).stdout)
@@ -119,7 +120,19 @@ with tempfile.TemporaryDirectory(prefix='openbindings-consumer-') as temporary:
         if features not in ['', 'ap']:
             # Core and the default evaluator use the unmodified library.
             assert {'jsonschema', 'referencing', 'jsonschema-value'} <= nodes.keys(), label
+        observed_path = fixture / 'evaluator-observations.json'
+        observed_path.unlink(missing_ok=True)
+        env['OB_CONSUMER_OBSERVATIONS'] = str(observed_path)
         result = run(['cargo', 'test', '--locked', *selection], fixture)
+        if 'openbindings-json-schema-evaluator' in nodes:
+            observed = json.loads(observed_path.read_text(encoding='utf-8'))
+            assert observed, 'Evaluator feature run produced no observations'
+            if evaluator_observations is None:
+                evaluator_observations = observed
+            else:
+                assert observed == evaluator_observations, f'{label}: evaluator observations changed with consumer features'
+            if output:
+                shutil.copyfile(observed_path, output / (label + '-observations.json'))
         row = {'configuration': label, 'serde_json_features': shared_features,
                'serde_json_identities': sorted(i for i in identities if i.startswith('serde_json v')),
                'normal_and_build_packages_excluding_consumer': len(identities) - 1,

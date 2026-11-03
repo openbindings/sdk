@@ -84,10 +84,10 @@ fn serve(
     log: &Mutex<Vec<Record>>,
     routes: &Mutex<BTreeMap<String, String>>,
 ) {
-    socket = socket
+    socket
         .set_read_timeout(Some(Duration::from_millis(100)))
         .unwrap();
-    socket = socket
+    socket
         .set_write_timeout(Some(Duration::from_millis(100)))
         .unwrap();
     let mut reader = BufReader::new(socket);
@@ -271,7 +271,7 @@ async fn real_http_media_types_statuses_compression_and_location_independence() 
             r.metadata.unwrap().final_url,
             Some(format!("{}{WELL_KNOWN_PATH}", server.origin))
         );
-        let refs = document.document().references().unwrap();
+        let refs = document.document().references();
         assert!(refs.complete);
         assert!(matches!(
             refs.references[0].resolution,

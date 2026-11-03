@@ -24,8 +24,10 @@ synthetic host and toolchain; no performance parity is asserted.
 
 Measurements cover handle construction/release, zero outputs, unary and 64-value
 streams at 1 byte and 64 KiB, a 1-byte selected subtree backed by a 1-MiB owner,
-and cancellation/release. Constructing and releasing an operation invoker must
-allocate nothing. A 1-MiB source is borrowed unchanged for all checked
+and cancellation/release. Constructing and releasing an operation client with
+already supplied dependencies must allocate nothing. Resource-set and original
+document construction are setup, measured separately from retaining those owners.
+A 1-MiB source is retained unchanged in the original document for all checked
 calls. Per-call allocation volumes and maximum individual allocations provide
 evidence against serializing/reparsing that source on each invocation. Native
 queue and pending-item maxima are qualified separately by SDK unit tests.
@@ -44,3 +46,10 @@ atomics, the checked provider's boxed future and the safe executor. Setup and
 receipt encoding are excluded. Logical bytes and retained parent bytes are
 reported separately: queue byte caps are not total-memory bounds, and allocator
 counts are not browser/process RSS measurements.
+
+The v2 probe uses original-document requests, explicit cancellation and terminal
+events. Its diagnostic lane supplies an explicitly incapable evaluator; the old
+implicit missing-evaluator API is retired. Old timing receipts remain historical
+and cannot pass the v2 timing gate. The 20 logical jobs remain represented, but
+new request admission and explicit dependency work must be accounted for in the
+matched migration campaign rather than compared as identical old API calls.

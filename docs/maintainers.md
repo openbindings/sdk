@@ -148,16 +148,17 @@ release checklist records those SDK-specific outcomes separately from source lan
 Maintained value and frame-shape tests cover the adopted interface; lifecycle
 and malformed-frame tests separately qualify this SDK's policy.
 The frame mapper is test-only and does not establish a new streaming fixture
-standard. The external Catalog consumer joins inspection, synthesis and explicit
-binding invocation against an independent execution oracle. The invoker-only
-consumer guards dependency isolation; the Node/Wasm probe qualifies a thin Rust
-bridge, not a released TypeScript API or browser deployment. Run
-`tools/verify-binding-invocation.py` for the maintained consumer qualification.
+standard. The external Catalog consumer explicitly pulls, adopts additions, then
+invokes a selected binding or operation from its conformant document. The
+invoker-only consumer guards dependency isolation; the Node/Wasm probe qualifies
+a thin Rust bridge, not a released TypeScript API or browser deployment. Run
+`tools/verify-invocation.py` for the maintained consumer qualification.
 
 Context provisioning and protocol transports remain application responsibilities.
 The SDK supplies no kind-specific instances. The separate
-[OpenAPI project](https://github.com/openbindings/openapi) implements the interfaces. Operation consumer and cancellation tests, the shared
-Catalog pipeline, and the expanded Node/Wasm probe qualify the operation layer.
+[OpenAPI project](https://github.com/openbindings/openapi) implements the interfaces.
+Current operation consumer checks cover aliases, selection, rejected values,
+context challenges and explicit retries without implicit effects.
 The resource probe records warmed binding-versus-operation overhead and owner
 release; it does not claim HTTP parity, browser memory bounds, or arbitrary schema
 throughput.

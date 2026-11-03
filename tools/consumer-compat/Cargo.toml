@@ -20,9 +20,10 @@ native = ["evaluator", "dep:openbindings-http-discovery", "openbindings-http-dis
 
 portable = ["sdk", "dep:openbindings-http-discovery"]
 
-inspection = ["sdk", "dep:openbindings-source-inspection"]
-
-synthesis = ["sdk", "dep:openbindings-interface-synthesis"]
+context = ["sdk", "dep:openbindings-context"]
+kinds = ["sdk", "dep:openbindings-kind-description"]
+comparison = ["sdk", "dep:openbindings-schema-comparison"]
+pull = ["sdk", "dep:openbindings-source-pull"]
 
 invocation = ["sdk", "dep:openbindings-invocation"]
 
@@ -35,6 +36,8 @@ openbindings-http-discovery = { path = "../../crates/openbindings-http-discovery
 reqwest = { version = "0.13.5", optional = true, default-features = false, features = ["rustls"] }
 tokio = { version = "1.53.2", optional = true, features = ["rt", "macros", "time"] }
 bytes = { version = "1.12.1", optional = true }
-openbindings-source-inspection = { path = "../../crates/openbindings-source-inspection", optional = true }
-openbindings-interface-synthesis = { path = "../../crates/openbindings-interface-synthesis", optional = true }
+openbindings-context = { path = "../../crates/openbindings-context", optional = true }
+openbindings-kind-description = { path = "../../crates/openbindings-kind-description", optional = true }
+openbindings-schema-comparison = { path = "../../crates/openbindings-schema-comparison", optional = true }
+openbindings-source-pull = { path = "../../crates/openbindings-source-pull", optional = true }
 openbindings-invocation = { path = "../../crates/openbindings-invocation", optional = true }

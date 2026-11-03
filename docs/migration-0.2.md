@@ -37,9 +37,11 @@ for the interpretation policies and remaining allocation gate.
 `openbindings-context` and `openbindings-invocation` implement the adopted current
 interface carriers. Invocation has owned original-document requests, explicit
 provider/evaluator/resource dependencies, separate invocation and preflight,
-shared context and consuming prepared validators. Consumer migration is ongoing;
-the obsolete source-inspection and interface-synthesis companions remain to be
-replaced by source pulling. `openbindings-kind-description` now implements exact
+shared context and consuming prepared validators. The old inspection/synthesis
+companions and their shared legacy records have been removed. Source pulling
+uses original-document requests and explicit adoption, with separate checked
+report relationships and kind-owned fidelity. External consumers now exercise
+pull/adopt/invoke through source packages, Cargo archives and Node/Wasm. `openbindings-kind-description` now implements exact
 kind descriptions, check disclosures and source-check clients against the same
 interface pin. Queries perform no checks, context stays separate from authored
 source data, and transport/admission failures are distinct from kind rejections.
@@ -85,8 +87,7 @@ anchors and ambiguous enum-intersection multiplicity remain documented failures.
 
 - Finish ordinary user-schema backend allocation qualification.
 - Complete the remaining module and terminology organization.
-- Implement source pulling against the
-  pinned current interfaces, and finish invocation consumers and examples.
+- Complete current consumer behavior qualification and matched performance workloads.
 - Complete TypeScript organization, all-host/package qualification, CI and the
   final matched-toolchain performance campaign. No performance threshold is waived.
 

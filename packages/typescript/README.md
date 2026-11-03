@@ -4,7 +4,7 @@ Parse, validate and author OpenBindings interface documents, inspect operations
 and validate their caller-facing values. This package includes the Rust engine as
 WebAssembly. Applications need no Rust toolchain.
 
-Source inspection, interface synthesis and binding/operation invocation are Rust
+Kind description, source pulling and binding/operation invocation are Rust
 companion APIs. Their coverage claims and provider streams are not exported by
 this TypeScript facade; the facade exposes document operations and HTTP discovery.
 
@@ -327,8 +327,8 @@ Parsing, inspection, preparation and value validation run synchronously. An
 `AbortSignal` cannot preempt same-thread Wasm. The
 [Worker owner](examples/worker-owner.mjs) demonstrates termination and recovery.
 The [service lifecycle example](examples/service-lifecycle.mjs) retains old work
-while installing a replacement. Public TypeScript invocation, inspection and
-synthesis providers and custom evaluator callbacks are not provided.
+while installing a replacement. Public TypeScript invocation, kind-description and
+source-pull providers and custom evaluator callbacks are not provided.
 
 ## HTTP discovery and reference
 

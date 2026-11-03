@@ -189,9 +189,9 @@ offered-contract identity or opaque dependency closure, and it never applies
 proposals. Default handoffs are 32 MiB; relationship indexing has separate entry,
 work and allocation bounds. These do not cover provider work or core prospective
 rebuild/validation internals, which retain core limits. Cancellation is checked
-around those synchronous core calls. Independent implementation review passes;
-legacy consumer replacement remains in progress; obsolete inspection/synthesis companions are not
-current-interface claims.
+around those synchronous core calls. Independent implementation review passes. External source/archive and Node/Wasm
+consumers exercise the current interfaces. Obsolete inspection/synthesis companions
+and their shared records have been removed; final whole-SDK qualification remains open.
 
 ## Runtime qualifications
 

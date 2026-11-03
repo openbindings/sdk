@@ -934,32 +934,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "openbindings-interface-synthesis"
-version = "0.2.0-alpha.1"
-dependencies = [
- "openbindings",
- "openbindings-internal-cancellation",
- "openbindings-internal-interfaces",
- "openbindings-json-schema-evaluator",
- "serde",
- "serde_json",
- "tokio",
-]
-
-[[package]]
 name = "openbindings-internal-cancellation"
 version = "0.2.0-alpha.1"
 dependencies = [
  "openbindings",
-]
-
-[[package]]
-name = "openbindings-internal-interfaces"
-version = "0.2.0-alpha.1"
-dependencies = [
- "openbindings",
- "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -1044,19 +1022,6 @@ dependencies = [
  "openbindings-json-schema-evaluator",
  "serde",
  "serde_json",
-]
-
-[[package]]
-name = "openbindings-source-inspection"
-version = "0.2.0-alpha.1"
-dependencies = [
- "openbindings",
- "openbindings-internal-cancellation",
- "openbindings-internal-interfaces",
- "openbindings-json-schema-evaluator",
- "serde",
- "serde_json",
- "tokio",
 ]
 
 [[package]]
