@@ -2,7 +2,11 @@ use openbindings::*;
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 use serde_json::{Value, json};
 
-fn prepare(schema: Value, resources: ExternalSchemas) -> Result<PreparedValueContract, NoVerdict> {
+fn prepare(
+    schema: Value,
+    resources: ExternalSchemas,
+) -> Result<PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator>, PreparationFailure>
+{
     let document = Document::parse(
         json!({"openbindings":"0.2.0","operations":{"op":{"input":schema}}}).to_string(),
     )
@@ -16,7 +20,11 @@ fn prepare(schema: Value, resources: ExternalSchemas) -> Result<PreparedValueCon
         .expect("declared operation")
         .input()
         .expect("declared input")
-        .prepare_with(&DefaultEvaluator::new(), &resources)
+        .prepare(
+            &DefaultEvaluator::new(),
+            &resources,
+            &openbindings::PreparationLimits::default(),
+        )
 }
 
 // Patterns with lone surrogate escapes, matched as Node's `RegExp` with the `u`
@@ -46,7 +54,7 @@ fn node_surrogate_differential_for_both_pattern_keywords() {
                 Err(detail) => panic!("{id}/{keyword}: {detail:?}"),
             };
             let value = JsonValue::parse(value.to_string()).unwrap();
-            match contract.validate(&value) {
+            match contract.evaluate(&value) {
                 ValueOutcome::Satisfies => assert_eq!(*expected, "true", "{id}/{keyword}"),
                 ValueOutcome::Fails { .. } => assert_eq!(*expected, "false", "{id}/{keyword}"),
                 ValueOutcome::NoVerdict { detail } if backtracking => {
@@ -97,11 +105,10 @@ fn invalid_patterns_locate_authored_keywords_in_document_and_supplied_resources(
             };
             let contract = prepare(entry, resources).unwrap_or_else(|d| panic!("{d:?}"));
             let value = JsonValue::parse(json!({ "a/b~c": reaching }).to_string()).unwrap();
-            let ValueOutcome::NoVerdict { detail } = contract.validate(&value) else {
+            let ValueOutcome::Undefined { detail } = contract.evaluate(&value) else {
                 panic!("{keyword}/{supplied}")
             };
-            assert_eq!(detail.reason, NoVerdictReason::ConservativePreparation);
-            assert_eq!(detail.code, "schema-pattern-compilation");
+            assert_eq!(detail.code, "semantic-dependence");
             assert_eq!(
                 detail.location,
                 Some(SchemaOrigin::new(
@@ -110,10 +117,6 @@ fn invalid_patterns_locate_authored_keywords_in_document_and_supplied_resources(
                         .parse()
                         .unwrap(),
                 ))
-            );
-            assert_eq!(
-                detail.message,
-                format!("the schema {keyword} regular expression could not be compiled")
             );
             assert!(!detail.message.contains("SECRET"));
         }
@@ -173,7 +176,10 @@ fn member(index: usize) -> String {
     format!("p{index}")
 }
 // Prepare one contract holding each row's schema under its member.
-fn combined(rows: &[(usize, &EcmaRow)], schema: impl Fn(&str) -> Value) -> PreparedValueContract {
+fn combined(
+    rows: &[(usize, &EcmaRow)],
+    schema: impl Fn(&str) -> Value,
+) -> PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator> {
     let properties: serde_json::Map<String, Value> = rows
         .iter()
         .map(|(index, row)| (member(*index), schema(&row.pattern)))
@@ -212,14 +218,10 @@ fn generated_patterns_match_as_ecmascript_does_through_both_keywords() {
             let contract = prepare(schema, ExternalSchemas::default())
                 .unwrap_or_else(|detail| panic!("{:?}: {detail:?}", row.pattern));
             let value = JsonValue::parse(value.to_string()).unwrap();
-            let ValueOutcome::NoVerdict { detail } = contract.validate(&value) else {
+            let ValueOutcome::Undefined { detail } = contract.evaluate(&value) else {
                 panic!("V8 refuses {:?}", row.pattern)
             };
-            assert_eq!(
-                detail.code, "schema-pattern-compilation",
-                "{:?}",
-                row.pattern
-            );
+            assert_eq!(detail.code, "semantic-dependence", "{:?}", row.pattern);
             *counts.entry("invalid stands in").or_default() += 1;
         }
     }
@@ -243,7 +245,7 @@ fn generated_patterns_match_as_ecmascript_does_through_both_keywords() {
     for &(index, row) in &valid {
         for (at, string) in row.strings.iter().enumerate() {
             let value = JsonValue::parse(json!({ member(index): string }).to_string()).unwrap();
-            match contract.validate(&value) {
+            match contract.evaluate(&value) {
                 ValueOutcome::Satisfies if expected(row, at) => {}
                 ValueOutcome::Fails { .. } if !expected(row, at) => {}
                 ValueOutcome::NoVerdict { detail }
@@ -286,7 +288,7 @@ fn generated_patterns_match_as_ecmascript_does_through_both_keywords() {
         let mut unmatched = 0;
         for (at, string) in row.strings.iter().enumerate() {
             let value = JsonValue::parse(json!({ string: 0 }).to_string()).unwrap();
-            match contract.validate(&value) {
+            match contract.evaluate(&value) {
                 ValueOutcome::NoVerdict { detail } if UNMATCHED.contains(&detail.code.as_str()) => {
                     unmatched += 1;
                 }
@@ -312,7 +314,7 @@ fn generated_patterns_match_as_ecmascript_does_through_both_keywords() {
             ).unwrap();
             for (at, string) in row.strings.iter().enumerate() {
                 let value = JsonValue::parse(json!({ string: 0 }).to_string()).unwrap();
-                let outcome = marked.validate(&value);
+                let outcome = marked.evaluate(&value);
                 assert!(matches!(
                     outcome,
                     ValueOutcome::Satisfies | ValueOutcome::Fails { .. }
@@ -330,7 +332,7 @@ fn generated_patterns_match_as_ecmascript_does_through_both_keywords() {
         for (at, string) in row.strings.iter().enumerate() {
             let value =
                 JsonValue::parse(json!({ member(index): { string: 0 } }).to_string()).unwrap();
-            let fails = matches!(contract.validate(&value), ValueOutcome::Fails { .. });
+            let fails = matches!(contract.evaluate(&value), ValueOutcome::Fails { .. });
             assert_eq!(fails, expected(row, at), "{:?} on {string:?}", row.pattern);
             *counts.entry("patternProperties agrees").or_default() += 1;
         }
@@ -345,7 +347,7 @@ fn generated_patterns_match_as_ecmascript_does_through_both_keywords() {
         for (at, string) in row.strings.iter().enumerate() {
             let value =
                 JsonValue::parse(json!({ member(index): { string: 0 } }).to_string()).unwrap();
-            let satisfies = matches!(contract.validate(&value), ValueOutcome::Satisfies);
+            let satisfies = matches!(contract.evaluate(&value), ValueOutcome::Satisfies);
             assert_eq!(
                 satisfies,
                 expected(row, at),
@@ -391,7 +393,7 @@ fn a_non_word_boundary_is_not_matched_and_a_word_boundary_is() {
         let contract = prepare(json!({"pattern": pattern}), ExternalSchemas::default()).unwrap();
         let text = value;
         let value = JsonValue::parse(json!(text).to_string()).unwrap();
-        let ValueOutcome::NoVerdict { detail } = contract.validate(&value) else {
+        let ValueOutcome::NoVerdict { detail } = contract.evaluate(&value) else {
             panic!("{pattern}")
         };
         assert_eq!(detail.code, "pattern-non-word-boundary", "{pattern}");
@@ -402,21 +404,24 @@ fn a_non_word_boundary_is_not_matched_and_a_word_boundary_is() {
         )
         .unwrap();
         let object = JsonValue::parse(json!({ text: "s" }).to_string()).unwrap();
-        let ValueOutcome::NoVerdict { detail } = contract.validate(&object) else {
+        let ValueOutcome::NoVerdict { detail } = contract.evaluate(&object) else {
             panic!("{pattern}")
         };
         assert_eq!(detail.code, "pattern-non-word-boundary", "{pattern}");
         assert!(matches!(
-            contract.validate(&JsonValue::parse(json!({ text: 1 }).to_string()).unwrap()),
+            contract.evaluate(&JsonValue::parse(json!({ text: 1 }).to_string()).unwrap()),
             ValueOutcome::Satisfies
         ));
-        let Err(detail) = prepare(
+        let contract = prepare(
             json!({"patternProperties": {pattern: true}, "unevaluatedProperties": false}),
             ExternalSchemas::default(),
-        ) else {
-            panic!("{pattern}")
+        )
+        .unwrap();
+        let ValueOutcome::NoVerdict { detail } = contract.evaluate(&object) else {
+            panic!("{pattern}");
         };
-        assert_eq!(detail.code, "pattern-non-word-boundary", "{pattern}");
+        assert_eq!(detail.reason, NoVerdictReason::UnsupportedCapability);
+        assert_eq!(detail.code, "pattern-non-word-boundary");
     }
     for (pattern, value, satisfies) in [
         ("^a\\b", "a", true),
@@ -429,7 +434,7 @@ fn a_non_word_boundary_is_not_matched_and_a_word_boundary_is() {
         ("a\\b", "a😀", true),
     ] {
         let contract = prepare(json!({"pattern": pattern}), ExternalSchemas::default()).unwrap();
-        let outcome = contract.validate(&JsonValue::parse(json!(value).to_string()).unwrap());
+        let outcome = contract.evaluate(&JsonValue::parse(json!(value).to_string()).unwrap());
         assert_eq!(
             matches!(outcome, ValueOutcome::Satisfies),
             satisfies,
@@ -451,7 +456,7 @@ fn unmatched_patterns_keep_their_own_reasons() {
         .unwrap();
         for (member, pattern) in [("a", first), ("b", second), ("c", "\\Bx")] {
             let value = JsonValue::parse(json!({ member: "x" }).to_string()).unwrap();
-            let ValueOutcome::NoVerdict { detail } = contract.validate(&value) else {
+            let ValueOutcome::NoVerdict { detail } = contract.evaluate(&value) else {
                 panic!("{member}")
             };
             let expected = if pattern.starts_with("(?") {
@@ -491,7 +496,7 @@ fn independently_reviewed_property_and_assertion_capabilities() {
                 } else {
                     string.clone()
                 };
-                let outcome = prepared.validate(&JsonValue::parse(value.to_string()).unwrap());
+                let outcome = prepared.evaluate(&JsonValue::parse(value.to_string()).unwrap());
                 match capability {
                     "linear" => {
                         let expected =
@@ -512,7 +517,7 @@ fn independently_reviewed_property_and_assertion_capabilities() {
                         );
                     }
                     "invalid" => assert!(
-                        matches!(outcome, ValueOutcome::NoVerdict { ref detail } if detail.code == "schema-pattern-compilation"),
+                        matches!(outcome, ValueOutcome::Undefined { .. }),
                         "{}: {outcome:?}",
                         row["id"]
                     ),

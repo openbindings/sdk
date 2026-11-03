@@ -38,7 +38,9 @@ pub fn measure(
     for (at, node) in index.nodes.iter().enumerate() {
         control.check()?;
         let value = index.value(node);
-        if let Some(id) = value.get("$id") {
+        if node.resource as usize == at + 1
+            && let Some(id) = value.get("$id")
+        {
             let parent = bases.get(&index.parent_resource(at)).copied().flatten();
             let length = match id.as_str().filter(|id| uri::valid(id)) {
                 Some(id) if uri::absolute(id) => Some(id.len()),
@@ -57,7 +59,28 @@ pub fn measure(
             }
             bases.insert(node.resource, length);
         }
+        if node.dialect == Some(crate::dialect::Dialect::Draft7)
+            && !node.dialect.unwrap().reference_object(value)
+            && let Some(name) = value
+                .get("$id")
+                .and_then(|v| v.as_str())
+                .and_then(|id| id.strip_prefix('#'))
+            && crate::dialect::draft7_name(name)
+        {
+            charge(name.len())?;
+        }
         for keyword in ["$anchor", "$dynamicAnchor", "$schema"] {
+            if keyword == "$schema" {
+                if node.depth != 0 && node.resource as usize != at + 1 {
+                    continue;
+                }
+            } else if !node
+                .dialect
+                .is_some_and(|d| d.active(keyword) && !d.reference_object(value))
+            {
+                continue;
+            }
+
             if let Some(text) = value.get(keyword).and_then(|value| value.as_str()) {
                 charge(text.len())?;
             }

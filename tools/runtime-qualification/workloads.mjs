@@ -25,7 +25,7 @@ function prepareInput(proof, name, options) {
     check(contract, "absent input contract " + name);
     const result = contract.prepare(options);
     check(result.status === "ready", JSON.stringify(result));
-    return result.valueContract;
+    return result.schema;
   } finally {
     contract?.dispose();
     operation.dispose();
@@ -70,7 +70,7 @@ export function retainedBatch(
   );
   const start = clock();
   for (let n = 0; n < repetitions; n++) {
-    const result = contract.validate(value);
+    const result = contract.evaluate(value);
     if (result.status !== expectedOutcome)
       throw Error("retained batch changed verdict: " + result.status);
   }
@@ -88,7 +88,7 @@ export function invalidSerializedBatch(contract, value, repetitions, clock) {
   let lastResult, lastWire;
   const start = clock();
   for (let n = 0; n < repetitions; n++) {
-    lastResult = contract.validate(value);
+    lastResult = contract.evaluate(value);
     if (lastResult.status !== "fails")
       throw Error("diagnostic batch changed verdict: " + lastResult.status);
     lastWire = JSON.stringify(lastResult);
@@ -140,15 +140,15 @@ export function runTier(sdk, testing, fixture, timed = true) {
         input = operation.input();
         const result = input.prepare();
         check(result.status === "ready", JSON.stringify(result));
-        return result.valueContract;
+        return result.schema;
       });
       value = take("parseValue", () => parsed(sdk, fixture.valid));
-      const first = take("firstValidation", () => contract.validate(value));
+      const first = take("firstValidation", () => contract.evaluate(value));
       check(first.status === fixture.validOutcome, JSON.stringify(first));
-      const hot = take("hotSingleDescriptive", () => contract.validate(value));
+      const hot = take("hotSingleDescriptive", () => contract.evaluate(value));
       check(hot.status === fixture.validOutcome, JSON.stringify(hot));
       invalid = take("parseInvalid", () => parsed(sdk, fixture.invalid));
-      const failed = take("invalid", () => contract.validate(invalid));
+      const failed = take("invalid", () => contract.evaluate(invalid));
       check(failed.status === "fails", JSON.stringify(failed));
       const wire = take("serialize", () => JSON.stringify(failed));
       last = {
@@ -309,10 +309,10 @@ export function lifetime(sdk, testing, fixture, timed = true) {
     }
   };
   const warm = make("integer", -1);
-  warm.validate(1);
+  warm.evaluate(1);
   warm.dispose();
   const contract = prepare(sdk, fixture.document);
-  contract.validate([1]);
+  contract.evaluate([1]);
   contract.dispose();
   const warmed = testing.liveStorageOwners();
   let active = make("integer", 0);
@@ -321,7 +321,7 @@ export function lifetime(sdk, testing, fixture, timed = true) {
   try {
     for (let n = 0; n < 1000; n++)
       check(
-        active.validate(1).status === "satisfies",
+        active.evaluate(1).status === "satisfies",
         "sustained retained call",
       );
     for (let n = 1; n <= 200; n++) {
@@ -330,15 +330,15 @@ export function lifetime(sdk, testing, fixture, timed = true) {
       active = make(n % 2 ? "string" : "integer", n);
       const oldValue = n % 2 ? 1 : "old";
       check(
-        old.validate(oldValue).status === "satisfies",
+        old.evaluate(oldValue).status === "satisfies",
         "old snapshot survives replacement",
       );
       check(
-        active.validate(n % 2 ? "new" : 1).status === "satisfies",
+        active.evaluate(n % 2 ? "new" : 1).status === "satisfies",
         "new snapshot",
       );
       check(
-        active.validate(oldValue).status === "fails",
+        active.evaluate(oldValue).status === "fails",
         "snapshots must not mix",
       );
       old.dispose();
@@ -370,12 +370,12 @@ export function lifetime(sdk, testing, fixture, timed = true) {
     const cancellation = new AbortController();
     cancellation.abort();
     check(
-      active.validate(1, { signal: cancellation.signal }).status ===
+      active.evaluate(1, { signal: cancellation.signal }).status ===
         "no-verdict",
       "pre-cancellation",
     );
     check(
-      active.validate(1).status === "satisfies",
+      active.evaluate(1).status === "satisfies",
       "recovery after cancellation",
     );
   } finally {
@@ -443,7 +443,7 @@ export function amplification(sdk, fixture, timed = true) {
   try {
     for (let n = 0; n < (timed ? 9 : 1); n++) {
       const before = timed ? performance.now() : 0;
-      const result = contract.validate(value);
+      const result = contract.evaluate(value);
       const after = timed ? performance.now() : 0;
       const wire = JSON.stringify(result);
       const ended = timed ? performance.now() : 0;

@@ -111,7 +111,7 @@ pub struct Observation {
     /// Expected fixture outcome, distinct from the actual observation.
     pub expected: String,
     /// Setup refusal when no prepared owner was produced; both outcomes are absent in this case.
-    pub preparation_refusal: Option<NoVerdict>,
+    pub preparation_refusal: Option<PreparationFailure>,
     /// Actual cheap-check outcome when preparation succeeded, including evaluation refusal.
     pub outcome: Option<ValueOutcome>,
     /// Actual explanation outcome for the same value when preparation succeeded.
@@ -167,7 +167,7 @@ impl std::fmt::Debug for Report {
 }
 
 impl Report {
-    /// Whether configuration is valid, every evaluator case was observed and no observation violates the kit contract. Permitted refusals are not counted as verdicts.
+    /// Whether configuration is valid, every evaluator case was observed and no observation violates the kit contract. Every refusal remains a gap when the case requires a semantic answer.
     pub fn is_success(&self) -> bool {
         self.configuration_failures.is_empty()
             && self.observations.iter().all(|o| o.failures.is_empty())
@@ -186,7 +186,7 @@ impl Report {
             })
             .count()
     }
-    /// Count preparation or evaluation no-verdict observations, including explicitly permitted capability refusals.
+    /// Count preparation or evaluation no-verdict observations, without treating either as a semantic verdict.
     pub fn refusal_count(&self) -> usize {
         self.observations
             .iter()
@@ -207,7 +207,7 @@ impl Report {
 /// more control observations (see [`judge_interruptions`]), and again as a
 /// member of a larger text, which must not change its problems: instance
 /// pointers start at the value passed.
-pub fn run(evaluator: &dyn SchemaEvaluator) -> Report {
+pub fn run<E: SchemaEvaluator + ?Sized>(evaluator: &E) -> Report {
     let suite = suite();
     let mut report = Report {
         observations: Vec::new(),
@@ -236,19 +236,29 @@ pub fn run(evaluator: &dyn SchemaEvaluator) -> Report {
             ));
             continue;
         };
-        let prepared = input.prepare_with(evaluator, &resources);
+        let prepared = input.prepare(evaluator, &resources, &PreparationLimits::default());
         for case in &group.cases {
             let value = JsonValue::parse(&case.value).expect("packaged instance JSON");
             let original = value.text().to_owned();
-            let (outcome, explanation, preparation_refusal) = match &prepared {
-                Ok(contract) => (contract.validate(&value), contract.explain(&value), None),
-                Err(detail) => {
-                    let refusal = ValueOutcome::NoVerdict {
-                        detail: detail.clone(),
-                    };
-                    (refusal.clone(), refusal, Some(detail.clone()))
+            let contract = match &prepared {
+                Ok(contract) => contract,
+                Err(failure) => {
+                    report.observations.push(Observation {
+                        id: case.id.clone(),
+                        expected: case.expected.clone(),
+                        outcome: None,
+                        explanation: None,
+                        preparation_refusal: Some(failure.clone()),
+                        failures: vec![
+                            "preparation failed; the required semantic answer was not established"
+                                .into(),
+                        ],
+                    });
+                    continue;
                 }
             };
+            let outcome = contract.evaluate(&value);
+            let explanation = contract.explain(&value);
             let mut failures = judge(case, &value, &outcome);
             for failure in judge(case, &value, &explanation) {
                 if !failures.contains(&failure) {
@@ -319,9 +329,9 @@ pub fn run(evaluator: &dyn SchemaEvaluator) -> Report {
             report.observations.push(Observation {
                 id: case.id.clone(),
                 expected: case.expected.clone(),
-                outcome: preparation_refusal.is_none().then_some(outcome),
-                explanation: preparation_refusal.is_none().then_some(explanation),
-                preparation_refusal,
+                outcome: Some(outcome),
+                explanation: Some(explanation),
+                preparation_refusal: None,
                 failures,
             });
         }
@@ -357,7 +367,10 @@ impl WorkControl for StopAfter {
 }
 // Explanations of one value cancelled after 0, 1, 2, 3, 5, 8 ... observations,
 // and finally after every observation an uninterrupted explanation makes.
-fn interrupted(contract: &PreparedValueContract, value: &JsonValue) -> Vec<(usize, ValueOutcome)> {
+fn interrupted<V: SchemaValidator>(
+    contract: &PreparedSchema<V>,
+    value: &JsonValue,
+) -> Vec<(usize, ValueOutcome)> {
     let all = StopAfter(AtomicUsize::new(0), usize::MAX);
     let _ = contract.explain_with_control(value, &all);
     let total = all.0.load(Ordering::Relaxed);

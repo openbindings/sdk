@@ -4,7 +4,10 @@
 use openbindings::*;
 use openbindings_json_schema_evaluator::{DefaultEvaluator, Limits};
 
-fn prepared(schema: &str, limits: Limits) -> PreparedValueContract {
+fn prepared(
+    schema: &str,
+    limits: Limits,
+) -> PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator> {
     let text = format!(r#"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{schema}}}}}}}"#);
     let proof = Document::parse(text)
         .unwrap()
@@ -16,7 +19,11 @@ fn prepared(schema: &str, limits: Limits) -> PreparedValueContract {
     operation
         .input()
         .unwrap()
-        .prepare(&DefaultEvaluator::with_limits(limits))
+        .prepare(
+            &DefaultEvaluator::with_limits(limits),
+            &openbindings::ExternalSchemas::default(),
+            &openbindings::PreparationLimits::default(),
+        )
         .unwrap()
 }
 fn code(outcome: &ValueOutcome) -> Option<&str> {
@@ -32,7 +39,7 @@ const ITEMS: usize = 700_000;
 fn large() -> JsonValue {
     JsonValue::parse(format!("[{}0]", "1,".repeat(ITEMS - 1))).unwrap()
 }
-fn explicit(steps: usize) -> PreparedValueContract {
+fn explicit(steps: usize) -> PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator> {
     prepared(
         SCHEMA,
         Limits {
@@ -46,7 +53,7 @@ fn explicit(steps: usize) -> PreparedValueContract {
 fn uncapped_evaluation_decides_large_values() {
     let defaults = prepared(SCHEMA, Limits::default());
     assert!(matches!(
-        defaults.validate(&large()),
+        defaults.evaluate(&large()),
         ValueOutcome::Satisfies
     ));
     let failing = JsonValue::parse(format!("[{}-1]", "1,".repeat(ITEMS - 1))).unwrap();
@@ -68,7 +75,7 @@ fn explicit_caps_bracket_a_checks_work_and_the_default_sets_none() {
     let (cheaper, costlier) = (all_of(6), all_of(29));
     // The array and its elements: 4 x 65,536 nodes.
     let value = JsonValue::parse(format!("[{}0]", "1,".repeat(4 * 65_536 - 2))).unwrap();
-    let outcome = |schema: &str, limits| prepared(schema, limits).validate(&value);
+    let outcome = |schema: &str, limits| prepared(schema, limits).evaluate(&value);
     let capped = |steps| Limits {
         evaluation_steps: Some(steps),
         ..Limits::default()
@@ -140,17 +147,17 @@ fn an_explicit_work_allowance_caps_every_pass_whatever_the_value_size() {
     let large = large();
     for steps in [1_000_000, 1_000, 0] {
         assert_eq!(
-            code(&explicit(steps).validate(&large)),
+            code(&explicit(steps).evaluate(&large)),
             Some("evaluation-work-limit")
         );
     }
     assert!(matches!(
-        explicit(1_000).validate(&JsonValue::parse("[1,2]").unwrap()),
+        explicit(1_000).evaluate(&JsonValue::parse("[1,2]").unwrap()),
         ValueOutcome::Satisfies
     ));
     // A cap above what the value needs decides it.
     assert!(matches!(
-        explicit(10_000_000).validate(&large),
+        explicit(10_000_000).evaluate(&large),
         ValueOutcome::Satisfies
     ));
     // An exhausted explanation pass keeps the failure the verdict pass
@@ -171,7 +178,7 @@ fn deep_values_report_the_depth_limit() {
     // Ample work, but each level nests several evaluations: 1,024 nested
     // evaluations fit the default stack, so values up to 203 levels deep are
     // evaluated, and the refusal says why and what to raise.
-    let refused = defaults.validate(&deep);
+    let refused = defaults.evaluate(&deep);
     let ValueOutcome::NoVerdict { detail } = &refused else {
         panic!("{refused:?}")
     };
@@ -190,7 +197,7 @@ fn deep_values_report_the_depth_limit() {
             ..Limits::default()
         },
     );
-    assert!(matches!(deeper.validate(&deep), ValueOutcome::Satisfies));
+    assert!(matches!(deeper.evaluate(&deep), ValueOutcome::Satisfies));
 }
 
 #[test]
@@ -216,7 +223,7 @@ fn a_contract_too_deep_for_the_stack_refuses_every_value() {
             ..Limits::default()
         },
     );
-    let ValueOutcome::NoVerdict { detail } = small.validate(&JsonValue::parse("1").unwrap()) else {
+    let ValueOutcome::NoVerdict { detail } = small.evaluate(&JsonValue::parse("1").unwrap()) else {
         panic!("a 64 KiB stack evaluates no value through 300 references")
     };
     assert_eq!(
@@ -228,7 +235,7 @@ fn a_contract_too_deep_for_the_stack_refuses_every_value() {
     // The default stack holds them.
     let defaults = prepared(&schema, Limits::default());
     assert!(matches!(
-        defaults.validate(&JsonValue::parse("1").unwrap()),
+        defaults.evaluate(&JsonValue::parse("1").unwrap()),
         ValueOutcome::Satisfies
     ));
 }

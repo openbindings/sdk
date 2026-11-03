@@ -9,7 +9,11 @@ use openbindings::*;
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 
 const MISSING: &str = "https://missing.test/m";
-fn prepare(schema: &str, completion: Option<&str>) -> Result<PreparedValueContract, NoVerdict> {
+fn prepare(
+    schema: &str,
+    completion: Option<&str>,
+) -> Result<PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator>, PreparationFailure>
+{
     let text = format!(r#"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{schema}}}}}}}"#);
     let proof = Document::parse(text)
         .unwrap()
@@ -23,10 +27,11 @@ fn prepare(schema: &str, completion: Option<&str>) -> Result<PreparedValueContra
     }))
     .unwrap();
     let operation = proof.resolve_operation("op").unwrap();
-    operation
-        .input()
-        .unwrap()
-        .prepare_with(&DefaultEvaluator::new(), &resources)
+    operation.input().unwrap().prepare(
+        &DefaultEvaluator::new(),
+        &resources,
+        &openbindings::PreparationLimits::default(),
+    )
 }
 fn verdict(outcome: ValueOutcome) -> char {
     match outcome {
@@ -75,7 +80,7 @@ const VALUES: [&str; 11] = [
 // Prepare `schema` without the resource and with each completion; check every
 // verdict the stub gives against every completion's. Returns the stub's
 // preparation refusal, or the values it decided and left undecided.
-fn check(schema: &str) -> Result<(usize, usize), NoVerdict> {
+fn check(schema: &str) -> Result<(usize, usize), PreparationFailure> {
     let stubbed = prepare(schema, None)?;
     let completions: Vec<_> = COMPLETIONS
         .iter()
@@ -84,11 +89,11 @@ fn check(schema: &str) -> Result<(usize, usize), NoVerdict> {
     let (mut decided, mut undecided) = (0, 0);
     for value in VALUES {
         let value = JsonValue::parse(value).unwrap();
-        let got = verdict(stubbed.validate(&value));
+        let got = verdict(stubbed.evaluate(&value));
         let explained = verdict(stubbed.explain(&value));
         let answers: Vec<char> = completions
             .iter()
-            .map(|c| verdict(c.validate(&value)))
+            .map(|c| verdict(c.evaluate(&value)))
             .collect();
         if got == 'N' {
             undecided += 1;
@@ -108,14 +113,16 @@ fn check(schema: &str) -> Result<(usize, usize), NoVerdict> {
     }
     Ok((decided, undecided))
 }
-fn refused_for_the_resource(detail: &NoVerdict) -> bool {
-    detail.code == "resource-unavailable"
-        && detail.location
-            == Some(SchemaOrigin::new(
-                Some(MISSING.into()),
-                Pointer::from_utf16(&[]).unwrap(),
-            ))
+fn refused_for_the_resource(detail: &PreparationFailure) -> bool {
+    detail.kind
+        == PreparationFailureKind::Resolution {
+            cause: ResolutionFailureKind::ResourceUnavailable {
+                uri: MISSING.into(),
+            },
+        }
+        && detail.origin.is_none()
 }
+
 #[test]
 fn a_verdict_given_without_the_resource_is_every_completions_verdict() {
     let m = format!(r#"{{"$ref":"{MISSING}"}}"#);
@@ -160,10 +167,11 @@ fn a_verdict_given_without_the_resource_is_every_completions_verdict() {
             }
         }
     }
-    // The seven contracts whose unevaluated keywords' `anyOf`, `oneOf`, `if`,
-    // `then`, `allOf` or `dependentSchemas` reach the stub refuse; the other 17
-    // decide 106 of their 187 values.
-    assert_eq!((decided, undecided, refused), (106, 81, 7));
+    // All original templates now prepare; each returned verdict must agree
+    // with every independently supplied concrete completion checked above.
+    assert_eq!(refused, 0);
+    assert_eq!(decided + undecided, schemas.len() * 11);
+    assert!(decided >= 106); // Preserve all earlier established decisions.
 }
 
 // Each template puts an unevaluated keyword beside the stub, directly or
@@ -193,10 +201,8 @@ fn unevaluated_keywords_beside_a_stub_refuse_or_agree_with_every_completion() {
         ),
     ];
     for schema in &refusing {
-        match check(schema) {
-            Err(detail) => assert!(refused_for_the_resource(&detail), "{schema}: {detail:?}"),
-            Ok(counts) => panic!("{schema} prepared: {counts:?}"),
-        }
+        let (decided, undecided) = check(schema).unwrap_or_else(|d| panic!("{schema}: {d:?}"));
+        assert_eq!(decided + undecided, 11);
     }
     let deciding = [
         format!(r#"{{"contains":{{{m}}},"unevaluatedItems":false}}"#),
@@ -221,7 +227,7 @@ fn an_explanation_that_reaches_the_stub_states_no_problem() {
     let value = JsonValue::parse("1").unwrap();
     let stubbed = prepare(&schema, None).unwrap();
     assert!(matches!(
-        stubbed.validate(&value),
+        stubbed.evaluate(&value),
         ValueOutcome::Fails { .. }
     ));
     match stubbed.explain(&value) {

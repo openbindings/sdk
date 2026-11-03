@@ -13,6 +13,7 @@ pub enum QueryFailure {
     IdentityConflict,
     ResourceUnavailable(String),
     UnsupportedDialect(Option<String>),
+    UnsupportedCapability(&'static str),
 }
 
 impl SchemaSpace {
@@ -24,6 +25,7 @@ impl SchemaSpace {
         if !uri::valid(reference) {
             return Err(QueryFailure::MalformedReference);
         }
+        self.query_identifier_interpretation(holder)?;
         let current = self.resource(self.node(holder).resource);
         if !self.eligible(self.node(holder).resource) {
             return Err(QueryFailure::IdentityConflict);
@@ -42,7 +44,15 @@ impl SchemaSpace {
             let exact = self.name(name).filter(|name| name.exact_contained);
             let normalized =
                 || crate::input_policy::canonical_uri(name).and_then(|name| self.name(&name));
-            match exact.or_else(normalized) {
+            let selected = exact.or_else(normalized);
+            if self.local.uncertain_identifiers
+                && selected.is_none_or(|s| s.origin != ResourceOrigin::Contained)
+            {
+                return Err(QueryFailure::UnsupportedCapability(
+                    "schema-identifier-form",
+                ));
+            }
+            match selected {
                 Some(NameSelection {
                     carrier: Some(resource),
                     ..
@@ -57,13 +67,42 @@ impl SchemaSpace {
     /// Whether this resource's non-root schema positions are known by this
     /// inventory. A custom evaluator can still inspect its root and meta-schema.
     pub fn query_inventory(&self, resource: usize) -> Result<(), QueryFailure> {
-        let dialect = &self.resource(resource).dialect;
-        match dialect.as_deref() {
-            Some(DIALECT | "https://json-schema.org/draft/2020-12/schema#") => Ok(()),
-            _ => Err(QueryFailure::UnsupportedDialect(
-                dialect.clone().filter(|uri| uri::absolute(uri)),
-            )),
+        if self.local.uncertain_identifiers
+            && self.resource(resource).origin != ResourceOrigin::Contained
+        {
+            return Err(QueryFailure::UnsupportedCapability(
+                "schema-identifier-form",
+            ));
         }
+        let dialect = &self.resource(resource).dialect;
+        if dialect
+            .as_deref()
+            .and_then(crate::dialect::Dialect::from_uri)
+            .is_some()
+        {
+            Ok(())
+        } else {
+            Err(QueryFailure::UnsupportedDialect(
+                dialect.clone().filter(|uri| uri::absolute(uri)),
+            ))
+        }
+    }
+
+    fn query_identifier_interpretation(&self, node: usize) -> Result<(), QueryFailure> {
+        let original = self.node(node);
+        if original.dialect.is_none()
+            && self
+                .resource(original.resource)
+                .dialect
+                .as_deref()
+                .and_then(crate::dialect::Dialect::from_uri)
+                .is_some()
+        {
+            return Err(QueryFailure::UnsupportedCapability(
+                "schema-identifier-form",
+            ));
+        }
+        Ok(())
     }
 
     fn query_fragment(&self, resource_id: usize, reference: &str) -> Result<Target, QueryFailure> {
@@ -150,6 +189,7 @@ impl SchemaSpace {
             for token in units[1..].split(|unit| *unit == u16::from(b'/')) {
                 if let Some(id) = source.positions.get(&ref_id(value)) {
                     self.query_inventory(self.node(*id).resource)?;
+                    self.query_identifier_interpretation(*id)?;
                 }
                 let mut path = Vec::with_capacity(token.len() + 1);
                 path.push(u16::from(b'/'));

@@ -1,10 +1,7 @@
 //! Debug is structural. Explicit display/accessors/serialization retain payloads.
 use openbindings::*;
 use std::fmt::Debug;
-use std::{
-    collections::BTreeMap,
-    sync::{Arc, Mutex},
-};
+use std::{collections::BTreeMap, sync::Mutex};
 // A credential-shaped probe value; Debug output must never contain it.
 const SECRET: &str = "PROBE-BEARER-TOKEN-7391";
 const NUMBER: &str = "739173917391";
@@ -28,14 +25,19 @@ fn row(label: &'static str, value: &(impl Debug + ?Sized)) -> Row {
 /// Prepares nothing and refuses with a caller-chosen code.
 struct Refuse(&'static str);
 impl SchemaEvaluator for Refuse {
+    type Validator = Accept;
     fn prepare(
         &self,
-        _: &SchemaRequest,
+        _: EvaluationRequest<'_>,
+        _: &PreparationLimits,
         _: &dyn WorkControl,
-    ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
-        let mut detail = refusal();
-        detail.code = self.0.into();
-        Err(detail)
+    ) -> Result<Self::Validator, PreparationFailure> {
+        Err(
+            PreparationFailure::new(PreparationFailureKind::UnsupportedCapability {
+                capability: self.0.into(),
+            })
+            .with_origin(location()),
+        )
     }
 }
 #[test]
@@ -57,19 +59,34 @@ fn preparation_refusals_redact_payloads_like_no_verdict() {
         SECRET,
         "caller-cancelled-PROBE-BEARER-TOKEN-7391",
     ] {
-        let error = contract.prepare(&Refuse(code)).unwrap_err();
-        // A preparation refusal is the evaluator's NoVerdict: same redaction, no code text.
-        assert_eq!(error.code, code);
+        let error = contract
+            .prepare(
+                &Refuse(code),
+                &openbindings::ExternalSchemas::default(),
+                &openbindings::PreparationLimits::default(),
+            )
+            .unwrap_err();
+        // Preparation failure retains its structured cause without exposing it in Debug.
+        assert_eq!(
+            error.kind,
+            PreparationFailureKind::UnsupportedCapability {
+                capability: code.into()
+            }
+        );
         // Only the broad reason is shown, never the code, even a recognized one.
         assert!(!format!("{error:?}").contains(code));
         rows.push(row("preparation refusal code", &error));
-        assert!(error.to_string().contains(SECRET));
+        assert!(!error.to_string().contains(SECRET));
         let error: &dyn std::error::Error = &error;
         assert!(error.source().is_none());
     }
     rows.push(row(
         "refused preparation result",
-        &contract.prepare(&Refuse(SECRET)),
+        &contract.prepare(
+            &Refuse(SECRET),
+            &openbindings::ExternalSchemas::default(),
+            &openbindings::PreparationLimits::default(),
+        ),
     ));
     check_rows(rows, 7);
 }
@@ -122,29 +139,41 @@ fn probe_finding(
 /// Accepts every value, so a prepared value contract exists to inspect.
 struct Accept;
 impl SchemaEvaluator for Accept {
+    type Validator = Accept;
     fn prepare(
         &self,
-        _: &SchemaRequest,
+        _: EvaluationRequest<'_>,
+        _: &PreparationLimits,
         _: &dyn WorkControl,
-    ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
-        Ok(Arc::new(Accept))
+    ) -> Result<Self::Validator, PreparationFailure> {
+        Ok(Accept)
     }
 }
-impl PreparedSchema for Accept {
-    fn validate(&self, _: &JsonValue, _: Detail, _: &dyn WorkControl) -> ValueOutcome {
+impl SchemaValidator for Accept {
+    fn evaluate(&self, _: &JsonValue, _: Detail, _: &dyn WorkControl) -> ValueOutcome {
         ValueOutcome::Satisfies
     }
 }
 #[derive(Default)]
-struct Capture(Mutex<Option<SchemaRequest>>);
+struct Capture(Mutex<Option<(Row, SchemaEnvironment)>>);
 impl SchemaEvaluator for Capture {
+    type Validator = Accept;
     fn prepare(
         &self,
-        request: &SchemaRequest,
+        request: EvaluationRequest<'_>,
+        limits: &PreparationLimits,
         _: &dyn WorkControl,
-    ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
-        *self.0.lock().unwrap() = Some(request.clone());
-        Err(refusal())
+    ) -> Result<Self::Validator, PreparationFailure> {
+        *self.0.lock().unwrap() = Some((
+            row("EvaluationRequest", &request),
+            request.environment(limits, &std::sync::atomic::AtomicBool::new(false))?,
+        ));
+        Err(
+            PreparationFailure::new(PreparationFailureKind::Implementation {
+                message: SECRET.into(),
+            })
+            .with_origin(location()),
+        )
     }
 }
 fn authoring_rows(source: &Source, operation: &Operation, context: &JsonValue) -> Vec<Row> {
@@ -344,18 +373,23 @@ fn debug_redacts_caller_text_at_every_boundary() {
     let operation = validated.resolve_operation("op").unwrap();
     let contract = operation.input().unwrap();
     rows.push(row("Schema", &contract));
-    let captured = contract.prepare_with(&capture, &resources);
+    let captured = contract.prepare(
+        &capture,
+        &resources,
+        &openbindings::PreparationLimits::default(),
+    );
     rows.push(row("capturing preparation", &captured));
-    let prepared = contract.prepare(&Accept).unwrap();
-    rows.push(row("PreparedValueContract", &prepared));
-    let request = capture.0.lock().unwrap().take().unwrap();
-    rows.push(row("SchemaRequest", &request));
-    rows.push(row(
-        "EvaluationProgram",
-        &request
-            .evaluation_program(&std::sync::atomic::AtomicBool::new(false))
-            .unwrap(),
-    ));
+    let prepared = contract
+        .prepare(
+            &Accept,
+            &openbindings::ExternalSchemas::default(),
+            &openbindings::PreparationLimits::default(),
+        )
+        .unwrap();
+    rows.push(row("PreparedSchema", &prepared));
+    let (request, environment) = capture.0.lock().unwrap().take().unwrap();
+    rows.push(request);
+    rows.push(row("SchemaEnvironment", &environment));
 
     for (uri, texts, reason) in [
         (

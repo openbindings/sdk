@@ -9,6 +9,7 @@ mod limits;
 mod near_misses;
 mod patterns;
 mod references;
+mod semantic;
 mod values;
 
 struct Counting;
@@ -63,6 +64,10 @@ fn measured<T>(call: impl FnOnce() -> T) -> (T, usize, u128) {
     (result, PEAK.load(Relaxed).saturating_sub(before), nanos)
 }
 fn main() {
+    if std::env::args().any(|arg| arg == "--semantic-only") {
+        semantic::run();
+        return;
+    }
     if std::env::args().any(|arg| arg == "--references-only") {
         println!("{}", serde_json::json!(references::run()));
         return;
@@ -246,4 +251,5 @@ fn main() {
     near_misses::run();
     patterns::run();
     limits::run();
+    semantic::run();
 }

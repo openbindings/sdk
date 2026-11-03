@@ -93,23 +93,23 @@ fn value_contracts(document: &Document) -> Result<(), Box<dyn std::error::Error>
     let input = operation
         .input()
         .ok_or("run has no input contract")?
-        .prepare_with(&evaluator, &resources)?;
+        .prepare(&evaluator, &resources, &openbindings::PreparationLimits::default())?;
     let output = operation
         .output()
         .ok_or("run has no output contract")?
-        .prepare_with(&evaluator, &resources)?;
+        .prepare(&evaluator, &resources, &openbindings::PreparationLimits::default())?;
     for text in ["7", "9007199254740993"] {
         assert!(matches!(
-            input.validate(&exact(text)),
+            input.evaluate(&exact(text)),
             ValueOutcome::Satisfies
         ));
     }
     assert!(matches!(
-        input.validate(&exact("-1")),
+        input.evaluate(&exact("-1")),
         ValueOutcome::Fails { .. }
     ));
     assert!(matches!(
-        output.validate(&JsonValue::null()),
+        output.evaluate(&JsonValue::null()),
         ValueOutcome::Fails { .. }
     ));
     let no_contract = proof
@@ -121,9 +121,9 @@ fn value_contracts(document: &Document) -> Result<(), Box<dyn std::error::Error>
     let unresolved = match operation
         .input()
         .ok_or("run has no input contract")?
-        .prepare(&evaluator)
+        .prepare(&evaluator, &openbindings::ExternalSchemas::default(), &openbindings::PreparationLimits::default())
     {
-        Ok(contract) => contract.validate(&exact("7")),
+        Ok(contract) => contract.evaluate(&exact("7")),
         Err(detail) => ValueOutcome::NoVerdict { detail },
     };
     assert!(matches!(
@@ -138,7 +138,7 @@ fn value_contracts(document: &Document) -> Result<(), Box<dyn std::error::Error>
     // Prepared value contracts own what they need after the document and resources go.
     drop((operation, proof, resources));
     assert!(matches!(
-        input.validate(&exact("8")),
+        input.evaluate(&exact("8")),
         ValueOutcome::Satisfies
     ));
     Ok(())

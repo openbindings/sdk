@@ -69,11 +69,11 @@ self.onmessage = async ({ data }) => {
       self.postMessage({ id, status: "preparation", preparation: setup });
       return;
     }
-    prepared = setup.valueContract;
+    prepared = setup.schema;
     self.postMessage({
       id,
       status: "evaluated",
-      result: prepared.validate(input),
+      result: prepared.evaluate(input),
     });
   } catch (error) {
     self.postMessage({

@@ -1,11 +1,8 @@
 //! Portable failures and value-free local boundary diagnostics.
 
-use crate::value::ContextChallenge;
+use crate::boundary::{BoundaryFailure, BoundaryFailureKind, encode, failure, object, string};
 use openbindings::{JsonLimits, JsonRef, JsonValue};
-use openbindings_internal_interfaces::{
-    BoundaryError,
-    carrier::{BoundaryCode, boundary_error, encode, object, string},
-};
+use openbindings_context::ContextChallenge;
 use serde::{Serialize, Serializer, ser::SerializeMap};
 use std::fmt;
 
@@ -34,16 +31,17 @@ impl InvocationError {
     ///
     /// # Errors
     /// Returns a boundary error for a malformed carrier: invalid field types, missing required fields, duplicate members, or unsupported fields. Opaque payloads are preserved.
-    pub fn new(code: impl Into<String>, data: Option<JsonValue>) -> Result<Self, BoundaryError> {
+    pub fn new(code: impl Into<String>, data: Option<JsonValue>) -> Result<Self, BoundaryFailure> {
         let code = code.into();
         if code.is_empty() {
-            return Err(boundary_error(BoundaryCode::EmptyString, "/code"));
+            return Err(failure(BoundaryFailureKind::EmptyString, "/code"));
         }
         if code == "CONTEXT_REQUIRED" {
             let value = data
                 .as_ref()
-                .ok_or_else(|| boundary_error(BoundaryCode::MissingMember, "/data"))?;
-            ContextChallenge::validate(value.view())?;
+                .ok_or_else(|| failure(BoundaryFailureKind::MissingMember, "/data"))?;
+            ContextChallenge::try_from(value.clone())
+                .map_err(|_| failure(BoundaryFailureKind::InvalidChallenge, "/data"))?;
         }
         Ok(Self { code, data })
     }
@@ -52,7 +50,7 @@ impl InvocationError {
     ///
     /// # Errors
     /// Returns a boundary error for a malformed carrier: invalid field types, missing required fields, duplicate members, or unsupported fields. Opaque payloads are preserved.
-    pub fn from_json(value: &JsonValue) -> Result<Self, BoundaryError> {
+    pub fn from_json(value: &JsonValue) -> Result<Self, BoundaryFailure> {
         Self::from_json_ref(value.view())
     }
 
@@ -60,11 +58,11 @@ impl InvocationError {
     ///
     /// # Errors
     /// Returns a boundary error for a malformed carrier: invalid field types, missing required fields, duplicate members, or unsupported fields. Opaque payloads are preserved.
-    pub fn from_json_ref(value: JsonRef<'_>) -> Result<Self, BoundaryError> {
-        object(value, &["code", "data"], false, "")?;
+    pub fn from_json_ref(value: JsonRef<'_>) -> Result<Self, BoundaryFailure> {
+        object(value, &["code", "data"], "")?;
         let code = value
             .get("code")
-            .ok_or_else(|| boundary_error(BoundaryCode::MissingMember, "/code"))?;
+            .ok_or_else(|| failure(BoundaryFailureKind::MissingMember, "/code"))?;
         Self::new(
             string(code, "/code")?,
             value.get("data").map(JsonRef::to_owned),
@@ -87,7 +85,8 @@ impl InvocationError {
     /// on the asserted target nor permission to resolve or release credentials.
     pub fn context_required(&self) -> Option<ContextChallenge> {
         (self.code == "CONTEXT_REQUIRED").then(|| {
-            ContextChallenge::checked(self.data.as_ref().expect("checked challenge data").clone())
+            ContextChallenge::try_from(self.data.as_ref().expect("checked challenge data").clone())
+                .expect("admitted challenge")
         })
     }
 
@@ -95,7 +94,7 @@ impl InvocationError {
     ///
     /// # Errors
     /// Returns an error if the carrier cannot be serialized or its encoded JSON exceeds the admission limits.
-    pub fn to_json(&self) -> Result<JsonValue, BoundaryError> {
+    pub fn to_json(&self) -> Result<JsonValue, BoundaryFailure> {
         self.to_json_with_limits(JsonLimits::default())
     }
 
@@ -103,7 +102,7 @@ impl InvocationError {
     ///
     /// # Errors
     /// Returns an error if the carrier cannot be serialized or its encoded JSON exceeds the admission limits.
-    pub fn to_json_with_limits(&self, limits: JsonLimits) -> Result<JsonValue, BoundaryError> {
+    pub fn to_json_with_limits(&self, limits: JsonLimits) -> Result<JsonValue, BoundaryFailure> {
         encode(&ErrorFields(self), limits)
     }
 
@@ -140,7 +139,7 @@ impl InvocationError {
     pub fn challenge(challenge: ContextChallenge) -> Self {
         Self {
             code: "CONTEXT_REQUIRED".into(),
-            data: Some(challenge.into_value()),
+            data: Some(challenge.to_json().into_value()),
         }
     }
 
@@ -153,18 +152,16 @@ impl InvocationError {
 
     // only call this on an error returned by a binding provider. Facade
     // selection and validation errors legitimately use these reserved codes.
-    pub(crate) fn admit_provider_code(self) -> Result<Self, BoundaryError> {
+    pub(crate) fn admit_provider_code(self) -> Result<Self, BoundaryFailure> {
         if matches!(
             self.code(),
             "ERR_OPERATION_NOT_FOUND"
-                | "ERR_BINDING_NOT_FOUND"
                 | "ERR_BINDING_SELECTION_REQUIRED"
-                | "ERR_UNKNOWN_SOURCE"
                 | "ERR_OPERATION_VALIDATION_FAILED"
                 | "ERR_SCHEMA_UNRESOLVED"
         ) {
-            Err(boundary_error(
-                BoundaryCode::ReservedProviderCode,
+            Err(failure(
+                BoundaryFailureKind::ReservedProviderCode,
                 "/error/code",
             ))
         } else {
@@ -186,7 +183,6 @@ impl fmt::Debug for InvocationError {
             "ERR_OPERATION_NOT_FOUND" => "ERR_OPERATION_NOT_FOUND",
             "ERR_BINDING_NOT_FOUND" => "ERR_BINDING_NOT_FOUND",
             "ERR_BINDING_SELECTION_REQUIRED" => "ERR_BINDING_SELECTION_REQUIRED",
-            "ERR_UNKNOWN_SOURCE" => "ERR_UNKNOWN_SOURCE",
             "ERR_OPERATION_VALIDATION_FAILED" => "ERR_OPERATION_VALIDATION_FAILED",
             "ERR_SCHEMA_UNRESOLVED" => "ERR_SCHEMA_UNRESOLVED",
             _ => "<redacted>",

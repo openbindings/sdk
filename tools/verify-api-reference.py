@@ -13,6 +13,7 @@ PUBLIC_CRATES = (
     "openbindings-internal-cancellation",
     "openbindings-internal-interfaces",
     "openbindings",
+    "openbindings-context",
     "openbindings-json-schema-evaluator",
     "openbindings-http-discovery",
     "openbindings-schema-evaluator-test-support",

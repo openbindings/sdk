@@ -24,9 +24,16 @@ impl Default for PreparationLimits {
 }
 
 /// Why preparation could not construct a validator. This judges no value.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(tag = "kind", content = "details", rename_all = "kebab-case")]
 #[non_exhaustive]
 pub enum PreparationFailureKind {
+    /// This evaluator cannot prepare after an original-context resolution failure.
+    /// An `Undefined` cause is local evidence, never a per-value judgment here.
+    Resolution {
+        /// Structured original lookup cause, with provenance on the outer failure.
+        cause: ResolutionFailureKind,
+    },
     /// The selected evaluator does not implement a required capability.
     UnsupportedCapability {
         /// Capability identifier.
@@ -48,12 +55,41 @@ pub enum PreparationFailureKind {
     },
 }
 /// A preparation refusal with original provenance when established.
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Serialize)]
 pub struct PreparationFailure {
     /// Structured cause; callers need not parse diagnostic prose.
+    #[serde(flatten)]
     pub kind: PreparationFailureKind,
     /// Original source location; never a private evaluator projection.
     pub origin: Option<SchemaOrigin>,
+}
+impl PreparationFailure {
+    /// Construct a preparation failure without manufacturing source provenance.
+    pub fn new(kind: PreparationFailureKind) -> Self {
+        Self { kind, origin: None }
+    }
+    /// Attach an established original source coordinate.
+    #[must_use]
+    pub fn with_origin(mut self, origin: SchemaOrigin) -> Self {
+        self.origin = Some(origin);
+        self
+    }
+}
+impl From<ResolutionFailure> for PreparationFailure {
+    fn from(failure: ResolutionFailure) -> Self {
+        let kind = match failure.kind {
+            ResolutionFailureKind::Cancelled => PreparationFailureKind::Cancelled,
+            ResolutionFailureKind::Limit { resource } => PreparationFailureKind::Limit { resource },
+            ResolutionFailureKind::InvalidExternalSchema => {
+                PreparationFailureKind::InvalidExternalSchema
+            }
+            cause => PreparationFailureKind::Resolution { cause },
+        };
+        Self {
+            kind,
+            origin: failure.origin,
+        }
+    }
 }
 impl fmt::Debug for PreparationFailure {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -112,7 +148,7 @@ pub enum NoVerdictReason {
 /// [`ConformantDocument::locate`] for the document and [`ExternalSchemas::locate`] for a
 /// supplied resource. A prepared value contract keeps no source text. Serializes as JSON text; a pointer through a member name with an unpaired UTF-16 unit has no `serde_json::Value` form, so `serde_json::to_value` refuses such a record and `json!` panics: use `serde_json::to_string` or `to_writer`.
 ///
-/// Custom evaluators build one with [`Self::new`] or [`SchemaRequest::location`].
+/// Custom evaluators build one with [`Self::new`] or [`SchemaNode::origin`].
 /// Later versions may add fields: read them by name and match with `..`.
 #[non_exhaustive]
 pub struct SchemaOrigin {
@@ -124,7 +160,7 @@ pub struct SchemaOrigin {
 }
 impl SchemaOrigin {
     /// A location in the document (`resource` `None`) or in the supplied resource
-    /// with this URI. [`SchemaRequest::location`] builds one for a schema node an
+    /// with this URI. [`SchemaNode::origin`] builds one for a schema node an
     /// evaluator was given.
     pub fn new(source_uri: Option<String>, pointer: Pointer) -> Self {
         Self {
@@ -355,7 +391,7 @@ impl ValueProblem {
     /// A problem without schema facts; add them with [`Self::with_details`].
     /// `instance` is the failing node's pointer from the validated value
     /// (`Pointer::from_str` parses one, [`JsonRef::at_pointer`] checks it);
-    /// [`SchemaRequest::location`] at preparation names `schema`.
+    /// [`SchemaNode::origin`] at preparation names `schema`.
     pub fn new(
         instance: Pointer,
         schema: SchemaOrigin,
@@ -450,130 +486,18 @@ impl ConformantDocument {
     }
 }
 
-/// Original snapshots and an entry point. Evaluators may use the checked projection
-/// helper or evaluate this request directly; generated identifiers are never API identity.
-#[derive(Clone)]
-pub struct SchemaRequest {
-    pub(crate) document: ConformantDocument,
-    pub(crate) resources: ExternalSchemas,
-    pub(crate) entry: JsonValue,
+/// Borrowed inputs for one preparation attempt. The returned validator must
+/// own what it needs; a request does not lend it a completed caller's lifetime.
+#[derive(Clone, Copy)]
+pub struct EvaluationRequest<'a> {
+    /// Selected contained schema and its immutable document context.
+    pub schema: &'a Schema,
+    /// Explicit external schemas; no URI authorizes acquisition.
+    pub external_schemas: &'a ExternalSchemas,
 }
-impl std::fmt::Debug for SchemaRequest {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("SchemaRequest").finish_non_exhaustive()
-    }
-}
-
-impl SchemaRequest {
-    /// Borrow the conformant document revision owning this normative value contract.
-    pub fn document(&self) -> &ConformantDocument {
-        &self.document
-    }
-    /// Borrow the immutable explicit resources for this preparation; evaluators must not substitute global URI caches.
-    pub fn supplied_resources(&self) -> &ExternalSchemas {
-        &self.resources
-    }
-    /// Borrow the selected exact input/output schema in its original context.
-    pub fn entry(&self) -> &JsonValue {
-        &self.entry
-    }
-    /// Allocate the selected schema's original document location.
-    pub fn entry_location(&self) -> SchemaOrigin {
-        SchemaOrigin {
-            source_uri: None,
-            pointer: openbindings_internal_json::backend::exact_pointer(self.entry.view()),
-        }
-    }
-    /// Allocate the original location of a schema node from this request's
-    /// document (such as one inside [`Self::entry`]) or from one of its
-    /// supplied resources, or `None` for a node from another source, including
-    /// a projected [`EvaluationProgram`] resource. Builds only the pointer.
-    pub fn location(&self, node: JsonRef<'_>) -> Option<SchemaOrigin> {
-        use openbindings_internal_json::backend::{exact_pointer, same_source};
-        let resource = if same_source(node, self.document.document().value()) {
-            None
-        } else {
-            Some(
-                self.resources
-                    .iter()
-                    .find(|resource| same_source(node, &resource.document))?
-                    .uri
-                    .clone(),
-            )
-        };
-        Some(SchemaOrigin {
-            source_uri: resource,
-            pointer: exact_pointer(node),
-        })
-    }
-    /// Build a finite evaluator projection with private resource identities, original-location mapping and cooperative cancellation. Refuses unsupported/ambiguous/unavailable references instead of retrieving data.
-    ///
-    /// The first projection for a document revision and resource set assembles
-    /// their resolution space using the set's identity index; later preparations
-    /// with the same live pair reuse it, and dropping the set or every owner of
-    /// the revision releases it.
-    ///
-    /// # Errors
-    /// Returns a refusal if references cannot be resolved soundly, a required capability or resource is unavailable, work limits are exceeded, or cancellation is observed. A refusal is not an instance failure.
-    pub fn evaluation_program(
-        &self,
-        control: &dyn WorkControl,
-    ) -> Result<EvaluationProgram, NoVerdict> {
-        control.check()?;
-        let limits = PreparationLimits::default();
-        let space = self
-            .document
-            .resolution_bounded(
-                &self.resources,
-                limits.max_schema_nodes,
-                limits.max_identity_bytes,
-                control,
-            )
-            .map_err(projection_failure)?;
-        let entry = space
-            .document_node(&self.entry)
-            .expect("preparation admits only indexed document schema positions");
-        space.program(entry, control)
-    }
-}
-/// A closed §7 schema projection with original provenance. Generated identifiers
-/// are private to this program and are not original source identities.
-#[derive(Clone)]
-pub struct EvaluationProgram {
-    entry_uri: String,
-    resources: Vec<ExternalSchema>,
-    projection: openbindings_internal_schema::Program,
-}
-impl EvaluationProgram {
-    /// Borrow the private absolute URI selecting the projected entry.
-    pub fn entry_uri(&self) -> &str {
-        &self.entry_uri
-    }
-    /// Borrow the immutable projected resources with their original provenance.
-    pub fn resources(&self) -> &[ExternalSchema] {
-        &self.resources
-    }
-    /// Map a generated keyword URI to an established original source location.
-    pub fn original_location(&self, uri: &str) -> Option<SchemaOrigin> {
-        self.projection
-            .original_location(uri)
-            .map(original_location)
-    }
-}
-impl EvaluationProgram {
-    pub(crate) fn from_projection(mut projection: openbindings_internal_schema::Program) -> Self {
-        let resources = std::mem::take(&mut projection.resources)
-            .into_iter()
-            .map(|r| ExternalSchema {
-                uri: r.uri,
-                document: r.document,
-            })
-            .collect();
-        Self {
-            entry_uri: projection.entry_uri.clone(),
-            resources,
-            projection,
-        }
+impl fmt::Debug for EvaluationRequest<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("EvaluationRequest").finish_non_exhaustive()
     }
 }
 pub(crate) fn original_location(at: openbindings_internal_schema::Location) -> SchemaOrigin {
@@ -582,74 +506,62 @@ pub(crate) fn original_location(at: openbindings_internal_schema::Location) -> S
         pointer: at.pointer,
     }
 }
-pub(crate) fn projection_failure(f: openbindings_internal_schema::Failure) -> NoVerdict {
-    use openbindings_internal_schema::FailureReason as F;
-    let reason = match f.reason {
-        F::UnsupportedCapability => NoVerdictReason::UnsupportedCapability,
-        F::ConservativePreparation => NoVerdictReason::ConservativePreparation,
-        F::ResourceUnavailable => NoVerdictReason::ResourceUnavailable,
-        F::LimitExceeded => NoVerdictReason::LimitExceeded,
-        F::Cancelled => NoVerdictReason::Cancelled,
-        F::EvaluatorFailure => NoVerdictReason::EvaluatorFailure,
-    };
-    NoVerdict {
-        reason,
-        code: f.code,
-        message: f.message,
-        location: f.location.map(original_location),
-    }
-}
-/// Thread-safe preparation extension point. Respect immutable original context, explicit resources and [`WorkControl`]; perform no implicit I/O. Return a refusal when required capabilities, soundness or limits prevent preparation. Prepared objects must own everything they need after the request is dropped.
-///
-/// A deliberately small evaluator can truthfully support just the boolean `true`
-/// schema. Unsupported requests remain refusals; no source is fetched.
+/// Optional evaluator implementation. Its validator type is concrete and may
+/// contain local state such as `Rc`; neither trait imposes thread-safety bounds.
+/// An evaluator owns compilation strategy, value evaluation and dynamic scope.
+/// Core supplies original schemas and reference interpretation through
+/// [`EvaluationRequest::environment`], without a vendor projection API.
 ///
 /// ```
 /// use openbindings::*;
-/// use std::sync::Arc;
+/// use std::rc::Rc;
 /// struct TrueOnly;
+/// struct Ready(Rc<()>);
 /// impl SchemaEvaluator for TrueOnly {
-///     fn prepare(&self, request: &SchemaRequest, control: &dyn WorkControl)
-///         -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
+///     type Validator = Ready;
+///     fn prepare(&self, request: EvaluationRequest<'_>, _: &PreparationLimits,
+///         control: &dyn WorkControl) -> Result<Ready, PreparationFailure> {
 ///         control.check()?;
-///         if request.entry().view().as_bool() == Some(true) {
-///             Ok(Arc::new(TrueOnly))
+///         if request.schema.json().view().as_bool() == Some(true) {
+///             Ok(Ready(Rc::new(())))
 ///         } else {
-///             Err(NoVerdict::new(
-///                 NoVerdictReason::UnsupportedCapability,
-///                 "true-only",
-///                 "this evaluator supports only the true schema",
-///             )
-///             .with_location(request.entry_location()))
+///             Err(PreparationFailure::new(PreparationFailureKind::UnsupportedCapability {
+///                 capability: "true-only".into(),
+///             }).with_origin(request.schema.location()))
 ///         }
 ///     }
 /// }
-/// impl PreparedSchema for TrueOnly {
-///     fn validate(&self, _: &JsonValue, _: Detail, control: &dyn WorkControl) -> ValueOutcome {
+/// impl SchemaValidator for Ready {
+///     fn evaluate(&self, _: &JsonValue, _: Detail, control: &dyn WorkControl) -> ValueOutcome {
 ///         match control.check() {
 ///             Ok(()) => ValueOutcome::Satisfies,
-///             Err(detail) => ValueOutcome::NoVerdict { detail: detail.into() },
+///             Err(error) => ValueOutcome::NoVerdict { detail: error.into() },
 ///         }
 ///     }
 /// }
-/// let document = Document::parse(
-///     r#"{"openbindings":"0.2.0","operations":{"run":{"input":true}}}"#)?;
-/// let document = document.validate()?.conformant().expect("conformant document");
-/// let operation = document.resolve_operation("run").expect("declared operation");
-/// let contract = operation.input().expect("declared input").prepare(&TrueOnly)?;
-/// assert!(matches!(contract.validate(&JsonValue::null()), ValueOutcome::Satisfies));
+/// let document = Document::parse(r#"{"openbindings":"0.2.0","operations":{"run":{"input":true}}}"#)?;
+/// let proof = document.validate()?.conformant().unwrap();
+/// let schema = proof.resolve_operation("run").unwrap().input().unwrap();
+/// let prepared = schema.prepare(&TrueOnly, &ExternalSchemas::default(), &PreparationLimits::default())?;
+/// drop((schema, proof, document));
+/// assert!(matches!(prepared.evaluate(&JsonValue::null()), ValueOutcome::Satisfies));
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
-pub trait SchemaEvaluator: Send + Sync {
-    /// Prepare this selected schema only, borrowing the request and control for the call. Return a shareable immutable [`PreparedSchema`] or truthful [`NoVerdict`]; never turn preparation refusal into instance failure.
+pub trait SchemaEvaluator {
+    /// Owned compiled state. Thread-safety and cloning follow this type.
+    type Validator: SchemaValidator + 'static;
+    /// Prepare the selected schema under explicit work bounds. No instance is
+    /// judged by this call; a preparation refusal is not a value outcome.
     ///
     /// # Errors
-    /// Returns a refusal if references cannot be resolved soundly, a required capability or resource is unavailable, work limits are exceeded, or cancellation is observed. A refusal is not an instance failure.
+    /// Returns a structured capability, resource, limit, cancellation, or
+    /// implementation failure when this evaluator cannot prepare the request.
     fn prepare(
         &self,
-        request: &SchemaRequest,
+        request: EvaluationRequest<'_>,
+        limits: &PreparationLimits,
         control: &dyn WorkControl,
-    ) -> Result<Arc<dyn PreparedSchema>, NoVerdict>;
+    ) -> Result<Self::Validator, PreparationFailure>;
 }
 /// How much failure detail one validation call asks for. The verdict does not
 /// depend on it.
@@ -662,8 +574,8 @@ pub enum Detail {
     /// The verdict with problems that explain a failure.
     Explain,
 }
-/// Thread-safe retained validator returned by a [`SchemaEvaluator`]. Repeated calls must preserve caller input and retain no accidental borrow of a completed request. Only claim established semantic verdicts; bound diagnostic work separately and report incompleteness.
-pub trait PreparedSchema: Send + Sync {
+/// Owned validator returned by a [`SchemaEvaluator`]. Repeated calls must preserve caller input and retain no accidental borrow of a completed request. Only claim established semantic verdicts; bound diagnostic work separately and report incompleteness.
+pub trait SchemaValidator {
     /// Return only established verdicts. Resource/capability/work failures are NoVerdict.
     ///
     /// The requested [`Detail`] changes only what a failure carries. With
@@ -677,44 +589,59 @@ pub trait PreparedSchema: Send + Sync {
     /// `Detail` may gain variants. Answer one you do not recognize as for
     /// [`Detail::Outcome`], since a failure without problems and with
     /// `problems_complete` false is a truthful answer to every request.
-    fn validate(
+    fn evaluate(
         &self,
         value: &JsonValue,
         detail: Detail,
         control: &dyn WorkControl,
     ) -> ValueOutcome;
 }
-/// A prepared value contract that retains its required compiled state
-/// independently of the document, resources and evaluator. It is
-/// `Clone + Send + Sync + 'static`; cloning shares immutable state, and dropping
-/// the final owner releases it, without promising lower RSS.
+/// An owned prepared schema. `Clone`, `Send` and `Sync` are available exactly
+/// when the concrete validator supports them. No trait object is imposed.
 #[derive(Clone)]
-pub struct PreparedValueContract {
-    pub(crate) schema: Arc<dyn PreparedSchema>,
+pub struct PreparedSchema<V: SchemaValidator> {
+    pub(crate) validator: V,
 }
-impl fmt::Debug for PreparedValueContract {
+impl<V: SchemaValidator> fmt::Debug for PreparedSchema<V> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("PreparedValueContract { .. }")
+        f.write_str("PreparedSchema { .. }")
     }
 }
-impl PreparedValueContract {
+impl<V: SchemaValidator> PreparedSchema<V> {
+    /// Recover the concrete validator without changing its ownership model.
+    pub fn into_validator(self) -> V {
+        self.validator
+    }
     /// Admit exact JSON text or bytes under [`JsonLimits::default`], then validate.
     /// Every [`ValueOutcome`] is returned as `Ok`, including undefined and
     /// no-verdict. Duplicate members are retained by admission and yield
     /// no-verdict during validation. Number tokens are never rounded.
     ///
-    /// Use [`JsonValue::parse_with_limits`] and [`Self::validate`] for custom
+    /// Use [`JsonValue::parse_with_limits`] and [`Self::evaluate`] for custom
     /// admission limits or to retain exact values for repeated checks. Use
-    /// [`Self::validate_with_control`] for cooperative validation cancellation.
+    /// [`Self::evaluate_with_control`] for cooperative validation cancellation.
     ///
     /// # Errors
     /// Returns [`InputError`] only when JSON admission fails, including invalid
     /// UTF-8, a byte order mark, malformed JSON or an exceeded input limit.
-    pub fn validate_json(&self, input: impl AsRef<[u8]>) -> Result<ValueOutcome, InputError> {
-        // A limit refusal names parsing with limits, which this call does not take.
+    pub fn evaluate_json(&self, input: impl AsRef<[u8]>) -> Result<ValueOutcome, InputError> {
+        self.evaluate_json_with_control(input, &crate::control::NeverCancelled)
+    }
+    /// Admit exact JSON under the default parse bounds, then evaluate with a
+    /// cooperative control. Parsing is bounded but is not interruptible by this
+    /// control. Malformed text remains an ingress error even after cancellation.
+    ///
+    /// # Errors
+    /// Returns [`InputError`] for invalid or over-budget JSON admission; valid
+    /// admitted input can yield a cancelled [`ValueOutcome::NoVerdict`].
+    pub fn evaluate_json_with_control(
+        &self,
+        input: impl AsRef<[u8]>,
+        control: &dyn WorkControl,
+    ) -> Result<ValueOutcome, InputError> {
         let value = JsonValue::parse(input)
             .map_err(openbindings_internal_json::backend::value_check_refusal)?;
-        Ok(self.validate(&value))
+        Ok(self.evaluate_with_control(&value, control))
     }
 
     /// Validate an admitted exact value, distinguishing satisfies, fails, undefined
@@ -726,8 +653,8 @@ impl PreparedValueContract {
     /// This is the cheap check: a failure carries no problems and
     /// `problems_complete` is false. Call [`Self::explain`] with the same value
     /// to learn why it fails.
-    pub fn validate(&self, value: &JsonValue) -> ValueOutcome {
-        self.validate_with_control(value, &crate::control::NeverCancelled)
+    pub fn evaluate(&self, value: &JsonValue) -> ValueOutcome {
+        self.evaluate_with_control(value, &crate::control::NeverCancelled)
     }
     /// Validate with cooperative cancellation. Cancellation observed before a
     /// verdict is established yields no-verdict and leaves this owner usable with
@@ -735,7 +662,7 @@ impl PreparedValueContract {
     /// before it observes cancellation stands, whether the value satisfies or
     /// fails.
     /// This is not a preemptive wall-clock deadline; applications schedule work.
-    pub fn validate_with_control(
+    pub fn evaluate_with_control(
         &self,
         value: &JsonValue,
         control: &dyn WorkControl,
@@ -743,13 +670,13 @@ impl PreparedValueContract {
         self.check(value, Detail::Outcome, control)
     }
     /// Validate and explain a failure with problems that name where and why the
-    /// value fails. The verdict is the one [`Self::validate`] returns.
+    /// value fails. The verdict is the one [`Self::evaluate`] returns.
     ///
     /// Explanation costs more than the cheap check, and its cost is bounded
     /// by the evaluator, not the SDK. The default evaluator reports the JSON
     /// Schema library's first error, with redacted messages and original schema
     /// facts: building it allocates in proportion to the schema and value, so
-    /// keep [`Self::validate`] on paths that check untrusted input. The default
+    /// keep [`Self::evaluate`] on paths that check untrusted input. The default
     /// evaluator builds an explanation only for values within half the nesting
     /// its `stack_bytes` limit admits and reports a deeper failure without its
     /// problem, so release builds explain on a thread with that much stack;
@@ -790,7 +717,7 @@ impl PreparedValueContract {
                 ),
             };
         }
-        self.schema.validate(value, requested, control)
+        self.validator.evaluate(value, requested, control)
     }
 }
 
@@ -801,14 +728,76 @@ impl std::fmt::Debug for ValueProblemDetails {
     }
 }
 
-impl std::fmt::Debug for EvaluationProgram {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("EvaluationProgram").finish_non_exhaustive()
-    }
-}
-
 impl std::fmt::Debug for SchemaOrigin {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("SchemaOrigin").finish_non_exhaustive()
+    }
+}
+
+macro_rules! forward_validator {
+    ($owner:ident) => {
+        impl<V: SchemaValidator + ?Sized> SchemaValidator for $owner<V> {
+            fn evaluate(
+                &self,
+                value: &JsonValue,
+                detail: Detail,
+                control: &dyn WorkControl,
+            ) -> ValueOutcome {
+                (**self).evaluate(value, detail, control)
+            }
+        }
+        impl<E: SchemaEvaluator + ?Sized> SchemaEvaluator for $owner<E> {
+            type Validator = E::Validator;
+            fn prepare(
+                &self,
+                request: EvaluationRequest<'_>,
+                limits: &PreparationLimits,
+                control: &dyn WorkControl,
+            ) -> Result<Self::Validator, PreparationFailure> {
+                (**self).prepare(request, limits, control)
+            }
+        }
+    };
+}
+use std::rc::Rc;
+forward_validator!(Arc);
+forward_validator!(Rc);
+forward_validator!(Box);
+
+impl From<openbindings_internal_schema::Failure> for PreparationFailure {
+    fn from(failure: openbindings_internal_schema::Failure) -> Self {
+        use openbindings_internal_schema::FailureReason as F;
+        let origin = failure.location.map(original_location);
+        let kind = match failure.reason {
+            F::Cancelled => PreparationFailureKind::Cancelled,
+            F::LimitExceeded => PreparationFailureKind::Limit {
+                resource: failure.code,
+            },
+            _ if failure.query_failure.is_some() => {
+                let cause = crate::schema::references::query_kind(
+                    *failure.query_failure.expect("checked resolution cause"),
+                );
+                return ResolutionFailure {
+                    kind: cause,
+                    origin,
+                }
+                .into();
+            }
+            F::ConservativePreparation if failure.code == "invalid-schema" => {
+                PreparationFailureKind::InvalidExternalSchema
+            }
+            F::UnsupportedCapability | F::ConservativePreparation => {
+                PreparationFailureKind::UnsupportedCapability {
+                    capability: failure.code,
+                }
+            }
+            F::ResourceUnavailable => PreparationFailureKind::Implementation {
+                message: "the resolver omitted the unavailable resource identity".into(),
+            },
+            F::EvaluatorFailure => PreparationFailureKind::Implementation {
+                message: failure.message,
+            },
+        };
+        Self { kind, origin }
     }
 }

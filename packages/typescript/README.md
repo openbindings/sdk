@@ -61,8 +61,8 @@ function checkInput(input: JsonInput) {
   if (!contract) return { status: "no-input-contract" } as const;
   const setup = contract.prepare();
   if (setup.status !== "ready") return setup;
-  using prepared = setup.valueContract;
-  const result = prepared.validate(input); // narrow on result.status
+  using prepared = setup.schema;
+  const result = prepared.evaluate(input); // narrow on result.status
   return { operations, result };
 }
 
@@ -93,7 +93,7 @@ validating a value. Every result narrows on `status`. A value result's is
 validity), `no-verdict` (the SDK could not answer) or `input-error` when ordinary
 JavaScript data cannot be admitted.
 `validate` reads a string as a JSON string value; check JSON text or bytes, such as
-a request body, with `validateJson`, which admits them as `parseJson` does.
+a request body, with `evaluateJson`, which admits them as `parseJson` does.
 
 ## Browser resource management
 
@@ -202,7 +202,7 @@ setters apply them to the edited document, as Rust's do, whatever route writes
 the value. `discover` raises only the byte limit, to `maxDocumentBytes`; a body
 past the default 1,000,000 nodes comes back undetermined, and `validateDocument`
 with a larger `maxNodes` admits it. `Document.create()`, `ExactJson.from`,
-`validateJson` and a prepared value contract's `validate` and `explain` of an ordinary
+`evaluateJson` and a prepared value contract's `validate` and `explain` of an ordinary
 value use the defaults. Value-contract preparation keeps fixed bounds of its own,
 which no setting raises, such as its 100,000 schema positions and a reached schema
 nested at most 256 schemas below the schema position or resource root holding it

@@ -313,7 +313,7 @@ test("a projection keeps its own bounds whatever the document was admitted under
     const document = parsed(sdk.Document.parse(text, { limits }));
     const ready = prepareInput(document, "op");
     assert.equal(ready.status, "ready");
-    ready.valueContract.dispose();
+    ready.schema.dispose();
     document.dispose();
   }
   // A document admitted past the default byte limit prepares a contract whose
@@ -329,8 +329,8 @@ test("a projection keeps its own bounds whatever the document was admitted under
   const prepared = prepareInput(large, "op");
   assert.equal(prepared.status, "ready");
   const value = parsed(sdk.parseJson(literal, { limits }));
-  assert.equal(prepared.valueContract.validate(value).status, "satisfies");
-  for (const owner of [large, prepared.valueContract, value]) owner.dispose();
+  assert.equal(prepared.schema.evaluate(value).status, "satisfies");
+  for (const owner of [large, prepared.schema, value]) owner.dispose();
 });
 
 test("discovery with a raised body limit validates a body past the default byte limit", async () => {

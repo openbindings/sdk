@@ -3,7 +3,6 @@ use openbindings::*;
 use openbindings_schema_evaluator_test_support as kit;
 use std::collections::BTreeMap;
 use std::fmt::Debug;
-use std::sync::Arc;
 // A credential-shaped probe value; Debug output must never contain it.
 const SECRET: &str = "PROBE-BEARER-TOKEN-7391";
 const NUMBER: &str = "739173917391";
@@ -26,23 +25,17 @@ fn row(label: &'static str, value: &(impl Debug + ?Sized)) -> Row {
 fn location() -> SchemaOrigin {
     SchemaOrigin::new(Some(SECRET.into()), format!("/{SECRET}").parse().unwrap())
 }
-fn refusal() -> NoVerdict {
-    NoVerdict::new(
-        NoVerdictReason::EvaluatorFailure,
-        SECRET,
-        format!("provider refused schema operand {SECRET}"),
-    )
-    .with_location(location())
-}
 /// Refuses every preparation, so the kit records a receipt for every case.
 struct Refuse;
 impl SchemaEvaluator for Refuse {
+    type Validator = Refuse;
     fn prepare(
         &self,
-        _: &SchemaRequest,
+        _: EvaluationRequest<'_>,
+        _: &PreparationLimits,
         _: &dyn WorkControl,
-    ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
-        Err(refusal())
+    ) -> Result<Self::Validator, PreparationFailure> {
+        Err(preparation_failure())
     }
 }
 // The kit builds its suite and receipts; a caller receives them and can
@@ -70,7 +63,7 @@ fn kit_rows(outcome: &ValueOutcome) -> Vec<Row> {
     let mut observation = report.observations[0].clone();
     observation.id = SECRET.into();
     observation.expected = SECRET.into();
-    observation.preparation_refusal = Some(refusal());
+    observation.preparation_refusal = Some(preparation_failure());
     observation.outcome = Some(outcome.clone());
     observation.explanation = Some(outcome.clone());
     observation.failures = vec![SECRET.into()];
@@ -120,4 +113,16 @@ fn debug_redacts_caller_text_at_every_boundary() {
     let rows = kit_rows(&outcome);
 
     check_rows(rows, 6);
+}
+
+fn preparation_failure() -> PreparationFailure {
+    PreparationFailure::new(PreparationFailureKind::Implementation {
+        message: SECRET.into(),
+    })
+    .with_origin(location())
+}
+impl SchemaValidator for Refuse {
+    fn evaluate(&self, _: &JsonValue, _: Detail, _: &dyn WorkControl) -> ValueOutcome {
+        unreachable!()
+    }
 }

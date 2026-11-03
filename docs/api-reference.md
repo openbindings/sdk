@@ -9,6 +9,7 @@ for a complete job; use the definitions for exact result, ownership and limit co
 | Rust document/authoring/contracts | [`openbindings`](../crates/openbindings/src/lib.rs), including its exact-value reexports | `cargo doc --locked --no-deps -p openbindings` |
 | Rust default evaluator | [`openbindings-json-schema-evaluator`](../crates/openbindings-json-schema-evaluator/src/lib.rs) | `cargo doc --locked --no-deps -p openbindings-json-schema-evaluator` |
 | Rust evaluator contract kit | [`openbindings-schema-evaluator-test-support`](../crates/openbindings-schema-evaluator-test-support/src/lib.rs) | `cargo doc --locked --no-deps -p openbindings-schema-evaluator-test-support` |
+| Rust shared context | [`openbindings-context`](../crates/openbindings-context/src/lib.rs) | `cargo doc --locked --no-deps -p openbindings-context` |
 | Rust HTTP discovery | [`openbindings-http-discovery`](../crates/openbindings-http-discovery/src/lib.rs), including native adapter | `cargo doc --locked --no-deps -p openbindings-http-discovery --features native` |
 | Rust source inspection interface | [`openbindings-source-inspection`](../crates/openbindings-source-inspection/src/lib.rs) | `cargo doc --locked --no-deps -p openbindings-source-inspection` |
 | Rust interface synthesis interface | [`openbindings-interface-synthesis`](../crates/openbindings-interface-synthesis/src/lib.rs) | `cargo doc --locked --no-deps -p openbindings-interface-synthesis` |
@@ -133,7 +134,7 @@ for diagnostics and are refused by typed interpretation, editing and proof.
 | `ConformantDocument` | Nominal, privately constructed proof with infallible typed reads. `resolveOperation(name)` returns a `ConformantOperationView` or `undefined`. It has no setters and does not inherit `Document`. |
 | `ConformantOperationView` | `input()` and `output()` return a disposable `Schema` or `undefined`; the plain `OperationView` of a `Document` returns exact values instead. Both views have `retain()`. |
 | `Schema` | `json()` acquires the exact schema; `prepare(options)` takes `resources`, `limits` and `signal` and returns `{ status: "ready", valueContract }` or `{ status: "no-verdict", detail }`. |
-| `PreparedValueContract` | Disposable prepared value contract with `validate(value, options)`, the cheap check, `explain(value, options)`, which adds problems to a failure, and `retain()`; independent of its document, operation, resources and contract owners. `validateJson(input, options)` is Rust's `validate_json`: it admits JSON text or bytes as `parseJson` does and returns a `JsonCheck`, whose `input-error` carries the `parseJson` error. `validate` reads a string as a JSON string value. |
+| `PreparedSchema` | Disposable prepared value contract with `validate(value, options)`, the cheap check, `explain(value, options)`, which adds problems to a failure, and `retain()`; independent of its document, operation, resources and contract owners. `validateJson(input, options)` is Rust's `validate_json`: it admits JSON text or bytes as `parseJson` does and returns a `JsonCheck`, whose `input-error` carries the `parseJson` error. `validate` reads a string as a JSON string value. |
 | `ExactJson.locate(pointer)`, `ConformantDocument.locate(at)`, `ExternalSchemas.locate(at)` | The `SourceLocation` of the node a problem's instance pointer or a `SchemaOrigin` names, in the value, the document or the supplied resource with its URI, or `null`. A malformed pointer throws `SdkError` with code `invalid-pointer`, and a malformed schema location with code `invalid-schema-location`. |
 | `asDocument()`, `intoDocument()` | Acquire an independent immutable document owner, or consume the proof. Consumption revokes all JavaScript aliases of that proof; retained owners survive. |
 | `toBytes()`, `dispose()`, `Symbol.dispose`, `disposed` | Detached exact current bytes and the existing deterministic lifecycle. |
@@ -154,16 +155,16 @@ from findings. An atomic batch returns a new document and preserves earlier owne
 | --- | --- |
 | `ConformantOperationView::input(&self)`, `output(&self) -> Option<Schema>` | The operation's declared value contract, or `None` when the field is absent. Reading prepares nothing. Only a conformant view hands one out; a plain `OperationView` returns the exact `JsonRef`. |
 | `Schema::json(&self) -> JsonValue` | The exact unprepared schema; present `true`, `false` and objects remain distinct. |
-| `Schema::prepare(&self, &dyn SchemaEvaluator) -> Result<PreparedValueContract, NoVerdict>` | Prepares with no supplied resources. A `&DefaultEvaluator` coerces; the evaluator is borrowed for the call. |
+| `Schema::prepare(&self, &dyn SchemaEvaluator) -> Result<PreparedSchema, NoVerdict>` | Prepares with no supplied resources. A `&DefaultEvaluator` coerces; the evaluator is borrowed for the call. |
 | `Schema::prepare_with(&self, &dyn SchemaEvaluator, &ExternalSchemas)`, `prepare_with_control(.., &dyn WorkControl)` | The same with immutable supplied resources and cooperative cancellation. A refusal judges no instance and does not prove undefinedness. |
-| `PreparedValueContract::validate_json(input: impl AsRef<[u8]>) -> Result<ValueOutcome, InputError>` | Admits through `JsonValue::parse` with default limits, then validates. `Err` is admission failure only; all four value outcomes are `Ok`. Duplicate members yield no-verdict and numbers retain exact semantics. An exceeded limit's message names the route that admits more: `JsonValue::parse_with_limits`, then `validate` (TypeScript: `parseJson` with `limits`, then `validate`). |
-| `PreparedValueContract::validate(&self, &JsonValue)`, `validate_with_control(.., &dyn WorkControl) -> ValueOutcome` | The cheap check: a failure carries no problems and `problems_complete` is false. |
-| `PreparedValueContract::explain(&self, &JsonValue)`, `explain_with_control(.., &dyn WorkControl) -> ValueOutcome` | The same verdict, with problems that explain a failure. Library-bounded; see [value diagnostics](#value-diagnostics). |
+| `PreparedSchema::validate_json(input: impl AsRef<[u8]>) -> Result<ValueOutcome, InputError>` | Admits through `JsonValue::parse` with default limits, then validates. `Err` is admission failure only; all four value outcomes are `Ok`. Duplicate members yield no-verdict and numbers retain exact semantics. An exceeded limit's message names the route that admits more: `JsonValue::parse_with_limits`, then `validate` (TypeScript: `parseJson` with `limits`, then `validate`). |
+| `PreparedSchema::validate(&self, &JsonValue)`, `validate_with_control(.., &dyn WorkControl) -> ValueOutcome` | The cheap check: a failure carries no problems and `problems_complete` is false. |
+| `PreparedSchema::explain(&self, &JsonValue)`, `explain_with_control(.., &dyn WorkControl) -> ValueOutcome` | The same verdict, with problems that explain a failure. Library-bounded; see [value diagnostics](#value-diagnostics). |
 | `JsonValue::locate(&self, &Pointer)`, `ConformantDocument::locate(&self, &SchemaOrigin)`, `ExternalSchemas::locate(&self, &SchemaOrigin) -> Option<SourceLocation>` | Byte offset, line and column of the node a problem's instance pointer or schema location names, in the value's, document's or supplied resource's text; `None` for another source or a pointer naming no node. One pass on the call; nothing retained. |
 
-`PreparedValueContract` is `Clone + Send + Sync + 'static` and owns what it needs after
+`PreparedSchema` is `Clone + Send + Sync + 'static` and owns what it needs after
 the document, resources and evaluator are dropped. Core has no default evaluator
-dependency. Use `JsonValue::parse_with_limits` and `PreparedValueContract::validate`
+dependency. Use `JsonValue::parse_with_limits` and `PreparedSchema::validate`
 for custom admission limits or retained exact values (TypeScript: `parseJson` with
 `limits`, then `validate`); `validate_with_control`
 accepts cooperative cancellation. Each preparation still compiles independently.
@@ -183,7 +184,7 @@ custom evaluator messages; callers choose their disclosure policy.
 
 Source inspection uses `SourceInspector` and `Inspector`; interface synthesis uses
 `InterfaceSynthesizer` and `Synthesizer`. Invocation uses `binding::BindingInvoker`
-with `binding::Invoker` or `operation::Invoker`. These provisional companion APIs
+with `BindingClient<P>` or `OperationClient<P,E>`. These companion APIs
 are not exported by the TypeScript facade.
 
 | Public item | Contract |
@@ -191,21 +192,16 @@ are not exported by the TypeScript facade.
 | `INTERFACE_VERSION`, `APPLIED_INTERFACE_REVISION` | In invocation, source inspection and interface synthesis: the published interface version implemented, independent of the crate's own version, and the revision of the interfaces repository applied. HTTP discovery keeps its separate companion constants. |
 | `CoverageClaim::complete(entries)` | Claims an exhaustive inventory with no limitation; the synthesis facade checks correspondence before returning `SynthesisCoverage`. |
 | `ProviderInput: futures_core::Stream<Item = JsonValue>` | Poll-based input delivery sharing the inherent `next` implementation; preserves backpressure, cancellation, validation failure suspension and terminal ordering. `close` discards unread input. |
-| `binding::BindingInvoker::preflight` | Provided method declaring the provider's advisory preflight hook; `None` by default. A hook returns a `Self::Invocation` job that completes with `Ok(())` for no prediction or with the `CONTEXT_REQUIRED` challenge invocation would raise. |
-| `binding::Invoker::preflight`, `operation::Invoker::preflight` | Run the SDK's admission checks (and, for operations, selection) for every provider, then the provider's hook when it declares one. |
-| `binding::Invoker::preflight_with_control`, `operation::Invoker::preflight_with_control` | The same provider preflight with caller cancellation, isolated from sibling attempts. |
-| `InspectionLimitation::additional_fields` | `BTreeMap<String, JsonValue>` retaining additional exact evidence; `code`, `message` and `details` cannot be shadowed. |
+| `BindingInvoker::Invoke<'a>`, `Preflight<'a>` | Separate provider futures. Invocation returns one terminal; advisory work returns NoPrediction or a shared ContextChallenge as a successful result. |
+| `BindingClient::invoke`, `OperationClient::invoke` | Admit owned document/key/context requests and return lazy invocations. Only the output handle drives provider/validation work. |
+| `BindingClient::preflight`, `OperationClient::preflight` | Return local admission failure or an advisory future. Operation selection is identical to invocation; no schema preparation or dispatch occurs. |
+| `InvocationControl` | Observe/cancel without retaining provider work. Local evidence stays separate from portable code/data errors. |
 
-Override `BindingInvoker::preflight` to provide advisory preflight. The
-facades' `preflight` methods always admit the request and, when the provider
-declares a hook, return its answer; a provider without one makes no prediction,
-and invocation never requires preflight. The hook's job is the provider's
-`Invocation` future, so stable Rust callers can bound it: binding preflight is
-`Send` when the provider is `Sync` and `P::Invocation<'a>` is `Send`, and so are
-operation preflight and plain operation invocation. A future that holds
-a prepared operation also needs a `Send` provider, because the handle shares its
-invoker.
-Local futures and `Rc` providers are also supported.
+Preflight has its own associated future; no challenge is smuggled through an
+invocation-error result. Send follows the provider and its chosen future. An
+operation advisory future captures no evaluator. Local Rc providers, evaluators
+and validators are supported. PreparedOperation<V> owns validators independently
+of the client; each consuming attempt receives an explicit provider.
 
 ## Boundaries to preserve
 
@@ -228,7 +224,7 @@ Local futures and `Rc` providers are also supported.
   New binding/source/dependency/example views follow this same owner-acquisition method rule;
   their frozen metadata is plain data. A traversal cursor and each yielded owner
   have independent lifetimes. See the TypeScript guide for editing ownership.
-- Every preparation compiles independently. Retain a `PreparedValueContract` for
+- Every preparation compiles independently. Retain a `PreparedSchema` for
   repeated validation without recompilation; it survives document, resource and
   evaluator drop. Resource sets are immutable, explicit and scoped to the preparations that receive them; URI
   identity never authorizes I/O. Core and default schema evaluation do no acquisition.
@@ -269,7 +265,7 @@ asks for problems. See the [evaluator guide](../crates/openbindings-json-schema-
 Custom Rust evaluators receive the call's `Detail`. An evaluator constructing
 `ValueOutcome::Fails` supplies a value-free `message` alongside `problems` and
 `problems_complete`. Empty incomplete diagnostics are valid established failures.
-Custom evaluators receive a `SchemaRequest` with the original document, supplied
+Custom evaluators receive a `EvaluationRequest` with the original document, supplied
 resources, entry and entry location; `location(node)` names a node of the document
 or a supplied resource. They build problems with `ValueProblem::new(instance,
 schema, code, message)` and `with_details(details)`, an instance pointer from the
@@ -464,9 +460,10 @@ Raw parser admission codes `byte-limit`, `node-limit` and `depth-limit` remain
 ## ConformantDocument document reads
 
 A conformant operation's `input()` and `output()` return its `Schema`s;
-`operation::Invoker::new` takes `ConformantDocument`; `with_evaluator` and
-`with_validation_detail(Detail)` return `Self`. Preparation still may refuse, and prepared does not mean decidable.
-`SchemaRequest::document()` exposes the conformant document revision to custom evaluators.
+owned invocation requests take `ConformantDocument`. `OperationClient::new` takes
+an explicit provider, evaluator and external schemas; `with_validation_detail`
+selects local diagnostic detail. Preparation may refuse, and prepared does not mean decidable.
+`EvaluationRequest::document()` exposes the conformant document revision to custom evaluators.
 
 | Rust read | Result and presence |
 | --- | --- |
@@ -601,32 +598,24 @@ it can report in the original sources, in which case `problems_complete` is fals
 
 ## Caller-owned operation preparation
 
-`operation::Invoker::prepare(name)` and `prepare_with_control(name, &control)`
-take the invoker as `&Arc<Invoker<P>>` and return
-`Result<PreparedOperation<P>, InvocationError>`. `Invoker::new` allocates nothing;
-a caller that prepares holds the configured invoker in an `Arc`, and each handle
-keeps one share of it: its document, provider, decoded carriers, limits and
-validation detail. The handle eagerly prepares both declared directions and owns
-their compiled state. It can outlive the caller's `Arc` and is `Send`, `Sync` and
-`'static` when the provider is, so one handle wrapped in an `Arc` can serve
-spawned tasks. The invoker is `Send` when the provider is `Send` and `Sync` when
-it is `Sync`.
-Absent directions need no evaluator. Failed or cancelled preparation releases all
-partial work and returns no handle. Preparation does not select bindings or call
-providers; ready means prepared, not that every value is decidable.
+`OperationClient<P,E>::prepare(interface, name, &control)` returns
+`Result<PreparedOperation<E::Validator>, OperationPreparationFailure>`. It resolves
+one operation key/alias and prepares declared directions without selecting a
+binding or calling the provider. The returned owner stores no P, E or client borrow.
+It can outlive its originating client. Clone, Send and Sync follow V; each invocation
+owns V, so Sync is not required merely to move an attempt between threads.
 
-`PreparedOperation::invoke(attempt)` and `invoke_with_control(attempt, &control)`
-take `operation::Attempt`, which carries only what varies per call: binding choice
-and optional opaque context. `Attempt::new()` (also `Default`) requires a sole
-supported binding; `Attempt::ordered(&[..])` chooses the first supported binding
-in the supplied list; `Attempt::binding(key)` selects one exact binding. Every
-ordered key must belong to the prepared operation, including keys after the first
-supported entry. An exact binding belonging to another operation returns
-`ERR_BINDING_NOT_FOUND` before provider work. `.with_context(&context)` forwards
-an opaque object; Debug redacts binding choices and context contents. Binding
-support and selection are checked anew, and cancellation, queues and validation
-evidence are independent. Plain `Invoker::invoke` keeps `Request` and still
-prepares lazily once per used direction per attempt.
+`PreparedOperation::invoke(self, &provider, choice, context, control)` selects from
+the retained document. BindingChoice is Sole, Ordered(Vec<String>), or Binding(key).
+Every ordered key must belong to the operation; explicit binding bypasses support
+selection but must belong to the prepared operation. Context remains opaque and
+exact. Each attempt has separate queues, cancellation and validation evidence.
+
+Preparation failures distinguish admission, name resolution, directional schema
+preparation and cancellation outside a schema. Partial validators are released on
+failure. Lazy invocation prepares once per used direction per attempt; prepared
+clones reuse their validators. Neither prepared readiness nor preflight establishes
+that every later value is decidable. See the [invocation guide](invocation.md).
 
 `ValidationReport` retains release, revision, conclusion, evidence, findings and
 `findingsTruncated`; it has no application policy identifier. Applications attach
@@ -640,8 +629,8 @@ implements acquire observation. Core convenience APIs use a private always-live
 control. Cancellation is permanent during an attempt; reset during work is unsupported.
 
 Discovery, invocation, source inspection and interface synthesis reexport one
-`CancellationToken` and `Cancellation` identity. Their controlled APIs borrow the
-token, and providers receive an owned token. Token `check()` returns `Cancelled`,
+`CancellationToken` and `Cancellation` identity. Invocation requests own the caller token and providers receive an isolated local
+token. Other controlled APIs may borrow the caller token. Token `check()` returns `Cancelled`,
 not a value verdict. Contract boundaries convert it to `caller-cancelled`; async
 consumers retain their existing cancellation outcomes. Invocation retains its
 synchronous relay and isolated local tokens. See the [cancellation definitions](../crates/openbindings-internal-cancellation/src/lib.rs).

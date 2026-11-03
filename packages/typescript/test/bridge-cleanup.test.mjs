@@ -27,7 +27,7 @@ test("owned selection and preparation wrappers release untaken children on decod
     // warm them so every fault compares against a settled baseline.
     const warm = contract.prepare();
     assert.equal(warm.status, "ready");
-    warm.valueContract.dispose();
+    warm.schema.dispose();
     for (const [prototype, invoke, take] of [
       [
         bridge.WasmOperationSelection.prototype,
@@ -37,7 +37,7 @@ test("owned selection and preparation wrappers release untaken children on decod
       [
         bridge.WasmPreparation.prototype,
         () => contract.prepare(),
-        "takeValueContract",
+        "takeSchema",
       ],
     ]) {
       for (const fault of [
@@ -89,8 +89,8 @@ test("owned selection and preparation wrappers release untaken children on decod
     selected.operation.dispose();
     const prepared = contract.prepare();
     assert.equal(prepared.status, "ready");
-    assert.equal(prepared.valueContract.validate(7).status, "satisfies");
-    prepared.valueContract.dispose();
+    assert.equal(prepared.schema.evaluate(7).status, "satisfies");
+    prepared.schema.dispose();
   } finally {
     contract.dispose();
     document.dispose();
@@ -103,14 +103,14 @@ test("ordinary admission maps only known engine limits and preserves unexpected 
   ).value;
   const setup = prepareInput(document, "run");
   assert.equal(setup.status, "ready");
-  const prepared = setup.valueContract;
+  const prepared = setup.schema;
   const parse = bridge.WasmJson.parseText;
   try {
     const before = testing.liveStorageOwners();
     bridge.WasmJson.parseText = () => {
       throw '{"kind":"Limit","message":"fixture admission limit"}';
     };
-    assert.deepEqual(prepared.validate(7), {
+    assert.deepEqual(prepared.evaluate(7), {
       status: "input-error",
       error: {
         code: "input-limit",
@@ -124,7 +124,7 @@ test("ordinary admission maps only known engine limits and preserves unexpected 
       throw unexpected;
     };
     assert.throws(
-      () => prepared.validate(7),
+      () => prepared.evaluate(7),
       (error) => error === unexpected,
     );
     assert.equal(testing.liveStorageOwners(), before);

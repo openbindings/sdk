@@ -199,7 +199,8 @@ const SHAPES: [(&str, usize); 39] = [
 fn contract(
     schema: &str,
     evaluator: &DefaultEvaluator,
-) -> Result<PreparedValueContract, NoVerdict> {
+) -> Result<PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator>, PreparationFailure>
+{
     let resources = ExternalSchemas::new([ExternalSchema {
         uri: "https://stack.test/s".into(),
         document: JsonValue::parse(schema).unwrap(),
@@ -218,7 +219,11 @@ fn contract(
         .unwrap()
         .input()
         .unwrap()
-        .prepare_with(evaluator, &resources)
+        .prepare(
+            evaluator,
+            &resources,
+            &openbindings::PreparationLimits::default(),
+        )
 }
 fn refused(outcome: &ValueOutcome) -> bool {
     matches!(outcome, ValueOutcome::NoVerdict { detail } if detail.code == "evaluation-depth-limit")
@@ -244,7 +249,13 @@ fn admitted(stack: usize) -> Vec<Option<usize>> {
                 let contract = match contract(&schema, &evaluator) {
                     Ok(contract) => contract,
                     Err(detail) => {
-                        assert_eq!(detail.code, "unevaluated-walk-limit", "{stack}: {name}");
+                        assert_eq!(
+                            detail.kind,
+                            PreparationFailureKind::Limit {
+                                resource: "unevaluated-walk-limit".into()
+                            },
+                            "{stack}: {name}"
+                        );
                         admitted.push(None);
                         continue;
                     }
@@ -255,14 +266,14 @@ fn admitted(stack: usize) -> Vec<Option<usize>> {
                 while refused_at - deepest > 1 {
                     let depth = (deepest + refused_at) / 2;
                     let value = JsonValue::parse(shape(name, depth).1).unwrap();
-                    if refused(&contract.validate(&value)) {
+                    if refused(&contract.evaluate(&value)) {
                         refused_at = depth;
                     } else {
                         deepest = depth;
                     }
                 }
                 let value = JsonValue::parse(shape(name, deepest).1).unwrap();
-                let checked = contract.validate(&value);
+                let checked = contract.evaluate(&value);
                 let explained = contract.explain(&value);
                 assert!(
                     !refused(&checked) && !refused(&explained),
@@ -274,7 +285,7 @@ fn admitted(stack: usize) -> Vec<Option<usize>> {
                     "{stack}: {name}"
                 );
                 let deeper = JsonValue::parse(shape(name, refused_at).1).unwrap();
-                assert!(refused(&contract.validate(&deeper)), "{stack}: {name}");
+                assert!(refused(&contract.evaluate(&deeper)), "{stack}: {name}");
                 assert!(refused(&contract.explain(&deeper)), "{stack}: {name}");
                 admitted.push(Some(deepest));
             }

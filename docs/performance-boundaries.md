@@ -10,9 +10,16 @@ the compiled-pattern memory and the exponential evaluation example were measured
 on 2026-10-21, and preparation and the Wasm size on 2026-10-24. Use the locked
 dependencies and release profile to reproduce them.
 
+The 0.2 alignment work now routes static references directly through the bounded
+original schema inventory. The older carrier-inspection caches described with
+these historical measurements have been removed. Their timing and allocation
+tables are historical evidence, not measurements of this implementation. The
+matched-toolchain comparison against the pinned SDK baseline remains a release
+gate; no current performance conclusion is implied by those tables.
+
 ## Prepared value contracts
 
-Retain a `PreparedValueContract` for repeated validation. Reusing a conformant
+Retain a `PreparedSchema` for repeated validation. Reusing a conformant
 document and `ExternalSchemas` also saves work, but still prepares a fresh contract on
 each `prepare` call. The SDK does not transparently cache arbitrary custom
 evaluator results.

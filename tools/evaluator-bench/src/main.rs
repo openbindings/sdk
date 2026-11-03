@@ -271,6 +271,7 @@ fn measure(r: &Request, observed: Value, operation: impl Fn() -> &'static str) -
         "fails",
         "undefined",
         "no-verdict",
+        "preparation-refused",
     ] {
         outcomes.insert(key, 0);
     }

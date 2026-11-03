@@ -53,9 +53,37 @@ for (const name of metaSchemas) {
   assert.equal(digest, digests[name], 'Bundled meta-schema SHA-256 differs: ' + schemasPath + '/' + name);
 }
 
+const externalMetaSchemas = [
+  'draft7.json',
+  'draft2019-09/schema.json',
+  'draft2019-09/meta/core.json',
+  'draft2019-09/meta/applicator.json',
+  'draft2019-09/meta/validation.json',
+  'draft2019-09/meta/meta-data.json',
+  'draft2019-09/meta/format.json',
+  'draft2019-09/meta/content.json',
+];
+const externalDigestsPath = schemasPath + '/EXTERNAL-DIGESTS.json';
+const externalDigests = JSON.parse(readFileSync(join(sdk, externalDigestsPath), 'utf8'));
+const externalSources = JSON.parse(readFileSync(join(sdk, schemasPath, 'EXTERNAL-SOURCES.json'), 'utf8'));
+assert.deepEqual(Object.keys(externalDigests).sort(), [...externalMetaSchemas].sort(), 'External meta-schema digest inventory must contain all supported standard artifacts');
+assert.deepEqual(Object.keys(externalSources).sort(), [...externalMetaSchemas].sort(), 'External meta-schema source inventory must match the digest inventory');
+for (const name of externalMetaSchemas) {
+  assert.match(externalDigests[name], /^[0-9a-f]{64}$/, 'Invalid external SHA-256 digest: ' + name);
+  assert.equal(externalSources[name].sha256, externalDigests[name], 'External source digest mismatch: ' + name);
+  assert.match(externalSources[name].revision, /^[0-9a-f]{40}$/, 'External source must use an immutable revision: ' + name);
+  const revision = name === 'draft7.json' ? '20a3fee852db88519dcb3bb329b7a872ebad8953' : 'c8eb3d320f60eca7cfb18da25337a426ceb40eaa';
+  const path = name === 'draft7.json' ? 'schema.json' : name.slice('draft2019-09/'.length);
+  assert.equal(externalSources[name].url, `https://raw.githubusercontent.com/json-schema-org/json-schema-spec/${revision}/${path}`, 'External source publication changed: ' + name);
+  assert.equal(externalSources[name].revision, revision, 'External source revision changed: ' + name);
+  const digest = createHash('sha256').update(readFileSync(join(sdk, schemasPath, name))).digest('hex');
+  assert.equal(digest, externalDigests[name], 'Bundled meta-schema SHA-256 differs: ' + schemasPath + '/' + name);
+}
+const allMetaSchemas = [...metaSchemas, ...externalMetaSchemas];
+
 // A pin only guarantees the bytes the product uses when it names them: every
 // bundled schema a crate source embeds is pinned above, and each pinned file is embedded.
-const pinned = [derivedPath, ...metaSchemas.map(name => schemasPath + '/' + name)];
+const pinned = [derivedPath, ...allMetaSchemas.map(name => schemasPath + '/' + name)];
 function embeddedSchemas(directory, found = new Set()) {
   for (const entry of readdirSync(directory, {withFileTypes:true})) {
     const path = join(directory, entry.name);
@@ -97,7 +125,7 @@ function testDrift() {
     assert.equal(baseline.status, 0, 'unmodified temporary inputs must pass: ' + baseline.stderr);
     const inputs = [
       [derivedPath, 'Bundled derived schema differs from pinned spec: ' + derivedPath],
-      ...metaSchemas.map(name => [schemasPath + '/' + name, 'Bundled meta-schema SHA-256 differs: ' + schemasPath + '/' + name]),
+      ...allMetaSchemas.map(name => [schemasPath + '/' + name, 'Bundled meta-schema SHA-256 differs: ' + schemasPath + '/' + name]),
     ];
     for (const [name, message] of inputs) {
       const path = join(copy, name);
@@ -139,11 +167,19 @@ function testDrift() {
     const result = run();
     assert.equal(result.status, 1, 'incomplete digest inventory must fail');
     assert(result.stderr.includes('Bundled meta-schema digest inventory'), 'failure must identify the incomplete digest inventory: ' + result.stderr);
-    return inputs.length + 3;
+    writeFileSync(path, JSON.stringify(digests));
+    const externalPath = join(copy, externalDigestsPath);
+    const missingExternal = {...externalDigests};
+    delete missingExternal[externalMetaSchemas[0]];
+    writeFileSync(externalPath, JSON.stringify(missingExternal));
+    const externalResult = run();
+    assert.equal(externalResult.status, 1, 'incomplete external digest inventory must fail');
+    assert(externalResult.stderr.includes('External meta-schema digest inventory'), 'external inventory failure must be identified');
+    return inputs.length + 4;
   } finally {
     rmSync(temporary, {recursive:true, force:true});
   }
 }
 
 const regression = options.length ? {driftRegressionTests:testDrift()} : {};
-console.log(JSON.stringify({appliedSpecification:expected, identicalFiles:count, verifiedMetaSchemas:metaSchemas.length, ...regression}));
+console.log(JSON.stringify({appliedSpecification:expected, identicalFiles:count, verifiedMetaSchemas:metaSchemas.length, verifiedExternalMetaSchemas:externalMetaSchemas.length, ...regression}));

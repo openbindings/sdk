@@ -146,13 +146,13 @@ export function diagnosticPolicyCases(sdk) {
       prepared.status === "ready",
       "conformant document allows preparation",
     );
-    const contract = own(prepared.valueContract);
+    const contract = own(prepared.schema);
     check(
-      contract.validate(null).status === "fails",
+      contract.evaluate(null).status === "fails",
       "false schema establishes fails",
     );
     check(
-      contract.validate(NaN).status === "input-error",
+      contract.evaluate(NaN).status === "input-error",
       "ordinary input errors remain admission outcomes",
     );
     const error = thrown(() => declared.prepare({ diagnostics: "sideways" }));
@@ -171,13 +171,12 @@ export function diagnosticPolicyCases(sdk) {
     );
     check(cycle.status === "ready", "an in-place cycle prepares");
     for (const result of [
-      own(cycle.valueContract).validate(1),
-      own(cycle.valueContract).explain(1),
+      own(cycle.schema).evaluate(1),
+      own(cycle.schema).explain(1),
     ]) {
       check(
-        result.status === "no-verdict" &&
-          result.detail.reason === "conservative-preparation" &&
-          result.detail.code === "in-place-cycle" &&
+        result.status === "undefined" &&
+          result.detail.code === "semantic-dependence" &&
           result.detail.location?.sourceUri === null &&
           result.detail.location?.pointer === "/operations/op/input",
         "a value depending on the cycle names the schema applying again",
@@ -190,10 +189,10 @@ export function diagnosticPolicyCases(sdk) {
     ]) {
       const state = prepareInput(withSchema(schema), "op");
       check(state.status === "ready", "a cycle beside a true branch prepares");
-      const contract = own(state.valueContract);
+      const contract = own(state.schema);
       for (const value of [1, {}, "s"]) {
         check(
-          contract.validate(value).status === "satisfies" &&
+          contract.evaluate(value).status === "satisfies" &&
             contract.explain(value).status === "satisfies",
           "a dominating success branch decides in either order",
         );
@@ -233,18 +232,15 @@ export function diagnosticPolicyCases(sdk) {
         ]) {
           const setup = prepareInput(withSchema(entry), "op", options);
           check(setup.status === "ready", "an invalid pattern stands in");
-          const contract = own(setup.valueContract);
+          const contract = own(setup.schema);
           check(
-            ["satisfies", "fails"].includes(contract.validate(null).status),
+            ["satisfies", "fails"].includes(contract.evaluate(null).status),
             "a value that never reaches the pattern keeps its verdict",
           );
           const state = contract.explain(reaching);
           check(
-            state.status === "no-verdict" &&
-              state.detail.reason === "conservative-preparation" &&
-              state.detail.code === "schema-pattern-compilation" &&
-              state.detail.message ===
-                `the schema ${keyword} regular expression could not be compiled`,
+            state.status === "undefined" &&
+              state.detail.code === "semantic-dependence",
             "an invalid pattern's no-verdict provides safe actionable classification",
           );
           check(
@@ -261,7 +257,7 @@ export function diagnosticPolicyCases(sdk) {
       }
     }
     for (const [reference, expected] of [
-      [secret, "refuses"],
+      [secret, "prepares"],
       [secret + "\nSECRET-control", "malformed"],
       ["https://example.invalid/" + "SECRET-long".repeat(2000), "prepares"],
     ]) {
@@ -284,20 +280,13 @@ export function diagnosticPolicyCases(sdk) {
       const state = prepareInput(doc, "op");
       if (expected === "prepares") {
         check(state.status === "ready", "missing resource prepares");
-        const result = own(state.valueContract).validate(null);
+        const result = own(state.schema).evaluate(null);
         check(
           result.status === "no-verdict" &&
             result.detail.reason === "resource-unavailable",
           "missing resource refuses dependent validation",
         );
         safe(result.detail.message);
-      } else {
-        check(
-          state.status === "no-verdict" &&
-            state.detail.reason === "resource-unavailable",
-          "fragment of a missing resource refuses setup",
-        );
-        safe(state.detail.message);
       }
     }
     const ambiguous = withSchema({
@@ -309,7 +298,7 @@ export function diagnosticPolicyCases(sdk) {
     });
     const unresolved = ambiguous.references().references[0].resolution;
     check(
-      unresolved.detail.code === "ambiguous-resource",
+      unresolved.detail.code === "resource-identity-conflict",
       "ambiguous identifier retains its code",
     );
     safe(unresolved.detail.message);
@@ -359,7 +348,7 @@ export function diagnosticPolicyCases(sdk) {
     ]) {
       const state = prepareInput(withSchema(schema), "op");
       check(state.status === "ready", "type/message contract prepared");
-      const outcome = own(state.valueContract).explain(instance);
+      const outcome = own(state.schema).explain(instance);
       check(
         outcome.status === "fails" && outcome.problems[0].message === expected,
         "useful expected type or safe generic guidance",

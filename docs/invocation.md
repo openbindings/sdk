@@ -1,251 +1,135 @@
 # Invocation lifecycle
 
-## Call an operation in a document
+`BindingClient<P>` runs an explicitly named binding from an owned conformant
+interface. `OperationClient<P,E>` also resolves operation keys/aliases, applies the
+caller's binding choice, and validates each declared value contract. Both return
+an invocation with separate input, output and control handles.
 
-`operation::Invoker` retains a document and an explicit binding provider. It
-resolves names and pure support at call construction, then returns the **same
-`Invocation`** as the binding entry point. Provider execution remains lazy.
+## Call an operation
 
 ```rust
-use openbindings::{JsonValue, Document, ExternalSchemas};
-use openbindings_invocation::{binding::BindingInvoker, operation::{Attempt, Invoker}};
+use openbindings::{ConformantDocument, ExternalSchemas, JsonValue};
+use openbindings_invocation::{BindingInvoker, CancellationToken, InvocationSupport,
+    OperationClient, OperationRequest, OutputEvent};
 use openbindings_json_schema_evaluator::DefaultEvaluator;
-use std::sync::Arc;
 
-async fn call<P: BindingInvoker>(document: Document, provider: P)
-    -> Result<(), Box<dyn std::error::Error>>
-{
-    let proof = document.validate()?.conformant().ok_or("document is not conformant")?;
-    let invoker = Arc::new(
-        Invoker::new(proof, provider)
-            .with_evaluator(Arc::new(DefaultEvaluator::new()), ExternalSchemas::default()),
-    );
-    let prepared = invoker.prepare("echo")?; // Keep for further attempts.
-    let mut invocation = prepared.invoke(Attempt::new());
-    invocation.write(JsonValue::parse("42")?).await?;
-    invocation.close();
-    while let Some(result) = invocation.next().await {
-        let value = result?; // Observe the terminal too, even after receiving a value.
-        assert_eq!(value.text(), "42");
+async fn call<P: BindingInvoker + InvocationSupport>(
+    interface: ConformantDocument, provider: P, value: JsonValue,
+) -> Result<Vec<JsonValue>, Box<dyn std::error::Error>> {
+    let client = OperationClient::new(provider, DefaultEvaluator::default(), ExternalSchemas::default());
+    let request = OperationRequest::binding(interface, "echo.binding");
+    let (mut input, mut output) = client.invoke(request, CancellationToken::new())?.split();
+    // A single value fits the default input queue. Streaming writers and readers
+    // must be polled concurrently in the application's runtime.
+    input.send(value).await?;
+    input.close();
+    let mut values = Vec::new();
+    while let Some(event) = output.next().await {
+        match event {
+            OutputEvent::Output(value) => values.push(value),
+            OutputEvent::InputClosed => (),
+            OutputEvent::Complete => return Ok(values),
+            OutputEvent::Error(error) => return Err(error.into()),
+            _ => (),
+        }
     }
-    Ok(())
+    Err("invocation ended without a terminal event".into())
 }
 ```
 
-The optional evaluator package is an explicit application dependency. Without
-`.with_evaluator`, absent schemas still forward values; a declared schema yields
-`ERR_SCHEMA_UNRESOLVED` on its first actual value. Supplying an evaluator retains
-it with one immutable resource set for every preparation. Plain `invoke` prepares each used
-direction lazily once per attempt and retains that value contract for its stream; zero
-values do not trigger preparation. Fresh attempts prepare again. There is no network retrieval
-or whole-graph readiness gate.
+Requests own the original `ConformantDocument`, address and optional opaque
+`openbindings_context::Context`. No source/binding carrier is copied or sliced on
+the provider's behalf. A draft must establish conformance before becoming a request;
+opaque document data still obeys document admission. Wire decoding rejects malformed
+outer fields through local `BoundaryFailure`, separately from invocation terminals.
 
-For repeated attempts, hold the configured invoker in an `Arc`, call
-`let prepared = invoker.prepare("echo")?` and then `prepared.invoke(Attempt::new())`.
-`Invoker::new` allocates nothing; preparing is what needs the `Arc`, because the
-`operation::PreparedOperation` handle keeps a share of the invoker (its document,
-provider, decoded carriers, limits and validation detail) and eagerly retains both
-declared value contracts. The handle can therefore outlive the caller's `Arc`, and
-it is `Send`, `Sync` and `'static` when the provider is: wrap it in an `Arc` to share
-one handle across spawned tasks. A caller that only invokes plainly needs no `Arc`.
-Configure the invoker before wrapping it. The handle performs no provider work and
-pins no binding or context. Each call takes an
-`Attempt` with no operation name: `Attempt::new()` requires a sole supported
-binding, `Attempt::ordered(&["preferred", "fallback"])` supplies an ordered list,
-and `Attempt::binding("exact-key")` selects one binding of the prepared operation.
-Use `.with_context(&context)` to supply an opaque object per attempt. Every
-ordered key must belong to the operation; an exact binding belonging to another
-operation returns `ERR_BINDING_NOT_FOUND` before provider work. Attempt Debug
-output redacts binding choices and context contents. Absent directions need no
-evaluator.
-Preparation returns `ERR_OPERATION_NOT_FOUND` for an unknown operation, `ERR_REFUSED`
-for metadata it cannot represent, and `ERR_SCHEMA_UNRESOLVED` when a declared
-value contract cannot be prepared; each releases partial work. `prepare_with_control`
-returns `ERR_CANCELLED` when cancelled, leaving no handle.
-A prepared value contract can still return no verdict or an undefined result for a
-particular value. Both stop the affected value with `ERR_SCHEMA_UNRESOLVED`.
-`ValidationFailure::outcome()` retains `ValueOutcome::Undefined` separately from
-`NoVerdict`, so callers can distinguish an established undefined result from
-inability to answer.
-`PreparedOperation::invoke_with_control` isolates each attempt's cancellation,
-queues and validation evidence, so concurrent attempts can share one handle.
+`OperationRequest::operation(interface, name)` requires a sole invocable candidate.
+`ordered(interface, name, keys)` selects the first invocable listed binding, after
+checking that **every** key belongs to the operation. Repeated keys are permitted.
+`binding(interface, key)` derives the operation and bypasses support selection.
+No preference, deprecation flag, key order or registration order silently breaks
+ambiguity. The optional native `InvocationSupport` facet supplies routing knowledge;
+it is not a portable kind-description query. A binding-only provider needs no facet.
 
-For plain invocation, use `Request::operation("name-or-alias")` when exactly one
-supported binding exists, `Request::ordered("name", &["preferred", "fallback"])` for caller policy,
-or `Request::binding("exact-key")` to select directly. Every ordered key must
-belong to the operation, including entries after the first supported one.
-Unsupported automatic/ordered candidates are skipped; an unsupported explicit
-binding yields `ERR_BINDING_NOT_FOUND` in invocation and preflight. Metadata and provider registration order never choose a binding.
-Use `.with_context(&context)` to forward one opaque object unchanged.
+## Driving, closure and cancellation
 
-`operation::Invoker::new` requires a `ConformantDocument`, including when no evaluator
-is configured. Invalid documents are rejected before invocation construction;
-document editor reads still report malformed fields and ambiguous names.
-`with_evaluator` is infallible and performs no preparation. An unpaired-surrogate
-escape in a source kind or other document metadata violates OBI-01, so that draft
-cannot supply the proof required by the invoker. Other interface carrier failures
-return `ERR_REFUSED` before dispatch, with a local `boundary_error()` identifying
-the field. `preflight` uses the same selection rules and admission checks for
-every provider, then asks the provider's hook (`BindingInvoker::preflight`) when
-it declares one; it never prepares value contracts. A provider without a hook,
-the default, makes no prediction.
+The output handle alone polls provider work and value validation. Sending input
+accepts into a bounded queue; it does not start or advance the provider. Poll
+streaming input submission and output consumption concurrently. Dropping a pending
+input send does not submit its value. Dropping a pending output read releases that
+caller's wake registration while keeping the invocation reusable.
 
-Input is validated before delivery to the provider; successful output is validated
-before entering the committed output queue. Invalid input **does not become clean
-EOF**: the invocation ends and the pending provider read is abandoned. Providers
-polling split endpoints independently must also observe their supplied
-`CancellationToken` and release those tasks on cancellation. A failed output emission
-returns an error. Already committed outputs precede the single terminal failure;
-earlier effects are not undone. Application errors and context challenges are
-forwarded without applying the successful-output schema.
+Caller input closure drains previously accepted values. Provider input closure
+declines further values and may emit `InputClosed` while output continues. Terminal
+settlement suppresses an undelivered closure notice. Invalid operation input never
+becomes clean EOF: the driver settles the failure and disposes the provider future.
+Providers may split `ProviderIo`; its input has both an async `next` and a Stream
+implementation, and its output `send` commits only when that live emission completes.
+Dropping an uncommitted emission withdraws it, including after validation accepted it.
 
-An established mismatch yields code-only `ERR_OPERATION_VALIDATION_FAILED`;
-preparation or evaluation without a verdict yields code-only `ERR_SCHEMA_UNRESOLVED`.
-`Invocation`, `Outputs` and `Control` expose `validation_failure()` for the winning
-terminal's local evidence: direction, preparation/evaluation stage, and the original
-core `ValueOutcome`, including diagnostic completeness. The evidence is never
-portable error data. Debug redacts it; custom evaluator messages and locations
-require an application disclosure policy. Diagnostic limits come from the chosen
-evaluator, independently of invocation's portable-error byte limit.
-By default the gate runs the cheap check, so a failed value's outcome carries the
-verdict without problems. `with_validation_detail(Detail::Explain)` explains each
-rejected value before withholding it, so the evidence carries the evaluator's
-problems. One setting covers both directions: caller input and provider output
-are explained alike. Explaining costs more than the verdict and discloses more:
-schema facts, and each problem's `instance` pointer, which spells the rejected
-value's member names. An explained input therefore carries the caller's member
-names and an explained output the provider's. Ask for explanations where your
-disclosure policy allows that for both directions.
+Committed outputs remain ordered before the terminal. An output alone never
+establishes success. After `Complete` or `Error`, subsequent reads return `None`.
+`InvocationControl` observes the winning terminal and local evidence without
+retaining or polling provider work. Local cancellation affects only that attempt;
+external cancellation synchronously revokes its shared handoffs. Dropping output
+cancels and releases its future. None of these operations promises rollback.
 
-Carrier caches have slots only for declared source/binding keys; repeated unknown
-requests cannot grow them. Used carriers retain exact content and are decoded
-once, without serializing or copying a whole document per call. Prepared
-operations share these caches; drop the invoker's `Arc` and its prepared operations
-to release the cache owners. Caller-retained documents, prepared value contracts, and
-values can independently retain their own backing storage.
+`InvocationLimits` bounds input/output queue capacity, value token bytes and
+terminal encoding bytes. A token-byte bound does not bound retained parent JSON
+arenas. Sixty-four SDK I/O credits per outer output poll bound cooperative progress,
+including absent-schema bypass and graceful EOF. Already blocked polls consume no
+credits. Arbitrary provider CPU is outside that cooperative I/O bound.
 
-## Ownership and progress
+## Schema evaluation and prepared reuse
 
-Provider execution is lazy. Polling a write, read or input-closure future drives the
-provider job; retaining the handle alone performs no background work. Providers
-must obey ordinary Rust future rules: polls return promptly, blocking work is
-arranged by the application, and pending work arranges a wakeup. No detached task,
-runtime, HTTP client, registry or transport is installed by the companion.
-Provider panics remain Rust panics; the SDK does not convert them to portable
-invocation errors or promise recovery of the same invocation after unwinding.
+The evaluator and external schema set are explicit dependencies. Lazy invocation
+prepares a declared direction when its first value reaches that boundary, then
+reuses that validator within the attempt. An absent schema invokes no evaluator
+and makes no validation claim. No whole-graph readiness check is required.
 
-There is one caller input owner and one output owner. `split()` consumes the
-combined handle once. `Outputs` implements `Stream` and `FusedStream`, as well as
-an inherent asynchronous `next`. `ProviderIo::split()` supports independently
-polled provider directions. No `Sink` implementation suggests that flush means
-remote dispatch acknowledgement.
+An established mismatch yields `ERR_OPERATION_VALIDATION_FAILED`; preparation
+refusal, undefinedness or inability to establish a value verdict yields
+`ERR_SCHEMA_UNRESOLVED`. Neither forwards that value. `ValidationEvidence` keeps a
+`PreparationFailure` separate from `ValueOutcome`; it never manufactures a value
+verdict from preparation. Evidence stays local and is available only for the
+winning validation terminal. Error data and context challenges are never checked
+against the operation's output schema.
 
-| Event | Behavior |
-| --- | --- |
-| `write(value).await` succeeds | Value entered the bounded SDK handoff; it may not have been dispatched. |
-| Drop a pending write/read | No input admission/output consumption; its waiter is released. |
-| Caller `close()` or input drop | Idempotent half-close; accepted input can drain, output continues. |
-| Provider input close/drop | Stop delivery and discard unread input; output can continue. |
-| Job returns | First terminal wins; queued outputs precede success or one failure. |
-| `control.cancel()` | Settle cancellation, close input and signal/drop cooperative work; queued output remains before terminal. |
-| Output owner drop | Abandon active work, release the provider future and output queue. |
-| Poll after terminal | Stable exhaustion; `outcome()` remains available. |
+For reuse, call `client.prepare(interface, name, &control)`. The resulting
+`PreparedOperation<V>` owns the original document, canonical operation key and
+optional validators. It retains no provider, evaluator or client lifetime, and can
+outlive the whole originating client. Failed or cancelled preparation releases
+partial validators; retry with healthy control and unchanged inputs is supported.
 
-A cancellation handle weakly references the driver and does not retain provider
-work after output abandonment. Its **Rust lifetime still follows the borrowed
-invocation**; copy the owned `outcome()` snapshot to retain a result afterward.
-A caller `CancellationToken` may cancel several attempts, but cancelling one invocation
-never cancels siblings sharing that external control. Cancellation cannot roll
-back effects or prove that detached external work stopped. A scoped cancellation
-relay also reaches cooperative synchronous provider/evaluator work during its
-current poll. External cancellation observed before or after that poll wins its
-returned result; an already settled terminal stays authoritative.
+Consume a prepared owner using
+`prepared.invoke(&provider, choice, context, control)`. `BindingChoice::Sole`,
+`Ordered(keys)` and `Binding(key)` express the remaining caller choice. A foreign
+operation's binding fails before provider work. Clone the prepared owner when V
+supports cloning; callers decide whether V copies or shares compiled state. Each
+attempt owns V, so a Send-but-not-Sync validator can yield a Send future with a Sync
+provider and Send provider future. Local Rc evaluators/validators also work.
+Prepared contracts can move into spawned host tasks alongside an Arc provider;
+no leaked or global invoker is required.
 
-## Exact values and boundaries
+## Context and advisory preflight
 
-`BindingInvocationInput::from_json` checks the closed input envelope, strict
-source/binding carriers, duplicate interpreted names and context's object
-boundary. `BindingValue` permits omitted operation/source/content fields;
-`BindingValue::from(&core_binding)` explicitly preserves both core strings. It is
-the same type as a source inspection target's binding, so an inspected target
-invokes as it is, and `bind(operation, source)` gives an author's core binding.
-Reuse these carriers across calls: there is no per-call source serialization or
-reparse.
+Context is an opaque object. The shared challenge is `{message, schema}`, where
+schema is an object; message retains exact JSON string semantics. Providers own
+kind-specific interpretation and the no-output/no-operation-effect guarantee of
+`CONTEXT_REQUIRED`. The SDK rejects that challenge after an output has committed.
+Acquisition, approval, credential storage and retry policy belong to the host.
 
-Content, extensions, context internals and application error data retain exact
-JSON: numbers beyond binary64, duplicate opaque names, spelling, and explicit
-null. Absent content/context/error data remains absent. Opaque data is never
-silently converted through a JavaScript number or Rust map.
+`BindingInvoker` declares separate `Invoke` and `Preflight` future types. A provider
+with no prediction returns `Ok(PreflightOutcome::NoPrediction)`; a known requirement
+returns `Ok(PreflightOutcome::Challenge(challenge))`. An error carries no prediction.
+Both clients synchronously admit preflight requests, then return the advisory
+future. Operation preflight selects exactly as invocation does, but never prepares
+schemas, consumes values, dispatches the operation or reserves a later choice.
+Its future captures no evaluator, so a local evaluator does not prevent a Send
+advisory future when the provider supports it.
 
-`InvocationError` has only a nonempty code and optional exact data. Its typed
-`context_required()` accessor is available only for a structurally checked
-challenge. Open requirement families survive; `config.value` checks its point,
-JSON Pointer and optional object-or-Boolean schema without evaluating it.
-Requests, carriers and failures redact values in `Debug`/`Display`. Providers
-remain responsible for ensuring portable error data is appropriate application
-data, not credentials or raw native protocol evidence.
-
-`ERR_REFUSED` and `CONTEXT_REQUIRED` carry no-operation-effects guarantees.
-The facade checks carrier admission, support, challenge structure and forbids a
-challenge after output; **it cannot prove a provider has not dispatched**.
-A provider must uphold that remaining guarantee. An oversized result or a
-post-output challenge becomes `ERR_EXECUTION_FAILED`, with a bounded value-free
-`boundary_error()` finding. No automatic preflight, context resolution or retry
-occurs. Preflight is advisory and separately cancellable; failure does not gate
-a later invocation. A hook's job reports requirements as the `CONTEXT_REQUIRED`
-challenge invocation would raise, and preflight returns that challenge as
-`Ok(Some(challenge))`, never as an error carrying a retry path. A job completing
-with `Ok(())` makes no prediction.
-
-The hook's job is the provider's own `Invocation` future type, which is what lets
-a caller's `Send` bound cover preflight, and it has a cost: the prediction travels
-in that future's error channel, as `Err(InvocationError::challenge(..))`. A
-provider with a boxed or `Ready` future builds the job freely. A provider whose
-future is a hand-written type, such as a request state machine, gives that type a
-preflight state that completes with the prediction without reading input,
-emitting output or dispatching; the `BindingInvoker::preflight` documentation
-shows one.
-
-## Resource policy
-
-`Invoker::new` starts with **one queued input, four queued outputs, 1 MiB per value
-and 64 KiB per encoded error/advisory challenge**. These are native policy defaults,
-not interface requirements. `Invoker::with_limits` makes a different finite policy
-explicit. Value limits are checked before admission; an oversized caller value
-is a local `WriteError` and does not redefine an active invocation's terminal.
-Oversized provider output terminates unsuccessfully without emitting the value.
-
-In addition to queue slots, there can be one pending caller value, one pending
-provider emission, a terminal record and bounded driver/waiter state. Provider
-private state and caller-held output are outside these queues. A selected
-`JsonValue` subtree retains its entire parent arena: a one-byte `value.bytes()`
-can retain a 1 MiB source. These caps are **not a global memory limit**. An explicit
-bounded reparse can isolate a snapshot when ownership isolation is required;
-this is a copy with a cost, not the default handoff.
-
-## Interface mapping
-
-The shared interfaces define operation meanings; this SDK defines native
-ownership, queue and cancellation policy.
-
-| Interface concept | Native API / responsibility |
-| --- | --- |
-| `checkKindSupport`, `listSupportedKinds` | `Invoker::check_kind_support`, `list_supported_kinds`; exact, pure, job-specific. |
-| Initial by-value payload | `BindingInvocationInput` / borrowed `BindingRequest`, checked before provider work. |
-| `invokeBinding` | `Invoker::invoke` or the explicit external-control variant; one attempt. |
-| Input/output frames | Owned native endpoints and terminal sequence; no production frame transport. |
-| `input_closed` | `Input::is_closed`, `closed`, `Control::input_is_closed`; nonterminal. |
-| `complete` / `error` | Job return, fallible output sequence and owned outcome snapshot. |
-| `preflightBinding` | `Invoker::preflight`: checked admission, then the provider's `BindingInvoker::preflight` hook when it declares one (none by default, no prediction); no operation I/O or dispatch. |
-| `invokeOperation`, `preflightOperation` | `operation::Invoker` with `operation::Request`; shared lifecycle and explicit evaluator. |
-| Declared schema failures | Code-only portable error plus local `validation_failure()` evidence. |
-| Context/effect semantics | Checked structure plus documented provider obligations; no resolver. |
-| Source interpretation | Kind adapter; the companion treats content as opaque. |
-
-Provider errors using operation-invoker-owned resolution or validation codes are
-refused at the provider boundary as `ERR_EXECUTION_FAILED`, without their data.
-Invocation retains a value-free `reserved-provider-code` boundary finding. The
-facade's own selection and validation errors retain their reserved codes and
-local evidence. `InvocationError` Display shows every code. Debug is structural:
-it shows the codes the invoker interfaces govern and redacts application-defined
-codes. Application data is redacted in both.
+The portable `InvocationError` carries only code and optional exact data, preserving
+absence versus null. Only current interface/kind-owned codes have portable meaning.
+Provider-supplied operation-layer resolution/validation codes are rejected at the
+provider boundary; `ERR_BINDING_NOT_FOUND` belongs to the binding interface and is
+allowed. Local evidence and resource-policy findings never become portable data.

@@ -183,6 +183,97 @@ pub fn validity(value: &JsonValue, is_meta: bool) -> Result<bool, String> {
         .map_err(Clone::clone)?;
     Ok(backend::fixed_strings(|| valid(validator, value.view())))
 }
+/// A single original foreign schema position, with recursive meta edges cut.
+/// Its schema children are checked at their own inventory positions.
+pub fn dialect_validity(
+    value: &JsonValue,
+    dialect: crate::dialect::Dialect,
+) -> Result<bool, String> {
+    use crate::dialect::Dialect;
+    static DRAFT7: OnceLock<Compiled> = OnceLock::new();
+    static DRAFT2019: OnceLock<Compiled> = OnceLock::new();
+    if dialect.reference_object(value.view()) {
+        return Ok(value.get("$ref").is_some_and(|r| r.as_str().is_some()));
+    }
+    let (cell, files, draft) = match dialect {
+        Dialect::Draft202012 => return validity(value, true),
+        Dialect::Draft7 => (&DRAFT7, DRAFT7_FILES.as_slice(), Draft::Draft7),
+        Dialect::Draft201909 => (&DRAFT2019, DRAFT2019_FILES.as_slice(), Draft::Draft201909),
+    };
+    let compiled = cell
+        .get_or_init(|| {
+            fn localize_foreign(value: &mut Value) {
+                match value {
+                    Value::Object(fields) => {
+                        if fields.get("$schema").is_some_and(Value::is_string) {
+                            fields.remove("$schema");
+                        }
+                        for reference in ["$ref", "$recursiveRef"] {
+                            if fields.get(reference).and_then(Value::as_str) == Some("#") {
+                                fields.remove(reference);
+                                fields.insert(
+                                    "type".into(),
+                                    serde_json::json!(["object", "boolean"]),
+                                );
+                            }
+                        }
+                        for (key, value) in fields {
+                            if matches!(key.as_str(), "$id" | "$ref")
+                                && let Some(text) = value.as_str()
+                            {
+                                *value = Value::String(
+                                    text.replace(
+                                        "http://json-schema.org/",
+                                        "https://openbindings.invalid/foreign-meta/",
+                                    )
+                                    .replace(
+                                        "https://json-schema.org/",
+                                        "https://openbindings.invalid/foreign-meta/",
+                                    ),
+                                );
+                            } else {
+                                localize_foreign(value);
+                            }
+                        }
+                    }
+                    Value::Array(values) => values.iter_mut().for_each(localize_foreign),
+                    _ => {}
+                }
+            }
+            let mut resources = BTreeMap::new();
+            let mut root = None;
+            for text in files {
+                let mut schema: Value = serde_json::from_str(text).map_err(|e| e.to_string())?;
+                localize_foreign(&mut schema);
+                if root.is_none() {
+                    root = Some(schema.clone());
+                }
+                let id = schema["$id"]
+                    .as_str()
+                    .ok_or("foreign meta-schema identifier missing")?
+                    .to_owned();
+                resources.insert(id, schema);
+            }
+            options(resources)
+                .with_draft(draft)
+                .build(&root.expect("nonempty fixed files"))
+                .map_err(|e| e.to_string())
+        })
+        .as_ref()
+        .map_err(Clone::clone)?;
+    Ok(backend::fixed_strings(|| valid(compiled, value.view())))
+}
+
+pub(crate) const DRAFT7_FILES: [&str; 1] = [include_str!("../schemas/draft7.json")];
+pub(crate) const DRAFT2019_FILES: [&str; 7] = [
+    include_str!("../schemas/draft2019-09/schema.json"),
+    include_str!("../schemas/draft2019-09/meta/core.json"),
+    include_str!("../schemas/draft2019-09/meta/applicator.json"),
+    include_str!("../schemas/draft2019-09/meta/validation.json"),
+    include_str!("../schemas/draft2019-09/meta/meta-data.json"),
+    include_str!("../schemas/draft2019-09/meta/format.json"),
+    include_str!("../schemas/draft2019-09/meta/content.json"),
+];
 fn document() -> &'static Compiled {
     DOCUMENT.get_or_init(|| {
         let schema: Value =

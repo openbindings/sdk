@@ -3,18 +3,18 @@ use openbindings_json_schema_evaluator::DefaultEvaluator;
 
 /// A prepared value contract checked with one detail per call: the cheap check or an explanation.
 struct Checked {
-    contract: PreparedValueContract,
+    contract: PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator>,
     detail: Detail,
 }
 impl Checked {
-    fn validate(&self, value: &JsonValue) -> ValueOutcome {
+    fn evaluate(&self, value: &JsonValue) -> ValueOutcome {
         match self.detail {
-            Detail::Outcome => self.contract.validate(value),
+            Detail::Outcome => self.contract.evaluate(value),
             _ => self.contract.explain(value),
         }
     }
-    fn validate_json(&self, input: &str) -> Result<ValueOutcome, InputError> {
-        Ok(self.validate(&JsonValue::parse(input)?))
+    fn evaluate_json(&self, input: &str) -> Result<ValueOutcome, InputError> {
+        Ok(self.evaluate(&JsonValue::parse(input)?))
     }
 }
 fn prepare(schema: &str, mode: Detail, resources: ExternalSchemas) -> Checked {
@@ -26,7 +26,11 @@ fn prepare(schema: &str, mode: Detail, resources: ExternalSchemas) -> Checked {
     let proof = validation.conformant().expect("conformant schema");
     let operation = proof.resolve_operation("op").expect("declared operation");
     let contract = operation.input().expect("declared input");
-    match contract.prepare_with(&DefaultEvaluator::new(), &resources) {
+    match contract.prepare(
+        &DefaultEvaluator::new(),
+        &resources,
+        &openbindings::PreparationLimits::default(),
+    ) {
         Ok(contract) => Checked {
             contract,
             detail: mode,
@@ -101,7 +105,7 @@ fn every_numeric_family_uses_exact_values_in_both_detail_modes() {
     for mode in [Detail::Outcome, Detail::Explain] {
         for (schema, input, expected) in cases {
             let contract = prepare(schema, mode, ExternalSchemas::default());
-            let outcome = contract.validate(&JsonValue::parse(input).unwrap());
+            let outcome = contract.evaluate(&JsonValue::parse(input).unwrap());
             match &outcome {
                 ValueOutcome::Satisfies => assert!(expected, "{schema}: {input}"),
                 ValueOutcome::Fails {
@@ -134,7 +138,7 @@ fn exact_bounds_and_choices_fail_at_their_original_keywords() {
         let schema = format!(r#"{{"exclusiveMinimum":{bound}}}"#);
         let contract = prepare(&schema, Detail::Explain, ExternalSchemas::default());
         let ValueOutcome::Fails { problems, .. } =
-            contract.validate(&JsonValue::parse(bound).unwrap())
+            contract.evaluate(&JsonValue::parse(bound).unwrap())
         else {
             panic!()
         };
@@ -149,7 +153,7 @@ fn exact_bounds_and_choices_fail_at_their_original_keywords() {
     let schema = format!(r#"{{"enum":[1e400,{huge},9007199254740993,-0.00]}}"#);
     let contract = prepare(&schema, Detail::Explain, ExternalSchemas::default());
     let ValueOutcome::Fails { problems, .. } =
-        contract.validate(&JsonValue::parse("-1e400").unwrap())
+        contract.evaluate(&JsonValue::parse("-1e400").unwrap())
     else {
         panic!()
     };
@@ -172,7 +176,7 @@ fn substituted_resource_nodes_keep_distinct_original_provenance() {
             .unwrap();
             let contract = prepare(&format!(r#"{{"$ref":"{reference}"}}"#), mode, resources);
             let ValueOutcome::Fails { problems, .. } =
-                contract.validate(&JsonValue::parse("3e400").unwrap())
+                contract.evaluate(&JsonValue::parse("3e400").unwrap())
             else {
                 panic!()
             };
@@ -207,14 +211,14 @@ fn compact_exponents_public_equality_and_arithmetic_refusal_remain_separate() {
         for token in [huge.as_str(), &"7".repeat(4097)] {
             let contract = prepare(r#"{"multipleOf":3}"#, mode, ExternalSchemas::default());
             let ValueOutcome::NoVerdict { detail } =
-                contract.validate(&JsonValue::parse(token).unwrap())
+                contract.evaluate(&JsonValue::parse(token).unwrap())
             else {
                 panic!()
             };
             assert_eq!(detail.code, "numeric-arithmetic-limit");
             let contract = prepare(r#"{"minimum":0}"#, mode, ExternalSchemas::default());
             assert!(matches!(
-                contract.validate(&JsonValue::parse(token).unwrap()),
+                contract.evaluate(&JsonValue::parse(token).unwrap()),
                 ValueOutcome::Satisfies
             ));
         }
@@ -273,7 +277,7 @@ fn integer_fast_path_edges_preserve_exact_bounds_and_equality() {
                             format!("{input}.0"),
                             format!("{input}e0"),
                         ] {
-                            let outcome = contract.validate_json(&value).unwrap();
+                            let outcome = contract.evaluate_json(&value).unwrap();
                             assert!(
                                 matches!(
                                     outcome,
@@ -309,7 +313,7 @@ fn integer_fast_path_edges_preserve_exact_bounds_and_equality() {
                 mode,
                 ExternalSchemas::default(),
             );
-            let outcome = contract.validate_json(input).unwrap();
+            let outcome = contract.evaluate_json(input).unwrap();
             assert!(matches!(
                 outcome,
                 ValueOutcome::Satisfies | ValueOutcome::Fails { .. }
@@ -329,7 +333,7 @@ fn integer_fast_path_edges_preserve_exact_bounds_and_equality() {
         ]) {
             assert!(
                 matches!(
-                    integer.validate_json(&token).unwrap(),
+                    integer.evaluate_json(&token).unwrap(),
                     ValueOutcome::Satisfies
                 ),
                 "{token}"
@@ -337,7 +341,7 @@ fn integer_fast_path_edges_preserve_exact_bounds_and_equality() {
         }
         for token in ["1e-99999", "-0.00000000001", "9223372036854775807.1"] {
             assert!(matches!(
-                integer.validate_json(token).unwrap(),
+                integer.evaluate_json(token).unwrap(),
                 ValueOutcome::Fails { .. }
             ));
         }
@@ -353,7 +357,7 @@ fn integer_fast_path_edges_preserve_exact_bounds_and_equality() {
         ] {
             assert_eq!(
                 matches!(
-                    unique.validate_json(input).unwrap(),
+                    unique.evaluate_json(input).unwrap(),
                     ValueOutcome::Satisfies
                 ),
                 expected

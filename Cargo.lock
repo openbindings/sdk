@@ -991,8 +991,8 @@ version = "0.2.0-alpha.1"
 dependencies = [
  "futures-core",
  "openbindings",
+ "openbindings-context",
  "openbindings-internal-cancellation",
- "openbindings-internal-interfaces",
  "openbindings-json-schema-evaluator",
  "serde",
  "serde_json",

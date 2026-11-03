@@ -5,7 +5,8 @@
 //! and keeps one copy of each distinct `pattern` form.
 use super::measured;
 use openbindings::{
-    ConformantDocument, Document, JsonValue, NoVerdict, PreparedValueContract, ValueOutcome,
+    ConformantDocument, Document, JsonValue, PreparationFailure, PreparationFailureKind,
+    PreparedSchema, ValueOutcome,
 };
 use openbindings_json_schema_evaluator::{DefaultEvaluator, Limits};
 use serde_json::json;
@@ -22,13 +23,24 @@ fn conformant(input: &str) -> ConformantDocument {
 fn prepare(
     proof: &ConformantDocument,
     limits: Limits,
-) -> Result<PreparedValueContract, NoVerdict> {
+) -> Result<PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator>, PreparationFailure>
+{
     proof
         .resolve_operation("op")
         .expect("declared operation")
         .input()
         .expect("declared input")
-        .prepare(&DefaultEvaluator::with_limits(limits))
+        .prepare(
+            &DefaultEvaluator::with_limits(limits),
+            &openbindings::ExternalSchemas::default(),
+            &openbindings::PreparationLimits::default(),
+        )
+}
+fn refusal_resource(failure: PreparationFailure) -> String {
+    match failure.kind {
+        PreparationFailureKind::Limit { resource } => resource,
+        other => panic!("expected a typed limit, got {other:?}"),
+    }
 }
 // Properties each holding one of `patterns`.
 fn properties(patterns: impl Iterator<Item = String>) -> String {
@@ -136,11 +148,11 @@ pub fn run() {
         let ceiling = control_bytes + allowance;
         for repetition in 0..3 {
             let (outcome, bytes, nanos) = measured(|| match prepare(&proof, Limits::default()) {
-                Ok(contract) => match contract.validate(&value) {
+                Ok(contract) => match contract.evaluate(&value) {
                     ValueOutcome::Satisfies => "satisfies".to_owned(),
                     other => format!("{other:?}"),
                 },
-                Err(detail) => detail.code.to_string(),
+                Err(detail) => refusal_resource(detail),
             });
             assert_eq!(outcome, expected, "{case}");
             println!(
@@ -196,7 +208,7 @@ fn run_matchers() {
             let kept = super::LIVE
                 .load(std::sync::atomic::Ordering::Relaxed)
                 .saturating_sub(before);
-            let outcome = match contract.validate(&value) {
+            let outcome = match contract.evaluate(&value) {
                 ValueOutcome::Satisfies => "satisfies".to_owned(),
                 other => format!("{other:?}"),
             };
@@ -264,13 +276,13 @@ fn compiled() {
                         let kept = super::LIVE
                             .load(std::sync::atomic::Ordering::Relaxed)
                             .saturating_sub(before);
-                        let outcome = match contract.validate(&value) {
+                        let outcome = match contract.evaluate(&value) {
                             ValueOutcome::Satisfies => "satisfies".to_owned(),
                             other => format!("{other:?}"),
                         };
                         (outcome, kept)
                     }
-                    Err(detail) => (detail.code.to_string(), 0),
+                    Err(detail) => (refusal_resource(detail), 0),
                 });
             assert_eq!(outcome, expected, "{case}");
             println!(
@@ -331,13 +343,13 @@ fn search_caches(memory: usize) {
     let control = conformant(&input.replace(r#""patternProperties""#, r#""properties""#));
     let (decided, control_bytes, _) = measured(|| {
         let contract = prepare(&control, Limits::default()).unwrap();
-        matches!(contract.validate(&value), ValueOutcome::Satisfies)
+        matches!(contract.evaluate(&value), ValueOutcome::Satisfies)
     });
     assert!(decided, "search caches control");
     for repetition in 0..3 {
         let (outcome, bytes, nanos) = measured(|| {
             let contract = prepare(&proof, Limits::default()).unwrap();
-            match contract.validate(&value) {
+            match contract.evaluate(&value) {
                 ValueOutcome::Satisfies => "satisfies".to_owned(),
                 other => format!("{other:?}"),
             }

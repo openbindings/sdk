@@ -3,7 +3,7 @@
 #![warn(clippy::return_self_not_must_use)]
 #![forbid(unsafe_code)]
 use openbindings::*;
-use openbindings_json_schema_evaluator::{DefaultEvaluator, Limits};
+use openbindings_json_schema_evaluator::{DefaultEvaluator, DefaultValidator, Limits};
 use serde_json::json;
 use std::cell::Cell;
 use wasm_bindgen::prelude::*;
@@ -1527,6 +1527,7 @@ impl WasmSchema {
             preparation: Some(self.schema.prepare_with_control(
                 &evaluator,
                 resources,
+                &openbindings::PreparationLimits::default(),
                 &control(cancelled),
             )),
         })
@@ -1571,7 +1572,7 @@ impl WasmSchema {
 /// A private transfer wrapper. Dropping it drops any untaken prepared value contract.
 #[wasm_bindgen]
 pub struct WasmPreparation {
-    preparation: Option<Result<PreparedValueContract, NoVerdict>>,
+    preparation: Option<Result<PreparedSchema<DefaultValidator>, PreparationFailure>>,
 }
 impl std::fmt::Debug for WasmPreparation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1584,12 +1585,12 @@ impl WasmPreparation {
     pub fn result(&self) -> String {
         match &self.preparation {
             Some(Ok(_)) => encoded(json!({"status":"ready"})),
-            Some(Err(detail)) => object!("detail": detail, "status": "no-verdict"),
+            Some(Err(failure)) => object!("failure": failure, "status": "refused"),
             None => encoded(json!({"status":"consumed"})),
         }
     }
-    #[wasm_bindgen(js_name=takeValueContract)]
-    pub fn take_value_contract(&mut self) -> Option<WasmPrepared> {
+    #[wasm_bindgen(js_name=takeSchema)]
+    pub fn take_schema(&mut self) -> Option<WasmPrepared> {
         match self.preparation.take()? {
             Ok(prepared) => Some(WasmPrepared { prepared }),
             Err(_) => None,
@@ -1598,7 +1599,7 @@ impl WasmPreparation {
 }
 #[wasm_bindgen]
 pub struct WasmPrepared {
-    prepared: PreparedValueContract,
+    prepared: PreparedSchema<DefaultValidator>,
 }
 impl std::fmt::Debug for WasmPrepared {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1608,10 +1609,10 @@ impl std::fmt::Debug for WasmPrepared {
 
 #[wasm_bindgen]
 impl WasmPrepared {
-    pub fn validate(&self, value: &WasmJson, cancelled: bool) -> String {
+    pub fn evaluate(&self, value: &WasmJson, cancelled: bool) -> String {
         encoded(
             self.prepared
-                .validate_with_control(&value.value, &control(cancelled)),
+                .evaluate_with_control(&value.value, &control(cancelled)),
         )
     }
     pub fn explain(&self, value: &WasmJson, cancelled: bool) -> String {
@@ -1620,17 +1621,17 @@ impl WasmPrepared {
                 .explain_with_control(&value.value, &control(cancelled)),
         )
     }
-    #[wasm_bindgen(js_name=validateJson)]
-    pub fn validate_json(&self, bytes: &[u8]) -> Result<String, JsValue> {
+    #[wasm_bindgen(js_name=evaluateJson)]
+    pub fn evaluate_json(&self, bytes: &[u8], cancelled: bool) -> Result<String, JsValue> {
         self.prepared
-            .validate_json(bytes)
+            .evaluate_json_with_control(bytes, &control(cancelled))
             .map(encoded)
             .map_err(input_error)
     }
-    /// As [`Self::validate_json`], for text encoded into module memory directly.
-    #[wasm_bindgen(js_name=validateJsonText)]
-    pub fn validate_json_text(&self, text: &str) -> Result<String, JsValue> {
-        self.validate_json(text.as_bytes())
+    /// As [`Self::evaluate_json`], for text encoded into module memory directly.
+    #[wasm_bindgen(js_name=evaluateJsonText)]
+    pub fn evaluate_json_text(&self, text: &str, cancelled: bool) -> Result<String, JsValue> {
+        self.evaluate_json(text.as_bytes(), cancelled)
     }
     #[must_use]
     pub fn retain(&self) -> WasmPrepared {

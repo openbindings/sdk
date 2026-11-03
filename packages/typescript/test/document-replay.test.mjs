@@ -109,7 +109,7 @@ test("all 20 moved evaluator cases retain their exact negative admission evidenc
     }
   }
 });
-for (const call of ["validate", "explain"]) {
+for (const call of ["evaluate", "explain"]) {
   test(`all 486 evaluator groups through ConformantDocument, ${call}`, () => {
     assert.equal(fixture.groups.length, 486);
     const observations = [];
@@ -138,11 +138,11 @@ for (const call of ["validate", "explain"]) {
           operation?.dispose();
         }
         const setup = contract?.prepare({ resources });
-        if (setup?.status === "ready") prepared = setup.valueContract;
+        if (setup?.status === "ready") prepared = setup.schema;
         const values = group.cases.map((entry) => {
           if (!prepared)
-            return setup?.status === "no-verdict"
-              ? { status: "no-verdict", detail: setup.detail }
+            return setup?.status === "refused"
+              ? { status: "preparation-refused", failure: setup.failure }
               : { status: operation ? "no-contract" : "operation-missing" };
           const value = exact(entry.value);
           try {

@@ -37,15 +37,16 @@ export class DocumentEditor {
       const setup = contract.prepare();
       if (setup.status !== "ready") {
         if (
-          setup.status === "no-verdict" &&
-          setup.detail.reason === "resource-unavailable"
+          setup.status === "refused" &&
+          setup.failure.kind === "resolution" &&
+          setup.failure.details.cause.kind === "resource-unavailable"
         )
-          return { status: "resources-missing", evidence: setup.detail };
+          return { status: "resources-missing", evidence: setup.failure };
         return setup;
       }
-      input = setup.valueContract;
+      input = setup.schema;
       // Explaining reports why a value fails; the cheap check only whether.
-      const result = explain ? input.explain(value) : input.validate(value);
+      const result = explain ? input.explain(value) : input.evaluate(value);
       const previous = this.#document;
       this.#document = proof; // transfer the conformant owner after successful setup
       proof = undefined;
@@ -130,10 +131,10 @@ export function formatEditorResult(result) {
       return 'Document is conformant; operation "find" is missing.';
     case "no-value-contract":
       return 'Document is conformant; operation "find" has no input contract.';
-    case "no-verdict":
-      return `Document is conformant; input setup was refused (${result.detail.reason}, ${result.detail.code}); ${schemaLocation(result.detail.location)}: ${result.detail.message}`;
+    case "refused":
+      return `Document is conformant; input setup was refused (${result.failure.kind}); ${schemaLocation(result.failure.origin)}.`;
     case "resources-missing":
-      return `Document is conformant; schema resources are missing. Previous prepared snapshot kept. One missing reference: ${schemaLocation(result.evidence.location)}. Prepare again with resources before replacement.`;
+      return `Document is conformant; schema resources are missing. Previous prepared snapshot kept. One missing reference: ${result.evidence.details.cause.details.uri}. Prepare again with resources before replacement.`;
     case "updated":
       return [
         "Document is conformant; the input contract is ready.",

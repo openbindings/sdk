@@ -2,6 +2,7 @@
 // A method that returns `Self` is a builder step; dropping its result loses the change.
 #![warn(clippy::return_self_not_must_use)]
 pub use openbindings_internal_json::{JsonKind, JsonRef, JsonValue};
+pub mod dialect;
 pub mod fixed_locations;
 pub mod fixed_schema;
 mod identifiers;
@@ -96,6 +97,9 @@ pub struct Failure {
     /// Established static-reference semantics, independent of evaluator ability.
     #[serde(skip)]
     pub reference_defect: Option<StaticReferenceDefect>,
+    /// Original-context resolution cause, retained without diagnostic parsing.
+    #[serde(skip)]
+    pub query_failure: Option<Box<QueryFailure>>,
 }
 impl std::fmt::Debug for Failure {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -121,6 +125,7 @@ impl Failure {
             message: message.into(),
             location: None,
             reference_defect: None,
+            query_failure: None,
         }
     }
     #[must_use]
@@ -164,4 +169,12 @@ impl std::fmt::Debug for ProjectedResource {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ProjectedResource").finish_non_exhaustive()
     }
+}
+
+/// Private SDK bridge used by evaluator adapters to reuse an original inventory.
+/// This internal package is version-locked to the SDK, not an extension API.
+#[doc(hidden)]
+pub trait OriginalEnvironment {
+    fn space(&self) -> &SchemaSpace;
+    fn entry(&self) -> usize;
 }

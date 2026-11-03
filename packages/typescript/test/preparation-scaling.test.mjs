@@ -118,14 +118,17 @@ const preparation = (text, limits) => {
 const prepares = (text) => {
   const prepared = preparation(text);
   assert.equal(prepared.status, "ready");
-  prepared.valueContract.dispose();
+  prepared.schema.dispose();
 };
 const refuses = (text) => {
   const prepared = preparation(text);
-  assert.equal(prepared.status, "no-verdict");
-  assert.equal(prepared.detail.reason, "limit-exceeded");
-  assert.equal(prepared.detail.code, "program-specialization-limit");
-  assert.equal(prepared.detail.location, null);
+  assert.equal(prepared.status, "refused");
+  assert.equal(prepared.failure.kind, "limit");
+  assert.equal(
+    prepared.failure.details.resource,
+    "program-specialization-limit",
+  );
+  assert.equal(prepared.failure.origin, null);
 };
 
 test("preparation compiles each schema once and bounds dynamic specialization through Wasm", () => {
@@ -154,17 +157,11 @@ test("the program and stack budgets scale what preparation and evaluation admit"
   // 256 dynamic contexts reach the last of 8 levels, whose copies take about
   // 6.8 MiB: a smaller budget refuses them and names itself.
   const small = preparation(dynamicChoices(8), { programBytes: 4 << 20 });
-  assert.equal(small.status, "no-verdict");
-  assert.equal(small.detail.code, "program-specialization-limit");
-  assert.ok(
-    small.detail.message.endsWith(
-      "by more than its 4 MiB program_bytes; raise program_bytes (programBytes in TypeScript)",
-    ),
-    small.detail.message,
-  );
+  assert.equal(small.status, "refused");
+  assert.equal(small.failure.details.resource, "program-specialization-limit");
   const enough = preparation(dynamicChoices(8), { programBytes: 8 << 20 });
   assert.equal(enough.status, "ready");
-  enough.valueContract.dispose();
+  enough.schema.dispose();
   // A value nested deeper than the default stack admits is refused, and
   // decided with a larger stack.
   const nested = document(
@@ -174,17 +171,17 @@ test("the program and stack budgets scale what preparation and evaluation admit"
   const deep = sdk.parseJson("[".repeat(400) + "]".repeat(400)).value;
   try {
     const defaults = preparation(nested);
-    const refused = defaults.valueContract.validate(deep);
+    const refused = defaults.schema.evaluate(deep);
     assert.equal(refused.status, "no-verdict");
     assert.equal(refused.detail.code, "evaluation-depth-limit");
     assert.equal(
       refused.detail.message,
       "this value nests more than 340 levels, the deepest this value contract evaluates within the 1024 schema evaluations its 256 KiB stack_bytes holds at 256 bytes each; raise stack_bytes (stackBytes in TypeScript)",
     );
-    defaults.valueContract.dispose();
+    defaults.schema.dispose();
     const larger = preparation(nested, { stackBytes: 512 * 1024 });
-    assert.equal(larger.valueContract.validate(deep).status, "satisfies");
-    larger.valueContract.dispose();
+    assert.equal(larger.schema.evaluate(deep).status, "satisfies");
+    larger.schema.dispose();
   } finally {
     deep.dispose();
   }

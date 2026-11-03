@@ -42,15 +42,18 @@ files = [root / 'crates/openbindings-internal-schema/src/fixed_schema.rs',
          root / 'tools/diagnostic-memory-probe/src/near_misses.rs',
          root / 'tools/diagnostic-memory-probe/src/patterns.rs',
          root / 'tools/diagnostic-memory-probe/src/limits.rs',
+         root / 'tools/diagnostic-memory-probe/src/semantic.rs',
          root / 'crates/openbindings-json-schema-evaluator/src/lib.rs',
          root / 'tools/diagnostic-memory-probe/generate_inputs.py']
 files += sorted((root / 'crates/openbindings-internal-schema/schemas').rglob('*.json'))
+files += sorted((root / 'crates/openbindings-json-schema-evaluator/src/semantic').rglob('*.rs'))
 receipt = {
     'scope': 'Release macOS arm64; System allocator incremental live peak, not RSS. Parsing, schema index construction for isolated checks, receipt encoding and warmed compilation excluded. Complete SDK samples use fresh owners, so validation caching is excluded.',
     'bounds_bytes': {'validity': 18 * 1024**2, 'fixed_above_validity': 10 * 1024**2, 'sdk_above_validity': 12 * 1024**2},
     'default_value_samples': [r for r in raw if r['phase'] == 'default-value'],
     'near_miss_samples': [r for r in raw if r['phase'] == 'near-miss'],
     'pattern_form_samples': [r for r in raw if r['phase'] == 'pattern-forms'],
+    'semantic_samples': [r for r in raw if r['phase'] == 'semantic-evaluation'],
     'default_limit_samples': [r for r in raw if r['phase'] == 'default-limits'],
     'compilation': [r for r in raw if r['phase'] == 'location-map-compilation'],
     'summary': summary,

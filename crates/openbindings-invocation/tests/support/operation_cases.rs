@@ -1,35 +1,33 @@
+//! Current pinned invocation semantics, independent of removed legacy facades.
 use openbindings::{
-    Document, ExternalSchemas, JsonValue, NoVerdict, PreparedSchema, SchemaEvaluator, SchemaOrigin,
-    SchemaRequest, UndefinedResult, ValueOutcome,
+    ConformantDocument, Detail, Document, EvaluationRequest, ExternalSchemas, JsonValue,
+    PreparationFailure, PreparationFailureKind, PreparationLimits, SchemaEvaluator,
+    SchemaValidator, ValueOutcome, WorkControl,
 };
-use openbindings_invocation::CancellationToken;
 use openbindings_invocation::{
-    BindingRequest, InvocationError, ProviderIo,
-    binding::BindingInvoker,
-    operation::{Attempt, Direction, Invoker, Request, ValidationStage},
+    BindingClient, BindingInvoker, BindingRequest, BoundaryFailureKind, CancellationToken, Context,
+    ContextChallenge, InvocationError, InvocationSupport, OperationClient, OperationRequest,
+    OutputEvent, PreflightOutcome, ProviderIo,
+    operation::{Direction, ValidationEvidence},
 };
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 use std::{
-    future::{Future, pending},
+    cell::Cell,
+    future::{Future, Ready, ready},
     pin::Pin,
+    rc::Rc,
     sync::{
-        Arc, Mutex,
+        Mutex,
         atomic::{AtomicUsize, Ordering},
     },
+    task::{Context as TaskContext, Poll, Waker},
 };
-
 fn json(text: &str) -> JsonValue {
     JsonValue::parse(text).unwrap()
 }
-fn doc(operations: &str, bindings: &str, sources: &str) -> Document {
-    Document::parse(format!(r#"{{"openbindings":"0.2.0","operations":{operations},"bindings":{bindings},"sources":{sources}}}"#)).unwrap()
-}
-fn one(operation: &str) -> Document {
-    doc(
-        &format!(r#"{{"echo":{operation}}}"#),
-        r#"{"b":{"operation":"echo","source":"s","content":null,"x-opaque":1e9999}}"#,
-        r#"{"s":{"kind":"fixture","content":null,"x-opaque":9007199254740993}}"#,
-    )
+fn document(operation: &str) -> ConformantDocument {
+    Document::parse(format!(r#"{{"openbindings":"0.2.0","operations":{{"echo":{operation},"other":{{}}}},"sources":{{"s":{{"kind":"fixture","data":null}}}},"bindings":{{"a":{{"operation":"echo","source":"s","data":1e9999}},"b":{{"operation":"echo","source":"s"}},"other":{{"operation":"other","source":"s"}}}}}}"#))
+        .unwrap().validate().unwrap().conformant().unwrap()
 }
 #[derive(Clone, Copy)]
 enum Mode {
@@ -40,84 +38,81 @@ enum Mode {
     Error,
     Park,
 }
-struct Provider<'a> {
+struct Provider {
     mode: Mode,
-    name: &'a str,
+    supported: bool,
     calls: AtomicUsize,
-    received: AtomicUsize,
+    queries: AtomicUsize,
+    reads: AtomicUsize,
     eof: AtomicUsize,
-    live: Arc<AtomicUsize>,
-    seen: Mutex<Option<(String, String, Option<String>)>>,
+    preflights: AtomicUsize,
+    seen: Mutex<Option<BindingRequest>>,
 }
-impl Provider<'_> {
+impl Provider {
     fn new(mode: Mode) -> Self {
         Self {
             mode,
-            name: "fixture",
-            calls: AtomicUsize::new(0),
-            received: AtomicUsize::new(0),
-            eof: AtomicUsize::new(0),
-            live: Arc::default(),
-            seen: Mutex::default(),
+            supported: true,
+            calls: 0.into(),
+            queries: 0.into(),
+            reads: 0.into(),
+            eof: 0.into(),
+            preflights: 0.into(),
+            seen: Mutex::new(None),
         }
     }
 }
-struct Guard(Arc<AtomicUsize>);
-impl Drop for Guard {
-    fn drop(&mut self) {
-        self.0.fetch_sub(1, Ordering::SeqCst);
+fn challenge() -> ContextChallenge {
+    ContextChallenge::try_from(json(
+        r#"{"message":"Supply a token","schema":{"type":"object","required":["token"]}}"#,
+    ))
+    .unwrap()
+}
+impl InvocationSupport for Provider {
+    fn can_invoke(&self, kind: &str) -> bool {
+        self.queries.fetch_add(1, Ordering::Relaxed);
+        self.supported && kind == "fixture"
     }
 }
-impl BindingInvoker for Provider<'_> {
-    type Invocation<'a>
-        = Pin<Box<dyn Future<Output = Result<(), InvocationError>> + Send + 'a>>
-    where
-        Self: 'a;
-    fn supports_kind(&self, kind: &str) -> bool {
-        kind == self.name
-    }
+impl BindingInvoker for Provider {
+    type Invoke<'a> = Pin<Box<dyn Future<Output = Result<(), InvocationError>> + Send + 'a>>;
+    type Preflight<'a> = Ready<Result<PreflightOutcome, InvocationError>>;
     fn invoke<'a>(
         &'a self,
-        r: BindingRequest<'a>,
+        request: BindingRequest,
         io: ProviderIo,
         _: CancellationToken,
-    ) -> Self::Invocation<'a> {
+    ) -> Self::Invoke<'a> {
+        self.calls.fetch_add(1, Ordering::Relaxed);
+        *self.seen.lock().unwrap() = Some(request);
         Box::pin(async move {
             let (mut input, mut output) = io.split();
-            self.calls.fetch_add(1, Ordering::SeqCst);
-            self.live.fetch_add(1, Ordering::SeqCst);
-            let _guard = Guard(self.live.clone());
-            let snapshot = openbindings_invocation::BindingInvocationInput {
-                source: r.source.clone(),
-                binding: r.binding.clone(),
-                context: r.context.cloned(),
-            }
-            .to_json()
-            .unwrap();
-            *self.seen.lock().unwrap() = Some((
-                snapshot.get("source").unwrap().text().into(),
-                r.binding.to_json().unwrap().text().into(),
-                r.context.map(|v| v.text().into()),
-            ));
             match self.mode {
                 Mode::Empty => (),
-                Mode::Park => pending::<()>().await,
-                Mode::Outputs => {
-                    output.emit(json("1")).await?;
-                    output.emit(json("\"bad\"")).await?;
-                }
-                Mode::Challenge => return Err(challenge()),
+                Mode::Park => std::future::pending::<()>().await,
+                Mode::Challenge => return Err(InvocationError::challenge(challenge())),
                 Mode::Error => {
-                    return Err(
-                        InvocationError::new("fixture.application", Some(json("null"))).unwrap(),
-                    );
+                    return Err(InvocationError::new("fixture.error", Some(json("null"))).unwrap());
+                }
+                Mode::Outputs => {
+                    output
+                        .send(json("1"))
+                        .await
+                        .map_err(|_| InvocationError::execution_failed())?;
+                    output
+                        .send(json(r#""bad""#))
+                        .await
+                        .map_err(|_| InvocationError::execution_failed())?;
                 }
                 Mode::Echo => {
                     while let Some(value) = super::receive(&mut input).await {
-                        self.received.fetch_add(1, Ordering::SeqCst);
-                        output.emit(value).await?;
+                        self.reads.fetch_add(1, Ordering::Relaxed);
+                        output
+                            .send(value)
+                            .await
+                            .map_err(|_| InvocationError::execution_failed())?;
                     }
-                    self.eof.fetch_add(1, Ordering::SeqCst);
+                    self.eof.fetch_add(1, Ordering::Relaxed);
                 }
             }
             Ok(())
@@ -125,749 +120,663 @@ impl BindingInvoker for Provider<'_> {
     }
     fn preflight<'a>(
         &'a self,
-        _: BindingRequest<'a>,
+        request: BindingRequest,
         _: CancellationToken,
-    ) -> Option<Self::Invocation<'a>> {
-        Some(Box::pin(async move { Err(challenge()) }))
+    ) -> Self::Preflight<'a> {
+        self.preflights.fetch_add(1, Ordering::Relaxed);
+        *self.seen.lock().unwrap() = Some(request);
+        ready(Ok(if matches!(self.mode, Mode::Challenge) {
+            PreflightOutcome::Challenge(challenge())
+        } else {
+            PreflightOutcome::NoPrediction
+        }))
     }
 }
-
-fn challenge() -> InvocationError {
-    InvocationError::new("CONTEXT_REQUIRED",Some(json(r#"{"target":"opaque","alternatives":[{"requirements":[{"type":"test.custom","x":1e9999}]}]}"#))).unwrap()
+fn control() -> CancellationToken {
+    CancellationToken::new()
 }
-async fn outcome<P: BindingInvoker>(
-    invoker: &Invoker<P>,
-    request: Request<'_>,
-) -> Result<(), InvocationError> {
-    let mut call = invoker.invoke(request);
-    call.close();
-    while let Some(item) = call.next().await {
-        item?;
+fn code(event: Option<OutputEvent>) -> String {
+    match event.unwrap() {
+        OutputEvent::Error(error) => error.code().to_owned(),
+        other => panic!("expected terminal, got {other:?}"),
     }
-    call.outcome().unwrap()
 }
-fn assert_code(result: Result<(), InvocationError>, code: &str) {
-    let e = result.unwrap_err();
-    assert_eq!(e.code(), code);
-    assert!(e.data().is_none());
-}
-fn checked<'a, 'b>(document: Document, provider: &'a Provider<'b>) -> Invoker<&'a Provider<'b>> {
-    Invoker::new(
-        document
-            .validate()
-            .unwrap()
-            .conformant()
-            .expect("conformant invocation document"),
-        provider,
-    )
-    .with_evaluator(
-        Arc::new(DefaultEvaluator::new()),
-        ExternalSchemas::default(),
-    )
-}
-
-#[tokio::test(flavor = "current_thread")]
-async fn names_ordered_choices_and_explicit_bindings_do_not_invent_policy() {
-    let p = Provider::new(Mode::Empty);
-    let d = doc(
-        r#"{"echo":{"aliases":["say"]},"other":{}}"#,
-        r#"{"a":{"operation":"echo","source":"s","preference":99},"b":{"operation":"echo","source":"s","deprecated":true},"unsupported":{"operation":"echo","source":"u"},"foreign":{"operation":"other","source":"s"}}"#,
-        r#"{"s":{"kind":"fixture"},"u":{"kind":"other"}}"#,
-    );
-    let invoke = Invoker::new(
-        d.validate()
-            .unwrap()
-            .conformant()
-            .expect("conformant invocation document"),
-        &p,
-    );
-    assert_code(
-        outcome(&invoke, Request::operation("say")).await,
-        "ERR_BINDING_SELECTION_REQUIRED",
-    );
-    assert_code(
-        outcome(&invoke, Request::operation("absent")).await,
-        "ERR_OPERATION_NOT_FOUND",
-    );
-    for keys in [&["a", "absent"][..], &["a", "foreign"], &["unsupported"]] {
-        assert_code(
-            outcome(&invoke, Request::ordered("say", keys)).await,
-            "ERR_BINDING_NOT_FOUND",
-        );
+#[tokio::test]
+async fn binding_is_lazy_owned_exact_and_descriptorless() {
+    let provider = Provider::new(Mode::Echo);
+    let client = BindingClient::new(&provider);
+    let context = Context::try_from(json(
+        r#"{"opaque":{"x":1,"x":2},"number":1e9999,"text":"\ud800"}"#,
+    ))
+    .unwrap();
+    let request = BindingRequest::new(document("{}"), "a").with_context(context.clone());
+    let expected = request.to_json().unwrap();
+    let (mut input, mut output) = client.invoke(request, control()).unwrap().split();
+    assert_eq!(provider.calls.load(Ordering::Relaxed), 0);
+    input.send(json("9007199254740993")).await.unwrap();
+    input.close();
+    assert_eq!(provider.calls.load(Ordering::Relaxed), 0);
+    match output.next().await.unwrap() {
+        OutputEvent::Output(value) => assert_eq!(value.text(), "9007199254740993"),
+        other => panic!("{other:?}"),
     }
-    assert_eq!(p.calls.load(Ordering::SeqCst), 0);
-    outcome(&invoke, Request::ordered("say", &["unsupported", "b", "a"]))
-        .await
-        .unwrap();
-    assert!(
-        p.seen
+    assert!(matches!(output.next().await, Some(OutputEvent::Complete)));
+    assert!(output.next().await.is_none());
+    assert_eq!(
+        provider
+            .seen
             .lock()
             .unwrap()
             .as_ref()
             .unwrap()
-            .1
-            .contains("\"deprecated\":true")
+            .to_json()
+            .unwrap()
+            .text(),
+        expected.text()
     );
-    outcome(&invoke, Request::ordered("say", &["a", "a"]))
-        .await
-        .unwrap();
-    assert_code(
-        outcome(&invoke, Request::ordered("say", &[])).await,
-        "ERR_REFUSED",
-    );
-    assert_code(
-        outcome(&invoke, Request::binding("unsupported")).await,
-        "ERR_BINDING_NOT_FOUND",
-    );
-    assert_code(
-        outcome(&invoke, Request::binding("absent")).await,
-        "ERR_BINDING_NOT_FOUND",
-    );
-    assert_eq!(p.calls.load(Ordering::SeqCst), 2);
+    assert_eq!(provider.queries.load(Ordering::Relaxed), 0);
+}
+#[tokio::test]
+async fn missing_binding_is_terminal_but_empty_key_is_local() {
+    let provider = Provider::new(Mode::Empty);
+    let client = BindingClient::new(&provider);
     assert_eq!(
-        invoke
-            .preflight(Request::ordered("say", &["a", "absent"]))
-            .await
+        client
+            .invoke(BindingRequest::new(document("{}"), ""), control())
             .unwrap_err()
-            .code(),
-        "ERR_BINDING_NOT_FOUND"
+            .kind(),
+        BoundaryFailureKind::EmptyString
     );
-    assert!(
-        invoke
-            .preflight(Request::binding("a"))
-            .await
-            .unwrap()
-            .is_some()
-    );
-    assert_eq!(p.calls.load(Ordering::SeqCst), 2);
+    let (_, mut output) = client
+        .invoke(BindingRequest::new(document("{}"), "missing"), control())
+        .unwrap()
+        .split();
+    assert_eq!(code(output.next().await), "ERR_BINDING_NOT_FOUND");
+    assert_eq!(provider.calls.load(Ordering::Relaxed), 0);
 }
-#[tokio::test(flavor = "current_thread")]
-async fn missing_ambiguous_and_sole_candidates() {
-    let p = Provider::new(Mode::Empty);
-    for operation in [
-        r#"{"echo":{"aliases":["echo"]}}"#,
-        r#"{"echo":{},"other":{"aliases":["echo"]}}"#,
-    ] {
-        let validation = doc(
-            operation,
-            r#"{"b":{"operation":"echo","source":"s"}}"#,
-            r#"{"s":{"kind":"fixture"}}"#,
+#[tokio::test]
+async fn explicit_operation_binding_bypasses_selection_support() {
+    let mut provider = Provider::new(Mode::Empty);
+    provider.supported = false;
+    let client = OperationClient::new(
+        &provider,
+        DefaultEvaluator::default(),
+        ExternalSchemas::default(),
+    );
+    let (_, mut output) = client
+        .invoke(OperationRequest::binding(document("{}"), "a"), control())
+        .unwrap()
+        .split();
+    assert!(matches!(output.next().await, Some(OutputEvent::Complete)));
+    assert_eq!(provider.queries.load(Ordering::Relaxed), 0);
+}
+#[tokio::test]
+async fn all_selection_keys_are_checked_before_any_support_query() {
+    let provider = Provider::new(Mode::Empty);
+    let client = OperationClient::new(
+        &provider,
+        DefaultEvaluator::default(),
+        ExternalSchemas::default(),
+    );
+    for bad in ["missing", "other"] {
+        let request =
+            OperationRequest::ordered(document("{}"), "echo", vec!["a".into(), bad.into()]);
+        let (_, mut output) = client.invoke(request, control()).unwrap().split();
+        assert_eq!(code(output.next().await), "ERR_BINDING_NOT_FOUND");
+    }
+    assert_eq!(provider.queries.load(Ordering::Relaxed), 0);
+    assert_eq!(provider.calls.load(Ordering::Relaxed), 0);
+}
+#[tokio::test]
+async fn aliases_ordered_selection_and_ambiguity_follow_caller_policy() {
+    let provider = Provider::new(Mode::Empty);
+    let client = OperationClient::new(
+        &provider,
+        DefaultEvaluator::default(),
+        ExternalSchemas::default(),
+    );
+    let doc = document(r#"{"aliases":["alias"]}"#);
+    let (_, mut output) = client
+        .invoke(OperationRequest::operation(doc.clone(), "alias"), control())
+        .unwrap()
+        .split();
+    assert_eq!(code(output.next().await), "ERR_BINDING_SELECTION_REQUIRED");
+    let (_, mut output) = client
+        .invoke(
+            OperationRequest::ordered(doc, "alias", vec!["b".into(), "a".into()]),
+            control(),
         )
-        .validate()
-        .unwrap();
-        assert_eq!(
-            validation.report().evidence["OBI-05"],
-            openbindings::Evidence::Violated
-        );
-        assert!(validation.conformant().is_none());
-        assert_eq!(p.calls.load(Ordering::SeqCst), 0);
-    }
-    let i = Invoker::new(
-        doc(r#"{"echo":{}}"#, "{}", "{}")
-            .validate()
-            .unwrap()
-            .conformant()
-            .expect("conformant invocation document"),
-        &p,
-    );
-    assert_code(
-        outcome(&i, Request::operation("echo")).await,
-        "ERR_BINDING_NOT_FOUND",
-    );
-    outcome(
-        &Invoker::new(
-            one(r#"{"aliases":["say"]}"#)
-                .validate()
-                .unwrap()
-                .conformant()
-                .expect("conformant invocation document"),
-            &p,
-        ),
-        Request::operation("say"),
-    )
-    .await
-    .unwrap();
-}
-#[tokio::test(flavor = "current_thread")]
-async fn exact_opaque_values_carriers_and_context_are_preserved() {
-    let p = Provider::new(Mode::Echo);
-    let i = Invoker::new(
-        one("{}")
-            .validate()
-            .unwrap()
-            .conformant()
-            .expect("conformant invocation document"),
-        &p,
-    );
-    let context = json(r#"{"secret":1e9999,"duplicate":1,"duplicate":2}"#);
-    let mut call = i.invoke(Request::binding("b").with_context(&context));
-    for value in ["null", "9007199254740993", "1e9999", r#"{"x":1,"x":2}"#] {
-        call.write(json(value)).await.unwrap();
-        assert_eq!(call.next().await.unwrap().unwrap().text(), value);
-    }
-    call.close();
-    assert!(call.next().await.is_none());
-    assert!(call.outcome().unwrap().is_ok());
-    assert!(call.validation_failure().is_none());
-    let seen = p.seen.lock().unwrap();
-    let (source, binding, c) = seen.as_ref().unwrap();
-    assert_eq!(
-        source,
-        r#"{"kind":"fixture","content":null,"x-opaque":9007199254740993}"#
-    );
-    assert_eq!(
-        binding,
-        r#"{"operation":"echo","source":"s","content":null,"x-opaque":1e9999}"#
-    );
-    assert_eq!(c.as_deref(), Some(context.text()));
-}
-#[tokio::test(flavor = "current_thread")]
-async fn late_input_failure_is_not_eof_and_keeps_prior_outputs() {
-    let p = Provider::new(Mode::Echo);
-    let i = checked(
-        one(r#"{"input":{"type":"integer"},"output":{"type":"integer"}}"#),
-        &p,
-    );
-    let mut call = i.invoke(Request::operation("echo"));
-    call.write(json("1")).await.unwrap();
-    call.write(json("\"bad\"")).await.unwrap();
-    assert_eq!(call.next().await.unwrap().unwrap().text(), "1");
-    assert_eq!(
-        call.next().await.unwrap().unwrap_err().code(),
-        "ERR_OPERATION_VALIDATION_FAILED"
-    );
-    assert!(call.next().await.is_none());
-    assert_eq!(p.received.load(Ordering::SeqCst), 1);
-    assert_eq!(p.eof.load(Ordering::SeqCst), 0);
-    assert_eq!(p.live.load(Ordering::SeqCst), 0);
-    let failure = call.validation_failure().unwrap();
-    assert_eq!(failure.direction(), Direction::Input);
-    assert_eq!(failure.stage(), ValidationStage::Evaluation);
-    assert!(matches!(failure.outcome(), ValueOutcome::Fails { .. }));
-    assert!(call.outcome().unwrap().unwrap_err().data().is_none());
-}
-#[tokio::test(flavor = "current_thread")]
-async fn output_failure_withholds_only_failing_value() {
-    let p = Provider::new(Mode::Outputs);
-    let i = checked(one(r#"{"output":{"type":"integer"}}"#), &p);
-    let mut call = i.invoke(Request::operation("echo"));
-    assert_eq!(call.next().await.unwrap().unwrap().text(), "1");
-    assert_eq!(
-        call.next().await.unwrap().unwrap_err().code(),
-        "ERR_OPERATION_VALIDATION_FAILED"
-    );
-    assert!(call.next().await.is_none());
-    assert_eq!(
-        call.validation_failure().unwrap().direction(),
-        Direction::Output
-    );
-}
-#[tokio::test(flavor = "current_thread")]
-async fn preparation_is_lazy_absence_is_not_true_and_no_verdict_is_not_failure() {
-    let p = Provider::new(Mode::Empty);
-    let i = Invoker::new(
-        one(r#"{"input":false,"output":{"$ref":"https://absent.test/schema"}}"#)
-            .validate()
-            .unwrap()
-            .conformant()
-            .expect("conformant invocation document"),
-        &p,
-    );
-    outcome(&i, Request::operation("echo")).await.unwrap();
-    assert!(
-        i.preflight(Request::operation("echo"))
-            .await
-            .unwrap()
-            .is_some()
-    );
-    let p = Provider::new(Mode::Echo);
-    for schema in [r#"{"input":true}"#, r#"{"input":false}"#] {
-        let i = Invoker::new(
-            one(schema)
-                .validate()
-                .unwrap()
-                .conformant()
-                .expect("conformant invocation document"),
-            &p,
-        );
-        let mut call = i.invoke(Request::operation("echo"));
-        call.write(json("null")).await.unwrap();
-        call.close();
-        assert_eq!(
-            call.next().await.unwrap().unwrap_err().code(),
-            "ERR_SCHEMA_UNRESOLVED"
-        );
-        assert_eq!(
-            call.validation_failure().unwrap().stage(),
-            ValidationStage::Preparation
-        );
-    }
-    let i = checked(
-        one(r#"{"input":{"$ref":"https://absent.test/schema"}}"#),
-        &p,
-    );
-    let mut call = i.invoke(Request::operation("echo"));
-    call.write(json("1")).await.unwrap();
-    call.close();
-    assert_eq!(
-        call.next().await.unwrap().unwrap_err().code(),
-        "ERR_SCHEMA_UNRESOLVED"
-    );
+        .unwrap()
+        .split();
+    assert!(matches!(output.next().await, Some(OutputEvent::Complete)));
+    assert_eq!(provider.seen.lock().unwrap().as_ref().unwrap().binding, "b");
+    let before_calls = provider.calls.load(Ordering::Relaxed);
+    let before_queries = provider.queries.load(Ordering::Relaxed);
+    let (_, mut missing) = client
+        .invoke(
+            OperationRequest::operation(document("{}"), "absent"),
+            control(),
+        )
+        .unwrap()
+        .split();
+    assert_eq!(code(missing.next().await), "ERR_OPERATION_NOT_FOUND");
+    assert_eq!(provider.calls.load(Ordering::Relaxed), before_calls);
+    assert_eq!(provider.queries.load(Ordering::Relaxed), before_queries);
+    let (_, mut duplicate) = client
+        .invoke(
+            OperationRequest::ordered(document("{}"), "echo", vec!["a".into(), "a".into()]),
+            control(),
+        )
+        .unwrap()
+        .split();
     assert!(matches!(
-        call.validation_failure().unwrap().outcome(),
-        ValueOutcome::NoVerdict { .. }
+        duplicate.next().await,
+        Some(OutputEvent::Complete)
     ));
-    assert_eq!(p.received.load(Ordering::SeqCst), 0);
+    assert_eq!(provider.seen.lock().unwrap().as_ref().unwrap().binding, "a");
 }
-#[tokio::test(flavor = "current_thread")]
-async fn binding_errors_and_challenges_bypass_output_contract() {
-    for mode in [Mode::Challenge, Mode::Error] {
-        let p = Provider::new(mode);
-        let i = checked(one(r#"{"output":false}"#), &p);
-        let error = outcome(&i, Request::operation("echo")).await.unwrap_err();
-        let expected = match mode {
-            Mode::Challenge => challenge(),
-            _ => InvocationError::new("fixture.application", Some(json("null"))).unwrap(),
-        };
-        assert_eq!(
-            error.to_json().unwrap().text(),
-            expected.to_json().unwrap().text()
-        );
-    }
+#[tokio::test]
+async fn input_is_checked_before_delivery_and_rejection_is_not_eof() {
+    let provider = Provider::new(Mode::Echo);
+    let client = OperationClient::new(
+        &provider,
+        DefaultEvaluator::default(),
+        ExternalSchemas::default(),
+    );
+    let call = client
+        .invoke(
+            OperationRequest::binding(document(r#"{"input":{"type":"integer"}}"#), "a"),
+            control(),
+        )
+        .unwrap();
+    let evidence = call.control();
+    let (mut input, mut output) = call.split();
+    input.send(json(r#""bad""#)).await.unwrap();
+    input.close();
+    assert_eq!(code(output.next().await), "ERR_OPERATION_VALIDATION_FAILED");
+    assert_eq!(provider.reads.load(Ordering::Relaxed), 0);
+    assert_eq!(provider.eof.load(Ordering::Relaxed), 0);
+    let failure = evidence.validation_failure().unwrap();
+    assert_eq!(failure.direction(), Direction::Input);
+    assert!(matches!(
+        failure.evidence(),
+        ValidationEvidence::Evaluation(ValueOutcome::Fails { .. })
+    ));
 }
-struct Counted {
-    prepares: Arc<AtomicUsize>,
-    evaluations: Arc<AtomicUsize>,
+#[tokio::test]
+async fn valid_output_precedes_rejected_output_terminal() {
+    let provider = Provider::new(Mode::Outputs);
+    let client = OperationClient::new(
+        &provider,
+        DefaultEvaluator::default(),
+        ExternalSchemas::default(),
+    );
+    let (_, mut output) = client
+        .invoke(
+            OperationRequest::binding(document(r#"{"output":{"type":"integer"}}"#), "a"),
+            control(),
+        )
+        .unwrap()
+        .split();
+    assert!(matches!(output.next().await, Some(OutputEvent::Output(value)) if value.text() == "1"));
+    assert_eq!(code(output.next().await), "ERR_OPERATION_VALIDATION_FAILED");
+    assert!(output.next().await.is_none());
 }
-struct Prepared {
-    inner: Arc<dyn PreparedSchema>,
-    evaluations: Arc<AtomicUsize>,
+struct LocalEvaluator {
+    preparations: Rc<Cell<usize>>,
+    evaluations: Rc<Cell<usize>>,
+    refusal: bool,
 }
-impl SchemaEvaluator for Counted {
+#[derive(Clone)]
+struct LocalValidator(Rc<Cell<usize>>);
+impl SchemaEvaluator for LocalEvaluator {
+    type Validator = LocalValidator;
     fn prepare(
         &self,
-        r: &SchemaRequest,
-        c: &dyn openbindings::WorkControl,
-    ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
-        self.prepares.fetch_add(1, Ordering::SeqCst);
-        Ok(Arc::new(Prepared {
-            inner: DefaultEvaluator::new().prepare(r, c)?,
-            evaluations: self.evaluations.clone(),
-        }))
-    }
-}
-impl PreparedSchema for Prepared {
-    fn validate(
-        &self,
-        v: &JsonValue,
-        d: openbindings::Detail,
-        c: &dyn openbindings::WorkControl,
-    ) -> ValueOutcome {
-        self.evaluations.fetch_add(1, Ordering::SeqCst);
-        self.inner.validate(v, d, c)
-    }
-}
-#[tokio::test(flavor = "current_thread")]
-async fn prepared_value_contracts_reused_across_values_and_attempts() {
-    let p = Provider::new(Mode::Echo);
-    let prepares = Arc::new(AtomicUsize::new(0));
-    let evaluations = Arc::new(AtomicUsize::new(0));
-    let i = Arc::new(
-        Invoker::new(
-            one(r#"{"input":true,"output":true}"#)
-                .validate()
-                .unwrap()
-                .conformant()
-                .expect("conformant invocation document"),
-            &p,
-        )
-        .with_evaluator(
-            Arc::new(Counted {
-                prepares: prepares.clone(),
-                evaluations: evaluations.clone(),
-            }),
-            ExternalSchemas::default(),
-        ),
-    );
-    let prepared = i.prepare("echo").unwrap();
-    assert_eq!(prepares.load(Ordering::SeqCst), 2);
-    assert_eq!(p.calls.load(Ordering::SeqCst), 0);
-    for _ in 0..3 {
-        let mut call = prepared.invoke(Attempt::new());
-        for _ in 0..20 {
-            call.write(json("1")).await.unwrap();
-            assert!(call.next().await.unwrap().is_ok());
+        _: EvaluationRequest<'_>,
+        _: &PreparationLimits,
+        _: &dyn WorkControl,
+    ) -> Result<Self::Validator, PreparationFailure> {
+        self.preparations.set(self.preparations.get() + 1);
+        if self.refusal {
+            Err(PreparationFailure::new(
+                PreparationFailureKind::UnsupportedCapability {
+                    capability: "test".into(),
+                },
+            ))
+        } else {
+            Ok(LocalValidator(self.evaluations.clone()))
         }
-        call.close();
-        assert!(call.next().await.is_none());
     }
-    assert_eq!(prepares.load(Ordering::SeqCst), 2);
-    assert_eq!(evaluations.load(Ordering::SeqCst), 120);
-    // Plain invocation prepares once per used direction on every attempt.
-    drop(i.invoke(Request::operation("echo")));
-    outcome(&i, Request::operation("echo")).await.unwrap();
-    assert_eq!(prepares.load(Ordering::SeqCst), 2); // no actual values
-    for values in [1, 20] {
-        let mut call = i.invoke(Request::operation("echo"));
-        for _ in 0..values {
-            call.write(json("1")).await.unwrap();
-            assert!(call.next().await.unwrap().is_ok());
-        }
-        call.close();
-        assert!(call.next().await.is_none());
-    }
-    assert_eq!(prepares.load(Ordering::SeqCst), 6);
 }
-#[tokio::test(flavor = "current_thread")]
-async fn borrowed_send_and_local_rc_and_cancellation_release() {
-    fn send<T: Send>(_: &T) {}
-    let name = String::from("fixture");
-    let mut p = Provider::new(Mode::Park);
-    p.name = &name;
-    let i = Invoker::new(
-        one("{}")
-            .validate()
-            .unwrap()
-            .conformant()
-            .expect("conformant invocation document"),
-        &p,
-    );
-    let mut call = i.invoke(Request::operation("echo"));
-    send(&call);
-    call.write(json("null")).await.unwrap();
-    let control = call.control();
-    control.cancel();
-    assert_eq!(
-        call.next().await.unwrap().unwrap_err().code(),
-        "ERR_CANCELLED"
-    );
-    assert_eq!(p.live.load(Ordering::SeqCst), 0);
-    assert!(control.validation_failure().is_none());
-    let external = CancellationToken::new();
-    external.cancel();
-    let mut call = i.invoke_with_control(Request::operation("echo"), &external);
-    assert_eq!(
-        call.next().await.unwrap().unwrap_err().code(),
-        "ERR_CANCELLED"
-    );
-    assert_eq!(p.calls.load(Ordering::SeqCst), 1);
-    let local = std::rc::Rc::new(Provider::new(Mode::Empty));
-    outcome(
-        &Invoker::new(
-            one("{}")
-                .validate()
-                .unwrap()
-                .conformant()
-                .expect("conformant invocation document"),
-            local,
-        ),
-        Request::operation("echo"),
+impl SchemaValidator for LocalValidator {
+    fn evaluate(&self, _: &JsonValue, _: Detail, _: &dyn WorkControl) -> ValueOutcome {
+        self.0.set(self.0.get() + 1);
+        ValueOutcome::Satisfies
+    }
+}
+fn evaluator(refusal: bool) -> (LocalEvaluator, Rc<Cell<usize>>, Rc<Cell<usize>>) {
+    let prep = Rc::new(Cell::new(0));
+    let eval = Rc::new(Cell::new(0));
+    (
+        LocalEvaluator {
+            preparations: prep.clone(),
+            evaluations: eval.clone(),
+            refusal,
+        },
+        prep,
+        eval,
     )
-    .await
-    .unwrap();
 }
-
-#[test]
-fn failed_or_cancelled_prepare_releases_partial_work_and_can_retry() {
-    use openbindings::NoVerdictReason;
-    struct Probe {
-        calls: AtomicUsize,
-        live: Arc<AtomicUsize>,
-        stop_at: AtomicUsize,
-        cancel: Option<CancellationToken>,
-    }
-    struct Held(Arc<AtomicUsize>);
-    impl Drop for Held {
-        fn drop(&mut self) {
-            self.0.fetch_sub(1, Ordering::SeqCst);
-        }
-    }
-    impl PreparedSchema for Held {
-        fn validate(
-            &self,
-            _: &JsonValue,
-            _: openbindings::Detail,
-            _: &dyn openbindings::WorkControl,
-        ) -> ValueOutcome {
-            ValueOutcome::Satisfies
-        }
-    }
-    impl SchemaEvaluator for Probe {
-        fn prepare(
-            &self,
-            _: &SchemaRequest,
-            _control: &dyn openbindings::WorkControl,
-        ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
-            let call = self.calls.fetch_add(1, Ordering::SeqCst) + 1;
-            if call == self.stop_at.load(Ordering::SeqCst) {
-                if let Some(control) = &self.cancel {
-                    // Simulate cancellation while the evaluator is preparing,
-                    // including a late successful return after cancellation.
-                    control.cancel();
-                } else {
-                    return Err(NoVerdict::new(
-                        NoVerdictReason::EvaluatorFailure,
-                        "fixture",
-                        "temporary failure",
-                    ));
-                }
-            }
-            self.live.fetch_add(1, Ordering::SeqCst);
-            Ok(Arc::new(Held(self.live.clone())))
-        }
-    }
-    for cancel in [false, true] {
-        let control = CancellationToken::new();
-        let probe = Arc::new(Probe {
-            calls: AtomicUsize::new(0),
-            live: Arc::default(),
-            stop_at: AtomicUsize::new(2),
-            cancel: cancel.then(|| control.clone()),
-        });
-        let p = Provider::new(Mode::Empty);
-        let i = Arc::new(
-            Invoker::new(
-                one(r#"{"input":true,"output":true}"#)
-                    .validate()
-                    .unwrap()
-                    .conformant()
-                    .expect("conformant invocation document"),
-                &p,
+#[tokio::test]
+async fn local_typed_validators_prepare_once_per_declared_direction() {
+    let provider = Provider::new(Mode::Echo);
+    let (eval, preparations, evaluations) = evaluator(false);
+    let client = OperationClient::new(&provider, eval, ExternalSchemas::default());
+    for attempt in 1..=2 {
+        let (mut input, mut output) = client
+            .invoke(
+                OperationRequest::binding(document(r#"{"input":true,"output":true}"#), "a"),
+                control(),
             )
-            .with_evaluator(probe.clone(), ExternalSchemas::default()),
-        );
-        let cancelled = CancellationToken::new();
-        cancelled.cancel();
-        assert_eq!(
-            i.prepare_with_control("echo", &cancelled)
-                .err()
-                .unwrap()
-                .code(),
-            "ERR_CANCELLED"
-        );
-        assert_eq!(probe.calls.load(Ordering::SeqCst), 0);
-        let error = i.prepare_with_control("echo", &control).err().unwrap();
-        assert_eq!(
-            error.code(),
-            if cancel {
-                "ERR_CANCELLED"
-            } else {
-                "ERR_SCHEMA_UNRESOLVED"
+            .unwrap()
+            .split();
+        let writer = async {
+            for _ in 0..4 {
+                input.send(json("1")).await.unwrap();
             }
-        );
-        assert_eq!(probe.calls.load(Ordering::SeqCst), 2);
-        assert_eq!(probe.live.load(Ordering::SeqCst), 0);
-        assert_eq!(p.calls.load(Ordering::SeqCst), 0);
-        probe.stop_at.store(0, Ordering::SeqCst);
-        let prepared = i.prepare("echo").unwrap();
-        assert_eq!(probe.calls.load(Ordering::SeqCst), 4);
-        assert_eq!(probe.live.load(Ordering::SeqCst), 2);
-        drop(prepared);
-        // The still-live invoker has no hidden contract owners.
-        assert_eq!(probe.live.load(Ordering::SeqCst), 0);
-    }
-}
-
-#[test]
-fn explicit_prepare_handles_absence_missing_names_and_missing_evaluator() {
-    let p = Provider::new(Mode::Empty);
-    let i = Arc::new(Invoker::new(
-        one(r#"{"aliases":["say"]}"#)
-            .validate()
-            .unwrap()
-            .conformant()
-            .expect("conformant invocation document"),
-        &p,
-    ));
-    assert!(i.prepare("say").is_ok());
-    assert_eq!(
-        i.prepare("absent").err().unwrap().code(),
-        "ERR_OPERATION_NOT_FOUND"
-    );
-    let i = Arc::new(Invoker::new(
-        one(r#"{"input":true}"#)
-            .validate()
-            .unwrap()
-            .conformant()
-            .expect("conformant invocation document"),
-        &p,
-    ));
-    assert_eq!(
-        i.prepare("echo").err().unwrap().code(),
-        "ERR_SCHEMA_UNRESOLVED"
-    );
-    assert_eq!(p.calls.load(Ordering::SeqCst), 0);
-}
-
-#[tokio::test(flavor = "current_thread")]
-async fn shared_prepared_attempts_keep_selection_context_and_cancellation_separate() {
-    struct ContextEcho;
-    impl BindingInvoker for ContextEcho {
-        type Invocation<'a> =
-            Pin<Box<dyn Future<Output = Result<(), InvocationError>> + Send + 'a>>;
-        fn supports_kind(&self, kind: &str) -> bool {
-            kind == "fixture"
-        }
-        fn invoke<'a>(
-            &'a self,
-            request: BindingRequest<'a>,
-            io: ProviderIo,
-            _: CancellationToken,
-        ) -> Self::Invocation<'a> {
-            Box::pin(async move {
-                let (mut input, mut output) = io.split();
-                output.emit(request.context.unwrap().clone()).await?;
-                output
-                    .emit(request.binding.content.as_ref().unwrap().clone())
-                    .await?;
-                while let Some(value) = super::receive(&mut input).await {
-                    output.emit(value).await?;
+            input.close();
+        };
+        let reader = async {
+            let mut count = 0;
+            while let Some(event) = output.next().await {
+                match event {
+                    OutputEvent::Output(_) => count += 1,
+                    OutputEvent::Complete => (),
+                    other => panic!("{other:?}"),
                 }
-                Ok(())
-            })
-        }
+            }
+            assert_eq!(count, 4);
+        };
+        tokio::join!(writer, reader);
+        assert_eq!(preparations.get(), attempt * 2);
+        assert_eq!(evaluations.get(), attempt * 8);
     }
-    let prepares = Arc::new(AtomicUsize::new(0));
-    let i = Arc::new(Invoker::new(doc(
-        r#"{"echo":{"aliases":["say"],"input":{"type":"integer"},"output":true},"other":{}}"#,
-        r#"{"a":{"operation":"echo","source":"s","content":1},"b":{"operation":"echo","source":"s","content":2},"foreign":{"operation":"other","source":"s","content":3}}"#,
-        r#"{"s":{"kind":"fixture"}}"#,
-    ).validate().unwrap().conformant().expect("conformant invocation document"), ContextEcho).with_evaluator(Arc::new(Counted { prepares: prepares.clone(), evaluations: Arc::default() }), ExternalSchemas::default()));
-    // Preparing does not require a sole supported binding.
-    let prepared = i.prepare("say").unwrap();
-    let first_context = json(r#"{"attempt":1}"#);
-    let second_context = json(r#"{"attempt":2}"#);
-    let external = CancellationToken::new();
-    let mut first = prepared.invoke_with_control(
-        Attempt::ordered(&["a", "b"]).with_context(&first_context),
-        &external,
+}
+#[tokio::test]
+async fn preparation_refusal_keeps_preparation_evidence_without_value_verdict() {
+    let provider = Provider::new(Mode::Echo);
+    let (eval, preparations, evaluations) = evaluator(true);
+    let client = OperationClient::new(&provider, eval, ExternalSchemas::default());
+    let call = client
+        .invoke(
+            OperationRequest::binding(document(r#"{"input":true}"#), "a"),
+            control(),
+        )
+        .unwrap();
+    let evidence = call.control();
+    let (mut input, mut output) = call.split();
+    input.send(json("1")).await.unwrap();
+    assert_eq!(code(output.next().await), "ERR_SCHEMA_UNRESOLVED");
+    assert!(matches!(
+        evidence.validation_failure().unwrap().evidence(),
+        ValidationEvidence::Preparation(_)
+    ));
+    assert_eq!(preparations.get(), 1);
+    assert_eq!(evaluations.get(), 0);
+}
+fn require_send<T: Send>(_: &T) {}
+#[tokio::test]
+async fn preflight_is_send_with_a_non_send_evaluator_and_never_prepares() {
+    let provider = Provider::new(Mode::Challenge);
+    let (eval, preparations, evaluations) = evaluator(true);
+    let client = OperationClient::new(&provider, eval, ExternalSchemas::default());
+    let future = client
+        .preflight(
+            OperationRequest::binding(document(r#"{"input":false,"output":false}"#), "a"),
+            control(),
+        )
+        .unwrap();
+    require_send(&future);
+    assert!(matches!(
+        future.await.unwrap(),
+        PreflightOutcome::Challenge(_)
+    ));
+    assert_eq!(preparations.get(), 0);
+    assert_eq!(evaluations.get(), 0);
+    assert_eq!(provider.calls.load(Ordering::Relaxed), 0);
+}
+#[tokio::test]
+async fn absent_contracts_and_error_data_are_not_validated() {
+    for mode in [Mode::Echo, Mode::Error, Mode::Challenge] {
+        let provider = Provider::new(mode);
+        let (eval, preparations, evaluations) = evaluator(true);
+        let client = OperationClient::new(&provider, eval, ExternalSchemas::default());
+        let doc = if matches!(mode, Mode::Echo) {
+            document("{}")
+        } else {
+            document(r#"{"output":false}"#)
+        };
+        let (mut input, mut output) = client
+            .invoke(OperationRequest::binding(doc, "a"), control())
+            .unwrap()
+            .split();
+        if matches!(mode, Mode::Echo) {
+            input.send(json("null")).await.unwrap();
+            input.close();
+        }
+        let event = output.next().await;
+        match mode {
+            Mode::Echo => assert!(matches!(event, Some(OutputEvent::Output(_)))),
+            Mode::Error => match event.unwrap() {
+                OutputEvent::Error(error) => assert_eq!(
+                    error.to_json().unwrap().text(),
+                    r#"{"code":"fixture.error","data":null}"#
+                ),
+                other => panic!("{other:?}"),
+            },
+            Mode::Challenge => {
+                let Some(OutputEvent::Error(error)) = event else {
+                    panic!("challenge")
+                };
+                assert_eq!(
+                    error.to_json().unwrap().text(),
+                    InvocationError::challenge(challenge())
+                        .to_json()
+                        .unwrap()
+                        .text()
+                );
+            }
+            _ => unreachable!(),
+        }
+        assert_eq!(preparations.get(), 0);
+        assert_eq!(evaluations.get(), 0);
+    }
+}
+#[test]
+fn thread_safe_composition_yields_send_driver_and_provider_handles() {
+    let provider = Provider::new(Mode::Park);
+    let client = OperationClient::new(
+        provider,
+        DefaultEvaluator::default(),
+        ExternalSchemas::default(),
     );
-    let mut second = prepared.invoke(Attempt::binding("b").with_context(&second_context));
-    fn send_sync<T: Send + Sync>(_: &T) {}
-    send_sync(&prepared);
-    let (a, b) = tokio::join!(first.next(), second.next());
-    assert_eq!(a.unwrap().unwrap().text(), first_context.text());
-    assert_eq!(b.unwrap().unwrap().text(), second_context.text());
-    let (a, b) = tokio::join!(first.next(), second.next());
-    assert_eq!(a.unwrap().unwrap().text(), "1");
-    assert_eq!(b.unwrap().unwrap().text(), "2");
-    external.cancel();
+    let call = client
+        .invoke(
+            OperationRequest::binding(document(r#"{"input":true}"#), "a"),
+            control(),
+        )
+        .unwrap();
+    require_send(&call);
+    let (input, output) = call.split();
+    require_send(&input);
+    require_send(&output);
+}
+#[tokio::test]
+async fn cancelled_before_first_poll_never_constructs_provider_work() {
+    let provider = Provider::new(Mode::Park);
+    let client = BindingClient::new(&provider);
+    let cancel = control();
+    let (_, mut output) = client
+        .invoke(BindingRequest::new(document("{}"), "a"), cancel.clone())
+        .unwrap()
+        .split();
+    cancel.cancel();
+    assert_eq!(code(output.next().await), "ERR_CANCELLED");
+    assert_eq!(provider.calls.load(Ordering::Relaxed), 0);
+}
+#[test]
+fn dropping_output_cancels_parked_provider_and_input_cannot_drive() {
+    let provider = Provider::new(Mode::Park);
+    let client = BindingClient::new(&provider);
+    let call = client
+        .invoke(BindingRequest::new(document("{}"), "a"), control())
+        .unwrap();
+    let evidence = call.control();
+    let (mut input, mut output) = call.split();
+    let mut next = Box::pin(output.next());
+    assert!(
+        next.as_mut()
+            .poll(&mut TaskContext::from_waker(Waker::noop()))
+            .is_pending()
+    );
+    drop(next);
+    drop(output);
     assert_eq!(
-        first.next().await.unwrap().unwrap_err().code(),
+        evidence.outcome().unwrap().unwrap_err().code(),
         "ERR_CANCELLED"
     );
-    assert!(first.validation_failure().is_none());
-    second.write(json("7")).await.unwrap();
-    assert_eq!(second.next().await.unwrap().unwrap().text(), "7");
-    second.close();
-    assert!(second.next().await.is_none());
-    assert!(second.outcome().unwrap().is_ok());
-    assert!(second.validation_failure().is_none());
-    let mut wrong = prepared.invoke(Attempt::binding("foreign"));
-    assert_eq!(
-        wrong.next().await.unwrap().unwrap_err().code(),
-        "ERR_BINDING_NOT_FOUND"
-    );
-    // A failing attempt's evidence cannot leak into another attempt or the handle.
-    let mut invalid = prepared.invoke(Attempt::binding("a").with_context(&first_context));
-    assert!(invalid.next().await.unwrap().is_ok());
-    assert!(invalid.next().await.unwrap().is_ok());
-    invalid.write(json("\"bad\"")).await.unwrap();
-    assert_eq!(
-        invalid.next().await.unwrap().unwrap_err().code(),
-        "ERR_OPERATION_VALIDATION_FAILED"
-    );
-    assert_eq!(
-        invalid.validation_failure().unwrap().stage(),
-        ValidationStage::Evaluation
-    );
-    assert!(second.validation_failure().is_none());
-    assert_eq!(prepares.load(Ordering::SeqCst), 2);
-}
-
-#[tokio::test(flavor = "current_thread")]
-async fn prepared_foreign_exact_binding_is_not_found_before_any_provider_work() {
-    struct NoProviderWork;
-    impl BindingInvoker for NoProviderWork {
-        type Invocation<'a> = std::future::Ready<Result<(), InvocationError>>;
-        fn supports_kind(&self, _: &str) -> bool {
-            panic!("foreign binding must be refused before checking provider support");
-        }
-        fn invoke<'a>(
-            &'a self,
-            _: BindingRequest<'a>,
-            _: ProviderIo,
-            _: CancellationToken,
-        ) -> Self::Invocation<'a> {
-            panic!("foreign binding must be refused before constructing provider work");
-        }
-    }
-    let i = Arc::new(Invoker::new(
-        doc(
-            r#"{"echo":{"aliases":["say"]},"other":{}}"#,
-            r#"{"foreign":{"operation":"other","source":"s"}}"#,
-            r#"{"s":{"kind":"fixture"}}"#,
-        )
-        .validate()
-        .unwrap()
-        .conformant()
-        .expect("conformant invocation document"),
-        NoProviderWork,
+    let mut send = Box::pin(input.send(json("1")));
+    assert!(matches!(
+        send.as_mut()
+            .poll(&mut TaskContext::from_waker(Waker::noop())),
+        Poll::Ready(Err(_))
     ));
-    // The prepared operation resolved; the key names no binding of it.
-    let prepared = i.prepare("say").unwrap();
-    let mut call = prepared.invoke(Attempt::binding("foreign"));
-    assert_eq!(
-        call.next().await.unwrap().unwrap_err().code(),
-        "ERR_BINDING_NOT_FOUND"
-    );
-    assert!(call.next().await.is_none());
-    assert!(call.validation_failure().is_none());
 }
-
-#[tokio::test(flavor = "current_thread")]
-async fn prepared_attempt_binding_choices_validate_the_entire_selection() {
-    let p = Provider::new(Mode::Empty);
-    let i = Arc::new(Invoker::new(
-        doc(
-            r#"{"echo":{},"other":{}}"#,
-            r#"{"a":{"operation":"echo","source":"s"},"b":{"operation":"echo","source":"s"},"foreign":{"operation":"other","source":"s"}}"#,
-            r#"{"s":{"kind":"fixture"}}"#,
-        ).validate().unwrap().conformant().expect("conformant invocation document"),
-        &p,
-    ));
-    let prepared = i.prepare("echo").unwrap();
-    for (attempt, code) in [
-        (Attempt::new(), "ERR_BINDING_SELECTION_REQUIRED"),
-        (Attempt::default(), "ERR_BINDING_SELECTION_REQUIRED"),
-        (Attempt::ordered(&[]), "ERR_REFUSED"),
-        (Attempt::ordered(&[""]), "ERR_REFUSED"),
-        (Attempt::ordered(&["a", "foreign"]), "ERR_BINDING_NOT_FOUND"),
-        (Attempt::binding("missing"), "ERR_BINDING_NOT_FOUND"),
-    ] {
-        let mut call = prepared.invoke(attempt);
-        assert_eq!(call.next().await.unwrap().unwrap_err().code(), code);
-    }
-    assert_eq!(p.calls.load(Ordering::SeqCst), 0);
-    let mut call = prepared.invoke(Attempt::ordered(&["b", "a"]));
-    call.close();
-    assert!(call.next().await.is_none());
-    assert_eq!(p.calls.load(Ordering::SeqCst), 1);
-}
-
 #[test]
-fn attempt_debug_redacts_binding_keys_and_context() {
-    let context = json(r#"{"secret":"opaque"}"#);
-    for attempt in [
-        Attempt::new(),
-        Attempt::ordered(&["secret-key"]),
-        Attempt::binding("secret-key"),
+fn current_wire_addressing_is_closed_and_preserves_exact_values() {
+    let doc = document("{}").value().to_owned();
+    for address in [
+        r#""operation":"echo""#,
+        r#""operation":"echo","selection":["b","a"]"#,
+        r#""binding":"a""#,
     ] {
+        let text = format!(
+            r#"{{"interface":{}, {},"context":{{"x":1e9999,"x":"\ud800"}}}}"#,
+            doc.text(),
+            address
+        );
+        let request = OperationRequest::from_json(&json(&text)).unwrap();
+        let encoded = request.to_json().unwrap();
         assert_eq!(
-            format!("{:?}", attempt.with_context(&context)),
-            "Attempt { selection: \"<redacted>\", context_present: true }"
+            encoded.get("context").unwrap().text(),
+            r#"{"x":1e9999,"x":"\ud800"}"#
         );
     }
+    for address in [
+        r#""operation":"echo","binding":"a""#,
+        r#""binding":"a","selection":["a"]"#,
+        r#""operation":"echo","selection":[]"#,
+        r#""operation":"echo","operation":"echo""#,
+        r#""operation":"echo","target":"old""#,
+    ] {
+        let text = format!(r#"{{"interface":{}, {}}}"#, doc.text(), address);
+        assert!(
+            OperationRequest::from_json(&json(&text)).is_err(),
+            "{address}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn prepared_local_validators_are_reused_without_requiring_provider_clone() {
+    use openbindings_invocation::operation::BindingChoice;
+    let (eval, preparations, evaluations) = evaluator(false);
+    // Provider itself is deliberately not Clone; only the owned validator is.
+    let client = OperationClient::new(Provider::new(Mode::Echo), eval, ExternalSchemas::default());
+    let prepared = client
+        .prepare(
+            document(r#"{"input":true,"output":true,"aliases":["alias"]}"#),
+            "alias",
+            &control(),
+        )
+        .unwrap();
+    drop(client);
+    assert_eq!(Rc::strong_count(&preparations), 1);
+    let provider = Provider::new(Mode::Echo);
+    assert_eq!(prepared.operation(), "echo");
+    assert_eq!(preparations.get(), 2);
+    for _ in 0..3 {
+        let (mut input, mut output) = prepared
+            .clone()
+            .invoke(
+                &provider,
+                BindingChoice::Binding("a".into()),
+                None,
+                control(),
+            )
+            .unwrap()
+            .split();
+        for _ in 0..4 {
+            input.send(json("1")).await.unwrap();
+            assert!(matches!(output.next().await, Some(OutputEvent::Output(_))));
+        }
+        input.close();
+        assert!(matches!(output.next().await, Some(OutputEvent::Complete)));
+    }
+    assert_eq!(preparations.get(), 2);
+    assert_eq!(evaluations.get(), 24);
+}
+struct SendNotSyncValidator(Cell<usize>);
+impl SchemaValidator for SendNotSyncValidator {
+    fn evaluate(&self, _: &JsonValue, _: Detail, _: &dyn WorkControl) -> ValueOutcome {
+        self.0.set(self.0.get() + 1);
+        ValueOutcome::Satisfies
+    }
+}
+struct LocalCompiler(Rc<Cell<usize>>);
+impl SchemaEvaluator for LocalCompiler {
+    type Validator = SendNotSyncValidator;
+    fn prepare(
+        &self,
+        _: EvaluationRequest<'_>,
+        _: &PreparationLimits,
+        _: &dyn WorkControl,
+    ) -> Result<Self::Validator, PreparationFailure> {
+        self.0.set(self.0.get() + 1);
+        Ok(SendNotSyncValidator(Cell::new(0)))
+    }
+}
+#[tokio::test]
+async fn prepared_driver_is_send_without_sync_validator_or_send_evaluator() {
+    use openbindings_invocation::operation::BindingChoice;
+    let client = OperationClient::new(
+        Provider::new(Mode::Echo),
+        LocalCompiler(Rc::new(Cell::new(0))),
+        ExternalSchemas::default(),
+    );
+    let prepared = client
+        .prepare(
+            document(r#"{"input":true,"output":true}"#),
+            "echo",
+            &control(),
+        )
+        .unwrap();
+    drop(client);
+    let provider = Provider::new(Mode::Echo);
+    require_send(&prepared);
+    let call = prepared
+        .invoke(
+            &provider,
+            BindingChoice::Binding("a".into()),
+            None,
+            control(),
+        )
+        .unwrap();
+    require_send(&call);
+    let (mut input, mut output) = call.split();
+    input.send(json("1")).await.unwrap();
+    input.close();
+    assert!(matches!(output.next().await, Some(OutputEvent::Output(_))));
+    assert!(matches!(output.next().await, Some(OutputEvent::Complete)));
+}
+#[tokio::test]
+async fn prepared_snapshot_and_operation_membership_are_stable() {
+    use openbindings_invocation::operation::BindingChoice;
+    let provider = Provider::new(Mode::Echo);
+    let client = OperationClient::new(
+        &provider,
+        DefaultEvaluator::default(),
+        ExternalSchemas::default(),
+    );
+    let prepared = client
+        .prepare(
+            document(r#"{"input":{"type":"integer"}}"#),
+            "echo",
+            &control(),
+        )
+        .unwrap();
+    let replacement = document(r#"{"input":{"type":"string"}}"#);
+    assert_ne!(
+        prepared.interface().value().text(),
+        replacement.value().text()
+    );
+    let (_, mut output) = prepared
+        .clone()
+        .invoke(
+            &provider,
+            BindingChoice::Binding("other".into()),
+            None,
+            control(),
+        )
+        .unwrap()
+        .split();
+    assert_eq!(code(output.next().await), "ERR_BINDING_NOT_FOUND");
+    assert_eq!(provider.calls.load(Ordering::Relaxed), 0);
+    assert_eq!(provider.queries.load(Ordering::Relaxed), 0);
+    let (mut input, mut output) = prepared
+        .invoke(
+            &provider,
+            BindingChoice::Binding("a".into()),
+            None,
+            control(),
+        )
+        .unwrap()
+        .split();
+    input.send(json(r#""replacement-only""#)).await.unwrap();
+    assert_eq!(code(output.next().await), "ERR_OPERATION_VALIDATION_FAILED");
+    assert_eq!(provider.reads.load(Ordering::Relaxed), 0);
+}
+struct CancelDuringPreparation(CancellationToken);
+impl SchemaEvaluator for CancelDuringPreparation {
+    type Validator = SendNotSyncValidator;
+    fn prepare(
+        &self,
+        _: EvaluationRequest<'_>,
+        _: &PreparationLimits,
+        _: &dyn WorkControl,
+    ) -> Result<Self::Validator, PreparationFailure> {
+        self.0.cancel();
+        Ok(SendNotSyncValidator(Cell::new(0)))
+    }
+}
+#[test]
+fn preparation_cancellation_has_a_direction_only_when_a_schema_was_being_prepared() {
+    use openbindings_invocation::operation::OperationPreparationFailure;
+    let cancel = control();
+    cancel.cancel();
+    let client = OperationClient::new(
+        Provider::new(Mode::Empty),
+        DefaultEvaluator::default(),
+        ExternalSchemas::default(),
+    );
+    assert!(matches!(
+        client.prepare(document("{}"), "echo", &cancel),
+        Err(OperationPreparationFailure::Cancelled)
+    ));
+    let cancel = control();
+    let client = OperationClient::new(
+        Provider::new(Mode::Empty),
+        CancelDuringPreparation(cancel.clone()),
+        ExternalSchemas::default(),
+    );
+    let Err(OperationPreparationFailure::Schema(failure)) =
+        client.prepare(document(r#"{"output":true}"#), "echo", &cancel)
+    else {
+        panic!("typed preparation cancellation")
+    };
+    assert_eq!(failure.direction(), Direction::Output);
+    assert!(matches!(
+        failure.evidence(),
+        ValidationEvidence::Preparation(PreparationFailure {
+            kind: PreparationFailureKind::Cancelled,
+            ..
+        })
+    ));
+}
+
+fn doc(operations: &str, bindings: &str, sources: &str) -> Document {
+    Document::parse(format!(r#"{{"openbindings":"0.2.0","operations":{operations},"bindings":{bindings},"sources":{sources}}}"#)).unwrap()
 }
 
 #[test]
@@ -947,75 +856,495 @@ fn unpaired_metadata_is_rejected_before_invoker_construction() {
     }
 }
 
-// An evaluator whose every value has an undefined result, located at the
-// contract's reference.
-struct UndefinedResults(&'static str);
-struct Undefined(&'static str);
-impl SchemaEvaluator for UndefinedResults {
+#[tokio::test]
+async fn late_input_mismatch_preserves_prior_output_without_a_clean_eof() {
+    let provider = Provider::new(Mode::Echo);
+    let client = OperationClient::new(
+        &provider,
+        DefaultEvaluator::default(),
+        ExternalSchemas::default(),
+    );
+    let (mut input, mut output) = client
+        .invoke(
+            OperationRequest::binding(document(r#"{"input":{"type":"integer"}}"#), "a"),
+            control(),
+        )
+        .unwrap()
+        .split();
+    input.send(json("1")).await.unwrap();
+    assert!(matches!(output.next().await,Some(OutputEvent::Output(value)) if value.text()=="1"));
+    input.send(json(r#""bad""#)).await.unwrap();
+    input.close();
+    assert_eq!(code(output.next().await), "ERR_OPERATION_VALIDATION_FAILED");
+    assert_eq!(provider.reads.load(Ordering::Relaxed), 1);
+    assert_eq!(provider.eof.load(Ordering::Relaxed), 0);
+}
+struct SemanticEvaluator(bool);
+struct SemanticValidator(bool, openbindings::SchemaOrigin);
+impl SchemaEvaluator for SemanticEvaluator {
+    type Validator = SemanticValidator;
     fn prepare(
         &self,
-        _: &SchemaRequest,
-        _: &dyn openbindings::WorkControl,
-    ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
-        Ok(Arc::new(Undefined(self.0)))
+        request: EvaluationRequest<'_>,
+        _: &PreparationLimits,
+        _: &dyn WorkControl,
+    ) -> Result<Self::Validator, PreparationFailure> {
+        let pointer = format!("{}/$ref", request.schema.location().pointer)
+            .parse()
+            .unwrap();
+        Ok(SemanticValidator(
+            self.0,
+            openbindings::SchemaOrigin::new(None, pointer),
+        ))
     }
 }
-impl PreparedSchema for Undefined {
-    fn validate(
-        &self,
-        _: &JsonValue,
-        _: openbindings::Detail,
-        _: &dyn openbindings::WorkControl,
-    ) -> ValueOutcome {
-        let mut detail = UndefinedResult::new("static-reference-defect", "undefined");
-        detail.location = Some(SchemaOrigin::new(None, self.0.parse().unwrap()));
-        ValueOutcome::Undefined { detail }
-    }
-}
-#[tokio::test(flavor = "current_thread")]
-async fn undefined_withholds_values_and_retains_the_semantic_result() {
-    for (direction, mode, location) in [
-        (Direction::Input, Mode::Echo, "/operations/echo/input/$ref"),
-        (
-            Direction::Output,
-            Mode::Outputs,
-            "/operations/echo/output/$ref",
-        ),
-    ] {
-        let provider = Provider::new(mode);
-        let operation = serde_json::json!({direction.as_str(): {"$id":"https://fixture.test/root", "$ref":"#missing"}}).to_string();
-        let invoker = Invoker::new(
-            one(&operation)
-                .validate()
-                .unwrap()
-                .conformant()
-                .expect("conformant invocation document"),
-            &provider,
-        )
-        .with_evaluator(
-            Arc::new(UndefinedResults(location)),
-            ExternalSchemas::default(),
-        );
-        let mut call = invoker.invoke(Request::operation("echo"));
-        if direction == Direction::Input {
-            call.write(json("1")).await.unwrap();
+impl SchemaValidator for SemanticValidator {
+    fn evaluate(&self, _: &JsonValue, _: Detail, _: &dyn WorkControl) -> ValueOutcome {
+        if self.0 {
+            ValueOutcome::Undefined {
+                detail: openbindings::UndefinedResult::new(
+                    "static-reference-defect",
+                    "established undefined",
+                )
+                .with_location(self.1.clone()),
+            }
+        } else {
+            ValueOutcome::NoVerdict {
+                detail: openbindings::NoVerdict::new(
+                    openbindings::NoVerdictReason::UnsupportedCapability,
+                    "review.unsupported",
+                    "cannot establish",
+                )
+                .with_location(self.1.clone()),
+            }
         }
-        call.close();
-        assert_eq!(
-            call.next().await.unwrap().unwrap_err().code(),
-            "ERR_SCHEMA_UNRESOLVED"
-        );
-        assert!(call.next().await.is_none());
-        let evidence = call.validation_failure().unwrap();
-        assert_eq!(evidence.direction(), direction);
-        assert_eq!(evidence.stage(), ValidationStage::Evaluation);
-        let ValueOutcome::Undefined { detail } = evidence.outcome() else {
-            panic!("undefined evidence lost")
-        };
-        assert_eq!(detail.code, "static-reference-defect");
-        assert_eq!(detail.location.as_ref().unwrap().pointer, location);
-        assert_eq!(provider.received.load(Ordering::SeqCst), 0);
-        assert_eq!(provider.live.load(Ordering::SeqCst), 0);
-        assert!(call.outcome().unwrap().unwrap_err().data().is_none());
     }
+}
+#[tokio::test]
+async fn undefined_and_no_verdict_withhold_both_directions_and_keep_exact_evidence() {
+    for undefined in [false, true] {
+        for direction in [Direction::Input, Direction::Output] {
+            let mode = if direction == Direction::Input {
+                Mode::Echo
+            } else {
+                Mode::Outputs
+            };
+            let provider = Provider::new(mode);
+            let client = OperationClient::new(
+                &provider,
+                SemanticEvaluator(undefined),
+                ExternalSchemas::default(),
+            );
+            let operation = format!(
+                r#"{{"{}":{{"$ref":"https://external.test/schema"}}}}"#,
+                direction.as_str()
+            );
+            let call = client
+                .invoke(
+                    OperationRequest::binding(document(&operation), "a"),
+                    control(),
+                )
+                .unwrap();
+            let evidence = call.control();
+            let (mut input, mut output) = call.split();
+            if direction == Direction::Input {
+                input.send(json("1")).await.unwrap();
+            }
+            input.close();
+            let Some(OutputEvent::Error(error)) = output.next().await else {
+                panic!("withheld value")
+            };
+            assert_eq!(error.code(), "ERR_SCHEMA_UNRESOLVED");
+            assert!(error.data().is_none());
+            assert!(output.next().await.is_none());
+            let failure = evidence.validation_failure().unwrap();
+            assert_eq!(failure.direction(), direction);
+            let location = match failure.evidence() {
+                ValidationEvidence::Evaluation(ValueOutcome::Undefined { detail }) => {
+                    assert!(undefined);
+                    assert_eq!(detail.code, "static-reference-defect");
+                    detail.location.as_ref().unwrap()
+                }
+                ValidationEvidence::Evaluation(ValueOutcome::NoVerdict { detail }) => {
+                    assert!(!undefined);
+                    assert_eq!(
+                        detail.reason,
+                        openbindings::NoVerdictReason::UnsupportedCapability
+                    );
+                    assert_eq!(detail.code, "review.unsupported");
+                    detail.location.as_ref().unwrap()
+                }
+                other => panic!("{other:?}"),
+            };
+            assert_eq!(
+                location.pointer.to_string(),
+                format!("/operations/echo/{}/$ref", direction.as_str())
+            );
+            assert_eq!(provider.reads.load(Ordering::Relaxed), 0);
+            assert_eq!(provider.eof.load(Ordering::Relaxed), 0);
+        }
+    }
+}
+#[test]
+fn historical_contained_reference_defects_remain_obi12_negatives() {
+    for direction in ["input", "output"] {
+        let operation = format!(
+            r##"{{"echo":{{"{direction}":{{"$id":"https://fixture.test/root","$ref":"#missing"}}}}}}"##
+        );
+        let validation = doc(
+            &operation,
+            r#"{"b":{"operation":"echo","source":"s"}}"#,
+            r#"{"s":{"kind":"fixture"}}"#,
+        )
+        .validate()
+        .unwrap();
+        assert_eq!(
+            validation.report().evidence["OBI-12"],
+            openbindings::Evidence::Violated
+        );
+        assert!(validation.conformant().is_none());
+    }
+}
+#[tokio::test]
+async fn declared_schemas_without_values_do_not_prepare_even_when_unresolvable() {
+    let provider = Provider::new(Mode::Empty);
+    let (eval, preps, evaluations) = evaluator(true);
+    let client = OperationClient::new(&provider, eval, ExternalSchemas::default());
+    let (_, mut output) = client
+        .invoke(
+            OperationRequest::binding(
+                document(r#"{"input":false,"output":{"$ref":"https://absent.test/schema"}}"#),
+                "a",
+            ),
+            control(),
+        )
+        .unwrap()
+        .split();
+    assert!(matches!(output.next().await, Some(OutputEvent::Complete)));
+    assert_eq!(preps.get(), 0);
+    assert_eq!(evaluations.get(), 0);
+}
+
+#[test]
+fn duplicate_alias_documents_remain_obi05_admission_negatives() {
+    for operations in [
+        r#"{"echo":{"aliases":["echo"]}}"#,
+        r#"{"echo":{},"other":{"aliases":["echo"]}}"#,
+    ] {
+        let validation = doc(
+            operations,
+            r#"{"b":{"operation":"echo","source":"s"}}"#,
+            r#"{"s":{"kind":"fixture"}}"#,
+        )
+        .validate()
+        .unwrap();
+        assert_eq!(
+            validation.report().evidence["OBI-05"],
+            openbindings::Evidence::Violated
+        );
+        assert!(validation.conformant().is_none());
+    }
+}
+#[tokio::test]
+async fn absent_schema_operation_forwards_all_exact_values_context_and_original_document() {
+    let provider = Provider::new(Mode::Echo);
+    let client = OperationClient::new(
+        &provider,
+        DefaultEvaluator::default(),
+        ExternalSchemas::default(),
+    );
+    let context =
+        Context::try_from(json(r#"{"secret":1e9999,"duplicate":1,"duplicate":2}"#)).unwrap();
+    let interface = document("{}");
+    let original = interface.value().to_owned();
+    let call = client
+        .invoke(
+            OperationRequest::binding(interface, "a").with_context(context.clone()),
+            control(),
+        )
+        .unwrap();
+    let evidence = call.control();
+    let (mut input, mut output) = call.split();
+    for value in ["null", "9007199254740993", "1e9999", r#"{"x":1,"x":2}"#] {
+        input.send(json(value)).await.unwrap();
+        assert!(
+            matches!(output.next().await,Some(OutputEvent::Output(actual)) if actual.text()==value)
+        );
+    }
+    input.close();
+    assert!(matches!(output.next().await, Some(OutputEvent::Complete)));
+    assert!(output.next().await.is_none());
+    let seen = provider.seen.lock().unwrap();
+    let seen = seen.as_ref().unwrap();
+    assert_eq!(seen.binding, "a");
+    assert_eq!(seen.interface.value().text(), original.text());
+    assert_eq!(
+        seen.context.as_ref().unwrap().value().value().text(),
+        context.value().value().text()
+    );
+    assert!(evidence.validation_failure().is_none());
+}
+struct PreparationProbe {
+    calls: AtomicUsize,
+    live: std::sync::Arc<AtomicUsize>,
+    stop_at: AtomicUsize,
+    cancel: Option<CancellationToken>,
+}
+struct HeldValidator(std::sync::Arc<AtomicUsize>);
+impl Drop for HeldValidator {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::SeqCst);
+    }
+}
+impl SchemaValidator for HeldValidator {
+    fn evaluate(&self, _: &JsonValue, _: Detail, _: &dyn WorkControl) -> ValueOutcome {
+        ValueOutcome::Satisfies
+    }
+}
+impl SchemaEvaluator for PreparationProbe {
+    type Validator = HeldValidator;
+    fn prepare(
+        &self,
+        _: EvaluationRequest<'_>,
+        _: &PreparationLimits,
+        _: &dyn WorkControl,
+    ) -> Result<Self::Validator, PreparationFailure> {
+        let call = self.calls.fetch_add(1, Ordering::SeqCst) + 1;
+        if call == self.stop_at.load(Ordering::SeqCst) {
+            if let Some(control) = &self.cancel {
+                control.cancel();
+            } else {
+                return Err(PreparationFailure::new(
+                    PreparationFailureKind::Implementation {
+                        message: "temporary fixture failure".into(),
+                    },
+                ));
+            }
+        }
+        self.live.fetch_add(1, Ordering::SeqCst);
+        Ok(HeldValidator(self.live.clone()))
+    }
+}
+#[test]
+fn second_direction_failure_or_late_cancel_releases_partial_preparation_and_allows_retry() {
+    use openbindings_invocation::operation::OperationPreparationFailure;
+    for cancel_late in [false, true] {
+        let cancellation = control();
+        let probe = std::sync::Arc::new(PreparationProbe {
+            calls: 0.into(),
+            live: std::sync::Arc::default(),
+            stop_at: 2.into(),
+            cancel: cancel_late.then(|| cancellation.clone()),
+        });
+        let provider = Provider::new(Mode::Empty);
+        let client = OperationClient::new(&provider, probe.clone(), ExternalSchemas::default());
+        let interface = document(r#"{"input":true,"output":true}"#);
+        let stopped = control();
+        stopped.cancel();
+        assert!(matches!(
+            client.prepare(interface.clone(), "echo", &stopped),
+            Err(OperationPreparationFailure::Cancelled)
+        ));
+        assert_eq!(probe.calls.load(Ordering::SeqCst), 0);
+        let Err(OperationPreparationFailure::Schema(failure)) =
+            client.prepare(interface.clone(), "echo", &cancellation)
+        else {
+            panic!("second schema failure")
+        };
+        assert_eq!(failure.direction(), Direction::Output);
+        let ValidationEvidence::Preparation(failure) = failure.evidence() else {
+            panic!("preparation evidence")
+        };
+        assert_eq!(
+            matches!(failure.kind, PreparationFailureKind::Cancelled),
+            cancel_late
+        );
+        assert_eq!(probe.calls.load(Ordering::SeqCst), 2);
+        assert_eq!(probe.live.load(Ordering::SeqCst), 0);
+        assert_eq!(provider.calls.load(Ordering::Relaxed), 0);
+        probe.stop_at.store(0, Ordering::SeqCst);
+        let prepared = client.prepare(interface, "echo", &control()).unwrap();
+        assert_eq!(probe.calls.load(Ordering::SeqCst), 4);
+        assert_eq!(probe.live.load(Ordering::SeqCst), 2);
+        drop(prepared);
+        assert_eq!(probe.live.load(Ordering::SeqCst), 0);
+    }
+}
+#[test]
+fn explicit_preparation_distinguishes_absence_missing_name_and_declared_refusal() {
+    use openbindings_invocation::operation::OperationPreparationFailure;
+    let provider = Provider::new(Mode::Empty);
+    let (eval, preps, evaluations) = evaluator(true);
+    let client = OperationClient::new(&provider, eval, ExternalSchemas::default());
+    let interface = document(r#"{"aliases":["say"]}"#);
+    assert!(client.prepare(interface.clone(), "say", &control()).is_ok());
+    assert!(
+        matches!(client.prepare(interface,"absent",&control()),Err(OperationPreparationFailure::Resolution(error)) if error.code()=="ERR_OPERATION_NOT_FOUND")
+    );
+    assert_eq!(preps.get(), 0);
+    assert_eq!(evaluations.get(), 0);
+    for schema in ["true", "false"] {
+        assert!(matches!(
+            client.prepare(
+                document(&format!(r#"{{"input":{schema}}}"#)),
+                "echo",
+                &control()
+            ),
+            Err(OperationPreparationFailure::Schema(_))
+        ));
+    }
+    assert_eq!(preps.get(), 2);
+    assert_eq!(provider.calls.load(Ordering::Relaxed), 0);
+    assert_eq!(provider.queries.load(Ordering::Relaxed), 0);
+}
+#[tokio::test]
+async fn prepared_choice_admission_and_complete_membership_checks_precede_support() {
+    use openbindings_invocation::operation::BindingChoice;
+    let provider = Provider::new(Mode::Empty);
+    let client = OperationClient::new(
+        &provider,
+        DefaultEvaluator::default(),
+        ExternalSchemas::default(),
+    );
+    let prepared = client.prepare(document("{}"), "echo", &control()).unwrap();
+    for (choice, kind) in [
+        (vec![], BoundaryFailureKind::EmptyArray),
+        (vec![String::new()], BoundaryFailureKind::EmptyString),
+    ] {
+        assert_eq!(
+            prepared
+                .clone()
+                .invoke(&provider, BindingChoice::Ordered(choice), None, control())
+                .unwrap_err()
+                .kind(),
+            kind
+        );
+    }
+    let (_, mut output) = prepared
+        .invoke(
+            &provider,
+            BindingChoice::Ordered(vec!["a".into(), "other".into()]),
+            None,
+            control(),
+        )
+        .unwrap()
+        .split();
+    assert_eq!(code(output.next().await), "ERR_BINDING_NOT_FOUND");
+    assert_eq!(provider.calls.load(Ordering::Relaxed), 0);
+    assert_eq!(provider.queries.load(Ordering::Relaxed), 0);
+}
+
+#[tokio::test]
+async fn concurrent_prepared_clones_keep_selection_context_cancellation_and_evidence_separate() {
+    use openbindings_invocation::operation::BindingChoice;
+    let provider = Provider::new(Mode::Echo);
+    let client = OperationClient::new(
+        &provider,
+        DefaultEvaluator::default(),
+        ExternalSchemas::default(),
+    );
+    let prepared = client
+        .prepare(
+            document(r#"{"input":{"type":"integer"},"output":{"type":"integer"}}"#),
+            "echo",
+            &control(),
+        )
+        .unwrap();
+    let context_a =
+        Context::try_from(json(r#"{"token":"A","n":1e9999,"same":1,"same":2}"#)).unwrap();
+    let context_b = Context::try_from(json(r#"{"token":"B","n":9007199254740993}"#)).unwrap();
+    let parent = control();
+    let a = prepared
+        .clone()
+        .invoke(
+            &provider,
+            BindingChoice::Ordered(vec!["b".into(), "a".into()]),
+            Some(context_a.clone()),
+            parent.clone(),
+        )
+        .unwrap();
+    let a_control = a.control();
+    let (mut ai, mut ao) = a.split();
+    let b = prepared
+        .clone()
+        .invoke(
+            &provider,
+            BindingChoice::Binding("a".into()),
+            Some(context_b.clone()),
+            parent.clone(),
+        )
+        .unwrap();
+    let b_control = b.control();
+    let (mut bi, mut bo) = b.split();
+    assert!(
+        Box::pin(ao.next())
+            .as_mut()
+            .poll(&mut TaskContext::from_waker(Waker::noop()))
+            .is_pending()
+    );
+    {
+        let seen = provider.seen.lock().unwrap();
+        let seen = seen.as_ref().unwrap();
+        assert_eq!(seen.binding, "b");
+        assert_eq!(
+            seen.context.as_ref().unwrap().value().value().text(),
+            context_a.value().value().text()
+        );
+    }
+    assert!(
+        Box::pin(bo.next())
+            .as_mut()
+            .poll(&mut TaskContext::from_waker(Waker::noop()))
+            .is_pending()
+    );
+    {
+        let seen = provider.seen.lock().unwrap();
+        let seen = seen.as_ref().unwrap();
+        assert_eq!(seen.binding, "a");
+        assert_eq!(
+            seen.context.as_ref().unwrap().value().value().text(),
+            context_b.value().value().text()
+        );
+    }
+    a_control.cancel();
+    assert_eq!(code(ao.next().await), "ERR_CANCELLED");
+    assert!(ai.send(json("1")).await.is_err());
+    assert!(!parent.is_cancelled());
+    assert!(b_control.outcome().is_none());
+    bi.send(json("2")).await.unwrap();
+    bi.close();
+    assert!(matches!(bo.next().await,Some(OutputEvent::Output(value)) if value.text()=="2"));
+    assert!(matches!(bo.next().await, Some(OutputEvent::Complete)));
+    let c = prepared
+        .clone()
+        .invoke(
+            &provider,
+            BindingChoice::Binding("a".into()),
+            Some(context_a),
+            control(),
+        )
+        .unwrap();
+    let c_control = c.control();
+    let (mut ci, mut co) = c.split();
+    ci.send(json(r#""bad""#)).await.unwrap();
+    ci.close();
+    assert_eq!(code(co.next().await), "ERR_OPERATION_VALIDATION_FAILED");
+    assert!(a_control.validation_failure().is_none());
+    assert!(b_control.validation_failure().is_none());
+    assert!(c_control.validation_failure().is_some());
+    let d = prepared
+        .invoke(
+            &provider,
+            BindingChoice::Binding("a".into()),
+            Some(context_b),
+            control(),
+        )
+        .unwrap();
+    let d_control = d.control();
+    let (mut di, mut dout) = d.split();
+    di.send(json("3")).await.unwrap();
+    di.close();
+    assert!(matches!(dout.next().await,Some(OutputEvent::Output(value)) if value.text()=="3"));
+    assert!(matches!(dout.next().await, Some(OutputEvent::Complete)));
+    assert!(d_control.validation_failure().is_none());
 }

@@ -40,10 +40,14 @@ fn contained_identities_and_fragments_preserve_the_specified_resource() {
         ))
         .unwrap();
         let schema = proof.resolve_operation("op").unwrap().input().unwrap();
-        let prepared = schema.prepare_with(&DefaultEvaluator::new(), &resources);
+        let prepared = schema.prepare(
+            &DefaultEvaluator::new(),
+            &resources,
+            &openbindings::PreparationLimits::default(),
+        );
         if let Some(code) = case["expected_preparation"].as_str() {
             assert!(
-                matches!(prepared, Err(ref refusal) if refusal.code == code),
+                matches!(prepared, Err(ref refusal) if code == "ambiguous-resource" && refusal.kind == PreparationFailureKind::InvalidExternalSchema),
                 "{id}: {prepared:?}"
             );
             continue;
@@ -52,8 +56,8 @@ fn contained_identities_and_fragments_preserve_the_specified_resource() {
             Ok(prepared) => prepared,
             Err(refusal) => {
                 gaps.push(format!(
-                    "{id}: preparation {} instead of {:?}",
-                    refusal.code, case["expected"]
+                    "{id}: preparation {:?} instead of {:?}",
+                    refusal.kind, case["expected"]
                 ));
                 continue;
             }
@@ -64,7 +68,7 @@ fn contained_identities_and_fragments_preserve_the_specified_resource() {
             .iter()
             .zip(case["expected"].as_array().unwrap())
         {
-            let actual = match prepared.validate(&JsonValue::parse(value.to_string()).unwrap()) {
+            let actual = match prepared.evaluate(&JsonValue::parse(value.to_string()).unwrap()) {
                 ValueOutcome::Satisfies => "satisfies",
                 ValueOutcome::Fails { .. } => "fails",
                 ValueOutcome::Undefined { .. } => "undefined",

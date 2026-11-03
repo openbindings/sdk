@@ -1,88 +1,111 @@
-//! A long-running service prepares an operation once and shares the handle
-//! with spawned tasks, so attempts reuse its compiled contracts.
-use openbindings::{Document, ExternalSchemas, JsonValue};
+//! Prepared contracts outlive their compiler and enter caller-owned spawned tasks.
+use openbindings::{Document, ExternalSchemas, JsonValue, SchemaValidator};
 use openbindings_invocation::{
-    BindingRequest, CancellationToken, InvocationError, ProviderIo,
-    binding::BindingInvoker,
-    operation::{Attempt, Invoker, PreparedOperation},
+    BindingInvoker, BindingRequest, CancellationToken, InvocationError, InvocationSupport,
+    OperationClient, OutputEvent, PreflightOutcome, ProviderIo,
+    operation::{BindingChoice, PreparedOperation},
 };
 use openbindings_json_schema_evaluator::DefaultEvaluator;
-use std::{future::Future, pin::Pin, sync::Arc};
-
+use std::{
+    future::{Future, Ready, ready},
+    pin::Pin,
+    sync::Arc,
+};
 struct Echo;
-impl BindingInvoker for Echo {
-    type Invocation<'a> = Pin<Box<dyn Future<Output = Result<(), InvocationError>> + Send + 'a>>;
-    fn supports_kind(&self, kind: &str) -> bool {
+impl InvocationSupport for Echo {
+    fn can_invoke(&self, kind: &str) -> bool {
         kind == "example.echo"
     }
+}
+impl BindingInvoker for Echo {
+    type Invoke<'a> = Pin<Box<dyn Future<Output = Result<(), InvocationError>> + Send + 'a>>;
+    type Preflight<'a> = Ready<Result<PreflightOutcome, InvocationError>>;
     fn invoke<'a>(
         &'a self,
-        _: BindingRequest<'a>,
+        _: BindingRequest,
         mut io: ProviderIo,
         _: CancellationToken,
-    ) -> Self::Invocation<'a> {
+    ) -> Self::Invoke<'a> {
         Box::pin(async move {
             while let Some(value) = io.next().await {
-                io.emit(value).await?;
+                io.send(value).await?;
             }
             Ok(())
         })
     }
+    fn preflight<'a>(&'a self, _: BindingRequest, _: CancellationToken) -> Self::Preflight<'a> {
+        ready(Ok(PreflightOutcome::NoPrediction))
+    }
 }
-
 fn shareable<T: Send + Sync + 'static>(_: &T) {}
-
-// The generic shape a service uses: no leaked or static invoker is needed.
-fn spawn_attempts<P>(
-    prepared: Arc<PreparedOperation<P>>,
+fn spawn_attempts<P, V>(
+    provider: Arc<P>,
+    prepared: &PreparedOperation<V>,
     values: &[&str],
 ) -> Vec<tokio::task::JoinHandle<Result<String, InvocationError>>>
 where
-    P: BindingInvoker + Send + Sync + 'static,
-    for<'a> P::Invocation<'a>: Send,
+    P: BindingInvoker + InvocationSupport + Send + Sync + 'static,
+    for<'a> P::Invoke<'a>: Send,
+    V: SchemaValidator + Clone + Send + 'static,
 {
     values
         .iter()
         .map(|value| {
+            let provider = provider.clone();
             let prepared = prepared.clone();
             let value = JsonValue::parse(*value).unwrap();
             tokio::spawn(async move {
-                let mut call = prepared.invoke(Attempt::new());
-                call.write(value).await.expect("input accepted");
-                call.close();
-                let output = call.next().await.expect("one output")?;
-                assert!(call.next().await.is_none());
-                Ok(output.text().to_owned())
+                let (mut input, mut output) = prepared
+                    .invoke(
+                        &*provider,
+                        BindingChoice::Sole,
+                        None,
+                        CancellationToken::new(),
+                    )
+                    .unwrap()
+                    .split();
+                input.send(value).await.unwrap();
+                input.close();
+                let mut returned = None;
+                while let Some(event) = output.next().await {
+                    match event {
+                        OutputEvent::Output(value) => {
+                            assert!(returned.is_none(), "exactly one output per attempt");
+                            returned = Some(value.text().to_owned());
+                        }
+                        OutputEvent::Complete => return Ok(returned.expect("one output")),
+                        OutputEvent::Error(error) => return Err(error),
+                        OutputEvent::InputClosed => (),
+                        _ => panic!("unknown event"),
+                    }
+                }
+                panic!("terminal required")
             })
         })
         .collect()
 }
-
-#[tokio::test(flavor = "current_thread")]
-async fn prepared_operation_moves_into_spawned_tasks_and_outlives_its_invoker() {
-    let document = Document::parse(
-        r#"{"openbindings":"0.2.0","operations":{"echo":{"input":{"type":"integer"},"output":{"type":"integer"}}},"sources":{"s":{"kind":"example.echo"}},"bindings":{"b":{"operation":"echo","source":"s"}}}"#,
-    )
-    .unwrap()
-    .validate()
-    .unwrap()
-    .conformant()
-    .expect("conformant invocation document");
-    let invoker = Arc::new(Invoker::new(document, Echo).with_evaluator(
-        Arc::new(DefaultEvaluator::new()),
+#[tokio::test]
+async fn prepared_operation_moves_into_spawned_tasks_and_outlives_its_client() {
+    let document=Document::parse(r#"{"openbindings":"0.2.0","operations":{"echo":{"input":{"type":"integer"},"output":{"type":"integer"}}},"sources":{"s":{"kind":"example.echo"}},"bindings":{"b":{"operation":"echo","source":"s"}}}"#).unwrap().validate().unwrap().conformant().unwrap();
+    let client = OperationClient::new(
+        Echo,
+        DefaultEvaluator::default(),
         ExternalSchemas::default(),
-    ));
-    let prepared = Arc::new(invoker.prepare("echo").unwrap());
-    shareable(&*prepared);
-    shareable(&*invoker);
-    drop(invoker);
+    );
+    let prepared = client
+        .prepare(document, "echo", &CancellationToken::new())
+        .unwrap();
+    shareable(&prepared);
+    drop(client);
+    let provider = Arc::new(Echo);
     let mut outputs = Vec::new();
-    for task in spawn_attempts(prepared.clone(), &["1", "9007199254740993", "3"]) {
+    for task in spawn_attempts(provider.clone(), &prepared, &["1", "9007199254740993", "3"]) {
         outputs.push(task.await.unwrap().unwrap());
     }
     assert_eq!(outputs, ["1", "9007199254740993", "3"]);
-    // The shared contracts still gate every attempt after the invoker is gone.
-    let rejected = spawn_attempts(prepared, &["\"text\""]).pop().unwrap();
+    let rejected = spawn_attempts(provider, &prepared, &[r#""text""#])
+        .pop()
+        .unwrap();
     assert_eq!(
         rejected.await.unwrap().unwrap_err().code(),
         "ERR_OPERATION_VALIDATION_FAILED"

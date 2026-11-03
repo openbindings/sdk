@@ -1,8 +1,8 @@
 //! External-consumer checks: literal catalog expectations, public APIs only.
 use binding_invocation_consumer::{Catalog, KIND, yield_once};
 use openbindings::{
-    Document, JsonValue, NoVerdict, NoVerdictReason, PreparedSchema, ExternalSchemas, SchemaEvaluator,
-    SchemaRequest, Source, ValueOutcome, ValueProblem,
+    Document, JsonValue, NoVerdict, NoVerdictReason, SchemaValidator, ExternalSchemas, SchemaEvaluator,
+    EvaluationRequest, Source, ValueOutcome, ValueProblem,
 };
 use openbindings_interface_synthesis::{
     CoverageStatus, SynthesisRequest, SynthesisSource, Synthesizer,
@@ -49,9 +49,9 @@ struct BooleanContract(bool, openbindings::SchemaOrigin);
 impl SchemaEvaluator for Booleans {
     fn prepare(
         &self,
-        request: &SchemaRequest,
+        request: &EvaluationRequest,
         control: &dyn openbindings::WorkControl,
-    ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
+    ) -> Result<Arc<dyn SchemaValidator>, NoVerdict> {
         control.check()?;
         let proof: &openbindings::ConformantDocument = request.document();
         assert_eq!(proof.openbindings(), "0.2.0");
@@ -61,7 +61,7 @@ impl SchemaEvaluator for Booleans {
             .view()
             .as_bool()
             .map(|value| {
-                Arc::new(BooleanContract(value, request.entry_location())) as Arc<dyn PreparedSchema>
+                Arc::new(BooleanContract(value, request.entry_location())) as Arc<dyn SchemaValidator>
             })
             .ok_or_else(|| {
                 NoVerdict::new(
@@ -72,8 +72,8 @@ impl SchemaEvaluator for Booleans {
             })
     }
 }
-impl PreparedSchema for BooleanContract {
-    fn validate(
+impl SchemaValidator for BooleanContract {
+    fn evaluate(
         &self,
         _: &JsonValue,
         detail: openbindings::Detail,
@@ -516,10 +516,10 @@ fn consumer_evaluator_explains_a_rejection_only_when_asked() {
         .unwrap()
         .input()
         .unwrap()
-        .prepare(&Booleans::default())
+        .prepare(&Booleans::default(), &openbindings::ExternalSchemas::default(), &openbindings::PreparationLimits::default())
         .unwrap();
     assert!(matches!(
-        contract.validate(&JsonValue::null()),
+        contract.evaluate(&JsonValue::null()),
         ValueOutcome::Fails { problems, problems_complete: false, .. } if problems.is_empty()
     ));
     match contract.explain(&JsonValue::null()) {

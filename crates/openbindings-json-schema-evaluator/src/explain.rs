@@ -105,6 +105,23 @@ impl Locations {
     /// The original location of the keyword the library names by `uri`, and
     /// the keyword a transform's definition stands for.
     pub(crate) fn locate(&self, uri: &str) -> Option<(SchemaOrigin, Option<&'static str>)> {
+        self.locate_with_limit(uri, None)
+    }
+    pub(crate) fn locate_bounded(
+        &self,
+        uri: &str,
+        maximum: usize,
+    ) -> Option<(SchemaOrigin, Option<&'static str>)> {
+        self.locate_with_limit(uri, Some(maximum))
+    }
+    fn locate_with_limit(
+        &self,
+        uri: &str,
+        maximum: Option<usize>,
+    ) -> Option<(SchemaOrigin, Option<&'static str>)> {
+        if maximum.is_some_and(|cap| uri.len() > cap) {
+            return None;
+        }
         let fragment = uri.strip_prefix(bundle::URI)?.strip_prefix('#')?;
         let decoded;
         let fragment = if fragment.contains('%') {
@@ -120,6 +137,30 @@ impl Locations {
             .projected
             .binary_search_by_key(&number, |(number, _)| *number)
             .ok()?;
+        if let Some(maximum) = maximum {
+            let (resource, bytes) = match &self.projected[at].1 {
+                Stored::Text {
+                    resource,
+                    start,
+                    end,
+                } => (*resource, (*end - *start) as usize),
+                Stored::Exact { resource, pointer } => {
+                    (*resource, pointer.utf16_units().count().saturating_mul(2))
+                }
+            };
+            let bytes = bytes
+                .saturating_add(suffix.len())
+                .saturating_add(keyword.map_or(0, str::len))
+                .saturating_add(
+                    self.resources[resource as usize]
+                        .as_ref()
+                        .map_or(0, String::len),
+                )
+                .saturating_add(1);
+            if bytes > maximum {
+                return None;
+            }
+        }
         let (resource, mut pointer) = match &self.projected[at].1 {
             Stored::Text {
                 resource,

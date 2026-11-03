@@ -1,6 +1,6 @@
 use openbindings::*;
+use openbindings_json_schema_evaluator::DefaultValidator;
 use openbindings_schema_evaluator_test_support::*;
-use std::sync::Arc;
 #[test]
 fn pinned_suite_and_adversarial_contracts() {
     let report = run(&openbindings_json_schema_evaluator::DefaultEvaluator::new());
@@ -54,20 +54,24 @@ fn controls_reject_wrong_verdict_refusal_and_bogus_paths() {
 /// An adapter can consume original source identity without depending on a bundler.
 struct OriginalContextAdapter;
 impl SchemaEvaluator for OriginalContextAdapter {
+    type Validator = DefaultValidator;
     fn prepare(
         &self,
-        request: &SchemaRequest,
+        request: EvaluationRequest<'_>,
+        limits: &PreparationLimits,
         control: &dyn WorkControl,
-    ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
+    ) -> Result<Self::Validator, PreparationFailure> {
         control.check()?;
         let original = request
+            .schema
             .document()
             .value()
-            .at(request.entry_location().pointer.as_str().unwrap())
+            .at(request.schema.location().pointer.as_str().unwrap())
             .expect("original entry location")
             .to_owned();
-        assert_eq!(original.semantic_eq(request.entry()), Some(true));
-        openbindings_json_schema_evaluator::DefaultEvaluator::new().prepare(request, control)
+        assert_eq!(original.semantic_eq(&request.schema.json()), Some(true));
+        openbindings_json_schema_evaluator::DefaultEvaluator::new()
+            .prepare(request, limits, control)
     }
 }
 #[test]
@@ -78,16 +82,18 @@ fn external_adapter_receives_original_context_and_passes_the_kit() {
 struct Wrong;
 struct WrongPrepared;
 impl SchemaEvaluator for Wrong {
+    type Validator = WrongPrepared;
     fn prepare(
         &self,
-        _: &SchemaRequest,
+        _: EvaluationRequest<'_>,
+        _: &PreparationLimits,
         _: &dyn WorkControl,
-    ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
-        Ok(Arc::new(WrongPrepared))
+    ) -> Result<Self::Validator, PreparationFailure> {
+        Ok(WrongPrepared)
     }
 }
-impl PreparedSchema for WrongPrepared {
-    fn validate(&self, _: &JsonValue, _: Detail, _: &dyn WorkControl) -> ValueOutcome {
+impl SchemaValidator for WrongPrepared {
+    fn evaluate(&self, _: &JsonValue, _: Detail, _: &dyn WorkControl) -> ValueOutcome {
         ValueOutcome::Satisfies
     }
 }
@@ -115,28 +121,30 @@ enum Fault {
     SourceRootedInstance,
 }
 struct FaultyAdapter(Fault);
-struct FaultyContract(Arc<dyn PreparedSchema>, Fault);
+struct FaultyContract(DefaultValidator, Fault);
 impl SchemaEvaluator for FaultyAdapter {
+    type Validator = FaultyContract;
     fn prepare(
         &self,
-        request: &SchemaRequest,
+        request: EvaluationRequest<'_>,
+        limits: &PreparationLimits,
         control: &dyn WorkControl,
-    ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
+    ) -> Result<Self::Validator, PreparationFailure> {
         let prepared = openbindings_json_schema_evaluator::DefaultEvaluator::new()
-            .prepare(request, control)?;
-        Ok(Arc::new(FaultyContract(prepared, self.0)))
+            .prepare(request, limits, control)?;
+        Ok(FaultyContract(prepared, self.0))
     }
 }
-impl PreparedSchema for FaultyContract {
-    fn validate(
+impl SchemaValidator for FaultyContract {
+    fn evaluate(
         &self,
         value: &JsonValue,
         detail: Detail,
         control: &dyn WorkControl,
     ) -> ValueOutcome {
-        let outcome = self.0.validate(value, detail, control);
+        let outcome = self.0.evaluate(value, detail, control);
         match self.1 {
-            Fault::DetailedCheck => self.0.validate(value, Detail::Explain, control),
+            Fault::DetailedCheck => self.0.evaluate(value, Detail::Explain, control),
             Fault::DisagreeingExplanation if detail == Detail::Explain => match outcome {
                 ValueOutcome::Satisfies => ValueOutcome::Fails {
                     message: "value does not satisfy the value contract".into(),
@@ -228,19 +236,21 @@ fn real_runner_rejects_malformed_outcomes_fabricated_sources_and_broad_refusals(
         assert!(report.observations.iter().any(|o| !o.failures.is_empty()));
     }
 }
-struct LeakyAdapter(std::sync::Mutex<Option<Arc<dyn PreparedSchema>>>);
+struct LeakyAdapter(std::sync::Mutex<Option<DefaultValidator>>);
 impl SchemaEvaluator for LeakyAdapter {
+    type Validator = DefaultValidator;
     fn prepare(
         &self,
-        request: &SchemaRequest,
+        request: EvaluationRequest<'_>,
+        limits: &PreparationLimits,
         control: &dyn WorkControl,
-    ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
+    ) -> Result<Self::Validator, PreparationFailure> {
         let mut cache = self.0.lock().unwrap();
         if let Some(prepared) = &*cache {
             return Ok(prepared.clone());
         }
         let prepared = openbindings_json_schema_evaluator::DefaultEvaluator::new()
-            .prepare(request, control)?;
+            .prepare(request, limits, control)?;
         *cache = Some(prepared.clone());
         Ok(prepared)
     }

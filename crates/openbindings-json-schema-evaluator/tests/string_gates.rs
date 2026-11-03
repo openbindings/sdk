@@ -1,7 +1,10 @@
 use openbindings::*;
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 
-fn prepare(schema: &str, extra: &str) -> PreparedValueContract {
+fn prepare(
+    schema: &str,
+    extra: &str,
+) -> PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator> {
     // Schema text and opaque examples live in a supplied resource. OBI-01
     // governs the interface document, not supplied schemas or caller values.
     let text = r#"{"openbindings":"0.2.0","operations":{"op":{"input":{"$ref":"https://strings.invalid/schema#/$defs/target"}}}}"#;
@@ -20,17 +23,17 @@ fn prepare(schema: &str, extra: &str) -> PreparedValueContract {
     let operation = document
         .resolve_operation("op")
         .expect("declared operation");
-    let Ok(contract) = operation
-        .input()
-        .expect("declared input")
-        .prepare_with(&DefaultEvaluator::new(), &resources)
-    else {
+    let Ok(contract) = operation.input().expect("declared input").prepare(
+        &DefaultEvaluator::new(),
+        &resources,
+        &openbindings::PreparationLimits::default(),
+    ) else {
         panic!("{text}")
     };
     contract
 }
 fn outcome(schema: &str, value: &str) -> ValueOutcome {
-    prepare(schema, "").validate(&JsonValue::parse(value).unwrap())
+    prepare(schema, "").evaluate(&JsonValue::parse(value).unwrap())
 }
 #[test]
 fn uninterpreted_surrogates_do_not_disable_contracts() {
@@ -45,7 +48,7 @@ fn uninterpreted_surrogates_do_not_disable_contracts() {
             extra,
         );
         assert!(matches!(
-            contract.validate(&JsonValue::parse("1").unwrap()),
+            contract.evaluate(&JsonValue::parse("1").unwrap()),
             ValueOutcome::Satisfies
         ));
     }
@@ -115,11 +118,11 @@ fn only_reached_string_interpretation_refuses_and_scopes_do_not_leak() {
     let contract = prepare(r#"{"pattern":"a"}"#, "");
     for _ in 0..2 {
         assert!(matches!(
-            contract.validate(&JsonValue::parse(r#""\ud800""#).unwrap()),
+            contract.evaluate(&JsonValue::parse(r#""\ud800""#).unwrap()),
             ValueOutcome::NoVerdict { .. }
         ));
         assert!(matches!(
-            contract.validate(&JsonValue::parse(r#""a""#).unwrap()),
+            contract.evaluate(&JsonValue::parse(r#""a""#).unwrap()),
             ValueOutcome::Satisfies
         ));
     }

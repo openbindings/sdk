@@ -121,7 +121,27 @@ The obsolete test expecting an anonymous document-resource dynamic anchor to cap
 references is now an OBI-14 admission-negative witness. This retires its invalid
 assumption without weakening the current specification.
 
-Next: replace the object-safe evaluator/projection API with the reviewed generic
-`SchemaEvaluator`/`SchemaValidator` seam and separate preparation failures. Canonical
-owned domain views, companion interfaces, full hosts, MSRV, matched performance
-comparisons and final qualification remain unfinished.
+The generic evaluator replacement is described below. Canonical owned domain views,
+companion interfaces, full hosts, MSRV/Wasm, matched performance comparisons and final
+qualification remain unfinished.
+
+## Generic evaluator migration and stricter completion judgment
+
+The generic core/default/Wasm/TypeScript seam is implemented and independently reviewed;
+consumer migration is ongoing. `SchemaEvaluator` has an associated `SchemaValidator`, and
+`PreparedSchema<V>` inherits ownership/thread capabilities from V. Preparation failures have
+structured resolution causes and are never fabricated instance no-verdicts. The TypeScript
+preparation union returns ready `schema` or refused `failure`; evaluation uses `evaluate`.
+
+The earlier 505/505 full-core result allowed capability refusals for required undefined and
+dialect-sensitive results. It is capability-profile evidence only. The tightened completion
+judge requires actual semantic answers, including previously optional declines. An unavailable
+resource is accepted only for an explicit external-content requirement. All 48 judge controls
+pass. Current results: admission/resolution 423/423; strict full core 489/505; required evaluator
+values 1536/1546; Node targets 166/168 (both strict evaluator replays remain failing). Additional
+contained-reference and auxiliary obligations remain open. No full alignment claim is made.
+
+Rust 1.88 now executes 29 core/generic and two default-boundary witnesses. Core/default/kit/Wasm
+all-target clippy, Wasm/TS builds and TypeScript types pass. Canonical domain views, the concrete
+generic operation driver, companion replacement, remaining consumers, full hosts/MSRV/Wasm and
+matched performance remain required. The current edits are not yet a pushed checkpoint.

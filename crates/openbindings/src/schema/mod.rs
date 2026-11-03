@@ -66,77 +66,42 @@ impl Schema {
             openbindings_internal_json::backend::exact_pointer(self.value.view()),
         )
     }
-    /// Prepare with no supplied resources. Ready means prepared, not decidable:
-    /// a prepared value contract can still return any of the four [`ValueOutcome`]
-    /// variants, including no-verdict for every value.
+    /// Prepare with a concrete evaluator and explicit immutable external inputs.
+    /// A ready validator may still return any of the four value outcomes.
     ///
     /// # Errors
-    /// Returns a [`NoVerdict`] refusal when preparation is not established. A
-    /// refusal judges no instance and does not prove semantic undefinedness.
-    pub fn prepare(
+    /// Preparation failure judges no value and does not establish undefinedness.
+    pub fn prepare<E: SchemaEvaluator + ?Sized>(
         &self,
-        evaluator: &dyn SchemaEvaluator,
-    ) -> Result<PreparedValueContract, NoVerdict> {
-        self.prepare_with(evaluator, ExternalSchemas::empty())
+        evaluator: &E,
+        external: &ExternalSchemas,
+        limits: &PreparationLimits,
+    ) -> Result<PreparedSchema<E::Validator>, PreparationFailure> {
+        self.prepare_with_control(evaluator, external, limits, &crate::control::NeverCancelled)
     }
-    /// Prepare with immutable supplied resources; nothing is fetched. An
-    /// evaluator that calls [`SchemaRequest::evaluation_program`] reuses the
-    /// set's index, and its resolution space with this document while both are
-    /// alive. The default evaluator reuses the set's index and assembles its
-    /// resolution space again on every preparation.
+    /// Prepare with cooperative cancellation. A validator is not returned after
+    /// cancellation, including cancellation observed as the evaluator finishes.
+    /// Failed attempts do not poison immutable inputs or later retries.
     ///
     /// # Errors
-    /// Returns a [`NoVerdict`] refusal when preparation is not established. A
-    /// refusal judges no instance and does not prove semantic undefinedness.
-    pub fn prepare_with(
+    /// Returns preparation failure, separately from every per-value outcome.
+    pub fn prepare_with_control<E: SchemaEvaluator + ?Sized>(
         &self,
-        evaluator: &dyn SchemaEvaluator,
-        resources: &ExternalSchemas,
-    ) -> Result<PreparedValueContract, NoVerdict> {
-        self.prepare_with_control(evaluator, resources, &crate::control::NeverCancelled)
-    }
-    /// Prepare with cooperative cancellation. A cancelled attempt returns no
-    /// prepared owner. Cancellation and transient evaluator failures do not
-    /// poison a retry; use a fresh [`WorkControl`] after cancellation.
-    ///
-    /// # Errors
-    /// Returns a [`NoVerdict`] refusal when preparation is not established,
-    /// including `Cancelled` when cancellation is observed before a prepared
-    /// owner is returned. A refusal judges no instance.
-    pub fn prepare_with_control(
-        &self,
-        evaluator: &dyn SchemaEvaluator,
-        resources: &ExternalSchemas,
+        evaluator: &E,
+        external: &ExternalSchemas,
+        limits: &PreparationLimits,
         control: &dyn WorkControl,
-    ) -> Result<PreparedValueContract, NoVerdict> {
+    ) -> Result<PreparedSchema<E::Validator>, PreparationFailure> {
         control.check()?;
-        let schema = self.value.view();
-        let entry = self.value.clone();
-        let document = &self.document;
-        if !document
-            .document()
-            .schema_index()
-            .position(openbindings_internal_json::backend::node_id(&entry))
-            .is_some()
-        {
-            return Err(NoVerdict::new(
-                NoVerdictReason::ConservativePreparation,
-                "non-schema-entry",
-                "the entry is not a schema position",
-            )
-            .with_location(SchemaOrigin {
-                source_uri: None,
-                pointer: openbindings_internal_json::backend::exact_pointer(schema),
-            }));
-        }
-        let request = SchemaRequest {
-            document: document.clone(),
-            resources: resources.clone(),
-            entry,
-        };
-        let prepared = evaluator.prepare(&request, control);
-        // An evaluator may finish while the caller cancels; no ready owner is returned.
+        let result = evaluator.prepare(
+            EvaluationRequest {
+                schema: self,
+                external_schemas: external,
+            },
+            limits,
+            control,
+        );
         control.check()?;
-        prepared.map(|schema| PreparedValueContract { schema })
+        result.map(|validator| PreparedSchema { validator })
     }
 }

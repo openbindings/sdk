@@ -68,7 +68,11 @@ fn schema(kind: &str, nested: bool, levels: usize, nesting: usize) -> String {
     holder["$defs"] = Value::Object(definitions);
     holder.to_string()
 }
-fn prepare(schema: &str, evaluator: &DefaultEvaluator) -> Result<PreparedValueContract, NoVerdict> {
+fn prepare(
+    schema: &str,
+    evaluator: &DefaultEvaluator,
+) -> Result<PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator>, PreparationFailure>
+{
     let resources = ExternalSchemas::new([ExternalSchema {
         uri: "https://stack.test/s".into(),
         document: JsonValue::parse(schema).unwrap(),
@@ -86,7 +90,11 @@ fn prepare(schema: &str, evaluator: &DefaultEvaluator) -> Result<PreparedValueCo
     .unwrap()
     .input()
     .unwrap()
-    .prepare_with(evaluator, &resources)
+    .prepare(
+        evaluator,
+        &resources,
+        &openbindings::PreparationLimits::default(),
+    )
 }
 
 // Run `then` once at least `bytes` of the stack below `top` are in use.
@@ -165,8 +173,8 @@ fn the_longest_admitted_walks_prepare_on_a_stack_of_the_size_given() {
                     }
                     let longer = prepare(&schema(kind, nested, levels + 1, 0), &evaluator);
                     assert_eq!(
-                        longer.err().map(|detail| detail.code),
-                        Some("unevaluated-walk-limit".into()),
+                        longer.err().map(|detail| detail.kind),
+                        Some(PreparationFailureKind::Limit { resource: "unevaluated-walk-limit".into() }),
                         "{stack}: {kind} nested={nested} {} levels",
                         levels + 1
                     );

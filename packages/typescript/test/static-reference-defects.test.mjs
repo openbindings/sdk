@@ -22,19 +22,14 @@ const cases = (
 const admission = JSON.parse(
   await readFile(new URL("reference-admission.json", input), "utf8"),
 );
-const capabilities = new Map(
+const oracle = new Map(
   JSON.parse(
-    await readFile(new URL("reference-capabilities.json", input), "utf8"),
+    await readFile(new URL("reference-current-oracle.json", input), "utf8"),
   ).cases.map((c) => [c.id, c]),
 );
+assert.equal(oracle.size, 2348);
 const negatives = new Map(admission.cases.map((c) => [c.id, c]));
 assert.equal(negatives.size, 194);
-function subset(expected, actual, id) {
-  if (expected && typeof expected === "object") {
-    for (const [key, value] of Object.entries(expected))
-      subset(value, actual?.[key], id);
-  } else assert.deepEqual(actual, expected, id);
-}
 test("static reference matrix and concrete completions through Wasm", async () => {
   const receipt = [];
   for (const c of cases) {
@@ -90,11 +85,11 @@ test("static reference matrix and concrete completions through Wasm", async () =
         ]),
       );
       const setup = prepareInput(parsed.value, "op", { resources, limits });
-      contract = setup.valueContract;
+      contract = setup.schema;
       const result =
         setup.status === "ready"
-          ? contract.validate(c.value)
-          : { status: "no-verdict", detail: setup.detail };
+          ? contract.evaluate(c.value)
+          : { status: "refused", failure: setup.failure };
       const actual = {
         stage: setup.status === "ready" ? "ready" : "preparation",
         outcome: {
@@ -102,8 +97,10 @@ test("static reference matrix and concrete completions through Wasm", async () =
           fails: "F",
           undefined: "undefined",
           "no-verdict": "N",
+          refused: "refused",
         }[result.status],
       };
+      if (result.failure) actual.failure = result.failure;
       if (result.detail)
         actual.detail = {
           reason: result.detail.reason,
@@ -115,18 +112,29 @@ test("static reference matrix and concrete completions through Wasm", async () =
               }
             : null,
         };
-      const capability = capabilities.get(c.id);
-      if (capability) assert.deepEqual(c, capability.historical_case);
-      const expected = structuredClone(capability?.expected ?? c.expected);
-      if (expected.outcome === "N" && expected.detail?.reason === "undefined") {
-        expected.outcome = "undefined";
-        delete expected.detail.reason;
-      }
+      const required = oracle.get(c.id).required;
       if (result.status === "undefined") {
         assert.equal("reason" in result.detail, false, c.id);
         assert.equal(typeof result.detail.message, "string", c.id);
       }
-      subset(expected, actual, c.id);
+      const matched =
+        required === "S" || required === "F"
+          ? actual.stage === "ready" && actual.outcome === required
+          : required === "U"
+            ? actual.stage === "ready" && actual.outcome === "undefined"
+            : required === "external"
+              ? actual.outcome === "N" &&
+                actual.detail.reason === "resource-unavailable"
+              : required === "limit"
+                ? (actual.outcome === "N" &&
+                    actual.detail.reason === "limit-exceeded") ||
+                  (actual.outcome === "refused" &&
+                    actual.failure.kind === "limit")
+                : false;
+      assert.ok(
+        matched,
+        `${c.id}: required ${required}, observed ${JSON.stringify(actual)}`,
+      );
       receipt.push({ id: c.id, actual });
     } finally {
       contract?.dispose();

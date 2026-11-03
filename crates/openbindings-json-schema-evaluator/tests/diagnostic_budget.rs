@@ -2,7 +2,11 @@ use openbindings::*;
 use openbindings_json_schema_evaluator::{DefaultEvaluator, Limits};
 use serde_json::{Value, json};
 
-fn prepared(schema: Value, limits: Limits, resources: ExternalSchemas) -> PreparedValueContract {
+fn prepared(
+    schema: Value,
+    limits: Limits,
+    resources: ExternalSchemas,
+) -> PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator> {
     let doc = Document::parse(
         json!({"openbindings":"0.2.0","operations":{"op":{"input":schema}}}).to_string(),
     )
@@ -14,13 +18,20 @@ fn prepared(schema: Value, limits: Limits, resources: ExternalSchemas) -> Prepar
         .expect("conformant document");
     let operation = doc.resolve_operation("op").expect("declared operation");
     let contract = operation.input().expect("declared input");
-    match contract.prepare_with(&DefaultEvaluator::with_limits(limits), &resources) {
+    match contract.prepare(
+        &DefaultEvaluator::with_limits(limits),
+        &resources,
+        &openbindings::PreparationLimits::default(),
+    ) {
         Ok(contract) => contract,
         Err(detail) => panic!("{detail:?}"),
     }
 }
 /// Prepare operation `op` input with the default evaluator and no supplied resources.
-fn prepare_input(doc: &Document) -> Result<PreparedValueContract, NoVerdict> {
+fn prepare_input(
+    doc: &Document,
+) -> Result<PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator>, PreparationFailure>
+{
     doc.validate()
         .unwrap()
         .conformant()
@@ -29,7 +40,11 @@ fn prepare_input(doc: &Document) -> Result<PreparedValueContract, NoVerdict> {
         .unwrap()
         .input()
         .unwrap()
-        .prepare(&DefaultEvaluator::new())
+        .prepare(
+            &DefaultEvaluator::new(),
+            &openbindings::ExternalSchemas::default(),
+            &openbindings::PreparationLimits::default(),
+        )
 }
 #[test]
 fn cheap_checks_are_value_free_and_explanations_are_one_first_error() {
@@ -40,7 +55,7 @@ fn cheap_checks_are_value_free_and_explanations_are_one_first_error() {
         Limits::default(),
         ExternalSchemas::default(),
     );
-    let outcome = contract.validate(&value);
+    let outcome = contract.evaluate(&value);
     let ValueOutcome::Fails {
         message,
         problems,

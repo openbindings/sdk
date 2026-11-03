@@ -328,20 +328,45 @@ export type OperationSelection =
       /** Distinct primary keys in lexical order; repeated occurrences can yield one key. */
       candidates: readonly string[];
     };
-/** Preparation result: ready transfers a disposable PreparedValueContract; no-verdict is a preparation refusal that judges no instance. Ready means prepared, not decidable: a prepared value contract can return no-verdict for every value. A missing operation or an absent value contract is undefined before preparation, never a preparation result. */
-export type ValueContractPreparation =
+/** Preparation result: ready transfers a disposable PreparedSchema; no-verdict is a preparation refusal that judges no instance. Ready means prepared, not decidable: a prepared value contract can return no-verdict for every value. A missing operation or an absent value contract is undefined before preparation, never a preparation result. */
+/** Original-context lookup failure. Undefined describes a local reference defect, not an instance verdict. */
+export type ResolutionFailureKind =
   | {
-      /** Result discriminant; narrow this before reading branch-specific fields. */
-      status: "ready";
-      /** Caller-owned prepared value contract, valid independently of its document, resources and operation owners. */
-      valueContract: PreparedValueContract;
+      kind: "undefined";
+      details:
+        | "malformed-reference"
+        | "missing-target"
+        | "non-schema-target"
+        | "missing-anchor"
+        | "ambiguous-anchor"
+        | "invalid-identifier";
     }
   | {
-      /** Result discriminant; narrow this before reading branch-specific fields. */
-      status: "no-verdict";
-      /** Structured no-verdict reason; no satisfaction/failure is claimed. */
-      detail: NoVerdict;
+      kind: "resource-unavailable" | "unsupported-dialect";
+      details: { uri: string };
+    }
+  | { kind: "unsupported-capability"; details: { capability: string } }
+  | { kind: "limit"; details: { resource: string } }
+  | {
+      kind:
+        | "invalid-external-schema"
+        | "cancelled"
+        | "wrong-environment"
+        | "not-schema-location"
+        | "invalid-anchor-name";
     };
+/** A failed preparation attempt, distinct from every per-value outcome. */
+export type PreparationFailure = { origin: SchemaOrigin | null } & (
+  | { kind: "resolution"; details: { cause: ResolutionFailureKind } }
+  | { kind: "unsupported-capability"; details: { capability: string } }
+  | { kind: "limit"; details: { resource: string } }
+  | { kind: "cancelled" | "invalid-external-schema" }
+  | { kind: "implementation"; details: { message: string } }
+);
+/** Preparation either returns an owned validator or a structured preparation failure. */
+export type SchemaPreparation =
+  | { status: "ready"; schema: PreparedSchema }
+  | { status: "refused"; failure: PreparationFailure };
 /** Expected refusal while converting an ordinary caller value into exact JSON, before schema evaluation. The code identifies the unsupported shape; instancePointer is a logical ordinary-value path, never invented source coordinates. */
 export interface ValueAdmissionFailure {
   /** Stable ordinary-value admission category; returned before schema evaluation. */
@@ -2033,7 +2058,7 @@ export class ExternalSchemas extends Managed {
     return decode(sdkCall(() => raw.locate(schemaLocationText(at))));
   }
 }
-/** A conformant operation's input or output value contract, not yet prepared. Obtain it from ConformantOperationView.input() or output(); it retains its proved revision and survives operation and document disposal. Each prepare() compiles anew; retain the PreparedValueContract for repeated validation. */
+/** A conformant operation's input or output value contract, not yet prepared. Obtain it from ConformantOperationView.input() or output(); it retains its proved revision and survives operation and document disposal. Each prepare() compiles anew; retain the PreparedSchema for repeated validation. */
 export class Schema extends Managed {
   private constructor(raw: wasm.WasmSchema) {
     super(raw);
@@ -2045,8 +2070,8 @@ export class Schema extends Managed {
   json(): ExactJson {
     return new ExactJson(schemaRaw(this).json());
   }
-  /** Prepare with the built-in evaluator. Ready transfers a new disposable PreparedValueContract independent of this owner; it does not promise every value is decidable. The default evaluator prepares a value contract with a stand-in for a resource that was not supplied, a schema that could apply again without consuming the instance, and a pattern it does not match. Validation returns the stand-in's no-verdict, such as resource-unavailable, when the verdict depends on how the stand-in comes out, and otherwise the verdict that holds however it comes out. A value contract in which an unevaluatedProperties or unevaluatedItems keyword's annotation sources reach a stand-in for a missing resource, a cycle or patternProperties names, a reference to a fragment of a missing resource, and known errors still refuse preparation; prepare again with resources to recover, while existing prepared owners retain their original snapshot. Cancelled/transient failures do not poison retries. Pre-aborted work returns no-verdict. */
-  prepare(options: PrepareOptions = {}): ValueContractPreparation {
+  /** Prepare with the built-in evaluator. Ready transfers a new disposable PreparedSchema independent of this owner; it does not promise every value is decidable. The default evaluator prepares a value contract with a stand-in for a resource that was not supplied, a schema that could apply again without consuming the instance, and a pattern it does not match. Validation returns the stand-in's no-verdict, such as resource-unavailable, when the verdict depends on how the stand-in comes out, and otherwise the verdict that holds however it comes out. A value contract in which an unevaluatedProperties or unevaluatedItems keyword's annotation sources reach a stand-in for a missing resource, a cycle or patternProperties names, a reference to a fragment of a missing resource, and known errors still refuse preparation; prepare again with resources to recover, while existing prepared owners retain their original snapshot. Cancelled/transient failures do not poison retries. Pre-aborted work returns a cancelled preparation failure. */
+  prepare(options: PrepareOptions = {}): SchemaPreparation {
     requireReady();
     const raw = schemaRaw(this);
     const { resources, limits, signal } = prepareOptions(options);
@@ -2060,20 +2085,19 @@ export class Schema extends Managed {
     );
     try {
       const result = decode<
-        | Exclude<ValueContractPreparation, { status: "ready" }>
-        | { status: "ready" }
+        Exclude<SchemaPreparation, { status: "ready" }> | { status: "ready" }
       >(preparation.result());
       if (result.status !== "ready") {
-        if (result.status !== "no-verdict")
+        if (result.status !== "refused")
           throw new Error("Invalid preparation result.");
         return result;
       }
-      const prepared = preparation.takeValueContract();
+      const prepared = preparation.takeSchema();
       if (!prepared)
-        throw new Error("Preparation invariant: ready value contract missing.");
+        throw new Error("Preparation invariant: ready schema missing.");
       return {
         status: "ready",
-        valueContract: adopt(prepared, PreparedValueContract.fromRaw),
+        schema: adopt(prepared, PreparedSchema.fromRaw),
       };
     } finally {
       preparation.free();
@@ -2154,50 +2178,47 @@ function cancelledValue(): ValueOutcome {
   };
 }
 /** Disposable prepared value contract, independent of its document, resources, operation and contract owners. Repeated validation borrows exact input; ordinary inputs are admitted and temporary owners released within the call. No verdict here proves whole-document conformance. */
-export class PreparedValueContract extends Managed {
+export class PreparedSchema extends Managed {
   private constructor(raw: wasm.WasmPrepared) {
     super(raw);
   }
-  /** @internal */ static fromRaw(
-    raw: wasm.WasmPrepared,
-  ): PreparedValueContract {
-    return new PreparedValueContract(raw);
+  /** @internal */ static fromRaw(raw: wasm.WasmPrepared): PreparedSchema {
+    return new PreparedSchema(raw);
   }
   // Overload order matters: an untyped (any) argument takes the first
   // signature, so it must be one whose result keeps input-error.
   /** Admit ordinary JSON (including nested exact owners), then check it cheaply.
-   * A string is a JSON string value, so validate("7") checks the string "7"; use validateJson for JSON text.
+   * A string is a JSON string value, so evaluate("7") checks the string "7"; use evaluateJson for JSON text.
    * Expected admission failures return input-error. Caller exceptions and handle misuse throw.
    */
-  validate(
+  evaluate(
     value: Exclude<JsonInput, ExactJson>,
     options?: WorkOptions,
   ): ValueCheck;
   /** The cheap check of an exact root: a failure carries no problems and problemsComplete is false. Cancellation cannot preempt synchronous Wasm. */
-  validate(value: ExactJson, options?: WorkOptions): ValueOutcome;
+  evaluate(value: ExactJson, options?: WorkOptions): ValueOutcome;
   /** Check a value that may be ordinary or exact: an ordinary one is admitted first, so input-error remains possible. */
-  validate(value: JsonInput, options?: WorkOptions): ValueCheck;
-  validate(value: JsonInput, options: WorkOptions = {}): ValueCheck {
+  evaluate(value: JsonInput, options?: WorkOptions): ValueCheck;
+  evaluate(value: JsonInput, options: WorkOptions = {}): ValueCheck {
     return checkValue(this, value, options, false);
   }
-  /** Admit exact JSON text or UTF-8 bytes as parseJson does, under the default limits, then check it cheaply: validateJson("7") checks the number 7. Every value outcome is returned, including undefined and no-verdict; input-error is admission failure only. Duplicate members yield no-verdict and numbers are never rounded. Wrong input types and literal unpaired UTF-16 text throw, as for parseJson; a pre-aborted signal returns cancellation first. Parse once with parseJson to check one value repeatedly; cancellation cannot preempt synchronous Wasm. */
-  validateJson(input: ExactInput, options: WorkOptions = {}): JsonCheck {
+  /** Admit exact JSON text or UTF-8 bytes as parseJson does, under the default limits, then check it cheaply: evaluateJson("7") checks the number 7. Every value outcome is returned, including undefined and no-verdict; input-error is admission failure only. Duplicate members yield no-verdict and numbers are never rounded. Wrong input types and literal unpaired UTF-16 text throw, as for parseJson; exact admission precedes cancellation observation. Parse once with parseJson to check one value repeatedly; cancellation cannot preempt synchronous Wasm. */
+  evaluateJson(input: ExactInput, options: WorkOptions = {}): JsonCheck {
     requireReady();
     const prepared = handle<wasm.WasmPrepared>(this);
     const signal = workSignal(options);
-    if (isAborted(signal)) return cancelledValue();
     const data = exact(input);
     try {
       return decode(
         typeof data === "string"
-          ? prepared.validateJsonText(data)
-          : prepared.validateJson(data),
+          ? prepared.evaluateJsonText(data, isAborted(signal))
+          : prepared.evaluateJson(data, isAborted(signal)),
       );
     } catch (error) {
       return { status: "input-error", error: failure(error).error };
     }
   }
-  // As for validate, the first signature is the one an untyped argument takes.
+  // As for evaluate, the first signature is the one an untyped argument takes.
   /** Admit ordinary JSON (including nested exact owners), then explain it.
    * Expected admission failures return input-error. Caller exceptions and handle misuse throw.
    */
@@ -2205,7 +2226,7 @@ export class PreparedValueContract extends Managed {
     value: Exclude<JsonInput, ExactJson>,
     options?: WorkOptions,
   ): ValueCheck;
-  /** Explain an exact root: the verdict validate() returns, and for a failure the library's first error with redacted messages and original schema facts. Explanation costs more than the cheap check: it allocates in proportion to the schema and value, so keep validate() on paths that check untrusted input. It is built only for values within half the nesting `stackBytes` admits, and a deeper failure is reported without its problem; a `stackBytes` larger than the JavaScript engine's call stack holds can still overflow that stack (see `stackBytes`). Cancellation after the verdict keeps an established failure with problemsComplete false. */
+  /** Explain an exact root: the verdict evaluate() returns, and for a failure the library's first error with redacted messages and original schema facts. Explanation costs more than the cheap check: it allocates in proportion to the schema and value, so keep evaluate() on paths that check untrusted input. It is built only for values within half the nesting `stackBytes` admits, and a deeper failure is reported without its problem; a `stackBytes` larger than the JavaScript engine's call stack holds can still overflow that stack (see `stackBytes`). Cancellation after the verdict keeps an established failure with problemsComplete false. */
   explain(value: ExactJson, options?: WorkOptions): ValueOutcome;
   /** Explain a value that may be ordinary or exact: an ordinary one is admitted first, so input-error remains possible. */
   explain(value: JsonInput, options?: WorkOptions): ValueCheck;
@@ -2213,14 +2234,12 @@ export class PreparedValueContract extends Managed {
     return checkValue(this, value, options, true);
   }
   /** Return a NEW independently disposable owner sharing compiled state; it remains valid after the prior prepared owner is disposed. */
-  retain(): PreparedValueContract {
-    return PreparedValueContract.fromRaw(
-      handle<wasm.WasmPrepared>(this).retain(),
-    );
+  retain(): PreparedSchema {
+    return PreparedSchema.fromRaw(handle<wasm.WasmPrepared>(this).retain());
   }
 }
 function checkValue(
-  contract: PreparedValueContract,
+  contract: PreparedSchema,
   value: JsonInput,
   options: WorkOptions,
   explain: boolean,
@@ -2234,7 +2253,7 @@ function checkValue(
     decode(
       explain
         ? prepared.explain(raw, cancelled)
-        : prepared.validate(raw, cancelled),
+        : prepared.evaluate(raw, cancelled),
     );
   if (exact) return run(exact, isAborted(signal));
   let temporary: ExactJson | undefined;

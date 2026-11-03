@@ -20,7 +20,8 @@ const LOOP: &str = "#/operations/op/input/$defs/L";
 fn prepare(
     schema: &Value,
     resources: &[(&str, Value)],
-) -> Result<PreparedValueContract, NoVerdict> {
+) -> Result<PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator>, PreparationFailure>
+{
     let document = Document::parse(
         json!({"openbindings":"0.2.0","operations":{"op":{"input":schema}}}).to_string(),
     )
@@ -39,7 +40,11 @@ fn prepare(
         .unwrap()
         .input()
         .unwrap()
-        .prepare_with(&DefaultEvaluator::new(), &resources)
+        .prepare(
+            &DefaultEvaluator::new(),
+            &resources,
+            &openbindings::PreparationLimits::default(),
+        )
 }
 fn verdict(outcome: &ValueOutcome) -> Option<bool> {
     match outcome {
@@ -206,7 +211,7 @@ fn verdicts_given_with_a_stand_in_are_every_completions() {
             };
             for text in VALUES {
                 let value = JsonValue::parse(text).unwrap();
-                let outcome = contract.validate(&value);
+                let outcome = contract.evaluate(&value);
                 let explained = contract.explain(&value);
                 assert_eq!(
                     verdict(&outcome),
@@ -214,15 +219,16 @@ fn verdicts_given_with_a_stand_in_are_every_completions() {
                     "{kind:?} {at} {text}"
                 );
                 let Some(got) = verdict(&outcome) else {
-                    let ValueOutcome::NoVerdict { detail } = outcome else {
-                        panic!("{outcome:?}")
-                    };
-                    let expected = match kind {
-                        Kind::Missing => "resource-unavailable",
-                        Kind::Cycle => "in-place-cycle",
-                        Kind::Pattern | Kind::Names => "schema-pattern-compilation",
-                    };
-                    assert_eq!(detail.code, expected, "{kind:?} {at} {text}");
+                    match (kind, &outcome) {
+                        (Kind::Missing, ValueOutcome::NoVerdict { detail }) => {
+                            assert_eq!(detail.reason, NoVerdictReason::ResourceUnavailable)
+                        }
+                        (Kind::Cycle, ValueOutcome::NoVerdict { detail }) => {
+                            assert_eq!(detail.reason, NoVerdictReason::UnsupportedCapability)
+                        }
+                        (Kind::Pattern | Kind::Names, ValueOutcome::Undefined { .. }) => {}
+                        _ => panic!("{kind:?} {at} {text}: {outcome:?}"),
+                    }
                     undecided += 1;
                     continue;
                 };
@@ -266,7 +272,7 @@ fn verdicts_given_with_a_stand_in_are_every_completions() {
                 for (schema, resources) in completions {
                     let completed = prepare(&schema, &resources).unwrap();
                     assert_eq!(
-                        verdict(&completed.validate(&value)),
+                        verdict(&completed.evaluate(&value)),
                         Some(got),
                         "{kind:?} {at} {text}: {schema}"
                     );
@@ -274,10 +280,12 @@ fn verdicts_given_with_a_stand_in_are_every_completions() {
             }
         }
     }
-    // Shapes whose unevaluated keyword reads the stand-in refuse for the
-    // missing resource, the cycle and the names; the rest decide most values.
-    assert_eq!(refused, 3);
-    assert_eq!((decided, undecided), (678, 159));
+    assert_eq!(refused, 0);
+    assert_eq!(
+        decided + undecided,
+        4 * contexts(&json!(true)).len() * VALUES.len()
+    );
+    assert!(decided >= 678); // Every formerly established verdict remains checked.
 }
 
 // A decided failure is explained at the keyword that fails however the
@@ -337,16 +345,16 @@ fn a_cycle_stands_in_where_a_schema_would_apply_again() {
         let contract = prepare(&json!({"$defs": defs, "$ref": entry}), &[]).unwrap();
         // 5 is no string and no object, so it fails before A applies again.
         assert!(matches!(
-            contract.validate(&JsonValue::parse("5").unwrap()),
+            contract.evaluate(&JsonValue::parse("5").unwrap()),
             ValueOutcome::Fails { .. }
         ));
         let ValueOutcome::NoVerdict { detail } =
-            contract.validate(&JsonValue::parse("{}").unwrap())
+            contract.evaluate(&JsonValue::parse("{}").unwrap())
         else {
             panic!("{entry}")
         };
-        assert_eq!(detail.code, "in-place-cycle");
-        assert_eq!(detail.reason, NoVerdictReason::ConservativePreparation);
+        assert_eq!(detail.code, "semantic-analysis-inconclusive");
+        assert_eq!(detail.reason, NoVerdictReason::UnsupportedCapability);
         assert_eq!(
             detail.location,
             Some(SchemaOrigin::new(None, location.parse().unwrap()))
@@ -354,7 +362,7 @@ fn a_cycle_stands_in_where_a_schema_would_apply_again() {
     }
     let contract = prepare(&json!({"$defs": defs, "$ref": a}), &[]).unwrap();
     assert!(matches!(
-        contract.validate(&JsonValue::parse(r#""s""#).unwrap()),
+        contract.evaluate(&JsonValue::parse(r#""s""#).unwrap()),
         ValueOutcome::Satisfies
     ));
 }
@@ -382,44 +390,48 @@ fn a_dense_cycle_stands_in_at_each_reference() {
     )
     .unwrap();
     assert!(matches!(
-        contract.validate(&JsonValue::parse("1").unwrap()),
+        contract.evaluate(&JsonValue::parse("1").unwrap()),
         ValueOutcome::Satisfies
     ));
     let ValueOutcome::NoVerdict { detail } =
-        contract.validate(&JsonValue::parse(r#""x""#).unwrap())
+        contract.evaluate(&JsonValue::parse(r#""x""#).unwrap())
     else {
         panic!()
     };
-    assert_eq!(detail.code, "in-place-cycle");
+    assert_eq!(detail.code, "semantic-analysis-inconclusive");
 }
 
-// An `unevaluatedProperties` keyword reads its annotation sources' structure,
-// so a stand-in for a cycle or for `patternProperties` names among them
-// refuses preparation with its own code; a `pattern` stand-in, which the
-// library evaluates there, does not.
+// Unevaluated keywords consume coherent annotations from successful branches.
+// Known undefined matches and uncomputed predicates have distinct outcomes.
 #[test]
-fn an_unevaluated_keyword_reading_a_stand_in_refuses() {
-    for (source, code) in [
-        (
-            json!({"$ref": "#/operations/op/input"}),
-            Some("in-place-cycle"),
-        ),
-        (
-            json!({"patternProperties": {"(": true}}),
-            Some("schema-pattern-compilation"),
-        ),
-        (
-            json!({"patternProperties": {"(?=a)a": true}}),
-            Some("pattern-backtracking"),
-        ),
-        (json!({"$ref": MISSING}), Some("resource-unavailable")),
-        (json!({"properties": {"a": {"pattern": "("}}}), None),
+fn unevaluated_annotation_dependence_is_evaluated_per_value() {
+    for (source, required) in [
+        (json!({"$ref":"#/operations/op/input"}), "unsupported"),
+        (json!({"patternProperties":{"(":true}}), "undefined"),
+        (json!({"patternProperties":{"(?=a)a":true}}), "unsupported"),
+        (json!({"$ref":MISSING}), "external"),
+        (json!({"properties":{"a":{"pattern":"("}}}), "satisfies"),
     ] {
-        let schema = json!({"anyOf": [source, {"type": "object"}], "unevaluatedProperties": false});
-        match (prepare(&schema, &[]), code) {
-            (Err(detail), Some(code)) => assert_eq!(detail.code, code, "{schema}"),
-            (Ok(_), None) => {}
-            (outcome, _) => panic!("{schema}: {:?}", outcome.err()),
+        let schema = json!({"anyOf":[source,{"type":"object"}],"unevaluatedProperties":false});
+        let contract = prepare(&schema, &[]).unwrap();
+        let value = JsonValue::parse(r#"{"a":1}"#).unwrap();
+        for outcome in [contract.evaluate(&value), contract.explain(&value)] {
+            let actual = match outcome {
+                ValueOutcome::Satisfies => "satisfies",
+                ValueOutcome::Undefined { .. } => "undefined",
+                ValueOutcome::NoVerdict { detail }
+                    if detail.reason == NoVerdictReason::ResourceUnavailable =>
+                {
+                    "external"
+                }
+                ValueOutcome::NoVerdict { detail }
+                    if detail.reason == NoVerdictReason::UnsupportedCapability =>
+                {
+                    "unsupported"
+                }
+                other => panic!("{schema}: {other:?}"),
+            };
+            assert_eq!(actual, required, "{schema}");
         }
     }
 }
@@ -441,7 +453,7 @@ fn additional_properties_beside_an_unmatched_name() {
         ("{}", Some(true)),
     ] {
         let value = JsonValue::parse(value).unwrap();
-        assert_eq!(verdict(&contract.validate(&value)), expected);
+        assert_eq!(verdict(&contract.evaluate(&value)), expected);
         assert_eq!(verdict(&contract.explain(&value)), expected);
     }
 }
@@ -457,7 +469,10 @@ fn nested_keywords_written_from_both_bounds_cost_a_multiple_of_the_verdict_pass(
     let leaves = [
         (json!({"$ref": MISSING}), "resource-unavailable"),
         (json!({"pattern": "(?=a)a"}), "pattern-backtracking"),
-        (json!({"$ref": "#/operations/op/input"}), "in-place-cycle"),
+        (
+            json!({"$ref": "#/operations/op/input"}),
+            "semantic-analysis-inconclusive",
+        ),
     ];
     let wraps: [fn(Value) -> Value; 3] = [
         |inner| json!({"oneOf": [inner, {"type": "null"}]}),
@@ -475,7 +490,7 @@ fn nested_keywords_written_from_both_bounds_cost_a_multiple_of_the_verdict_pass(
                 let contract = prepare(&schema, &[]).unwrap();
                 for value in [r#""a""#, r#"["a"]"#] {
                     let value = JsonValue::parse(value).unwrap();
-                    for outcome in [contract.validate(&value), contract.explain(&value)] {
+                    for outcome in [contract.evaluate(&value), contract.explain(&value)] {
                         if let ValueOutcome::NoVerdict { detail } = outcome {
                             assert_eq!(detail.code, code, "{schema}");
                         }
@@ -508,7 +523,7 @@ fn an_explanation_that_reaches_a_stand_in_falls_back_to_the_upper_bound() {
         let schema = json!({"oneOf": [{"type": "string"}, {"type": "string"}, third]});
         let contract = prepare(&schema, &[]).unwrap();
         assert!(matches!(
-            contract.validate(&value),
+            contract.evaluate(&value),
             ValueOutcome::Fails { .. }
         ));
         let ValueOutcome::Fails { problems, .. } = contract.explain(&value) else {

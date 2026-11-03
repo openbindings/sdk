@@ -3,7 +3,6 @@
 use openbindings::*;
 use openbindings_internal_json::backend::live_arenas;
 use openbindings_json_schema_evaluator::DefaultEvaluator;
-use std::sync::Arc;
 
 const ITEM: &str = "https://example.test/item";
 const OTHER: &str = "https://example.test/other";
@@ -29,16 +28,18 @@ fn proof() -> ConformantDocument {
 // assembles a resolution space for the resources it is given.
 struct Projecting;
 impl SchemaEvaluator for Projecting {
+    type Validator = openbindings_json_schema_evaluator::DefaultValidator;
     fn prepare(
         &self,
-        request: &SchemaRequest,
+        request: EvaluationRequest<'_>,
+        limits: &PreparationLimits,
         control: &dyn WorkControl,
-    ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
-        request.evaluation_program(control)?;
-        DefaultEvaluator::new().prepare(request, control)
+    ) -> Result<Self::Validator, PreparationFailure> {
+        request.environment(limits, control)?;
+        DefaultEvaluator::new().prepare(request, limits, control)
     }
 }
-fn explaining_contract() -> PreparedValueContract {
+fn explaining_contract() -> PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator> {
     let proof = proof();
     let item = resources(
         ITEM,
@@ -49,7 +50,11 @@ fn explaining_contract() -> PreparedValueContract {
         .unwrap()
         .input()
         .unwrap()
-        .prepare_with(&DefaultEvaluator::new(), &item)
+        .prepare(
+            &DefaultEvaluator::new(),
+            &item,
+            &openbindings::PreparationLimits::default(),
+        )
         .unwrap();
     // Another set prepared on the same revision, with a projecting evaluator,
     // must not stay alive through this contract.
@@ -62,7 +67,11 @@ fn explaining_contract() -> PreparedValueContract {
         operation
             .input()
             .unwrap()
-            .prepare_with(&Projecting, &other)
+            .prepare(
+                &Projecting,
+                &other,
+                &openbindings::PreparationLimits::default(),
+            )
             .unwrap(),
     );
     contract

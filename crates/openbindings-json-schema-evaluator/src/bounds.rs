@@ -91,18 +91,42 @@ pub(crate) struct Program {
     pub(crate) original: u32,
 }
 
-/// The bounds program of `source`, a bundled value contract whose stand-in
-/// patterns are the `pattern` matchers `stand_ins` marks, within `budget`
-/// bytes of added definitions as [`bundle::definition_charge`] counts them;
-/// `None` when its entry reaches no stand-in, applies nothing but stand-ins,
-/// or the definitions would pass the budget.
-pub(crate) fn program(source: &Bundle, stand_ins: &[bool], budget: usize) -> Option<Program> {
+/// Why the optional universal-bound proof could not be constructed. None of
+/// these states establishes semantic Undefined.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Unavailable {
+    NotNeeded,
+    Uninformative,
+    DefinitionBudget,
+    DepthAnalysis,
+    AnnotationWalk,
+    PatternMemory,
+    Compilation,
+}
+/// Optional analysis artifacts retain their absence cause through preparation.
+pub(crate) enum Build<T> {
+    Ready(T),
+    Unavailable(Unavailable),
+}
+impl<T> Build<T> {
+    pub(crate) fn ready(&self) -> Option<&T> {
+        match self {
+            Self::Ready(value) => Some(value),
+            Self::Unavailable(_) => None,
+        }
+    }
+}
+
+/// Construct a sound universal-bound program within the definition budget.
+/// An uninformative interval and an interrupted construction are distinct.
+/// Neither certifies that both endpoints are feasible semantic completions.
+pub(crate) fn program(source: &Bundle, stand_ins: &[bool], budget: usize) -> Build<Program> {
     if only_stand_ins(source) {
-        return None;
+        return Build::Unavailable(Unavailable::Uninformative);
     }
     let mut bounds = Bounds::new(source, stand_ins);
     if !bounds.tainted[source.entry as usize] {
-        return None;
+        return Build::Unavailable(Unavailable::NotNeeded);
     }
     bounds.mark_unknown_holders();
     let lower = bounds.copy(source.entry, false);
@@ -113,10 +137,10 @@ pub(crate) fn program(source: &Bundle, stand_ins: &[bool], budget: usize) -> Opt
         bounds.charge(&schema);
         bounds.added[index].3 = schema;
         if bounds.charged > budget {
-            return None;
+            return Build::Unavailable(Unavailable::DefinitionBudget);
         }
     }
-    Some(bounds.finish(lower, upper))
+    Build::Ready(bounds.finish(lower, upper))
 }
 
 struct Bounds<'s> {

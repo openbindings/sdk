@@ -246,7 +246,7 @@ impl Schema {
         SchemaEnvironment::new(self, external, limits, control)
     }
 }
-impl SchemaRequest {
+impl EvaluationRequest<'_> {
     /// Construct the same original-schema environment available from [`Schema`].
     ///
     /// # Errors
@@ -256,10 +256,16 @@ impl SchemaRequest {
         limits: &PreparationLimits,
         control: &dyn WorkControl,
     ) -> Result<SchemaEnvironment, PreparationFailure> {
-        Schema::contained(self.document(), self.entry().clone()).environment(
-            self.supplied_resources(),
-            limits,
-            control,
-        )
+        self.schema
+            .environment(self.external_schemas, limits, control)
+    }
+}
+
+impl openbindings_internal_schema::OriginalEnvironment for SchemaEnvironment {
+    fn space(&self) -> &openbindings_internal_schema::SchemaSpace {
+        &self.inner.space
+    }
+    fn entry(&self) -> usize {
+        self.inner.root
     }
 }

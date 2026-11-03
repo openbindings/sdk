@@ -12,8 +12,8 @@ enum LoadFailure {
     Conformance(ValidationReport),
     MissingOperation,
     NoInputContract,
-    Preparation(NoVerdict),
-    MissingResources(NoVerdict),
+    Preparation(PreparationFailure),
+    MissingResources(PreparationFailure),
     UnresolvedReferences(Box<ReferenceReport>),
 }
 impl fmt::Display for LoadFailure {
@@ -51,7 +51,7 @@ fn candidate(
     text: &str,
     resources: ExternalSchemas,
     control: &dyn WorkControl,
-) -> Result<PreparedValueContract, LoadFailure> {
+) -> Result<PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator>, LoadFailure> {
     let document = Document::parse(text).map_err(LoadFailure::Parse)?;
     let validation = document.validate().map_err(LoadFailure::Version)?;
     let Some(proof) = validation.conformant() else {
@@ -71,21 +71,39 @@ fn candidate(
         .resolve_operation("find")
         .ok_or(LoadFailure::MissingOperation)?;
     let contract = operation.input().ok_or(LoadFailure::NoInputContract)?;
-    match contract.prepare_with_control(&DefaultEvaluator::new(), &resources, control) {
+    match contract.prepare_with_control(
+        &DefaultEvaluator::new(),
+        &resources,
+        &openbindings::PreparationLimits::default(),
+        control,
+    ) {
         // Document, resource and evaluator owners end; the returned owner remains usable.
         Ok(input) => Ok(input),
-        Err(detail) if detail.reason == NoVerdictReason::ResourceUnavailable => {
+        Err(detail)
+            if matches!(
+                detail.kind,
+                PreparationFailureKind::Resolution {
+                    cause: ResolutionFailureKind::ResourceUnavailable { .. }
+                }
+            ) =>
+        {
             Err(LoadFailure::MissingResources(detail))
         }
         Err(detail) => Err(LoadFailure::Preparation(detail)),
     }
 }
 
-fn satisfies(input: &PreparedValueContract, value: &JsonValue) {
-    assert!(matches!(input.validate(value), ValueOutcome::Satisfies));
+fn satisfies(
+    input: &PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator>,
+    value: &JsonValue,
+) {
+    assert!(matches!(input.evaluate(value), ValueOutcome::Satisfies));
 }
-fn mismatch(input: &PreparedValueContract, value: &JsonValue) {
-    assert!(matches!(input.validate(value), ValueOutcome::Fails { .. }));
+fn mismatch(
+    input: &PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator>,
+    value: &JsonValue,
+) {
+    assert!(matches!(input.evaluate(value), ValueOutcome::Fails { .. }));
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -107,7 +125,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         let retained = find
             .input()
             .expect("fixture declares an input")
-            .prepare_with(&evaluator, &resources)
+            .prepare(
+                &evaluator,
+                &resources,
+                &openbindings::PreparationLimits::default(),
+            )
             .expect("fixture must have a prepared input");
         let lookup = proof
             .resolve_operation("lookup")
@@ -116,7 +138,11 @@ fn main() -> Result<(), Box<dyn Error>> {
             lookup
                 .output()
                 .expect("fixture declares an output")
-                .prepare_with(&evaluator, &resources)
+                .prepare(
+                    &evaluator,
+                    &resources,
+                    &openbindings::PreparationLimits::default()
+                )
                 .is_ok()
         ); // each direction prepares independently
         // The prepared owner survives the document, resources and evaluator.
@@ -200,7 +226,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         other => panic!("expected cancelled loading: {other:?}"),
     }
     assert!(matches!(
-        active.validate_with_control(&new_value, &cancelled),
+        active.evaluate_with_control(&new_value, &cancelled),
         ValueOutcome::NoVerdict {
             detail: NoVerdict {
                 reason: NoVerdictReason::Cancelled,

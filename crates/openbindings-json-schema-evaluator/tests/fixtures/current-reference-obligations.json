@@ -1,0 +1,4551 @@
+[
+  {
+    "id": "dynamic/cycle-placeholder/0",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://t.test/E"
+          }
+        }
+      }
+    },
+    "value": {
+      "first": {
+        "v": 1
+      }
+    },
+    "resources": [
+      {
+        "uri": "https://t.test/E",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "first": {
+              "$ref": "X"
+            },
+            "second": {
+              "$ref": "A"
+            }
+          }
+        }
+      },
+      {
+        "uri": "https://t.test/X",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "via": {
+              "$ref": "A"
+            },
+            "v": {
+              "$dynamicRef": "D#n"
+            }
+          }
+        }
+      },
+      {
+        "uri": "https://t.test/A",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$defs": {
+            "n": {
+              "$dynamicAnchor": "n",
+              "type": "string"
+            }
+          },
+          "$ref": "N"
+        }
+      },
+      {
+        "uri": "https://t.test/N",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "x": {
+              "$ref": "X"
+            }
+          }
+        }
+      },
+      {
+        "uri": "https://t.test/D",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$dynamicAnchor": "n",
+          "type": "integer"
+        }
+      }
+    ],
+    "required": "S"
+  },
+  {
+    "id": "dynamic/cycle-placeholder/1",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://t.test/E"
+          }
+        }
+      }
+    },
+    "value": {
+      "first": {
+        "v": "s"
+      }
+    },
+    "resources": [
+      {
+        "uri": "https://t.test/E",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "first": {
+              "$ref": "X"
+            },
+            "second": {
+              "$ref": "A"
+            }
+          }
+        }
+      },
+      {
+        "uri": "https://t.test/X",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "via": {
+              "$ref": "A"
+            },
+            "v": {
+              "$dynamicRef": "D#n"
+            }
+          }
+        }
+      },
+      {
+        "uri": "https://t.test/A",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$defs": {
+            "n": {
+              "$dynamicAnchor": "n",
+              "type": "string"
+            }
+          },
+          "$ref": "N"
+        }
+      },
+      {
+        "uri": "https://t.test/N",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "x": {
+              "$ref": "X"
+            }
+          }
+        }
+      },
+      {
+        "uri": "https://t.test/D",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$dynamicAnchor": "n",
+          "type": "integer"
+        }
+      }
+    ],
+    "required": "F"
+  },
+  {
+    "id": "dynamic/cycle-placeholder/2",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://t.test/E"
+          }
+        }
+      }
+    },
+    "value": {
+      "first": {
+        "via": {
+          "x": {
+            "v": "s"
+          }
+        }
+      }
+    },
+    "resources": [
+      {
+        "uri": "https://t.test/E",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "first": {
+              "$ref": "X"
+            },
+            "second": {
+              "$ref": "A"
+            }
+          }
+        }
+      },
+      {
+        "uri": "https://t.test/X",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "via": {
+              "$ref": "A"
+            },
+            "v": {
+              "$dynamicRef": "D#n"
+            }
+          }
+        }
+      },
+      {
+        "uri": "https://t.test/A",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$defs": {
+            "n": {
+              "$dynamicAnchor": "n",
+              "type": "string"
+            }
+          },
+          "$ref": "N"
+        }
+      },
+      {
+        "uri": "https://t.test/N",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "x": {
+              "$ref": "X"
+            }
+          }
+        }
+      },
+      {
+        "uri": "https://t.test/D",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$dynamicAnchor": "n",
+          "type": "integer"
+        }
+      }
+    ],
+    "required": "S"
+  },
+  {
+    "id": "dynamic/cycle-placeholder/3",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://t.test/E"
+          }
+        }
+      }
+    },
+    "value": {
+      "first": {
+        "via": {
+          "x": {
+            "v": 1
+          }
+        }
+      }
+    },
+    "resources": [
+      {
+        "uri": "https://t.test/E",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "first": {
+              "$ref": "X"
+            },
+            "second": {
+              "$ref": "A"
+            }
+          }
+        }
+      },
+      {
+        "uri": "https://t.test/X",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "via": {
+              "$ref": "A"
+            },
+            "v": {
+              "$dynamicRef": "D#n"
+            }
+          }
+        }
+      },
+      {
+        "uri": "https://t.test/A",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$defs": {
+            "n": {
+              "$dynamicAnchor": "n",
+              "type": "string"
+            }
+          },
+          "$ref": "N"
+        }
+      },
+      {
+        "uri": "https://t.test/N",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "x": {
+              "$ref": "X"
+            }
+          }
+        }
+      },
+      {
+        "uri": "https://t.test/D",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$dynamicAnchor": "n",
+          "type": "integer"
+        }
+      }
+    ],
+    "required": "F"
+  },
+  {
+    "id": "dynamic/cycle-placeholder/4",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://t.test/E"
+          }
+        }
+      }
+    },
+    "value": {
+      "second": {
+        "x": {
+          "v": "s"
+        }
+      }
+    },
+    "resources": [
+      {
+        "uri": "https://t.test/E",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "first": {
+              "$ref": "X"
+            },
+            "second": {
+              "$ref": "A"
+            }
+          }
+        }
+      },
+      {
+        "uri": "https://t.test/X",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "via": {
+              "$ref": "A"
+            },
+            "v": {
+              "$dynamicRef": "D#n"
+            }
+          }
+        }
+      },
+      {
+        "uri": "https://t.test/A",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$defs": {
+            "n": {
+              "$dynamicAnchor": "n",
+              "type": "string"
+            }
+          },
+          "$ref": "N"
+        }
+      },
+      {
+        "uri": "https://t.test/N",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "x": {
+              "$ref": "X"
+            }
+          }
+        }
+      },
+      {
+        "uri": "https://t.test/D",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$dynamicAnchor": "n",
+          "type": "integer"
+        }
+      }
+    ],
+    "required": "S"
+  },
+  {
+    "id": "dynamic/cycle-placeholder/5",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://t.test/E"
+          }
+        }
+      }
+    },
+    "value": {
+      "second": {
+        "x": {
+          "v": 1
+        }
+      }
+    },
+    "resources": [
+      {
+        "uri": "https://t.test/E",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "first": {
+              "$ref": "X"
+            },
+            "second": {
+              "$ref": "A"
+            }
+          }
+        }
+      },
+      {
+        "uri": "https://t.test/X",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "via": {
+              "$ref": "A"
+            },
+            "v": {
+              "$dynamicRef": "D#n"
+            }
+          }
+        }
+      },
+      {
+        "uri": "https://t.test/A",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$defs": {
+            "n": {
+              "$dynamicAnchor": "n",
+              "type": "string"
+            }
+          },
+          "$ref": "N"
+        }
+      },
+      {
+        "uri": "https://t.test/N",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "x": {
+              "$ref": "X"
+            }
+          }
+        }
+      },
+      {
+        "uri": "https://t.test/D",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$dynamicAnchor": "n",
+          "type": "integer"
+        }
+      }
+    ],
+    "required": "F"
+  },
+  {
+    "id": "dynamic/cycle-placeholder-rev/0",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://t.test/E"
+          }
+        }
+      }
+    },
+    "value": {
+      "b_first": {
+        "v": 1
+      }
+    },
+    "resources": [
+      {
+        "uri": "https://t.test/E",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "a_second": {
+              "$ref": "A"
+            },
+            "b_first": {
+              "$ref": "X"
+            }
+          }
+        }
+      },
+      {
+        "uri": "https://t.test/X",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "via": {
+              "$ref": "A"
+            },
+            "v": {
+              "$dynamicRef": "D#n"
+            }
+          }
+        }
+      },
+      {
+        "uri": "https://t.test/A",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$defs": {
+            "n": {
+              "$dynamicAnchor": "n",
+              "type": "string"
+            }
+          },
+          "$ref": "N"
+        }
+      },
+      {
+        "uri": "https://t.test/N",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "x": {
+              "$ref": "X"
+            }
+          }
+        }
+      },
+      {
+        "uri": "https://t.test/D",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$dynamicAnchor": "n",
+          "type": "integer"
+        }
+      }
+    ],
+    "required": "S"
+  },
+  {
+    "id": "dynamic/cycle-placeholder-rev/1",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://t.test/E"
+          }
+        }
+      }
+    },
+    "value": {
+      "b_first": {
+        "v": "s"
+      }
+    },
+    "resources": [
+      {
+        "uri": "https://t.test/E",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "a_second": {
+              "$ref": "A"
+            },
+            "b_first": {
+              "$ref": "X"
+            }
+          }
+        }
+      },
+      {
+        "uri": "https://t.test/X",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "via": {
+              "$ref": "A"
+            },
+            "v": {
+              "$dynamicRef": "D#n"
+            }
+          }
+        }
+      },
+      {
+        "uri": "https://t.test/A",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$defs": {
+            "n": {
+              "$dynamicAnchor": "n",
+              "type": "string"
+            }
+          },
+          "$ref": "N"
+        }
+      },
+      {
+        "uri": "https://t.test/N",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "x": {
+              "$ref": "X"
+            }
+          }
+        }
+      },
+      {
+        "uri": "https://t.test/D",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$dynamicAnchor": "n",
+          "type": "integer"
+        }
+      }
+    ],
+    "required": "F"
+  },
+  {
+    "id": "dynamic/cycle-placeholder-rev/2",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://t.test/E"
+          }
+        }
+      }
+    },
+    "value": {
+      "b_first": {
+        "via": {
+          "x": {
+            "v": "s"
+          }
+        }
+      }
+    },
+    "resources": [
+      {
+        "uri": "https://t.test/E",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "a_second": {
+              "$ref": "A"
+            },
+            "b_first": {
+              "$ref": "X"
+            }
+          }
+        }
+      },
+      {
+        "uri": "https://t.test/X",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "via": {
+              "$ref": "A"
+            },
+            "v": {
+              "$dynamicRef": "D#n"
+            }
+          }
+        }
+      },
+      {
+        "uri": "https://t.test/A",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$defs": {
+            "n": {
+              "$dynamicAnchor": "n",
+              "type": "string"
+            }
+          },
+          "$ref": "N"
+        }
+      },
+      {
+        "uri": "https://t.test/N",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "x": {
+              "$ref": "X"
+            }
+          }
+        }
+      },
+      {
+        "uri": "https://t.test/D",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$dynamicAnchor": "n",
+          "type": "integer"
+        }
+      }
+    ],
+    "required": "S"
+  },
+  {
+    "id": "dynamic/cycle-placeholder-rev/3",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://t.test/E"
+          }
+        }
+      }
+    },
+    "value": {
+      "b_first": {
+        "via": {
+          "x": {
+            "v": 1
+          }
+        }
+      }
+    },
+    "resources": [
+      {
+        "uri": "https://t.test/E",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "a_second": {
+              "$ref": "A"
+            },
+            "b_first": {
+              "$ref": "X"
+            }
+          }
+        }
+      },
+      {
+        "uri": "https://t.test/X",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "via": {
+              "$ref": "A"
+            },
+            "v": {
+              "$dynamicRef": "D#n"
+            }
+          }
+        }
+      },
+      {
+        "uri": "https://t.test/A",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$defs": {
+            "n": {
+              "$dynamicAnchor": "n",
+              "type": "string"
+            }
+          },
+          "$ref": "N"
+        }
+      },
+      {
+        "uri": "https://t.test/N",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "x": {
+              "$ref": "X"
+            }
+          }
+        }
+      },
+      {
+        "uri": "https://t.test/D",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$dynamicAnchor": "n",
+          "type": "integer"
+        }
+      }
+    ],
+    "required": "F"
+  },
+  {
+    "id": "dynamic/cycle-placeholder-rev/4",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://t.test/E"
+          }
+        }
+      }
+    },
+    "value": {
+      "a_second": {
+        "x": {
+          "v": "s"
+        }
+      }
+    },
+    "resources": [
+      {
+        "uri": "https://t.test/E",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "a_second": {
+              "$ref": "A"
+            },
+            "b_first": {
+              "$ref": "X"
+            }
+          }
+        }
+      },
+      {
+        "uri": "https://t.test/X",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "via": {
+              "$ref": "A"
+            },
+            "v": {
+              "$dynamicRef": "D#n"
+            }
+          }
+        }
+      },
+      {
+        "uri": "https://t.test/A",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$defs": {
+            "n": {
+              "$dynamicAnchor": "n",
+              "type": "string"
+            }
+          },
+          "$ref": "N"
+        }
+      },
+      {
+        "uri": "https://t.test/N",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "x": {
+              "$ref": "X"
+            }
+          }
+        }
+      },
+      {
+        "uri": "https://t.test/D",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$dynamicAnchor": "n",
+          "type": "integer"
+        }
+      }
+    ],
+    "required": "S"
+  },
+  {
+    "id": "dynamic/cycle-placeholder-rev/5",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://t.test/E"
+          }
+        }
+      }
+    },
+    "value": {
+      "a_second": {
+        "x": {
+          "v": 1
+        }
+      }
+    },
+    "resources": [
+      {
+        "uri": "https://t.test/E",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "a_second": {
+              "$ref": "A"
+            },
+            "b_first": {
+              "$ref": "X"
+            }
+          }
+        }
+      },
+      {
+        "uri": "https://t.test/X",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "via": {
+              "$ref": "A"
+            },
+            "v": {
+              "$dynamicRef": "D#n"
+            }
+          }
+        }
+      },
+      {
+        "uri": "https://t.test/A",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$defs": {
+            "n": {
+              "$dynamicAnchor": "n",
+              "type": "string"
+            }
+          },
+          "$ref": "N"
+        }
+      },
+      {
+        "uri": "https://t.test/N",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "x": {
+              "$ref": "X"
+            }
+          }
+        }
+      },
+      {
+        "uri": "https://t.test/D",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$dynamicAnchor": "n",
+          "type": "integer"
+        }
+      }
+    ],
+    "required": "F"
+  },
+  {
+    "id": "dynamic/unrolled/0",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://t.test/E"
+          }
+        }
+      }
+    },
+    "value": {
+      "first": {
+        "v": 1
+      }
+    },
+    "resources": [
+      {
+        "uri": "https://t.test/E",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "first": {
+              "$ref": "X"
+            },
+            "second": {
+              "$ref": "A"
+            }
+          }
+        }
+      },
+      {
+        "uri": "https://t.test/X",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "via": {
+              "$ref": "A"
+            },
+            "v": {
+              "$dynamicRef": "D#n"
+            }
+          }
+        }
+      },
+      {
+        "uri": "https://t.test/A",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$defs": {
+            "n": {
+              "$dynamicAnchor": "n",
+              "type": "string"
+            }
+          },
+          "$ref": "N"
+        }
+      },
+      {
+        "uri": "https://t.test/N",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "x": {
+              "$ref": "X2"
+            }
+          }
+        }
+      },
+      {
+        "uri": "https://t.test/X2",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "v": {
+              "$dynamicRef": "D#n"
+            }
+          }
+        }
+      },
+      {
+        "uri": "https://t.test/D",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$dynamicAnchor": "n",
+          "type": "integer"
+        }
+      }
+    ],
+    "required": "S"
+  },
+  {
+    "id": "dynamic/unrolled/1",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://t.test/E"
+          }
+        }
+      }
+    },
+    "value": {
+      "first": {
+        "v": "s"
+      }
+    },
+    "resources": [
+      {
+        "uri": "https://t.test/E",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "first": {
+              "$ref": "X"
+            },
+            "second": {
+              "$ref": "A"
+            }
+          }
+        }
+      },
+      {
+        "uri": "https://t.test/X",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "via": {
+              "$ref": "A"
+            },
+            "v": {
+              "$dynamicRef": "D#n"
+            }
+          }
+        }
+      },
+      {
+        "uri": "https://t.test/A",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$defs": {
+            "n": {
+              "$dynamicAnchor": "n",
+              "type": "string"
+            }
+          },
+          "$ref": "N"
+        }
+      },
+      {
+        "uri": "https://t.test/N",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "x": {
+              "$ref": "X2"
+            }
+          }
+        }
+      },
+      {
+        "uri": "https://t.test/X2",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "v": {
+              "$dynamicRef": "D#n"
+            }
+          }
+        }
+      },
+      {
+        "uri": "https://t.test/D",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$dynamicAnchor": "n",
+          "type": "integer"
+        }
+      }
+    ],
+    "required": "F"
+  },
+  {
+    "id": "dynamic/unrolled/2",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://t.test/E"
+          }
+        }
+      }
+    },
+    "value": {
+      "first": {
+        "via": {
+          "x": {
+            "v": "s"
+          }
+        }
+      }
+    },
+    "resources": [
+      {
+        "uri": "https://t.test/E",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "first": {
+              "$ref": "X"
+            },
+            "second": {
+              "$ref": "A"
+            }
+          }
+        }
+      },
+      {
+        "uri": "https://t.test/X",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "via": {
+              "$ref": "A"
+            },
+            "v": {
+              "$dynamicRef": "D#n"
+            }
+          }
+        }
+      },
+      {
+        "uri": "https://t.test/A",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$defs": {
+            "n": {
+              "$dynamicAnchor": "n",
+              "type": "string"
+            }
+          },
+          "$ref": "N"
+        }
+      },
+      {
+        "uri": "https://t.test/N",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "x": {
+              "$ref": "X2"
+            }
+          }
+        }
+      },
+      {
+        "uri": "https://t.test/X2",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "v": {
+              "$dynamicRef": "D#n"
+            }
+          }
+        }
+      },
+      {
+        "uri": "https://t.test/D",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$dynamicAnchor": "n",
+          "type": "integer"
+        }
+      }
+    ],
+    "required": "S"
+  },
+  {
+    "id": "dynamic/unrolled/3",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://t.test/E"
+          }
+        }
+      }
+    },
+    "value": {
+      "first": {
+        "via": {
+          "x": {
+            "v": 1
+          }
+        }
+      }
+    },
+    "resources": [
+      {
+        "uri": "https://t.test/E",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "first": {
+              "$ref": "X"
+            },
+            "second": {
+              "$ref": "A"
+            }
+          }
+        }
+      },
+      {
+        "uri": "https://t.test/X",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "via": {
+              "$ref": "A"
+            },
+            "v": {
+              "$dynamicRef": "D#n"
+            }
+          }
+        }
+      },
+      {
+        "uri": "https://t.test/A",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$defs": {
+            "n": {
+              "$dynamicAnchor": "n",
+              "type": "string"
+            }
+          },
+          "$ref": "N"
+        }
+      },
+      {
+        "uri": "https://t.test/N",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "x": {
+              "$ref": "X2"
+            }
+          }
+        }
+      },
+      {
+        "uri": "https://t.test/X2",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "v": {
+              "$dynamicRef": "D#n"
+            }
+          }
+        }
+      },
+      {
+        "uri": "https://t.test/D",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$dynamicAnchor": "n",
+          "type": "integer"
+        }
+      }
+    ],
+    "required": "F"
+  },
+  {
+    "id": "dynamic/unrolled/4",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://t.test/E"
+          }
+        }
+      }
+    },
+    "value": {
+      "second": {
+        "x": {
+          "v": "s"
+        }
+      }
+    },
+    "resources": [
+      {
+        "uri": "https://t.test/E",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "first": {
+              "$ref": "X"
+            },
+            "second": {
+              "$ref": "A"
+            }
+          }
+        }
+      },
+      {
+        "uri": "https://t.test/X",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "via": {
+              "$ref": "A"
+            },
+            "v": {
+              "$dynamicRef": "D#n"
+            }
+          }
+        }
+      },
+      {
+        "uri": "https://t.test/A",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$defs": {
+            "n": {
+              "$dynamicAnchor": "n",
+              "type": "string"
+            }
+          },
+          "$ref": "N"
+        }
+      },
+      {
+        "uri": "https://t.test/N",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "x": {
+              "$ref": "X2"
+            }
+          }
+        }
+      },
+      {
+        "uri": "https://t.test/X2",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "v": {
+              "$dynamicRef": "D#n"
+            }
+          }
+        }
+      },
+      {
+        "uri": "https://t.test/D",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$dynamicAnchor": "n",
+          "type": "integer"
+        }
+      }
+    ],
+    "required": "S"
+  },
+  {
+    "id": "dynamic/unrolled/5",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://t.test/E"
+          }
+        }
+      }
+    },
+    "value": {
+      "second": {
+        "x": {
+          "v": 1
+        }
+      }
+    },
+    "resources": [
+      {
+        "uri": "https://t.test/E",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "first": {
+              "$ref": "X"
+            },
+            "second": {
+              "$ref": "A"
+            }
+          }
+        }
+      },
+      {
+        "uri": "https://t.test/X",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "via": {
+              "$ref": "A"
+            },
+            "v": {
+              "$dynamicRef": "D#n"
+            }
+          }
+        }
+      },
+      {
+        "uri": "https://t.test/A",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$defs": {
+            "n": {
+              "$dynamicAnchor": "n",
+              "type": "string"
+            }
+          },
+          "$ref": "N"
+        }
+      },
+      {
+        "uri": "https://t.test/N",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "x": {
+              "$ref": "X2"
+            }
+          }
+        }
+      },
+      {
+        "uri": "https://t.test/X2",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "v": {
+              "$dynamicRef": "D#n"
+            }
+          }
+        }
+      },
+      {
+        "uri": "https://t.test/D",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$dynamicAnchor": "n",
+          "type": "integer"
+        }
+      }
+    ],
+    "required": "F"
+  },
+  {
+    "id": "dynamic/in-document/0",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "#/schemas/E"
+          }
+        }
+      },
+      "schemas": {
+        "E": {
+          "properties": {
+            "first": {
+              "$ref": "#/schemas/X"
+            },
+            "second": {
+              "$ref": "#/schemas/A"
+            }
+          }
+        },
+        "X": {
+          "$id": "https://t.test/X",
+          "properties": {
+            "via": {
+              "$ref": "A"
+            },
+            "v": {
+              "$dynamicRef": "D#n"
+            }
+          }
+        },
+        "A": {
+          "$id": "https://t.test/A",
+          "$defs": {
+            "n": {
+              "$dynamicAnchor": "n",
+              "type": "string"
+            }
+          },
+          "$ref": "N"
+        },
+        "N": {
+          "$id": "https://t.test/N",
+          "properties": {
+            "x": {
+              "$ref": "X"
+            }
+          }
+        },
+        "D": {
+          "$id": "https://t.test/D",
+          "$dynamicAnchor": "n",
+          "type": "integer"
+        }
+      }
+    },
+    "value": {
+      "first": {
+        "via": {
+          "x": {
+            "v": "s"
+          }
+        }
+      }
+    },
+    "resources": [],
+    "required": "S"
+  },
+  {
+    "id": "dynamic/in-document/1",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "#/schemas/E"
+          }
+        }
+      },
+      "schemas": {
+        "E": {
+          "properties": {
+            "first": {
+              "$ref": "#/schemas/X"
+            },
+            "second": {
+              "$ref": "#/schemas/A"
+            }
+          }
+        },
+        "X": {
+          "$id": "https://t.test/X",
+          "properties": {
+            "via": {
+              "$ref": "A"
+            },
+            "v": {
+              "$dynamicRef": "D#n"
+            }
+          }
+        },
+        "A": {
+          "$id": "https://t.test/A",
+          "$defs": {
+            "n": {
+              "$dynamicAnchor": "n",
+              "type": "string"
+            }
+          },
+          "$ref": "N"
+        },
+        "N": {
+          "$id": "https://t.test/N",
+          "properties": {
+            "x": {
+              "$ref": "X"
+            }
+          }
+        },
+        "D": {
+          "$id": "https://t.test/D",
+          "$dynamicAnchor": "n",
+          "type": "integer"
+        }
+      }
+    },
+    "value": {
+      "first": {
+        "via": {
+          "x": {
+            "v": 1
+          }
+        }
+      }
+    },
+    "resources": [],
+    "required": "F"
+  },
+  {
+    "id": "dynamic/in-document/2",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "#/schemas/E"
+          }
+        }
+      },
+      "schemas": {
+        "E": {
+          "properties": {
+            "first": {
+              "$ref": "#/schemas/X"
+            },
+            "second": {
+              "$ref": "#/schemas/A"
+            }
+          }
+        },
+        "X": {
+          "$id": "https://t.test/X",
+          "properties": {
+            "via": {
+              "$ref": "A"
+            },
+            "v": {
+              "$dynamicRef": "D#n"
+            }
+          }
+        },
+        "A": {
+          "$id": "https://t.test/A",
+          "$defs": {
+            "n": {
+              "$dynamicAnchor": "n",
+              "type": "string"
+            }
+          },
+          "$ref": "N"
+        },
+        "N": {
+          "$id": "https://t.test/N",
+          "properties": {
+            "x": {
+              "$ref": "X"
+            }
+          }
+        },
+        "D": {
+          "$id": "https://t.test/D",
+          "$dynamicAnchor": "n",
+          "type": "integer"
+        }
+      }
+    },
+    "value": {
+      "second": {
+        "x": {
+          "v": "s"
+        }
+      }
+    },
+    "resources": [],
+    "required": "S"
+  },
+  {
+    "id": "dynamic/in-document/3",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "#/schemas/E"
+          }
+        }
+      },
+      "schemas": {
+        "E": {
+          "properties": {
+            "first": {
+              "$ref": "#/schemas/X"
+            },
+            "second": {
+              "$ref": "#/schemas/A"
+            }
+          }
+        },
+        "X": {
+          "$id": "https://t.test/X",
+          "properties": {
+            "via": {
+              "$ref": "A"
+            },
+            "v": {
+              "$dynamicRef": "D#n"
+            }
+          }
+        },
+        "A": {
+          "$id": "https://t.test/A",
+          "$defs": {
+            "n": {
+              "$dynamicAnchor": "n",
+              "type": "string"
+            }
+          },
+          "$ref": "N"
+        },
+        "N": {
+          "$id": "https://t.test/N",
+          "properties": {
+            "x": {
+              "$ref": "X"
+            }
+          }
+        },
+        "D": {
+          "$id": "https://t.test/D",
+          "$dynamicAnchor": "n",
+          "type": "integer"
+        }
+      }
+    },
+    "value": {
+      "second": {
+        "x": {
+          "v": 1
+        }
+      }
+    },
+    "resources": [],
+    "required": "F"
+  },
+  {
+    "id": "dynamic/layered/0",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "#/schemas/E"
+          }
+        }
+      },
+      "schemas": {
+        "E": {
+          "properties": {
+            "first": {
+              "$ref": "#/schemas/X"
+            },
+            "second": {
+              "$ref": "#/schemas/L1"
+            }
+          }
+        },
+        "L1": {
+          "$id": "https://t.test/L1",
+          "properties": {
+            "down": {
+              "$ref": "L2"
+            }
+          }
+        },
+        "L2": {
+          "$id": "https://t.test/L2",
+          "properties": {
+            "down": {
+              "$ref": "A"
+            }
+          }
+        },
+        "X": {
+          "$id": "https://t.test/X",
+          "properties": {
+            "via": {
+              "$ref": "B"
+            },
+            "v": {
+              "$dynamicRef": "D#n"
+            }
+          }
+        },
+        "B": {
+          "$id": "https://t.test/B",
+          "properties": {
+            "next": {
+              "$ref": "A"
+            }
+          }
+        },
+        "A": {
+          "$id": "https://t.test/A",
+          "$defs": {
+            "n": {
+              "$dynamicAnchor": "n",
+              "type": "string"
+            }
+          },
+          "$ref": "N"
+        },
+        "N": {
+          "$id": "https://t.test/N",
+          "properties": {
+            "x": {
+              "$ref": "X"
+            }
+          }
+        },
+        "D": {
+          "$id": "https://t.test/D",
+          "$dynamicAnchor": "n",
+          "type": "integer"
+        }
+      }
+    },
+    "value": {
+      "first": {
+        "via": {
+          "next": {
+            "x": {
+              "v": "s"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "required": "S"
+  },
+  {
+    "id": "dynamic/layered/1",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "#/schemas/E"
+          }
+        }
+      },
+      "schemas": {
+        "E": {
+          "properties": {
+            "first": {
+              "$ref": "#/schemas/X"
+            },
+            "second": {
+              "$ref": "#/schemas/L1"
+            }
+          }
+        },
+        "L1": {
+          "$id": "https://t.test/L1",
+          "properties": {
+            "down": {
+              "$ref": "L2"
+            }
+          }
+        },
+        "L2": {
+          "$id": "https://t.test/L2",
+          "properties": {
+            "down": {
+              "$ref": "A"
+            }
+          }
+        },
+        "X": {
+          "$id": "https://t.test/X",
+          "properties": {
+            "via": {
+              "$ref": "B"
+            },
+            "v": {
+              "$dynamicRef": "D#n"
+            }
+          }
+        },
+        "B": {
+          "$id": "https://t.test/B",
+          "properties": {
+            "next": {
+              "$ref": "A"
+            }
+          }
+        },
+        "A": {
+          "$id": "https://t.test/A",
+          "$defs": {
+            "n": {
+              "$dynamicAnchor": "n",
+              "type": "string"
+            }
+          },
+          "$ref": "N"
+        },
+        "N": {
+          "$id": "https://t.test/N",
+          "properties": {
+            "x": {
+              "$ref": "X"
+            }
+          }
+        },
+        "D": {
+          "$id": "https://t.test/D",
+          "$dynamicAnchor": "n",
+          "type": "integer"
+        }
+      }
+    },
+    "value": {
+      "second": {
+        "down": {
+          "down": {
+            "x": {
+              "v": "s"
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "required": "S"
+  },
+  {
+    "id": "dynamic/layered/2",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "#/schemas/E"
+          }
+        }
+      },
+      "schemas": {
+        "E": {
+          "properties": {
+            "first": {
+              "$ref": "#/schemas/X"
+            },
+            "second": {
+              "$ref": "#/schemas/L1"
+            }
+          }
+        },
+        "L1": {
+          "$id": "https://t.test/L1",
+          "properties": {
+            "down": {
+              "$ref": "L2"
+            }
+          }
+        },
+        "L2": {
+          "$id": "https://t.test/L2",
+          "properties": {
+            "down": {
+              "$ref": "A"
+            }
+          }
+        },
+        "X": {
+          "$id": "https://t.test/X",
+          "properties": {
+            "via": {
+              "$ref": "B"
+            },
+            "v": {
+              "$dynamicRef": "D#n"
+            }
+          }
+        },
+        "B": {
+          "$id": "https://t.test/B",
+          "properties": {
+            "next": {
+              "$ref": "A"
+            }
+          }
+        },
+        "A": {
+          "$id": "https://t.test/A",
+          "$defs": {
+            "n": {
+              "$dynamicAnchor": "n",
+              "type": "string"
+            }
+          },
+          "$ref": "N"
+        },
+        "N": {
+          "$id": "https://t.test/N",
+          "properties": {
+            "x": {
+              "$ref": "X"
+            }
+          }
+        },
+        "D": {
+          "$id": "https://t.test/D",
+          "$dynamicAnchor": "n",
+          "type": "integer"
+        }
+      }
+    },
+    "value": {
+      "second": {
+        "down": {
+          "down": {
+            "x": {
+              "v": 1
+            }
+          }
+        }
+      }
+    },
+    "resources": [],
+    "required": "F"
+  },
+  {
+    "id": "dynamic/uneval/0",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "#/schemas/E"
+          }
+        }
+      },
+      "schemas": {
+        "E": {
+          "properties": {
+            "first": {
+              "$ref": "#/schemas/X"
+            },
+            "second": {
+              "$ref": "#/schemas/A"
+            }
+          }
+        },
+        "X": {
+          "$id": "https://t.test/X",
+          "$dynamicRef": "D#n",
+          "unevaluatedProperties": false,
+          "properties": {
+            "via": {
+              "$ref": "A"
+            }
+          }
+        },
+        "A": {
+          "$id": "https://t.test/A",
+          "$defs": {
+            "n": {
+              "$dynamicAnchor": "n",
+              "properties": {
+                "s": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "$ref": "N"
+        },
+        "N": {
+          "$id": "https://t.test/N",
+          "properties": {
+            "x": {
+              "$ref": "X"
+            }
+          }
+        },
+        "D": {
+          "$id": "https://t.test/D",
+          "$dynamicAnchor": "n",
+          "properties": {
+            "i": {
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "value": {
+      "first": {
+        "i": 1
+      }
+    },
+    "resources": [],
+    "required": "S"
+  },
+  {
+    "id": "dynamic/uneval/1",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "#/schemas/E"
+          }
+        }
+      },
+      "schemas": {
+        "E": {
+          "properties": {
+            "first": {
+              "$ref": "#/schemas/X"
+            },
+            "second": {
+              "$ref": "#/schemas/A"
+            }
+          }
+        },
+        "X": {
+          "$id": "https://t.test/X",
+          "$dynamicRef": "D#n",
+          "unevaluatedProperties": false,
+          "properties": {
+            "via": {
+              "$ref": "A"
+            }
+          }
+        },
+        "A": {
+          "$id": "https://t.test/A",
+          "$defs": {
+            "n": {
+              "$dynamicAnchor": "n",
+              "properties": {
+                "s": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "$ref": "N"
+        },
+        "N": {
+          "$id": "https://t.test/N",
+          "properties": {
+            "x": {
+              "$ref": "X"
+            }
+          }
+        },
+        "D": {
+          "$id": "https://t.test/D",
+          "$dynamicAnchor": "n",
+          "properties": {
+            "i": {
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "value": {
+      "first": {
+        "s": "a"
+      }
+    },
+    "resources": [],
+    "required": "F"
+  },
+  {
+    "id": "dynamic/uneval/2",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "#/schemas/E"
+          }
+        }
+      },
+      "schemas": {
+        "E": {
+          "properties": {
+            "first": {
+              "$ref": "#/schemas/X"
+            },
+            "second": {
+              "$ref": "#/schemas/A"
+            }
+          }
+        },
+        "X": {
+          "$id": "https://t.test/X",
+          "$dynamicRef": "D#n",
+          "unevaluatedProperties": false,
+          "properties": {
+            "via": {
+              "$ref": "A"
+            }
+          }
+        },
+        "A": {
+          "$id": "https://t.test/A",
+          "$defs": {
+            "n": {
+              "$dynamicAnchor": "n",
+              "properties": {
+                "s": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "$ref": "N"
+        },
+        "N": {
+          "$id": "https://t.test/N",
+          "properties": {
+            "x": {
+              "$ref": "X"
+            }
+          }
+        },
+        "D": {
+          "$id": "https://t.test/D",
+          "$dynamicAnchor": "n",
+          "properties": {
+            "i": {
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "value": {
+      "first": {
+        "via": {
+          "x": {
+            "s": "a"
+          }
+        }
+      }
+    },
+    "resources": [],
+    "required": "S"
+  },
+  {
+    "id": "dynamic/uneval/3",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "#/schemas/E"
+          }
+        }
+      },
+      "schemas": {
+        "E": {
+          "properties": {
+            "first": {
+              "$ref": "#/schemas/X"
+            },
+            "second": {
+              "$ref": "#/schemas/A"
+            }
+          }
+        },
+        "X": {
+          "$id": "https://t.test/X",
+          "$dynamicRef": "D#n",
+          "unevaluatedProperties": false,
+          "properties": {
+            "via": {
+              "$ref": "A"
+            }
+          }
+        },
+        "A": {
+          "$id": "https://t.test/A",
+          "$defs": {
+            "n": {
+              "$dynamicAnchor": "n",
+              "properties": {
+                "s": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "$ref": "N"
+        },
+        "N": {
+          "$id": "https://t.test/N",
+          "properties": {
+            "x": {
+              "$ref": "X"
+            }
+          }
+        },
+        "D": {
+          "$id": "https://t.test/D",
+          "$dynamicAnchor": "n",
+          "properties": {
+            "i": {
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "value": {
+      "first": {
+        "via": {
+          "x": {
+            "i": 1
+          }
+        }
+      }
+    },
+    "resources": [],
+    "required": "F"
+  },
+  {
+    "id": "dynamic/uneval/4",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "#/schemas/E"
+          }
+        }
+      },
+      "schemas": {
+        "E": {
+          "properties": {
+            "first": {
+              "$ref": "#/schemas/X"
+            },
+            "second": {
+              "$ref": "#/schemas/A"
+            }
+          }
+        },
+        "X": {
+          "$id": "https://t.test/X",
+          "$dynamicRef": "D#n",
+          "unevaluatedProperties": false,
+          "properties": {
+            "via": {
+              "$ref": "A"
+            }
+          }
+        },
+        "A": {
+          "$id": "https://t.test/A",
+          "$defs": {
+            "n": {
+              "$dynamicAnchor": "n",
+              "properties": {
+                "s": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "$ref": "N"
+        },
+        "N": {
+          "$id": "https://t.test/N",
+          "properties": {
+            "x": {
+              "$ref": "X"
+            }
+          }
+        },
+        "D": {
+          "$id": "https://t.test/D",
+          "$dynamicAnchor": "n",
+          "properties": {
+            "i": {
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "value": {
+      "second": {
+        "x": {
+          "s": "a"
+        }
+      }
+    },
+    "resources": [],
+    "required": "S"
+  },
+  {
+    "id": "dynamic/uneval/5",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "#/schemas/E"
+          }
+        }
+      },
+      "schemas": {
+        "E": {
+          "properties": {
+            "first": {
+              "$ref": "#/schemas/X"
+            },
+            "second": {
+              "$ref": "#/schemas/A"
+            }
+          }
+        },
+        "X": {
+          "$id": "https://t.test/X",
+          "$dynamicRef": "D#n",
+          "unevaluatedProperties": false,
+          "properties": {
+            "via": {
+              "$ref": "A"
+            }
+          }
+        },
+        "A": {
+          "$id": "https://t.test/A",
+          "$defs": {
+            "n": {
+              "$dynamicAnchor": "n",
+              "properties": {
+                "s": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "$ref": "N"
+        },
+        "N": {
+          "$id": "https://t.test/N",
+          "properties": {
+            "x": {
+              "$ref": "X"
+            }
+          }
+        },
+        "D": {
+          "$id": "https://t.test/D",
+          "$dynamicAnchor": "n",
+          "properties": {
+            "i": {
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "value": {
+      "second": {
+        "x": {
+          "i": 1
+        }
+      }
+    },
+    "resources": [],
+    "required": "F"
+  },
+  {
+    "id": "dynamic/uneval-unrolled/0",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "#/schemas/E"
+          }
+        }
+      },
+      "schemas": {
+        "E": {
+          "properties": {
+            "first": {
+              "$ref": "#/schemas/X"
+            },
+            "second": {
+              "$ref": "#/schemas/A"
+            }
+          }
+        },
+        "X": {
+          "$id": "https://t.test/X",
+          "$dynamicRef": "D#n",
+          "unevaluatedProperties": false,
+          "properties": {
+            "via": {
+              "$ref": "A"
+            }
+          }
+        },
+        "A": {
+          "$id": "https://t.test/A",
+          "$defs": {
+            "n": {
+              "$dynamicAnchor": "n",
+              "properties": {
+                "s": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "$ref": "N"
+        },
+        "N": {
+          "$id": "https://t.test/N",
+          "properties": {
+            "x": {
+              "$ref": "X2"
+            }
+          }
+        },
+        "D": {
+          "$id": "https://t.test/D",
+          "$dynamicAnchor": "n",
+          "properties": {
+            "i": {
+              "type": "integer"
+            }
+          }
+        },
+        "X2": {
+          "$id": "https://t.test/X2",
+          "$dynamicRef": "D#n",
+          "unevaluatedProperties": false
+        }
+      }
+    },
+    "value": {
+      "first": {
+        "i": 1
+      }
+    },
+    "resources": [],
+    "required": "S"
+  },
+  {
+    "id": "dynamic/uneval-unrolled/1",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "#/schemas/E"
+          }
+        }
+      },
+      "schemas": {
+        "E": {
+          "properties": {
+            "first": {
+              "$ref": "#/schemas/X"
+            },
+            "second": {
+              "$ref": "#/schemas/A"
+            }
+          }
+        },
+        "X": {
+          "$id": "https://t.test/X",
+          "$dynamicRef": "D#n",
+          "unevaluatedProperties": false,
+          "properties": {
+            "via": {
+              "$ref": "A"
+            }
+          }
+        },
+        "A": {
+          "$id": "https://t.test/A",
+          "$defs": {
+            "n": {
+              "$dynamicAnchor": "n",
+              "properties": {
+                "s": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "$ref": "N"
+        },
+        "N": {
+          "$id": "https://t.test/N",
+          "properties": {
+            "x": {
+              "$ref": "X2"
+            }
+          }
+        },
+        "D": {
+          "$id": "https://t.test/D",
+          "$dynamicAnchor": "n",
+          "properties": {
+            "i": {
+              "type": "integer"
+            }
+          }
+        },
+        "X2": {
+          "$id": "https://t.test/X2",
+          "$dynamicRef": "D#n",
+          "unevaluatedProperties": false
+        }
+      }
+    },
+    "value": {
+      "first": {
+        "s": "a"
+      }
+    },
+    "resources": [],
+    "required": "F"
+  },
+  {
+    "id": "dynamic/uneval-unrolled/2",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "#/schemas/E"
+          }
+        }
+      },
+      "schemas": {
+        "E": {
+          "properties": {
+            "first": {
+              "$ref": "#/schemas/X"
+            },
+            "second": {
+              "$ref": "#/schemas/A"
+            }
+          }
+        },
+        "X": {
+          "$id": "https://t.test/X",
+          "$dynamicRef": "D#n",
+          "unevaluatedProperties": false,
+          "properties": {
+            "via": {
+              "$ref": "A"
+            }
+          }
+        },
+        "A": {
+          "$id": "https://t.test/A",
+          "$defs": {
+            "n": {
+              "$dynamicAnchor": "n",
+              "properties": {
+                "s": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "$ref": "N"
+        },
+        "N": {
+          "$id": "https://t.test/N",
+          "properties": {
+            "x": {
+              "$ref": "X2"
+            }
+          }
+        },
+        "D": {
+          "$id": "https://t.test/D",
+          "$dynamicAnchor": "n",
+          "properties": {
+            "i": {
+              "type": "integer"
+            }
+          }
+        },
+        "X2": {
+          "$id": "https://t.test/X2",
+          "$dynamicRef": "D#n",
+          "unevaluatedProperties": false
+        }
+      }
+    },
+    "value": {
+      "first": {
+        "via": {
+          "x": {
+            "s": "a"
+          }
+        }
+      }
+    },
+    "resources": [],
+    "required": "S"
+  },
+  {
+    "id": "dynamic/uneval-unrolled/3",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "#/schemas/E"
+          }
+        }
+      },
+      "schemas": {
+        "E": {
+          "properties": {
+            "first": {
+              "$ref": "#/schemas/X"
+            },
+            "second": {
+              "$ref": "#/schemas/A"
+            }
+          }
+        },
+        "X": {
+          "$id": "https://t.test/X",
+          "$dynamicRef": "D#n",
+          "unevaluatedProperties": false,
+          "properties": {
+            "via": {
+              "$ref": "A"
+            }
+          }
+        },
+        "A": {
+          "$id": "https://t.test/A",
+          "$defs": {
+            "n": {
+              "$dynamicAnchor": "n",
+              "properties": {
+                "s": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "$ref": "N"
+        },
+        "N": {
+          "$id": "https://t.test/N",
+          "properties": {
+            "x": {
+              "$ref": "X2"
+            }
+          }
+        },
+        "D": {
+          "$id": "https://t.test/D",
+          "$dynamicAnchor": "n",
+          "properties": {
+            "i": {
+              "type": "integer"
+            }
+          }
+        },
+        "X2": {
+          "$id": "https://t.test/X2",
+          "$dynamicRef": "D#n",
+          "unevaluatedProperties": false
+        }
+      }
+    },
+    "value": {
+      "first": {
+        "via": {
+          "x": {
+            "i": 1
+          }
+        }
+      }
+    },
+    "resources": [],
+    "required": "F"
+  },
+  {
+    "id": "dynamic/uneval-unrolled/4",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "#/schemas/E"
+          }
+        }
+      },
+      "schemas": {
+        "E": {
+          "properties": {
+            "first": {
+              "$ref": "#/schemas/X"
+            },
+            "second": {
+              "$ref": "#/schemas/A"
+            }
+          }
+        },
+        "X": {
+          "$id": "https://t.test/X",
+          "$dynamicRef": "D#n",
+          "unevaluatedProperties": false,
+          "properties": {
+            "via": {
+              "$ref": "A"
+            }
+          }
+        },
+        "A": {
+          "$id": "https://t.test/A",
+          "$defs": {
+            "n": {
+              "$dynamicAnchor": "n",
+              "properties": {
+                "s": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "$ref": "N"
+        },
+        "N": {
+          "$id": "https://t.test/N",
+          "properties": {
+            "x": {
+              "$ref": "X2"
+            }
+          }
+        },
+        "D": {
+          "$id": "https://t.test/D",
+          "$dynamicAnchor": "n",
+          "properties": {
+            "i": {
+              "type": "integer"
+            }
+          }
+        },
+        "X2": {
+          "$id": "https://t.test/X2",
+          "$dynamicRef": "D#n",
+          "unevaluatedProperties": false
+        }
+      }
+    },
+    "value": {
+      "second": {
+        "x": {
+          "s": "a"
+        }
+      }
+    },
+    "resources": [],
+    "required": "S"
+  },
+  {
+    "id": "dynamic/uneval-unrolled/5",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "#/schemas/E"
+          }
+        }
+      },
+      "schemas": {
+        "E": {
+          "properties": {
+            "first": {
+              "$ref": "#/schemas/X"
+            },
+            "second": {
+              "$ref": "#/schemas/A"
+            }
+          }
+        },
+        "X": {
+          "$id": "https://t.test/X",
+          "$dynamicRef": "D#n",
+          "unevaluatedProperties": false,
+          "properties": {
+            "via": {
+              "$ref": "A"
+            }
+          }
+        },
+        "A": {
+          "$id": "https://t.test/A",
+          "$defs": {
+            "n": {
+              "$dynamicAnchor": "n",
+              "properties": {
+                "s": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "$ref": "N"
+        },
+        "N": {
+          "$id": "https://t.test/N",
+          "properties": {
+            "x": {
+              "$ref": "X2"
+            }
+          }
+        },
+        "D": {
+          "$id": "https://t.test/D",
+          "$dynamicAnchor": "n",
+          "properties": {
+            "i": {
+              "type": "integer"
+            }
+          }
+        },
+        "X2": {
+          "$id": "https://t.test/X2",
+          "$dynamicRef": "D#n",
+          "unevaluatedProperties": false
+        }
+      }
+    },
+    "value": {
+      "second": {
+        "x": {
+          "i": 1
+        }
+      }
+    },
+    "resources": [],
+    "required": "F"
+  },
+  {
+    "id": "dynamic/OBP-01/0",
+    "document": {
+      "openbindings": "0.2.0",
+      "schemas": {
+        "T": {
+          "$id": "https://d.example/t.json",
+          "$dynamicAnchor": "node",
+          "type": "string"
+        },
+        "S": {
+          "$id": "https://d.example/s.json",
+          "$dynamicAnchor": "node",
+          "type": "object",
+          "properties": {
+            "inner": {
+              "$ref": "https://d.example/l.json"
+            }
+          }
+        },
+        "L": {
+          "$id": "https://d.example/l.json",
+          "type": "array",
+          "prefixItems": [
+            {
+              "$ref": "https://d.example/s.json"
+            }
+          ],
+          "items": {
+            "$dynamicRef": "https://d.example/t.json#node"
+          }
+        }
+      },
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://d.example/l.json"
+          }
+        }
+      }
+    },
+    "value": [
+      {
+        "inner": [
+          {
+            "inner": []
+          },
+          "str"
+        ]
+      },
+      "a"
+    ],
+    "resources": [],
+    "required": "F"
+  },
+  {
+    "id": "dynamic/OBP-01/1",
+    "document": {
+      "openbindings": "0.2.0",
+      "schemas": {
+        "T": {
+          "$id": "https://d.example/t.json",
+          "$dynamicAnchor": "node",
+          "type": "string"
+        },
+        "S": {
+          "$id": "https://d.example/s.json",
+          "$dynamicAnchor": "node",
+          "type": "object",
+          "properties": {
+            "inner": {
+              "$ref": "https://d.example/l.json"
+            }
+          }
+        },
+        "L": {
+          "$id": "https://d.example/l.json",
+          "type": "array",
+          "prefixItems": [
+            {
+              "$ref": "https://d.example/s.json"
+            }
+          ],
+          "items": {
+            "$dynamicRef": "https://d.example/t.json#node"
+          }
+        }
+      },
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://d.example/l.json"
+          }
+        }
+      }
+    },
+    "value": [
+      {
+        "inner": [
+          {
+            "inner": []
+          },
+          {
+            "inner": []
+          }
+        ]
+      },
+      "a"
+    ],
+    "resources": [],
+    "required": "S"
+  },
+  {
+    "id": "dynamic/OBP-01/2",
+    "document": {
+      "openbindings": "0.2.0",
+      "schemas": {
+        "T": {
+          "$id": "https://d.example/t.json",
+          "$dynamicAnchor": "node",
+          "type": "string"
+        },
+        "S": {
+          "$id": "https://d.example/s.json",
+          "$dynamicAnchor": "node",
+          "type": "object",
+          "properties": {
+            "inner": {
+              "$ref": "https://d.example/l.json"
+            }
+          }
+        },
+        "L": {
+          "$id": "https://d.example/l.json",
+          "type": "array",
+          "prefixItems": [
+            {
+              "$ref": "https://d.example/s.json"
+            }
+          ],
+          "items": {
+            "$dynamicRef": "https://d.example/t.json#node"
+          }
+        }
+      },
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://d.example/l.json"
+          }
+        }
+      }
+    },
+    "value": [
+      {
+        "inner": []
+      },
+      1
+    ],
+    "resources": [],
+    "required": "F"
+  },
+  {
+    "id": "dynamic/OBP-02/0",
+    "document": {
+      "openbindings": "0.2.0",
+      "schemas": {
+        "Strict": {
+          "$dynamicAnchor": "node",
+          "$ref": "https://x.example/tree.json",
+          "unevaluatedProperties": false
+        },
+        "Tree": {
+          "$id": "https://x.example/tree.json",
+          "$dynamicAnchor": "node",
+          "type": "object",
+          "properties": {
+            "children": {
+              "type": "array",
+              "items": {
+                "$dynamicRef": "#node"
+              }
+            }
+          }
+        }
+      },
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "#/schemas/Strict"
+          }
+        }
+      }
+    },
+    "value": {
+      "children": [
+        {
+          "children": []
+        }
+      ]
+    },
+    "resources": [],
+    "required": "admission:OBI-14"
+  },
+  {
+    "id": "dynamic/reexpressed/OBP-02/0",
+    "document": {
+      "openbindings": "0.2.0",
+      "schemas": {
+        "Strict": {
+          "$dynamicAnchor": "node",
+          "$ref": "https://x.example/tree.json",
+          "unevaluatedProperties": false,
+          "$id": "https://x.example/strict.json"
+        },
+        "Tree": {
+          "$id": "https://x.example/tree.json",
+          "$dynamicAnchor": "node",
+          "type": "object",
+          "properties": {
+            "children": {
+              "type": "array",
+              "items": {
+                "$dynamicRef": "#node"
+              }
+            }
+          }
+        }
+      },
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "#/schemas/Strict"
+          }
+        }
+      }
+    },
+    "value": {
+      "children": [
+        {
+          "children": []
+        }
+      ]
+    },
+    "resources": [],
+    "required": "S"
+  },
+  {
+    "id": "dynamic/OBP-02/1",
+    "document": {
+      "openbindings": "0.2.0",
+      "schemas": {
+        "Strict": {
+          "$dynamicAnchor": "node",
+          "$ref": "https://x.example/tree.json",
+          "unevaluatedProperties": false
+        },
+        "Tree": {
+          "$id": "https://x.example/tree.json",
+          "$dynamicAnchor": "node",
+          "type": "object",
+          "properties": {
+            "children": {
+              "type": "array",
+              "items": {
+                "$dynamicRef": "#node"
+              }
+            }
+          }
+        }
+      },
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "#/schemas/Strict"
+          }
+        }
+      }
+    },
+    "value": {
+      "children": [
+        {
+          "extra": 1
+        }
+      ]
+    },
+    "resources": [],
+    "required": "admission:OBI-14"
+  },
+  {
+    "id": "dynamic/reexpressed/OBP-02/1",
+    "document": {
+      "openbindings": "0.2.0",
+      "schemas": {
+        "Strict": {
+          "$dynamicAnchor": "node",
+          "$ref": "https://x.example/tree.json",
+          "unevaluatedProperties": false,
+          "$id": "https://x.example/strict.json"
+        },
+        "Tree": {
+          "$id": "https://x.example/tree.json",
+          "$dynamicAnchor": "node",
+          "type": "object",
+          "properties": {
+            "children": {
+              "type": "array",
+              "items": {
+                "$dynamicRef": "#node"
+              }
+            }
+          }
+        }
+      },
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "#/schemas/Strict"
+          }
+        }
+      }
+    },
+    "value": {
+      "children": [
+        {
+          "extra": 1
+        }
+      ]
+    },
+    "resources": [],
+    "required": "F"
+  },
+  {
+    "id": "ri20/original/ordinary",
+    "document": {
+      "openbindings": "0.2.0",
+      "schemas": {
+        "E": {
+          "$id": "https://identity.example.invalid/resource",
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://identity.example.invalid/resource#ordinary"
+          }
+        }
+      }
+    },
+    "value": 1,
+    "resources": [
+      {
+        "uri": "https://identity.example.invalid/resource",
+        "schema": {
+          "$anchor": "ordinary",
+          "$defs": {
+            "dynamic": {
+              "$dynamicAnchor": "dynamic"
+            },
+            "target": true
+          }
+        }
+      }
+    ],
+    "required": "admission:OBI-12"
+  },
+  {
+    "id": "ri20/reexpressed/ordinary",
+    "document": {
+      "openbindings": "0.2.0",
+      "schemas": {
+        "E": {
+          "$id": "https://identity.example.invalid/resource",
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://identity.example.invalid/retrieval"
+          }
+        }
+      }
+    },
+    "value": 1,
+    "resources": [
+      {
+        "uri": "https://identity.example.invalid/resource",
+        "schema": {
+          "$anchor": "ordinary",
+          "$defs": {
+            "dynamic": {
+              "$dynamicAnchor": "dynamic"
+            },
+            "target": true
+          }
+        }
+      },
+      {
+        "uri": "https://identity.example.invalid/retrieval",
+        "schema": {
+          "$ref": "https://identity.example.invalid/resource#ordinary"
+        }
+      }
+    ],
+    "required": "U"
+  },
+  {
+    "id": "ri20/original/dynamic",
+    "document": {
+      "openbindings": "0.2.0",
+      "schemas": {
+        "E": {
+          "$id": "https://identity.example.invalid/resource",
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "operations": {
+        "op": {
+          "input": {
+            "$dynamicRef": "https://identity.example.invalid/resource#dynamic"
+          }
+        }
+      }
+    },
+    "value": 1,
+    "resources": [
+      {
+        "uri": "https://identity.example.invalid/resource",
+        "schema": {
+          "$anchor": "ordinary",
+          "$defs": {
+            "dynamic": {
+              "$dynamicAnchor": "dynamic"
+            },
+            "target": true
+          }
+        }
+      }
+    ],
+    "required": "admission:OBI-12"
+  },
+  {
+    "id": "ri20/reexpressed/dynamic",
+    "document": {
+      "openbindings": "0.2.0",
+      "schemas": {
+        "E": {
+          "$id": "https://identity.example.invalid/resource",
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://identity.example.invalid/retrieval"
+          }
+        }
+      }
+    },
+    "value": 1,
+    "resources": [
+      {
+        "uri": "https://identity.example.invalid/resource",
+        "schema": {
+          "$anchor": "ordinary",
+          "$defs": {
+            "dynamic": {
+              "$dynamicAnchor": "dynamic"
+            },
+            "target": true
+          }
+        }
+      },
+      {
+        "uri": "https://identity.example.invalid/retrieval",
+        "schema": {
+          "$dynamicRef": "https://identity.example.invalid/resource#dynamic"
+        }
+      }
+    ],
+    "required": "U"
+  },
+  {
+    "id": "ri20/original//$defs/target",
+    "document": {
+      "openbindings": "0.2.0",
+      "schemas": {
+        "E": {
+          "$id": "https://identity.example.invalid/resource",
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://identity.example.invalid/resource#/$defs/target"
+          }
+        }
+      }
+    },
+    "value": 1,
+    "resources": [
+      {
+        "uri": "https://identity.example.invalid/resource",
+        "schema": {
+          "$anchor": "ordinary",
+          "$defs": {
+            "dynamic": {
+              "$dynamicAnchor": "dynamic"
+            },
+            "target": true
+          }
+        }
+      }
+    ],
+    "required": "admission:OBI-12"
+  },
+  {
+    "id": "ri20/reexpressed//$defs/target",
+    "document": {
+      "openbindings": "0.2.0",
+      "schemas": {
+        "E": {
+          "$id": "https://identity.example.invalid/resource",
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://identity.example.invalid/retrieval"
+          }
+        }
+      }
+    },
+    "value": 1,
+    "resources": [
+      {
+        "uri": "https://identity.example.invalid/resource",
+        "schema": {
+          "$anchor": "ordinary",
+          "$defs": {
+            "dynamic": {
+              "$dynamicAnchor": "dynamic"
+            },
+            "target": true
+          }
+        }
+      },
+      {
+        "uri": "https://identity.example.invalid/retrieval",
+        "schema": {
+          "$ref": "https://identity.example.invalid/resource#/$defs/target"
+        }
+      }
+    ],
+    "required": "U"
+  },
+  {
+    "id": "ri21/original/$anchor",
+    "document": {
+      "openbindings": "0.2.0",
+      "schemas": {
+        "E": {
+          "$id": "https://identity.example.invalid/resource",
+          "$anchor": "node",
+          "type": "integer"
+        },
+        "Outer": {
+          "$dynamicAnchor": "node",
+          "type": "string"
+        }
+      },
+      "operations": {
+        "op": {
+          "input": {
+            "$dynamicRef": "https://identity.example.invalid/resource#node"
+          }
+        }
+      }
+    },
+    "value": 1,
+    "resources": [],
+    "required": "admission:OBI-14"
+  },
+  {
+    "id": "ri21/reexpressed/$anchor/1",
+    "document": {
+      "openbindings": "0.2.0",
+      "schemas": {
+        "E": {
+          "$id": "https://identity.example.invalid/resource",
+          "$anchor": "node",
+          "type": "integer"
+        },
+        "Outer": {
+          "$id": "https://identity.example.invalid/outer",
+          "$defs": {
+            "outerNode": {
+              "$dynamicAnchor": "node",
+              "type": "string"
+            }
+          },
+          "$dynamicRef": "https://identity.example.invalid/resource#node"
+        }
+      },
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://identity.example.invalid/outer"
+          }
+        }
+      }
+    },
+    "value": 1,
+    "resources": [],
+    "required": "S"
+  },
+  {
+    "id": "ri21/reexpressed/$anchor/x",
+    "document": {
+      "openbindings": "0.2.0",
+      "schemas": {
+        "E": {
+          "$id": "https://identity.example.invalid/resource",
+          "$anchor": "node",
+          "type": "integer"
+        },
+        "Outer": {
+          "$id": "https://identity.example.invalid/outer",
+          "$defs": {
+            "outerNode": {
+              "$dynamicAnchor": "node",
+              "type": "string"
+            }
+          },
+          "$dynamicRef": "https://identity.example.invalid/resource#node"
+        }
+      },
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://identity.example.invalid/outer"
+          }
+        }
+      }
+    },
+    "value": "x",
+    "resources": [],
+    "required": "F"
+  },
+  {
+    "id": "ri21/original/$dynamicAnchor",
+    "document": {
+      "openbindings": "0.2.0",
+      "schemas": {
+        "E": {
+          "$id": "https://identity.example.invalid/resource",
+          "$dynamicAnchor": "node",
+          "type": "integer"
+        },
+        "Outer": {
+          "$dynamicAnchor": "node",
+          "type": "string"
+        }
+      },
+      "operations": {
+        "op": {
+          "input": {
+            "$dynamicRef": "https://identity.example.invalid/resource#node"
+          }
+        }
+      }
+    },
+    "value": 1,
+    "resources": [],
+    "required": "admission:OBI-14"
+  },
+  {
+    "id": "ri21/reexpressed/$dynamicAnchor/1",
+    "document": {
+      "openbindings": "0.2.0",
+      "schemas": {
+        "E": {
+          "$id": "https://identity.example.invalid/resource",
+          "$dynamicAnchor": "node",
+          "type": "integer"
+        },
+        "Outer": {
+          "$id": "https://identity.example.invalid/outer",
+          "$defs": {
+            "outerNode": {
+              "$dynamicAnchor": "node",
+              "type": "string"
+            }
+          },
+          "$dynamicRef": "https://identity.example.invalid/resource#node"
+        }
+      },
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://identity.example.invalid/outer"
+          }
+        }
+      }
+    },
+    "value": 1,
+    "resources": [],
+    "required": "F"
+  },
+  {
+    "id": "ri21/reexpressed/$dynamicAnchor/x",
+    "document": {
+      "openbindings": "0.2.0",
+      "schemas": {
+        "E": {
+          "$id": "https://identity.example.invalid/resource",
+          "$dynamicAnchor": "node",
+          "type": "integer"
+        },
+        "Outer": {
+          "$id": "https://identity.example.invalid/outer",
+          "$defs": {
+            "outerNode": {
+              "$dynamicAnchor": "node",
+              "type": "string"
+            }
+          },
+          "$dynamicRef": "https://identity.example.invalid/resource#node"
+        }
+      },
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://identity.example.invalid/outer"
+          }
+        }
+      }
+    },
+    "value": "x",
+    "resources": [],
+    "required": "S"
+  },
+  {
+    "id": "marker/original",
+    "document": {
+      "openbindings": "0.2.0",
+      "schemas": {},
+      "operations": {
+        "op": {
+          "input": {
+            "$id": "https://e.test/r",
+            "$defs": {
+              "\ue000\ue000": {
+                "type": "integer"
+              }
+            },
+            "$ref": "#/$defs/%EE%80%80"
+          }
+        }
+      }
+    },
+    "value": 1,
+    "resources": [],
+    "required": "admission:OBI-12"
+  },
+  {
+    "id": "marker/reexpressed",
+    "document": {
+      "openbindings": "0.2.0",
+      "schemas": {},
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://e.test/r"
+          }
+        }
+      }
+    },
+    "value": 1,
+    "resources": [
+      {
+        "uri": "https://e.test/r",
+        "schema": {
+          "$id": "https://e.test/r",
+          "$defs": {
+            "\ue000\ue000": {
+              "type": "integer"
+            }
+          },
+          "$ref": "#/$defs/%EE%80%80"
+        }
+      }
+    ],
+    "required": "U"
+  },
+  {
+    "id": "embedding/False/ref/1",
+    "document": {
+      "openbindings": "0.2.0",
+      "schemas": {
+        "R": {
+          "$id": "https://probe.invalid/root",
+          "$defs": {
+            "good": {
+              "type": "string"
+            },
+            "bad": {
+              "not": {
+                "$ref": "%"
+              }
+            }
+          }
+        }
+      },
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://probe.invalid/root#/$defs/good"
+          }
+        }
+      }
+    },
+    "value": 1,
+    "resources": [],
+    "required": "F"
+  },
+  {
+    "id": "embedding/False/ref/x",
+    "document": {
+      "openbindings": "0.2.0",
+      "schemas": {
+        "R": {
+          "$id": "https://probe.invalid/root",
+          "$defs": {
+            "good": {
+              "type": "string"
+            },
+            "bad": {
+              "not": {
+                "$ref": "%"
+              }
+            }
+          }
+        }
+      },
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://probe.invalid/root#/$defs/good"
+          }
+        }
+      }
+    },
+    "value": "x",
+    "resources": [],
+    "required": "S"
+  },
+  {
+    "id": "embedding/False/id/1",
+    "document": {
+      "openbindings": "0.2.0",
+      "schemas": {
+        "R": {
+          "$id": "https://probe.invalid/root",
+          "$defs": {
+            "good": {
+              "type": "string"
+            },
+            "bad": {
+              "$id": "%"
+            }
+          }
+        }
+      },
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://probe.invalid/root#/$defs/good"
+          }
+        }
+      }
+    },
+    "value": 1,
+    "resources": [],
+    "required": "F"
+  },
+  {
+    "id": "embedding/False/id/x",
+    "document": {
+      "openbindings": "0.2.0",
+      "schemas": {
+        "R": {
+          "$id": "https://probe.invalid/root",
+          "$defs": {
+            "good": {
+              "type": "string"
+            },
+            "bad": {
+              "$id": "%"
+            }
+          }
+        }
+      },
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://probe.invalid/root#/$defs/good"
+          }
+        }
+      }
+    },
+    "value": "x",
+    "resources": [],
+    "required": "S"
+  },
+  {
+    "id": "embedding/True/ref/1",
+    "document": {
+      "openbindings": "0.2.0",
+      "schemas": {},
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://probe.invalid/root#/$defs/good"
+          }
+        }
+      }
+    },
+    "value": 1,
+    "resources": [
+      {
+        "uri": "https://probe.invalid/root",
+        "schema": {
+          "$id": "https://probe.invalid/root",
+          "$defs": {
+            "good": {
+              "type": "string"
+            },
+            "bad": {
+              "not": {
+                "$ref": "%"
+              }
+            }
+          }
+        }
+      }
+    ],
+    "required": "F"
+  },
+  {
+    "id": "embedding/True/ref/x",
+    "document": {
+      "openbindings": "0.2.0",
+      "schemas": {},
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://probe.invalid/root#/$defs/good"
+          }
+        }
+      }
+    },
+    "value": "x",
+    "resources": [
+      {
+        "uri": "https://probe.invalid/root",
+        "schema": {
+          "$id": "https://probe.invalid/root",
+          "$defs": {
+            "good": {
+              "type": "string"
+            },
+            "bad": {
+              "not": {
+                "$ref": "%"
+              }
+            }
+          }
+        }
+      }
+    ],
+    "required": "S"
+  },
+  {
+    "id": "embedding/True/id/1",
+    "document": {
+      "openbindings": "0.2.0",
+      "schemas": {},
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://probe.invalid/root#/$defs/good"
+          }
+        }
+      }
+    },
+    "value": 1,
+    "resources": [
+      {
+        "uri": "https://probe.invalid/root",
+        "schema": {
+          "$id": "https://probe.invalid/root",
+          "$defs": {
+            "good": {
+              "type": "string"
+            },
+            "bad": {
+              "$id": "%"
+            }
+          }
+        }
+      }
+    ],
+    "required": "F"
+  },
+  {
+    "id": "embedding/True/id/x",
+    "document": {
+      "openbindings": "0.2.0",
+      "schemas": {},
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://probe.invalid/root#/$defs/good"
+          }
+        }
+      }
+    },
+    "value": "x",
+    "resources": [
+      {
+        "uri": "https://probe.invalid/root",
+        "schema": {
+          "$id": "https://probe.invalid/root",
+          "$defs": {
+            "good": {
+              "type": "string"
+            },
+            "bad": {
+              "$id": "%"
+            }
+          }
+        }
+      }
+    ],
+    "required": "S"
+  },
+  {
+    "id": "encoded/document/task/1",
+    "document": {
+      "openbindings": "0.2.0",
+      "schemas": {
+        "R": {
+          "$defs": {
+            "target": {
+              "$anchor": "task",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "#task"
+          }
+        }
+      }
+    },
+    "value": 1,
+    "resources": [],
+    "required": "F"
+  },
+  {
+    "id": "encoded/document/task/x",
+    "document": {
+      "openbindings": "0.2.0",
+      "schemas": {
+        "R": {
+          "$defs": {
+            "target": {
+              "$anchor": "task",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "#task"
+          }
+        }
+      }
+    },
+    "value": "x",
+    "resources": [],
+    "required": "S"
+  },
+  {
+    "id": "encoded/document/t%61sk/1",
+    "document": {
+      "openbindings": "0.2.0",
+      "schemas": {
+        "R": {
+          "$defs": {
+            "target": {
+              "$anchor": "task",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "#t%61sk"
+          }
+        }
+      }
+    },
+    "value": 1,
+    "resources": [],
+    "required": "F"
+  },
+  {
+    "id": "encoded/document/t%61sk/x",
+    "document": {
+      "openbindings": "0.2.0",
+      "schemas": {
+        "R": {
+          "$defs": {
+            "target": {
+              "$anchor": "task",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "#t%61sk"
+          }
+        }
+      }
+    },
+    "value": "x",
+    "resources": [],
+    "required": "S"
+  },
+  {
+    "id": "encoded/contained/task/1",
+    "document": {
+      "openbindings": "0.2.0",
+      "schemas": {
+        "R": {
+          "$defs": {
+            "target": {
+              "$anchor": "task",
+              "type": "string"
+            }
+          },
+          "$id": "https://e.test/r"
+        }
+      },
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://e.test/r#task"
+          }
+        }
+      }
+    },
+    "value": 1,
+    "resources": [],
+    "required": "F"
+  },
+  {
+    "id": "encoded/contained/task/x",
+    "document": {
+      "openbindings": "0.2.0",
+      "schemas": {
+        "R": {
+          "$defs": {
+            "target": {
+              "$anchor": "task",
+              "type": "string"
+            }
+          },
+          "$id": "https://e.test/r"
+        }
+      },
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://e.test/r#task"
+          }
+        }
+      }
+    },
+    "value": "x",
+    "resources": [],
+    "required": "S"
+  },
+  {
+    "id": "encoded/contained/t%61sk/1",
+    "document": {
+      "openbindings": "0.2.0",
+      "schemas": {
+        "R": {
+          "$defs": {
+            "target": {
+              "$anchor": "task",
+              "type": "string"
+            }
+          },
+          "$id": "https://e.test/r"
+        }
+      },
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://e.test/r#t%61sk"
+          }
+        }
+      }
+    },
+    "value": 1,
+    "resources": [],
+    "required": "F"
+  },
+  {
+    "id": "encoded/contained/t%61sk/x",
+    "document": {
+      "openbindings": "0.2.0",
+      "schemas": {
+        "R": {
+          "$defs": {
+            "target": {
+              "$anchor": "task",
+              "type": "string"
+            }
+          },
+          "$id": "https://e.test/r"
+        }
+      },
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://e.test/r#t%61sk"
+          }
+        }
+      }
+    },
+    "value": "x",
+    "resources": [],
+    "required": "S"
+  },
+  {
+    "id": "encoded/supplied/task/1",
+    "document": {
+      "openbindings": "0.2.0",
+      "schemas": {},
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://e.test/r#task"
+          }
+        }
+      }
+    },
+    "value": 1,
+    "resources": [
+      {
+        "uri": "https://e.test/r",
+        "schema": {
+          "$defs": {
+            "target": {
+              "$anchor": "task",
+              "type": "string"
+            }
+          },
+          "$id": "https://e.test/r"
+        }
+      }
+    ],
+    "required": "F"
+  },
+  {
+    "id": "encoded/supplied/task/x",
+    "document": {
+      "openbindings": "0.2.0",
+      "schemas": {},
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://e.test/r#task"
+          }
+        }
+      }
+    },
+    "value": "x",
+    "resources": [
+      {
+        "uri": "https://e.test/r",
+        "schema": {
+          "$defs": {
+            "target": {
+              "$anchor": "task",
+              "type": "string"
+            }
+          },
+          "$id": "https://e.test/r"
+        }
+      }
+    ],
+    "required": "S"
+  },
+  {
+    "id": "encoded/supplied/t%61sk/1",
+    "document": {
+      "openbindings": "0.2.0",
+      "schemas": {},
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://e.test/r#t%61sk"
+          }
+        }
+      }
+    },
+    "value": 1,
+    "resources": [
+      {
+        "uri": "https://e.test/r",
+        "schema": {
+          "$defs": {
+            "target": {
+              "$anchor": "task",
+              "type": "string"
+            }
+          },
+          "$id": "https://e.test/r"
+        }
+      }
+    ],
+    "required": "F"
+  },
+  {
+    "id": "encoded/supplied/t%61sk/x",
+    "document": {
+      "openbindings": "0.2.0",
+      "schemas": {},
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://e.test/r#t%61sk"
+          }
+        }
+      }
+    },
+    "value": "x",
+    "resources": [
+      {
+        "uri": "https://e.test/r",
+        "schema": {
+          "$defs": {
+            "target": {
+              "$anchor": "task",
+              "type": "string"
+            }
+          },
+          "$id": "https://e.test/r"
+        }
+      }
+    ],
+    "required": "S"
+  },
+  {
+    "id": "exact-contained/2",
+    "document": {
+      "openbindings": "0.2.0",
+      "schemas": {
+        "A": {
+          "$id": "https://CASE.example.invalid/schema",
+          "type": "string"
+        },
+        "B": {
+          "$id": "https://case.example.invalid/schema",
+          "type": "integer"
+        }
+      },
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://case.example.invalid/schema"
+          }
+        }
+      }
+    },
+    "value": 2,
+    "resources": [],
+    "required": "S"
+  },
+  {
+    "id": "exact-contained/x",
+    "document": {
+      "openbindings": "0.2.0",
+      "schemas": {
+        "A": {
+          "$id": "https://CASE.example.invalid/schema",
+          "type": "string"
+        },
+        "B": {
+          "$id": "https://case.example.invalid/schema",
+          "type": "integer"
+        }
+      },
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://case.example.invalid/schema"
+          }
+        }
+      }
+    },
+    "value": "x",
+    "resources": [],
+    "required": "F"
+  },
+  {
+    "id": "unlimited/inability/work",
+    "family": "inability",
+    "context": "control",
+    "schema": {
+      "allOf": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ]
+    },
+    "value": null,
+    "spec_expected": "S",
+    "expected": {
+      "stage": "ready",
+      "detail": {
+        "code": "evaluation-work-limit",
+        "location": null,
+        "reason": "limit-exceeded"
+      },
+      "outcome": "N"
+    },
+    "required": "S"
+  },
+  {
+    "id": "unlimited/inability/pattern-admission",
+    "family": "inability",
+    "context": "control",
+    "schema": {
+      "pattern": "a"
+    },
+    "value": "a",
+    "spec_expected": "S",
+    "expected": {
+      "detail": {
+        "code": "pattern-byte-limit",
+        "location": {
+          "pointer": "/operations/op/input/pattern",
+          "resource": null
+        },
+        "reason": "limit-exceeded"
+      },
+      "outcome": "N",
+      "stage": "preparation"
+    },
+    "required": "S"
+  }
+]

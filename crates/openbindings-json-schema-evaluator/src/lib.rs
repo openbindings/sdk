@@ -15,6 +15,7 @@ mod missing;
 mod operands;
 mod pass;
 mod pattern;
+mod semantic;
 mod stack;
 mod unevaluated_walk;
 use openbindings::*;
@@ -256,37 +257,201 @@ impl jsonschema::Retrieve for NoRetrieval {
 fn no_verdict(reason: NoVerdictReason, code: &str, message: impl Into<String>) -> NoVerdict {
     NoVerdict::new(reason, code, message)
 }
+/// Opaque owned validator produced by [`DefaultEvaluator`]. Clones share its
+/// immutable compiled state; no public evaluator trait requires this ownership.
+#[derive(Clone)]
+pub struct DefaultValidator {
+    inner: Option<Arc<Compiled>>,
+    semantic: Option<Arc<semantic::Plan>>,
+}
+impl std::fmt::Debug for DefaultValidator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DefaultValidator").finish_non_exhaustive()
+    }
+}
+impl SchemaValidator for DefaultValidator {
+    fn evaluate(
+        &self,
+        value: &JsonValue,
+        detail: Detail,
+        control: &dyn WorkControl,
+    ) -> ValueOutcome {
+        if let Some(compiled) = &self.inner {
+            let outcome = compiled.evaluate(value, detail, control);
+            if self.semantic.is_none()
+                || !matches!(&outcome, ValueOutcome::NoVerdict { detail }
+                if !matches!(detail.reason, NoVerdictReason::Cancelled | NoVerdictReason::LimitExceeded))
+            {
+                return outcome;
+            }
+        }
+        self.semantic
+            .as_ref()
+            .expect("an incomplete compiler path retains its semantic plan")
+            .evaluate(value, detail, control)
+    }
+}
 impl SchemaEvaluator for DefaultEvaluator {
+    type Validator = DefaultValidator;
     fn prepare(
         &self,
-        request: &SchemaRequest,
+        request: EvaluationRequest<'_>,
+        limits: &PreparationLimits,
         control: &dyn WorkControl,
-    ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
+    ) -> Result<Self::Validator, PreparationFailure> {
         control.check()?;
-        let (space, entry) = space(request, Vec::new(), control)?;
+        let environment = request.environment(limits, control)?;
+        let compiled = self.compiled(request, limits, control);
+        let inner = match compiled {
+            Ok(compiled) => Some(compiled),
+            Err(failure)
+                if match &failure.kind {
+                    PreparationFailureKind::Resolution {
+                        cause:
+                            ResolutionFailureKind::Undefined(_)
+                            | ResolutionFailureKind::ResourceUnavailable { .. },
+                    } => true,
+                    PreparationFailureKind::UnsupportedCapability { capability } => matches!(
+                        capability.as_str(),
+                        "foreign-dialect-projection"
+                            | "in-place-cycle"
+                            | "evaluation-cycle"
+                            | "schema-pattern-compilation"
+                            | "pattern-backtracking"
+                            | "pattern-property-escape"
+                            | "pattern-non-word-boundary"
+                    ),
+                    _ => false,
+                } =>
+            {
+                None
+            }
+            Err(failure) => return Err(failure),
+        };
+        control.check()?;
+        // Complete compiled validators need no original-source fallback. Release
+        // the request's document/resources instead of retaining an unused plan.
+        let semantic = if inner
+            .as_ref()
+            .is_none_or(|compiled| compiled.stand_ins.is_some())
+        {
+            Some(Arc::new(semantic::Plan::new(
+                environment,
+                self.limits.clone(),
+                *limits,
+                control,
+            )?))
+        } else {
+            None
+        };
+        Ok(DefaultValidator { inner, semantic })
+    }
+}
+impl DefaultEvaluator {
+    // Primitive predicates use this compiled path directly, without recursively
+    // constructing another semantic evaluator.
+    fn compiled(
+        &self,
+        request: EvaluationRequest<'_>,
+        limits: &PreparationLimits,
+        control: &dyn WorkControl,
+    ) -> Result<Arc<Compiled>, PreparationFailure> {
+        use openbindings_internal_schema::OriginalEnvironment;
+        control.check()?;
+        let environment = request.environment(limits, control)?;
+        let space = environment.space();
+        let entry = environment.entry();
         let cancellation = || control.is_cancelled();
-        let projected = match space.program_definitions(entry, &cancellation) {
+        let compiled = match space.program_definitions(entry, &cancellation) {
             Err(failure)
                 if failure.reason
                     == openbindings_internal_schema::FailureReason::ResourceUnavailable =>
             {
-                // Stand in for every resource the references name but the
-                // request does not supply, and project again; a contract the
-                // stand-ins cannot complete refuses as it first did.
-                let missing = missing::uris(&space);
+                let missing = missing::uris(space);
                 if missing.is_empty() {
-                    return Err(projection_failure(failure));
+                    return Err(failure.into());
                 }
-                let (space, entry) =
-                    self::space(request, missing::stand_ins(&missing).collect(), control)?;
-                let projected = space
-                    .program_definitions(entry, &cancellation)
-                    .map_err(|_| projection_failure(failure))?;
-                return self.prepared(projected, &space, entry, missing, control);
+                let (space, entry) = self::space(
+                    &request,
+                    missing::stand_ins(&missing).collect(),
+                    limits,
+                    control,
+                )?;
+                let projected =
+                    space
+                        .program_definitions(entry, &cancellation)
+                        .map_err(|fallback| {
+                            if matches!(
+                                fallback.reason,
+                                openbindings_internal_schema::FailureReason::Cancelled
+                                    | openbindings_internal_schema::FailureReason::LimitExceeded
+                            ) {
+                                PreparationFailure::from(fallback)
+                            } else {
+                                PreparationFailure::from(failure)
+                            }
+                        })?;
+                self.prepared(projected, &space, entry, missing, control)
+                    .map_err(CompilerFailure::into_failure)
             }
-            other => other.map_err(projection_failure)?,
+            Err(failure) => Err(failure.into()),
+            Ok(projected) => self
+                .prepared(projected, space, entry, Vec::new(), control)
+                .map_err(CompilerFailure::into_failure),
         };
-        self.prepared(projected, &space, entry, Vec::new(), control)
+        control.check()?;
+        compiled
+    }
+}
+// Compiler refusals are preparation failures, never per-instance outcomes.
+// Most private compiler helpers still return diagnostic details; preserve any
+// structured resolution cause separately at the point where it is known.
+enum CompilerFailure {
+    Detail(NoVerdict),
+    Resolution(PreparationFailure),
+}
+impl From<NoVerdict> for CompilerFailure {
+    fn from(detail: NoVerdict) -> Self {
+        Self::Detail(detail)
+    }
+}
+impl From<Cancelled> for CompilerFailure {
+    fn from(_: Cancelled) -> Self {
+        Self::Resolution(PreparationFailure::new(PreparationFailureKind::Cancelled))
+    }
+}
+impl CompilerFailure {
+    fn into_failure(self) -> PreparationFailure {
+        match self {
+            Self::Detail(detail) => preparation_detail(detail),
+            Self::Resolution(failure) => failure,
+        }
+    }
+}
+fn preparation_detail(detail: NoVerdict) -> PreparationFailure {
+    let kind = match detail.reason {
+        NoVerdictReason::Cancelled => PreparationFailureKind::Cancelled,
+        NoVerdictReason::LimitExceeded => PreparationFailureKind::Limit {
+            resource: detail.code,
+        },
+        NoVerdictReason::ConservativePreparation if detail.code == "invalid-schema" => {
+            PreparationFailureKind::InvalidExternalSchema
+        }
+        NoVerdictReason::UnsupportedCapability | NoVerdictReason::ConservativePreparation => {
+            PreparationFailureKind::UnsupportedCapability {
+                capability: detail.code,
+            }
+        }
+        NoVerdictReason::ResourceUnavailable => PreparationFailureKind::Implementation {
+            message: "the compiler omitted the unavailable resource identity".into(),
+        },
+        _ => PreparationFailureKind::Implementation {
+            message: detail.message,
+        },
+    };
+    PreparationFailure {
+        kind,
+        origin: detail.location,
     }
 }
 
@@ -296,32 +461,33 @@ impl SchemaEvaluator for DefaultEvaluator {
 // preparation returns. Stand-ins are admitted with the set's resources, so
 // their space indexes those again.
 fn space(
-    request: &SchemaRequest,
+    request: &EvaluationRequest<'_>,
     stand_ins: Vec<openbindings_internal_schema::ProjectedResource>,
+    limits: &PreparationLimits,
     control: &dyn WorkControl,
-) -> Result<(SchemaSpace, usize), NoVerdict> {
-    let supplied = request.supplied_resources().supplied();
+) -> Result<(SchemaSpace, usize), PreparationFailure> {
+    let supplied = request.external_schemas.supplied();
     let supplied = if stand_ins.is_empty() {
         supplied.clone()
     } else {
         openbindings_internal_schema::Supplied::new_bounded(
             supplied.iter().cloned().chain(stand_ins),
-            100_000,
-            openbindings_internal_schema::DEFAULT_IDENTITY_BYTES,
+            limits.max_schema_nodes,
+            limits.max_identity_bytes,
             &|| control.is_cancelled(),
         )
-        .map_err(projection_failure)?
+        .map_err(PreparationFailure::from)?
     };
     let space = SchemaSpace::new_bounded(
-        openbindings_internal_schema::IndexedDocument::indexed(request.document()),
+        openbindings_internal_schema::IndexedDocument::indexed(request.schema.document()),
         supplied,
-        100_000,
-        openbindings_internal_schema::DEFAULT_IDENTITY_BYTES,
+        limits.max_schema_nodes,
+        limits.max_identity_bytes,
         &|| control.is_cancelled(),
     )
-    .map_err(projection_failure)?;
+    .map_err(PreparationFailure::from)?;
     let entry = space
-        .document_node(request.entry())
+        .document_node(&request.schema.json())
         .expect("validated entry is a schema");
     Ok((space, entry))
 }
@@ -349,7 +515,7 @@ impl DefaultEvaluator {
         entry: usize,
         missing: Vec<String>,
         control: &dyn WorkControl,
-    ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
+    ) -> Result<Arc<Compiled>, CompilerFailure> {
         if self
             .limits
             .schema_resources
@@ -359,7 +525,8 @@ impl DefaultEvaluator {
                 NoVerdictReason::LimitExceeded,
                 "schema-resource-limit",
                 "the value contract reaches more schema resources than the configured limit",
-            ));
+            )
+            .into());
         }
         let mut operands = operands::Operands::default();
         #[cfg(feature = "conversion-check")]
@@ -574,7 +741,7 @@ impl DefaultEvaluator {
         missing: Vec<String>,
         cyclic: bool,
         control: &dyn WorkControl,
-    ) -> Result<Compiled, NoVerdict> {
+    ) -> Result<Compiled, CompilerFailure> {
         let Converted {
             mut resources,
             numbers,
@@ -686,7 +853,7 @@ impl DefaultEvaluator {
             let mut detail =
                 in_place_cycle("static preparation found a potentially evaluated in-place cycle");
             detail.location = cycles.get(at as usize).cloned().flatten();
-            return Err(detail);
+            return Err(detail.into());
         }
         if guarded
             && !names.is_empty()
@@ -695,22 +862,17 @@ impl DefaultEvaluator {
             let names = &names[at as usize];
             let mut detail = unsupported_pattern(names.unsupported, "patternProperties");
             detail.location = names.location.clone();
-            return Err(detail);
+            return Err(detail.into());
         }
         if guarded && let Some(at) = missing::behind_unevaluated(&bundle, missing::KEYWORD) {
-            let mut detail = no_verdict(
-                NoVerdictReason::ResourceUnavailable,
-                "resource-unavailable",
-                "static preparation requires a resource that was not supplied",
-            );
-            detail.location = missing.get(at as usize).map(|uri| {
-                SchemaOrigin::new(
-                    Some(uri.clone()),
-                    Pointer::from_utf16(&[]).expect("the root pointer"),
-                )
-            });
-            return Err(detail);
+            let uri = missing.get(at as usize).ok_or_else(program_failure)?;
+            return Err(CompilerFailure::Resolution(PreparationFailure::new(
+                PreparationFailureKind::Resolution {
+                    cause: ResolutionFailureKind::ResourceUnavailable { uri: uri.clone() },
+                },
+            )));
         }
+
         if guarded {
             unevaluated_walk::apply(&mut bundle);
         }
@@ -760,7 +922,7 @@ impl DefaultEvaluator {
                     bundle.names[holder as usize]
                 ))
                 .map(|(location, _)| location);
-            return Err(detail);
+            return Err(detail.into());
         }
         // A value contract with a stand-in has a bounds program, which decides
         // the values a pass that reaches a stand-in leaves undecided when no
@@ -775,7 +937,7 @@ impl DefaultEvaluator {
         let program = if standing {
             bounds::program(&bundle, &stand_in_patterns, budget)
         } else {
-            None
+            bounds::Build::Unavailable(bounds::Unavailable::NotNeeded)
         };
         drop(stand_in_patterns);
         let registered = operands::Registered {
@@ -811,17 +973,18 @@ impl DefaultEvaluator {
                 &locations,
                 control,
             )?,
-            Err(error) => return Err(preparation_error(&error, &locations)),
+            Err(error) => return Err(preparation_error(&error, &locations).into()),
         };
         drop(document);
         control.check()?;
         let bounds = match program {
-            Some(program) => self.bounds(program, &keywords, registered, host, control)?,
-            None => None,
+            bounds::Build::Ready(program) => {
+                self.bounds(program, &keywords, registered, host, control)?
+            }
+            bounds::Build::Unavailable(cause) => bounds::Build::Unavailable(cause),
         };
         let stand_ins = standing.then(|| {
             Box::new(StandIns {
-                missing,
                 cycles,
                 names,
                 bounds,
@@ -850,7 +1013,7 @@ impl DefaultEvaluator {
         registered: operands::Registered,
         host: stack::Stack,
         control: &dyn WorkControl,
-    ) -> Result<Option<Bounds>, NoVerdict> {
+    ) -> Result<bounds::Build<Bounds>, NoVerdict> {
         let bounds::Program {
             bundle,
             lower,
@@ -863,7 +1026,9 @@ impl DefaultEvaluator {
             depth::bound(&bundle.definitions, upper, weight),
             depth::bound(&bundle.definitions, original, weight),
         ) else {
-            return Ok(None);
+            return Ok(bounds::Build::Unavailable(
+                bounds::Unavailable::DepthAnalysis,
+            ));
         };
         let holders: Vec<bool> = bundle
             .schemas
@@ -877,7 +1042,9 @@ impl DefaultEvaluator {
             && depth::longest_walk(&bundle.definitions, &holders)
                 .is_some_and(|(length, _)| length > host.walk())
         {
-            return Ok(None);
+            return Ok(bounds::Build::Unavailable(
+                bounds::Unavailable::AnnotationWalk,
+            ));
         }
         // The library compiles the program's `patternProperties` names again,
         // each distinct form once, so they must fit in what the contract's
@@ -892,7 +1059,11 @@ impl DefaultEvaluator {
                 {
                     first
                 }
-                _ => return Ok(None),
+                _ => {
+                    return Ok(bounds::Build::Unavailable(
+                        bounds::Unavailable::PatternMemory,
+                    ));
+                }
             }
         };
         control.check()?;
@@ -910,12 +1081,12 @@ impl DefaultEvaluator {
             .should_validate_formats(false)
             .with_pattern_options(pattern_options(first));
         let Ok(validator) = options.build(&document) else {
-            return Ok(None);
+            return Ok(bounds::Build::Unavailable(bounds::Unavailable::Compilation));
         };
         drop(document);
         control.check()?;
         let depth = host.evaluation_depth();
-        Ok(Some(Bounds {
+        Ok(bounds::Build::Ready(Bounds {
             validator,
             deepest: [
                 lower_bound.deepest(depth),
@@ -1462,15 +1633,12 @@ struct Compiled {
     stand_ins: Option<Box<StandIns>>,
 }
 struct StandIns {
-    // The resources the contract reaches but the request did not supply, by
-    // the index their stand-ins' keyword holds.
-    missing: Vec<String>,
     // The original location of each schema that would apply again, by the
     // index its stand-in's keyword holds.
     cycles: Vec<Option<SchemaOrigin>>,
     // Each schema's unmatched `patternProperties` names, likewise.
     names: Vec<UnmatchedNames>,
-    bounds: Option<Bounds>,
+    bounds: bounds::Build<Bounds>,
     // Whether the contract holds a stand-in for an in-place cycle, an invalid
     // pattern or `patternProperties` names, and so explains a failure its own
     // explanation names no problem for through `bounds`.
@@ -1530,8 +1698,8 @@ fn verdict_only_failure() -> ValueOutcome {
         problems_complete: false,
     }
 }
-impl PreparedSchema for Compiled {
-    fn validate(
+impl SchemaValidator for Compiled {
+    fn evaluate(
         &self,
         value: &JsonValue,
         detail: Detail,
@@ -1540,6 +1708,15 @@ impl PreparedSchema for Compiled {
         if let Err(detail) = control.check() {
             let detail = detail.into();
             return ValueOutcome::NoVerdict { detail };
+        }
+        if value.has_duplicate_names() {
+            return ValueOutcome::NoVerdict {
+                detail: no_verdict(
+                    NoVerdictReason::UnsupportedCapability,
+                    "duplicate-instance-members",
+                    "a value with repeated JSON member names has no unambiguous interpretation",
+                ),
+            };
         }
         if !self.nests_within(value, self.deepest) {
             return ValueOutcome::NoVerdict {
@@ -1601,7 +1778,7 @@ impl Compiled {
         if !stop.stands_in() {
             return None;
         }
-        let bounds = self.stand_ins.as_ref()?.bounds.as_ref()?;
+        let bounds = self.stand_ins.as_ref()?.bounds.ready()?;
         let phase = if valid {
             pass::Phase::Lower
         } else {
@@ -1722,25 +1899,18 @@ impl Compiled {
                 let mut detail = unsupported_pattern(unsupported, "pattern");
                 detail.location = self.patterns.site(site).and_then(|at| {
                     self.locations
-                        .locate(&format!("{}#{}", bundle::URI, at.as_str()))
+                        .locate_bounded(&format!("{}#{}", bundle::URI, at.as_str()), 64 * 1024)
                         .map(|(location, _)| location)
                 });
                 detail
             }
-            pass::Stop::Missing(at) => {
-                let mut detail = no_verdict(
+            pass::Stop::Missing(_) => {
+                let detail = no_verdict(
                     NoVerdictReason::ResourceUnavailable,
                     "resource-unavailable",
                     "evaluation reached a resource that was not supplied",
                 );
-                detail.location = stand_ins
-                    .and_then(|stand_ins| stand_ins.missing.get(at as usize))
-                    .map(|uri| {
-                        SchemaOrigin::new(
-                            Some(uri.clone()),
-                            Pointer::from_utf16(&[]).expect("the root pointer"),
-                        )
-                    });
+                // An unavailable resource supplies no original source location.
                 detail
             }
             pass::Stop::Cycle(at) => {
@@ -1833,7 +2003,7 @@ impl Compiled {
             .stand_ins
             .as_deref()
             .filter(|stand_ins| stand_ins.explains)
-            .and_then(|stand_ins| stand_ins.bounds.as_ref())
+            .and_then(|stand_ins| stand_ins.bounds.ready())
         else {
             return outcome;
         };
@@ -2006,18 +2176,4 @@ fn diagnostic_message(kind: &jsonschema::error::ValidationErrorKind) -> String {
 
 fn original_location(at: openbindings_internal_schema::Location) -> SchemaOrigin {
     SchemaOrigin::new(at.resource, at.pointer)
-}
-fn projection_failure(f: openbindings_internal_schema::Failure) -> NoVerdict {
-    use openbindings_internal_schema::FailureReason as F;
-    let reason = match f.reason {
-        F::UnsupportedCapability => NoVerdictReason::UnsupportedCapability,
-        F::ConservativePreparation => NoVerdictReason::ConservativePreparation,
-        F::ResourceUnavailable => NoVerdictReason::ResourceUnavailable,
-        F::LimitExceeded => NoVerdictReason::LimitExceeded,
-        F::Cancelled => NoVerdictReason::Cancelled,
-        F::EvaluatorFailure => NoVerdictReason::EvaluatorFailure,
-    };
-    let mut detail = NoVerdict::new(reason, f.code, f.message);
-    detail.location = f.location.map(original_location);
-    detail
 }

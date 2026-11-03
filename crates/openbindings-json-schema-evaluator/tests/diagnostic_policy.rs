@@ -24,15 +24,22 @@ fn conformant(document: &Document) -> ConformantDocument {
 fn prepare(
     document: &Document,
     resources: &ExternalSchemas,
-) -> Result<PreparedValueContract, NoVerdict> {
+) -> Result<PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator>, PreparationFailure>
+{
     conformant(document)
         .resolve_operation("op")
         .expect("declared operation")
         .input()
         .expect("declared input")
-        .prepare_with(&DefaultEvaluator::new(), resources)
+        .prepare(
+            &DefaultEvaluator::new(),
+            resources,
+            &openbindings::PreparationLimits::default(),
+        )
 }
-fn ready(document: &Document) -> PreparedValueContract {
+fn ready(
+    document: &Document,
+) -> PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator> {
     match prepare(document, &ExternalSchemas::default()) {
         Ok(contract) => contract,
         Err(detail) => panic!("expected ready: {detail:?}"),
@@ -116,11 +123,11 @@ fn draft_metadata_and_semantic_setup_partitions_remain_distinct() {
             .is_none()
     );
     let operation = proof.resolve_operation("op").expect("declared operation");
-    let Ok(contract) = operation
-        .input()
-        .expect("declared input")
-        .prepare(&DefaultEvaluator::new())
-    else {
+    let Ok(contract) = operation.input().expect("declared input").prepare(
+        &DefaultEvaluator::new(),
+        &openbindings::ExternalSchemas::default(),
+        &openbindings::PreparationLimits::default(),
+    ) else {
         panic!()
     };
     let outcome = contract.explain(&JsonValue::parse("null").unwrap());
@@ -136,14 +143,13 @@ fn a_cycle_costs_only_values_whose_verdict_depends_on_it() {
         serde_json::json!({"$ref":"#/operations/op/input"}),
     ));
     for outcome in [
-        contract.validate(&JsonValue::parse("1").unwrap()),
+        contract.evaluate(&JsonValue::parse("1").unwrap()),
         contract.explain(&JsonValue::parse("1").unwrap()),
     ] {
-        let ValueOutcome::NoVerdict { detail } = outcome else {
+        let ValueOutcome::Undefined { detail } = outcome else {
             panic!("{outcome:?}")
         };
-        assert_eq!(detail.reason, NoVerdictReason::ConservativePreparation);
-        assert_eq!(detail.code, "in-place-cycle");
+        assert_eq!(detail.code, "semantic-dependence");
         assert_eq!(
             detail.location,
             Some(SchemaOrigin::new(
@@ -160,7 +166,7 @@ fn a_cycle_costs_only_values_whose_verdict_depends_on_it() {
         let contract = ready(&document(schema));
         for value in ["1", "{}", r#""s""#] {
             let value = JsonValue::parse(value).unwrap();
-            assert!(matches!(contract.validate(&value), ValueOutcome::Satisfies));
+            assert!(matches!(contract.evaluate(&value), ValueOutcome::Satisfies));
             assert!(matches!(contract.explain(&value), ValueOutcome::Satisfies));
         }
     }
@@ -215,20 +221,15 @@ fn invalid_patterns_use_original_locations_and_safe_messages() {
                 };
                 // A value that never reaches the pattern keeps its verdict.
                 assert!(matches!(
-                    contract.validate(&JsonValue::parse("null").unwrap()),
+                    contract.evaluate(&JsonValue::parse("null").unwrap()),
                     ValueOutcome::Satisfies | ValueOutcome::Fails { .. }
                 ));
-                let ValueOutcome::NoVerdict { detail } =
+                let ValueOutcome::Undefined { detail } =
                     contract.explain(&JsonValue::parse(reaching).unwrap())
                 else {
                     panic!("a value whose verdict depends on the pattern was decided")
                 };
-                assert_eq!(detail.reason, NoVerdictReason::ConservativePreparation);
-                assert_eq!(detail.code, "schema-pattern-compilation");
-                assert_eq!(
-                    detail.message,
-                    format!("the schema {keyword} regular expression could not be compiled")
-                );
+                assert_eq!(detail.code, "semantic-dependence");
                 assert_eq!(
                     detail.location,
                     Some(SchemaOrigin::new(
@@ -277,22 +278,28 @@ fn reference_and_resource_messages_do_not_echo_source_identifiers() {
         // A missing resource has a stand-in, and a value reaching it gives no
         // verdict; a reference to a fragment of it refuses preparation.
         // Privacy applies in both phases.
-        let detail = match prepare(&doc, &ExternalSchemas::default()) {
+        match prepare(&doc, &ExternalSchemas::default()) {
             Ok(contract) => {
                 let ValueOutcome::NoVerdict { detail } =
                     contract.explain(&JsonValue::parse("null").unwrap())
                 else {
                     panic!()
                 };
-                detail
+                assert_eq!(detail.reason, NoVerdictReason::ResourceUnavailable);
+                safe(&detail.message);
             }
-            Err(detail) => {
+            Err(failure) => {
                 assert!(reference.contains('#'));
-                detail
+                assert!(matches!(
+                    failure.kind,
+                    PreparationFailureKind::Resolution {
+                        cause: ResolutionFailureKind::ResourceUnavailable { .. }
+                    }
+                ));
+                safe(&failure.to_string());
+                safe(&format!("{failure:?}"));
             }
-        };
-        assert_eq!(detail.reason, NoVerdictReason::ResourceUnavailable);
-        safe(&detail.message);
+        }
     }
     let doc = document(
         serde_json::json!({"$ref":"https://example.invalid/SECRET-id", "$defs":{"a":{"$id":"https://example.invalid/SECRET-id"},"b":{"$id":"https://example.invalid/SECRET-id"}}}),
@@ -301,7 +308,8 @@ fn reference_and_resource_messages_do_not_echo_source_identifiers() {
     let ReferenceResolution::Unresolved { detail } = &refs.references[0].resolution else {
         panic!()
     };
-    assert_eq!(detail.code, "ambiguous-resource");
+    assert_eq!(detail.reason, ReferenceRefusalReason::IdentityConflict);
+    assert_eq!(detail.code, "resource-identity-conflict");
     safe(&detail.message);
     for uri in [
         secret.to_owned(),
@@ -373,17 +381,19 @@ fn messages_use_only_bounded_fixed_type_names_and_never_instance_or_schema_value
 struct Custom(Arc<AtomicUsize>);
 struct CustomPrepared(SchemaOrigin);
 impl SchemaEvaluator for Custom {
+    type Validator = CustomPrepared;
     fn prepare(
         &self,
-        request: &SchemaRequest,
+        request: EvaluationRequest<'_>,
+        _: &PreparationLimits,
         _: &dyn WorkControl,
-    ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
+    ) -> Result<Self::Validator, PreparationFailure> {
         self.0.fetch_add(1, Ordering::SeqCst);
-        Ok(Arc::new(CustomPrepared(request.entry_location())))
+        Ok(CustomPrepared(request.schema.location()))
     }
 }
-impl PreparedSchema for CustomPrepared {
-    fn validate(&self, _: &JsonValue, _: Detail, _: &dyn WorkControl) -> ValueOutcome {
+impl SchemaValidator for CustomPrepared {
+    fn evaluate(&self, _: &JsonValue, _: Detail, _: &dyn WorkControl) -> ValueOutcome {
         ValueOutcome::Fails {
             message: "value does not satisfy the value contract".into(),
             problems: vec![ValueProblem::new(
@@ -421,16 +431,17 @@ fn external_evaluator_construction_and_matching_stay_supported() {
     let calls = Arc::new(AtomicUsize::new(0));
     let proof = conformant(&document(serde_json::json!(true)));
     let operation = proof.resolve_operation("op").expect("declared operation");
-    let state = operation
-        .input()
-        .expect("declared input")
-        .prepare(&Custom(calls.clone()));
+    let state = operation.input().expect("declared input").prepare(
+        &Custom(calls.clone()),
+        &openbindings::ExternalSchemas::default(),
+        &openbindings::PreparationLimits::default(),
+    );
     match state {
         Ok(contract) => assert_eq!(
-            outcome_name(contract.validate(&JsonValue::parse("null").unwrap())),
+            outcome_name(contract.evaluate(&JsonValue::parse("null").unwrap())),
             "fails"
         ),
-        Err(NoVerdict { .. }) => panic!(),
+        Err(PreparationFailure { .. }) => panic!(),
     }
     let detail = UndefinedResult::new("proof", "established by a custom evaluator");
     assert_eq!(

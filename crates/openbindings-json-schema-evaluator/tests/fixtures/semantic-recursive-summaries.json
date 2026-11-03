@@ -1,0 +1,716 @@
+[
+  {
+    "id": "recursive-summary/allOf/annotations/S",
+    "schema": {
+      "allOf": [
+        {
+          "properties": {
+            "x": true
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "value": {
+      "x": 1
+    },
+    "resources": [],
+    "required": "S"
+  },
+  {
+    "id": "recursive-summary/allOf/annotations/F",
+    "schema": {
+      "allOf": [
+        {
+          "properties": {
+            "x": true
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "value": {
+      "y": 1
+    },
+    "resources": [],
+    "required": "F"
+  },
+  {
+    "id": "recursive-summary/allOf/assertion-sibling",
+    "schema": {
+      "allOf": [
+        true
+      ],
+      "type": "integer"
+    },
+    "value": "x",
+    "resources": [],
+    "required": "F"
+  },
+  {
+    "id": "recursive-summary/allOf/failed-child-annotations",
+    "schema": {
+      "anyOf": [
+        true,
+        {
+          "allOf": [
+            {
+              "properties": {
+                "x": true
+              },
+              "not": true
+            }
+          ]
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "value": {
+      "x": 1
+    },
+    "resources": [],
+    "required": "F"
+  },
+  {
+    "id": "recursive-summary/anyOf/annotations/S",
+    "schema": {
+      "anyOf": [
+        {
+          "properties": {
+            "x": true
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "value": {
+      "x": 1
+    },
+    "resources": [],
+    "required": "S"
+  },
+  {
+    "id": "recursive-summary/anyOf/annotations/F",
+    "schema": {
+      "anyOf": [
+        {
+          "properties": {
+            "x": true
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "value": {
+      "y": 1
+    },
+    "resources": [],
+    "required": "F"
+  },
+  {
+    "id": "recursive-summary/anyOf/assertion-sibling",
+    "schema": {
+      "anyOf": [
+        true
+      ],
+      "type": "integer"
+    },
+    "value": "x",
+    "resources": [],
+    "required": "F"
+  },
+  {
+    "id": "recursive-summary/anyOf/failed-child-annotations",
+    "schema": {
+      "anyOf": [
+        true,
+        {
+          "anyOf": [
+            {
+              "properties": {
+                "x": true
+              },
+              "not": true
+            }
+          ]
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "value": {
+      "x": 1
+    },
+    "resources": [],
+    "required": "F"
+  },
+  {
+    "id": "recursive-summary/oneOf/annotations/S",
+    "schema": {
+      "oneOf": [
+        {
+          "properties": {
+            "x": true
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "value": {
+      "x": 1
+    },
+    "resources": [],
+    "required": "S"
+  },
+  {
+    "id": "recursive-summary/oneOf/annotations/F",
+    "schema": {
+      "oneOf": [
+        {
+          "properties": {
+            "x": true
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "value": {
+      "y": 1
+    },
+    "resources": [],
+    "required": "F"
+  },
+  {
+    "id": "recursive-summary/oneOf/assertion-sibling",
+    "schema": {
+      "oneOf": [
+        true
+      ],
+      "type": "integer"
+    },
+    "value": "x",
+    "resources": [],
+    "required": "F"
+  },
+  {
+    "id": "recursive-summary/oneOf/failed-child-annotations",
+    "schema": {
+      "anyOf": [
+        true,
+        {
+          "oneOf": [
+            {
+              "properties": {
+                "x": true
+              },
+              "not": true
+            }
+          ]
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "value": {
+      "x": 1
+    },
+    "resources": [],
+    "required": "F"
+  },
+  {
+    "id": "cycle-composite-alias-ab",
+    "schema": {
+      "allOf": [
+        {
+          "oneOf": [
+            {
+              "$ref": "https://e.test/a"
+            },
+            {
+              "$ref": "https://e.test/a#/not"
+            }
+          ]
+        },
+        {
+          "not": {
+            "allOf": [
+              false,
+              {
+                "$id": "https://force.test/",
+                "$ref": "%"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "value": null,
+    "required": "F",
+    "resources": [
+      {
+        "uri": "https://e.test/a",
+        "schema": {
+          "$id": "https://e.test/a",
+          "not": {
+            "allOf": [
+              {
+                "$ref": "https://e.test/a"
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "cycle-composite-alias-ba",
+    "schema": {
+      "allOf": [
+        {
+          "oneOf": [
+            {
+              "$ref": "https://e.test/a#/not"
+            },
+            {
+              "$ref": "https://e.test/a"
+            }
+          ]
+        },
+        {
+          "not": {
+            "allOf": [
+              false,
+              {
+                "$id": "https://force.test/",
+                "$ref": "%"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "value": null,
+    "required": "F",
+    "resources": [
+      {
+        "uri": "https://e.test/a",
+        "schema": {
+          "$id": "https://e.test/a",
+          "not": {
+            "allOf": [
+              {
+                "$ref": "https://e.test/a"
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "mixed-quantifier/private-opaque-inability",
+    "document": {
+      "openbindings": "0.2.0",
+      "schemas": {
+        "P": {
+          "pattern": "(?i)x"
+        },
+        "A": {
+          "allOf": [
+            {
+              "$ref": "#/schemas/P"
+            },
+            {
+              "anyOf": [
+                true,
+                {
+                  "$ref": "#/schemas/A"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "operations": {
+        "op": {
+          "input": {
+            "oneOf": [
+              {
+                "$ref": "#/schemas/P"
+              },
+              {
+                "$ref": "#/schemas/A"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "value": "y",
+    "resources": [],
+    "required": "F"
+  },
+  {
+    "id": "recursive-adversarial/annotation-provisional-oneof-PA",
+    "document": {
+      "openbindings": "0.2.0",
+      "schemas": {
+        "P": {
+          "properties": {
+            "x": {
+              "pattern": "(?i)x"
+            }
+          }
+        },
+        "A": {
+          "allOf": [
+            {
+              "$ref": "#/schemas/P"
+            },
+            {
+              "anyOf": [
+                true,
+                {
+                  "$ref": "#/schemas/A"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "operations": {
+        "op": {
+          "input": {
+            "oneOf": [
+              {
+                "$ref": "#/schemas/P"
+              },
+              {
+                "$ref": "#/schemas/A"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "value": {
+      "x": "y",
+      "extra": 1
+    },
+    "resources": [],
+    "required": "F"
+  },
+  {
+    "id": "recursive-adversarial/annotation-provisional-oneof-AP",
+    "document": {
+      "openbindings": "0.2.0",
+      "schemas": {
+        "P": {
+          "properties": {
+            "x": {
+              "pattern": "(?i)x"
+            }
+          }
+        },
+        "A": {
+          "allOf": [
+            {
+              "$ref": "#/schemas/P"
+            },
+            {
+              "anyOf": [
+                true,
+                {
+                  "$ref": "#/schemas/A"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "operations": {
+        "op": {
+          "input": {
+            "oneOf": [
+              {
+                "$ref": "#/schemas/A"
+              },
+              {
+                "$ref": "#/schemas/P"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "value": {
+      "x": "y",
+      "extra": 1
+    },
+    "resources": [],
+    "required": "F"
+  },
+  {
+    "id": "recursive-adversarial/annotation-consumer-known-selection",
+    "document": {
+      "openbindings": "0.2.0",
+      "schemas": {
+        "P": {
+          "properties": {
+            "x": {
+              "pattern": "(?i)x"
+            }
+          }
+        },
+        "A": {
+          "allOf": [
+            {
+              "$ref": "#/schemas/P"
+            },
+            {
+              "anyOf": [
+                true,
+                {
+                  "$ref": "#/schemas/A"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "#/schemas/A",
+            "unevaluatedProperties": false
+          }
+        }
+      }
+    },
+    "value": {
+      "x": "y"
+    },
+    "resources": [],
+    "required": "U"
+  },
+  {
+    "id": "recursive-adversarial/resource-entry-allOf-x",
+    "document": {
+      "openbindings": "0.2.0",
+      "schemas": {
+        "A": {
+          "$id": "https://r.test/a",
+          "$defs": {
+            "Ext": {
+              "$dynamicAnchor": "node",
+              "type": "string"
+            }
+          },
+          "allOf": [
+            {
+              "$ref": "https://r.test/b"
+            }
+          ]
+        },
+        "B": {
+          "$id": "https://r.test/b",
+          "$dynamicAnchor": "node",
+          "$dynamicRef": "#node"
+        }
+      },
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://r.test/a"
+          }
+        }
+      }
+    },
+    "value": "x",
+    "resources": [],
+    "required": "S"
+  },
+  {
+    "id": "recursive-adversarial/resource-entry-allOf-1",
+    "document": {
+      "openbindings": "0.2.0",
+      "schemas": {
+        "A": {
+          "$id": "https://r.test/a",
+          "$defs": {
+            "Ext": {
+              "$dynamicAnchor": "node",
+              "type": "string"
+            }
+          },
+          "allOf": [
+            {
+              "$ref": "https://r.test/b"
+            }
+          ]
+        },
+        "B": {
+          "$id": "https://r.test/b",
+          "$dynamicAnchor": "node",
+          "$dynamicRef": "#node"
+        }
+      },
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://r.test/a"
+          }
+        }
+      }
+    },
+    "value": 1,
+    "resources": [],
+    "required": "F"
+  },
+  {
+    "id": "recursive-adversarial/resource-entry-anyOf-x",
+    "document": {
+      "openbindings": "0.2.0",
+      "schemas": {
+        "A": {
+          "$id": "https://r.test/a",
+          "$defs": {
+            "Ext": {
+              "$dynamicAnchor": "node",
+              "type": "string"
+            }
+          },
+          "anyOf": [
+            {
+              "$ref": "https://r.test/b"
+            }
+          ]
+        },
+        "B": {
+          "$id": "https://r.test/b",
+          "$dynamicAnchor": "node",
+          "$dynamicRef": "#node"
+        }
+      },
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://r.test/a"
+          }
+        }
+      }
+    },
+    "value": "x",
+    "resources": [],
+    "required": "S"
+  },
+  {
+    "id": "recursive-adversarial/resource-entry-anyOf-1",
+    "document": {
+      "openbindings": "0.2.0",
+      "schemas": {
+        "A": {
+          "$id": "https://r.test/a",
+          "$defs": {
+            "Ext": {
+              "$dynamicAnchor": "node",
+              "type": "string"
+            }
+          },
+          "anyOf": [
+            {
+              "$ref": "https://r.test/b"
+            }
+          ]
+        },
+        "B": {
+          "$id": "https://r.test/b",
+          "$dynamicAnchor": "node",
+          "$dynamicRef": "#node"
+        }
+      },
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://r.test/a"
+          }
+        }
+      }
+    },
+    "value": 1,
+    "resources": [],
+    "required": "F"
+  },
+  {
+    "id": "recursive-adversarial/resource-entry-oneOf-x",
+    "document": {
+      "openbindings": "0.2.0",
+      "schemas": {
+        "A": {
+          "$id": "https://r.test/a",
+          "$defs": {
+            "Ext": {
+              "$dynamicAnchor": "node",
+              "type": "string"
+            }
+          },
+          "oneOf": [
+            {
+              "$ref": "https://r.test/b"
+            }
+          ]
+        },
+        "B": {
+          "$id": "https://r.test/b",
+          "$dynamicAnchor": "node",
+          "$dynamicRef": "#node"
+        }
+      },
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://r.test/a"
+          }
+        }
+      }
+    },
+    "value": "x",
+    "resources": [],
+    "required": "S"
+  },
+  {
+    "id": "recursive-adversarial/resource-entry-oneOf-1",
+    "document": {
+      "openbindings": "0.2.0",
+      "schemas": {
+        "A": {
+          "$id": "https://r.test/a",
+          "$defs": {
+            "Ext": {
+              "$dynamicAnchor": "node",
+              "type": "string"
+            }
+          },
+          "oneOf": [
+            {
+              "$ref": "https://r.test/b"
+            }
+          ]
+        },
+        "B": {
+          "$id": "https://r.test/b",
+          "$dynamicAnchor": "node",
+          "$dynamicRef": "#node"
+        }
+      },
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://r.test/a"
+          }
+        }
+      }
+    },
+    "value": 1,
+    "resources": [],
+    "required": "F"
+  }
+]

@@ -34,11 +34,11 @@ test("patternProperties subschemas reached through references stay evaluable thr
     try {
       const setup = prepareInput(parsed.value, "op", { resources });
       assert.equal(setup.status, "ready", c.id);
-      contract = setup.valueContract;
+      contract = setup.schema;
       c.values.forEach((value, index) => {
         const label = `${c.id} ${JSON.stringify(value)}`;
         const expected = c.expected[index];
-        assert.equal(outcome[contract.validate(value).status], expected, label);
+        assert.equal(outcome[contract.evaluate(value).status], expected, label);
         assert.equal(outcome[contract.explain(value).status], expected, label);
       });
     } finally {

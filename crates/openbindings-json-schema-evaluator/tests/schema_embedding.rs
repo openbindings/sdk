@@ -9,7 +9,8 @@ const BASE: &str = "https://probe.invalid/root";
 fn prepare_input(
     doc: &Document,
     resources: &ExternalSchemas,
-) -> Result<PreparedValueContract, NoVerdict> {
+) -> Result<PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator>, PreparationFailure>
+{
     doc.validate()
         .unwrap()
         .conformant()
@@ -18,7 +19,11 @@ fn prepare_input(
         .unwrap()
         .input()
         .unwrap()
-        .prepare_with(&DefaultEvaluator::new(), resources)
+        .prepare(
+            &DefaultEvaluator::new(),
+            resources,
+            &openbindings::PreparationLimits::default(),
+        )
 }
 
 fn fixture(schema: &str, reference: &str, supplied: bool) -> (Document, ExternalSchemas) {
@@ -176,7 +181,7 @@ fn inspection_root_never_masks_missing_references_including_suffix_candidates() 
 }
 
 #[test]
-fn unused_malformed_reference_sibling_is_isolated_but_malformed_id_stays_refused() {
+fn unused_malformed_siblings_do_not_change_the_selected_schema() {
     for supplied in [false, true] {
         for bad in [r#"{"not":{"$ref":"%"}}"#, r#"{"$id":"%"}"#] {
             let schema =
@@ -190,35 +195,19 @@ fn unused_malformed_reference_sibling_is_isolated_but_malformed_id_stays_refused
                 .iter()
                 .find(|r| r.location.pointer == "/operations/op/input/$ref")
                 .unwrap();
-            if bad.contains("$ref") {
-                assert!(matches!(
-                    &reference.resolution,
-                    ReferenceResolution::Located { .. }
-                ));
-            } else {
-                assert!(
-                    matches!(&reference.resolution, ReferenceResolution::Unresolved { detail } if detail.code == "resource-inspection")
-                );
-            }
-            let prepared = prepare_input(&doc, &resources);
-            if bad.contains("$ref") {
-                let contract = match prepared {
-                    Ok(contract) => contract,
-                    Err(detail) => panic!("{detail:?}"),
-                };
-                assert!(matches!(
-                    contract.explain(&JsonValue::parse(r#""s""#).unwrap()),
-                    ValueOutcome::Satisfies
-                ));
-                assert!(matches!(
-                    contract.explain(&JsonValue::parse("1").unwrap()),
-                    ValueOutcome::Fails { .. }
-                ));
-            } else {
-                assert!(
-                    matches!(prepared, Err(detail) if detail.reason == NoVerdictReason::ConservativePreparation && detail.code == "resource-inspection")
-                );
-            }
+            assert!(matches!(
+                &reference.resolution,
+                ReferenceResolution::Located { .. }
+            ));
+            let contract = prepare_input(&doc, &resources).unwrap();
+            assert!(matches!(
+                contract.explain(&JsonValue::parse(r#""s""#).unwrap()),
+                ValueOutcome::Satisfies
+            ));
+            assert!(matches!(
+                contract.explain(&JsonValue::parse("1").unwrap()),
+                ValueOutcome::Fails { .. }
+            ));
         }
     }
 }

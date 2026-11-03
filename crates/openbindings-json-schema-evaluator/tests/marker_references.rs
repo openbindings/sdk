@@ -7,7 +7,11 @@ use openbindings_json_schema_evaluator::DefaultEvaluator;
 
 const M: char = '\u{e000}';
 
-fn prepare(input: &str, resources: &ExternalSchemas) -> Result<PreparedValueContract, NoVerdict> {
+fn prepare(
+    input: &str,
+    resources: &ExternalSchemas,
+) -> Result<PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator>, PreparationFailure>
+{
     let text = format!(
         r#"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{input}}}}},"schemas":{{"s":{{"$defs":{{"{M}":{{"type":"integer"}}}}}}}}}}"#
     );
@@ -21,11 +25,18 @@ fn prepare(input: &str, resources: &ExternalSchemas) -> Result<PreparedValueCont
         .unwrap()
         .input()
         .unwrap()
-        .prepare_with(&DefaultEvaluator::new(), resources)
+        .prepare(
+            &DefaultEvaluator::new(),
+            resources,
+            &openbindings::PreparationLimits::default(),
+        )
 }
 
-fn outcome(contract: &PreparedValueContract, value: &str) -> &'static str {
-    match contract.validate(&JsonValue::parse(value).unwrap()) {
+fn outcome(
+    contract: &PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator>,
+    value: &str,
+) -> &'static str {
+    match contract.evaluate(&JsonValue::parse(value).unwrap()) {
         ValueOutcome::Satisfies => "satisfies",
         ValueOutcome::Fails { .. } => "fails",
         ValueOutcome::Undefined { .. } => "undefined",
@@ -34,7 +45,9 @@ fn outcome(contract: &PreparedValueContract, value: &str) -> &'static str {
 }
 
 // Whether the contract checks values as an integer schema.
-fn integer(contract: &PreparedValueContract) -> bool {
+fn integer(
+    contract: &PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator>,
+) -> bool {
     match (outcome(contract, "5"), outcome(contract, r#""x""#)) {
         ("satisfies", "fails") => true,
         ("fails", "satisfies") => false,
@@ -84,8 +97,13 @@ fn a_reference_to_an_absent_marker_name_identifies_no_schema() {
     let input = format!(
         r##"{{"$id":"https://e.test/r","$defs":{{"{M}{M}":{{"type":"integer"}}}},"$ref":"#/$defs/%EE%80%80"}}"##
     );
-    let refused = prepare(&input, &ExternalSchemas::default()).unwrap_err();
-    assert_eq!(refused.code, "non-schema-target", "{refused:?}");
+    let document = Document::parse(format!(
+        r#"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{input}}}}}}}"#
+    ))
+    .unwrap();
+    let validation = document.validate().unwrap();
+    assert_eq!(validation.report().evidence["OBI-12"], Evidence::Violated);
+    assert!(validation.conformant().is_none());
 }
 
 #[test]

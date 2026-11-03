@@ -30,10 +30,10 @@ the default evaluator; it does not expose custom evaluator callbacks.
 
 ## Bring your own
 
-Implement `SchemaEvaluator::prepare` and return an owned `PreparedSchema`.
+Implement `SchemaEvaluator::prepare` and return an owned `SchemaValidator`.
 Pass a borrowed implementation, and an immutable `ExternalSchemas` when resources are
-supplied, to a conformant operation's `Schema::prepare_with`. Implement
-`PreparedSchema::validate` to return satisfies, fails, undefined or no-verdict.
+supplied, to a conformant operation's `Schema::prepare`. Implement
+`SchemaValidator::evaluate` to return satisfies, fails, undefined or no-verdict.
 Each call passes a `Detail`. With `Detail::Outcome`, the caller's cheap check, a
 failure carries no problems and `problems_complete` is false. With
 `Detail::Explain`, a failure carries at least one problem unless detail work was
@@ -44,14 +44,15 @@ same verdict. Observe `WorkControl` during both stages and retain everything
 needed after the document, resources and request are dropped, including what
 explanations read.
 
-`SchemaRequest` gives the original document, entry, source location and supplied
-resources. Its `evaluation_program()` helper supplies the OpenBindings embedding
-projection when the evaluator needs a closed JSON Schema program. Its resolution
-space is assembled once per live document revision and resource set and reused by
-later preparations with that pair, until the set or the revision is dropped. It can refuse; preserve the reason rather than claiming a value
-failure. The original document and resources remain available to an implementation
-with a different resolution strategy.
-Reference acquisition is application policy, never an implicit request from core.
+`EvaluationRequest` borrows the selected original `Schema` and `ExternalSchemas`.
+`environment(limits, control)` returns an owned `SchemaEnvironment` with original
+sources, inventories and typed reference queries. The bounded environment is
+reused for a live document/resource pair; it does not rewrite the document or
+fetch missing content. An implementation can retain this owned environment or
+copy the prepared facts it needs. A failed environment query remains a typed
+preparation/resolution cause, not a value verdict. Custom evaluators may inspect
+an external resource root even when the built-in inventory cannot interpret its
+dialect-dependent child positions.
 
 Implement OpenBindings' value-contract semantics, including its JSON Schema
 provisions and original-source locations. Declare unsupported capabilities with
@@ -70,14 +71,14 @@ and add schema facts with `with_details(details)`. `instance` is the failing
 node's exact `Pointer` from the value the call received (its root is that value,
 also when it is part of a larger text); `JsonValue::at_pointer` checks one and
 `Pointer: FromStr` parses escaped text from a library. Name `schema` by resource
-and exact pointer from that source's root: `SchemaRequest::location(node)` builds
-one for a node of the request's document or supplied resources, and
-`entry_location()` names the selected schema; do this at preparation, since the
-prepared object must not keep the request. `SchemaOrigin::new(resource,
-pointer)` takes any exact `Pointer`. When a keyword cannot be mapped to an
-original source, name the selected schema rather than guessing. Callers find line
-and column on demand with `JsonValue::locate`, `ConformantDocument::locate` and
-`ExternalSchemas::locate`.
+and exact pointer from that source's root. Use the original `Schema` and
+`SchemaEnvironment` locations while preparing or evaluating; retain owned source
+facts needed later. The borrowed request itself does not survive preparation.
+`SchemaOrigin::new(source_uri, pointer)` takes an exact `Pointer`. If a keyword
+cannot be mapped to an original source, use an established selected-schema origin
+or omit the optional origin; never invent one for unavailable content. Callers
+find line and column on demand with `JsonValue::locate`, `ConformantDocument::locate`
+and `ExternalSchemas::locate`.
 
 These records may gain fields in later versions, so they have no struct-literal
 form outside the SDK; their fields stay public to read and assign. `ValueOutcome`

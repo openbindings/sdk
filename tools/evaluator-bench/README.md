@@ -25,6 +25,14 @@ python3 tools/evaluator-bench/compare.py build --baseline-source /path/base-sour
 python3 tools/evaluator-bench/compare.py --baseline /path/bin/baseline --candidate /path/bin/candidate --baseline-alloc /path/bin/baseline-alloc --candidate-alloc /path/bin/candidate-alloc --output /path/results --enforce
 ```
 
+The current protocol has a separate `preparation-refused` counter and typed
+failure observation. This changes the instrument's counter initialization. A
+paired comparison with an older SDK must use this same instrument on both sides
+(with an explicitly adapted SDK-only boundary for the baseline); the original
+baseline executable is not a comparable timing instrument. The driver still
+rejects unmatched instrument changes. The frozen original measurements remain
+historical evidence until a matched pair is built.
+
 Use clean source snapshots at the same pinned compiler. Each snapshot's SDK
 sources must be at their usual relative paths. Every build variant (each side's
 timing and memory binaries, and any fallback) gets its own new directory under
@@ -125,7 +133,7 @@ bytes, checked against independent fixture expectations before timing.
 then requests full available diagnostics per iteration; serialization stays
 outside timing. Its precheck includes reported problem count, first problem
 code and original instance/schema locations, as well as the full observation.
-The shim calls `PreparedValueContract::explain_with_control` per iteration.
+The shim calls `PreparedSchema::explain_with_control` per iteration.
 
 Each request selects its mode's operation once, before timing. Every mode's
 warmups and timed loop form a separate, never-inlined instance of one generic

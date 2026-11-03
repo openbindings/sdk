@@ -35,8 +35,13 @@ pub(crate) const KEYWORD: &str = "$obMissing";
 pub(crate) fn uris(space: &SchemaSpace) -> Vec<String> {
     let mut missing = BTreeSet::new();
     for (id, node) in space.local_nodes() {
-        for keyword in ["$ref", "$dynamicRef"] {
-            if let Some(reference) = node.value.get(keyword).and_then(|value| value.as_str()) {
+        let Some(dialect) = node.dialect else {
+            continue;
+        };
+        for keyword in ["$ref", "$dynamicRef", "$recursiveRef"] {
+            if dialect.active(keyword)
+                && let Some(reference) = node.value.get(keyword).and_then(|value| value.as_str())
+            {
                 let _ = space.resolve_with_missing(id, reference, &mut |uri| {
                     missing.insert(uri.to_owned());
                 });

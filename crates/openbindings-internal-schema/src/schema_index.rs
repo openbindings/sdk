@@ -1,4 +1,5 @@
 //! The normative schema-position walk. Unknown keywords remain opaque.
+use crate::dialect::Dialect;
 use crate::{JsonKind, JsonRef, JsonValue, identifiers::Identifiers};
 use openbindings_internal_json::backend::{node, ref_id};
 mod references;
@@ -16,6 +17,8 @@ pub struct SchemaNode {
     pub id: u32,
     pub depth: u32,
     pub resource: u32,
+    /// Interpretation inherited from the nearest external resource root.
+    pub dialect: Option<Dialect>,
 }
 impl std::fmt::Debug for SchemaNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -140,27 +143,33 @@ pub fn each_schema_child<'a>(value: JsonRef<'a>, mut visit: impl FnMut(JsonRef<'
             else {
                 continue;
             };
-            let is_schema =
-                |v: &JsonRef<'_>| matches!(v.kind(), JsonKind::Object | JsonKind::Boolean);
-            match selector {
-                SchemaSelector::Map | SchemaSelector::MapOrStringArray => {
-                    if let Some(entries) = member.value.members() {
-                        entries
-                            .map(|m| m.value)
-                            .filter(is_schema)
-                            .for_each(&mut visit);
-                    }
-                }
-                SchemaSelector::Array => {
-                    if let Some(entries) = member.value.elements() {
-                        entries.filter(is_schema).for_each(&mut visit);
-                    }
-                }
-                SchemaSelector::Direct => {
-                    if is_schema(&member.value) {
-                        visit(member.value);
-                    }
-                }
+            selected_children(member.value, *selector, &mut visit);
+        }
+    }
+}
+pub(crate) fn selected_children<'a>(
+    value: JsonRef<'a>,
+    selector: SchemaSelector,
+    mut visit: impl FnMut(JsonRef<'a>),
+) {
+    let is_schema = |v: &JsonRef<'_>| matches!(v.kind(), JsonKind::Object | JsonKind::Boolean);
+    match selector {
+        SchemaSelector::Map | SchemaSelector::MapOrStringArray => {
+            if let Some(entries) = value.members() {
+                entries
+                    .map(|m| m.value)
+                    .filter(is_schema)
+                    .for_each(&mut visit);
+            }
+        }
+        SchemaSelector::Array => {
+            if let Some(entries) = value.elements() {
+                entries.filter(is_schema).for_each(&mut visit);
+            }
+        }
+        SchemaSelector::Direct => {
+            if is_schema(&value) {
+                visit(value);
             }
         }
     }
@@ -261,7 +270,63 @@ impl SchemaIndex {
                 };
                 let index =
                     u32::try_from(out.nodes.len()).expect("schemas are bounded by the node count");
-                let declared = value.get("$id");
+                let inherited = out
+                    .nodes
+                    .get(parent as usize)
+                    .map_or(Some(Dialect::Draft202012), |n| n.dialect);
+                let candidate_id = value.get("$id");
+                let mut dialect = if !external {
+                    Some(Dialect::Draft202012)
+                } else if parent == u32::MAX
+                    || (candidate_id.is_some()
+                        && !inherited.is_some_and(|d| d.reference_object(value))
+                        && !(inherited == Some(Dialect::Draft7)
+                            && candidate_id
+                                .and_then(|v| v.as_str())
+                                .is_some_and(|id| id.starts_with('#'))))
+                {
+                    value
+                        .get("$schema")
+                        .map_or(inherited, |v| v.as_str().and_then(Dialect::from_uri))
+                } else {
+                    inherited
+                };
+                let reference_object = dialect.is_some_and(|d| d.reference_object(value));
+                // A mixed-dialect boundary is established by the enclosing
+                // profile. Its new root interpretation cannot erase that boundary.
+                let id_suppressed = if parent == u32::MAX {
+                    reference_object
+                } else {
+                    inherited.is_some_and(|d| d.reference_object(value))
+                };
+                let declaring_dialect = if parent == u32::MAX {
+                    dialect
+                } else {
+                    inherited
+                };
+                let fragment = if declaring_dialect == Some(Dialect::Draft7) && !id_suppressed {
+                    candidate_id
+                        .and_then(|v| v.as_str())
+                        .and_then(|s| s.strip_prefix('#'))
+                } else {
+                    None
+                };
+                // Draft-07 only assigns a portable meaning to a fragment-only
+                // plain name. Other nonempty-fragment forms stay uninterpreted.
+                let unsupported_identifier = dialect == Some(Dialect::Draft7)
+                    && !id_suppressed
+                    && candidate_id.and_then(|v| v.as_str()).is_some_and(|id| {
+                        (id.contains('#') && !id.ends_with('#') && !id.starts_with('#'))
+                            || fragment.is_some_and(|name| !crate::dialect::draft7_name(name))
+                            || (declaring_dialect != Some(Dialect::Draft7)
+                                && id.starts_with('#')
+                                && id.len() > 1)
+                    });
+                if unsupported_identifier {
+                    dialect = None;
+                }
+                let declared = candidate_id
+                    .filter(|_| !id_suppressed && fragment.is_none() && !unsupported_identifier);
                 let resource = if declared.is_some() {
                     out.parent_resources.push((index + 1, parent_resource));
                     index + 1
@@ -303,8 +368,12 @@ impl SchemaIndex {
                 }
                 for (keyword, dynamic) in [("$anchor", false), ("$dynamicAnchor", true)] {
                     if full
+                        && !reference_object
+                        && dialect.is_some_and(|d| d.active(keyword))
                         && let Some(name) = value.get(keyword)
-                        && name.as_str().is_some_and(plain_name)
+                        && name
+                            .as_str()
+                            .is_some_and(|name| dialect.is_some_and(|d| d.anchor_name(name)))
                     {
                         out.anchors.push(Anchor {
                             resource,
@@ -317,33 +386,25 @@ impl SchemaIndex {
                 // Push children in reverse so they are visited in document order.
                 let pending = stack.len();
                 let mut stopped = None;
-                // External resources declare their own dialect. Retain an
-                // unsupported resource root but do not invent its positions
-                // using 2020-12 rules. Contained OBI schemas are fixed 2020-12.
-                let known_inventory = !external
-                    || (parent != u32::MAX && declared.is_none())
-                    || value.get("$schema").is_none_or(|dialect| {
-                        matches!(
-                            dialect.as_str(),
-                            Some(DIALECT | "https://json-schema.org/draft/2020-12/schema#")
-                        )
-                    });
-                if known_inventory {
-                    each_schema_child(value, |child| {
-                        if stopped.is_some() {
-                            return;
-                        }
-                        if let Err(error) = check(
-                            out.nodes
-                                .len()
-                                .saturating_add(stack.len())
-                                .saturating_add(1),
-                        ) {
-                            stopped = Some(error);
-                        } else {
-                            stack.push((ref_id(child) as u32, index));
-                        }
-                    });
+                let mut visit = |child: JsonRef<'_>| {
+                    if stopped.is_some() {
+                        return;
+                    }
+                    if let Err(error) = check(
+                        out.nodes
+                            .len()
+                            .saturating_add(stack.len())
+                            .saturating_add(1),
+                    ) {
+                        stopped = Some(error);
+                    } else {
+                        stack.push((ref_id(child) as u32, index));
+                    }
+                };
+                if !external {
+                    each_schema_child(value, &mut visit);
+                } else if let Some(dialect) = dialect {
+                    dialect.each_child(value, &mut visit);
                 }
                 if let Some(error) = stopped {
                     return Err(error);
@@ -353,6 +414,7 @@ impl SchemaIndex {
                     id,
                     depth,
                     resource,
+                    dialect,
                 });
             }
         }

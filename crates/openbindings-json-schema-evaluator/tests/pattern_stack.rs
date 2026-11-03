@@ -4,7 +4,10 @@
 use openbindings::*;
 use openbindings_json_schema_evaluator::{DefaultEvaluator, Limits};
 
-fn prepared(schema: &str) -> Result<PreparedValueContract, NoVerdict> {
+fn prepared(
+    schema: &str,
+) -> Result<PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator>, PreparationFailure>
+{
     let text = format!(r#"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{schema}}}}}}}"#);
     let proof = Document::parse(text)
         .unwrap()
@@ -13,7 +16,11 @@ fn prepared(schema: &str) -> Result<PreparedValueContract, NoVerdict> {
         .conformant()
         .unwrap();
     let operation = proof.resolve_operation("op").unwrap();
-    operation.input().unwrap().prepare(&DefaultEvaluator::new())
+    operation.input().unwrap().prepare(
+        &DefaultEvaluator::new(),
+        &openbindings::ExternalSchemas::default(),
+        &openbindings::PreparationLimits::default(),
+    )
 }
 
 // Release builds need at most 96 KiB here (macOS arm64). Unoptimized code gives
@@ -56,7 +63,7 @@ fn patterns_at_the_default_depth_prepare_and_check_on_a_small_stack() {
                     let value = JsonValue::parse(value).unwrap();
                     match prepared(&schema) {
                         Ok(contract) => {
-                            let outcome = contract.validate(&value);
+                            let outcome = contract.evaluate(&value);
                             if matched {
                                 assert!(!matches!(outcome, ValueOutcome::NoVerdict { .. }), "{pattern}");
                             } else {
@@ -68,7 +75,7 @@ fn patterns_at_the_default_depth_prepare_and_check_on_a_small_stack() {
                         }
                         Err(detail) => {
                             assert!(!matched && keyword == "patternProperties", "{pattern}: {detail:?}");
-                            assert_eq!(detail.code, "pattern-backtracking");
+                            assert_eq!(detail.kind, PreparationFailureKind::UnsupportedCapability { capability: "pattern-backtracking".into() });
                         }
                     }
                 }
@@ -80,7 +87,7 @@ fn patterns_at_the_default_depth_prepare_and_check_on_a_small_stack() {
                 );
                 assert!(matches!(
                     prepared(&schema),
-                    Err(detail) if detail.code == "pattern-depth-limit"
+                    Err(detail) if detail.kind == PreparationFailureKind::Limit { resource: "pattern-depth-limit".into() }
                 ));
             }
         })

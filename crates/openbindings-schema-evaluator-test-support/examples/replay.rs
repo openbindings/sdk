@@ -1,31 +1,33 @@
 //! Emit a complete case-ID receipt, checking and explaining every value, through
 //! a custom evaluator outside core.
 use openbindings::*;
-use openbindings_json_schema_evaluator::DefaultEvaluator;
+use openbindings_json_schema_evaluator::{DefaultEvaluator, DefaultValidator};
 use openbindings_schema_evaluator_test_support::{Report, run, suite};
-use std::sync::Arc;
 
 struct OriginalContext;
 impl SchemaEvaluator for OriginalContext {
+    type Validator = DefaultValidator;
     fn prepare(
         &self,
-        request: &SchemaRequest,
+        request: EvaluationRequest<'_>,
+        limits: &PreparationLimits,
         control: &dyn WorkControl,
-    ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
-        let document: &ConformantDocument = request.document();
-        let entry = document.locate(&request.entry_location()).unwrap();
+    ) -> Result<Self::Validator, PreparationFailure> {
+        let document = request.schema.document();
+        let entry = request.schema.location();
         assert_eq!(
             document
                 .value()
-                .at(entry.pointer.as_ref().and_then(Pointer::as_str).unwrap())
+                .at_pointer(&entry.pointer)
                 .unwrap()
                 .to_owned()
-                .semantic_eq(request.entry()),
+                .semantic_eq(&request.schema.json()),
             Some(true)
         );
-        DefaultEvaluator::new().prepare(request, control)
+        DefaultEvaluator::new().prepare(request, limits, control)
     }
 }
+
 fn main() {
     let report = run(&OriginalContext);
     // The receipt is written as JSON text: a report can carry an exact pointer

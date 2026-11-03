@@ -166,3 +166,21 @@ fn provenance_reports_the_embedded_source_digests() {
         );
     }
 }
+
+#[test]
+fn preparation_refusal_is_counted_without_an_instance_verdict() {
+    let output = run(json!({"schema":r##"{"$ref":"#/$defs/absent"}"##,
+    "value":"1", "iterations":2,
+    "expected":{"status":"preparation-refused", "failure":{
+        "kind":"resolution", "details":{"cause":{"kind":"undefined","details":"missing-target"}},
+        "origin":{"source_uri":"https://benchmark.invalid/root","pointer":""}
+    }}}));
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let observed: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(observed["outcomes"]["preparation-refused"], 2);
+    assert!(observed["outcomes"].get("no-verdict").is_none());
+}

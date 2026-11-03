@@ -545,7 +545,7 @@ test("text and its UTF-8 bytes are admitted alike by every exact entry point", (
   const prepared = prepareInput(document, "run");
   document.dispose();
   assert.equal(prepared.status, "ready");
-  const contract = prepared.valueContract;
+  const contract = prepared.schema;
   const before = testing.liveStorageOwners();
   const plain = (result) => {
     const value = result.value;
@@ -579,8 +579,8 @@ test("text and its UTF-8 bytes are admitted alike by every exact entry point", (
         plain(sdk.Document.parse(bytes)),
       );
       assert.deepEqual(
-        contract.validateJson(text),
-        contract.validateJson(bytes),
+        contract.evaluateJson(text),
+        contract.evaluateJson(bytes),
       );
     }
     assert.equal(testing.liveStorageOwners(), before);

@@ -14,7 +14,7 @@ buffers; standalone document views rebase byte locations correctly.
 
 A conformant operation hands out its `Schema`s; preparation borrows an
 evaluator and an explicit immutable `ExternalSchemas`. Each preparation compiles
-independently. A caller-retained `PreparedValueContract` owns required compiled state
+independently. A caller-retained `PreparedSchema` owns required compiled state
 and survives document, resource and evaluator disposal. Cancellation and transient failures do
 not poison healthy subsequent preparation. Resources with the same URI in distinct
 sets never share an implicit registry. A set indexes its resource identities once
@@ -76,6 +76,12 @@ The six public Rust workflows and TypeScript tests are architecture witnesses,
 not sample applications to be migrated. Arbitrary
 JavaScript evaluator callbacks, a Node native addon, source retrieval and CLI/Panjir
 migration remain separate design work.
+
+`openbindings-context` owns opaque context objects and the current closed
+`{message, schema}` challenge carrier. It depends only on core exact JSON and
+performs no acquisition, schema evaluation, trust decision or retry. Invocation,
+kind checking and pulling consume this shared interface concept; it adds no OBI
+fields. Integration of the new companion boundaries is in progress.
 
 `openbindings-interface-synthesis` is a separate optional interface companion, with no
 dependency on inspection. Providers return editable candidates; the `Synthesizer`

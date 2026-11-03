@@ -46,15 +46,25 @@ fn debug_redacts_caller_text_at_every_boundary() {
     for detail in [Detail::Outcome, Detail::Explain] {
         let unprepared = operation.input().unwrap();
         rows.push(row("Schema", &unprepared));
-        let prepared = unprepared.prepare(&DefaultEvaluator::new());
-        rows.push(row("Ok(PreparedValueContract)", &prepared));
+        let prepared = unprepared.prepare(
+            &DefaultEvaluator::new(),
+            &openbindings::ExternalSchemas::default(),
+            &openbindings::PreparationLimits::default(),
+        );
+        rows.push(row(
+            "Ok(PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator>)",
+            &prepared,
+        ));
         let Ok(contract) = prepared else {
             panic!("not ready")
         };
-        rows.push(row("PreparedValueContract", &contract));
+        rows.push(row(
+            "PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator>",
+            &contract,
+        ));
         let value = JsonValue::parse(serde_json::json!({SECRET:7}).to_string()).unwrap();
         let result = match detail {
-            Detail::Outcome => contract.validate(&value),
+            Detail::Outcome => contract.evaluate(&value),
             _ => contract.explain(&value),
         };
         assert!(matches!(result, ValueOutcome::Fails { .. }));
@@ -76,7 +86,11 @@ fn debug_redacts_caller_text_at_every_boundary() {
         .conformant()
         .unwrap();
         let operation = document.resolve_operation("op").unwrap();
-        let Ok(contract) = operation.input().unwrap().prepare(&DefaultEvaluator::new()) else {
+        let Ok(contract) = operation.input().unwrap().prepare(
+            &DefaultEvaluator::new(),
+            &openbindings::ExternalSchemas::default(),
+            &openbindings::PreparationLimits::default(),
+        ) else {
             panic!("not ready")
         };
         let mut result = contract.explain(&JsonValue::parse(instance).unwrap());

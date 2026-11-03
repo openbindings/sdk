@@ -128,7 +128,11 @@ mod tests {
             for run in case["runs"].as_array().unwrap() {
                 let limits: Limits = serde_json::from_value(run["limits"].clone()).unwrap();
                 let expected = &run["expected"];
-                match contract.prepare(&DefaultEvaluator::with_limits(limits)) {
+                match contract.prepare(
+                    &DefaultEvaluator::with_limits(limits),
+                    &openbindings::ExternalSchemas::default(),
+                    &openbindings::PreparationLimits::default(),
+                ) {
                     Err(refusal) => assert_eq!(
                         serde_json::to_value(&refusal).unwrap(),
                         expected["prepare"],
@@ -141,10 +145,16 @@ mod tests {
                         assert_eq!(values.len(), expected.len());
                         for (value, expected) in values.iter().zip(expected) {
                             let outcomes = serde_json::json!([
-                                serde_json::to_value(prepared.validate(value)).unwrap(),
+                                serde_json::to_value(prepared.evaluate(value)).unwrap(),
                                 serde_json::to_value(prepared.explain(value)).unwrap(),
                             ]);
-                            assert_eq!(&outcomes, expected, "{id} {} {}", run["limits"], value.text());
+                            assert_eq!(
+                                &outcomes,
+                                expected,
+                                "{id} {} {}",
+                                run["limits"],
+                                value.text()
+                            );
                         }
                     }
                 }
@@ -215,43 +225,38 @@ mod tests {
 
     #[cfg(feature = "sdk")]
     #[test]
-    fn public_custom_evaluator_and_projection_use_sdk_values() {
+    fn public_custom_evaluator_and_original_environment_use_sdk_values() {
         use openbindings::*;
-        use std::sync::Arc;
         struct ExactConstant;
         struct Prepared(JsonValue);
         impl SchemaEvaluator for ExactConstant {
+            type Validator = Prepared;
             fn prepare(
                 &self,
-                request: &SchemaRequest,
+                request: EvaluationRequest<'_>,
+                limits: &PreparationLimits,
                 control: &dyn WorkControl,
-            ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
-                let program: EvaluationProgram = request.evaluation_program(control)?;
-                let _: &str = program.entry_uri();
-                let resources: &[ExternalSchema] = program.resources();
-                assert!(!resources.is_empty());
-                for resource in resources {
-                    let document: &JsonValue = &resource.document;
-                    let encoded = serde_json::to_string(document).unwrap();
-                    let decoded: JsonValue = serde_json::from_str(&encoded).unwrap();
-                    assert_eq!(decoded.text(), document.text());
-                }
-                let entry = resources
-                    .iter()
-                    .find(|resource| resource.uri == program.entry_uri())
-                    .unwrap();
-                let reference = entry.document.get("$ref").unwrap();
-                let location: SchemaOrigin = program
-                    .original_location(reference.as_str().unwrap())
-                    .unwrap();
-                assert_eq!(location.pointer, request.entry_location().pointer);
-                let constant: JsonValue = request.entry().get("const").unwrap().to_owned();
+            ) -> Result<Prepared, PreparationFailure> {
+                let environment = request.environment(limits, control)?;
+                let root = environment.root();
+                let document: JsonValue = root.value();
+                let encoded = serde_json::to_string(&document).unwrap();
+                let decoded: JsonValue = serde_json::from_str(&encoded).unwrap();
+                assert_eq!(decoded.text(), document.text());
+                assert_eq!(root.origin().pointer, "/operations/read/input");
+                assert_eq!(root.origin().source_uri, None);
+                let constant: JsonValue = document.get("const").unwrap().to_owned();
                 assert_eq!(constant.text(), "1e400");
-                Ok(Arc::new(Prepared(constant)))
+                Ok(Prepared(constant))
             }
         }
-        impl PreparedSchema for Prepared {
-            fn validate(&self, value: &JsonValue, _: Detail, control: &dyn WorkControl) -> ValueOutcome {
+        impl SchemaValidator for Prepared {
+            fn evaluate(
+                &self,
+                value: &JsonValue,
+                _: Detail,
+                control: &dyn WorkControl,
+            ) -> ValueOutcome {
                 control.check().unwrap();
                 // This finite signature witness only calls the supported exact constant.
                 assert_eq!(value.semantic_eq(&self.0), Some(true));
@@ -269,11 +274,15 @@ mod tests {
             .expect("conformant document");
         let operation = proof.resolve_operation("read").expect("declared operation");
         let input: Schema = operation.input().expect("declared input");
-        let contract: PreparedValueContract = input
-            .prepare(&ExactConstant)
+        let contract: PreparedSchema<Prepared> = input
+            .prepare(
+                &ExactConstant,
+                &openbindings::ExternalSchemas::default(),
+                &openbindings::PreparationLimits::default(),
+            )
             .expect("custom evaluator must prepare");
         assert!(matches!(
-            contract.validate(&JsonValue::parse("1e400").unwrap()),
+            contract.evaluate(&JsonValue::parse("1e400").unwrap()),
             ValueOutcome::Satisfies
         ));
     }

@@ -16,7 +16,7 @@ pub struct ExternalSchema {
 /// Immutable caller-supplied resources. Separate sets can use the same URI
 /// for different snapshots; this is not a process-wide registry or an acquirer.
 /// Clones share storage, including the identity index built by [`Self::new`].
-/// [`SchemaRequest::evaluation_program`] reads that index, and the resolution
+/// [`EvaluationRequest::environment`] reads that index, and the resolution
 /// space it assembles for a nonempty set and a document revision is kept with
 /// the set while both are alive, and released when either is dropped. The
 /// default evaluator reuses the index instead of indexing the set again, but
@@ -289,11 +289,6 @@ impl ExternalSchemas {
     #[cfg(test)]
     pub(crate) fn kept_spaces(&self) -> usize {
         self.inner.spaces.lock().unwrap().len()
-    }
-    /// One shared empty set, so preparation without resources allocates nothing.
-    pub(crate) fn empty() -> &'static Self {
-        static EMPTY: std::sync::OnceLock<ExternalSchemas> = std::sync::OnceLock::new();
-        EMPTY.get_or_init(Self::default)
     }
 }
 

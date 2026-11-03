@@ -71,7 +71,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         schema.line
     );
     // Default budgets and no supplied resources.
-    let input = contract.prepare(&DefaultEvaluator::new())?;
+    let input = contract.prepare(
+        &DefaultEvaluator::new(),
+        &openbindings::ExternalSchemas::default(),
+        &openbindings::PreparationLimits::default(),
+    )?;
     // Ordinary values have checked Serde admission. Exact text preserves its tokens.
     let ordinary = JsonValue::from_serializable(&Input {
         id: 9_007_199_254_740_993,
@@ -79,7 +83,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let exact = JsonValue::parse(r#"{"id":9007199254740992}"#)?;
     for value in [&ordinary, &exact] {
         // The cheap check decides; an explanation of the same value says why.
-        let outcome = match input.validate(value) {
+        let outcome = match input.evaluate(value) {
             ValueOutcome::Fails { .. } => input.explain(value),
             outcome => outcome,
         };

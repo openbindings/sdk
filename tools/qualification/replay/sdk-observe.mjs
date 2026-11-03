@@ -97,14 +97,14 @@ export function observe(sdk, request) {
           preparation,
           values: given.valuesJson.map(() => preparationOutcome(preparation)),
         };
-      const prepared = own(preparation.valueContract);
+      const prepared = own(preparation.schema);
       return {
         ...output,
         preparation: { status: "ready" },
         values: given.valuesJson.map((text) => {
           const v = parsed(sdk.parseJson(text));
           try {
-            return prepared.validate(v);
+            return prepared.evaluate(v);
           } finally {
             v.dispose();
           }
@@ -128,7 +128,7 @@ export function observe(sdk, request) {
               const preparation = prepare(given.operation, direction);
               const outcome =
                 preparation.status === "ready"
-                  ? own(preparation.valueContract).validate(value)
+                  ? own(preparation.schema).evaluate(value)
                   : preparationOutcome(preparation);
               results.push({ ...outcome, example: name, side: direction });
             }

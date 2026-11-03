@@ -1,25 +1,22 @@
-# Interface snapshots and SDK policy evidence
+# Pinned current invocation fixtures
 
-Interface source revision: `f158f4f345301668ccb8fd555586b04ca823e732` on
-`main` (interfaces PR #45). These source snapshots do not establish a package
-release or website deployment.
+These byte-exact sources target interfaces revision
+`5815fb106bddd2c85ff4e93e0077570b3f6b9e74` and core specification revision
+`c1419c9fc3ae5a00c2b83da710c11bf67dab7934`.
 
-| Fixture | Evidence owner | SHA-256 |
-| --- | --- | --- |
-| `binding-invoker-0.1.json` | Pinned interface source | `9f611c87148613b2f50f5694a2c7135aa3c255faa536ed8e3faf720ff573355c` |
-| `operation-invoker-0.1.json` | Pinned interface source | `164988547585a7faf983ccf569ebe742b39dcd4082d9b80252230f690fc4f7d2` |
-| `conformance/kind-support/cases.json` | Pinned interface source | `109d33ceb52bb77264e0856d37506a46cfa474516d0ffbeff8496b3041609740` |
-| `conformance/selection/automatic-resolution.json` | Pinned interface source | `b36ddea2f985f106c758174f6ba66b770dce01b35edf85808c01ba87f89104b4` |
-| `conformance/selection/default-supported.json` | Pinned interface source | `f2d58689bf9d87b604a9ccfc55e0ff13dce070e91637c18eeccac3af63b97f54` |
-| `conformance/selection/explicit-binding.json` | Pinned interface source | `cee6ca3396b0d9983dbbe0486b5bb0c7dae4f60fc215939acc0f668e9d44021f` |
-| `conformance/selection/override-selection.json` | Pinned interface source | `4f142c38277066cfe687ac43350cfce12d7b2ca4608f902cf0929f7bfd9dc263` |
+| Fixture | SHA-256 |
+| --- | --- |
+| `binding-invoker-0.1.json` | `cf615d4d4677aa9d1225accd02ac50ab0bc4b8644aac5fcc8c74f99d1c646ec8` |
+| `operation-invoker-0.1.json` | `5e8945e4ef96aacdc32594acc0b6635f5ed4242c38e31b4333953acfe2b6a02a` |
+| `conformance/selection/automatic-resolution.json` | `deb5a6c6ff58e12bed35441993816dadcdf5d451f99ec721f097ce60d8c59a18` |
+| `conformance/selection/default-supported.json` | `f13429bb6ade26e14fab664bae0020e399f31eac0cd6b8edc16f9be273f5d791` |
+| `conformance/selection/explicit-binding.json` | `ba2e39597dfa15448052a195835f79cb5028b4c4c4070b2739e25e17b5b577bb` |
+| `conformance/selection/override-selection.json` | `12d6e91b627e238516a57b52ec5b59e543babd9b250feb1e6ade23a76e8ad2e0` |
 
-The binding and operation JSON files are verbatim interface snapshots. The
-`conformance/` files are verbatim copies of the same paths in that revision's
-published corpus. `conformance_corpus.rs` runs every selection case through plain
-invocation, a prepared operation and preflight, and every kind-support case
-through the binding facade.
-`frame_correspondence.rs` checks the declared frame shapes and separately exercises
-the SDK test bridge's error-handling and lifecycle policies. Native queue draining,
-terminal-race arbitration, polling and malformed-frame classification are SDK
-decisions, not obligations of every interface adopter.
+The twenty published selection cases run through plain invocation, prepared
+invocation, and preflight. The frame-correspondence suite consumes the current
+interface snapshots; its adapter and native lifecycle policies are SDK choices.
+The previous kind-support query is absent from the current invocation contract.
+Kind description is a separate companion obligation, not a passing invocation
+case. Original previous-revision fixtures and test adjudication are retained in
+the migration receipts; no old interface compatibility is promised.

@@ -54,21 +54,17 @@ Set `REFERENCE_RECEIPT` to separate output paths when running each, then run:
 python3 tools/qualification/replay/check-reference-completions.py native.json typescript.json
 ```
 
-The matrix's 1,086 cases and the 1,262 completion cases are retained, including
-the unsupported families. A contract that reaches a static reference defect
-refuses preparation, naming the reference, and a missing resource has a
-stand-in whose no-verdict names it. Against the earlier evaluator, 194 defect
-cases that were decided or undefined now refuse preparation, 8 values that reach
-a stand-in give no verdict, 34 no-verdicts now name the missing resource, 2
-preparation refusals are decided, 5 refusals name a different first defect or
-limit, and no case changes between satisfies and fails. Since in-place cycles
-and patterns the evaluator does not match became stand-ins too, the 26 cases of
-the cycle, pattern and `patternProperties` families and their controls that
-refused preparation prepare, each giving the case's specification answer where
-it does not depend on the stand-in and the stand-in's no-verdict where it does,
-and 8 values that reached a missing resource's stand-in are decided, each as
-every completion of the resource decides it. Additional controls
-preserve siblings and identities while replacing individual defective
-invocations with concrete schemas, and keep the complete-fragment oracle's
-verdicts. The oracle, completion comparisons, and injected false results run
-without network or an independent resolver implementation.
+The original matrix's 1,086 cases and 1,262 concrete-completion cases remain
+unchanged. `reference-current-oracle.json` records their current obligations:
+194 original admission negatives, 2,072 preserved/adjudicated S/F values,
+50 independently adjudicated former semantic gaps, 30 genuinely unavailable
+external-content cases, and two explicit-budget controls. Concrete replacement
+and ordering rows use their concrete S/F expectations, not inherited undefined
+labels. The oracle is not generated from current evaluator observations.
+
+Known local defects are evaluated per value; preparation failure is not used as
+an undefined verdict. Available annotation-producing applicators remain coupled
+with validity, and missing content is not assigned an invented source origin.
+`semantic-soundness.json` and `semantic-limits.json` retain independent review
+counterexamples alongside the unchanged corpus. Rust/TypeScript parity is a
+separate gate and requires a freshly built Wasm artifact.

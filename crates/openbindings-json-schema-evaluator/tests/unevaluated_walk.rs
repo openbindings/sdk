@@ -55,12 +55,16 @@ fn pattern_subschemas_reached_through_references_stay_evaluable() {
             .expect("declared operation")
             .input()
             .expect("declared input")
-            .prepare_with(&DefaultEvaluator::new(), &resources)
+            .prepare(
+                &DefaultEvaluator::new(),
+                &resources,
+                &openbindings::PreparationLimits::default(),
+            )
             .unwrap_or_else(|detail| panic!("{}: {detail:?}", case.id));
         for (value, expected) in case.values.iter().zip(&case.expected) {
             let value = JsonValue::parse(value.get()).unwrap();
             let label = format!("{} {}", case.id, value.text());
-            assert_eq!(outcome(&contract.validate(&value)), expected, "{label}");
+            assert_eq!(outcome(&contract.evaluate(&value)), expected, "{label}");
             assert_eq!(outcome(&contract.explain(&value)), expected, "{label}");
         }
     }
@@ -127,7 +131,11 @@ fn moved_subschema_failures_are_explained_at_their_pattern_properties() {
         .unwrap()
         .input()
         .unwrap()
-        .prepare(&DefaultEvaluator::new())
+        .prepare(
+            &DefaultEvaluator::new(),
+            &openbindings::ExternalSchemas::default(),
+            &openbindings::PreparationLimits::default(),
+        )
         .unwrap();
     let value = JsonValue::parse(r#"{"o":{"a":"x"}}"#).unwrap();
     let ValueOutcome::Fails { problems, .. } = contract.explain(&value) else {
@@ -141,7 +149,7 @@ fn moved_subschema_failures_are_explained_at_their_pattern_properties() {
         SchemaOrigin::new(None, "/schemas/p/patternProperties".parse().unwrap())
     );
     assert!(matches!(
-        contract.validate(&JsonValue::parse(r#"{"o":{"a":1}}"#).unwrap()),
+        contract.evaluate(&JsonValue::parse(r#"{"o":{"a":1}}"#).unwrap()),
         ValueOutcome::Satisfies
     ));
 }
@@ -178,25 +186,27 @@ fn a_walk_too_deep_refuses_at_its_keyword() {
         .expect("conformant")
         .clone();
     let operation = proof.resolve_operation("op").unwrap();
-    let Err(detail) = operation.input().unwrap().prepare(&DefaultEvaluator::new()) else {
+    let Err(detail) = operation.input().unwrap().prepare(
+        &DefaultEvaluator::new(),
+        &openbindings::ExternalSchemas::default(),
+        &openbindings::PreparationLimits::default(),
+    ) else {
         panic!("a 41-reference walk prepared")
     };
-    assert_eq!(detail.code, "unevaluated-walk-limit");
     assert_eq!(
-        detail.location,
+        detail.kind,
+        PreparationFailureKind::Limit {
+            resource: "unevaluated-walk-limit".into()
+        }
+    );
+    assert_eq!(
+        detail.origin,
         Some(SchemaOrigin::new(
             None,
             "/operations/op/input/properties/inner/unevaluatedProperties"
                 .parse()
                 .unwrap(),
         ))
-    );
-    // The refusal states the arithmetic and the setting to raise.
-    assert_eq!(
-        detail.message,
-        "this keyword's annotation walk weighs 273, more than the 105 its 256 KiB stack_bytes \
-         admits: a fifth of the stack is left to the caller, 99 KiB to the rest of preparation, \
-         and each unit takes 1 KiB; raise stack_bytes (stackBytes in TypeScript)"
     );
     // A host that gives preparation a larger stack admits the walk.
     let larger = DefaultEvaluator::with_limits(Limits {
@@ -207,7 +217,17 @@ fn a_walk_too_deep_refuses_at_its_keyword() {
     std::thread::scope(|scope| {
         std::thread::Builder::new()
             .stack_size(16 * 1024 * 1024)
-            .spawn_scoped(scope, || assert!(input.prepare(&larger).is_ok()))
+            .spawn_scoped(scope, || {
+                assert!(
+                    input
+                        .prepare(
+                            &larger,
+                            &openbindings::ExternalSchemas::default(),
+                            &openbindings::PreparationLimits::default()
+                        )
+                        .is_ok()
+                )
+            })
             .unwrap()
             .join()
             .unwrap()

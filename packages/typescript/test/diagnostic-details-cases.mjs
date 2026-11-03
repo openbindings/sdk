@@ -18,7 +18,7 @@ export function diagnosticDetailsCases(sdk) {
       proof = checked.document;
       const ready = prepareInput(proof, "op", options);
       check(ready.status === "ready", "ready");
-      return ready.valueContract;
+      return ready.schema;
     } finally {
       proof?.dispose();
       parsed.value.dispose();
@@ -27,7 +27,7 @@ export function diagnosticDetailsCases(sdk) {
   const doc = (schema) =>
     `{"openbindings":"0.2.0","operations":{"op":{"input":${schema}}}}`;
   // Check cheaply, or explain when `call` is "explain".
-  function run(schema, input, call = "validate") {
+  function run(schema, input, call = "evaluate") {
     const contract = prepare(doc(schema));
     const value = sdk.parseJson(input);
     check(value.status === "parsed", "exact input");
@@ -57,11 +57,11 @@ export function diagnosticDetailsCases(sdk) {
     "9007199254740993",
     "-0.00",
   ]) {
-    for (const call of ["validate", "explain"]) {
+    for (const call of ["evaluate", "explain"]) {
       const result = run(`{"exclusiveMinimum":${token}}`, token, call);
       check(result.status === "fails", "exact exclusive bound");
       check(!result.problemsComplete, "truthful first-error completeness");
-      if (call === "validate")
+      if (call === "evaluate")
         check(result.problems.length === 0, "cheap check omits payloads");
       else {
         const problem = result.problems[0];

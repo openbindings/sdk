@@ -88,7 +88,7 @@ evaluator, custom budgets, supplied resources or a custom evaluator. The evaluat
 is borrowed for the call. Each check chooses its detail: `validate` is cheap and
 reports only whether a value fails; `explain` on the same value contract reports why.
 
-Preparation returns `Result<PreparedValueContract, NoVerdict>`, so `?` propagates a
+Preparation returns `Result<PreparedSchema, NoVerdict>`, so `?` propagates a
 refusal with its reason, code, message and location. A missing operation and an
 absent value contract are `None` before preparation. Only a `ConformantDocument` hands
 out value contracts; a plain `Document` operation exposes the exact schema value.
@@ -102,7 +102,7 @@ Duplicate members are preserved during admission and yield `NoVerdict` during
 validation. Number tokens retain their exact meaning.
 
 Use `JsonValue::parse_with_limits` for custom admission limits and
-`PreparedValueContract::validate` for retained exact values without reparsing.
+`PreparedSchema::validate` for retained exact values without reparsing.
 Documents take the same `JsonLimits` through `validate_document_with_limits` and
 `Document::parse_with_limits`, and keep them for their edits. Use
 `JsonValue::from_serializable` for ordinary Rust data. The converter preserves

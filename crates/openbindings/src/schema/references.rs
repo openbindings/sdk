@@ -68,16 +68,6 @@ impl SchemaSpace {
         }
         Ok(())
     }
-    pub fn program(
-        &self,
-        entry: usize,
-        control: &dyn WorkControl,
-    ) -> Result<EvaluationProgram, NoVerdict> {
-        self.inner
-            .program(entry, &|| control.is_cancelled())
-            .map(EvaluationProgram::from_projection)
-            .map_err(crate::schema::evaluation::projection_failure)
-    }
     fn references(&self, control: &dyn WorkControl) -> ReferenceReport {
         let report = self.inner.references(&|| control.is_cancelled());
         ReferenceReport {
@@ -168,6 +158,17 @@ fn reference_refusal(f: embedding::Failure) -> ReferenceRefusal {
     let reason = match f.reason {
         F::Cancelled => R::Cancelled,
         F::LimitExceeded => R::LimitExceeded,
+        _ if f.query_failure.is_some() => {
+            use embedding::QueryFailure as Q;
+            match f.query_failure.as_deref().expect("query cause") {
+                Q::MalformedReference | Q::InvalidIdentifier => R::InvalidReference,
+                Q::MissingTarget | Q::NonSchemaTarget | Q::MissingAnchor => R::MissingTarget,
+                Q::AmbiguousAnchor => R::AmbiguousTarget,
+                Q::IdentityConflict => R::IdentityConflict,
+                Q::ResourceUnavailable(_) => R::ResourceUnavailable,
+                Q::UnsupportedDialect(_) | Q::UnsupportedCapability(_) => R::UnsupportedCapability,
+            }
+        }
         F::ResourceUnavailable => R::ResourceUnavailable,
         F::UnsupportedCapability => R::UnsupportedCapability,
         _ => match f.code.as_str() {
@@ -295,7 +296,8 @@ impl ConformantDocument {
 
 /// A statically established reference defect. This is semantic evidence at a
 /// reference, not an evaluation outcome for a surrounding schema or instance.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
 #[non_exhaustive]
 pub enum ReferenceDefect {
     /// Invalid URI, percent encoding, or JSON Pointer syntax.
@@ -312,7 +314,8 @@ pub enum ReferenceDefect {
     InvalidIdentifier,
 }
 /// Structured failure of an original-context schema lookup.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(tag = "kind", content = "details", rename_all = "kebab-case")]
 #[non_exhaustive]
 pub enum ResolutionFailureKind {
     /// A reference has an established semantic defect.
@@ -326,6 +329,11 @@ pub enum ResolutionFailureKind {
     UnsupportedDialect {
         /// The declared or inherited dialect URI.
         uri: String,
+    },
+    /// Original inventory interpretation requires an unsupported capability.
+    UnsupportedCapability {
+        /// Stable identifier for the unsupported interpretation.
+        capability: String,
     },
     /// A reached resource has conflicting identity or invalid dialect metadata.
     InvalidExternalSchema,
@@ -345,9 +353,10 @@ pub enum ResolutionFailureKind {
 }
 /// A query failure, with real original provenance when one is available.
 /// Wrong-environment misuse has no origin in the selected environment.
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Serialize)]
 pub struct ResolutionFailure {
     /// Structured cause; no diagnostic-message parsing is required.
+    #[serde(flatten)]
     pub kind: ResolutionFailureKind,
     /// Location in an original source, never a generated evaluator address.
     pub origin: Option<SchemaOrigin>,
@@ -493,7 +502,7 @@ impl SchemaEnvironment {
         }
     }
 }
-fn query_kind(error: embedding::QueryFailure) -> ResolutionFailureKind {
+pub(crate) fn query_kind(error: embedding::QueryFailure) -> ResolutionFailureKind {
     use ReferenceDefect as D;
     use ResolutionFailureKind as R;
     use embedding::QueryFailure as Q;
@@ -507,6 +516,9 @@ fn query_kind(error: embedding::QueryFailure) -> ResolutionFailureKind {
         Q::IdentityConflict | Q::UnsupportedDialect(None) => R::InvalidExternalSchema,
         Q::ResourceUnavailable(uri) => R::ResourceUnavailable { uri },
         Q::UnsupportedDialect(Some(uri)) => R::UnsupportedDialect { uri },
+        Q::UnsupportedCapability(capability) => R::UnsupportedCapability {
+            capability: capability.into(),
+        },
     }
 }
 

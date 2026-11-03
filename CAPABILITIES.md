@@ -80,144 +80,67 @@ subschema, so a node is read by at most two checks and their work together stays
 linear in those limits. A failing schema's members are read once more to locate
 OBI-10 findings at the keywords whose values fail.
 
-## Value validation
+## Schema evaluation
 
-Document validation needs no caller-supplied evaluator. Operation values require
-an explicit Rust `SchemaEvaluator`; the TypeScript facade supplies the bundled
-evaluator. Only a conformant operation hands out its input and output value
-contracts, and preparing one borrows the evaluator and any supplied resources. Core alone makes no satisfies/fails decision, even for a boolean
-schema. The [evaluator guide](docs/schema-evaluators.md) explains integration.
+Core exposes an original, proof-owned `Schema` and a generic `SchemaEvaluator`
+seam. Preparation borrows the schema, explicit immutable external resources,
+limits and caller control. `PreparedSchema<E::Validator>` owns the resulting
+validator. The seam requires neither `Send` nor `Sync` and performs no resource
+acquisition. Core alone supplies no value verdict, even for a Boolean schema.
+See the [evaluator integration guide](docs/schema-evaluators.md).
 
-The optional default evaluator supports JSON Schema 2020-12 with exact decimal
-comparison and explicit immutable resources, composed over the unmodified
-jsonschema 0.58.6 library. It performs no reference acquisition. `format`
-remains an annotation. Patterns are read in the dialect JSON Schema 2020-12
-cites, ECMA-262 11th edition (ES2020) section 21.2.1 with Unicode semantics, the
-word boundary `\b` included, and translated for a linear-time engine; a
-differential against V8 checks the translation through both pattern keywords.
-Syntax later editions added, such as ES2025's modifiers `(?i:a)` and duplicate
-named groups, is invalid in that edition and refused.
-One that needs a backtracking engine (lookaround or backreferences), applies
-a Unicode property escape or holds the non-word boundary `\B` produces
-no-verdict, as do other unsupported capabilities. A `$dynamicRef` resolves through the dynamic scope
-of the path that reaches it, also through `$ref` cycles.
+The optional [default evaluator](crates/openbindings-json-schema-evaluator/README.md)
+combines its exact primitive/compiled engine with a bounded semantic interpreter
+over original schema locations. It distinguishes `Satisfies`, `Fails`, `Undefined`
+and `NoVerdict`. A known invalid Unicode pattern or a supported non-consuming
+alias cycle may establish Undefined when the value's validity depends on it.
+Missing content, an unsupported predicate, cancellation and an exhausted limit
+are not known undefined effects. Decisive surrounding logic may establish a
+result despite an effect elsewhere.
 
-The evaluator bounds what the SDK itself reads, writes and recurses through; it
-does not estimate the JSON Schema library's compiled memory. On by default:
-core's document admission limits, its 100,000 schema positions per value contract
-and its fixed depth of 256 nested schemas below a schema position or supplied
-resource root (`schema-depth-limit`);
-the projected JSON nesting compiled (`compile_json_depth`, 512,
-`compileJsonDepth` in TypeScript);
-the stack the host gives (`stack_bytes`, 256 KiB, `stackBytes` in TypeScript),
-from which the evaluator sizes evaluation depth (256 bytes for each nested
-schema evaluation, 1,024 at the default), bounded from the value contract before a
-value is evaluated, the stack a pass of a value contract holding
-`unevaluatedProperties` or `unevaluatedItems` may use as it evaluates (half,
-128 KiB at the default: a bound on the stack's bytes, so the depth it admits
-varies with the build and the host) and the unevaluated walk limit below, so release
-builds on Linux, macOS and Windows prepare, check and explain the 39 recursive
-shapes the stack test covers on threads of 192 KiB, 256 KiB and 1 MiB with the
-evaluator sized for each; each pattern's bytes, form and nesting (1 MiB,
-32 groups) and the forms kept for all of a value contract's patterns together (4 MiB,
-`totalPatternBytes` in TypeScript); the memory of all of a value contract's
-patterns together (`total_pattern_memory`, 64 MiB, `totalPatternMemory` in
-TypeScript, `pattern-total-memory-limit`, with a message that states the
-arithmetic): the SDK's run matchers, which match anchored sequences of
-single-character runs without an automaton and hold a few bytes for each step
-and each range of members past ASCII and a byte for each byte of literal text,
-and the regex crate's memory
-for the compiled patterns, spent through the crate's lazy-DFA cache setting, a
-quarter of it in equal parts, and its compiled-size setting, within which each
-pattern first compiles in 48 KiB beside the run matchers while those that need
-more share the rest, so small patterns beside a large one change its outcome
-only through what they hold: `^.{1,10000}$` compiles beside up to 743 small
-patterns and four such counted repetitions of about 13 MiB compile together,
-while 40 refuse in about 0.2 s; the
-memory dynamic specialization adds to a value contract's program, estimated for the
-SDK's own copies and dynamic contexts (`program_bytes`, 48 MiB, `programBytes`
-in TypeScript, `program-specialization-limit`); and an unevaluated keyword's
-annotation walk, which the library compiles by recursion, weighed by the kind
-of each reference against what `stack_bytes` admits with a fifth of it left to
-the caller (`unevaluated-walk-limit`: at the default 26 `$ref`s, 8 levels of
-`allOf` inheritance, 7 through `then` or `dependentSchemas`). Each of these
-refusals states its arithmetic and names the setting to raise. Off unless an
-application sets them: an evaluation work cap (`evaluation_steps`), which bounds
-only time and without which time can grow exponentially with some schemas (its
-marker before every reference nests one more schema evaluation for each
-reference a value's evaluation follows, so within the same `stack_bytes` a
-recursive value contract decides fewer levels, at worst about half as many:
-203 instead of 340 for an array nested through one subschema reference per
-level), and a
-cap on the schema resources one value contract may reach (`schema_resources`,
-`schemaResources` in TypeScript). That cap refuses a value contract after core projects
-it and before the evaluator copies its resources and the library compiles them,
-so it bounds the time and memory of that compilation: an 8 MB document whose input
-reaches a chain of 99,990 `$id` resources prepared in 8.1 s at a 725 MB peak
-without it, and refused in 1.1 s at a 499 MB peak with it set to 1,000. Within
-these bounds, preparing a schema can still take more memory than a host may
-want, since the library's compiled program grows with what it compiles: 1,000
-holders of `unevaluatedProperties` that each inherit 4,000 properties peak at
-400 MB. A host preparing schemas from untrusted parties should do so in an
-isolated worker or process with an operating-system memory limit. Values
-checked against trusted schemas stay bounded by `stack_bytes` and, when set,
-`evaluation_steps`. A prepared value contract can remain undecidable for a
-particular value.
+Repeated original predicates share exact value identity. Applicator reasoning
+tracks evaluated properties and items as well as validity; effects do not invent
+annotations. Unknown external content may correlate with addressable predicates.
+The anonymous document resource has a distinct privacy boundary. Recursive
+summaries are reusable only when validity and every evaluated annotation are
+independent of provisional cuts; unresolved components remain conservative.
+Finite successful tests are not a claim of unrestricted recursive completeness.
 
-Two further cases give no verdict whatever `Limits` sets. Exact `multipleOf`
-divides within a fixed arithmetic bound: when the value or the divisor has more
-than 4,096 significant digits, or an exponent beyond ±20,000 once the trailing
-zeros of its digits are counted in it, a division the answer needs gives no
-verdict (`numeric-arithmetic-limit`); other numeric keywords compare exactly at
-any size. Caller values keep unpaired UTF-16 units: keywords that compare values
-exactly, such as `const`, `enum`, `required` and `uniqueItems`, decide them,
-while a keyword that reads a string or member name as Unicode text, such as
-`minLength`, `maxLength`, `pattern`, `properties`, `patternProperties` or
-`propertyNames`, gives no verdict (`lone-surrogate-instance`) when it reaches
-one.
+The compiled path uses jsonschema 0.58.6 with exact decimal comparisons and the
+SDK's ECMA-262 11th-edition Unicode-pattern handling. Unsupported valid pattern
+features yield NoVerdict where required; invalid patterns participate in semantic
+dependence analysis. Optional `format` assertion remains disabled. External
+draft-07 and 2019-09 resources now use their own inventory, assertions and
+annotations in the semantic path. Draft-07 reference siblings are ignored;
+2019-09 recursive references and contains annotations retain their dialect's
+behavior. Unsupported identifier forms retain explicit capability refusals,
+including external identity selection when a stopped inventory could hide names.
+Required custom vocabulary and format-assertion interpretation remains unfinished.
 
-A value contract prepares with a stand-in for what the evaluator cannot evaluate:
-a resource that was not supplied, a schema that could apply again without
-consuming the instance (an in-place cycle, such as one whose `$ref` names
-itself), and a pattern, in `pattern` or as a `patternProperties` name, that is
-invalid as an ECMA-262 11th edition (ES2020) regular expression with Unicode
-semantics, the dialect JSON Schema 2020-12 cites, or that its linear-time
-engine does not match. A value whose verdict depends on how a stand-in comes
-out gives no verdict naming it (`resource-unavailable`, `in-place-cycle`,
-`schema-pattern-compilation`, `pattern-backtracking`,
-`unicode-property-matching` or `pattern-non-word-boundary`); every other value
-keeps the verdict that holds however each stand-in comes out, independently at
-each place evaluation reaches it, whatever order the keywords are in. A pass
-that reaches a stand-in is decided by a second program the value contract
-compiles for its stand-ins, which bounds its validity from below and above.
-Preparation refuses a value contract in which an `unevaluatedProperties` or
-`unevaluatedItems` keyword's annotation sources reach a stand-in for a missing
-resource, a cycle or `patternProperties` names, since the library reads those
-sources rather than evaluating them, and a reference to a fragment of a
-missing resource or one that identifies no schema. An established undefined
-result has its own `Undefined` outcome, separate from no-verdict, which a
-custom evaluator may return; the default evaluator never does.
-Unsupported capabilities and exhausted limits produce no-verdict. Handle
-no-verdict in both preparation and validation.
+Construction and evaluation honor explicit resource/work limits and cooperative
+cancellation. The semantic path charges its decision graph, annotations, value
+identity and proof work, including retries. Original diagnostics are bounded
+before copying long paths; supported pattern matching borrows input text.
+`program_bytes` does not promise a total process-RSS cap or account for every
+allocation in the underlying compiler. Exact `multipleOf` retains its arithmetic
+bound; some Unicode-text operations cannot interpret unpaired UTF-16 units.
+See the evaluator guide's limit table for the individual policies.
 
-Retain prepared value contracts for repeated validation. Paired macOS arm64 release
-measurements reduced 20,000-integer evaluation from 5.61 ms to 0.39 ms and the
-original twenty-pair SDK/jsonschema-rs time ratio from 12.50× to 4.84×. Sharing one
-target carrier across 100 referring resources measured 8.01 ms before and 7.74 ms
-after for public preparation. The case with 5,000 long references uses 50.38 MiB peak
-requested heap versus 55.01 MiB before. Exact fallbacks and limits remain in
-force; these are measured examples, not latency guarantees. See
-[methodology and heap tradeoffs](docs/performance-boundaries.md).
+Preparation failure is separate from a per-value outcome. A failed or cancelled
+attempt does not poison cached preparation. Complete compiled validators release
+unnecessary original sources; a semantic validator retains the original schema
+environment it needs. `evaluate` requests an outcome; `explain` may provide bounded
+original-location evidence. Missing diagnostic detail never changes the verdict.
 
-Each value check chooses its detail. `validate` reports a failure without
-problems; `explain` reports the library's first error, an explicit choice that
-allocates in proportion to input and is made only for values within half the
-nesting `stack_bytes` admits. The explained problem names the failing node by exact pointer from
-the value and the failing keyword by resource and exact pointer; the value,
-document or resource set finds line and column on demand. A prepared value contract
-keeps only the original locations of the schemas it compiled for explanations,
-never their text, its document, supplied resources or any position. Diagnostic
-completeness is separate from the established value outcome.
+Current migration gates are not all green: the native strict core has 505/505
+exact answers, and the native required evaluator kit has 1537/1546; the nine
+remaining cases require custom vocabulary interpretation. The last complete
+auxiliary host replay passed 2348 preserved/adjudicated inputs; full Wasm/host
+qualification must be refreshed after the standard-dialect changes. Independently reviewed recursive controls close
+three earlier F gaps, but two further required Undefined cases remain open.
+The migration's matched-toolchain performance and all-host qualification must be
+completed before claiming these changes fully qualified. Earlier measurements in
+[performance boundaries](docs/performance-boundaries.md) remain historical evidence.
 
 ## Discovery and kind implementations
 

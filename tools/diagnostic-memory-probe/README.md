@@ -177,3 +177,10 @@ assertions for each failing path alone, and restores the copy. It never mutates
 the production evaluator. Each path must fail the allocation assertion while
 retaining the expected public outcome. Fresh mutation receipts are generated under
 `target/diagnostics-review/value-mutations`.
+
+The `--semantic-only` lane exercises both the compiled-to-semantic path and direct
+semantic evaluation with 100 KB and 1 MB original keys and instance strings.
+With a 64 KiB program allowance, all six runs must retain their required S/U
+result and add less than 128 KiB allocator-live peak bytes. Inputs and preparation
+precede each baseline. These checks catch temporary source-pointer and UTF-16
+copies; they do not claim a process RSS bound or include caller-owned input.

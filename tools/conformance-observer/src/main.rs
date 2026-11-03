@@ -224,13 +224,13 @@ fn main() {
 enum Preparation {
     OperationMissing,
     NoContract,
-    Prepared(Result<PreparedValueContract, NoVerdict>),
+    Prepared(Result<PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator>, PreparationFailure>),
 }
 fn prepare(
     proof: &ConformantDocument,
     operation: &str,
     side: &str,
-    evaluator: &dyn SchemaEvaluator,
+    evaluator: &openbindings_json_schema_evaluator::DefaultEvaluator,
     resources: &ExternalSchemas,
 ) -> Preparation {
     let Some(operation) = proof.resolve_operation(operation) else {
@@ -242,7 +242,7 @@ fn prepare(
         operation.output()
     };
     match contract {
-        Some(contract) => Preparation::Prepared(contract.prepare_with(evaluator, resources)),
+        Some(contract) => Preparation::Prepared(contract.prepare(evaluator, resources, &openbindings::PreparationLimits::default())),
         None => Preparation::NoContract,
     }
 }
@@ -250,13 +250,13 @@ fn prepare(
 fn observe_value(preparation: &Preparation, value: &JsonValue) -> String {
     match preparation {
         Preparation::Prepared(Ok(contract)) => {
-            serde_json::to_string(&contract.validate(value)).unwrap()
+            serde_json::to_string(&contract.evaluate(value)).unwrap()
         }
         Preparation::NoContract => json!({"status":"no-schema"}).to_string(),
         Preparation::OperationMissing => json!({"status":"operation-missing"}).to_string(),
         Preparation::Prepared(Err(detail)) => extended(
-            json!({"status":"no-verdict"}).to_string(),
-            &[("detail", serde_json::to_string(detail).unwrap())],
+            json!({"status":"preparation-refused"}).to_string(),
+            &[("failure", serde_json::to_string(detail).unwrap())],
         ),
     }
 }

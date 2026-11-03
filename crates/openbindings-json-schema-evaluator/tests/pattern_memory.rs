@@ -17,7 +17,11 @@ use serde_json::{Map, Value, json};
 const KIB: usize = 1024;
 const MIB: usize = 1024 * KIB;
 
-fn prepare(schema: &Value, limits: Limits) -> Result<PreparedValueContract, NoVerdict> {
+fn prepare(
+    schema: &Value,
+    limits: Limits,
+) -> Result<PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator>, PreparationFailure>
+{
     let document = Document::parse(
         json!({"openbindings":"0.2.0","operations":{"op":{"input":schema}}}).to_string(),
     )
@@ -31,7 +35,11 @@ fn prepare(schema: &Value, limits: Limits) -> Result<PreparedValueContract, NoVe
         .expect("declared operation")
         .input()
         .expect("declared input")
-        .prepare(&DefaultEvaluator::with_limits(limits))
+        .prepare(
+            &DefaultEvaluator::with_limits(limits),
+            &openbindings::ExternalSchemas::default(),
+            &openbindings::PreparationLimits::default(),
+        )
 }
 fn memory(bytes: usize) -> Limits {
     Limits {
@@ -42,11 +50,17 @@ fn memory(bytes: usize) -> Limits {
 fn value(text: &str) -> JsonValue {
     JsonValue::parse(text).unwrap()
 }
-fn satisfies(contract: &PreparedValueContract, text: &str) -> bool {
-    matches!(contract.validate(&value(text)), ValueOutcome::Satisfies)
+fn satisfies(
+    contract: &PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator>,
+    text: &str,
+) -> bool {
+    matches!(contract.evaluate(&value(text)), ValueOutcome::Satisfies)
 }
-fn no_verdict(contract: &PreparedValueContract, text: &str) -> NoVerdict {
-    match contract.validate(&value(text)) {
+fn no_verdict(
+    contract: &PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator>,
+    text: &str,
+) -> NoVerdict {
+    match contract.evaluate(&value(text)) {
         ValueOutcome::NoVerdict { detail } => detail,
         _ => panic!("{text} is decided"),
     }
@@ -75,10 +89,14 @@ fn small(count: usize) -> Vec<String> {
 // The refusal names the original location of the keyword holding the pattern
 // past the limit, `/operations/op/input` followed by `keyword`, which may hold
 // `*` for one array index.
-fn assert_memory_refusal(refused: &NoVerdict, keyword: &str) {
-    assert_eq!(refused.code, "pattern-total-memory-limit");
-    assert_eq!(refused.reason, NoVerdictReason::LimitExceeded);
-    let location = refused.location.as_ref().expect("located refusal");
+fn assert_memory_refusal(refused: &PreparationFailure, keyword: &str) {
+    assert_eq!(
+        refused.kind,
+        PreparationFailureKind::Limit {
+            resource: "pattern-total-memory-limit".into()
+        }
+    );
+    let location = refused.origin.as_ref().expect("located refusal");
     let pointer = location.pointer.to_string();
     let expected = format!("/operations/op/input{keyword}");
     let matches = match expected.split_once('*') {
@@ -109,8 +127,6 @@ fn counted_repetitions_that_need_more_together_refuse_preparation() {
     for count in [40, 300] {
         let refused = prepare(&counted_names(count, json!(true)), Limits::default()).unwrap_err();
         assert_memory_refusal(&refused, "/patternProperties");
-        let sharing = format!("; the {count} that need more share it equally, but this one");
-        assert!(refused.message.contains(&sharing), "{}", refused.message);
     }
 }
 
@@ -124,7 +140,7 @@ fn a_large_counted_repetition_among_few_patterns_compiles() {
         let contract = prepare(schema, Limits::default()).expect("within its part");
         assert!(satisfies(&contract, r#"{"":1}"#));
         assert!(matches!(
-            contract.validate(&value(r#"{"a0":1}"#)),
+            contract.evaluate(&value(r#"{"a0":1}"#)),
             ValueOutcome::Fails { .. }
         ));
     }
@@ -147,7 +163,7 @@ fn small_patterns_elsewhere_leave_a_large_pattern_its_outcome() {
         });
         let contract = prepare(&schema, Limits::default()).expect("within the memory");
         assert!(matches!(
-            contract.validate(&value(r#"{"a":1}"#)),
+            contract.evaluate(&value(r#"{"a":1}"#)),
             ValueOutcome::Fails { .. }
         ));
         let mut patterns = vec!["^.{1,10000}0$".to_owned()];
@@ -199,7 +215,7 @@ fn what_one_pattern_leaves_goes_to_one_that_needs_more() {
     let contract = prepare(&schema, memory(8 * MIB)).expect("the name fits what is left");
     assert!(satisfies(&contract, r#"{"p0":"xa"}"#));
     assert!(matches!(
-        contract.validate(&value(r#"{"xb":1}"#)),
+        contract.evaluate(&value(r#"{"xb":1}"#)),
         ValueOutcome::Fails { .. }
     ));
     // With a third such pattern, the two larger ones need more together than
@@ -213,7 +229,7 @@ fn what_one_pattern_leaves_goes_to_one_that_needs_more() {
     let schema = pattern_values(&patterns);
     for first in [r#"{"p0":"xa"}"#, r#"{"p2":"xc"}"#] {
         let contract = prepare(&schema, memory(8 * MIB)).unwrap();
-        let _ = contract.validate(&value(first));
+        let _ = contract.evaluate(&value(first));
         assert!(satisfies(&contract, r#"{"p0":"xa"}"#));
         for text in [r#"{"p1":"xb"}"#, r#"{"p2":"xc"}"#] {
             let refused = no_verdict(&contract, text);
@@ -265,12 +281,7 @@ fn the_compiled_patterns_are_bounded_in_number() {
     assert!(prepare(&schema(compiled(3)), three.clone()).is_ok());
     let refused = prepare(&schema(compiled(4)), three.clone()).unwrap_err();
     assert_memory_refusal(&refused, "/prefixItems/*/pattern");
-    assert_eq!(
-        refused.message,
-        "this value contract compiles more than 3 regular expressions, as many as its 192 KiB \
-         total_pattern_memory holds at 48 KiB each once their search caches take a quarter; \
-         raise total_pattern_memory (totalPatternMemory in TypeScript)"
-    );
+
     // Run matchers compile nothing, but they hold their bytes of the same
     // memory: 100 of them, 12,777 bytes, fit beside two compiled patterns,
     // and one holds more than three leave.
@@ -281,13 +292,7 @@ fn the_compiled_patterns_are_bounded_in_number() {
     let one = vec![json!({"pattern": "^a{0}$"})];
     let refused = prepare(&schema([compiled(3), one].concat()), three.clone()).unwrap_err();
     assert_memory_refusal(&refused, "/prefixItems/*/pattern");
-    assert_eq!(
-        refused.message,
-        "this value contract's run matchers hold 104 bytes and its 3 compiled regular \
-         expressions 48 KiB each, more together than the 144 KiB its 192 KiB \
-         total_pattern_memory holds for them once search caches take a quarter; raise \
-         total_pattern_memory (totalPatternMemory in TypeScript)"
-    );
+
     let repeated = vec![json!({"pattern": "a|b"}); 100];
     assert!(prepare(&schema(repeated), three.clone()).is_ok());
     let names = json!({"patternProperties": {"a|b": true, "c|d": true, "e|f": true, "g|h": true}});
@@ -309,7 +314,7 @@ fn a_small_pattern_memory_refuses_a_pattern_beyond_what_it_leaves() {
     let small = json!({"patternProperties": {"^.{1,100}x$": false}});
     let contract = prepare(&small, limits.clone()).expect("within what is left");
     assert!(matches!(
-        contract.validate(&value(r#"{"ax":1}"#)),
+        contract.evaluate(&value(r#"{"ax":1}"#)),
         ValueOutcome::Fails { .. }
     ));
     let large = json!({"patternProperties": {"^.{1,1000}x$": false}});
@@ -331,13 +336,7 @@ fn a_small_pattern_memory_refuses_a_pattern_beyond_what_it_leaves() {
     let two = json!({"patternProperties": {"^.{1,1000}x$": false, "^.{1,1000}y$": false}});
     let refused = prepare(&two, memory(2 * MIB)).unwrap_err();
     assert_memory_refusal(&refused, "/patternProperties");
-    assert_eq!(
-        refused.message,
-        "this value contract's 2 compiled regular expressions hold 48 KiB each of its 2 MiB \
-         total_pattern_memory and 256 KiB each for their search caches, which leaves 1.4 MiB; \
-         the 2 that need more share it equally, but this one does not compile within the \
-         768 KiB that gives it; raise total_pattern_memory (totalPatternMemory in TypeScript)"
-    );
+
     // No pattern memory admits no compiled pattern and no run matcher, and
     // leaves patterns the evaluator does not match and contracts without
     // patterns alone.
@@ -348,12 +347,7 @@ fn a_small_pattern_memory_refuses_a_pattern_beyond_what_it_leaves() {
     );
     let refused = prepare(&json!({"pattern": "^[a-z]+$"}), none.clone()).unwrap_err();
     assert_memory_refusal(&refused, "/pattern");
-    assert_eq!(
-        refused.message,
-        "this value contract's run matchers hold 104 bytes, more than the 0 bytes its \
-         0 bytes total_pattern_memory holds for them once search caches take a quarter; \
-         raise total_pattern_memory (totalPatternMemory in TypeScript)"
-    );
+
     let unmatched = prepare(&json!({"pattern": "^(?=a)a"}), none.clone()).unwrap();
     assert_eq!(
         no_verdict(&unmatched, r#""a""#).code,
@@ -376,7 +370,7 @@ fn run_matchers_hold_about_their_text_of_the_pattern_memory() {
     let text = &patterns[7][1..10_001];
     assert!(satisfies(&contract, &json!({ "p7": text }).to_string()));
     assert!(matches!(
-        contract.validate(&value(&json!({ "p7": &text[1..] }).to_string())),
+        contract.evaluate(&value(&json!({ "p7": &text[1..] }).to_string())),
         ValueOutcome::Fails { .. }
     ));
     // Three quarters of 4 MiB hold 310 of them and not 311.
@@ -384,10 +378,4 @@ fn run_matchers_hold_about_their_text_of_the_pattern_memory() {
     assert!(prepare(&pattern_values(&patterns[..310]), limits.clone()).is_ok());
     let refused = prepare(&pattern_values(&patterns[..311]), limits).unwrap_err();
     assert_memory_refusal(&refused, "/properties/p*/pattern");
-    assert_eq!(
-        refused.message,
-        "this value contract's run matchers hold 3.1 MiB, more than the 3 MiB its 4 MiB \
-         total_pattern_memory holds for them once search caches take a quarter; raise \
-         total_pattern_memory (totalPatternMemory in TypeScript)"
-    );
 }

@@ -14,7 +14,16 @@ fn inventories_validate_against_pinned_interface_output_contract() {
         .expect("conformant document");
     let Some(contract) = proof
         .resolve_operation("openbindings.source-inspector.inspectSource")
-        .and_then(|operation| operation.output()?.prepare(&DefaultEvaluator::new()).ok())
+        .and_then(|operation| {
+            operation
+                .output()?
+                .prepare(
+                    &DefaultEvaluator::new(),
+                    &openbindings::ExternalSchemas::default(),
+                    &openbindings::PreparationLimits::default(),
+                )
+                .ok()
+        })
     else {
         panic!("interface output contract did not prepare")
     };
@@ -61,7 +70,16 @@ fn duplicate_recovery_is_sdk_policy_not_an_interface_requirement() {
         .expect("conformant document");
     let Some(contract) = proof
         .resolve_operation("openbindings.source-inspector.inspectSource")
-        .and_then(|operation| operation.output()?.prepare(&DefaultEvaluator::new()).ok())
+        .and_then(|operation| {
+            operation
+                .output()?
+                .prepare(
+                    &DefaultEvaluator::new(),
+                    &openbindings::ExternalSchemas::default(),
+                    &openbindings::PreparationLimits::default(),
+                )
+                .ok()
+        })
     else {
         panic!("interface output contract did not prepare")
     };
@@ -106,7 +124,16 @@ fn limitation_additional_evidence_matches_the_published_interface() {
         .expect("conformant document");
     let Some(contract) = proof
         .resolve_operation("openbindings.source-inspector.inspectSource")
-        .and_then(|operation| operation.output()?.prepare(&DefaultEvaluator::new()).ok())
+        .and_then(|operation| {
+            operation
+                .output()?
+                .prepare(
+                    &DefaultEvaluator::new(),
+                    &openbindings::ExternalSchemas::default(),
+                    &openbindings::PreparationLimits::default(),
+                )
+                .ok()
+        })
     else {
         panic!("interface contract failed")
     };

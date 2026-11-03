@@ -14,7 +14,16 @@ async fn sdk_policy_cases_and_interface_output_shapes_are_distinct() {
         .expect("conformant document");
     let Some(contract) = proof
         .resolve_operation("openbindings.interface-synthesizer.synthesizeInterfaceWithCoverage")
-        .and_then(|operation| operation.output()?.prepare(&DefaultEvaluator::new()).ok())
+        .and_then(|operation| {
+            operation
+                .output()?
+                .prepare(
+                    &DefaultEvaluator::new(),
+                    &openbindings::ExternalSchemas::default(),
+                    &openbindings::PreparationLimits::default(),
+                )
+                .ok()
+        })
     else {
         panic!("interface contract failed")
     };
@@ -100,10 +109,16 @@ fn sdk_policy_fixture_file_satisfies_its_local_schema() {
         .unwrap()
         .conformant()
         .expect("conformant document");
-    let Some(contract) = proof
-        .resolve_operation("check")
-        .and_then(|operation| operation.input()?.prepare(&DefaultEvaluator::new()).ok())
-    else {
+    let Some(contract) = proof.resolve_operation("check").and_then(|operation| {
+        operation
+            .input()?
+            .prepare(
+                &DefaultEvaluator::new(),
+                &openbindings::ExternalSchemas::default(),
+                &openbindings::PreparationLimits::default(),
+            )
+            .ok()
+    }) else {
         panic!("fixture schema failed")
     };
     assert!(matches!(
@@ -123,7 +138,16 @@ fn independent_interface_examples_allow_variation_beyond_sdk_policy() {
         .expect("conformant document");
     let Some(contract) = proof
         .resolve_operation("openbindings.interface-synthesizer.synthesizeInterfaceWithCoverage")
-        .and_then(|operation| operation.output()?.prepare(&DefaultEvaluator::new()).ok())
+        .and_then(|operation| {
+            operation
+                .output()?
+                .prepare(
+                    &DefaultEvaluator::new(),
+                    &openbindings::ExternalSchemas::default(),
+                    &openbindings::PreparationLimits::default(),
+                )
+                .ok()
+        })
     else {
         panic!("interface output contract failed")
     };

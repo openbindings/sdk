@@ -1,9 +1,9 @@
 //! The only module that knows the SDK API. Keep this interface stable across API changes.
 use openbindings::*;
-use openbindings_json_schema_evaluator::DefaultEvaluator;
+use openbindings_json_schema_evaluator::{DefaultEvaluator, DefaultValidator};
 use serde::Deserialize;
 use serde_json::{Value, json};
-use std::{collections::BTreeMap, sync::Arc};
+use std::collections::BTreeMap;
 
 pub const ROOT: &str = "https://benchmark.invalid/root";
 #[derive(Clone, Default)]
@@ -38,43 +38,55 @@ pub struct Context {
     resources: ExternalSchemas,
     evaluator: Evaluator,
 }
-// A request for upstream diagnostics asks every check of the contract to
-// explain: its evaluator answers each validation as an explanation.
-enum Evaluator {
-    Default(DefaultEvaluator),
-    Explaining(Explaining),
+// This harness fixes the requested detail before entering a timed region.
+struct Evaluator {
+    inner: DefaultEvaluator,
+    detail: Detail,
 }
-impl Evaluator {
-    #[inline(always)]
-    fn get(&self) -> &dyn SchemaEvaluator {
-        match self {
-            Self::Default(evaluator) => evaluator,
-            Self::Explaining(evaluator) => evaluator,
-        }
-    }
+struct Validator {
+    inner: DefaultValidator,
+    detail: Detail,
 }
-struct Explaining(DefaultEvaluator);
-struct Explained(Arc<dyn PreparedSchema>);
-impl SchemaEvaluator for Explaining {
+impl SchemaEvaluator for Evaluator {
+    type Validator = Validator;
     fn prepare(
         &self,
-        request: &SchemaRequest,
+        request: EvaluationRequest<'_>,
+        limits: &PreparationLimits,
         control: &dyn WorkControl,
-    ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
-        Ok(Arc::new(Explained(self.0.prepare(request, control)?)))
+    ) -> Result<Validator, PreparationFailure> {
+        self.inner
+            .prepare(request, limits, control)
+            .map(|inner| Validator {
+                inner,
+                detail: self.detail,
+            })
     }
 }
-impl PreparedSchema for Explained {
-    fn validate(&self, value: &JsonValue, _: Detail, control: &dyn WorkControl) -> ValueOutcome {
-        self.0.validate(value, Detail::Explain, control)
+impl SchemaValidator for Validator {
+    fn evaluate(
+        &self,
+        value: &JsonValue,
+        detail: Detail,
+        control: &dyn WorkControl,
+    ) -> ValueOutcome {
+        self.inner.evaluate(
+            value,
+            if self.detail == Detail::Explain {
+                Detail::Explain
+            } else {
+                detail
+            },
+            control,
+        )
     }
 }
 #[repr(transparent)]
-pub struct Prepared(Result<PreparedValueContract, NoVerdict>);
+pub struct Prepared(Result<PreparedSchema<Validator>, PreparationFailure>);
 #[repr(transparent)]
 pub struct ParsedValue(JsonValue);
 #[repr(transparent)]
-pub struct Outcome(ValueOutcome);
+pub struct Outcome(Result<ValueOutcome, PreparationFailure>);
 
 #[inline(always)]
 pub fn parse_value(text: &str) -> ParsedValue {
@@ -106,10 +118,13 @@ pub fn context(
     Context {
         document: validation.conformant().unwrap(),
         resources: ExternalSchemas::new(resources).unwrap(),
-        evaluator: if upstream {
-            Evaluator::Explaining(Explaining(evaluator))
-        } else {
-            Evaluator::Default(evaluator)
+        evaluator: Evaluator {
+            inner: evaluator,
+            detail: if upstream {
+                Detail::Explain
+            } else {
+                Detail::Outcome
+            },
         },
     }
 }
@@ -118,12 +133,11 @@ impl Context {
     #[inline(always)]
     pub fn prepare_input(&self) -> Prepared {
         let operation = self.document.resolve_operation("op").unwrap();
-        Prepared(
-            operation
-                .input()
-                .unwrap()
-                .prepare_with(self.evaluator.get(), &self.resources),
-        )
+        Prepared(operation.input().unwrap().prepare(
+            &self.evaluator,
+            &self.resources,
+            &openbindings::PreparationLimits::default(),
+        ))
     }
 }
 impl Prepared {
@@ -132,43 +146,40 @@ impl Prepared {
     // the fixture.
     #[inline(always)]
     pub fn is_ready(&self) -> bool {
-        !matches!(&self.0, Err(detail) if detail.reason == NoVerdictReason::Cancelled)
+        !matches!(&self.0, Err(detail) if detail.kind == PreparationFailureKind::Cancelled)
     }
     // This SDK chooses detail per call.
     #[inline(always)]
     pub fn explain(&self, value: &ParsedValue, cancelled: bool) -> Outcome {
         match &self.0 {
-            Ok(contract) => Outcome(
-                contract
-                    .explain_with_control(&value.0, &std::sync::atomic::AtomicBool::new(cancelled)),
-            ),
+            Ok(contract) => Outcome(Ok(contract
+                .explain_with_control(&value.0, &std::sync::atomic::AtomicBool::new(cancelled)))),
             Err(detail) => refused(detail),
         }
     }
     #[inline(always)]
     pub fn validate(&self, value: &ParsedValue, cancelled: bool) -> Outcome {
         match &self.0 {
-            Ok(contract) => {
-                Outcome(contract.validate_with_control(
-                    &value.0,
-                    &std::sync::atomic::AtomicBool::new(cancelled),
-                ))
-            }
+            Ok(contract) => Outcome(Ok(contract.evaluate_with_control(
+                &value.0,
+                &std::sync::atomic::AtomicBool::new(cancelled),
+            ))),
             Err(detail) => refused(detail),
         }
     }
 }
-// A refused preparation gives no verdict for any value.
+// Observations keep preparation failure distinct from every instance outcome.
 #[inline(never)]
-fn refused(detail: &NoVerdict) -> Outcome {
-    Outcome(ValueOutcome::NoVerdict {
-        detail: detail.clone(),
-    })
+fn refused(detail: &PreparationFailure) -> Outcome {
+    Outcome(Err(detail.clone()))
 }
 impl Outcome {
     #[inline(always)]
     pub fn status(&self) -> &'static str {
-        match &self.0 {
+        let Ok(outcome) = &self.0 else {
+            return "preparation-refused";
+        };
+        match outcome {
             ValueOutcome::Satisfies => "satisfies",
             ValueOutcome::Fails { .. } => "fails",
             ValueOutcome::Undefined { .. } => "undefined",
@@ -177,14 +188,30 @@ impl Outcome {
     }
     pub fn observation(&self) -> Value {
         let mut value = json!({"status": self.status()});
-        match &self.0 {
+        let Ok(outcome) = &self.0 else {
+            value["failure"] = serde_json::to_value(self.0.as_ref().unwrap_err()).unwrap();
+            return value;
+        };
+        match outcome {
             ValueOutcome::NoVerdict { detail } => {
                 value["code"] = json!(detail.code);
                 value["detail"] = serde_json::to_value(detail).unwrap();
+                // The instrument's location protocol is fixed across SDK revisions.
+                if let Some(location) = value["detail"]["location"].as_object_mut() {
+                    if let Some(uri) = location.remove("source_uri") {
+                        location.insert("resource".into(), uri);
+                    }
+                }
             }
             ValueOutcome::Undefined { detail } => {
                 value["code"] = json!(detail.code);
                 value["detail"] = serde_json::to_value(detail).unwrap();
+                // The instrument's location protocol is fixed across SDK revisions.
+                if let Some(location) = value["detail"]["location"].as_object_mut() {
+                    if let Some(uri) = location.remove("source_uri") {
+                        location.insert("resource".into(), uri);
+                    }
+                }
             }
             ValueOutcome::Fails {
                 problems,
@@ -199,7 +226,7 @@ impl Outcome {
                         let mut observed = json!({
                             "instance_pointer": problem.instance.to_string(),
                             "schema_location": {
-                                "resource": problem.schema.resource,
+                                "resource": problem.schema.source_uri,
                                 "pointer": problem.schema.pointer.to_string(),
                             },
                             "code": problem.code,

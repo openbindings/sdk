@@ -1,7 +1,10 @@
 use openbindings::*;
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 
-fn prepare(text: &str, resources: ExternalSchemas) -> PreparedValueContract {
+fn prepare(
+    text: &str,
+    resources: ExternalSchemas,
+) -> PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator> {
     let doc = Document::parse(text).unwrap();
     let doc = doc
         .validate()
@@ -10,11 +13,11 @@ fn prepare(text: &str, resources: ExternalSchemas) -> PreparedValueContract {
         .expect("conformant document");
     let evaluator = DefaultEvaluator::new();
     let operation = doc.resolve_operation("op").expect("declared operation");
-    let Ok(contract) = operation
-        .input()
-        .expect("declared input")
-        .prepare_with(&evaluator, &resources)
-    else {
+    let Ok(contract) = operation.input().expect("declared input").prepare(
+        &evaluator,
+        &resources,
+        &openbindings::PreparationLimits::default(),
+    ) else {
         panic!("not ready")
     };
     contract
@@ -27,7 +30,7 @@ fn run(schema: &str, input: &str, details: bool) -> ValueOutcome {
     if details {
         contract.explain(&value)
     } else {
-        contract.validate(&value)
+        contract.evaluate(&value)
     }
 }
 fn failure(result: &ValueOutcome) -> (&[ValueProblem], bool) {
@@ -109,7 +112,7 @@ fn explained_locations_exist_in_original_document_and_supplied_resources() {
                 format!(r#"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{entry}}}}}}}"#);
             let value = JsonValue::parse(input).unwrap();
             let contract = prepare(&text, resources);
-            let coarse = contract.validate(&value);
+            let coarse = contract.evaluate(&value);
             assert!(failure(&coarse).0.is_empty());
             let upstream = contract.explain(&value);
             let location = &failure(&upstream).0[0].schema;

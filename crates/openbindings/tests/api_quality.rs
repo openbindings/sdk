@@ -686,7 +686,14 @@ fn static_struct_fields_keep_duplicate_and_fused_admission_checks() {
 #[test]
 fn contextual_schemas_and_prepared_validators_own_their_inputs() {
     fn owned<T: Clone + Send + Sync + 'static>() {}
-    owned::<PreparedValueContract>();
+    #[derive(Clone)]
+    struct Validator;
+    impl SchemaValidator for Validator {
+        fn evaluate(&self, _: &JsonValue, _: Detail, _: &dyn WorkControl) -> ValueOutcome {
+            ValueOutcome::Satisfies
+        }
+    }
+    owned::<PreparedSchema<Validator>>();
     owned::<Schema>();
     let schema = {
         let document =

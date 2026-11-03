@@ -21,7 +21,11 @@ const HEAD: &str = r#"{"openbindings":"0.2.0""#;
 /// `prefix`, a member holding one string that fills the document to the byte
 /// limit, then `suffix`; the string begins with an escape when `escaped`.
 fn filled(prefix: &str, suffix: &str, escaped: bool) -> String {
-    let member = if escaped { r#","x-fill":"\n"# } else { r#","x-fill":""# };
+    let member = if escaped {
+        r#","x-fill":"\n"#
+    } else {
+        r#","x-fill":""#
+    };
     let fill = MAX_BYTES - prefix.len() - suffix.len() - member.len() - 1;
     let mut text = String::with_capacity(MAX_BYTES);
     text.push_str(prefix);
@@ -45,7 +49,8 @@ fn joined(count: usize, item: impl Fn(usize) -> String) -> String {
 // Nested relative `$id`s, one level each, optionally declaring one identifier
 // twice at every level.
 fn identifier_chain(levels: usize, repeated: bool) -> String {
-    let mut text = format!(r#"{HEAD},"operations":{{}},"schemas":{{"s":{{"$id":"https://e.test/","#);
+    let mut text =
+        format!(r#"{HEAD},"operations":{{}},"schemas":{{"s":{{"$id":"https://e.test/","#);
     for _ in 0..levels {
         if repeated {
             text.push_str(r#""$defs":{"x":{"$id":"d"},"y":{"$id":"d"},"a":{"$id":"a/","#);
@@ -103,12 +108,18 @@ fn shapes() -> Vec<(&'static str, String, &'static str)> {
     // Invalid operation names that hold escapes, filling the byte limit: the
     // decoded names beside the findings and their pointers.
     let width = MAX_BYTES / 499_990 - 8;
-    let names = joined(499_990, |i| format!(r#""\n{i:07}{}":{{}}"#, "a".repeat(width - 10)));
+    let names = joined(499_990, |i| {
+        format!(r#""\n{i:07}{}":{{}}"#, "a".repeat(width - 10))
+    });
     let mut escaped_names = format!(r#"{HEAD},"operations":{{{names}}}}}"#);
     drop(names);
     assert!(escaped_names.len() <= MAX_BYTES, "{}", escaped_names.len());
     escaped_names.shrink_to_fit();
-    shapes.push(("escaped-invalid-operation-names", escaped_names, "non-conformant"));
+    shapes.push((
+        "escaped-invalid-operation-names",
+        escaped_names,
+        "non-conformant",
+    ));
     let per = (MAX_BYTES - 64) / 999_990 - 1;
     let escaped = format!(r#""\n{}""#, "a".repeat(per - 4));
     shapes.push((
@@ -184,7 +195,9 @@ fn shapes() -> Vec<(&'static str, String, &'static str)> {
         filled(
             &format!(
                 r#"{HEAD},"operations":{{}},"schemas":{{{}}}"#,
-                joined(249_990, |i| format!(r#""{i}":{{"$id":"https://e.test/{i}"}}"#))
+                joined(249_990, |i| format!(
+                    r#""{i}":{{"$id":"https://e.test/{i}"}}"#
+                ))
             ),
             "}",
             true,
@@ -194,19 +207,22 @@ fn shapes() -> Vec<(&'static str, String, &'static str)> {
     // A third of a million `$id`s that each add directories, under a base or
     // with authorities of their own, alone, in pairs and with a query and
     // fragment, beside an escaped string filling the remaining bytes.
-    let directories = |name: &'static str,
-                       base: &str,
-                       each: &dyn Fn(usize) -> String,
-                       expected: &'static str| {
-        let identifiers = joined(333_320, |i| format!(r#"{{"$id":"{}"}}"#, each(i)));
-        let schema = format!(r#""s":{{{base}"allOf":[{identifiers}]}}"#);
-        let prefix = format!(r#"{HEAD},"operations":{{}},"schemas":{{{schema}}}"#);
-        (name, filled(&prefix, "}", true), expected)
-    };
+    let directories =
+        |name: &'static str, base: &str, each: &dyn Fn(usize) -> String, expected: &'static str| {
+            let identifiers = joined(333_320, |i| format!(r#"{{"$id":"{}"}}"#, each(i)));
+            let schema = format!(r#""s":{{{base}"allOf":[{identifiers}]}}"#);
+            let prefix = format!(r#"{HEAD},"operations":{{}},"schemas":{{{schema}}}"#);
+            (name, filled(&prefix, "}", true), expected)
+        };
     let base = r#""$id":"https://e.test/","#;
     let pair = |i: usize, a: &str, b: &str| if i % 2 == 0 { a } else { b }.to_owned();
     for shape in [
-        directories("relative-directories", base, &|i| format!("{i}/"), "conformant"),
+        directories(
+            "relative-directories",
+            base,
+            &|i| format!("{i}/"),
+            "conformant",
+        ),
         directories(
             "relative-directory-pairs",
             base,
@@ -219,7 +235,12 @@ fn shapes() -> Vec<(&'static str, String, &'static str)> {
             &|i| format!("a{}/{}", i / 2, pair(i, "b/?#f", "c/?#g")),
             "non-conformant",
         ),
-        directories("authority-directories", "", &|i| format!("s://{i}/x/"), "conformant"),
+        directories(
+            "authority-directories",
+            "",
+            &|i| format!("s://{i}/x/"),
+            "conformant",
+        ),
         directories(
             "authority-directories-with-pieces",
             "",
@@ -247,13 +268,22 @@ fn shapes() -> Vec<(&'static str, String, &'static str)> {
         };
         let prefix = format!(r#"{HEAD},"operations":{{}},"schemas":{{"s":{{"allOf":["#);
         let suffix = "]}}}";
-        let base = prefix.len() + suffix.len() + (0..333_320).map(|i| element(i, 0).len() + 1).sum::<usize>();
+        let base = prefix.len()
+            + suffix.len()
+            + (0..333_320).map(|i| element(i, 0).len() + 1).sum::<usize>();
         let length = (MAX_BYTES - base) / 333_320;
-        let text = format!("{prefix}{}{suffix}", joined(333_320, |i| element(i, length)));
+        let text = format!(
+            "{prefix}{}{suffix}",
+            joined(333_320, |i| element(i, length))
+        );
         (name, text, expected)
     };
     shapes.push(copied("copied-identifier-paths", "", "conformant"));
-    shapes.push(copied("copied-identifier-paths-with-pieces", "?#f", "non-conformant"));
+    shapes.push(copied(
+        "copied-identifier-paths-with-pieces",
+        "?#f",
+        "non-conformant",
+    ));
     // One name or alias of U+E000, the character fixed checks escape beside
     // encoded unpaired units, filling the byte limit; and the operation name
     // beside one unpaired unit, where each is presented doubled.
@@ -272,7 +302,12 @@ fn shapes() -> Vec<(&'static str, String, &'static str)> {
             r#"":{}}}"#,
             "non-conformant",
         ),
-        marker("marker-extension-name", &format!(r#"{HEAD},"operations":{{}},"x-"#), r#"":0}"#, "conformant"),
+        marker(
+            "marker-extension-name",
+            &format!(r#"{HEAD},"operations":{{}},"x-"#),
+            r#"":0}"#,
+            "conformant",
+        ),
         marker(
             "marker-alias",
             r#"{"openbindings":"0.2.0","operations":{"o":{"aliases":[""#,
@@ -302,10 +337,24 @@ fn shapes() -> Vec<(&'static str, String, &'static str)> {
     for (shape, total, before, expected) in [
         ("long-identifier-8mib", 8 * MIB, "", "conformant"),
         ("long-identifier", MAX_BYTES, "", "conformant"),
-        ("long-identifier-and-repeated-pairs-8mib", 8 * MIB, REPEATED_PAIRS, "non-conformant"),
-        ("long-identifier-and-repeated-pairs", MAX_BYTES, REPEATED_PAIRS, "non-conformant"),
+        (
+            "long-identifier-and-repeated-pairs-8mib",
+            8 * MIB,
+            REPEATED_PAIRS,
+            "non-conformant",
+        ),
+        (
+            "long-identifier-and-repeated-pairs",
+            MAX_BYTES,
+            REPEATED_PAIRS,
+            "non-conformant",
+        ),
     ] {
-        shapes.push((shape, long_identifier(total, before, "https://e.test/", "a/"), expected));
+        shapes.push((
+            shape,
+            long_identifier(total, before, "https://e.test/", "a/"),
+            expected,
+        ));
     }
     // Dot segments throughout one long `$id`: its path is copied once.
     shapes.push((
@@ -339,7 +388,11 @@ fn shapes() -> Vec<(&'static str, String, &'static str)> {
         let _ = write!(nested, r#""{up}":{{"$id":"{}x/"}}"#, "../".repeat(up * 4));
     }
     nested.push_str("}}}}");
-    shapes.push(("relative-identifiers-inside-a-long-one", nested, "conformant"));
+    shapes.push((
+        "relative-identifiers-inside-a-long-one",
+        nested,
+        "conformant",
+    ));
     // A malformed reference at every level of a deep schema chain: each
     // finding's pointer is longer than the last.
     let mut deep = format!(r#"{HEAD},"operations":{{}},"schemas":{{"s":{{"#);

@@ -28,22 +28,32 @@ fn named_and_operation_schemas_retain_original_reference_context() {
         .unwrap();
     let evaluator = DefaultEvaluator::new();
     for schema in [named.clone(), input] {
-        let prepared = schema.prepare(&evaluator).unwrap();
+        let prepared = schema
+            .prepare(
+                &evaluator,
+                &openbindings::ExternalSchemas::default(),
+                &openbindings::PreparationLimits::default(),
+            )
+            .unwrap();
         assert!(matches!(
-            prepared.validate(&JsonValue::parse("2").unwrap()),
+            prepared.evaluate(&JsonValue::parse("2").unwrap()),
             ValueOutcome::Satisfies
         ));
         assert!(matches!(
-            prepared.validate(&JsonValue::parse(r#""two""#).unwrap()),
+            prepared.evaluate(&JsonValue::parse(r#""two""#).unwrap()),
             ValueOutcome::Fails { .. }
         ));
     }
     assert_eq!(named.location().pointer.as_str(), Some("/schemas/number"));
     assert!(matches!(
         changed
-            .prepare(&evaluator)
+            .prepare(
+                &evaluator,
+                &openbindings::ExternalSchemas::default(),
+                &openbindings::PreparationLimits::default()
+            )
             .unwrap()
-            .validate(&JsonValue::parse("2").unwrap()),
+            .evaluate(&JsonValue::parse("2").unwrap()),
         ValueOutcome::Fails { .. }
     ));
 }
@@ -67,12 +77,16 @@ fn absent_false_true_and_null_schemas_remain_distinct_owned_values() {
         let prepared = schema
             .as_ref()
             .unwrap()
-            .prepare(&DefaultEvaluator::new())
+            .prepare(
+                &DefaultEvaluator::new(),
+                &openbindings::ExternalSchemas::default(),
+                &openbindings::PreparationLimits::default(),
+            )
             .unwrap();
         for (text, expected) in [("null", null_matches), ("2", number_matches)] {
             assert_eq!(
                 matches!(
-                    prepared.validate(&JsonValue::parse(text).unwrap()),
+                    prepared.evaluate(&JsonValue::parse(text).unwrap()),
                     ValueOutcome::Satisfies
                 ),
                 expected

@@ -776,34 +776,47 @@ mod resolution_reuse {
     use super::*;
     use crate::schema::references::ASSEMBLED;
     use std::sync::Weak;
-    /// Projects the core resolution space on every preparation, as custom
-    /// evaluators may, and retains its request, as diagnostics-bearing
-    /// prepared schemas do.
-    struct Projecting;
-    struct Retaining(#[allow(dead_code)] SchemaRequest);
-    impl SchemaEvaluator for Projecting {
+    /// Retains the original environment while the prepared validator lives.
+    struct Inspecting;
+    struct Retaining(#[allow(dead_code)] SchemaEnvironment);
+    impl SchemaEvaluator for Inspecting {
+        type Validator = Retaining;
         fn prepare(
             &self,
-            request: &SchemaRequest,
+            request: EvaluationRequest<'_>,
+            limits: &PreparationLimits,
             control: &dyn WorkControl,
-        ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
-            request.evaluation_program(control)?;
-            Ok(Arc::new(Retaining(request.clone())))
+        ) -> Result<Retaining, PreparationFailure> {
+            Ok(Retaining(request.environment(limits, control)?))
         }
     }
-    /// Never asks for the core projection, like the default evaluator.
+    /// An evaluator can read the selected schema without needing an inventory.
     struct Accepting;
+    struct Snapshots {
+        _schema: Schema,
+        _external: ExternalSchemas,
+    }
     impl SchemaEvaluator for Accepting {
+        type Validator = Snapshots;
         fn prepare(
             &self,
-            request: &SchemaRequest,
+            request: EvaluationRequest<'_>,
+            _: &PreparationLimits,
             _: &dyn WorkControl,
-        ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
-            Ok(Arc::new(Retaining(request.clone())))
+        ) -> Result<Snapshots, PreparationFailure> {
+            Ok(Snapshots {
+                _schema: request.schema.clone(),
+                _external: request.external_schemas.clone(),
+            })
         }
     }
-    impl PreparedSchema for Retaining {
-        fn validate(&self, _: &JsonValue, _: Detail, _: &dyn WorkControl) -> ValueOutcome {
+    impl SchemaValidator for Retaining {
+        fn evaluate(&self, _: &JsonValue, _: Detail, _: &dyn WorkControl) -> ValueOutcome {
+            ValueOutcome::Satisfies
+        }
+    }
+    impl SchemaValidator for Snapshots {
+        fn evaluate(&self, _: &JsonValue, _: Detail, _: &dyn WorkControl) -> ValueOutcome {
             ValueOutcome::Satisfies
         }
     }
@@ -835,7 +848,7 @@ mod resolution_reuse {
     }
 
     #[test]
-    fn evaluators_that_never_project_assemble_no_space() {
+    fn evaluators_that_never_inventory_assemble_no_space() {
         let proof = proof();
         let operation = proof.resolve_operation("op").unwrap();
         let set = snapshot(1);
@@ -844,10 +857,20 @@ mod resolution_reuse {
             operation
                 .input()
                 .unwrap()
-                .prepare_with(&Accepting, &set)
+                .prepare(&Accepting, &set, &crate::PreparationLimits::default())
                 .unwrap(),
         );
-        drop(operation.output().unwrap().prepare(&Accepting).unwrap());
+        drop(
+            operation
+                .output()
+                .unwrap()
+                .prepare(
+                    &Accepting,
+                    &crate::ExternalSchemas::default(),
+                    &crate::PreparationLimits::default(),
+                )
+                .unwrap(),
+        );
         assert_eq!(assembled(), before);
         assert!(proof.document.inner.resolution.get().is_none());
         assert!(kept(&proof, &set).is_none());
@@ -862,13 +885,33 @@ mod resolution_reuse {
         let before = assembled();
         for _ in 0..3 {
             for set in [&first, &second, &first.clone()] {
-                drop(input.prepare_with(&Projecting, set).unwrap());
-                drop(output.prepare_with(&Projecting, set).unwrap());
+                drop(
+                    input
+                        .prepare(&Inspecting, set, &crate::PreparationLimits::default())
+                        .unwrap(),
+                );
+                drop(
+                    output
+                        .prepare(&Inspecting, set, &crate::PreparationLimits::default())
+                        .unwrap(),
+                );
             }
-            drop(output.prepare(&Projecting).unwrap());
             drop(
                 output
-                    .prepare_with(&Projecting, &ExternalSchemas::default())
+                    .prepare(
+                        &Inspecting,
+                        &crate::ExternalSchemas::default(),
+                        &crate::PreparationLimits::default(),
+                    )
+                    .unwrap(),
+            );
+            drop(
+                output
+                    .prepare(
+                        &Inspecting,
+                        &ExternalSchemas::default(),
+                        &crate::PreparationLimits::default(),
+                    )
                     .unwrap(),
             );
         }
@@ -887,8 +930,16 @@ mod resolution_reuse {
         let operation = proof.resolve_operation("op").unwrap();
         let input = operation.input().unwrap();
         let (first, second) = (snapshot(1), snapshot(2));
-        drop(input.prepare_with(&Projecting, &first).unwrap());
-        drop(input.prepare_with(&Projecting, &second).unwrap());
+        drop(
+            input
+                .prepare(&Inspecting, &first, &crate::PreparationLimits::default())
+                .unwrap(),
+        );
+        drop(
+            input
+                .prepare(&Inspecting, &second, &crate::PreparationLimits::default())
+                .unwrap(),
+        );
         let (a, b) = (
             kept(&proof, &first).unwrap(),
             kept(&proof, &second).unwrap(),
@@ -912,14 +963,22 @@ mod resolution_reuse {
     fn a_prepared_value_contract_keeps_no_space_of_a_set_it_never_received() {
         let proof = proof();
         let operation = proof.resolve_operation("op").unwrap();
-        // Prepared without resources and retaining its request, hence the document.
-        let keep = operation.output().unwrap().prepare(&Projecting).unwrap();
+        // Prepared without external resources and retaining its environment, hence the document.
+        let keep = operation
+            .output()
+            .unwrap()
+            .prepare(
+                &Inspecting,
+                &crate::ExternalSchemas::default(),
+                &crate::PreparationLimits::default(),
+            )
+            .unwrap();
         let without = Arc::downgrade(proof.document.inner.resolution.get().unwrap());
         let other = snapshot(1);
         let prepared = operation
             .input()
             .unwrap()
-            .prepare_with(&Projecting, &other)
+            .prepare(&Inspecting, &other, &crate::PreparationLimits::default())
             .unwrap();
         let space = kept(&proof, &other).unwrap();
         drop((prepared, other, operation, proof));
@@ -931,33 +990,29 @@ mod resolution_reuse {
     }
 
     #[test]
-    fn concurrent_preparations_project_their_own_set() {
-        /// Fails preparation when the projection lacks the request's own snapshot,
-        /// recognized by its `minimum` member.
+    fn concurrent_preparations_resolve_their_own_set() {
+        /// Fails preparation if resolution crosses immutable external sets.
         struct Checking;
         impl SchemaEvaluator for Checking {
+            type Validator = Retaining;
             fn prepare(
                 &self,
-                request: &SchemaRequest,
+                request: EvaluationRequest<'_>,
+                limits: &PreparationLimits,
                 control: &dyn WorkControl,
-            ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
-                let program = request.evaluation_program(control)?;
-                if let Some(resource) = request.supplied_resources().iter().next() {
-                    let text = resource.document.text();
-                    let marker = text[text.find("\"minimum\":").unwrap()..].trim_end_matches('}');
-                    if !program
-                        .resources()
-                        .iter()
-                        .any(|r| r.document.text().contains(marker))
-                    {
-                        return Err(NoVerdict::new(
-                            NoVerdictReason::EvaluatorFailure,
-                            "crossed-sets",
-                            "the projection carries another set's snapshot",
+            ) -> Result<Retaining, PreparationFailure> {
+                let environment = request.environment(limits, control)?;
+                if let Some(resource) = request.external_schemas.iter().next() {
+                    let target = environment.resolve(&environment.root(), &resource.uri)?;
+                    if target.schema.value().text() != resource.document.text() {
+                        return Err(PreparationFailure::new(
+                            PreparationFailureKind::Implementation {
+                                message: "the environment carries another set's snapshot".into(),
+                            },
                         ));
                     }
                 }
-                Ok(Arc::new(Retaining(request.clone())))
+                Ok(Retaining(environment))
             }
         }
         let proof = proof();
@@ -970,9 +1025,21 @@ mod resolution_reuse {
                     let (input, output) = (operation.input().unwrap(), operation.output().unwrap());
                     for i in 0..60 {
                         let set = &sets[(thread + i) % sets.len()];
-                        assert!(input.prepare_with(&Checking, set).is_ok());
+                        assert!(
+                            input
+                                .prepare(&Checking, set, &crate::PreparationLimits::default())
+                                .is_ok()
+                        );
                         if i % 5 == 0 {
-                            assert!(output.prepare(&Checking).is_ok());
+                            assert!(
+                                output
+                                    .prepare(
+                                        &Checking,
+                                        &crate::ExternalSchemas::default(),
+                                        &crate::PreparationLimits::default()
+                                    )
+                                    .is_ok()
+                            );
                         }
                     }
                 });

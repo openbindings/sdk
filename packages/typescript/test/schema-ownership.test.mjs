@@ -29,10 +29,10 @@ test("named and operation schemas retain the original document after disposal an
     assert.equal(prepared.status, "ready");
     schema.dispose();
     try {
-      assert.equal(prepared.valueContract.validate(2).status, "satisfies");
-      assert.equal(prepared.valueContract.validate("two").status, "fails");
+      assert.equal(prepared.schema.evaluate(2).status, "satisfies");
+      assert.equal(prepared.schema.evaluate("two").status, "fails");
     } finally {
-      prepared.valueContract.dispose();
+      prepared.schema.dispose();
     }
   }
   const newAssessment = changed.validate();
@@ -44,8 +44,8 @@ test("named and operation schemas retain the original document after disposal an
   newSchema.dispose();
   assert.equal(prepared.status, "ready");
   try {
-    assert.equal(prepared.valueContract.validate(2).status, "fails");
+    assert.equal(prepared.schema.evaluate(2).status, "fails");
   } finally {
-    prepared.valueContract.dispose();
+    prepared.schema.dispose();
   }
 });

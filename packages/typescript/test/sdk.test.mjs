@@ -14,7 +14,7 @@ await sdk.initialize(
 );
 const ready = (preparation) => {
   assert.equal(preparation.status, "ready");
-  return preparation.valueContract;
+  return preparation.schema;
 };
 const text =
   ' {"openbindings":"0.2.0","operations":{"run":{"input":{"type":"integer"},"aliases":["execute"]}}} ';
@@ -165,8 +165,8 @@ test("retained contracts and metadata support repeated native-feeling caller use
     document.dispose();
     const good = sdk.ExactJson.from(7),
       bad = sdk.ExactJson.from("private-value");
-    assert.equal(input.validate(good).status, "satisfies");
-    const mismatch = input.validate(bad);
+    assert.equal(input.evaluate(good).status, "satisfies");
+    const mismatch = input.evaluate(bad);
     assert.equal(mismatch.status, "fails");
     assert.ok(!JSON.stringify(mismatch).includes("private-value"));
     assert.equal(output, undefined);
@@ -377,20 +377,20 @@ test("explicit resources, evaluator limits and pre-cancellation keep their disti
   operation.dispose();
   const cancelled = contract.prepare({ resources, signal: control.signal });
   const value = sdk.ExactJson.from(7);
-  assert.equal(cancelled.status, "no-verdict");
-  assert.equal(cancelled.detail.reason, "cancelled");
+  assert.equal(cancelled.status, "refused");
+  assert.equal(cancelled.failure.kind, "cancelled");
   const healthy = ready(contract.prepare({ resources }));
-  assert.equal(healthy.validate(value).status, "satisfies");
+  assert.equal(healthy.evaluate(value).status, "satisfies");
   assert.equal(
-    healthy.validate(value, { signal: control.signal }).detail.reason,
+    healthy.evaluate(value, { signal: control.signal }).detail.reason,
     "cancelled",
   );
-  assert.equal(healthy.validate(value).status, "satisfies");
+  assert.equal(healthy.evaluate(value).status, "satisfies");
   const input = ready(
     contract.prepare({ resources, limits: { evaluationSteps: 0 } }),
   );
-  assert.equal(input.validate(value).status, "no-verdict");
-  assert.equal(input.validate(value).detail.reason, "limit-exceeded");
+  assert.equal(input.evaluate(value).status, "no-verdict");
+  assert.equal(input.evaluate(value).detail.reason, "limit-exceeded");
   input.dispose();
   // By default no work cap applies; null selects that, and a number caps
   // every pass.
@@ -398,7 +398,7 @@ test("explicit resources, evaluator limits and pre-cancellation keep their disti
   const grown = ready(
     contract.prepare({ resources, limits: { evaluationSteps: null } }),
   );
-  assert.equal(grown.validate(value).status, "satisfies");
+  assert.equal(grown.evaluate(value).status, "satisfies");
   grown.dispose();
   // Only evaluationSteps and schemaResources have null defaults, and the
   // refusal says so.
@@ -540,26 +540,26 @@ test("operation views retain independent owners", () => {
   retained.dispose();
   const prepared = ready(contract.prepare());
   contract.dispose();
-  assert.equal(prepared.validate(7).status, "satisfies");
+  assert.equal(prepared.evaluate(7).status, "satisfies");
   prepared.dispose();
   assert.equal(testing.liveStorageOwners(), before);
 });
 
 // a string is JSON text here, admitted exactly as parseJson admits it.
-test("validateJson admits JSON text as parseJson does, then validates", () => {
+test("evaluateJson admits JSON text as parseJson does, then validates", () => {
   const document = parsed(text);
   const contract = ready(prepareInput(document, "run"));
   document.dispose();
   const before = testing.liveStorageOwners();
   const utf8 = (value) => new TextEncoder().encode(value);
-  assert.equal(contract.validate("7").status, "fails");
-  assert.equal(contract.validateJson("7").status, "satisfies");
-  assert.equal(contract.validateJson(utf8(" 7 ")).status, "satisfies");
-  assert.equal(contract.validateJson("9007199254740993").status, "satisfies");
-  assert.equal(contract.validateJson("1.5").status, "fails");
-  const failed = contract.validateJson('"7"');
-  assert.deepEqual(failed, contract.validate("7"));
-  const duplicate = contract.validateJson('{"a":1,"a":2}');
+  assert.equal(contract.evaluate("7").status, "fails");
+  assert.equal(contract.evaluateJson("7").status, "satisfies");
+  assert.equal(contract.evaluateJson(utf8(" 7 ")).status, "satisfies");
+  assert.equal(contract.evaluateJson("9007199254740993").status, "satisfies");
+  assert.equal(contract.evaluateJson("1.5").status, "fails");
+  const failed = contract.evaluateJson('"7"');
+  assert.deepEqual(failed, contract.evaluate("7"));
+  const duplicate = contract.evaluateJson('{"a":1,"a":2}');
   assert.equal(duplicate.status, "no-verdict");
   assert.equal(duplicate.detail.code, "duplicate-instance-members");
   // A refusal's message says what was expected and where; code and offset
@@ -584,33 +584,33 @@ test("validateJson admits JSON text as parseJson does, then validates", () => {
   ]) {
     const admitted = sdk.parseJson(input);
     assert.equal(admitted.status, "input-error");
-    // A limit names parseJson with limits, which validateJson does not take;
+    // A limit names parseJson with limits, which evaluateJson does not take;
     // every other refusal is parseJson's.
     const message =
       input === deep
         ? "the input nests deeper than the admitted depth limit at byte 10000; parse the value with JsonValue::parse_with_limits and a larger JsonLimits::max_depth, then validate it (parseJson with a larger limits.maxDepth in TypeScript)"
         : admitted.error.message;
-    assert.deepEqual(contract.validateJson(input), {
+    assert.deepEqual(contract.evaluateJson(input), {
       status: "input-error",
       error: { ...admitted.error, message },
     });
   }
-  assert.throws(() => contract.validateJson("\ud800"), TypeError);
-  assert.throws(() => contract.validateJson(7), TypeError);
+  assert.throws(() => contract.evaluateJson("\ud800"), TypeError);
+  assert.throws(() => contract.evaluateJson(7), TypeError);
   const control = new AbortController();
   control.abort();
   assert.equal(
-    contract.validateJson("7", { signal: control.signal }).detail.reason,
+    contract.evaluateJson("7", { signal: control.signal }).detail.reason,
     "cancelled",
   );
   assert.throws(
-    () => contract.validateJson("7", { unknown: true }),
+    () => contract.evaluateJson("7", { unknown: true }),
     (e) => e.code === "invalid-work-options",
   );
   assert.equal(testing.liveStorageOwners(), before);
   contract.dispose();
   assert.throws(
-    () => contract.validateJson("7"),
+    () => contract.evaluateJson("7"),
     (e) => e.code === "disposed-handle",
   );
 });

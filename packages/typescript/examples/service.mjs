@@ -37,14 +37,14 @@ export class ValidationService {
       const parsed = parseJson(await body);
       if (parsed.status !== "parsed") return parsed;
       value = parsed.value;
-      return held.validate(value);
+      return held.evaluate(value);
     } finally {
       value?.dispose();
       held.dispose();
     }
   }
   check(value, options) {
-    return this.#current().validate(value, options);
+    return this.#current().evaluate(value, options);
   }
   replace(contract) {
     this.#current();

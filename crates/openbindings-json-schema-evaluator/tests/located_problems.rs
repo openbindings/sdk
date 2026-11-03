@@ -3,7 +3,7 @@
 //! column on demand.
 use openbindings::*;
 use openbindings_json_schema_evaluator::DefaultEvaluator;
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 
 fn document(schema: &str) -> ConformantDocument {
     let text = format!(
@@ -16,13 +16,20 @@ fn document(schema: &str) -> ConformantDocument {
         .conformant()
         .expect("conformant document")
 }
-fn contract(document: &ConformantDocument, resources: &ExternalSchemas) -> PreparedValueContract {
+fn contract(
+    document: &ConformantDocument,
+    resources: &ExternalSchemas,
+) -> PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator> {
     document
         .resolve_operation("op")
         .unwrap()
         .input()
         .unwrap()
-        .prepare_with(&DefaultEvaluator::new(), resources)
+        .prepare(
+            &DefaultEvaluator::new(),
+            resources,
+            &openbindings::PreparationLimits::default(),
+        )
         .expect("prepared")
 }
 fn problems(outcome: ValueOutcome) -> Vec<ValueProblem> {
@@ -45,7 +52,7 @@ fn explained_problems_locate_the_failing_node_and_the_documents_keyword() {
     let text = "{\n  \"items\": [\n    1,\n    \"two\"\n  ]\n}";
     let value = JsonValue::parse(text).unwrap();
     // The cheap check locates nothing.
-    assert!(problems(contract.validate(&value)).is_empty());
+    assert!(problems(contract.evaluate(&value)).is_empty());
     let problems = problems(contract.explain(&value));
     assert_eq!(problems.len(), 1);
     let problem = &problems[0];
@@ -217,15 +224,17 @@ fn supplied_resources_locate_their_own_keywords() {
 #[test]
 fn requests_locate_the_schema_nodes_an_evaluator_was_given() {
     #[derive(Default)]
-    struct Capture(Mutex<Option<SchemaRequest>>);
+    struct Capture(Mutex<Option<SchemaEnvironment>>);
     impl SchemaEvaluator for Capture {
+        type Validator = openbindings_json_schema_evaluator::DefaultValidator;
         fn prepare(
             &self,
-            request: &SchemaRequest,
+            request: EvaluationRequest<'_>,
+            limits: &PreparationLimits,
             control: &dyn WorkControl,
-        ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
-            *self.0.lock().unwrap() = Some(request.clone());
-            DefaultEvaluator::new().prepare(request, control)
+        ) -> Result<Self::Validator, PreparationFailure> {
+            *self.0.lock().unwrap() = Some(request.environment(limits, control)?);
+            DefaultEvaluator::new().prepare(request, limits, control)
         }
     }
     let uri = "https://example.test/schema";
@@ -243,39 +252,47 @@ fn requests_locate_the_schema_nodes_an_evaluator_was_given() {
         .unwrap()
         .input()
         .unwrap()
-        .prepare_with(&capture, &resources)
+        .prepare(
+            &capture,
+            &resources,
+            &openbindings::PreparationLimits::default(),
+        )
         .unwrap();
-    let request = capture.0.lock().unwrap().take().unwrap();
-    assert!(request.location(request.entry().view()) == Some(request.entry_location()));
-    let keyword = request.entry().at("/properties/a/type").unwrap();
-    let at = request.location(keyword).unwrap();
-    assert_eq!(at.source_uri, None);
-    assert_eq!(at.pointer, "/operations/op/input/properties/a/type");
-    assert_eq!(document.locate(&at), Some(keyword.location()));
-    let supplied = request.supplied_resources().iter().next().unwrap();
-    let node = supplied
-        .document
-        .get("$defs")
-        .unwrap()
-        .members()
-        .unwrap()
-        .next()
-        .unwrap()
-        .value;
-    let at = request.location(node).unwrap();
+    let environment = capture.0.lock().unwrap().take().unwrap();
+    let root = environment.root();
+    assert_eq!(root.pointer().as_str(), Some("/operations/op/input"));
+    assert_eq!(root.origin().source_uri, None);
+    let nested = root.subschema(&["properties", "a"]).unwrap();
+    assert_eq!(
+        nested.pointer().as_str(),
+        Some("/operations/op/input/properties/a")
+    );
+    assert_eq!(
+        document.locate(nested.origin()),
+        Some(nested.value().view().location())
+    );
+    let supplied = environment.resolve(&root, uri).unwrap().schema;
+    let pointer = Pointer::from_utf16(&[47, 36, 100, 101, 102, 115, 47, 0xd800]).unwrap();
+    let node = supplied.subschema_at(&pointer).unwrap();
+    let at = node.origin();
     assert_eq!(at.source_uri.as_deref(), Some(uri));
     assert_eq!(at.pointer.as_str(), None);
     assert_eq!(at.pointer.to_string(), "/$defs/\\ud800");
-    assert_eq!(resources.locate(&at), Some(node.location()));
-    // A node of another source, including a projection, has no original location.
-    let foreign = JsonValue::parse(r#"{"type":"string"}"#).unwrap();
-    assert_eq!(request.location(foreign.view()), None);
-    let program = request
-        .evaluation_program(&std::sync::atomic::AtomicBool::new(false))
+    assert_eq!(resources.locate(at), Some(node.value().view().location()));
+    let other = document
+        .resolve_operation("op")
+        .unwrap()
+        .input()
+        .unwrap()
+        .environment(
+            &resources,
+            &PreparationLimits::default(),
+            &std::sync::atomic::AtomicBool::new(false),
+        )
         .unwrap();
     assert_eq!(
-        request.location(program.resources()[0].document.view()),
-        None
+        environment.resolve(&other.root(), uri).unwrap_err().kind,
+        ResolutionFailureKind::WrongEnvironment
     );
 }
 

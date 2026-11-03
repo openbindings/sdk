@@ -1,9 +1,9 @@
-use openbindings::{JsonValue, Source};
-use openbindings_invocation::CancellationToken;
+//! Shared lifecycle witnesses through inherent receive and Stream receive adapters.
+use openbindings::{Document, JsonValue};
 use openbindings_invocation::{
-    BindingRequest, BindingValue, ContextChallenge, InvocationError, InvocationLimits, ProviderIo,
-    WriteError,
-    binding::{BindingInvoker, Invoker, SupportedKind},
+    BindingClient, BindingInvoker, BindingRequest, BoundaryFailureKind, CancellationToken,
+    Context as InvocationContext, ContextChallenge, InvocationError, InvocationLimits,
+    InvocationOutput, OutputEvent, PreflightOutcome, ProviderIo, WriteError,
 };
 use std::{
     future::{Future, pending},
@@ -14,25 +14,21 @@ use std::{
     },
     task::{Context, Poll, Wake, Waker},
 };
-
-fn json(s: &str) -> JsonValue {
-    JsonValue::parse(s).unwrap()
+fn json(text: &str) -> JsonValue {
+    JsonValue::parse(text).unwrap()
 }
-fn source() -> Source {
-    Source {
-        kind: "fixture".into(),
-        ..Default::default()
-    }
-}
-fn request<'a>(s: &'a Source, b: &'a BindingValue) -> BindingRequest<'a> {
-    BindingRequest {
-        source: s,
-        binding: b,
-        context: None,
-    }
+fn request() -> BindingRequest {
+    let interface = Document::parse(r#"{"openbindings":"0.2.0","operations":{"o":{}},"sources":{"s":{"kind":"fixture"}},"bindings":{"b":{"operation":"o","source":"s"}}}"#).unwrap().validate().unwrap().conformant().unwrap();
+    BindingRequest::new(interface, "b")
 }
 fn challenge() -> ContextChallenge {
-    ContextChallenge::new(json(r#"{"target":"","alternatives":[{"requirements":[{"type":"custom.token","name":"token","durable":false}]}]}"#)).unwrap()
+    ContextChallenge::try_from(json(
+        r#"{"message":"Supply a token","schema":{"type":"object","required":["token"]}}"#,
+    ))
+    .unwrap()
+}
+fn cancel() -> CancellationToken {
+    CancellationToken::new()
 }
 struct Guard(Arc<AtomicUsize>);
 impl Guard {
@@ -83,22 +79,23 @@ impl Fixture<'_> {
     }
 }
 impl BindingInvoker for Fixture<'_> {
-    type Invocation<'a>
+    type Invoke<'a>
         = Pin<Box<dyn Future<Output = Result<(), InvocationError>> + Send + 'a>>
     where
         Self: 'a;
-    fn supports_kind(&self, k: &str) -> bool {
-        k == "fixture"
-    }
-    fn supported_kinds(&self) -> Vec<SupportedKind> {
-        vec![SupportedKind::new("fixture").with_description("test only")]
+    type Preflight<'a>
+        = std::future::Ready<Result<PreflightOutcome, InvocationError>>
+    where
+        Self: 'a;
+    fn preflight<'a>(&'a self, _: BindingRequest, _: CancellationToken) -> Self::Preflight<'a> {
+        std::future::ready(Ok(PreflightOutcome::NoPrediction))
     }
     fn invoke<'a>(
         &'a self,
-        _r: BindingRequest<'a>,
+        _r: BindingRequest,
         io: ProviderIo,
         _c: CancellationToken,
-    ) -> Self::Invocation<'a> {
+    ) -> Self::Invoke<'a> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         Box::pin(async move {
             let (mut input, mut output) = io.split();
@@ -106,20 +103,20 @@ impl BindingInvoker for Fixture<'_> {
             let _guard = Guard::new(&self.live);
             match self.mode {
                 Mode::Empty => {}
-                Mode::Null => output.emit(json("null")).await?,
+                Mode::Null => output.send(json("null")).await?,
                 Mode::Echo | Mode::GateEcho => {
                     if matches!(self.mode, Mode::GateEcho) {
                         self.gate.cancelled().await;
                     }
                     while let Some(v) = super::receive(&mut input).await {
                         self.effects.fetch_add(1, Ordering::SeqCst);
-                        output.emit(v).await?;
+                        output.send(v).await?;
                     }
                 }
                 Mode::Server(n) => {
                     input.close();
                     for i in 0..n {
-                        output.emit(json(&i.to_string())).await?;
+                        output.send(json(&i.to_string())).await?;
                     }
                 }
                 Mode::Count => {
@@ -128,20 +125,20 @@ impl BindingInvoker for Fixture<'_> {
                         n += 1;
                         self.effects.fetch_add(1, Ordering::SeqCst);
                     }
-                    output.emit(json(&n.to_string())).await?;
+                    output.send(json(&n.to_string())).await?;
                 }
                 Mode::EarlyClose => {
                     input.close();
                     self.gate.cancelled().await;
-                    output.emit(json("7")).await?;
+                    output.send(json("7")).await?;
                 }
                 Mode::OutputError => {
-                    output.emit(json("1")).await?;
+                    output.send(json("1")).await?;
                     return Err(InvocationError::new("custom.failed", Some(json("null"))).unwrap());
                 }
                 Mode::Challenge => return Err(InvocationError::challenge(challenge())),
                 Mode::OutputChallenge => {
-                    output.emit(json("1")).await?;
+                    output.send(json("1")).await?;
                     return Err(InvocationError::challenge(challenge()));
                 }
                 Mode::AuthFailure => {
@@ -159,7 +156,7 @@ impl BindingInvoker for Fixture<'_> {
                     };
                     let write = async {
                         for i in 0..37 {
-                            output.emit(json(&i.to_string())).await?;
+                            output.send(json(&i.to_string())).await?;
                         }
                         Ok::<_, InvocationError>(())
                     };
@@ -172,6 +169,7 @@ impl BindingInvoker for Fixture<'_> {
         })
     }
 }
+
 #[derive(Default)]
 struct Counter(AtomicUsize);
 impl Wake for Counter {
@@ -180,172 +178,154 @@ impl Wake for Counter {
     }
 }
 fn poll<F: Future>(future: Pin<&mut F>) -> Poll<F::Output> {
-    let waker = Waker::from(Arc::new(Counter::default()));
-    future.poll(&mut Context::from_waker(&waker))
+    future.poll(&mut Context::from_waker(Waker::noop()))
 }
-fn ready<T>(value: Poll<T>) -> T {
-    match value {
-        Poll::Ready(v) => v,
-        Poll::Pending => panic!("expected ready"),
+fn code(event: Option<OutputEvent>) -> String {
+    match event.unwrap() {
+        OutputEvent::Error(error) => error.code().into(),
+        other => panic!("{other:?}"),
     }
 }
-fn code(value: Option<Result<JsonValue, InvocationError>>) -> String {
-    value.unwrap().unwrap_err().code().into()
+async fn collect<F: Future<Output = Result<(), InvocationError>>>(
+    output: &mut InvocationOutput<F>,
+) -> Result<Vec<String>, InvocationError> {
+    let mut values = Vec::new();
+    while let Some(event) = output.next().await {
+        match event {
+            OutputEvent::Output(value) => values.push(value.text().to_owned()),
+            OutputEvent::InputClosed => (),
+            OutputEvent::Complete => return Ok(values),
+            OutputEvent::Error(error) => return Err(error),
+            _ => panic!("unknown current event"),
+        }
+    }
+    panic!("terminal event was required")
 }
-
 #[tokio::test]
-async fn lazy_admission_exact_support_and_default_preflight() {
+async fn lazy_admission_and_advisory_no_prediction_do_no_provider_work() {
     let provider = Fixture::new(Mode::Empty);
-    let s = source();
-    let b = BindingValue::default();
-    let facade = Invoker::new(&provider);
-    assert!(facade.preflight(request(&s, &b)).await.unwrap().is_none());
-    drop(facade.invoke(request(&s, &b)));
-    assert_eq!(provider.calls.load(Ordering::SeqCst), 0);
-    assert_eq!(
-        facade
-            .check_kind_support(["fixture", "unknown", "fixture"])
+    let client = BindingClient::new(&provider);
+    assert!(matches!(
+        client
+            .preflight(request(), cancel())
             .unwrap()
-            .iter()
-            .map(|x| x.supported)
-            .collect::<Vec<_>>(),
-        [true, false]
-    );
-    assert!(facade.check_kind_support([""]).is_err());
-    assert_eq!(
-        facade.list_supported_kinds().unwrap()[0]
-            .description
-            .as_deref(),
-        Some("test only")
-    );
-    let bad = Source {
-        kind: "unknown".into(),
-        ..Default::default()
-    };
-    let mut call = facade.invoke(request(&bad, &b));
-    assert_eq!(code(call.next().await), "ERR_REFUSED");
-    let mut bad_binding = BindingValue::default();
-    bad_binding.extensions.insert("source".into(), json("42"));
-    let mut call = facade.invoke(request(&s, &bad_binding));
-    assert_eq!(code(call.next().await), "ERR_REFUSED");
-    assert_eq!(call.boundary_error().unwrap().code(), "unexpected-member");
-    let null = json("null");
-    let mut call = facade.invoke(BindingRequest {
-        context: Some(&null),
-        ..request(&s, &b)
-    });
-    assert_eq!(code(call.next().await), "ERR_REFUSED");
+            .await
+            .unwrap(),
+        PreflightOutcome::NoPrediction
+    ));
+    drop(client.invoke(request(), cancel()).unwrap());
+    let mut bad = request();
+    bad.binding.clear();
+    assert!(client.invoke(bad, cancel()).is_err());
     assert_eq!(provider.calls.load(Ordering::SeqCst), 0);
 }
 #[tokio::test]
 async fn zero_null_and_output_then_failure_require_terminal_observation() {
-    let s = source();
-    let b = BindingValue::default();
     for mode in [Mode::Empty, Mode::Null, Mode::OutputError] {
-        let p = Fixture::new(mode);
-        let f = Invoker::new(&p);
-        let mut call = f.invoke(request(&s, &b));
+        let provider = Fixture::new(mode);
+        let client = BindingClient::new(&provider);
+        let call = client.invoke(request(), cancel()).unwrap();
+        let control = call.control();
+        let (_, mut output) = call.split();
         match mode {
-            Mode::Empty => assert!(call.next().await.is_none()),
+            Mode::Empty => assert!(matches!(output.next().await, Some(OutputEvent::Complete))),
             Mode::Null => {
-                assert_eq!(call.next().await.unwrap().unwrap().text(), "null");
-                assert!(call.next().await.is_none());
+                assert!(
+                    matches!(output.next().await, Some(OutputEvent::Output(v)) if v.text()=="null")
+                );
+                assert!(matches!(output.next().await, Some(OutputEvent::Complete)));
             }
             _ => {
-                assert_eq!(call.next().await.unwrap().unwrap().text(), "1");
-                let e = call.next().await.unwrap().unwrap_err();
-                assert_eq!(e.code(), "custom.failed");
-                assert_eq!(e.data().unwrap().text(), "null");
-                assert!(call.next().await.is_none());
+                assert!(
+                    matches!(output.next().await, Some(OutputEvent::Output(v)) if v.text()=="1")
+                );
+                let Some(OutputEvent::Error(error)) = output.next().await else {
+                    panic!("failure")
+                };
+                assert_eq!(error.code(), "custom.failed");
+                assert_eq!(error.data().unwrap().text(), "null");
             }
         }
-        assert!(call.next().await.is_none());
-        assert!(call.outcome().is_some());
-        assert_eq!(p.calls.load(Ordering::SeqCst), 1);
-        assert_eq!(p.live.load(Ordering::SeqCst), 0);
-        let before = call.outcome().unwrap().err().map(|e| e.code().to_owned());
-        call.control().cancel();
+        assert!(output.next().await.is_none());
+        assert_eq!(provider.live.load(Ordering::SeqCst), 0);
+        let before = control
+            .outcome()
+            .unwrap()
+            .err()
+            .map(|e| e.code().to_owned());
+        control.cancel();
         assert_eq!(
-            call.outcome().unwrap().err().map(|e| e.code().to_owned()),
+            control
+                .outcome()
+                .unwrap()
+                .err()
+                .map(|e| e.code().to_owned()),
             before
         );
     }
 }
 #[tokio::test]
-async fn all_cardinalities_use_same_lifecycle_and_bidi_halves_drive_each_other() {
-    let s = source();
-    let b = BindingValue::default();
+async fn all_cardinalities_share_output_driving_and_bounded_bidi_handoffs() {
     for mode in [Mode::Echo, Mode::Count, Mode::Duplex] {
-        let p = Fixture::new(mode);
-        let f = Invoker::new(&p);
-        let (mut input, mut output) = f.invoke(request(&s, &b)).split();
-        let write = async {
+        let provider = Fixture::new(mode);
+        let client = BindingClient::new(&provider);
+        let (mut input, mut output) = client.invoke(request(), cancel()).unwrap().split();
+        let writing = async {
             for i in 0..37 {
-                input.write(json(&i.to_string())).await.unwrap();
+                input.send(json(&i.to_string())).await.unwrap();
             }
             input.close();
         };
-        let read = async {
-            let mut values = Vec::new();
-            while let Some(v) = output.next().await {
-                values.push(v.unwrap().text().to_owned());
-            }
-            values
-        };
-        // Both results survive; a fail-fast join could hide the output terminal.
-        let (_, values) = tokio::join!(write, read);
-        match mode {
-            Mode::Count => assert_eq!(values, ["37"]),
-            _ => assert_eq!(values, (0..37).map(|i| i.to_string()).collect::<Vec<_>>()),
+        let (_, values) = tokio::join!(writing, collect(&mut output));
+        let values = values.unwrap();
+        if matches!(mode, Mode::Count) {
+            assert_eq!(values, ["37"]);
+        } else {
+            assert_eq!(values, (0..37).map(|i| i.to_string()).collect::<Vec<_>>());
         }
-        assert!(output.outcome().unwrap().is_ok());
     }
-    let p = Fixture::new(Mode::Server(23));
-    let f = Invoker::new(&p);
-    let (input, mut output) = f.invoke(request(&s, &b)).split();
+    let provider = Fixture::new(Mode::Server(23));
+    let client = BindingClient::new(&provider);
+    let (input, mut output) = client.invoke(request(), cancel()).unwrap().split();
     drop(input);
-    for i in 0..23 {
-        assert_eq!(output.next().await.unwrap().unwrap().text(), i.to_string());
-    }
-    assert!(output.next().await.is_none());
+    assert_eq!(
+        collect(&mut output).await.unwrap(),
+        (0..23).map(|i| i.to_string()).collect::<Vec<_>>()
+    );
 }
 #[tokio::test]
 async fn accepted_input_drains_on_half_close_and_early_close_keeps_output_open() {
-    let s = source();
-    let b = BindingValue::default();
-    let p = Fixture::new(Mode::GateEcho);
-    let f = Invoker::new(&p);
-    let mut call = f.invoke(request(&s, &b));
-    call.write(json("9007199254740993")).await.unwrap();
-    call.close();
-    assert_eq!(call.write(json("2")).await, Err(WriteError::Closed));
-    p.gate.cancel();
-    assert_eq!(
-        call.next().await.unwrap().unwrap().text(),
-        "9007199254740993"
-    );
-    assert!(call.next().await.is_none());
-    let p = Fixture::new(Mode::EarlyClose);
-    let f = Invoker::new(&p);
-    let (mut input, mut output) = f.invoke(request(&s, &b)).split();
+    let provider = Fixture::new(Mode::GateEcho);
+    let client = BindingClient::new(&provider);
+    let (mut input, mut output) = client.invoke(request(), cancel()).unwrap().split();
+    input.send(json("9007199254740993")).await.unwrap();
+    input.close();
+    assert_eq!(input.send(json("2")).await, Err(WriteError::Closed));
+    assert_eq!(provider.calls.load(Ordering::SeqCst), 0);
+    provider.gate.cancel();
+    assert_eq!(collect(&mut output).await.unwrap(), ["9007199254740993"]);
+    let provider = Fixture::new(Mode::EarlyClose);
+    let client = BindingClient::new(&provider);
+    let (mut input, mut output) = client.invoke(request(), cancel()).unwrap().split();
+    assert!(matches!(
+        output.next().await,
+        Some(OutputEvent::InputClosed)
+    ));
     input.closed().await;
     assert!(input.is_closed());
-    assert_eq!(input.write(json("1")).await, Err(WriteError::Closed));
-    assert!(output.outcome().is_none());
-    p.gate.cancel();
-    assert_eq!(output.next().await.unwrap().unwrap().text(), "7");
-    assert!(output.next().await.is_none());
+    assert!(output.control().outcome().is_none());
+    assert_eq!(input.send(json("1")).await, Err(WriteError::Closed));
+    provider.gate.cancel();
+    assert_eq!(collect(&mut output).await.unwrap(), ["7"]);
 }
 #[tokio::test]
 async fn pending_write_drop_and_pending_read_drop_do_not_consume_or_duplicate() {
-    let s = source();
-    let b = BindingValue::default();
-    let p = Fixture::new(Mode::GateEcho);
-    let f = Invoker::new(&p);
-    let (mut input, mut output) = f.invoke(request(&s, &b)).split();
-    input.write(json("1")).await.unwrap();
+    let provider = Fixture::new(Mode::GateEcho);
+    let client = BindingClient::new(&provider);
+    let (mut input, mut output) = client.invoke(request(), cancel()).unwrap().split();
+    input.send(json("1")).await.unwrap();
     {
-        let mut write = pin!(input.write(json("2")));
+        let mut write = pin!(input.send(json("2")));
         assert!(poll(write.as_mut()).is_pending());
     }
     {
@@ -353,449 +333,376 @@ async fn pending_write_drop_and_pending_read_drop_do_not_consume_or_duplicate() 
         assert!(poll(read.as_mut()).is_pending());
     }
     input.close();
-    p.gate.cancel();
-    assert_eq!(output.next().await.unwrap().unwrap().text(), "1");
-    assert!(output.next().await.is_none());
-    assert_eq!(p.effects.load(Ordering::SeqCst), 1);
+    provider.gate.cancel();
+    assert_eq!(collect(&mut output).await.unwrap(), ["1"]);
 }
 #[tokio::test]
-async fn cancellation_full_queues_preserves_accepted_output_order_and_releases_job() {
-    let s = source();
-    let b = BindingValue::default();
-    let p = Fixture::new(Mode::Server(100));
-    let f = Invoker::new(&p);
-    let mut call = f.invoke(request(&s, &b));
-    assert_eq!(call.next().await.unwrap().unwrap().text(), "0");
-    assert_eq!(p.live.load(Ordering::SeqCst), 1);
+async fn cancellation_full_queues_preserves_committed_output_order_and_releases_job() {
+    let provider = Fixture::new(Mode::Server(23));
+    let client = BindingClient::new(&provider);
+    let call = client.invoke(request(), cancel()).unwrap();
     let control = call.control();
+    let (_, mut output) = call.split();
+    assert!(matches!(output.next().await, Some(OutputEvent::Output(v)) if v.text()=="0"));
     control.cancel();
-    assert_eq!(p.live.load(Ordering::SeqCst), 0);
     assert_eq!(
         control.outcome().unwrap().unwrap_err().code(),
         "ERR_CANCELLED"
     );
     for i in 1..4 {
-        assert_eq!(call.next().await.unwrap().unwrap().text(), i.to_string());
+        assert!(
+            matches!(output.next().await, Some(OutputEvent::Output(v)) if v.text()==i.to_string())
+        );
     }
-    assert_eq!(code(call.next().await), "ERR_CANCELLED");
-    assert!(call.next().await.is_none());
-    let p = Fixture::new(Mode::GateEcho);
-    let f = Invoker::new(&p);
-    let (mut input, mut output) = f.invoke(request(&s, &b)).split();
-    let control = output.control();
-    input.write(json("1")).await.unwrap();
-    let mut write = pin!(input.write(json("2")));
-    assert!(poll(write.as_mut()).is_pending());
-    control.cancel();
-    assert_eq!(ready(poll(write.as_mut())), Err(WriteError::Closed));
     assert_eq!(code(output.next().await), "ERR_CANCELLED");
-    assert_eq!(p.effects.load(Ordering::SeqCst), 0);
+    assert!(output.next().await.is_none());
+    assert_eq!(provider.live.load(Ordering::SeqCst), 0);
 }
 #[tokio::test]
 async fn pre_cancel_external_control_and_output_abandonment_do_not_cancel_siblings() {
-    let s = source();
-    let b = BindingValue::default();
-    let p = Fixture::new(Mode::Park);
-    let f = Invoker::new(&p);
-    let external = CancellationToken::new();
-    external.cancel();
-    let mut call = f.invoke_with_control(request(&s, &b), &external);
-    assert_eq!(code(call.next().await), "ERR_CANCELLED");
-    assert_eq!(p.calls.load(Ordering::SeqCst), 0);
-    let external = CancellationToken::new();
-    let mut a = f.invoke_with_control(request(&s, &b), &external);
-    let mut bcall = f.invoke_with_control(request(&s, &b), &external);
-    {
-        let mut next = pin!(a.next());
-        assert!(poll(next.as_mut()).is_pending());
-    }
-    {
-        let mut next = pin!(bcall.next());
-        assert!(poll(next.as_mut()).is_pending());
-    }
-    assert_eq!(p.live.load(Ordering::SeqCst), 2);
-    let control = a.control();
-    drop(a);
-    assert_eq!(p.live.load(Ordering::SeqCst), 1);
-    assert!(!external.is_cancelled());
-    assert_eq!(
-        control.outcome().unwrap().unwrap_err().code(),
-        "ERR_CANCELLED"
-    );
-    external.cancel();
-    assert_eq!(code(bcall.next().await), "ERR_CANCELLED");
-    assert_eq!(p.live.load(Ordering::SeqCst), 0);
+    let provider = Fixture::new(Mode::Park);
+    let client = BindingClient::new(&provider);
+    let cancelled = cancel();
+    cancelled.cancel();
+    let (_, mut output) = client.invoke(request(), cancelled).unwrap().split();
+    assert_eq!(code(output.next().await), "ERR_CANCELLED");
+    assert_eq!(provider.calls.load(Ordering::SeqCst), 0);
+    let parent = cancel();
+    let first = client.invoke(request(), parent.clone()).unwrap();
+    let sibling = client.invoke(request(), parent.clone()).unwrap();
+    let sibling_control = sibling.control();
+    let (_, mut first_output) = first.split();
+    assert!(poll(pin!(first_output.next())).is_pending());
+    drop(first_output);
+    assert!(!parent.is_cancelled());
+    assert!(sibling_control.outcome().is_none());
+    let (_, mut sibling_output) = sibling.split();
+    assert!(poll(pin!(sibling_output.next())).is_pending());
+    parent.cancel();
+    assert_eq!(code(sibling_output.next().await), "ERR_CANCELLED");
 }
 #[tokio::test]
 async fn challenge_boundary_is_checked_without_inventing_retry_or_effect_guarantees() {
-    let s = source();
-    let b = BindingValue::default();
     for mode in [Mode::Challenge, Mode::OutputChallenge, Mode::AuthFailure] {
-        let p = Fixture::new(mode);
-        let f = Invoker::new(&p);
-        let mut call = f.invoke(request(&s, &b));
+        let provider = Fixture::new(mode);
+        let client = BindingClient::new(&provider);
+        let call = client.invoke(request(), cancel()).unwrap();
+        let control = call.control();
+        let (_, mut output) = call.split();
         if matches!(mode, Mode::OutputChallenge) {
-            assert!(call.next().await.unwrap().is_ok());
+            assert!(matches!(output.next().await, Some(OutputEvent::Output(_))));
         }
-        let e = call.next().await.unwrap().unwrap_err();
+        let Some(OutputEvent::Error(error)) = output.next().await else {
+            panic!("error")
+        };
         match mode {
             Mode::Challenge => {
-                assert_eq!(e.context_required().unwrap().target(), "");
-                assert_eq!(p.effects.load(Ordering::SeqCst), 0);
+                assert_eq!(
+                    error.context_required().unwrap().message().as_str(),
+                    Some("Supply a token")
+                );
+                assert_eq!(provider.effects.load(Ordering::SeqCst), 0);
             }
             Mode::OutputChallenge => {
-                assert_eq!(e.code(), "ERR_EXECUTION_FAILED");
-                assert!(e.context_required().is_none());
+                assert_eq!(error.code(), "ERR_EXECUTION_FAILED");
+                assert!(error.context_required().is_none());
                 assert_eq!(
-                    call.boundary_error().unwrap().code(),
-                    "challenge-after-output"
+                    control.boundary_failure().unwrap().kind(),
+                    BoundaryFailureKind::ChallengeAfterOutput
                 );
             }
             Mode::AuthFailure => {
-                assert_eq!(e.code(), "custom.auth");
-                assert!(e.context_required().is_none());
-                assert_eq!(p.effects.load(Ordering::SeqCst), 1);
+                assert_eq!(error.code(), "custom.auth");
+                assert!(error.context_required().is_none());
+                assert_eq!(provider.effects.load(Ordering::SeqCst), 1);
             }
             _ => unreachable!(),
         }
-        assert_eq!(p.calls.load(Ordering::SeqCst), 1);
+        assert_eq!(provider.calls.load(Ordering::SeqCst), 1);
     }
 }
 #[tokio::test]
 async fn native_borrowed_nonclone_provider_is_send_and_retained_output_survives() {
-    fn assert_send<T: Send>(_: &T) {}
+    fn send<T: Send>(_: &T) {}
     let retained;
     {
         let name = String::from("borrowed");
-        let mut p = Fixture::new(Mode::Null);
-        p.name = &name;
-        let f = Invoker::new(Arc::new(p));
-        let s = source();
-        let b = BindingValue::default();
-        let mut call = f.invoke(request(&s, &b));
-        assert_send(&call);
-        retained = call.next().await.unwrap().unwrap();
-        assert!(call.next().await.is_none());
+        let mut provider = Fixture::new(Mode::Null);
+        provider.name = &name;
+        let client = BindingClient::new(Arc::new(provider));
+        let call = client.invoke(request(), cancel()).unwrap();
+        send(&call);
+        let (_, mut output) = call.split();
+        let Some(OutputEvent::Output(value)) = output.next().await else {
+            panic!("value")
+        };
+        retained = value;
+        assert!(matches!(output.next().await, Some(OutputEvent::Complete)));
     }
     assert_eq!(retained.text(), "null");
 }
 #[tokio::test]
 async fn delivery_limits_are_local_on_input_and_terminal_on_bad_provider_output() {
-    let s = source();
-    let b = BindingValue::default();
-    let p = Fixture::new(Mode::Echo);
-    let f = Invoker::with_limits(
-        &p,
-        InvocationLimits {
+    let provider = Fixture::new(Mode::Echo);
+    let client = BindingClient::new(&provider)
+        .with_limits(InvocationLimits {
             max_value_bytes: 1,
             ..Default::default()
-        },
-    )
-    .unwrap();
-    let mut call = f.invoke(request(&s, &b));
+        })
+        .unwrap();
+    let (mut input, mut output) = client.invoke(request(), cancel()).unwrap().split();
     assert_eq!(
-        call.write(json("123")).await,
+        input.send(json("123")).await,
         Err(WriteError::ValueTooLarge)
     );
-    assert_eq!(p.calls.load(Ordering::SeqCst), 0);
-    call.write(json("7")).await.unwrap();
-    call.close();
-    assert_eq!(call.next().await.unwrap().unwrap().text(), "7");
-    assert!(call.next().await.is_none());
-    let p = Fixture::new(Mode::Null);
-    let f = Invoker::with_limits(
-        &p,
-        InvocationLimits {
+    assert_eq!(provider.calls.load(Ordering::SeqCst), 0);
+    input.send(json("7")).await.unwrap();
+    input.close();
+    assert_eq!(collect(&mut output).await.unwrap(), ["7"]);
+    let provider = Fixture::new(Mode::Null);
+    let client = BindingClient::new(&provider)
+        .with_limits(InvocationLimits {
             max_value_bytes: 1,
             ..Default::default()
-        },
-    )
-    .unwrap();
-    let mut call = f.invoke(request(&s, &b));
-    assert_eq!(code(call.next().await), "ERR_EXECUTION_FAILED");
+        })
+        .unwrap();
+    let call = client.invoke(request(), cancel()).unwrap();
+    let control = call.control();
+    let (_, mut output) = call.split();
+    assert_eq!(code(output.next().await), "ERR_EXECUTION_FAILED");
     assert_eq!(
-        call.boundary_error().unwrap().code(),
-        "output-resource-limit"
+        control.boundary_failure().unwrap().kind(),
+        BoundaryFailureKind::OutputResourceLimit
     );
     assert!(
-        Invoker::with_limits(
-            &p,
-            InvocationLimits {
+        BindingClient::new(&provider)
+            .with_limits(InvocationLimits {
                 input_capacity: 0,
                 ..Default::default()
-            }
-        )
-        .is_err()
+            })
+            .is_err()
     );
 }
 #[test]
 fn no_busy_self_wake_when_provider_is_pending() {
-    let s = source();
-    let b = BindingValue::default();
-    let p = Fixture::new(Mode::Park);
-    let f = Invoker::new(&p);
-    let mut call = f.invoke(request(&s, &b));
+    let provider = Fixture::new(Mode::Park);
+    let client = BindingClient::new(&provider);
+    let (_, mut output) = client.invoke(request(), cancel()).unwrap().split();
     let counter = Arc::new(Counter::default());
     let waker = Waker::from(counter.clone());
-    let mut next = pin!(call.next());
-    assert!(
-        next.as_mut()
-            .poll(&mut Context::from_waker(&waker))
-            .is_pending()
-    );
-    assert_eq!(counter.0.load(Ordering::SeqCst), 0);
-}
-
-struct Advisory;
-impl BindingInvoker for Advisory {
-    type Invocation<'a> = std::future::Ready<Result<(), InvocationError>>;
-    fn supports_kind(&self, k: &str) -> bool {
-        k == "fixture"
-    }
-    fn invoke<'a>(
-        &'a self,
-        _: BindingRequest<'a>,
-        _: ProviderIo,
-        _: CancellationToken,
-    ) -> Self::Invocation<'a> {
-        std::future::ready(Ok(()))
-    }
-    fn preflight<'a>(
-        &'a self,
-        r: BindingRequest<'a>,
-        _: CancellationToken,
-    ) -> Option<Self::Invocation<'a>> {
-        Some(std::future::ready(Err(if r.context.is_some() {
-            InvocationError::new("custom.preflight", None).unwrap()
-        } else {
-            InvocationError::challenge(challenge())
-        })))
-    }
-}
-
-#[tokio::test]
-async fn advisory_preflight_can_challenge_or_fail_without_becoming_an_invocation_gate() {
-    let s = source();
-    let b = BindingValue::default();
-    let f = Invoker::new(Advisory);
-    assert!(f.preflight(request(&s, &b)).await.unwrap().is_some());
-    let context = json("{}");
-    let r = BindingRequest {
-        context: Some(&context),
-        ..request(&s, &b)
-    };
-    assert_eq!(f.preflight(r).await.unwrap_err().code(), "custom.preflight");
-    let mut call = f.invoke(r);
-    assert!(call.next().await.is_none());
-}
-#[tokio::test]
-async fn input_and_output_wakeups_can_be_joined_inside_provider() {
-    // Joined provider directions use the same bounded lifecycle; the driver
-    // unit tests separately check each endpoint’s task-waker notifications.
-    let s = source();
-    let b = BindingValue::default();
-    let p = Fixture::new(Mode::Duplex);
-    let f = Invoker::new(&p);
-    let (mut input, mut output) = f.invoke(request(&s, &b)).split();
-    let write = async {
-        for i in 0..37 {
-            input.write(json(&i.to_string())).await.unwrap();
-        }
-        input.close();
-    };
-    let read = async {
-        let mut n = 0;
-        while output.next().await.is_some() {
-            n += 1;
-        }
-        assert_eq!(n, 37);
-    };
-    tokio::join!(write, read);
-}
-#[test]
-fn full_output_queue_does_not_prevent_immediate_control_cancellation() {
-    let s = source();
-    let b = BindingValue::default();
-    let p = Fixture::new(Mode::Server(100));
-    let f = Invoker::new(&p);
-    let (mut input, mut output) = f.invoke(request(&s, &b)).split();
-    let control = output.control();
-    let mut closed = pin!(input.closed());
-    ready(poll(closed.as_mut()));
-    control.cancel();
-    assert_eq!(
-        control.outcome().unwrap().unwrap_err().code(),
-        "ERR_CANCELLED"
-    );
     let mut read = pin!(output.next());
-    assert_eq!(ready(poll(read.as_mut())).unwrap().unwrap().text(), "0");
-}
-#[test]
-fn dropped_pending_read_does_not_keep_its_waker_alive() {
-    let s = source();
-    let b = BindingValue::default();
-    let p = Fixture::new(Mode::Park);
-    let f = Invoker::new(&p);
-    let mut call = f.invoke(request(&s, &b));
-    let counter = Arc::new(Counter::default());
-    let waker = Waker::from(counter.clone());
-    {
-        let mut read = pin!(call.next());
+    for _ in 0..128 {
         assert!(
             read.as_mut()
                 .poll(&mut Context::from_waker(&waker))
                 .is_pending()
         );
     }
-    assert_eq!(Arc::strong_count(&counter), 2);
+    assert_eq!(counter.0.load(Ordering::SeqCst), 0);
 }
-
+#[test]
+fn dropped_pending_read_does_not_keep_its_waker_alive() {
+    let provider = Fixture::new(Mode::Echo);
+    let client = BindingClient::new(&provider);
+    let (_input, mut output) = client.invoke(request(), cancel()).unwrap().split();
+    let owner = Arc::new(Counter::default());
+    let weak = Arc::downgrade(&owner);
+    let waker = Waker::from(owner);
+    {
+        let mut read = pin!(output.next());
+        assert!(
+            read.as_mut()
+                .poll(&mut Context::from_waker(&waker))
+                .is_pending()
+        );
+    }
+    drop(waker);
+    assert!(weak.upgrade().is_none());
+}
 #[tokio::test]
 async fn supplied_unusable_context_can_receive_a_safe_renewed_challenge() {
-    let s = source();
-    let b = BindingValue::default();
-    let context = json(r#"{"credential":"unusable-test-value"}"#);
-    let p = Fixture::new(Mode::Challenge);
-    let f = Invoker::new(&p);
-    let mut call = f.invoke(BindingRequest {
-        context: Some(&context),
-        ..request(&s, &b)
-    });
-    assert!(
-        call.next()
-            .await
-            .unwrap()
-            .unwrap_err()
-            .context_required()
-            .is_some()
-    );
-    assert_eq!(p.effects.load(Ordering::SeqCst), 0);
-    assert_eq!(p.calls.load(Ordering::SeqCst), 1);
-    // The facade never resolves context or starts another attempt.
-    assert!(call.next().await.is_none());
-    assert_eq!(p.calls.load(Ordering::SeqCst), 1);
+    let provider = Fixture::new(Mode::Challenge);
+    let client = BindingClient::new(&provider);
+    let request = request()
+        .with_context(InvocationContext::try_from(json(r#"{"token":"expired"}"#)).unwrap());
+    let (_, mut output) = client.invoke(request, cancel()).unwrap().split();
+    assert_eq!(code(output.next().await), "CONTEXT_REQUIRED");
+    assert_eq!(provider.effects.load(Ordering::SeqCst), 0);
+    assert_eq!(provider.calls.load(Ordering::SeqCst), 1);
+    assert!(output.next().await.is_none());
+    assert_eq!(provider.calls.load(Ordering::SeqCst), 1);
 }
 #[tokio::test]
 async fn per_handle_cancel_before_first_poll_does_no_provider_work() {
-    let s = source();
-    let b = BindingValue::default();
-    let p = Fixture::new(Mode::Empty);
-    let f = Invoker::new(&p);
-    let mut call = f.invoke(request(&s, &b));
+    let provider = Fixture::new(Mode::Empty);
+    let client = BindingClient::new(&provider);
+    let call = client.invoke(request(), cancel()).unwrap();
     call.control().cancel();
-    assert_eq!(code(call.next().await), "ERR_CANCELLED");
-    assert_eq!(p.calls.load(Ordering::SeqCst), 0);
+    let (_, mut output) = call.split();
+    assert_eq!(code(output.next().await), "ERR_CANCELLED");
+    assert_eq!(provider.calls.load(Ordering::SeqCst), 0);
 }
-struct LargeFailure;
-impl BindingInvoker for LargeFailure {
-    type Invocation<'a> = std::future::Ready<Result<(), InvocationError>>;
-    fn supports_kind(&self, k: &str) -> bool {
-        k == "fixture"
-    }
+struct Prediction {
+    answer: Result<PreflightOutcome, InvocationError>,
+    terminal: Result<(), InvocationError>,
+    calls: AtomicUsize,
+}
+impl BindingInvoker for Prediction {
+    type Invoke<'a> = std::future::Ready<Result<(), InvocationError>>;
+    type Preflight<'a> = std::future::Ready<Result<PreflightOutcome, InvocationError>>;
     fn invoke<'a>(
         &'a self,
-        r: BindingRequest<'a>,
+        _: BindingRequest,
         _: ProviderIo,
         _: CancellationToken,
-    ) -> Self::Invocation<'a> {
-        std::future::ready(Err(InvocationError::new(
-            "custom.large",
-            r.source.data.clone(),
-        )
-        .unwrap()))
+    ) -> Self::Invoke<'a> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        std::future::ready(self.terminal.clone())
     }
-    fn preflight<'a>(
-        &'a self,
-        r: BindingRequest<'a>,
-        _: CancellationToken,
-    ) -> Option<Self::Invocation<'a>> {
-        Some(std::future::ready(Err(if r.source.data.is_none() {
-            InvocationError::challenge(challenge())
-        } else {
-            InvocationError::new("custom.large", r.source.data.clone()).unwrap()
-        })))
+    fn preflight<'a>(&'a self, _: BindingRequest, _: CancellationToken) -> Self::Preflight<'a> {
+        std::future::ready(self.answer.clone())
     }
 }
-
 #[tokio::test]
-async fn oversized_terminal_and_preflight_failure_fall_back_without_data_or_retry_claim() {
-    let s = Source {
-        data: Some(json(&format!("\"{}\"", "x".repeat(512)))),
-        ..source()
-    };
-    let b = BindingValue::default();
-    let f = Invoker::with_limits(
-        LargeFailure,
-        InvocationLimits {
-            max_error_bytes: 256,
-            ..Default::default()
-        },
-    )
+async fn advisory_preflight_can_challenge_or_fail_without_becoming_an_invocation_gate() {
+    for answer in [
+        Ok(PreflightOutcome::NoPrediction),
+        Ok(PreflightOutcome::Challenge(challenge())),
+        Err(InvocationError::refused()),
+        Err(InvocationError::execution_failed()),
+    ] {
+        let provider = Prediction {
+            answer: answer.clone(),
+            terminal: Ok(()),
+            calls: AtomicUsize::new(0),
+        };
+        let client = BindingClient::new(&provider);
+        let result = client.preflight(request(), cancel()).unwrap().await;
+        match (&answer, result) {
+            (Ok(PreflightOutcome::NoPrediction), Ok(PreflightOutcome::NoPrediction)) => (),
+            (Ok(PreflightOutcome::Challenge(want)), Ok(PreflightOutcome::Challenge(got))) => {
+                assert_eq!(got.value().value().text(), want.value().value().text());
+            }
+            (Err(want), Err(got)) => assert_eq!(want.code(), got.code()),
+            other => panic!("{other:?}"),
+        }
+        assert_eq!(provider.calls.load(Ordering::SeqCst), 0);
+        let (_, mut output) = client.invoke(request(), cancel()).unwrap().split();
+        assert!(matches!(output.next().await, Some(OutputEvent::Complete)));
+    }
+}
+#[tokio::test]
+async fn oversized_terminal_and_preflight_answers_fall_back_without_data_or_retry_claim() {
+    let huge = JsonValue::string(&"x".repeat(600)).unwrap();
+    let error = InvocationError::new("example.application", Some(huge.clone())).unwrap();
+    let big_challenge = ContextChallenge::try_from(json(&format!(
+        r#"{{"message":{},"schema":{{}}}}"#,
+        huge.text()
+    )))
     .unwrap();
-    let mut call = f.invoke(request(&s, &b));
-    let e = call.next().await.unwrap().unwrap_err();
-    assert_eq!(e.code(), "ERR_EXECUTION_FAILED");
-    assert!(e.data().is_none());
-    assert_eq!(
-        call.boundary_error().unwrap().code(),
-        "terminal-resource-limit"
-    );
-    let e = f.preflight(request(&s, &b)).await.unwrap_err();
-    assert_eq!(e.code(), "ERR_EXECUTION_FAILED");
-    assert!(e.data().is_none());
-}
-
-// The hook predicts the challenge invocation would raise; preflight returns it
-// as its result, never as an error carrying a retry path.
-#[tokio::test]
-async fn preflight_returns_a_predicted_challenge_as_its_result_not_an_error() {
-    let s = source();
-    let b = BindingValue::default();
-    let f = Invoker::new(LargeFailure);
-    let predicted = f.preflight(request(&s, &b)).await.unwrap().unwrap();
-    assert_eq!(predicted.value().text(), challenge().value().text());
-}
-
-#[tokio::test]
-async fn dropped_and_cancelled_attempts_preserve_siblings_and_other_parents() {
-    let s = source();
-    let b = BindingValue::default();
-    // All providers wait on the same independent completion gate.
-    let p = Fixture::new(Mode::GateEcho);
-    let facade = Invoker::new(&p);
-    let external = CancellationToken::new();
-    let unrelated = CancellationToken::new();
-    let mut first = facade.invoke_with_control(request(&s, &b), &external);
-    let mut sibling = facade.invoke_with_control(request(&s, &b), &external);
-    let mut third = facade.invoke_with_control(request(&s, &b), &unrelated);
-    for call in [&mut first, &mut sibling, &mut third] {
-        call.close();
-        assert!(poll(pin!(call.next()).as_mut()).is_pending());
+    for answer in [
+        Err(error.clone()),
+        Ok(PreflightOutcome::Challenge(big_challenge)),
+    ] {
+        let provider = Prediction {
+            answer,
+            terminal: Err(error.clone()),
+            calls: AtomicUsize::new(0),
+        };
+        let client = BindingClient::new(&provider)
+            .with_limits(InvocationLimits {
+                max_error_bytes: 256,
+                ..Default::default()
+            })
+            .unwrap();
+        let failure = client
+            .preflight(request(), cancel())
+            .unwrap()
+            .await
+            .unwrap_err();
+        assert_eq!(failure.code(), "ERR_EXECUTION_FAILED");
+        assert!(failure.data().is_none());
+        let call = client.invoke(request(), cancel()).unwrap();
+        let control = call.control();
+        let (_, mut output) = call.split();
+        let Some(OutputEvent::Error(failure)) = output.next().await else {
+            panic!("error")
+        };
+        assert_eq!(failure.code(), "ERR_EXECUTION_FAILED");
+        assert!(failure.data().is_none());
+        assert_eq!(
+            control.boundary_failure().unwrap().kind(),
+            BoundaryFailureKind::TerminalResourceLimit
+        );
     }
-    drop(first);
+}
+
+#[tokio::test]
+async fn cancelled_full_input_wakes_pending_submission_before_output_is_repolled() {
+    let provider = Fixture::new(Mode::GateEcho);
+    let client = BindingClient::new(&provider);
+    let call = client.invoke(request(), cancel()).unwrap();
+    let control = call.control();
+    let (mut input, mut output) = call.split();
+    input.send(json("1")).await.unwrap();
+    assert!(poll(pin!(output.next())).is_pending());
+    let counter = Arc::new(Counter::default());
+    let waker = Waker::from(counter.clone());
+    {
+        let mut send = pin!(input.send(json("2")));
+        assert!(
+            send.as_mut()
+                .poll(&mut Context::from_waker(&waker))
+                .is_pending()
+        );
+        control.cancel();
+        assert!(counter.0.load(Ordering::SeqCst) > 0);
+        assert!(matches!(
+            poll(send.as_mut()),
+            Poll::Ready(Err(WriteError::Closed))
+        ));
+    }
+    assert_eq!(provider.effects.load(Ordering::SeqCst), 0);
+    assert_eq!(code(output.next().await), "ERR_CANCELLED");
+    assert_eq!(provider.live.load(Ordering::SeqCst), 0);
+}
+#[tokio::test]
+async fn dropped_and_cancelled_attempts_preserve_live_siblings_and_other_parents() {
+    let external = cancel();
+    let unrelated = cancel();
+    let provider = Fixture::new(Mode::GateEcho);
+    let client = BindingClient::new(&provider);
+    let (mut ai, mut a) = client.invoke(request(), external.clone()).unwrap().split();
+    let (mut bi, mut b) = client.invoke(request(), external.clone()).unwrap().split();
+    let (mut ci, mut c) = client.invoke(request(), unrelated.clone()).unwrap().split();
+    ai.close();
+    bi.close();
+    ci.close();
+    for output in [&mut a, &mut b, &mut c] {
+        assert!(poll(pin!(output.next())).is_pending());
+    }
+    drop(a);
     assert!(!external.is_cancelled() && !unrelated.is_cancelled());
-    p.gate.cancel();
-    assert!(sibling.next().await.is_none());
-    assert!(third.next().await.is_none());
-    assert_eq!(p.live.load(Ordering::SeqCst), 0);
-
-    let p = Fixture::new(Mode::Park);
-    let facade = Invoker::new(&p);
-    let mut a = facade.invoke_with_control(request(&s, &b), &external);
-    let mut bcall = facade.invoke_with_control(request(&s, &b), &external);
-    let mut third = facade.invoke_with_control(request(&s, &b), &unrelated);
-    for call in [&mut a, &mut bcall, &mut third] {
-        assert!(poll(pin!(call.next()).as_mut()).is_pending());
+    provider.gate.cancel();
+    assert!(matches!(b.next().await, Some(OutputEvent::Complete)));
+    assert!(matches!(c.next().await, Some(OutputEvent::Complete)));
+    assert_eq!(provider.live.load(Ordering::SeqCst), 0);
+    let provider = Fixture::new(Mode::Park);
+    let client = BindingClient::new(&provider);
+    let (_, mut a) = client.invoke(request(), external.clone()).unwrap().split();
+    let (_, mut b) = client.invoke(request(), external.clone()).unwrap().split();
+    let (_, mut c) = client.invoke(request(), unrelated.clone()).unwrap().split();
+    for output in [&mut a, &mut b, &mut c] {
+        assert!(poll(pin!(output.next())).is_pending());
     }
-    // Explicit local cancellation also leaves both parents healthy.
     a.control().cancel();
     assert_eq!(code(a.next().await), "ERR_CANCELLED");
     assert!(!external.is_cancelled() && !unrelated.is_cancelled());
-    assert!(poll(pin!(bcall.next()).as_mut()).is_pending());
+    assert!(poll(pin!(b.next())).is_pending());
     external.cancel();
-    assert_eq!(code(bcall.next().await), "ERR_CANCELLED");
-    assert!(poll(pin!(third.next()).as_mut()).is_pending());
+    assert_eq!(code(b.next().await), "ERR_CANCELLED");
+    assert!(poll(pin!(c.next())).is_pending());
     assert!(!unrelated.is_cancelled());
-    drop(third);
-    assert_eq!(p.live.load(Ordering::SeqCst), 0);
+    drop(c);
+    assert_eq!(provider.live.load(Ordering::SeqCst), 0);
 }

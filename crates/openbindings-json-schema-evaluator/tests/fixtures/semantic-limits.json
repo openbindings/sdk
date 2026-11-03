@@ -1,0 +1,325 @@
+[
+  {
+    "id": "per-pattern-expanded-form/ordinary",
+    "schema": {
+      "pattern": "\\d"
+    },
+    "value": "1",
+    "limits": {
+      "pattern_bytes": 2
+    },
+    "resources": [],
+    "required": "limit"
+  },
+  {
+    "id": "per-pattern-expanded-form/semantic",
+    "schema": {
+      "allOf": [
+        {
+          "not": {
+            "allOf": [
+              false,
+              {
+                "$id": "https://force.test/",
+                "$ref": "%"
+              }
+            ]
+          }
+        },
+        {
+          "pattern": "\\d"
+        }
+      ]
+    },
+    "value": "1",
+    "limits": {
+      "pattern_bytes": 2
+    },
+    "resources": [],
+    "required": "limit"
+  },
+  {
+    "id": "total-pattern-forms/ordinary",
+    "schema": {
+      "anyOf": [
+        {
+          "pattern": "^a$"
+        },
+        {
+          "pattern": "^b$"
+        },
+        {
+          "pattern": "^c$"
+        },
+        {
+          "pattern": "^d$"
+        }
+      ]
+    },
+    "value": "a",
+    "limits": {
+      "total_pattern_bytes": 5
+    },
+    "resources": [],
+    "required": "limit"
+  },
+  {
+    "id": "total-pattern-forms/semantic",
+    "schema": {
+      "allOf": [
+        {
+          "not": {
+            "allOf": [
+              false,
+              {
+                "$id": "https://force.test/",
+                "$ref": "%"
+              }
+            ]
+          }
+        },
+        {
+          "anyOf": [
+            {
+              "pattern": "^a$"
+            },
+            {
+              "pattern": "^b$"
+            },
+            {
+              "pattern": "^c$"
+            },
+            {
+              "pattern": "^d$"
+            }
+          ]
+        }
+      ]
+    },
+    "value": "a",
+    "limits": {
+      "total_pattern_bytes": 5
+    },
+    "resources": [],
+    "required": "limit"
+  },
+  {
+    "id": "simple-pattern-memory/ordinary",
+    "schema": {
+      "pattern": "^a$"
+    },
+    "value": "a",
+    "limits": {
+      "total_pattern_memory": 0
+    },
+    "resources": [],
+    "required": "limit"
+  },
+  {
+    "id": "simple-pattern-memory/semantic",
+    "schema": {
+      "allOf": [
+        {
+          "not": {
+            "allOf": [
+              false,
+              {
+                "$id": "https://force.test/",
+                "$ref": "%"
+              }
+            ]
+          }
+        },
+        {
+          "pattern": "^a$"
+        }
+      ]
+    },
+    "value": "a",
+    "limits": {
+      "total_pattern_memory": 0
+    },
+    "resources": [],
+    "required": "limit"
+  },
+  {
+    "id": "general-pattern-memory/ordinary",
+    "schema": {
+      "pattern": "a|b"
+    },
+    "value": "a",
+    "limits": {
+      "total_pattern_memory": 0
+    },
+    "resources": [],
+    "required": "limit"
+  },
+  {
+    "id": "general-pattern-memory/semantic",
+    "schema": {
+      "allOf": [
+        {
+          "not": {
+            "allOf": [
+              false,
+              {
+                "$id": "https://force.test/",
+                "$ref": "%"
+              }
+            ]
+          }
+        },
+        {
+          "pattern": "a|b"
+        }
+      ]
+    },
+    "value": "a",
+    "limits": {
+      "total_pattern_memory": 0
+    },
+    "resources": [],
+    "required": "limit"
+  },
+  {
+    "id": "zero-stack/ordinary",
+    "schema": {
+      "type": "integer"
+    },
+    "value": 1,
+    "limits": {
+      "stack_bytes": 0
+    },
+    "resources": [],
+    "required": "limit"
+  },
+  {
+    "id": "zero-stack/semantic",
+    "schema": {
+      "allOf": [
+        {
+          "not": {
+            "allOf": [
+              false,
+              {
+                "$id": "https://force.test/",
+                "$ref": "%"
+              }
+            ]
+          }
+        },
+        {
+          "type": "integer"
+        }
+      ]
+    },
+    "value": 1,
+    "limits": {
+      "stack_bytes": 0
+    },
+    "resources": [],
+    "required": "limit"
+  },
+  {
+    "id": "zero-compile-depth/ordinary",
+    "schema": {
+      "type": "integer"
+    },
+    "value": 1,
+    "limits": {
+      "compile_json_depth": 0
+    },
+    "resources": [],
+    "required": "S"
+  },
+  {
+    "id": "zero-compile-depth/semantic",
+    "schema": {
+      "allOf": [
+        {
+          "not": {
+            "allOf": [
+              false,
+              {
+                "$id": "https://force.test/",
+                "$ref": "%"
+              }
+            ]
+          }
+        },
+        {
+          "type": "integer"
+        }
+      ]
+    },
+    "value": 1,
+    "limits": {
+      "compile_json_depth": 0
+    },
+    "resources": [],
+    "required": "S"
+  },
+  {
+    "id": "zero-program/ordinary",
+    "schema": true,
+    "value": null,
+    "limits": {
+      "program_bytes": 0
+    },
+    "resources": [],
+    "required": "S"
+  },
+  {
+    "id": "zero-program/semantic",
+    "schema": {
+      "allOf": [
+        {
+          "not": {
+            "allOf": [
+              false,
+              {
+                "$id": "https://force.test/",
+                "$ref": "%"
+              }
+            ]
+          }
+        },
+        true
+      ]
+    },
+    "value": null,
+    "limits": {
+      "program_bytes": 0
+    },
+    "resources": [],
+    "required": "limit"
+  },
+  {
+    "id": "zero-schema-resources-ordinary",
+    "schema": true,
+    "value": null,
+    "required": "limit",
+    "resources": [],
+    "limits": {
+      "schema_resources": 0
+    }
+  },
+  {
+    "id": "zero-schema-resources-semantic",
+    "schema": {
+      "$id": "https://e.test/r",
+      "anyOf": [
+        true,
+        {
+          "$ref": "%"
+        }
+      ]
+    },
+    "value": null,
+    "required": "limit",
+    "resources": [],
+    "limits": {
+      "schema_resources": 0
+    }
+  }
+]

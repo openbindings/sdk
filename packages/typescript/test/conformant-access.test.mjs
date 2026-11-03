@@ -183,10 +183,10 @@ test("raw document receiver substitution rechecks proof at every authority entry
     operation.free();
     const preparation = contract.prepareWith(resources, "{}", false);
     assert.equal(JSON.parse(preparation.result()).status, "ready");
-    const prepared = preparation.takeValueContract();
+    const prepared = preparation.takeSchema();
     const value = bridge.WasmJson.parseBytes(new TextEncoder().encode("42"));
     assert.equal(
-      JSON.parse(prepared.validate(value, false)).status,
+      JSON.parse(prepared.evaluate(value, false)).status,
       "satisfies",
     );
     assert.equal(

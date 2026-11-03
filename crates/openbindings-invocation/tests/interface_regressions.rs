@@ -1,336 +1,277 @@
-use openbindings::{Document, ExternalSchemas, JsonValue, Source};
-use openbindings_invocation::CancellationToken;
+//! Current-interface regressions preserve behavior while replacing obsolete APIs.
+use openbindings::{ConformantDocument, Document, ExternalSchemas, JsonValue};
 use openbindings_invocation::{
-    BindingRequest, BindingValue, ContextChallenge, InvocationError, ProviderIo,
-    binding::{BindingInvoker, Invoker},
-    operation::{self, Request},
+    BindingClient, BindingInvoker, BindingRequest, CancellationToken, ContextChallenge,
+    InvocationError, InvocationSupport, OperationClient, OperationRequest, OutputEvent,
+    PreflightOutcome, ProviderIo, ProviderOutput,
 };
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 use std::{
-    cell::Cell,
     future::{Future, Ready, ready},
-    pin::Pin,
     rc::Rc,
-    sync::Arc,
+    sync::{Arc, Mutex},
 };
-
-fn source() -> Source {
-    Source {
-        kind: "example.interfaces".into(),
-        ..Default::default()
+fn doc(operation: &str) -> ConformantDocument {
+    Document::parse(format!(r#"{{"openbindings":"0.2.0","operations":{{"o":{operation}}},"sources":{{"s":{{"kind":"fixture"}}}},"bindings":{{"b":{{"operation":"o","source":"s"}}}}}}"#))
+        .unwrap().validate().unwrap().conformant().unwrap()
+}
+fn request() -> BindingRequest {
+    BindingRequest::new(doc("{}"), "b")
+}
+fn cancel() -> CancellationToken {
+    CancellationToken::new()
+}
+fn json(text: &str) -> JsonValue {
+    JsonValue::parse(text).unwrap()
+}
+fn terminal(event: Option<OutputEvent>) -> InvocationError {
+    match event.unwrap() {
+        OutputEvent::Error(error) => error,
+        other => panic!("{other:?}"),
     }
 }
-fn request<'a>(source: &'a Source, binding: &'a BindingValue) -> BindingRequest<'a> {
-    BindingRequest {
-        source,
-        binding,
-        context: None,
+struct Provider<'a> {
+    code: Option<&'a str>,
+    output: Arc<Mutex<Option<ProviderOutput>>>,
+    hooks: Arc<std::sync::atomic::AtomicUsize>,
+}
+impl<'a> Provider<'a> {
+    fn new(code: Option<&'a str>) -> Self {
+        Self {
+            code,
+            output: Arc::default(),
+            hooks: Arc::default(),
+        }
     }
 }
-fn document(operation: &str) -> Document {
-    Document::parse(format!(
-        r#"{{"openbindings":"0.2.0","operations":{{"run":{operation}}},"sources":{{"s":{{"kind":"example.interfaces"}},"unsupported":{{"kind":"other"}}}},"bindings":{{"b":{{"operation":"run","source":"s"}},"u":{{"operation":"run","source":"unsupported"}}}}}}"#
-    )).unwrap()
-}
-
-struct InvokeOnly;
-impl BindingInvoker for InvokeOnly {
-    type Invocation<'a> = Ready<Result<(), InvocationError>>;
-    fn supports_kind(&self, kind: &str) -> bool {
-        kind == "example.interfaces"
-    }
+impl BindingInvoker for Provider<'_> {
+    type Invoke<'a>
+        = Ready<Result<(), InvocationError>>
+    where
+        Self: 'a;
+    type Preflight<'a>
+        = Ready<Result<PreflightOutcome, InvocationError>>
+    where
+        Self: 'a;
     fn invoke<'a>(
         &'a self,
-        _: BindingRequest<'a>,
-        _: ProviderIo,
+        _: BindingRequest,
+        io: ProviderIo,
         _: CancellationToken,
-    ) -> Self::Invocation<'a> {
-        ready(Ok(()))
-    }
-}
-
-// all selection paths and the advisory path use the specific code.
-#[tokio::test]
-async fn unsupported_explicit_and_ordered_bindings_are_not_found() {
-    let facade = operation::Invoker::new(
-        document("{}")
-            .validate()
-            .unwrap()
-            .conformant()
-            .expect("conformant invocation document"),
-        SendProvider,
-    );
-    for selection in [Request::binding("u"), Request::ordered("run", &["u"])] {
-        let mut call = facade.invoke(selection);
-        call.close();
-        assert_eq!(
-            call.next().await.unwrap().unwrap_err().code(),
-            "ERR_BINDING_NOT_FOUND"
-        );
-        assert!(call.boundary_error().is_none());
-        assert_eq!(
-            facade.preflight(selection).await.unwrap_err().code(),
-            "ERR_BINDING_NOT_FOUND"
-        );
-    }
-}
-
-// The hook's job is the provider's invocation future, so the same bound makes
-// a generic default preflight Send.
-fn send_default<'a, P: BindingInvoker + Sync>(
-    facade: &'a Invoker<P>,
-    request: BindingRequest<'a>,
-) -> impl Future<Output = Result<Option<ContextChallenge>, InvocationError>> + Send + 'a
-where
-    for<'b> P::Invocation<'b>: Send,
-{
-    facade.preflight(request)
-}
-#[expect(
-    clippy::manual_async_fn,
-    reason = "The preflight trait requires a generic Send return type"
-)]
-fn send_provider<'a, P>(
-    binding: &'a Invoker<P>,
-    operation: &'a operation::Invoker<P>,
-    request: BindingRequest<'a>,
-) -> impl Future<Output = ()> + Send + 'a
-where
-    // Plain operation calls borrow the invoker, so a provider that can be
-    // shared suffices, as for binding calls.
-    P: BindingInvoker + Sync,
-    for<'b> P::Invocation<'b>: Send,
-{
-    async move {
-        assert!(binding.preflight(request).await.unwrap().is_none());
-        assert!(
-            operation
-                .preflight(Request::binding("b"))
-                .await
-                .unwrap()
-                .is_none()
-        );
-        let mut call = binding.invoke(request);
-        call.close();
-        assert!(call.next().await.is_none());
-        let mut call = operation.invoke(Request::binding("b"));
-        call.close();
-        assert!(call.next().await.is_none());
-    }
-}
-
-struct SendProvider;
-impl BindingInvoker for SendProvider {
-    type Invocation<'a> = Ready<Result<(), InvocationError>>;
-    fn supports_kind(&self, kind: &str) -> bool {
-        InvokeOnly.supports_kind(kind)
-    }
-    fn invoke<'a>(
-        &'a self,
-        _: BindingRequest<'a>,
-        _: ProviderIo,
-        _: CancellationToken,
-    ) -> Self::Invocation<'a> {
-        ready(Ok(()))
-    }
-    fn preflight<'a>(
-        &'a self,
-        _: BindingRequest<'a>,
-        _: CancellationToken,
-    ) -> Option<Self::Invocation<'a>> {
-        Some(ready(Ok(())))
-    }
-}
-
-// no required preflight items for invoke-only providers; the default is
-// still no prediction. Optional named futures support generic Send consumers.
-#[tokio::test]
-async fn generic_send_preflight_and_invoke_only_default() {
-    let source = source();
-    let value = BindingValue::default();
-    let request = request(&source, &value);
-    assert!(
-        send_default(&Invoker::new(InvokeOnly), request)
-            .await
-            .unwrap()
-            .is_none()
-    );
-    assert!(
-        operation::Invoker::new(
-            document("{}")
-                .validate()
-                .unwrap()
-                .conformant()
-                .expect("conformant invocation document"),
-            InvokeOnly
-        )
-        .preflight(Request::binding("b"))
-        .await
-        .unwrap()
-        .is_none()
-    );
-    send_provider(
-        &Invoker::new(SendProvider),
-        &operation::Invoker::new(
-            document("{}")
-                .validate()
-                .unwrap()
-                .conformant()
-                .expect("conformant invocation document"),
-            SendProvider,
-        ),
-        request,
-    )
-    .await;
-}
-
-struct Challenging;
-impl BindingInvoker for Challenging {
-    type Invocation<'a> = Ready<Result<(), InvocationError>>;
-    fn supports_kind(&self, kind: &str) -> bool {
-        InvokeOnly.supports_kind(kind)
-    }
-    fn invoke<'a>(
-        &'a self,
-        _: BindingRequest<'a>,
-        _: ProviderIo,
-        _: CancellationToken,
-    ) -> Self::Invocation<'a> {
-        ready(Ok(()))
-    }
-    fn preflight<'a>(
-        &'a self,
-        _: BindingRequest<'a>,
-        _: CancellationToken,
-    ) -> Option<Self::Invocation<'a>> {
-        let challenge = ContextChallenge::new(
-            JsonValue::parse(
-                r#"{"target":"example.target","alternatives":[{"requirements":[{"type":"auth.bearer"}]}]}"#,
-            )
-            .unwrap(),
-        )
-        .unwrap();
-        Some(ready(Err(InvocationError::challenge(challenge))))
-    }
-}
-
-// Every preflight entry point runs the SDK's checks and then asks the
-// provider's hook; none answers for a provider that has one.
-#[tokio::test]
-async fn preflight_returns_the_provider_hook_challenge_on_both_facades() {
-    let source = source();
-    let value = BindingValue::default();
-    let binding = Invoker::new(Challenging);
-    let operation = operation::Invoker::new(
-        document("{}")
-            .validate()
-            .unwrap()
-            .conformant()
-            .expect("conformant invocation document"),
-        Challenging,
-    );
-    let control = CancellationToken::new();
-    let challenges = [
-        binding.preflight(request(&source, &value)).await,
-        binding
-            .preflight_with_control(request(&source, &value), &control)
-            .await,
-        operation.preflight(Request::binding("b")).await,
-        operation
-            .preflight_with_control(Request::operation("run"), &control)
-            .await,
-    ];
-    for challenge in challenges {
-        assert_eq!(challenge.unwrap().unwrap().target(), "example.target");
-    }
-}
-
-struct LocalProvider(Rc<Cell<usize>>);
-impl BindingInvoker for LocalProvider {
-    type Invocation<'a> = Pin<Box<dyn Future<Output = Result<(), InvocationError>> + 'a>>;
-    fn supports_kind(&self, kind: &str) -> bool {
-        InvokeOnly.supports_kind(kind)
-    }
-    fn invoke<'a>(
-        &'a self,
-        _: BindingRequest<'a>,
-        _: ProviderIo,
-        _: CancellationToken,
-    ) -> Self::Invocation<'a> {
-        Box::pin(async move {
-            self.0.set(self.0.get() + 1);
-            Ok(())
-        })
-    }
-    fn preflight<'a>(
-        &'a self,
-        _: BindingRequest<'a>,
-        _: CancellationToken,
-    ) -> Option<Self::Invocation<'a>> {
-        Some(Box::pin(async move {
-            self.0.set(self.0.get() + 1);
-            Ok(())
+    ) -> Self::Invoke<'a> {
+        self.hooks.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let (_, output) = io.split();
+        *self.output.lock().unwrap() = Some(output);
+        ready(self.code.map_or(Ok(()), |code| {
+            Err(InvocationError::new(code, None).unwrap())
         }))
     }
+    fn preflight<'a>(&'a self, _: BindingRequest, _: CancellationToken) -> Self::Preflight<'a> {
+        self.hooks.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        ready(
+            self.code.map_or(
+                Ok(PreflightOutcome::Challenge(
+                    ContextChallenge::try_from(json(r#"{"message":"Context needed","schema":{}}"#))
+                        .unwrap(),
+                )),
+                |code| Err(InvocationError::new(code, None).unwrap()),
+            ),
+        )
+    }
 }
-
-// Rc configuration is held across both local future types. the
-// interface's forwarding implementations must preserve both hooks without boxing.
+impl InvocationSupport for Provider<'_> {
+    fn can_invoke(&self, _: &str) -> bool {
+        false
+    }
+}
+fn send_preflight<'a, P: BindingInvoker + Sync>(
+    client: &'a BindingClient<P>,
+    request: BindingRequest,
+) -> impl Future<Output = Result<PreflightOutcome, InvocationError>> + Send + 'a
+where
+    P::Preflight<'a>: Send,
+{
+    client.preflight(request, cancel()).unwrap()
+}
+fn send_invocation<'a, P: BindingInvoker + Sync>(
+    client: &'a BindingClient<P>,
+    request: BindingRequest,
+) -> openbindings_invocation::Invocation<
+    impl Future<Output = Result<(), InvocationError>> + Send + 'a,
+>
+where
+    P::Invoke<'a>: Send,
+{
+    client.invoke(request, cancel()).unwrap()
+}
 #[tokio::test]
-async fn local_rc_preflight_and_forwarding_preserve_hooks() {
-    let calls = Rc::new(Cell::new(0));
-    let provider = Rc::new(LocalProvider(calls.clone()));
-    let binding = Invoker::new(provider.clone());
-    let operation = operation::Invoker::new(
-        document("{}")
-            .validate()
-            .unwrap()
-            .conformant()
-            .expect("conformant invocation document"),
-        &provider,
+async fn borrowed_generic_provider_futures_are_send_without_static_configuration() {
+    let configured_code = String::from("example.borrowed");
+    let client = BindingClient::new(Provider::new(Some(&configured_code)));
+    assert_eq!(
+        send_preflight(&client, request()).await.unwrap_err().code(),
+        configured_code
     );
-    let source = source();
-    let value = BindingValue::default();
-    assert!(
-        binding
-            .preflight(request(&source, &value))
-            .await
-            .unwrap()
-            .is_none()
-    );
-    assert!(
-        operation
-            .preflight(Request::binding("b"))
-            .await
-            .unwrap()
-            .is_none()
-    );
-    let mut call = binding.invoke(request(&source, &value));
-    call.close();
-    assert!(call.next().await.is_none());
-    let mut call = operation.invoke(Request::binding("b"));
-    call.close();
-    assert!(call.next().await.is_none());
-    assert_eq!(calls.get(), 4);
-    let shared = Arc::new(SendProvider);
-    send_provider(
-        &Invoker::new(shared.clone()),
-        &operation::Invoker::new(
-            document("{}")
-                .validate()
-                .unwrap()
-                .conformant()
-                .expect("conformant invocation document"),
-            shared,
-        ),
-        request(&source, &value),
-    )
-    .await;
+    let (_, mut output) = send_invocation(&client, request()).split();
+    assert_eq!(terminal(output.next().await).code(), configured_code);
 }
-
-// codes are diagnostic facts; portable application data stays private.
-// Display shows every code. Debug is structural: it shows the codes the
-// invoker interfaces govern and redacts application-defined codes.
+async fn check_forwarding<P: BindingInvoker + InvocationSupport>(
+    provider: P,
+    hooks: Arc<std::sync::atomic::AtomicUsize>,
+) {
+    let expected = r#"{"message":"Context needed","schema":{}}"#;
+    let binding = BindingClient::new(&provider);
+    let PreflightOutcome::Challenge(challenge) = binding
+        .preflight(request(), cancel())
+        .unwrap()
+        .await
+        .unwrap()
+    else {
+        panic!("prediction")
+    };
+    assert_eq!(challenge.value().value().text(), expected);
+    let (_, mut output) = binding.invoke(request(), cancel()).unwrap().split();
+    assert!(matches!(output.next().await, Some(OutputEvent::Complete)));
+    drop(output);
+    let operation = OperationClient::new(
+        provider,
+        DefaultEvaluator::default(),
+        ExternalSchemas::default(),
+    );
+    let PreflightOutcome::Challenge(challenge) = operation
+        .preflight(OperationRequest::binding(doc("{}"), "b"), cancel())
+        .unwrap()
+        .await
+        .unwrap()
+    else {
+        panic!("prediction")
+    };
+    assert_eq!(challenge.value().value().text(), expected);
+    let (_, mut output) = operation
+        .invoke(OperationRequest::binding(doc("{}"), "b"), cancel())
+        .unwrap()
+        .split();
+    assert!(matches!(output.next().await, Some(OutputEvent::Complete)));
+    assert_eq!(hooks.load(std::sync::atomic::Ordering::SeqCst), 4);
+}
+#[tokio::test]
+async fn pointer_forwarding_preserves_separate_preflight_hooks() {
+    let provider = Provider::new(None);
+    let hooks = provider.hooks.clone();
+    check_forwarding(Rc::new(provider), hooks).await;
+    let provider = Provider::new(None);
+    let hooks = provider.hooks.clone();
+    check_forwarding(Arc::new(provider), hooks).await;
+    let provider = Provider::new(None);
+    let hooks = provider.hooks.clone();
+    check_forwarding(Box::new(provider), hooks).await;
+    let provider = Provider::new(None);
+    let hooks = provider.hooks.clone();
+    check_forwarding(&provider, hooks).await;
+}
+#[tokio::test]
+async fn unsupported_ordered_selection_is_not_found_but_explicit_binding_is_attempted() {
+    let provider = Provider::new(None);
+    let client = OperationClient::new(
+        &provider,
+        DefaultEvaluator::default(),
+        ExternalSchemas::default(),
+    );
+    let (_, mut output) = client
+        .invoke(
+            OperationRequest::ordered(doc("{}"), "o", vec!["b".into()]),
+            cancel(),
+        )
+        .unwrap()
+        .split();
+    assert_eq!(
+        terminal(output.next().await).code(),
+        "ERR_BINDING_NOT_FOUND"
+    );
+    let (_, mut output) = client
+        .invoke(OperationRequest::binding(doc("{}"), "b"), cancel())
+        .unwrap()
+        .split();
+    assert!(matches!(output.next().await, Some(OutputEvent::Complete)));
+}
+#[tokio::test]
+async fn independent_provider_output_after_settlement_reports_the_terminal() {
+    let provider = Provider::new(Some("ERR_REFUSED"));
+    let client = BindingClient::new(&provider);
+    let (_, mut output) = client.invoke(request(), cancel()).unwrap().split();
+    assert_eq!(terminal(output.next().await).code(), "ERR_REFUSED");
+    let mut sender = provider.output.lock().unwrap().take().unwrap();
+    assert_eq!(
+        sender.send(json("1")).await.unwrap_err().code(),
+        "ERR_REFUSED"
+    );
+}
+#[tokio::test]
+async fn only_current_operation_owned_codes_are_reserved_at_provider_boundary() {
+    for code in [
+        "ERR_OPERATION_NOT_FOUND",
+        "ERR_BINDING_SELECTION_REQUIRED",
+        "ERR_OPERATION_VALIDATION_FAILED",
+        "ERR_SCHEMA_UNRESOLVED",
+    ] {
+        let provider = Provider::new(Some(code));
+        let binding = BindingClient::new(&provider);
+        let operation = OperationClient::new(
+            &provider,
+            DefaultEvaluator::default(),
+            ExternalSchemas::default(),
+        );
+        let call = binding.invoke(request(), cancel()).unwrap();
+        let evidence = call.control();
+        let (_, mut output) = call.split();
+        assert_eq!(terminal(output.next().await).code(), "ERR_EXECUTION_FAILED");
+        assert_eq!(
+            evidence.boundary_failure().unwrap().kind(),
+            openbindings_invocation::BoundaryFailureKind::ReservedProviderCode
+        );
+        let (_, mut output) = operation
+            .invoke(OperationRequest::binding(doc("{}"), "b"), cancel())
+            .unwrap()
+            .split();
+        assert_eq!(terminal(output.next().await).code(), "ERR_EXECUTION_FAILED");
+        assert_eq!(
+            binding
+                .preflight(request(), cancel())
+                .unwrap()
+                .await
+                .unwrap_err()
+                .code(),
+            "ERR_EXECUTION_FAILED"
+        );
+        assert_eq!(
+            operation
+                .preflight(OperationRequest::binding(doc("{}"), "b"), cancel())
+                .unwrap()
+                .await
+                .unwrap_err()
+                .code(),
+            "ERR_EXECUTION_FAILED"
+        );
+    }
+    for code in [
+        "ERR_BINDING_NOT_FOUND",
+        "ERR_UNKNOWN_SOURCE",
+        "example.application",
+    ] {
+        let client = BindingClient::new(Provider::new(Some(code)));
+        let (_, mut output) = client.invoke(request(), cancel()).unwrap().split();
+        assert_eq!(terminal(output.next().await).code(), code);
+        assert_eq!(
+            client
+                .preflight(request(), cancel())
+                .unwrap()
+                .await
+                .unwrap_err()
+                .code(),
+            code
+        );
+    }
+}
 #[test]
 fn display_shows_every_code_and_debug_shows_only_governed_codes() {
     let governed = InvocationError::new(
@@ -349,162 +290,6 @@ fn display_shows_every_code_and_debug_shows_only_governed_codes() {
         r#"InvocationError { code: "<redacted>", data_present: false }"#
     );
 }
-
-// Once an invocation settles, a provider emission reports that terminal
-// error, not a cancellation it did not suffer.
-#[tokio::test]
-async fn emit_after_settlement_reports_the_terminal_error() {
-    struct EmitTwice {
-        values: [String; 2],
-        refusals: std::sync::Mutex<Vec<String>>,
-    }
-    impl BindingInvoker for EmitTwice {
-        type Invocation<'a> = Pin<Box<dyn Future<Output = Result<(), InvocationError>> + 'a>>;
-        fn supports_kind(&self, kind: &str) -> bool {
-            InvokeOnly.supports_kind(kind)
-        }
-        fn invoke<'a>(
-            &'a self,
-            _: BindingRequest<'a>,
-            mut io: ProviderIo,
-            _: CancellationToken,
-        ) -> Self::Invocation<'a> {
-            Box::pin(async move {
-                for value in &self.values {
-                    let error = io
-                        .emit(JsonValue::parse(value.as_str()).unwrap())
-                        .await
-                        .unwrap_err();
-                    self.refusals.lock().unwrap().push(error.code().to_owned());
-                }
-                Ok(())
-            })
-        }
-    }
-    let invalid = || "\"bad\"".to_owned();
-    let oversized = || format!("\"{}\"", "x".repeat(300));
-    let integer = r#"{"output":{"type":"integer"}}"#;
-    // The first emission settles the terminal; the second must report it.
-    for (operation, values, code) in [
-        (
-            integer,
-            [invalid(), invalid()],
-            "ERR_OPERATION_VALIDATION_FAILED",
-        ),
-        (
-            integer,
-            [invalid(), oversized()],
-            "ERR_OPERATION_VALIDATION_FAILED",
-        ),
-        ("{}", [oversized(), "1".to_owned()], "ERR_EXECUTION_FAILED"),
-    ] {
-        let provider = EmitTwice {
-            values,
-            refusals: std::sync::Mutex::default(),
-        };
-        let invoker = operation::Invoker::new(
-            document(operation)
-                .validate()
-                .unwrap()
-                .conformant()
-                .expect("conformant invocation document"),
-            &provider,
-        )
-        .with_evaluator(
-            Arc::new(DefaultEvaluator::new()),
-            ExternalSchemas::default(),
-        )
-        .with_limits(openbindings_invocation::InvocationLimits {
-            max_value_bytes: 256,
-            ..Default::default()
-        })
-        .unwrap();
-        let mut call = invoker.invoke(Request::binding("b"));
-        call.close();
-        assert_eq!(call.next().await.unwrap().unwrap_err().code(), code);
-        assert_eq!(*provider.refusals.lock().unwrap(), [code, code]);
-    }
-}
-
-// One detail setting explains caller input and provider output alike, and
-// an explanation locates the failure by the value's own member names.
-#[tokio::test]
-async fn explain_detail_covers_both_directions_and_names_value_members() {
-    struct EmitMember;
-    impl BindingInvoker for EmitMember {
-        type Invocation<'a> = Pin<Box<dyn Future<Output = Result<(), InvocationError>> + 'a>>;
-        fn supports_kind(&self, kind: &str) -> bool {
-            InvokeOnly.supports_kind(kind)
-        }
-        fn invoke<'a>(
-            &'a self,
-            _: BindingRequest<'a>,
-            mut io: ProviderIo,
-            _: CancellationToken,
-        ) -> Self::Invocation<'a> {
-            Box::pin(async move {
-                while io.next().await.is_some() {}
-                io.emit(JsonValue::parse(r#"{"provider-member":7}"#).unwrap())
-                    .await
-            })
-        }
-    }
-    let strings = r#"{"type":"object","additionalProperties":{"type":"string"}}"#;
-    for (detail, explained) in [
-        (openbindings::Detail::Outcome, false),
-        (openbindings::Detail::Explain, true),
-    ] {
-        for (direction, operation, member) in [
-            (
-                operation::Direction::Input,
-                format!(r#"{{"input":{strings}}}"#),
-                "/caller-member",
-            ),
-            (
-                operation::Direction::Output,
-                format!(r#"{{"output":{strings}}}"#),
-                "/provider-member",
-            ),
-        ] {
-            let invoker = operation::Invoker::new(
-                document(&operation)
-                    .validate()
-                    .unwrap()
-                    .conformant()
-                    .expect("conformant invocation document"),
-                EmitMember,
-            )
-            .with_evaluator(
-                Arc::new(DefaultEvaluator::new()),
-                ExternalSchemas::default(),
-            )
-            .with_validation_detail(detail);
-            let mut call = invoker.invoke(Request::binding("b"));
-            call.write(JsonValue::parse(r#"{"caller-member":7}"#).unwrap())
-                .await
-                .unwrap();
-            call.close();
-            assert_eq!(
-                call.next().await.unwrap().unwrap_err().code(),
-                "ERR_OPERATION_VALIDATION_FAILED"
-            );
-            let failure = call.validation_failure().unwrap();
-            assert_eq!(failure.direction(), direction);
-            let openbindings::ValueOutcome::Fails { problems, .. } = failure.outcome() else {
-                panic!("established failure expected")
-            };
-            let instances: Vec<_> = problems.iter().map(|p| p.instance.to_string()).collect();
-            if explained {
-                assert_eq!(instances, [member]);
-            } else {
-                assert!(instances.is_empty());
-            }
-        }
-    }
-}
-
-// the invocation crate's private writer has the same exact byte-bound
-// contract as inspection and synthesis; forwarding is exercised above.
 #[test]
 fn invocation_writer_preserves_exact_values_and_byte_limits() {
     let error = InvocationError::new(
@@ -535,208 +320,180 @@ fn invocation_writer_preserves_exact_values_and_byte_limits() {
     );
 }
 
-struct Failure(&'static str);
-impl BindingInvoker for Failure {
-    type Invocation<'a> = Ready<Result<(), InvocationError>>;
-    fn supports_kind(&self, kind: &str) -> bool {
-        InvokeOnly.supports_kind(kind)
-    }
-    fn invoke<'a>(
-        &'a self,
-        _: BindingRequest<'a>,
-        _: ProviderIo,
-        _: CancellationToken,
-    ) -> Self::Invocation<'a> {
-        ready(Err(
-            InvocationError::new(self.0, Some(JsonValue::null())).unwrap()
-        ))
-    }
-    fn preflight<'a>(
-        &'a self,
-        _: BindingRequest<'a>,
-        _: CancellationToken,
-    ) -> Option<Self::Invocation<'a>> {
-        Some(ready(Err(InvocationError::new(
-            self.0,
-            Some(JsonValue::null()),
-        )
-        .unwrap())))
-    }
-}
-
-// filter only provider-origin errors, in each facade and provider hook.
 #[tokio::test]
-async fn reserved_provider_invocation_and_preflight_codes_are_rejected() {
-    let source = source();
-    let value = BindingValue::default();
-    for code in [
-        "ERR_OPERATION_NOT_FOUND",
-        "ERR_BINDING_NOT_FOUND",
-        "ERR_BINDING_SELECTION_REQUIRED",
-        "ERR_UNKNOWN_SOURCE",
-        "ERR_OPERATION_VALIDATION_FAILED",
-        "ERR_SCHEMA_UNRESOLVED",
-    ] {
-        let binding = Invoker::new(Failure(code));
-        let operation = operation::Invoker::new(
-            document("{}")
-                .validate()
-                .unwrap()
-                .conformant()
-                .expect("conformant invocation document"),
-            Failure(code),
-        );
-        let mut calls = [binding.invoke(request(&source, &value))];
-        let mut operation_call = operation.invoke(Request::binding("b"));
-        calls[0].close();
-        operation_call.close();
-        let error = calls[0].next().await.unwrap().unwrap_err();
-        assert_eq!(error.code(), "ERR_EXECUTION_FAILED");
-        assert!(error.data().is_none());
-        assert_eq!(
-            calls[0].boundary_error().unwrap().code(),
-            "reserved-provider-code"
-        );
-        let error = operation_call.next().await.unwrap().unwrap_err();
-        assert_eq!(error.code(), "ERR_EXECUTION_FAILED");
-        assert!(error.data().is_none());
-        assert_eq!(
-            operation_call.boundary_error().unwrap().code(),
-            "reserved-provider-code"
-        );
-        assert!(operation_call.validation_failure().is_none());
-        for error in [
-            binding
-                .preflight(request(&source, &value))
-                .await
-                .unwrap_err(),
-            operation
-                .preflight(Request::binding("b"))
-                .await
-                .unwrap_err(),
-        ] {
-            assert_eq!(error.code(), "ERR_EXECUTION_FAILED");
-            assert!(error.data().is_none());
+async fn explain_detail_covers_both_directions_and_names_value_members() {
+    use openbindings::{Detail, ValueOutcome};
+    use openbindings_invocation::operation::{Direction, ValidationEvidence};
+    struct EmitMember;
+    impl InvocationSupport for EmitMember {
+        fn can_invoke(&self, _: &str) -> bool {
+            true
         }
     }
-    let binding = Invoker::new(Failure("example.application"));
-    assert_eq!(
-        binding
-            .preflight(request(&source, &value))
-            .await
-            .unwrap_err()
-            .code(),
-        "example.application"
-    );
-    let mut call = binding.invoke(request(&source, &value));
-    assert_eq!(
-        call.next().await.unwrap().unwrap_err().code(),
-        "example.application"
-    );
-    assert!(call.boundary_error().is_none());
-}
-
-// errors generated by SDK selection and validation keep their provenance
-// and codes even though the provider-result path rejects those same spellings.
-#[tokio::test]
-async fn sdk_selection_and_validation_errors_still_surface() {
-    let facade = operation::Invoker::new(
-        document("{}")
-            .validate()
-            .unwrap()
-            .conformant()
-            .expect("conformant invocation document"),
-        InvokeOnly,
-    );
-    for (request, code) in [
-        (Request::operation("absent"), "ERR_OPERATION_NOT_FOUND"),
-        (Request::binding("absent"), "ERR_BINDING_NOT_FOUND"),
-    ] {
-        let mut call = facade.invoke(request);
-        assert_eq!(call.next().await.unwrap().unwrap_err().code(), code);
-        assert_eq!(facade.preflight(request).await.unwrap_err().code(), code);
-        assert!(call.boundary_error().is_none());
-    }
-    for (text, request, code) in [
-        (
-            document("{}")
-                .value()
-                .text()
-                .replace(r#""source":"unsupported""#, r#""source":"s""#),
-            Request::operation("run"),
-            "ERR_BINDING_SELECTION_REQUIRED",
-        ),
-        (
-            document("{}")
-                .value()
-                .text()
-                .replace(r#""source":"s""#, r#""source":"missing""#),
-            Request::binding("b"),
-            "ERR_UNKNOWN_SOURCE",
-        ),
-    ] {
-        let validation = Document::parse(text).unwrap().validate().unwrap();
-        if code == "ERR_UNKNOWN_SOURCE" {
-            assert_eq!(
-                validation.report().evidence["OBI-07"],
-                openbindings::Evidence::Violated
-            );
-            assert!(validation.conformant().is_none());
-            continue;
-        }
-        let facade = operation::Invoker::new(validation.conformant().unwrap(), InvokeOnly);
-        let mut call = facade.invoke(request);
-        assert_eq!(call.next().await.unwrap().unwrap_err().code(), code);
-        assert_eq!(facade.preflight(request).await.unwrap_err().code(), code);
-        assert!(call.boundary_error().is_none());
-    }
-    struct Reads;
-    impl BindingInvoker for Reads {
-        type Invocation<'a> = Pin<Box<dyn Future<Output = Result<(), InvocationError>> + 'a>>;
-        fn supports_kind(&self, kind: &str) -> bool {
-            InvokeOnly.supports_kind(kind)
-        }
+    impl BindingInvoker for EmitMember {
+        type Invoke<'a> = std::pin::Pin<Box<dyn Future<Output = Result<(), InvocationError>> + 'a>>;
+        type Preflight<'a> = Ready<Result<PreflightOutcome, InvocationError>>;
         fn invoke<'a>(
             &'a self,
-            _: BindingRequest<'a>,
+            _: BindingRequest,
             mut io: ProviderIo,
             _: CancellationToken,
-        ) -> Self::Invocation<'a> {
+        ) -> Self::Invoke<'a> {
             Box::pin(async move {
                 while io.next().await.is_some() {}
-                Ok(())
+                io.send(json(r#"{"provider-member":7}"#)).await
             })
         }
+        fn preflight<'a>(&'a self, _: BindingRequest, _: CancellationToken) -> Self::Preflight<'a> {
+            ready(Ok(PreflightOutcome::NoPrediction))
+        }
     }
-    for evaluated in [false, true] {
-        let facade = operation::Invoker::new(
-            document(r#"{"input":false}"#)
-                .validate()
-                .unwrap()
-                .conformant()
-                .expect("conformant invocation document"),
-            Reads,
-        );
-        let facade = if evaluated {
-            facade.with_evaluator(
-                Arc::new(DefaultEvaluator::new()),
+    let strings = r#"{"type":"object","additionalProperties":{"type":"string"}}"#;
+    for (detail, explained) in [(Detail::Outcome, false), (Detail::Explain, true)] {
+        for (direction, operation, member) in [
+            (
+                Direction::Input,
+                format!(r#"{{"input":{strings}}}"#),
+                "/caller-member",
+            ),
+            (
+                Direction::Output,
+                format!(r#"{{"output":{strings}}}"#),
+                "/provider-member",
+            ),
+        ] {
+            let client = OperationClient::new(
+                EmitMember,
+                DefaultEvaluator::default(),
                 ExternalSchemas::default(),
             )
-        } else {
-            facade
-        };
-        let mut call = facade.invoke(Request::binding("b"));
-        let _ = call.write(JsonValue::null()).await;
-        call.close();
-        assert_eq!(
-            call.next().await.unwrap().unwrap_err().code(),
-            if evaluated {
+            .with_validation_detail(detail);
+            let call = client
+                .invoke(OperationRequest::binding(doc(&operation), "b"), cancel())
+                .unwrap();
+            let control = call.control();
+            let (mut input, mut output) = call.split();
+            input.send(json(r#"{"caller-member":7}"#)).await.unwrap();
+            input.close();
+            assert_eq!(
+                terminal(output.next().await).code(),
                 "ERR_OPERATION_VALIDATION_FAILED"
+            );
+            let failure = control.validation_failure().unwrap();
+            assert_eq!(failure.direction(), direction);
+            let ValidationEvidence::Evaluation(ValueOutcome::Fails { problems, .. }) =
+                failure.evidence()
+            else {
+                panic!("established failure")
+            };
+            let instances: Vec<_> = problems
+                .iter()
+                .map(|problem| problem.instance.to_string())
+                .collect();
+            if explained {
+                assert_eq!(instances, [member]);
             } else {
-                "ERR_SCHEMA_UNRESOLVED"
+                assert!(instances.is_empty());
             }
-        );
-        assert!(call.validation_failure().is_some());
-        assert!(call.boundary_error().is_none());
+        }
     }
+}
+
+struct HoldOutput(Arc<Mutex<Option<ProviderOutput>>>);
+impl InvocationSupport for HoldOutput {
+    fn can_invoke(&self, _: &str) -> bool {
+        true
+    }
+}
+impl BindingInvoker for HoldOutput {
+    type Invoke<'a> = std::pin::Pin<Box<dyn Future<Output = Result<(), InvocationError>> + 'a>>;
+    type Preflight<'a> = Ready<Result<PreflightOutcome, InvocationError>>;
+    fn invoke<'a>(
+        &'a self,
+        _: BindingRequest,
+        io: ProviderIo,
+        _: CancellationToken,
+    ) -> Self::Invoke<'a> {
+        let (input, output) = io.split();
+        *self.0.lock().unwrap() = Some(output);
+        Box::pin(async move {
+            let _held = input;
+            std::future::pending().await
+        })
+    }
+    fn preflight<'a>(&'a self, _: BindingRequest, _: CancellationToken) -> Self::Preflight<'a> {
+        ready(Ok(PreflightOutcome::NoPrediction))
+    }
+}
+fn post_terminal_precedence<F: Future<Output = Result<(), InvocationError>>>(
+    call: openbindings_invocation::Invocation<F>,
+    published: &Mutex<Option<ProviderOutput>>,
+    first: JsonValue,
+    want: &str,
+) {
+    use std::{
+        pin::pin,
+        task::{Context, Poll, Waker},
+    };
+    let mut cx = Context::from_waker(Waker::noop());
+    let control = call.control();
+    let (_, mut output) = call.split();
+    assert!(pin!(output.next()).as_mut().poll(&mut cx).is_pending());
+    let mut sender = published.lock().unwrap().take().unwrap();
+    {
+        let mut send = pin!(sender.send(first));
+        assert!(send.as_mut().poll(&mut cx).is_pending());
+        let Poll::Ready(event) = pin!(output.next()).as_mut().poll(&mut cx) else {
+            panic!("terminal")
+        };
+        assert_eq!(terminal(event).code(), want);
+        assert!(
+            matches!(send.as_mut().poll(&mut cx),Poll::Ready(Err(error)) if error.code()==want)
+        );
+    }
+    for late in [json("1"), json(r#""oversized after terminal""#)] {
+        assert!(
+            matches!(pin!(sender.send(late)).as_mut().poll(&mut cx),Poll::Ready(Err(error)) if error.code()==want)
+        );
+    }
+    control.cancel();
+    assert_eq!(control.outcome().unwrap().unwrap_err().code(), want);
+}
+#[test]
+fn established_validation_or_size_failure_wins_over_later_oversized_output() {
+    let published = Arc::new(Mutex::new(None));
+    let client = OperationClient::new(
+        HoldOutput(published.clone()),
+        DefaultEvaluator::default(),
+        ExternalSchemas::default(),
+    )
+    .with_limits(openbindings_invocation::InvocationLimits {
+        max_value_bytes: 1,
+        ..Default::default()
+    })
+    .unwrap();
+    post_terminal_precedence(
+        client
+            .invoke(
+                OperationRequest::binding(doc(r#"{"output":false}"#), "b"),
+                cancel(),
+            )
+            .unwrap(),
+        &published,
+        json("1"),
+        "ERR_OPERATION_VALIDATION_FAILED",
+    );
+    let published = Arc::new(Mutex::new(None));
+    let client = BindingClient::new(HoldOutput(published.clone()))
+        .with_limits(openbindings_invocation::InvocationLimits {
+            max_value_bytes: 1,
+            ..Default::default()
+        })
+        .unwrap();
+    post_terminal_precedence(
+        client.invoke(request(), cancel()).unwrap(),
+        &published,
+        json("null"),
+        "ERR_EXECUTION_FAILED",
+    );
 }

@@ -18,7 +18,8 @@ fn prepare_limited(
     text: &str,
     resources: &ExternalSchemas,
     limits: Limits,
-) -> Result<PreparedValueContract, NoVerdict> {
+) -> Result<PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator>, PreparationFailure>
+{
     let proof = Document::parse(text)
         .unwrap()
         .validate()
@@ -30,13 +31,18 @@ fn prepare_limited(
         .expect("declared operation")
         .input()
         .expect("declared input")
-        .prepare_with(&DefaultEvaluator::with_limits(limits), resources)
+        .prepare(
+            &DefaultEvaluator::with_limits(limits),
+            resources,
+            &openbindings::PreparationLimits::default(),
+        )
 }
 fn prepare(
     text: &str,
     resources: &ExternalSchemas,
     cap: Option<usize>,
-) -> Result<PreparedValueContract, NoVerdict> {
+) -> Result<PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator>, PreparationFailure>
+{
     let limits = Limits {
         schema_resources: cap,
         ..Limits::default()
@@ -69,17 +75,21 @@ fn id_chain(links: usize) -> String {
     ));
     document(&schemas, r##"{"$ref":"#/schemas/d0"}"##)
 }
-fn assert_refused(refused: NoVerdict) {
-    assert_eq!(refused.reason, NoVerdictReason::LimitExceeded);
-    assert_eq!(refused.code, "schema-resource-limit");
-    assert!(refused.location.is_none());
+fn assert_refused(refused: PreparationFailure) {
+    assert_eq!(
+        refused.kind,
+        PreparationFailureKind::Limit {
+            resource: "schema-resource-limit".into()
+        }
+    );
+    assert!(refused.origin.is_none());
 }
 // A cap of `reached` admits the contract, and so does no cap; one less refuses it.
 // The admitted contract decides `value`, which satisfies it.
 fn assert_reaches_deciding(text: &str, resources: &ExternalSchemas, reached: usize, value: &str) {
     let admitted = prepare(text, resources, Some(reached)).expect("admitted at its count");
     assert!(matches!(
-        admitted.validate(&JsonValue::parse(value).unwrap()),
+        admitted.evaluate(&JsonValue::parse(value).unwrap()),
         ValueOutcome::Satisfies
     ));
     prepare(text, resources, None).expect("admitted without a cap");
@@ -150,7 +160,12 @@ fn a_refusal_precedes_preparing_any_resource() {
         ..Limits::default()
     };
     let within = prepare_limited(&text, &none, limits(Some(1))).unwrap_err();
-    assert_eq!(within.code, "pattern-byte-limit");
+    assert_eq!(
+        within.kind,
+        PreparationFailureKind::Limit {
+            resource: "pattern-byte-limit".into()
+        }
+    );
     assert_refused(prepare_limited(&text, &none, limits(Some(0))).unwrap_err());
 }
 
@@ -196,9 +211,13 @@ fn a_contract_s_patterns_are_bounded_together() {
     };
     assert!(prepare_limited(&text, &none, limits(24)).is_ok());
     let refused = prepare_limited(&text, &none, limits(23)).unwrap_err();
-    assert_eq!(refused.code, "pattern-total-byte-limit");
-    assert_eq!(refused.reason, NoVerdictReason::LimitExceeded);
-    let pointer = refused.location.expect("located").pointer.to_string();
+    assert_eq!(
+        refused.kind,
+        PreparationFailureKind::Limit {
+            resource: "pattern-total-byte-limit".into()
+        }
+    );
+    let pointer = refused.origin.expect("located").pointer.to_string();
     assert!(
         pointer.ends_with("/pattern") || pointer.ends_with("/patternProperties"),
         "{pointer}"
@@ -220,8 +239,10 @@ fn the_pattern_total_counts_the_forms_kept() {
     assert_eq!(
         prepare_limited(&spelled, &none, limits(64))
             .unwrap_err()
-            .code,
-        "pattern-total-byte-limit"
+            .kind,
+        PreparationFailureKind::Limit {
+            resource: "pattern-total-byte-limit".into()
+        }
     );
     assert!(prepare_limited(&spelled, &none, limits(1024)).is_ok());
     let repeated = document(
@@ -235,7 +256,9 @@ fn the_pattern_total_counts_the_forms_kept() {
     );
     assert!(prepare_limited(&names, &none, limits(16)).is_ok());
     assert_eq!(
-        prepare_limited(&names, &none, limits(15)).unwrap_err().code,
-        "pattern-total-byte-limit"
+        prepare_limited(&names, &none, limits(15)).unwrap_err().kind,
+        PreparationFailureKind::Limit {
+            resource: "pattern-total-byte-limit".into()
+        }
     );
 }

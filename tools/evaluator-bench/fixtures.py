@@ -60,10 +60,11 @@ def fixtures():
         modes=('compile', 'context', 'eval', 'full'))
     # A value that reaches an unsupplied resource gives no verdict naming it;
     # a reference that identifies no schema refuses preparation, and a refused
-    # preparation gives no verdict for any value.
+    # preparation is observed separately from every value outcome.
+    # The required per-value Undefined case remains in the semantic gate.
     add('missing-resource', {'$ref': 'https://benchmark.invalid/missing'}, '1', 'no-verdict', modes=('cold', 'compile', 'context', 'eval', 'full'))
     add('missing-independent', {'anyOf': [True, {'$ref': 'https://benchmark.invalid/missing'}]}, '1')
-    add('undefined-pointer', {'$ref': '#/$defs/absent'}, '1', 'no-verdict')
+    add('undefined-pointer', {'$ref': '#/$defs/absent'}, '1', 'preparation-refused')
     recursive = {'$defs': {'node': {'anyOf': [{'type': 'integer'}, {'type': 'array', 'items': {'$ref': '#/$defs/node'}}]}}, '$ref': '#/$defs/node'}
     add('deep', recursive, '['*32+'0'+']'*32)
     add('depth-stop', recursive, '['*32+'0'+']'*32, 'no-verdict', limits=dict(evaluation_depth=8))
@@ -74,9 +75,10 @@ def fixtures():
     add('cancelled', True, '1', 'no-verdict', cancelled=True)
     add('source-diagnostics', '{"maximum":9223372036854775807}', '9223372036854775808', 'fails', upstream=True)
     for name, code in [('missing-resource', 'resource-unavailable'),
-                       ('undefined-pointer', 'non-schema-target'), ('depth-stop', 'evaluation-depth-limit'),
+                       ('depth-stop', 'evaluation-depth-limit'),
                        ('work-stop', 'evaluation-work-limit'), ('cancelled', 'caller-cancelled')]:
         rows[name]['expected']['code'] = code
+    rows['undefined-pointer']['expected']['failure'] = dict(kind='resolution', details=dict(cause=dict(kind='undefined', details='missing-target')), origin=dict(source_uri='https://benchmark.invalid/root', pointer=''))
     rows['missing-resource']['expected']['detail'] = dict(code='resource-unavailable',
         location=dict(pointer='', resource='https://benchmark.invalid/missing'),
         message='evaluation reached a resource that was not supplied', reason='resource-unavailable')

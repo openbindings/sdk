@@ -29,10 +29,10 @@ function replace(service, schemaText, documentBytes = document) {
   const next = prepare(schemaText, documentBytes);
   if (next.status !== "ready") return next;
   try {
-    service.replace(next.valueContract); // ownership transfers only on success
+    service.replace(next.schema); // ownership transfers only on success
     return { status: "replaced" };
   } catch (error) {
-    next.valueContract.dispose();
+    next.schema.dispose();
     throw error;
   }
 }
@@ -43,15 +43,15 @@ const startupArenas = liveStorageOwners();
 const warm = prepare('{"type":"integer"}');
 assert.equal(warm.status, "ready");
 try {
-  assert.equal(warm.valueContract.validate(7).status, "satisfies");
+  assert.equal(warm.schema.evaluate(7).status, "satisfies");
 } finally {
-  warm.valueContract.dispose();
+  warm.schema.dispose();
 }
 const warmedArenas = liveStorageOwners();
 
 const setup = prepare('{"type":"integer","const":9007199254740993}');
 assert.equal(setup.status, "ready");
-const service = new ValidationService(setup.valueContract);
+const service = new ValidationService(setup.schema);
 let releaseBody, oldRequest;
 const outcomes = {};
 try {
@@ -114,11 +114,11 @@ try {
 const partial = prepareService(document, []);
 assert.equal(partial.status, "ready");
 try {
-  outcomes.missingResource = partial.valueContract.validate(7);
+  outcomes.missingResource = partial.schema.evaluate(7);
   assert.equal(outcomes.missingResource.status, "no-verdict");
   assert.equal(outcomes.missingResource.detail.reason, "resource-unavailable");
 } finally {
-  partial.valueContract.dispose();
+  partial.schema.dispose();
 }
 const releasedArenas = liveStorageOwners();
 assert.equal(releasedArenas, warmedArenas);

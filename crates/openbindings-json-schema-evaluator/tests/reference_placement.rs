@@ -307,17 +307,28 @@ fn graph(rng: &mut Rng) -> Contract {
             properties.push(("a".to_owned(), graph.sub(index, 2, false)));
         }
         if graph.place[index] != Place::Document {
-            let mut definitions = vec![("d0".to_owned(), graph.sub(index, 2, false))];
-            if graph.anchors[index] {
-                definitions.push((
-                    format!("an{index}"),
-                    object(vec![
-                        ("type", text(r#""object""#)),
-                        ("$anchor", quoted(&format!("an{index}"))),
-                    ]),
-                ));
-            }
+            let definitions = vec![("d0".to_owned(), graph.sub(index, 2, false))];
             members.push(("$defs".to_owned(), Json::Object(definitions)));
+        }
+    }
+    // Later references can require an anchor in an earlier resource. This
+    // pass consumes no random draws, preserving the original generated bodies.
+    for (index, members) in schemas.iter_mut().enumerate() {
+        if graph.anchors[index] && graph.place[index] != Place::Document {
+            let (_, Json::Object(definitions)) = members
+                .iter_mut()
+                .find(|(key, _)| key == "$defs")
+                .expect("resource definitions")
+            else {
+                unreachable!("definitions object")
+            };
+            definitions.push((
+                format!("an{index}"),
+                object(vec![
+                    ("type", text(r#""object""#)),
+                    ("$anchor", quoted(&format!("an{index}"))),
+                ]),
+            ));
         }
     }
     Contract {
@@ -524,7 +535,8 @@ fn value(rng: &mut Rng, depth: usize, out: &mut String) {
 fn prepare(
     evaluator: &DefaultEvaluator,
     (document, supplied): &(String, Vec<(String, String)>),
-) -> Result<PreparedValueContract, NoVerdict> {
+) -> Result<PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator>, PreparationFailure>
+{
     let parsed = Document::parse(document).unwrap();
     let validation = parsed.validate().unwrap();
     let proof = validation
@@ -540,7 +552,11 @@ fn prepare(
         .unwrap()
         .input()
         .unwrap()
-        .prepare_with(evaluator, &resources)
+        .prepare(
+            evaluator,
+            &resources,
+            &openbindings::PreparationLimits::default(),
+        )
 }
 
 /// `Some(true)` satisfies, `Some(false)` fails, `None` reaches no verdict.
@@ -580,7 +596,7 @@ fn verdicts_do_not_depend_on_where_referenced_schemas_live() {
             let value = JsonValue::parse(&text).unwrap();
             let mut verdicts = Vec::new();
             for contract in [&placed_contract, &control_contract].into_iter().flatten() {
-                let checked = verdict(&contract.validate(&value));
+                let checked = verdict(&contract.evaluate(&value));
                 assert_eq!(
                     checked,
                     verdict(&contract.explain(&value)),
