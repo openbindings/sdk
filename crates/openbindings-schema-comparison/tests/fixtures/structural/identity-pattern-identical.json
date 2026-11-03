@@ -1,0 +1,35 @@
+{
+  "version": "1.0",
+  "description": "Identical mode compares outside-profile keywords structurally: identical schemas with pattern are compatible, never indeterminate.",
+  "mode": "identical",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "deliver": {
+        "input": {
+          "type": "string",
+          "pattern": "^[a-z]+$"
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "deliver": {
+        "input": {
+          "type": "string",
+          "pattern": "^[a-z]+$"
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "compatible"
+    }
+  }
+}

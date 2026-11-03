@@ -44,6 +44,11 @@ kind descriptions, check disclosures and source-check clients against the same
 interface pin. Queries perform no checks, context stays separate from authored
 source data, and transport/admission failures are distinct from kind rejections.
 
+`openbindings-schema-comparison` implements the adopted normalized identity slice
+with exact values, per-side reference context and one bounded attempt. It does not
+claim directional compatibility, general schema equivalence or independent proof
+of a puller's reuse assertion. Reference/normalization failures remain failures.
+
 ## Qualification
 
 The current document/evaluator slice passes the 505-case production corpus,
@@ -70,11 +75,17 @@ Kind-description review resolved support-disclosure, exact extension, operationa
 failure and cancellation-handoff findings. These receipts qualify their bounded
 scopes, not arbitrary provider behavior or unrestricted recursion.
 
+The comparison checkpoint passes all 14 ordinary and 10 exact identity fixture
+groups, 64 independently authored controls, all observed cancellation checkpoints
+and independent allocation probes. The 88 directional groups remain outside scope.
+Both Rust toolchains, Wasm builds, documentation and dependency checks pass; unsupported
+anchors and ambiguous enum-intersection multiplicity remain documented failures.
+
 ## Remaining work
 
 - Finish ordinary user-schema backend allocation qualification.
 - Complete the remaining module and terminology organization.
-- Implement schema comparison and source pulling against the
+- Implement source pulling against the
   pinned current interfaces, and finish invocation consumers and examples.
 - Complete TypeScript organization, all-host/package qualification, CI and the
   final matched-toolchain performance campaign. No performance threshold is waived.

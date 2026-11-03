@@ -1,0 +1,459 @@
+{
+  "version": "1.0",
+  "description": "allOf flattens to a single merged schema: type intersection (with the integer-subtype rule), properties/required/items merge, additionalProperties false-wins and schema-merge, enum/const intersection, most-restrictive bounds.",
+  "mode": "identical",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "simpleMerge": {
+        "input": {
+          "allOf": [
+            {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name"
+              ]
+            }
+          ]
+        }
+      },
+      "typeIntersection": {
+        "input": {
+          "allOf": [
+            {
+              "type": [
+                "string",
+                "number"
+              ]
+            },
+            {
+              "type": [
+                "number",
+                "integer"
+              ]
+            }
+          ]
+        }
+      },
+      "subtypeIntersection": {
+        "input": {
+          "allOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "integer"
+            }
+          ]
+        }
+      },
+      "nestedPropertyMerge": {
+        "input": {
+          "allOf": [
+            {
+              "type": "object",
+              "properties": {
+                "p": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "type": "object",
+              "properties": {
+                "p": {
+                  "type": "object",
+                  "properties": {
+                    "y": {
+                      "type": "number"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "additionalPropsFalseWins": {
+        "input": {
+          "allOf": [
+            {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": true
+            },
+            {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            }
+          ]
+        }
+      },
+      "additionalPropsSchemaMerge": {
+        "input": {
+          "allOf": [
+            {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": {
+                "type": [
+                  "string",
+                  "number"
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "enumIntersection": {
+        "input": {
+          "allOf": [
+            {
+              "type": "string",
+              "enum": [
+                "a",
+                "b",
+                "c"
+              ]
+            },
+            {
+              "type": "string",
+              "enum": [
+                "b",
+                "c",
+                "d"
+              ]
+            }
+          ]
+        }
+      },
+      "constMerge": {
+        "input": {
+          "allOf": [
+            {
+              "type": "string",
+              "const": "fixed"
+            },
+            {
+              "type": "string",
+              "const": "fixed"
+            }
+          ]
+        }
+      },
+      "itemsMerge": {
+        "input": {
+          "allOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "y": {
+                    "type": "number"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "boundsMostRestrictive": {
+        "input": {
+          "allOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            },
+            {
+              "type": "integer",
+              "minimum": 5,
+              "maximum": 50
+            }
+          ]
+        }
+      },
+      "exclusiveBounds": {
+        "input": {
+          "allOf": [
+            {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "exclusiveMaximum": 100
+            },
+            {
+              "type": "number",
+              "exclusiveMinimum": 10,
+              "exclusiveMaximum": 50
+            }
+          ]
+        }
+      },
+      "mixedBounds": {
+        "input": {
+          "allOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "exclusiveMaximum": 100
+            },
+            {
+              "type": "integer",
+              "exclusiveMinimum": 5,
+              "maximum": 50
+            }
+          ]
+        }
+      },
+      "stringBounds": {
+        "input": {
+          "allOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 50
+            }
+          ]
+        }
+      },
+      "arrayBounds": {
+        "input": {
+          "allOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 0,
+              "maxItems": 100
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1,
+              "maxItems": 10
+            }
+          ]
+        }
+      },
+      "singleBranch": {
+        "input": {
+          "allOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            }
+          ]
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "simpleMerge": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "name"
+          ]
+        }
+      },
+      "typeIntersection": {
+        "input": {
+          "type": "number"
+        }
+      },
+      "subtypeIntersection": {
+        "input": {
+          "type": "integer"
+        }
+      },
+      "nestedPropertyMerge": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "p": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                },
+                "y": {
+                  "type": "number"
+                }
+              }
+            }
+          }
+        }
+      },
+      "additionalPropsFalseWins": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalPropsSchemaMerge": {
+        "input": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      },
+      "enumIntersection": {
+        "input": {
+          "type": "string",
+          "enum": [
+            "b",
+            "c"
+          ]
+        }
+      },
+      "constMerge": {
+        "input": {
+          "type": "string",
+          "const": "fixed"
+        }
+      },
+      "itemsMerge": {
+        "input": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              },
+              "y": {
+                "type": "number"
+              }
+            }
+          }
+        }
+      },
+      "boundsMostRestrictive": {
+        "input": {
+          "type": "integer",
+          "minimum": 5,
+          "maximum": 50
+        }
+      },
+      "exclusiveBounds": {
+        "input": {
+          "type": "number",
+          "exclusiveMinimum": 10,
+          "exclusiveMaximum": 50
+        }
+      },
+      "mixedBounds": {
+        "input": {
+          "type": "integer",
+          "minimum": 0,
+          "exclusiveMinimum": 5,
+          "maximum": 50,
+          "exclusiveMaximum": 100
+        }
+      },
+      "stringBounds": {
+        "input": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 50
+        }
+      },
+      "arrayBounds": {
+        "input": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "maxItems": 10
+        }
+      },
+      "singleBranch": {
+        "input": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "compatible"
+    }
+  }
+}

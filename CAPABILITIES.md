@@ -142,6 +142,22 @@ The migration's matched-toolchain performance and all-host qualification must be
 completed before claiming these changes fully qualified. Earlier measurements in
 [performance boundaries](docs/performance-boundaries.md) remain historical evidence.
 
+## Schema comparison
+
+The optional [comparison companion](crates/openbindings-schema-comparison/README.md)
+implements normalized identity from `OB-2020-12` profile 0.1. It preserves optional
+slots, exact numbers/strings, opaque keyword values and union multiplicity. Explicit
+caller roots, bases and resource records govern references; it performs no fetching
+and does not reuse core `$id` interpretation or value evaluation. Its Equal answer
+is profile identity, not general schema equivalence or a verified reuse claim.
+
+All 14 ordinary and 10 exact identity fixture groups pass. The 88 directional
+groups remain outside this API's scope. Missing/cyclic references, unsupported
+plain-name anchors, repeated-first-enum intersection ambiguity, resource exhaustion
+and cancellation are failures with no identity verdict. Defaults are 20 million
+work units, 64 MiB cumulative allocation reservations and depth 128; the depth
+ceiling cannot be raised. Comparison remains independent of core conformance.
+
 ## Discovery and kind implementations
 
 HTTP discovery acquires an interface document with bounded decoded bytes and an
@@ -163,8 +179,8 @@ inside a provider. Native provider failures remain distinct from kind rejections
 Kind implementations supply source interpretation, binding behavior and acquisition
 policy in separate projects. Applications choose providers; kinds remain exact
 opaque strings in core. No fixed registry or universal kind-support claim follows
-from installing the SDK. TypeScript does not expose role APIs. Source pulling and
-schema comparison remain implementation work; the obsolete inspection/synthesis
+from installing the SDK. TypeScript does not expose role APIs. Source pulling remains
+implementation work; the obsolete inspection/synthesis
 companions are awaiting replacement and are not current-interface claims.
 
 ## Runtime qualifications

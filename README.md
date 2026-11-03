@@ -60,7 +60,8 @@ carry operation-specific support claims and check disclosures. Explicit source
 checks return a source-entry claim or a separate rejection, context challenge or
 operational failure. Kind implementations supply the meaning of source and binding
 data. Applications choose providers, execution permission and acquisition policy.
-Source pulling and schema comparison remain under implementation.
+Normalized schema identity is an optional comparison companion. Source pulling
+remains under implementation.
 
 Start with the crate guide for
 [core](crates/openbindings/README.md),
@@ -68,6 +69,7 @@ Start with the crate guide for
 [evaluator qualification](crates/openbindings-schema-evaluator-test-support/README.md),
 [HTTP discovery](crates/openbindings-http-discovery/README.md),
 [shared context](crates/openbindings-context/README.md),
+[schema comparison](crates/openbindings-schema-comparison/README.md),
 [kind description and source checking](crates/openbindings-kind-description/README.md) or
 [invocation](crates/openbindings-invocation/README.md).
 

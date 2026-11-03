@@ -1,0 +1,757 @@
+{
+  "format": "independent-comparison-design-controls-1",
+  "authority": "pinned profile plus D10/D11 adjudications in review.md",
+  "context_defaults": "For a present input without document_root_json, use the parsed schema itself as root; base absent; resources empty. null side means absent; schema_json null text means a present invalid form.",
+  "failure_names": "Abstract review categories, not prescribed public Rust variant names.",
+  "cases": [
+    {
+      "id": "absent-both",
+      "left": null,
+      "right": null,
+      "expected": "Equal",
+      "reason": "D11: compare presence, never substitute true or suppress identity."
+    },
+    {
+      "id": "absent-left",
+      "left": null,
+      "right": {
+        "schema_json": "{}"
+      },
+      "expected": "Different",
+      "reason": "D11: compare presence, never substitute true or suppress identity."
+    },
+    {
+      "id": "absent-right",
+      "left": {
+        "schema_json": "false"
+      },
+      "right": null,
+      "expected": "Different",
+      "reason": "D11: compare presence, never substitute true or suppress identity."
+    },
+    {
+      "id": "absent-not-top",
+      "left": null,
+      "right": {
+        "schema_json": "true"
+      },
+      "expected": "Different",
+      "reason": "D11: compare presence, never substitute true or suppress identity."
+    },
+    {
+      "id": "present-null-is-not-absence",
+      "left": {
+        "schema_json": "null"
+      },
+      "right": {
+        "schema_json": "{}"
+      },
+      "expected": "Failure(InputShape)",
+      "reason": "JSON null is not either permitted schema form."
+    },
+    {
+      "id": "boolean-top",
+      "left": {
+        "schema_json": "true"
+      },
+      "right": {
+        "schema_json": "{}"
+      },
+      "expected": "Equal",
+      "reason": "Profile schema forms map true to empty object."
+    },
+    {
+      "id": "boolean-bottom",
+      "left": {
+        "schema_json": "false"
+      },
+      "right": {
+        "schema_json": "{\"not\":{}}"
+      },
+      "expected": "Equal",
+      "reason": "Profile maps false to not-empty, retained structurally in identity mode."
+    },
+    {
+      "id": "boolean-discrimination",
+      "left": {
+        "schema_json": "false"
+      },
+      "right": {
+        "schema_json": "{}"
+      },
+      "expected": "Different",
+      "reason": "False is not Top."
+    },
+    {
+      "id": "ref-replaces-assertion-sibling",
+      "left": {
+        "schema_json": "{\"$ref\":\"#/Target\",\"type\":\"string\"}",
+        "document_root_json": "{\"Target\":{\"type\":\"integer\"}}"
+      },
+      "right": {
+        "schema_json": "{\"type\":\"integer\"}"
+      },
+      "expected": "Equal",
+      "reason": "Profile normalization step 3 is target replacement, not evaluator conjunction."
+    },
+    {
+      "id": "ref-replaces-outside-sibling",
+      "left": {
+        "schema_json": "{\"$ref\":\"#/Target\",\"pattern\":\"x\"}",
+        "document_root_json": "{\"Target\":{\"type\":\"integer\"}}"
+      },
+      "right": {
+        "schema_json": "{\"type\":[\"integer\"]}"
+      },
+      "expected": "Equal",
+      "reason": "Discard wrapper classification with the replaced wrapper; target determines marking."
+    },
+    {
+      "id": "ref-discards-unreached-sibling-work",
+      "left": {
+        "schema_json": "{\"$ref\":\"#/Target\",\"properties\":{\"x\":{\"$ref\":\"https://absent.invalid/s\"}}}",
+        "document_root_json": "{\"Target\":{\"type\":\"integer\"}}"
+      },
+      "right": {
+        "schema_json": "{\"type\":\"integer\"}"
+      },
+      "expected": "Equal",
+      "reason": "Do not normalize discarded ref siblings after replacement."
+    },
+    {
+      "id": "ref-reads-original-defs",
+      "left": {
+        "schema_json": "{\"$ref\":\"#/$defs/T\",\"$defs\":{\"T\":{\"type\":\"string\"}}}"
+      },
+      "right": {
+        "schema_json": "{\"type\":\"string\"}"
+      },
+      "expected": "Equal",
+      "reason": "Reference resolution sees original root even when normalized output strips definitions."
+    },
+    {
+      "id": "child-ref-after-defs-stripping",
+      "left": {
+        "schema_json": "{\"$defs\":{\"T\":{\"type\":\"string\"}},\"properties\":{\"p\":{\"$ref\":\"#/$defs/T\"}}}"
+      },
+      "right": {
+        "schema_json": "{\"properties\":{\"p\":{\"type\":[\"string\"]}}}"
+      },
+      "expected": "Equal",
+      "reason": "Retain root, not transformed object, for later child reference resolution."
+    },
+    {
+      "id": "unresolved-self-identity",
+      "left": {
+        "schema_json": "{\"$ref\":\"https://absent.invalid/s\"}"
+      },
+      "right": {
+        "schema_json": "{\"$ref\":\"https://absent.invalid/s\"}"
+      },
+      "expected": "Failure(Reference)",
+      "reason": "Normalization errors precede structural identity; identical raw input does not suffice."
+    },
+    {
+      "id": "malformed-self-identity",
+      "left": {
+        "schema_json": "{\"$ref\":\"%\"}"
+      },
+      "right": {
+        "schema_json": "{\"$ref\":\"%\"}"
+      },
+      "expected": "Failure(Reference)",
+      "reason": "Normalization errors precede structural identity; identical raw input does not suffice."
+    },
+    {
+      "id": "cycle-self-identity",
+      "left": {
+        "schema_json": "{\"$ref\":\"#\"}"
+      },
+      "right": {
+        "schema_json": "{\"$ref\":\"#\"}"
+      },
+      "expected": "Failure(Reference)",
+      "reason": "Normalization errors precede structural identity; identical raw input does not suffice."
+    },
+    {
+      "id": "relative-without-base",
+      "left": {
+        "schema_json": "{\"$ref\":\"child\"}",
+        "resources": [
+          {
+            "uri": "https://r.test/child",
+            "json": "{\"type\":\"integer\"}"
+          }
+        ]
+      },
+      "right": {
+        "schema_json": "{\"type\":\"integer\"}"
+      },
+      "expected": "Failure(Reference)",
+      "reason": "Explicit supplied content does not invent a caller base."
+    },
+    {
+      "id": "relative-with-explicit-base",
+      "left": {
+        "schema_json": "{\"$ref\":\"child\"}",
+        "base_uri": "https://r.test/root",
+        "resources": [
+          {
+            "uri": "https://r.test/child",
+            "json": "{\"type\":\"integer\"}"
+          }
+        ]
+      },
+      "right": {
+        "schema_json": "{\"type\":\"integer\"}"
+      },
+      "expected": "Equal",
+      "reason": "Relative reference resolves only against explicit caller base."
+    },
+    {
+      "id": "external-fragment-keeps-carrier-root",
+      "left": {
+        "schema_json": "{\"$ref\":\"https://r.test/doc#/$defs/A\"}",
+        "document_root_json": "{\"$defs\":{\"B\":{\"type\":\"integer\"}}}",
+        "resources": [
+          {
+            "uri": "https://r.test/doc",
+            "json": "{\"$defs\":{\"A\":{\"$ref\":\"#/$defs/B\"},\"B\":{\"type\":\"string\"}}}"
+          }
+        ]
+      },
+      "right": {
+        "schema_json": "{\"type\":\"string\"}"
+      },
+      "expected": "Equal",
+      "reason": "Nested external fragments resolve in original external carrier, not requesting document."
+    },
+    {
+      "id": "external-relative-keeps-retrieval-base",
+      "left": {
+        "schema_json": "{\"$ref\":\"https://r.test/dir/entry\"}",
+        "base_uri": "https://wrong.test/root",
+        "resources": [
+          {
+            "uri": "https://r.test/dir/entry",
+            "json": "{\"$ref\":\"next\"}"
+          },
+          {
+            "uri": "https://r.test/dir/next",
+            "json": "{\"type\":\"number\"}"
+          }
+        ]
+      },
+      "right": {
+        "schema_json": "{\"type\":\"number\"}"
+      },
+      "expected": "Equal",
+      "reason": "Supplied target is normalized using its original retrieval root/base."
+    },
+    {
+      "id": "same-handle-different-root",
+      "left": {
+        "schema_json": "{\"$ref\":\"#/T\"}",
+        "document_root_json": "{\"T\":{\"type\":\"string\"}}"
+      },
+      "right": {
+        "schema_json": "{\"$ref\":\"#/T\"}",
+        "document_root_json": "{\"T\":{\"type\":\"integer\"}}"
+      },
+      "expected": "Different",
+      "reason": "Memoization must include root context even if selected JsonValue handle is shared.",
+      "api_setup": "Reuse the same selected schema handle for both sides; supply distinct root handles."
+    },
+    {
+      "id": "same-uri-distinct-resource-sets",
+      "left": {
+        "schema_json": "{\"$ref\":\"https://r.test/T\"}",
+        "resources": [
+          {
+            "uri": "https://r.test/T",
+            "json": "{\"type\":\"string\"}"
+          }
+        ]
+      },
+      "right": {
+        "schema_json": "{\"$ref\":\"https://r.test/T\"}",
+        "resources": [
+          {
+            "uri": "https://r.test/T",
+            "json": "{\"type\":\"integer\"}"
+          }
+        ]
+      },
+      "expected": "Different",
+      "reason": "A URI is not a process-global resource/content identity."
+    },
+    {
+      "id": "shared-dag-is-not-cycle",
+      "left": {
+        "schema_json": "{\"$defs\":{\"T\":{\"type\":\"integer\"}},\"properties\":{\"a\":{\"$ref\":\"#/$defs/T\"},\"b\":{\"$ref\":\"#/$defs/T\"}}}"
+      },
+      "right": {
+        "schema_json": "{\"properties\":{\"a\":{\"type\":\"integer\"},\"b\":{\"type\":\"integer\"}}}"
+      },
+      "expected": "Equal",
+      "reason": "Use active traversal path for cycles, not a global seen set."
+    },
+    {
+      "id": "opaque-unknown",
+      "left": {
+        "schema_json": "{\"vendor\":{\"type\":\"string\",\"title\":\"a\"}}"
+      },
+      "right": {
+        "schema_json": "{\"vendor\":{\"type\":[\"string\"],\"title\":\"b\"}}"
+      },
+      "expected": "Different",
+      "reason": "Outside-profile keyword payload is retained verbatim, not recursively normalized."
+    },
+    {
+      "id": "opaque-not",
+      "left": {
+        "schema_json": "{\"not\":{\"type\":\"string\",\"title\":\"a\"}}"
+      },
+      "right": {
+        "schema_json": "{\"not\":{\"type\":[\"string\"],\"title\":\"b\"}}"
+      },
+      "expected": "Different",
+      "reason": "Outside-profile keyword payload is retained verbatim, not recursively normalized."
+    },
+    {
+      "id": "opaque-prefix-items",
+      "left": {
+        "schema_json": "{\"prefixItems\":[{\"type\":\"string\",\"title\":\"a\"}]}"
+      },
+      "right": {
+        "schema_json": "{\"prefixItems\":[{\"type\":[\"string\"],\"title\":\"b\"}]}"
+      },
+      "expected": "Different",
+      "reason": "Outside-profile keyword payload is retained verbatim, not recursively normalized."
+    },
+    {
+      "id": "opaque-const-reference",
+      "left": {
+        "schema_json": "{\"const\":{\"$ref\":\"%\",\"title\":\"a\"}}"
+      },
+      "right": {
+        "schema_json": "{\"const\":{\"title\":\"a\",\"$ref\":\"%\"}}"
+      },
+      "expected": "Equal",
+      "reason": "Instance objects are opaque exact values; no reference lookup or annotation stripping."
+    },
+    {
+      "id": "opaque-enum-union-order",
+      "left": {
+        "schema_json": "{\"enum\":[{\"anyOf\":[1,2]}]}"
+      },
+      "right": {
+        "schema_json": "{\"enum\":[{\"anyOf\":[2,1]}]}"
+      },
+      "expected": "Different",
+      "reason": "Union multiset exception never applies inside enum instance data."
+    },
+    {
+      "id": "opaque-unknown-union-order",
+      "left": {
+        "schema_json": "{\"vendor\":{\"oneOf\":[{\"type\":\"string\"},{\"type\":\"number\"}]}}"
+      },
+      "right": {
+        "schema_json": "{\"vendor\":{\"oneOf\":[{\"type\":\"number\"},{\"type\":\"string\"}]}}"
+      },
+      "expected": "Different",
+      "reason": "Unknown data has ordinary ordered arrays, even if keys look like schema keywords."
+    },
+    {
+      "id": "unused-defs-no-recursion",
+      "left": {
+        "schema_json": "{\"$defs\":{\"bad\":{\"$ref\":\"#\"}}}"
+      },
+      "right": {
+        "schema_json": "{}"
+      },
+      "expected": "Equal",
+      "reason": "Unused definitions are stripped without speculative normalization."
+    },
+    {
+      "id": "exact-extension-name",
+      "left": {
+        "schema_json": "{\"x-\\ud800\":{\"$ref\":\"%\"}}"
+      },
+      "right": {
+        "schema_json": "{}"
+      },
+      "expected": "Equal",
+      "reason": "The extension rule is the exact x- prefix, not whole-string scalar conversion."
+    },
+    {
+      "id": "schema-union-permutation",
+      "left": {
+        "schema_json": "{\"oneOf\":[{\"const\":1},{\"const\":2}]}"
+      },
+      "right": {
+        "schema_json": "{\"oneOf\":[{\"const\":2},{\"const\":1}]}"
+      },
+      "expected": "Equal",
+      "reason": "Schema union arrays are multisets after variant normalization."
+    },
+    {
+      "id": "schema-union-multiplicity",
+      "left": {
+        "schema_json": "{\"anyOf\":[{\"const\":1},{\"const\":1}]}"
+      },
+      "right": {
+        "schema_json": "{\"anyOf\":[{\"const\":1}]}"
+      },
+      "expected": "Different",
+      "reason": "Multiset equality retains multiplicity."
+    },
+    {
+      "id": "oneof-not-anyof",
+      "left": {
+        "schema_json": "{\"oneOf\":[true]}"
+      },
+      "right": {
+        "schema_json": "{\"anyOf\":[true]}"
+      },
+      "expected": "Different",
+      "reason": "Identity does not identify distinct union keywords."
+    },
+    {
+      "id": "enum-author-order",
+      "left": {
+        "schema_json": "{\"enum\":[1,2]}"
+      },
+      "right": {
+        "schema_json": "{\"enum\":[2,1]}"
+      },
+      "expected": "Different",
+      "reason": "Only schema union arrays have the multiset exception."
+    },
+    {
+      "id": "enum-multiplicity",
+      "left": {
+        "schema_json": "{\"enum\":[1,1]}"
+      },
+      "right": {
+        "schema_json": "{\"enum\":[1]}"
+      },
+      "expected": "Different",
+      "reason": "Standalone enum arrays remain ordinary ordered arrays in structural identity."
+    },
+    {
+      "id": "outside-sibling-preempts-union-merge",
+      "left": {
+        "schema_json": "{\"pattern\":\"x\",\"allOf\":[{\"oneOf\":[{\"type\":\"string\"},{\"type\":\"integer\"}]},{\"minLength\":1}]}"
+      },
+      "right": {
+        "schema_json": "{\"pattern\":\"x\",\"allOf\":[{\"oneOf\":[{\"type\":\"string\"},{\"type\":\"integer\"}]},{\"minLength\":1}]}"
+      },
+      "expected": "Equal",
+      "reason": "Step 2 retains an outside-bearing allOf before merge refusal is considered."
+    },
+    {
+      "id": "outside-branch-preempts-union-merge",
+      "left": {
+        "schema_json": "{\"allOf\":[{\"pattern\":\"x\"},{\"oneOf\":[{\"type\":\"string\"},{\"type\":\"integer\"}]}]}"
+      },
+      "right": {
+        "schema_json": "{\"allOf\":[{\"pattern\":\"x\"},{\"oneOf\":[{\"type\":\"integer\"},{\"type\":\"string\"}]}]}"
+      },
+      "expected": "Equal",
+      "reason": "Retained allOf branches normalize individually; nested actual union variants remain unordered for identity."
+    },
+    {
+      "id": "retained-allof-order",
+      "left": {
+        "schema_json": "{\"allOf\":[{\"pattern\":\"x\"},{\"oneOf\":[{\"type\":\"string\"},{\"type\":\"integer\"}]}]}"
+      },
+      "right": {
+        "schema_json": "{\"allOf\":[{\"oneOf\":[{\"type\":\"string\"},{\"type\":\"integer\"}]},{\"pattern\":\"x\"}]}"
+      },
+      "expected": "Different",
+      "reason": "Retained outside-bearing allOf keeps authored branch order."
+    },
+    {
+      "id": "merge-eligible-union-refuses",
+      "left": {
+        "schema_json": "{\"allOf\":[{\"oneOf\":[{\"type\":\"string\"},{\"type\":\"integer\"}]},{\"type\":\"string\"}]}"
+      },
+      "right": {
+        "schema_json": "{\"allOf\":[{\"oneOf\":[{\"type\":\"string\"},{\"type\":\"integer\"}]},{\"type\":\"string\"}]}"
+      },
+      "expected": "Failure(UnionMerge)",
+      "reason": "Otherwise eligible merge with normalized union branch fails before identity."
+    },
+    {
+      "id": "ref-union-merge-refuses",
+      "left": {
+        "schema_json": "{\"allOf\":[{\"$ref\":\"#/T\"},{\"type\":\"string\"}]}",
+        "document_root_json": "{\"T\":{\"oneOf\":[{\"type\":\"string\"},{\"type\":\"integer\"}]}}"
+      },
+      "right": {
+        "schema_json": "{\"type\":\"string\"}"
+      },
+      "expected": "Failure(UnionMerge)",
+      "reason": "Ref-carried union is checked after inlining, just like an inline branch."
+    },
+    {
+      "id": "ref-outside-retains-allof",
+      "left": {
+        "schema_json": "{\"allOf\":[{\"$ref\":\"#/T\"},{\"minLength\":1}]}",
+        "document_root_json": "{\"T\":{\"pattern\":\"x\"}}"
+      },
+      "right": {
+        "schema_json": "{\"allOf\":[{\"pattern\":\"x\"},{\"minLength\":1}]}"
+      },
+      "expected": "Equal",
+      "reason": "Resolved outside keyword prevents dropping its constraint in merge."
+    },
+    {
+      "id": "nested-union-is-local",
+      "left": {
+        "schema_json": "{\"allOf\":[{\"properties\":{\"p\":{\"oneOf\":[{\"type\":\"string\"},{\"type\":\"integer\"}]}}}]}"
+      },
+      "right": {
+        "schema_json": "{\"properties\":{\"p\":{\"oneOf\":[{\"type\":\"string\"},{\"type\":\"integer\"}]}}}"
+      },
+      "expected": "Equal",
+      "reason": "Merge guards apply at the merge position; copying a nested property is not merging that property union."
+    },
+    {
+      "id": "outside-overlapping-property",
+      "left": {
+        "schema_json": "{\"allOf\":[{\"properties\":{\"p\":{\"pattern\":\"x\"}}},{\"properties\":{\"p\":{\"minLength\":1}}}]}"
+      },
+      "right": {
+        "schema_json": "{\"properties\":{\"p\":{\"allOf\":[{\"pattern\":\"x\"},{\"minLength\":1}]}}}"
+      },
+      "expected": "Equal",
+      "reason": "Recursive overlap merge must preserve outside constraints via the same ordered-allOf rule."
+    },
+    {
+      "id": "additional-false-wins",
+      "left": {
+        "schema_json": "{\"allOf\":[{\"additionalProperties\":false},{\"additionalProperties\":{\"pattern\":\"x\"}}]}"
+      },
+      "right": {
+        "schema_json": "{\"additionalProperties\":false}"
+      },
+      "expected": "Equal",
+      "reason": "Explicit additionalProperties false-wins survives Boolean normalization."
+    },
+    {
+      "id": "additional-false-does-not-mask-normalization-error",
+      "left": {
+        "schema_json": "{\"allOf\":[{\"additionalProperties\":false},{\"additionalProperties\":{\"$ref\":\"https://absent.invalid/s\"}}]}"
+      },
+      "right": {
+        "schema_json": "{\"additionalProperties\":false}"
+      },
+      "expected": "Failure(Reference)",
+      "reason": "Normalize every branch fully before applying merge rules."
+    },
+    {
+      "id": "outside-false-branch-retained",
+      "left": {
+        "schema_json": "{\"allOf\":[false,{\"type\":\"string\"}]}"
+      },
+      "right": {
+        "schema_json": "{\"allOf\":[{\"not\":{}},{\"type\":[\"string\"]}]}"
+      },
+      "expected": "Equal",
+      "reason": "Boolean false expands to an outside keyword; it does not trigger a general SAT simplifier."
+    },
+    {
+      "id": "enum-intersection-sibling-first",
+      "left": {
+        "schema_json": "{\"enum\":[\"c\",\"a\",\"b\"],\"allOf\":[{\"enum\":[\"b\",\"c\"]}]}"
+      },
+      "right": {
+        "schema_json": "{\"enum\":[\"c\",\"b\"]}"
+      },
+      "expected": "Equal",
+      "reason": "Merge sibling branch first and preserve its authored enum value order."
+    },
+    {
+      "id": "type-intersection-subtype",
+      "left": {
+        "schema_json": "{\"allOf\":[{\"type\":[\"string\",\"number\"]},{\"type\":[\"number\",\"integer\"]}]}"
+      },
+      "right": {
+        "schema_json": "{\"type\":\"number\"}"
+      },
+      "expected": "Equal",
+      "reason": "Subtype-aware intersection follows the pinned ordinary fixture."
+    },
+    {
+      "id": "unsatisfiable-types",
+      "left": {
+        "schema_json": "{\"allOf\":[{\"type\":\"string\"},{\"type\":\"integer\"}]}"
+      },
+      "right": {
+        "schema_json": "{}"
+      },
+      "expected": "Failure(SchemaMerge)",
+      "reason": "An empty type intersection is an error, not Different."
+    },
+    {
+      "id": "unsatisfiable-const",
+      "left": {
+        "schema_json": "{\"allOf\":[{\"const\":9007199254740992},{\"const\":9007199254740993}]}"
+      },
+      "right": {
+        "schema_json": "{}"
+      },
+      "expected": "Failure(SchemaMerge)",
+      "reason": "Conflicting exact const values are an error."
+    },
+    {
+      "id": "unsatisfiable-enum",
+      "left": {
+        "schema_json": "{\"allOf\":[{\"enum\":[1e1000]},{\"enum\":[2e1000]}]}"
+      },
+      "right": {
+        "schema_json": "{}"
+      },
+      "expected": "Failure(SchemaMerge)",
+      "reason": "An empty exact enum intersection is an error."
+    },
+    {
+      "id": "per-keyword-bound-retention",
+      "left": {
+        "schema_json": "{\"allOf\":[{\"minimum\":0},{\"exclusiveMinimum\":5}]}"
+      },
+      "right": {
+        "schema_json": "{\"exclusiveMinimum\":5}"
+      },
+      "expected": "Different",
+      "reason": "Normalization keeps different bound keywords; effective-bound reduction belongs to directional checking."
+    },
+    {
+      "id": "exact-adjacent-decimals",
+      "left": {
+        "schema_json": "{\"const\":0.10000000000000000001}"
+      },
+      "right": {
+        "schema_json": "{\"const\":0.10000000000000000002}"
+      },
+      "expected": "Different",
+      "reason": "No binary64 collapse."
+    },
+    {
+      "id": "exact-huge-equality",
+      "left": {
+        "schema_json": "{\"const\":1e1000000000}"
+      },
+      "right": {
+        "schema_json": "{\"const\":10e999999999}"
+      },
+      "expected": "Equal",
+      "reason": "Exact exponent comparison without expanding exponent zeroes."
+    },
+    {
+      "id": "exact-numeric-spelling",
+      "left": {
+        "schema_json": "{\"const\":{\"n\":-0,\"m\":1.00}}"
+      },
+      "right": {
+        "schema_json": "{\"const\":{\"m\":1e0,\"n\":0e999999}}"
+      },
+      "expected": "Equal",
+      "reason": "Signed zero and spelling do not change mathematical values; member order is irrelevant."
+    },
+    {
+      "id": "exact-surrogate-vs-replacement",
+      "left": {
+        "schema_json": "{\"const\":\"\\ud800\"}"
+      },
+      "right": {
+        "schema_json": "{\"const\":\"\ufffd\"}"
+      },
+      "expected": "Different",
+      "reason": "Exact UTF-16 host representation must not replace a non-scalar JSON string."
+    },
+    {
+      "id": "exact-required-order",
+      "left": {
+        "schema_json": "{\"required\":[\"\\ud800\",\"a\",\"a\"]}"
+      },
+      "right": {
+        "schema_json": "{\"required\":[\"a\",\"\\ud800\"]}"
+      },
+      "expected": "Equal",
+      "reason": "Required is a sorted deduplicated exact-name set; no lossy scalar conversion."
+    },
+    {
+      "id": "additional-true-vs-empty-schema",
+      "left": {
+        "schema_json": "{\"additionalProperties\":true}"
+      },
+      "right": {
+        "schema_json": "{\"additionalProperties\":{}}"
+      },
+      "expected": "Different",
+      "reason": "AdditionalProperties literal booleans stay flags; only object schema form normalizes recursively. Ref targets use schema Boolean normalization, without reverse coercion."
+    },
+    {
+      "id": "additional-false-vs-not-empty",
+      "left": {
+        "schema_json": "{\"additionalProperties\":false}"
+      },
+      "right": {
+        "schema_json": "{\"additionalProperties\":{\"not\":{}}}"
+      },
+      "expected": "Different",
+      "reason": "AdditionalProperties literal booleans stay flags; only object schema form normalizes recursively. Ref targets use schema Boolean normalization, without reverse coercion."
+    },
+    {
+      "id": "additional-ref-true-vs-object",
+      "left": {
+        "schema_json": "{\"additionalProperties\":{\"$ref\":\"#/T\"}}",
+        "document_root_json": "{\"T\":true}"
+      },
+      "right": {
+        "schema_json": "{\"additionalProperties\":{}}"
+      },
+      "expected": "Equal",
+      "reason": "AdditionalProperties literal booleans stay flags; only object schema form normalizes recursively. Ref targets use schema Boolean normalization, without reverse coercion."
+    },
+    {
+      "id": "additional-ref-true-vs-literal",
+      "left": {
+        "schema_json": "{\"additionalProperties\":{\"$ref\":\"#/T\"}}",
+        "document_root_json": "{\"T\":true}"
+      },
+      "right": {
+        "schema_json": "{\"additionalProperties\":true}"
+      },
+      "expected": "Different",
+      "reason": "AdditionalProperties literal booleans stay flags; only object schema form normalizes recursively. Ref targets use schema Boolean normalization, without reverse coercion."
+    },
+    {
+      "id": "additional-ref-false-vs-object",
+      "left": {
+        "schema_json": "{\"additionalProperties\":{\"$ref\":\"#/T\"}}",
+        "document_root_json": "{\"T\":false}"
+      },
+      "right": {
+        "schema_json": "{\"additionalProperties\":{\"not\":{}}}"
+      },
+      "expected": "Equal",
+      "reason": "AdditionalProperties literal booleans stay flags; only object schema form normalizes recursively. Ref targets use schema Boolean normalization, without reverse coercion."
+    },
+    {
+      "id": "additional-ref-false-vs-literal",
+      "left": {
+        "schema_json": "{\"additionalProperties\":{\"$ref\":\"#/T\"}}",
+        "document_root_json": "{\"T\":false}"
+      },
+      "right": {
+        "schema_json": "{\"additionalProperties\":false}"
+      },
+      "expected": "Different",
+      "reason": "AdditionalProperties literal booleans stay flags; only object schema form normalizes recursively. Ref targets use schema Boolean normalization, without reverse coercion."
+    }
+  ]
+}

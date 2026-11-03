@@ -116,6 +116,10 @@ invocation_source = ''.join(path.read_text(encoding='utf-8') for path in
 assert 'pub use openbindings_context::{Context, ContextChallenge};' in invocation_source
 for retired in ['BindingValue', 'BindingInvocationInput', 'BindingLifecycle']:
     assert not re.search(r'pub (struct|enum|type) ' + retired + r'\b', invocation_source), retired
+comparison = manifests['openbindings-schema-comparison']['dependencies']
+assert set(comparison) == {'openbindings', 'openbindings-internal-json', 'openbindings-internal-schema'}
+for owner in ['openbindings', 'openbindings-invocation', 'openbindings-json-schema-evaluator']:
+    assert 'openbindings-schema-comparison' not in manifests[owner].get('dependencies', {})
 kind = manifests['openbindings-kind-description']['dependencies']
 assert set(kind) == {'openbindings', 'openbindings-context', cancellation}
 for owner in ['openbindings', 'openbindings-invocation', 'openbindings-json-schema-evaluator']:

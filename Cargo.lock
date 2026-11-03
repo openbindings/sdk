@@ -1027,6 +1027,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "openbindings-schema-comparison"
+version = "0.2.0-alpha.1"
+dependencies = [
+ "openbindings",
+ "openbindings-internal-json",
+ "openbindings-internal-schema",
+ "serde_json",
+]
+
+[[package]]
 name = "openbindings-schema-evaluator-test-support"
 version = "0.2.0-alpha.1"
 dependencies = [

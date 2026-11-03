@@ -1,0 +1,948 @@
+{
+  "formatVersion": "1.0.0",
+  "scope": "comparison-profile",
+  "profile": "OB-2020-12",
+  "profileVersion": "0.1",
+  "description": "Exact JSON-text cases for the same optional comparison profile. Expected outcomes are authored from profile rules; numberTokens protect fixture carriage, not production semantics.",
+  "cases": [
+    {
+      "id": "wide-const",
+      "rule": "exact const equality",
+      "mode": "subsume",
+      "direction": "input",
+      "leftJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"const\":9007199254740992}}}}",
+      "rightJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"const\":9007199254740993}}}}",
+      "expected": {
+        "verdict": "incompatible"
+      },
+      "witness": {
+        "instanceJSON": "9007199254740992",
+        "targetValid": true,
+        "candidateValid": false
+      },
+      "numberTokens": {
+        "left": [
+          "9007199254740992"
+        ],
+        "right": [
+          "9007199254740993"
+        ],
+        "witness": [
+          "9007199254740992"
+        ]
+      }
+    },
+    {
+      "id": "nested-wide-const",
+      "rule": "recursive instance equality",
+      "mode": "subsume",
+      "direction": "input",
+      "leftJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"const\":{\"id\":9007199254740992}}}}}",
+      "rightJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"const\":{\"id\":9007199254740993}}}}}",
+      "expected": {
+        "verdict": "incompatible"
+      },
+      "witness": {
+        "instanceJSON": "{\"id\":9007199254740992}",
+        "targetValid": true,
+        "candidateValid": false
+      },
+      "numberTokens": {
+        "left": [
+          "9007199254740992"
+        ],
+        "right": [
+          "9007199254740993"
+        ],
+        "witness": [
+          "9007199254740992"
+        ]
+      }
+    },
+    {
+      "id": "wide-enum",
+      "rule": "exact enum membership",
+      "mode": "subsume",
+      "direction": "input",
+      "leftJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"enum\":[9007199254740992]}}}}",
+      "rightJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"enum\":[9007199254740993]}}}}",
+      "expected": {
+        "verdict": "incompatible"
+      },
+      "witness": {
+        "instanceJSON": "9007199254740992",
+        "targetValid": true,
+        "candidateValid": false
+      },
+      "numberTokens": {
+        "left": [
+          "9007199254740992"
+        ],
+        "right": [
+          "9007199254740993"
+        ],
+        "witness": [
+          "9007199254740992"
+        ]
+      }
+    },
+    {
+      "id": "equivalent-decimal-spelling",
+      "rule": "numeric spelling is not value identity",
+      "mode": "subsume",
+      "direction": "input",
+      "leftJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"const\":1}}}}",
+      "rightJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"const\":1.0}}}}",
+      "expected": {
+        "verdict": "compatible"
+      },
+      "witness": {
+        "instanceJSON": "1",
+        "targetValid": true,
+        "candidateValid": true
+      },
+      "numberTokens": {
+        "left": [
+          "1"
+        ],
+        "right": [
+          "1.0"
+        ],
+        "witness": [
+          "1"
+        ]
+      }
+    },
+    {
+      "id": "equivalent-exponent",
+      "rule": "numeric spelling is not value identity",
+      "mode": "subsume",
+      "direction": "input",
+      "leftJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"const\":1}}}}",
+      "rightJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"const\":1e0}}}}",
+      "expected": {
+        "verdict": "compatible"
+      },
+      "witness": {
+        "instanceJSON": "1",
+        "targetValid": true,
+        "candidateValid": true
+      },
+      "numberTokens": {
+        "left": [
+          "1"
+        ],
+        "right": [
+          "1e0"
+        ],
+        "witness": [
+          "1"
+        ]
+      }
+    },
+    {
+      "id": "signed-zero",
+      "rule": "zero has one mathematical value",
+      "mode": "subsume",
+      "direction": "input",
+      "leftJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"const\":-0}}}}",
+      "rightJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"const\":0}}}}",
+      "expected": {
+        "verdict": "compatible"
+      },
+      "witness": {
+        "instanceJSON": "0",
+        "targetValid": true,
+        "candidateValid": true
+      },
+      "numberTokens": {
+        "left": [
+          "-0"
+        ],
+        "right": [
+          "0"
+        ],
+        "witness": [
+          "0"
+        ]
+      }
+    },
+    {
+      "id": "ordinary-decimal",
+      "rule": "decimal equality without binary expansion",
+      "mode": "subsume",
+      "direction": "input",
+      "leftJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"const\":0.1}}}}",
+      "rightJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"const\":0.10}}}}",
+      "expected": {
+        "verdict": "compatible"
+      },
+      "witness": {
+        "instanceJSON": "0.1",
+        "targetValid": true,
+        "candidateValid": true
+      },
+      "numberTokens": {
+        "left": [
+          "0.1"
+        ],
+        "right": [
+          "0.10"
+        ],
+        "witness": [
+          "0.1"
+        ]
+      }
+    },
+    {
+      "id": "precise-decimal",
+      "rule": "adjacent decimals remain distinct",
+      "mode": "subsume",
+      "direction": "input",
+      "leftJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"const\":0.10000000000000000001}}}}",
+      "rightJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"const\":0.10000000000000000002}}}}",
+      "expected": {
+        "verdict": "incompatible"
+      },
+      "witness": {
+        "instanceJSON": "0.10000000000000000001",
+        "targetValid": true,
+        "candidateValid": false
+      },
+      "numberTokens": {
+        "left": [
+          "0.10000000000000000001"
+        ],
+        "right": [
+          "0.10000000000000000002"
+        ],
+        "witness": [
+          "0.10000000000000000001"
+        ]
+      }
+    },
+    {
+      "id": "overflow-const",
+      "rule": "out-of-binary64-domain is not equality",
+      "mode": "subsume",
+      "direction": "input",
+      "leftJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"const\":1e400}}}}",
+      "rightJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"const\":2e400}}}}",
+      "expected": {
+        "verdict": "incompatible"
+      },
+      "witness": {
+        "instanceJSON": "1e400",
+        "targetValid": true,
+        "candidateValid": false
+      },
+      "numberTokens": {
+        "left": [
+          "1e400"
+        ],
+        "right": [
+          "2e400"
+        ],
+        "witness": [
+          "1e400"
+        ]
+      }
+    },
+    {
+      "id": "underflow-const",
+      "rule": "underflow is not zero",
+      "mode": "subsume",
+      "direction": "input",
+      "leftJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"const\":0}}}}",
+      "rightJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"const\":1e-400}}}}",
+      "expected": {
+        "verdict": "incompatible"
+      },
+      "witness": {
+        "instanceJSON": "0",
+        "targetValid": true,
+        "candidateValid": false
+      },
+      "numberTokens": {
+        "left": [
+          "0"
+        ],
+        "right": [
+          "1e-400"
+        ],
+        "witness": [
+          "0"
+        ]
+      }
+    },
+    {
+      "id": "negative-minimum",
+      "rule": "exact negative ordering",
+      "mode": "subsume",
+      "direction": "input",
+      "leftJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"type\":\"number\",\"minimum\":-9007199254740993}}}}",
+      "rightJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"type\":\"number\",\"minimum\":-9007199254740992}}}}",
+      "expected": {
+        "verdict": "incompatible"
+      },
+      "witness": {
+        "instanceJSON": "-9007199254740993",
+        "targetValid": true,
+        "candidateValid": false
+      },
+      "numberTokens": {
+        "left": [
+          "-9007199254740993"
+        ],
+        "right": [
+          "-9007199254740992"
+        ],
+        "witness": [
+          "-9007199254740993"
+        ]
+      }
+    },
+    {
+      "id": "wide-minimum-input",
+      "rule": "input candidate must not narrow lower bound",
+      "mode": "subsume",
+      "direction": "input",
+      "leftJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"type\":\"number\",\"minimum\":9007199254740992}}}}",
+      "rightJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"type\":\"number\",\"minimum\":9007199254740993}}}}",
+      "expected": {
+        "verdict": "incompatible"
+      },
+      "witness": {
+        "instanceJSON": "9007199254740992",
+        "targetValid": true,
+        "candidateValid": false
+      },
+      "numberTokens": {
+        "left": [
+          "9007199254740992"
+        ],
+        "right": [
+          "9007199254740993"
+        ],
+        "witness": [
+          "9007199254740992"
+        ]
+      }
+    },
+    {
+      "id": "wide-maximum-input",
+      "rule": "input candidate must not narrow upper bound",
+      "mode": "subsume",
+      "direction": "input",
+      "leftJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"type\":\"number\",\"maximum\":9007199254740993}}}}",
+      "rightJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"type\":\"number\",\"maximum\":9007199254740992}}}}",
+      "expected": {
+        "verdict": "incompatible"
+      },
+      "witness": {
+        "instanceJSON": "9007199254740993",
+        "targetValid": true,
+        "candidateValid": false
+      },
+      "numberTokens": {
+        "left": [
+          "9007199254740993"
+        ],
+        "right": [
+          "9007199254740992"
+        ],
+        "witness": [
+          "9007199254740993"
+        ]
+      }
+    },
+    {
+      "id": "wide-maximum-output",
+      "rule": "output candidate must not widen upper bound",
+      "mode": "subsume",
+      "direction": "output",
+      "leftJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"output\":{\"type\":\"number\",\"maximum\":9007199254740992}}}}",
+      "rightJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"output\":{\"type\":\"number\",\"maximum\":9007199254740993}}}}",
+      "expected": {
+        "verdict": "incompatible"
+      },
+      "witness": {
+        "instanceJSON": "9007199254740993",
+        "targetValid": false,
+        "candidateValid": true
+      },
+      "numberTokens": {
+        "left": [
+          "9007199254740992"
+        ],
+        "right": [
+          "9007199254740993"
+        ],
+        "witness": [
+          "9007199254740993"
+        ]
+      }
+    },
+    {
+      "id": "wide-minimum-output",
+      "rule": "output candidate must not widen lower bound",
+      "mode": "subsume",
+      "direction": "output",
+      "leftJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"output\":{\"type\":\"number\",\"minimum\":9007199254740993}}}}",
+      "rightJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"output\":{\"type\":\"number\",\"minimum\":9007199254740992}}}}",
+      "expected": {
+        "verdict": "incompatible"
+      },
+      "witness": {
+        "instanceJSON": "9007199254740992",
+        "targetValid": false,
+        "candidateValid": true
+      },
+      "numberTokens": {
+        "left": [
+          "9007199254740993"
+        ],
+        "right": [
+          "9007199254740992"
+        ],
+        "witness": [
+          "9007199254740992"
+        ]
+      }
+    },
+    {
+      "id": "exclusive-huge-lower",
+      "rule": "exclusive equal lower bound is stricter",
+      "mode": "subsume",
+      "direction": "input",
+      "leftJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"type\":\"number\",\"minimum\":1e400}}}}",
+      "rightJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"type\":\"number\",\"exclusiveMinimum\":1e400}}}}",
+      "expected": {
+        "verdict": "incompatible"
+      },
+      "witness": {
+        "instanceJSON": "1e400",
+        "targetValid": true,
+        "candidateValid": false
+      },
+      "numberTokens": {
+        "left": [
+          "1e400"
+        ],
+        "right": [
+          "1e400"
+        ],
+        "witness": [
+          "1e400"
+        ]
+      }
+    },
+    {
+      "id": "exclusive-tiny-upper",
+      "rule": "exclusive equal upper bound is stricter",
+      "mode": "subsume",
+      "direction": "input",
+      "leftJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"type\":\"number\",\"maximum\":1e-400}}}}",
+      "rightJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"type\":\"number\",\"exclusiveMaximum\":1e-400}}}}",
+      "expected": {
+        "verdict": "incompatible"
+      },
+      "witness": {
+        "instanceJSON": "1e-400",
+        "targetValid": true,
+        "candidateValid": false
+      },
+      "numberTokens": {
+        "left": [
+          "1e-400"
+        ],
+        "right": [
+          "1e-400"
+        ],
+        "witness": [
+          "1e-400"
+        ]
+      }
+    },
+    {
+      "id": "widened-input",
+      "rule": "exact widening remains compatible",
+      "mode": "subsume",
+      "direction": "input",
+      "leftJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"type\":\"number\",\"minimum\":9007199254740993}}}}",
+      "rightJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"type\":\"number\",\"minimum\":9007199254740992}}}}",
+      "expected": {
+        "verdict": "compatible"
+      },
+      "witness": {
+        "instanceJSON": "9007199254740993",
+        "targetValid": true,
+        "candidateValid": true
+      },
+      "numberTokens": {
+        "left": [
+          "9007199254740993"
+        ],
+        "right": [
+          "9007199254740992"
+        ],
+        "witness": [
+          "9007199254740993"
+        ]
+      }
+    },
+    {
+      "id": "narrowed-output",
+      "rule": "exact narrowing remains compatible",
+      "mode": "subsume",
+      "direction": "output",
+      "leftJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"output\":{\"type\":\"number\",\"minimum\":9007199254740992}}}}",
+      "rightJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"output\":{\"type\":\"number\",\"minimum\":9007199254740993}}}}",
+      "expected": {
+        "verdict": "compatible"
+      },
+      "witness": {
+        "instanceJSON": "9007199254740993",
+        "targetValid": true,
+        "candidateValid": true
+      },
+      "numberTokens": {
+        "left": [
+          "9007199254740992"
+        ],
+        "right": [
+          "9007199254740993"
+        ],
+        "witness": [
+          "9007199254740993"
+        ]
+      }
+    },
+    {
+      "id": "allof-restrictive-bound",
+      "rule": "allOf selects exact stricter bound",
+      "mode": "subsume",
+      "direction": "input",
+      "leftJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"type\":\"number\",\"minimum\":9007199254740992}}}}",
+      "rightJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"type\":\"number\",\"allOf\":[{\"minimum\":9007199254740992},{\"minimum\":9007199254740993}]}}}}",
+      "expected": {
+        "verdict": "incompatible"
+      },
+      "witness": {
+        "instanceJSON": "9007199254740992",
+        "targetValid": true,
+        "candidateValid": false
+      },
+      "numberTokens": {
+        "left": [
+          "9007199254740992"
+        ],
+        "right": [
+          "9007199254740992",
+          "9007199254740993"
+        ],
+        "witness": [
+          "9007199254740992"
+        ]
+      }
+    },
+    {
+      "id": "allof-enum-intersection",
+      "rule": "allOf intersects by exact instance values",
+      "mode": "subsume",
+      "direction": "input",
+      "leftJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"const\":9007199254740992}}}}",
+      "rightJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"allOf\":[{\"enum\":[9007199254740992,9007199254740993]},{\"enum\":[9007199254740993]}]}}}}",
+      "expected": {
+        "verdict": "incompatible"
+      },
+      "witness": {
+        "instanceJSON": "9007199254740992",
+        "targetValid": true,
+        "candidateValid": false
+      },
+      "numberTokens": {
+        "left": [
+          "9007199254740992"
+        ],
+        "right": [
+          "9007199254740992",
+          "9007199254740993",
+          "9007199254740993"
+        ],
+        "witness": [
+          "9007199254740992"
+        ]
+      }
+    },
+    {
+      "id": "allof-const-conflict",
+      "rule": "distinct exact consts make an unsatisfiable merge",
+      "mode": "subsume",
+      "direction": "input",
+      "leftJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"allOf\":[{\"const\":9007199254740992},{\"const\":9007199254740993}]}}}}",
+      "rightJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{}}}}",
+      "expected": {
+        "error": "schema"
+      },
+      "numberTokens": {
+        "left": [
+          "9007199254740992",
+          "9007199254740993"
+        ],
+        "right": []
+      }
+    },
+    {
+      "id": "allof-empty-enum",
+      "rule": "distinct exact enum intersection is empty",
+      "mode": "subsume",
+      "direction": "input",
+      "leftJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"allOf\":[{\"enum\":[9007199254740992]},{\"enum\":[9007199254740993]}]}}}}",
+      "rightJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{}}}}",
+      "expected": {
+        "error": "schema"
+      },
+      "numberTokens": {
+        "left": [
+          "9007199254740992",
+          "9007199254740993"
+        ],
+        "right": []
+      }
+    },
+    {
+      "id": "structural-wide-difference",
+      "rule": "normalized identity must not round",
+      "mode": "identical",
+      "direction": "input",
+      "leftJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"const\":9007199254740992}}}}",
+      "rightJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"const\":9007199254740993}}}}",
+      "expected": {
+        "verdict": "incompatible"
+      },
+      "numberTokens": {
+        "left": [
+          "9007199254740992"
+        ],
+        "right": [
+          "9007199254740993"
+        ]
+      }
+    },
+    {
+      "id": "structural-equivalent-spelling",
+      "rule": "normalized identity is value identity",
+      "mode": "identical",
+      "direction": "input",
+      "leftJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"const\":1}}}}",
+      "rightJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"const\":1.0}}}}",
+      "expected": {
+        "verdict": "compatible"
+      },
+      "numberTokens": {
+        "left": [
+          "1"
+        ],
+        "right": [
+          "1.0"
+        ]
+      }
+    },
+    {
+      "id": "union-permutation",
+      "rule": "normalized union identity ignores variant order",
+      "mode": "identical",
+      "direction": "input",
+      "leftJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"oneOf\":[{\"const\":9007199254740992},{\"const\":9007199254740993}]}}}}",
+      "rightJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"oneOf\":[{\"const\":9007199254740993},{\"const\":9007199254740992}]}}}}",
+      "expected": {
+        "verdict": "compatible"
+      },
+      "numberTokens": {
+        "left": [
+          "9007199254740992",
+          "9007199254740993"
+        ],
+        "right": [
+          "9007199254740992",
+          "9007199254740993"
+        ]
+      }
+    },
+    {
+      "id": "union-multiplicity",
+      "rule": "normalized union identity retains multiplicity",
+      "mode": "identical",
+      "direction": "input",
+      "leftJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"oneOf\":[{\"const\":9007199254740992},{\"const\":9007199254740993}]}}}}",
+      "rightJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"oneOf\":[{\"const\":9007199254740992},{\"const\":9007199254740992}]}}}}",
+      "expected": {
+        "verdict": "incompatible"
+      },
+      "numberTokens": {
+        "left": [
+          "9007199254740992",
+          "9007199254740993"
+        ],
+        "right": [
+          "9007199254740992",
+          "9007199254740992"
+        ]
+      }
+    },
+    {
+      "id": "union-order-in-instance-data",
+      "rule": "union permutation exception never applies inside const",
+      "mode": "identical",
+      "direction": "input",
+      "leftJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"const\":{\"oneOf\":[1,2]}}}}}",
+      "rightJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"const\":{\"oneOf\":[2,1]}}}}}",
+      "expected": {
+        "verdict": "incompatible"
+      },
+      "numberTokens": {
+        "left": [
+          "1",
+          "2"
+        ],
+        "right": [
+          "1",
+          "2"
+        ]
+      }
+    },
+    {
+      "id": "object-member-order",
+      "rule": "instance object member order is irrelevant",
+      "mode": "identical",
+      "direction": "input",
+      "leftJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"const\":{\"10\":1,\"2\":2}}}}}",
+      "rightJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"const\":{\"2\":2,\"10\":1}}}}}",
+      "expected": {
+        "verdict": "compatible"
+      },
+      "numberTokens": {
+        "left": [
+          "1",
+          "2"
+        ],
+        "right": [
+          "1",
+          "2"
+        ]
+      }
+    },
+    {
+      "id": "array-order",
+      "rule": "instance array order remains significant",
+      "mode": "identical",
+      "direction": "input",
+      "leftJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"const\":[1,2]}}}}",
+      "rightJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"const\":[2,1]}}}}",
+      "expected": {
+        "verdict": "incompatible"
+      },
+      "numberTokens": {
+        "left": [
+          "1",
+          "2"
+        ],
+        "right": [
+          "1",
+          "2"
+        ]
+      }
+    },
+    {
+      "id": "null-vs-missing",
+      "rule": "member presence is significant",
+      "mode": "identical",
+      "direction": "input",
+      "leftJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"const\":{\"x\":null}}}}}",
+      "rightJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"const\":{}}}}}",
+      "expected": {
+        "verdict": "incompatible"
+      },
+      "numberTokens": {
+        "left": [],
+        "right": []
+      }
+    },
+    {
+      "id": "number-vs-string",
+      "rule": "JSON types remain distinct",
+      "mode": "identical",
+      "direction": "input",
+      "leftJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"const\":1}}}}",
+      "rightJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"const\":\"1\"}}}}",
+      "expected": {
+        "verdict": "incompatible"
+      },
+      "numberTokens": {
+        "left": [
+          "1"
+        ],
+        "right": []
+      }
+    },
+    {
+      "id": "wide-array-count",
+      "rule": "array bounds use exact ordering",
+      "mode": "subsume",
+      "direction": "input",
+      "leftJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"type\":\"array\",\"minItems\":9007199254740992}}}}",
+      "rightJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"type\":\"array\",\"minItems\":9007199254740993}}}}",
+      "expected": {
+        "verdict": "incompatible"
+      },
+      "numberTokens": {
+        "left": [
+          "9007199254740992"
+        ],
+        "right": [
+          "9007199254740993"
+        ]
+      }
+    },
+    {
+      "id": "decimal-minimum",
+      "rule": "precise decimal bounds remain distinct",
+      "mode": "subsume",
+      "direction": "input",
+      "leftJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"type\":\"number\",\"minimum\":0.10000000000000000001}}}}",
+      "rightJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"type\":\"number\",\"minimum\":0.10000000000000000002}}}}",
+      "expected": {
+        "verdict": "incompatible"
+      },
+      "witness": {
+        "instanceJSON": "0.10000000000000000001",
+        "targetValid": true,
+        "candidateValid": false
+      },
+      "numberTokens": {
+        "left": [
+          "0.10000000000000000001"
+        ],
+        "right": [
+          "0.10000000000000000002"
+        ],
+        "witness": [
+          "0.10000000000000000001"
+        ]
+      }
+    },
+    {
+      "id": "tiny-minimum",
+      "rule": "positive underflow-sized minimum excludes zero",
+      "mode": "subsume",
+      "direction": "input",
+      "leftJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"type\":\"number\",\"minimum\":0}}}}",
+      "rightJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"type\":\"number\",\"minimum\":1e-400}}}}",
+      "expected": {
+        "verdict": "incompatible"
+      },
+      "witness": {
+        "instanceJSON": "0",
+        "targetValid": true,
+        "candidateValid": false
+      },
+      "numberTokens": {
+        "left": [
+          "0"
+        ],
+        "right": [
+          "1e-400"
+        ],
+        "witness": [
+          "0"
+        ]
+      }
+    },
+    {
+      "id": "outside-keyword",
+      "rule": "unsupported keyword remains indeterminate",
+      "mode": "subsume",
+      "direction": "input",
+      "leftJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"const\":9007199254740993,\"pattern\":\"x\"}}}}",
+      "rightJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"const\":9007199254740993}}}}",
+      "expected": {
+        "verdict": "indeterminate"
+      },
+      "numberTokens": {
+        "left": [
+          "9007199254740993"
+        ],
+        "right": [
+          "9007199254740993"
+        ]
+      }
+    },
+    {
+      "id": "union-authored-order",
+      "rule": "union traversal indexes remain authored",
+      "mode": "identical",
+      "direction": "input",
+      "leftJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"anyOf\":[{\"const\":2},{\"const\":1}]}}}}",
+      "rightJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"anyOf\":[{\"const\":1},{\"const\":2}]}}}}",
+      "expected": {
+        "verdict": "compatible"
+      },
+      "leftUnionConstOrder": [
+        "2",
+        "1"
+      ],
+      "numberTokens": {
+        "left": [
+          "1",
+          "2"
+        ],
+        "right": [
+          "1",
+          "2"
+        ]
+      }
+    },
+    {
+      "id": "enum-diagnostic-order",
+      "rule": "first failing authored enum value decides diagnostic",
+      "mode": "subsume",
+      "direction": "input",
+      "leftJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"enum\":[2,1]}}}}",
+      "rightJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"enum\":[3]}}}}",
+      "expected": {
+        "verdict": "incompatible"
+      },
+      "reason": "enum: target value 2 not in candidate enum",
+      "numberTokens": {
+        "left": [
+          "1",
+          "2"
+        ],
+        "right": [
+          "3"
+        ]
+      }
+    },
+    {
+      "id": "exact-diagnostic",
+      "rule": "diagnostic must distinguish exact values",
+      "mode": "subsume",
+      "direction": "input",
+      "leftJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"const\":9007199254740992}}}}",
+      "rightJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"const\":9007199254740993}}}}",
+      "expected": {
+        "verdict": "incompatible"
+      },
+      "reason": "const: candidate const 9007199254740993 does not match target const 9007199254740992",
+      "numberTokens": {
+        "left": [
+          "9007199254740992"
+        ],
+        "right": [
+          "9007199254740993"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,89 @@
+{
+  "version": "1.0",
+  "description": "Nested allOf flattens recursively: each branch is normalized in full before merging, so an allOf inside a branch (with or without its own siblings, beside or below other branches) collapses to the flat merged form.",
+  "mode": "identical",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "nestedAllOf": {
+        "input": {
+          "allOf": [
+            {
+              "allOf": [
+                {
+                  "type": "string",
+                  "minLength": 3
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "nestedAllOfWithSibling": {
+        "input": {
+          "allOf": [
+            {
+              "minLength": 2,
+              "allOf": [
+                {
+                  "type": "string",
+                  "maxLength": 8
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "nestedAllOfBesideBranch": {
+        "input": {
+          "allOf": [
+            {
+              "allOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              ]
+            },
+            {
+              "maximum": 10
+            }
+          ]
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "nestedAllOf": {
+        "input": {
+          "type": "string",
+          "minLength": 3
+        }
+      },
+      "nestedAllOfWithSibling": {
+        "input": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 8
+        }
+      },
+      "nestedAllOfBesideBranch": {
+        "input": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "compatible"
+    }
+  }
+}

@@ -1,0 +1,85 @@
+{
+  "version": "1.0",
+  "description": "OpenAPI 3.0 nullable: true converts structurally to a type union with null; nullable: false is stripped.",
+  "mode": "identical",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "nullableScalar": {
+        "input": {
+          "type": "string",
+          "nullable": true
+        }
+      },
+      "nullableTypeArray": {
+        "input": {
+          "type": [
+            "string",
+            "integer"
+          ],
+          "nullable": true
+        }
+      },
+      "nullableIdempotent": {
+        "input": {
+          "type": [
+            "null",
+            "string"
+          ],
+          "nullable": true
+        }
+      },
+      "nullableFalse": {
+        "input": {
+          "type": "string",
+          "nullable": false
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "nullableScalar": {
+        "input": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "nullableTypeArray": {
+        "input": {
+          "type": [
+            "integer",
+            "null",
+            "string"
+          ]
+        }
+      },
+      "nullableIdempotent": {
+        "input": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "nullableFalse": {
+        "input": {
+          "type": [
+            "string"
+          ]
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "compatible"
+    }
+  }
+}

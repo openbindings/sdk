@@ -1,0 +1,35 @@
+{
+  "version": "1.0",
+  "description": "Identical mode reports a differing outside-profile keyword as a difference: sameness is decidable for any keyword, so the verdict is incompatible, not indeterminate.",
+  "mode": "identical",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "deliver": {
+        "input": {
+          "type": "string",
+          "pattern": "^[a-z]+$"
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "deliver": {
+        "input": {
+          "type": "string",
+          "pattern": "^[a-z]*$"
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "incompatible"
+    }
+  }
+}
