@@ -102,6 +102,28 @@ fn independent_reconstruction_boundary_refuses_before_translation() {
         }
     }
 }
+
+#[test]
+fn shared_pressure_exhaustion_refuses_before_translation() {
+    let budget = profile::Budget::default();
+    // Establish earlier accepted pressure without manufacturing giant owners.
+    for _ in 0..16 {
+        budget
+            .hir(
+                &inventory::Pressure {
+                    reconstruction_entries: profile::RECONSTRUCTION_ENTRIES,
+                    ..inventory::Pressure::default()
+                },
+                &|| false,
+            )
+            .unwrap();
+    }
+    reset();
+    let failed = failure(super::prepare("a?b?", &budget, &|| false).unwrap_err());
+    assert_eq!(failed.code, "pattern-construction-reconstruction");
+    assert_eq!(entries(), 0);
+    assert_eq!(budget.check(&|| false).unwrap_err().code, failed.code);
+}
 #[test]
 fn normalized_depth_accounts_for_reader_synthesized_groups() {
     for row in controls()
@@ -410,4 +432,8 @@ fn retained_forms_translate_once_with_matching_hir() {
         count += 1;
     }
     assert_eq!(count, 1140);
+}
+
+fn prepare(form: &str, control: &dyn Control) -> Result<Hir, Error> {
+    super::prepare(form, &profile::Budget::default(), control)
 }

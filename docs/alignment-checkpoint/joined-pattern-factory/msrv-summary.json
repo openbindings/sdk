@@ -1,0 +1,11 @@
+{
+  "lane": "msrv",
+  "rows": 1320,
+  "success": 1256,
+  "reader": 51,
+  "refusal": 13,
+  "failures": [],
+  "seconds": 0.3030271530151367,
+  "maximum_sdk_reserved": 46848,
+  "maximum_requested": 17107689
+}

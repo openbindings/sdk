@@ -1,0 +1,174 @@
+{
+  "scope": "Pending real-route controls are not claimed passes",
+  "baseline_fixture": "sdk/crates/openbindings-json-schema-evaluator/src/semantic/construction/shared-meta-input.json",
+  "controls": [
+    {
+      "id": "AGG-01",
+      "scope": "stage",
+      "trigger": "Fill each of eight aggregate dimensions exactly, then add one admitted contribution.",
+      "expected": "Inclusive endpoint succeeds; next target dependency never enters; exact shared code remains sticky.",
+      "status": "independent probe pass"
+    },
+    {
+      "id": "AGG-02",
+      "scope": "stage",
+      "trigger": "Node/class aggregate exhausted before an admitted AST.",
+      "expected": "No parser entry; ignored error remains visible at final budget check.",
+      "status": "independent probe pass"
+    },
+    {
+      "id": "AGG-03",
+      "scope": "stage",
+      "trigger": "Reconstruction/literal/range aggregate exhausted before a contributing form.",
+      "expected": "AST is spent; translator does not enter.",
+      "status": "independent probe pass"
+    },
+    {
+      "id": "AGG-04",
+      "scope": "stage",
+      "trigger": "Dispatch/helper/tail aggregate exhausted before admitted HIR.",
+      "expected": "No NFA builder/wrapper; sticky refusal.",
+      "status": "independent probe pass"
+    },
+    {
+      "id": "AGG-05",
+      "scope": "stage",
+      "trigger": "Above-node-limit input.",
+      "expected": "Local ConstructionLimit, zero stage debit, no parser, healthy sibling.",
+      "status": "independent probe pass"
+    },
+    {
+      "id": "AGG-06",
+      "scope": "stage",
+      "trigger": "Frozen 3196 repeated a? b/c prefix control.",
+      "expected": "AST spent; local HIR pressure refusal; no HIR/NFA debit.",
+      "status": "independent probe pass"
+    },
+    {
+      "id": "AGG-07",
+      "scope": "stage",
+      "trigger": "Admitted repetition syntax outside backend u32 representation.",
+      "expected": "Parser enters once; debit remains; local Representation does not poison aggregate.",
+      "status": "independent probe pass"
+    },
+    {
+      "id": "AGG-08",
+      "scope": "stage",
+      "trigger": "One-byte NFA allowance with admitted small HIR.",
+      "expected": "One local Size; no wrapper; NFA score debit retained.",
+      "status": "independent probe pass"
+    },
+    {
+      "id": "AGG-09",
+      "scope": "stage",
+      "trigger": "Cancel immediately after each dependency entry marker.",
+      "expected": "Post-check returns Cancelled and releases every temporary owner.",
+      "status": "independent probe pass"
+    },
+    {
+      "id": "AGG-10",
+      "scope": "stage",
+      "trigger": "SDK limit already exhausted before malformed/profile-limited input.",
+      "expected": "SDK cause wins before local refusal; no backend.",
+      "status": "independent probe pass"
+    },
+    {
+      "id": "AGG-11",
+      "scope": "precedence",
+      "trigger": "Structural aggregate failure followed by cancellation before Attempt completes.",
+      "expected": "Budget retains structural cause; existing outer Attempt final boundary returns Cancelled. Do not claim universally chronological precedence.",
+      "status": "observed on both Rust versions"
+    },
+    {
+      "id": "AGG-12",
+      "scope": "ownership",
+      "trigger": "Drop source/HIR/control/budget before searching VM, then drop VM.",
+      "expected": "No hidden borrowing or control retention; independent cache works; zero live allocation after final drop.",
+      "status": "independent probe pass"
+    },
+    {
+      "id": "AGG-13",
+      "scope": "completion",
+      "trigger": "Ignore aggregate failure, then return a different root/meta error.",
+      "expected": "Plan::new runs Construction.finish on both result paths before returning, subject to outer cancellation priority.",
+      "status": "source verified; real-path regression pending"
+    },
+    {
+      "id": "AGG-14",
+      "scope": "ownership",
+      "trigger": "Root and selected-meta/secondary Plans borrow one Construction.",
+      "expected": "Budget is identical and never reset. Manual seeded test proves ownership plumbing only.",
+      "status": "source verified; end-to-end debit pending"
+    },
+    {
+      "id": "AGG-15",
+      "scope": "future",
+      "trigger": "Patch unchanged construction/shared-meta-input.json with distinct admitted non-Simple patterns in root,m1,m2,helper. Record actual entry and budget identity.",
+      "expected": "All actual constructions debit same owner before entry; reused original meta Plan is not rebuilt; exact aggregate boundary refuses without dropping resources.",
+      "status": "required before activation"
+    },
+    {
+      "id": "AGG-16",
+      "scope": "future",
+      "trigger": "Reverse root/meta visitation and prewarm positive syntax facts in same Construction.",
+      "expected": "No order renews allowance or skips admission; any simultaneous-dimension first code is honestly order-scoped.",
+      "status": "required before activation"
+    },
+    {
+      "id": "AGG-17",
+      "scope": "future",
+      "trigger": "Same spelling across distinct resources, then escaped spellings with same normalized form.",
+      "expected": "Actual reused immutable program is constructed/debited once. Every actual reconstruction is debited. Cache key includes all compiler options.",
+      "status": "required before activation"
+    },
+    {
+      "id": "AGG-18",
+      "scope": "future",
+      "trigger": "Warm environment/program caches then use fresh Construction with lower SDK counters.",
+      "expected": "No previous Attempt/Budget retained; current ownership/footprint checks and scoped counters still apply.",
+      "status": "required before activation"
+    },
+    {
+      "id": "AGG-19",
+      "scope": "future",
+      "trigger": "Selected meta demands a locally limited pattern over string versus irrelevant/nonstring position.",
+      "expected": "Demanded terminal Limit blocks admission; irrelevant local limitation is not Undefined or automatic global failure. Shared aggregate exhaustion blocks preparation.",
+      "status": "required before activation"
+    },
+    {
+      "id": "AGG-20",
+      "scope": "future",
+      "trigger": "Frozen6000 independent shorthand pattern plus its sibling-specific deciding/nonstring controls.",
+      "expected": "Preserve exact adjudicated local limitation/masking behavior and reasons; no blanket patternProperties rejection.",
+      "status": "required before activation"
+    },
+    {
+      "id": "AGG-21",
+      "scope": "future",
+      "trigger": "Frozen100/300/400/1024 tiny-form jobs with repeated values.",
+      "expected": "Once per retained unique program, no per-value build, unchanged outcomes/default intended jobs and actual resource/performance gates.",
+      "status": "required before activation"
+    },
+    {
+      "id": "AGG-22",
+      "scope": "future",
+      "trigger": "Concurrent evaluations, one cancellation, multiple Plan owners.",
+      "expected": "Mutable scratch and controls independent; immutable programs shared safely; final drop reaches warmed baseline.",
+      "status": "required before activation"
+    },
+    {
+      "id": "AGG-23",
+      "scope": "future",
+      "trigger": "Refusal/cancellation then retry in new versus old Construction.",
+      "expected": "New owner starts fresh; old entered-phase spending stays spent; no partial success/cache publication.",
+      "status": "required before activation"
+    },
+    {
+      "id": "AGG-24",
+      "scope": "future",
+      "trigger": "Caller maximum above32MiB and final representation exact/one-below.",
+      "expected": "Hard private ceiling cannot be raised; approximate backend cap and final footprint check stay separate, with terminal Limit.",
+      "status": "source clamp verified; whole factory pending"
+    }
+  ]
+}

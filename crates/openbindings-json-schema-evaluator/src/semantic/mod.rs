@@ -97,9 +97,13 @@ impl Plan {
     ) -> Result<Self, PreparationFailure> {
         let entry = environment.entry();
         let construction = Construction::new(environment, control)?;
-        let plan = Self::at(&construction, entry, limits, preparation)?;
-        meta::validate(&plan, &construction)?;
-        Ok(plan)
+        let result = (|| {
+            let plan = Self::at(&construction, entry, limits, preparation)?;
+            meta::validate(&plan, &construction)?;
+            Ok(plan)
+        })();
+        construction.finish()?;
+        result
     }
     /// Evaluate an original schema position without constructing a replacement
     /// document or changing its resource base and dynamic scope.

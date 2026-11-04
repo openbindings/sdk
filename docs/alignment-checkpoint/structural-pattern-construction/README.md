@@ -33,7 +33,10 @@ correctly refused before reaching the intended range-count boundary. The correct
 test uses sorted disjoint scalar items. That initial failure and the corrected
 runs are preserved in the coordinator receipt directory.
 
-Independent implementation review is in progress. These stages remain inactive.
+Independent implementation review passes at checkpoint `34f898c`: all 11,305
+rows and 11,245 structural comparisons independently replay, with 223 additional
+controls on each Rust version. See [the bounded review](independent-review.md).
+These stages remain outside the ordinary default.
 The single-build NFA owner, lean actual-HIR scores, shared aggregate admission,
 once-prepared program ownership, combined resource-boundary tests and full
 activation gates remain separate work. Raw measurements, build logs and probes

@@ -2,10 +2,9 @@
 //! shared directly; VM compilation and mutable search state remain local to a
 //! value call until their aggregate prepared-program bounds are qualified.
 mod cache;
-// The construction certificate is under review. Exercise the guarded first
-// slice without activating a compiler or changing ordinary evaluator behavior.
+// Structural construction is qualified in stages before default activation.
 #[cfg(test)]
-mod compiler;
+pub(super) mod compiler;
 use super::*;
 use crate::pattern::{Reading, Unsupported};
 use regex_automata::nfa::thompson::{

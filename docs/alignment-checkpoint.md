@@ -16,8 +16,10 @@ The [single-build NFA owner](alignment-checkpoint/single-build-nfa-owner/review.
 now passes bounded independent review. The lean
 [AST/HIR structural replacement](alignment-checkpoint/structural-pattern-construction/README.md)
 and [actual-HIR admission scores](alignment-checkpoint/nfa-admission/README.md)
-pass their parent native/host checks and await independent implementation review.
-Shared aggregate admission and the complete once-prepared factory remain open. The
+now pass bounded independent implementation review. The [joined factory and shared
+aggregate](alignment-checkpoint/joined-pattern-factory/README.md) also pass independent
+review and a 1,320-row current/minimum/actual-host replay. Actual Program/index/Search
+integration and complete once-prepared ownership remain open. The
 [ordered Reader name index](alignment-checkpoint/reader-name-index/README.md)
 is independently reviewed and pushed as `f1d5d4d`; its native and actual-host gates
 pass. The preceding `e76ca51` checkpoint passes all hosted CI and performance jobs.

@@ -10,6 +10,10 @@ pub(super) struct Construction<'a> {
     // Single-threaded construction shares facts through immutable borrows of
     // its environment. Neither these cells nor the control enter a Plan.
     syntax: Vec<Cell<usize>>,
+    // Temporary integration with the inactive compiler stages. Activation removes
+    // this cfg together with the compiler's cfg; the Plan never owns this state.
+    #[cfg(test)]
+    pattern_budget: patterns::compiler::profile::Budget,
 }
 
 impl<'a> Construction<'a> {
@@ -27,6 +31,8 @@ impl<'a> Construction<'a> {
             environment,
             control,
             syntax,
+            #[cfg(test)]
+            pattern_budget: patterns::compiler::profile::Budget::default(),
         })
     }
 
@@ -36,6 +42,20 @@ impl<'a> Construction<'a> {
 
     pub(super) fn control(&self) -> &'a dyn Control {
         self.control
+    }
+
+    #[cfg(test)]
+    pub(super) fn pattern_budget(&self) -> &patterns::compiler::profile::Budget {
+        &self.pattern_budget
+    }
+
+    /// No ignored nested construction failure may publish a prepared Plan.
+    pub(super) fn finish(&self) -> Result<(), PreparationFailure> {
+        #[cfg(test)]
+        self.pattern_budget.check(self.control)?;
+        #[cfg(not(test))]
+        self.control.check()?;
+        Ok(())
     }
 
     /// Call only after the traversal's resource/profile applicability checks.

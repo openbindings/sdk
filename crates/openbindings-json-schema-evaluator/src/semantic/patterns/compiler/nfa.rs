@@ -1,8 +1,9 @@
 //! One forward, capture-free construction from an already admitted HIR.
 //!
 //! This stage is inactive. Its caller must first admit Reader expansion,
-//! AST/HIR breadth and reconstruction, repetition-expanded payload and join
-//! pressure. The path guard here does not replace those upstream checks.
+//! AST/HIR breadth and reconstruction. This stage admits actual-HIR path, helper
+//! payload and join pressure, then debits the shared aggregate before building.
+use super::profile;
 use openbindings_internal_schema::{Control, Failure};
 use regex_automata::nfa::thompson::{self, pikevm::PikeVM};
 use regex_syntax::hir::{Hir, HirKind};
@@ -18,6 +19,14 @@ pub(super) enum Error {
     Size,
     Representation,
     Attempt(Failure),
+}
+impl From<profile::AdmissionError> for Error {
+    fn from(error: profile::AdmissionError) -> Self {
+        match error {
+            profile::AdmissionError::PatternLimit => Self::ConstructionLimit,
+            profile::AdmissionError::Attempt(failure) => Self::Attempt(failure),
+        }
+    }
 }
 impl From<Failure> for Error {
     fn from(failure: Failure) -> Self {
@@ -131,14 +140,22 @@ fn build_error(error: thompson::BuildError) -> Error {
 pub(super) fn prepare(
     hir: &Hir,
     maximum_bytes: usize,
+    budget: &profile::Budget,
     control: &dyn Control,
 ) -> Result<PikeVM, Error> {
-    control.check()?;
+    budget.check(control)?;
     if maximum_bytes == 0 {
         return Err(Error::Size);
     }
-    compiler_path(hir, control)?;
-    control.check()?;
+    let scores = admission::inspect(hir, control)?;
+    budget.nfa(
+        scores.dispatch,
+        scores.helper_payload,
+        scores.empty_tail_pressure,
+        control,
+    )?;
+    let maximum_bytes = maximum_bytes.min(profile::NFA_BYTES);
+    budget.check(control)?;
     let built = {
         #[cfg(test)]
         tests::entered_backend();
@@ -154,18 +171,18 @@ pub(super) fn prepare(
     };
     // The fresh compiler and any dependency error have been dropped. A sticky
     // attempt failure or late cancellation takes precedence over local refusal.
-    control.check()?;
+    budget.check(control)?;
     let nfa = built?;
     if nfa.memory_usage() > maximum_bytes {
         return Err(Error::Size);
     }
-    control.check()?;
+    budget.check(control)?;
     let built = {
         #[cfg(test)]
         tests::entered_wrapper();
         PikeVM::builder().build_from_nfa(nfa).map_err(build_error)
     };
-    control.check()?;
+    budget.check(control)?;
     built
 }
 

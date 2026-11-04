@@ -22,6 +22,14 @@ pub(super) enum Error {
     Refused(Refusal),
     Attempt(Failure),
 }
+impl From<profile::AdmissionError> for Error {
+    fn from(error: profile::AdmissionError) -> Self {
+        match error {
+            profile::AdmissionError::PatternLimit => Self::Refused(Refusal::ConstructionLimit),
+            profile::AdmissionError::Attempt(failure) => Self::Attempt(failure),
+        }
+    }
+}
 impl From<Failure> for Error {
     fn from(failure: Failure) -> Self {
         Self::Attempt(failure)
@@ -32,9 +40,10 @@ pub(super) fn prepare(
     form: &str,
     maximum_group_depth: usize,
     maximum_ast_depth: u32,
+    budget: &profile::Budget,
     control: &dyn Control,
 ) -> Result<Parsed, Error> {
-    control.check()?;
+    budget.check(control)?;
     let inventory = normalized::inspect(
         form,
         maximum_group_depth.min(profile::NORMALIZED_GROUPS),
@@ -44,11 +53,7 @@ pub(super) fn prepare(
         normalized::Error::Refused(refusal) => Error::Refused(Refusal::Normalized(refusal)),
         normalized::Error::Attempt(failure) => Error::Attempt(failure),
     })?;
-    if !profile::admits_normalized(&inventory) {
-        control.check()?;
-        return Err(Error::Refused(Refusal::ConstructionLimit));
-    }
-    control.check()?;
+    budget.ast(&inventory, control)?;
     let result = {
         #[cfg(test)]
         tests::entered_parser();
@@ -62,7 +67,7 @@ pub(super) fn prepare(
     };
     // Parser and dependency error owners are gone before the completion check.
     // A late shared failure also drops a successful tree before returning.
-    control.check()?;
+    budget.check(control)?;
     result.map(|tree| Parsed { tree, inventory })
 }
 

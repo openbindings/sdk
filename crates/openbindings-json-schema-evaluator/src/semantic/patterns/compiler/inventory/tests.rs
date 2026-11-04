@@ -4,7 +4,14 @@ use openbindings_internal_schema::{FailureReason, preparation::Attempt};
 use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
 
 fn parsed(form: &str) -> Parsed {
-    ast::prepare(form, 32, 250, &|| false).unwrap()
+    ast::prepare(
+        form,
+        32,
+        250,
+        &super::super::profile::Budget::default(),
+        &|| false,
+    )
+    .unwrap()
 }
 fn summary(form: &str) -> Summary {
     inspect(parsed(form), &|| false).unwrap().summary
@@ -155,7 +162,13 @@ fn original_forms_preserve_ast_and_candidate_admission() {
         else {
             continue;
         };
-        let parsed = ast::prepare(&reading.form, 33, 250, &|| false);
+        let parsed = ast::prepare(
+            &reading.form,
+            33,
+            250,
+            &super::super::profile::Budget::default(),
+            &|| false,
+        );
         if matches!(row["id"].as_u64(), Some(1184 | 1185)) {
             assert!(matches!(
                 parsed,

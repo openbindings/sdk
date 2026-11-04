@@ -140,6 +140,38 @@ fn limits_are_local_and_never_retry_the_backend() {
 }
 
 #[test]
+fn failed_builds_spend_shared_admission_and_exhaustion_stops_before_entry() {
+    let hir = parse("a{65534}");
+    let budget = profile::Budget::default();
+    reset();
+    for _ in 0..16 {
+        assert!(matches!(
+            super::prepare(&hir, 1, &budget, &|| false),
+            Err(Error::Size)
+        ));
+    }
+    assert_eq!(counts(), (16, 0));
+    let failed = failure(super::prepare(&hir, 1, &budget, &|| false).unwrap_err());
+    assert_eq!(failed.code, "pattern-construction-dispatch");
+    assert_eq!(counts(), (16, 0));
+    assert_eq!(budget.check(&|| false).unwrap_err().code, failed.code);
+}
+
+#[test]
+fn a_local_actual_hir_profile_limit_never_enters_the_backend() {
+    let budget = profile::Budget::default();
+    reset();
+    assert!(matches!(
+        super::prepare(&parse("a{65535}"), 1 << 20, &budget, &|| false),
+        Err(Error::ConstructionLimit)
+    ));
+    assert_eq!(counts(), (0, 0));
+    budget.check(&|| false).unwrap();
+    super::prepare(&parse("a"), 1 << 20, &budget, &|| false).unwrap();
+    assert_eq!(counts(), (1, 1));
+}
+
+#[test]
 fn final_representation_check_is_separate_from_approximate_builder_limit() {
     let hir = parse("a");
     let vm = prepare(&hir, 1 << 20, &|| false).unwrap();
@@ -220,4 +252,8 @@ fn prior_shared_failure_wins_over_local_limit_and_cannot_be_hidden() {
     });
     assert_eq!(result.unwrap_err().code, "preparation-sdk-work-units");
     assert_eq!(counts(), (0, 0));
+}
+
+fn prepare(hir: &Hir, bytes: usize, control: &dyn Control) -> Result<PikeVM, Error> {
+    super::prepare(hir, bytes, &profile::Budget::default(), control)
 }

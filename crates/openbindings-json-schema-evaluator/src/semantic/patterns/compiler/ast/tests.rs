@@ -204,6 +204,21 @@ fn structural_boundaries_refuse_before_parser_entry() {
 }
 
 #[test]
+fn shared_node_exhaustion_refuses_before_another_parser_entry() {
+    let budget = profile::Budget::default();
+    let full = "a".repeat(profile::AST_NODES - 2);
+    reset_entries();
+    for _ in 0..16 {
+        drop(super::prepare(&full, 33, 250, &budget, &|| false).unwrap());
+    }
+    assert_eq!(entries(), 16);
+    let failed = failure(super::prepare("a", 33, 250, &budget, &|| false).unwrap_err());
+    assert_eq!(failed.code, "pattern-construction-ast-nodes");
+    assert_eq!(entries(), 16);
+    assert_eq!(budget.check(&|| false).unwrap_err().code, failed.code);
+}
+
+#[test]
 fn unchanged_reader_forms_use_the_guarded_stage() {
     let mut linear = 0;
     for line in include_str!("../normalized/tests/reader-inputs.jsonl").lines() {
@@ -231,4 +246,8 @@ fn unchanged_reader_forms_use_the_guarded_stage() {
         linear += 1;
     }
     assert_eq!(linear, 1142);
+}
+
+fn prepare(form: &str, groups: usize, depth: u32, control: &dyn Control) -> Result<Parsed, Error> {
+    super::prepare(form, groups, depth, &profile::Budget::default(), control)
 }

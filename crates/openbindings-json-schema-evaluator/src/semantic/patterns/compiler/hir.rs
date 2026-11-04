@@ -10,6 +10,14 @@ pub(super) enum Error {
     TranslationNesting,
     Attempt(Failure),
 }
+impl From<profile::AdmissionError> for Error {
+    fn from(error: profile::AdmissionError) -> Self {
+        match error {
+            profile::AdmissionError::PatternLimit => Self::ConstructionLimit,
+            profile::AdmissionError::Attempt(failure) => Self::Attempt(failure),
+        }
+    }
+}
 impl From<Failure> for Error {
     fn from(failure: Failure) -> Self {
         Self::Attempt(failure)
@@ -35,29 +43,30 @@ impl From<inventory::Error> for Error {
 }
 
 /// The same normalized borrow supplies guard, parser and translator. Reader's
-/// source/expansion admission has already applied. Aggregate construction pressure
-/// must additionally be debited by the enclosing once-prepared-program owner.
+/// source/expansion admission has already applied. The enclosing Construction
+/// lends one shared budget, debited before parser and translator entry.
 /// Dependency execution is not represented as a complete SDK work/byte ledger.
-pub(super) fn prepare(form: &str, control: &dyn Control) -> Result<Hir, Error> {
-    control.check()?;
+pub(super) fn prepare(
+    form: &str,
+    budget: &profile::Budget,
+    control: &dyn Control,
+) -> Result<Hir, Error> {
+    budget.check(control)?;
     let parsed = ast::prepare(
         form,
         profile::NORMALIZED_GROUPS,
         profile::AST_DEPTH,
+        budget,
         control,
     )?;
     let owned = inventory::inspect(parsed, control)?;
     if owned.summary.maximum_prefix_calls > profile::PREFIX_CALLS
         || owned.summary.equality_height > profile::EQUALITY_HEIGHT
     {
-        control.check()?;
+        budget.check(control)?;
         return Err(Error::TranslationNesting);
     }
-    if !profile::admits_translation(&owned.summary.pressure) {
-        control.check()?;
-        return Err(Error::ConstructionLimit);
-    }
-    control.check()?;
+    budget.hir(&owned.summary.pressure, control)?;
     let output = {
         #[cfg(test)]
         tests::entered_translator();
@@ -70,7 +79,7 @@ pub(super) fn prepare(form: &str, control: &dyn Control) -> Result<Hir, Error> {
             })
     };
     drop(owned);
-    control.check()?;
+    budget.check(control)?;
     output
 }
 

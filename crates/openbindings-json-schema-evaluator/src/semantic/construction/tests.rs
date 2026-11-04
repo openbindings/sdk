@@ -298,3 +298,38 @@ fn table_backing_and_shared_work_have_exact_sticky_boundaries() {
         );
     }
 }
+
+#[test]
+fn nested_plans_cannot_renew_the_outer_pattern_construction_allowance() {
+    let environment = build_environment(&input());
+    let construction = Construction::new(environment, &|| false).unwrap();
+    let budget = construction.pattern_budget();
+    for _ in 0..7 {
+        budget.nfa(0, 1_048_576, 0, construction.control()).unwrap();
+    }
+    let plan = Plan::at(
+        &construction,
+        construction.environment.entry(),
+        Limits::default(),
+        PreparationLimits::default(),
+    )
+    .unwrap();
+    meta::validate(&plan, &construction).unwrap();
+    // The same owner remains after root and selected-meta preparation.
+    construction
+        .pattern_budget()
+        .nfa(0, 1_048_576, 0, construction.control())
+        .unwrap();
+    construction.finish().unwrap();
+    let _ignored = construction
+        .pattern_budget()
+        .nfa(0, 1, 0, construction.control());
+    assert!(
+        matches!(construction.finish().unwrap_err().kind, PreparationFailureKind::Limit {resource} if resource == "pattern-construction-helper-payload")
+    );
+    // A genuinely separate outer attempt starts fresh.
+    Construction::new(build_environment(&input()), &|| false)
+        .unwrap()
+        .finish()
+        .unwrap();
+}

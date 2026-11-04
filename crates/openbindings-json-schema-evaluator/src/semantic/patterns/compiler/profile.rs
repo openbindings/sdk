@@ -1,11 +1,15 @@
 //! Private construction profile; caller options may tighten, never bypass it.
 //! These are structural pressure scores, not operation or byte predictions.
 use super::{inventory::Pressure, normalized};
+mod budget;
+pub(crate) use budget::Budget;
+pub(super) use budget::Error as AdmissionError;
 
 pub(super) const NORMALIZED_GROUPS: usize = crate::pattern::MAX_GROUP_DEPTH + 1;
 pub(super) const AST_DEPTH: u32 = 250;
 pub(super) const PREFIX_CALLS: usize = 64;
 pub(super) const EQUALITY_HEIGHT: usize = 256;
+pub(super) const NFA_BYTES: usize = 32 * 1024 * 1024;
 pub(super) const NFA_PATH: usize = 512;
 pub(super) const NFA_DISPATCH: usize = 65_536;
 pub(super) const NFA_HELPER_PAYLOAD: usize = 1_048_576;

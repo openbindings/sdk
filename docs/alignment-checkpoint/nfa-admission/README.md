@@ -19,9 +19,10 @@ tests ignored. Minimum Rust passes all 44 compiler groups; strict Clippy passes.
 The [single-build owner](../single-build-nfa-owner/review.md) separately passes
 independent review, including the corrected failed-allocation cancellation path.
 
-The score fold remains independently reviewed in design and parent-tested in
-implementation; independent implementation review is pending. It is not yet wired
-into the single-build owner. Shared construction aggregates, retained unique
+Independent implementation review now passes at `34f898c`: 11,274 independently
+replayed rows plus 448 extra controls on each Rust version. See [the review](independent-review.md).
+The later [joined factory](../joined-pattern-factory/README.md) wires these scores
+into the single-build owner before dependency entry. Shared construction aggregates, retained unique
 program storage, full transient/time/stack boundaries and default-engine activation
 remain open. These modules are test-only; current ordinary evaluator behavior is
 unchanged by this checkpoint. Inputs include synthetic and upstream-refused HIR
