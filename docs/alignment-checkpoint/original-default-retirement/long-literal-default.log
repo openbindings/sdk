@@ -1,0 +1,9 @@
+   Compiling openbindings-json-schema-evaluator v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-json-schema-evaluator)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.74s
+     Running tests/pattern_memory.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/pattern_memory-5be27aad40d5b529)
+
+running 1 test
+test run_matchers_hold_about_their_text_of_the_pattern_memory ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.78s
+

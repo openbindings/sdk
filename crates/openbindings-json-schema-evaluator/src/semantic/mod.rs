@@ -1,7 +1,6 @@
 //! Per-value dependence analysis over original schema locations.
-//! The ordinary compiled engine remains the fast path. This layer represents
-//! local effects and applicator annotations together when that path cannot
-//! establish a value's result. It does not infer Undefined from failed bounds.
+//! Local effects and applicator annotations preserve the meaning and identity
+//! of the authored schema. Undefined is never inferred from failed bounds.
 mod construction;
 mod counts;
 mod cycles;
@@ -33,6 +32,19 @@ use std::{
     sync::Arc,
 };
 
+const FAILURE_MESSAGE: &str = "value does not satisfy the schema";
+fn verdict_only_failure() -> ValueOutcome {
+    ValueOutcome::Fails {
+        message: FAILURE_MESSAGE.into(),
+        problems: Vec::new(),
+        problems_complete: false,
+    }
+}
+
+// A logical bound on ordered Boolean reasoning, not a schema/instance depth
+// or portable physical-stack byte guarantee. Meta and Explain use the same path.
+const MAXIMUM_EFFECTS: usize = 64;
+const SAMPLED_STACK_BYTES: usize = 256 * 1024;
 const RECURSIVE_SCOPE: &str = "#recursive-scope";
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -189,10 +201,14 @@ impl Plan {
     ) -> Completed {
         let marker = 0u8;
         let origin = std::hint::black_box(std::ptr::addr_of!(marker)) as usize;
-        let depth = (self.limits.stack_bytes / 4096).max(1);
-        let mut graph =
-            Graph::with_preparation(allowance.bytes, allowance.work, depth, control, attempt);
-        graph.observe_stack(stack::Observation::new(origin, self.limits.stack_bytes));
+        let mut graph = Graph::with_preparation(
+            allowance.bytes,
+            allowance.work,
+            MAXIMUM_EFFECTS,
+            control,
+            attempt,
+        );
+        graph.observe_stack(stack::Observation::new(origin, SAMPLED_STACK_BYTES));
         let outcome = self.evaluate_bounded(value, control, unavailable, graph, record_witnesses);
         std::hint::black_box(&marker);
         outcome
@@ -1200,9 +1216,9 @@ impl Run<'_> {
             return Ok(ValueOutcome::Satisfies);
         }
         if formula == FALSE {
-            self.graph.work(super::FAILURE_MESSAGE.len())?;
-            self.graph.charge(super::FAILURE_MESSAGE.len())?;
-            return Ok(super::verdict_only_failure());
+            self.graph.work(FAILURE_MESSAGE.len())?;
+            self.graph.charge(FAILURE_MESSAGE.len())?;
+            return Ok(verdict_only_failure());
         }
         let yes = self.graph.witness(formula)?;
         let negated = self.graph.not(formula)?;
@@ -1528,6 +1544,87 @@ mod summary_tests {
             funded.evaluate(&value, Detail::Outcome, &control),
             ValueOutcome::Fails { .. }
         ));
+    }
+
+    #[test]
+    fn reference_free_composites_preserve_annotations_and_equal_subject_effects() {
+        let control = std::sync::atomic::AtomicBool::new(false);
+        for (schema, text, expected) in [
+            (
+                r#"{"allOf":[{"properties":{"a":true}},{"properties":{"b":true}}],"unevaluatedProperties":false}"#,
+                r#"{"a":1,"b":2}"#,
+                "S",
+            ),
+            (
+                r#"{"anyOf":[{"properties":{"a":true}},{"properties":{"b":true}}],"unevaluatedProperties":false}"#,
+                r#"{"a":1,"c":2}"#,
+                "F",
+            ),
+            (
+                r#"{"contains":{"allOf":[{"pattern":"["}]},"minContains":1,"maxContains":1}"#,
+                r#"["x","x"]"#,
+                "F",
+            ),
+            (
+                r#"{"contains":{"anyOf":[{"pattern":"["}]},"minContains":1,"maxContains":1}"#,
+                r#"["x","y"]"#,
+                "U",
+            ),
+        ] {
+            let plan = original_plan(schema, &[], Limits::default());
+            assert!(plan.queries.is_empty());
+            let value = JsonValue::parse(text).unwrap();
+            for detail in [Detail::Outcome, Detail::Explain] {
+                let outcome = plan.evaluate(&value, detail, &control);
+                let label = match &outcome {
+                    ValueOutcome::Satisfies => "S",
+                    ValueOutcome::Fails { .. } => "F",
+                    ValueOutcome::Undefined { .. } => "U",
+                    ValueOutcome::NoVerdict { .. } => "N",
+                };
+                assert_eq!(label, expected, "{schema}/{text}: {outcome:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn reference_free_large_composites_stream_with_bounded_frame_storage() {
+        let control = std::sync::atomic::AtomicBool::new(false);
+        for branches in [6, 29] {
+            let source = format!(
+                r#"{{"type":"array","items":{{"allOf":[{}]}}}}"#,
+                vec![r#"{"minimum":0}"#; branches].join(",")
+            );
+            let mut plan = original_plan(
+                &source,
+                &[],
+                Limits {
+                    program_bytes: 32 * 1024,
+                    evaluation_steps: Some(1_000_000_000),
+                    ..Limits::default()
+                },
+            );
+            let value = JsonValue::parse(format!("[{}0]", "1,".repeat(4095))).unwrap();
+            assert!(plan.queries.is_empty());
+            let measured =
+                plan.evaluate_pass(&value, &control, None, &mut None, plan.allowance(), false);
+            assert!(matches!(measured.outcome, ValueOutcome::Satisfies));
+            let used = 1_000_000_000 - measured.remaining.work.unwrap();
+            eprintln!("reference_free branches={branches} items=4096 work={used}");
+            plan.limits.evaluation_steps = Some(used - 1);
+            assert!(
+                matches!(plan.evaluate(&value, Detail::Outcome, &control), ValueOutcome::NoVerdict { detail }
+                if detail.reason == NoVerdictReason::LimitExceeded && detail.code == "evaluation-work-limit")
+            );
+            plan.limits.evaluation_steps = Some(used);
+            for detail in [Detail::Outcome, Detail::Explain] {
+                let outcome = plan.evaluate(&value, detail, &control);
+                assert!(
+                    matches!(outcome, ValueOutcome::Satisfies),
+                    "{branches}: {outcome:?}"
+                );
+            }
+        }
     }
 
     #[test]

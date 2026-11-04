@@ -73,16 +73,8 @@ fn explained_locations_exist_in_original_document_and_supplied_resources() {
             r#"{"a":1}"#,
             "/dependentSchemas/a/required",
         ),
-        (
-            r#"{"contains":true,"minContains":2}"#,
-            "[1]",
-            "/minContains",
-        ),
-        (
-            r#"{"contains":true,"maxContains":0}"#,
-            "[1]",
-            "/maxContains",
-        ),
+        (r#"{"contains":true,"minContains":2}"#, "[1]", "/contains"),
+        (r#"{"contains":true,"maxContains":0}"#, "[1]", "/contains"),
         (
             r#"{"propertyNames":{"pattern":"^a$"}}"#,
             r#"{"b":1}"#,
@@ -174,7 +166,7 @@ fn every_keyword_is_explained_at_its_original_location() {
             r#"{"contains":{"type":"string"},"maxContains":1}"#,
             r#"["a","b"]"#,
             "contains",
-            "/maxContains",
+            "/contains",
             "",
         ),
         (r#"{"items":false}"#, "[1]", "falseSchema", "/items", "/0"),
@@ -195,9 +187,9 @@ fn every_keyword_is_explained_at_its_original_location() {
         (
             r#"{"prefixItems":[true],"unevaluatedItems":{"type":"string"}}"#,
             "[1,2]",
-            "unevaluatedItems",
-            "/unevaluatedItems",
-            "",
+            "type",
+            "/unevaluatedItems/type",
+            "/1",
         ),
         (
             r#"{"required":["a","b"]}"#,
@@ -244,9 +236,9 @@ fn every_keyword_is_explained_at_its_original_location() {
         (
             r#"{"unevaluatedProperties":false}"#,
             r#"{"a":1}"#,
-            "unevaluatedProperties",
+            "falseSchema",
             "/unevaluatedProperties",
-            "",
+            "/a",
         ),
         (
             r#"{"dependentSchemas":{"a":{"required":["b"]}}}"#,

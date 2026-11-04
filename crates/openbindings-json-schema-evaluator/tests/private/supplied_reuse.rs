@@ -1,9 +1,8 @@
 //! Preparation shares the identity index a resource set built once, instead of
 //! admitting the set's resources again, and projects exactly as a fresh
 //! admission.
-use crate::space;
 use openbindings::*;
-use openbindings_internal_schema::{self as embedding, SuppliedSet};
+use openbindings_internal_schema::{self as embedding, OriginalEnvironment, SuppliedSet};
 fn selected(input: &str) -> Schema {
     Document::parse(format!(
         r#"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{input}}}}},"schemas":{{"c":{{"$id":"https://reuse.test/contained","type":"string"}}}}}}"#
@@ -45,13 +44,13 @@ fn preparation_shares_the_sets_admitted_resources() {
         external_schemas: &resources,
     };
     for _ in 0..2 {
-        let (space, _) = space(
-            &request,
-            Vec::new(),
-            &PreparationLimits::default(),
-            &std::sync::atomic::AtomicBool::new(false),
-        )
-        .unwrap();
+        let environment = request
+            .environment(
+                &PreparationLimits::default(),
+                &std::sync::atomic::AtomicBool::new(false),
+            )
+            .unwrap();
+        let space = environment.space();
         // The same admitted resources in memory, not a copy of them.
         let shared: Vec<_> = space.supplied.iter().map(std::ptr::from_ref).collect();
         let held: Vec<_> = resources
@@ -104,13 +103,13 @@ fn shared_and_freshly_admitted_resources_project_identically() {
             schema: &schema,
             external_schemas: &resources,
         };
-        let (shared, _) = space(
-            &request,
-            Vec::new(),
-            &PreparationLimits::default(),
-            &std::sync::atomic::AtomicBool::new(false),
-        )
-        .unwrap();
+        let environment = request
+            .environment(
+                &PreparationLimits::default(),
+                &std::sync::atomic::AtomicBool::new(false),
+            )
+            .unwrap();
+        let shared = environment.space();
         let fresh = embedding::SchemaSpace::new(
             embedding::RawDocument::new(request.schema.document().document().value().clone()),
             embedding::Supplied::new(request.external_schemas.iter().map(|r| {
@@ -127,7 +126,7 @@ fn shared_and_freshly_admitted_resources_project_identically() {
             serde_json::to_string(&fresh.references(&control)).unwrap()
         );
         for (id, _) in shared.nodes().filter(|(_, node)| node.source == 0) {
-            assert_eq!(program(&shared, id), program(&fresh, id), "{input} {id}");
+            assert_eq!(program(shared, id), program(&fresh, id), "{input} {id}");
             planned += 1;
         }
     }

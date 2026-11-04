@@ -344,19 +344,15 @@ export interface WorkOptions {
 export interface EvaluatorLimits {
   /** Evaluation and semantic proof work; null (default) sets no caller-selected cap. Internal capability bounds still apply. */
   evaluationSteps: number | null;
-  /** Stack budget used to derive compilation, evaluation and proof-nesting bounds; default 262,144 bytes. Actual admitted nesting depends on schema shape and host. Raising this cannot enlarge the host's stack. */
-  stackBytes: number;
-  /** Projected JSON nesting admitted to the current compiled backend; default 512. */
-  compileJsonDepth: number;
   /** Maximum UTF-8 bytes in one schema pattern and its expanded form; default 1,048,576. */
   patternBytes: number;
   /** Caller-selected authored pattern group ceiling; default 32. The supported maximum remains 32 even when a larger value is requested. */
   patternDepth: number;
-  /** Aggregate retained pattern-form bytes; default 4,194,304. Each distinct normalized form of a pattern value and each patternProperties name contributes. Expanded forms can be larger than their authored patterns. */
+  /** Aggregate retained pattern-form bytes; default 4,194,304. Equivalent normalized forms share one immutable program across value patterns and property names. Expanded forms can be larger than their authored patterns. */
   totalPatternBytes: number;
-  /** Aggregate matcher storage and engine allowances; default 67,108,864 bytes. Compiler and search-cache policies divide this allowance; it is not a process-memory measurement. */
+  /** Immutable pattern-program footprint; default and supported maximum 67,108,864 bytes. Per-call search caches use the separate program allowance; this is not a process-memory measurement. */
   totalPatternMemory: number;
-  /** SDK program growth and semantic proof-storage allowance; default 50,331,648 bytes. This does not account for every allocation in the underlying compiled library. */
+  /** SDK program growth and semantic proof-storage allowance; default 50,331,648 bytes. This is an SDK reservation allowance, not total process memory. */
   programBytes: number;
   /** Reached schema-resource bound; null (default) sets no additional resource-count cap. Original-environment preparation still has its own footprint, work and allocation bounds. */
   schemaResources: number | null;

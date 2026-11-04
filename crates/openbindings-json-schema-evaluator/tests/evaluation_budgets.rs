@@ -80,13 +80,18 @@ fn explicit_caps_bracket_a_checks_work_and_the_default_sets_none() {
         evaluation_steps: Some(steps),
         ..Limits::default()
     };
-    // Bracket each check's need with explicit allowances.
+    // Original-engine work includes exact primitive and frame dispatch work.
+    // The values and expected semantics are unchanged; these generous caps
+    // bracket the current units (exact/one-below is covered separately).
     for (schema, enough, too_little) in [
-        (&cheaper, 8_000_000, 2_000_000),
-        (&costlier, 32_000_000, 8_000_000),
+        (&cheaper, 64_000_000, 2_000_000),
+        (&costlier, 256_000_000, 8_000_000),
     ] {
         let decided = outcome(schema, capped(enough));
-        assert!(matches!(decided, ValueOutcome::Satisfies));
+        assert!(
+            matches!(decided, ValueOutcome::Satisfies),
+            "{enough}: {decided:?}"
+        );
         let refused = outcome(schema, capped(too_little));
         assert_eq!(code(&refused), Some("evaluation-work-limit"));
     }
@@ -103,8 +108,6 @@ fn explicit_caps_bracket_a_checks_work_and_the_default_sets_none() {
 fn an_evaluator_reports_the_budgets_it_was_given() {
     let limits = Limits {
         evaluation_steps: Some(7),
-        stack_bytes: 11,
-        compile_json_depth: 17,
         pattern_bytes: 19,
         pattern_depth: 23,
         total_pattern_bytes: 31,
@@ -127,17 +130,8 @@ fn an_evaluator_reports_the_budgets_it_was_given() {
         64 << 20
     );
     assert_eq!(reported.program_bytes, 41);
-    assert_eq!(DefaultEvaluator::new().limits().stack_bytes, 256 << 10);
     assert_eq!(DefaultEvaluator::new().limits().program_bytes, 48 << 20);
-    assert_eq!(
-        (
-            reported.stack_bytes,
-            reported.compile_json_depth,
-            reported.pattern_bytes,
-            reported.pattern_depth
-        ),
-        (11, 17, 19, 23)
-    );
+    assert_eq!((reported.pattern_bytes, reported.pattern_depth), (19, 23));
     assert_eq!(DefaultEvaluator::new().limits().evaluation_steps, None);
     assert_eq!(DefaultEvaluator::new().limits().schema_resources, None);
 }
@@ -157,51 +151,40 @@ fn an_explicit_work_allowance_caps_every_pass_whatever_the_value_size() {
     ));
     // A cap above what the value needs decides it.
     assert!(matches!(
-        explicit(10_000_000).evaluate(&large),
+        explicit(64_000_000).evaluate(&large),
         ValueOutcome::Satisfies
     ));
-    // An exhausted explanation pass keeps the failure the verdict pass
-    // established.
+    // Preserve the former1.5M-unit request: the current evaluator now exhausts
+    // it before completing this large verdict. Funded evaluation still fails.
     let failing = JsonValue::parse(format!("[{}-1]", "1,".repeat(ITEMS - 1))).unwrap();
-    let capped = explicit(1_500_000);
-    assert!(matches!(
-        capped.explain(&failing),
-        ValueOutcome::Fails { problems, .. } if problems.len() == 1
-    ));
-}
-
-#[test]
-fn deep_values_report_the_depth_limit() {
-    let schema = r##"{"$defs":{"node":{"anyOf":[{"type":"integer"},{"type":"array","items":{"$ref":"#/operations/op/input/$defs/node"}}]}},"$ref":"#/operations/op/input/$defs/node"}"##;
-    let deep = JsonValue::parse(format!("{}0{}", "[".repeat(300), "]".repeat(300))).unwrap();
-    let defaults = prepared(schema, Limits::default());
-    // Ample work, but each level nests several evaluations: 1,024 nested
-    // evaluations fit the default stack, so values up to 203 levels deep are
-    // evaluated, and the refusal says why and what to raise.
-    let refused = defaults.evaluate(&deep);
-    let ValueOutcome::NoVerdict { detail } = &refused else {
-        panic!("{refused:?}")
-    };
-    assert_eq!(detail.code, "evaluation-depth-limit");
     assert_eq!(
-        detail.message,
-        "this value nests more than 203 levels, the deepest this schema evaluates within the \
-         1024 schema evaluations its 256 KiB stack_bytes holds at 256 bytes each; raise \
-         stack_bytes (stackBytes in TypeScript)"
+        code(&explicit(1_500_000).explain(&failing)),
+        Some("evaluation-work-limit")
     );
-    // The bound grows with the stack the host gives.
-    let deeper = prepared(
-        schema,
-        Limits {
-            stack_bytes: 1024 * 1024,
-            ..Limits::default()
-        },
+    assert!(
+        matches!(explicit(64_000_000).explain(&failing), ValueOutcome::Fails { problems, .. } if problems.len() == 1)
     );
-    assert!(matches!(deeper.evaluate(&deep), ValueOutcome::Satisfies));
 }
 
 #[test]
-fn a_contract_too_deep_for_the_stack_refuses_every_value() {
+fn deep_concrete_values_do_not_spend_symbolic_effects() {
+    let schema = r##"{"$defs":{"node":{"anyOf":[{"type":"integer"},{"type":"array","items":{"$ref":"#/operations/op/input/$defs/node"}}]}},"$ref":"#/operations/op/input/$defs/node"}"##;
+    let defaults = prepared(schema, Limits::default());
+    for (leaf, satisfies) in [("0", true), ("false", false)] {
+        let deep =
+            JsonValue::parse(format!("{}{leaf}{}", "[".repeat(300), "]".repeat(300))).unwrap();
+        for outcome in [defaults.evaluate(&deep), defaults.explain(&deep)] {
+            assert!(
+                matches!(outcome, ValueOutcome::Satisfies) && satisfies
+                    || matches!(outcome, ValueOutcome::Fails { .. }) && !satisfies,
+                "{outcome:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn long_alias_chains_do_not_inherit_the_retired_compiler_stack_bound() {
     // A chain of 300 references, each nesting one evaluation deeper, holds
     // more evaluations than a 64 KiB stack does before any value is read.
     let links: Vec<_> = (0..300)
@@ -216,23 +199,7 @@ fn a_contract_too_deep_for_the_stack_refuses_every_value() {
         r##"{{"$ref":"#/operations/op/input/$defs/d0","$defs":{{{},"d300":{{"type":"integer"}}}}}}"##,
         links.join(",")
     );
-    let small = prepared(
-        &schema,
-        Limits {
-            stack_bytes: 64 * 1024,
-            ..Limits::default()
-        },
-    );
-    let ValueOutcome::NoVerdict { detail } = small.evaluate(&JsonValue::parse("1").unwrap()) else {
-        panic!("a 64 KiB stack evaluates no value through 300 references")
-    };
-    assert_eq!(
-        detail.message,
-        "evaluating any value against this schema could nest more than the 256 schema \
-         evaluations its 64 KiB stack_bytes holds at 256 bytes each; raise stack_bytes \
-         (stackBytes in TypeScript)"
-    );
-    // The default stack holds them.
+    // The same300-link input now evaluates through explicit original frames.
     let defaults = prepared(&schema, Limits::default());
     assert!(matches!(
         defaults.evaluate(&JsonValue::parse("1").unwrap()),

@@ -27,8 +27,9 @@ fn short_unicode_properties_reserve_their_expansion_before_reading() {
             patterns
                 .forms
                 .borrow()
-                .keys()
-                .map(String::len)
+                .values()
+                .flatten()
+                .map(|form| form.text.len())
                 .sum::<usize>(),
         )
     })
@@ -190,5 +191,60 @@ fn interrupted_insertions_never_become_reusable_programs() {
             programs.forms.borrow().is_empty(),
             "interrupted publication at {at}"
         );
+    }
+}
+
+#[test]
+fn hash_collisions_preserve_exact_forms_sharing_and_interrupted_siblings() {
+    let limits = Limits::default();
+    let programs = Programs::default();
+    programs.forced_hash.set(Some(0));
+    let budget = compiler::profile::Budget::default();
+    let first = programs.add("^a$", &limits, &budget, &|| false).unwrap();
+    let second = programs.add("^b$", &limits, &budget, &|| false).unwrap();
+    assert!(!Arc::ptr_eq(&first, &second));
+    assert_eq!(programs.forms.borrow()[&(3, 0)].len(), 2);
+    for source in ["^a$", r"^\x61$", r"^\u0061$"] {
+        assert!(Arc::ptr_eq(
+            &first,
+            &programs.add(source, &limits, &budget, &|| false).unwrap()
+        ));
+    }
+    use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
+    let calls = AtomicUsize::new(0);
+    programs
+        .add("^c$", &limits, &budget, &|| {
+            calls.fetch_add(1, Relaxed);
+            false
+        })
+        .unwrap();
+    let total = calls.load(Relaxed);
+    for at in 0..total {
+        let programs = Programs::default();
+        programs.forced_hash.set(Some(0));
+        let budget = compiler::profile::Budget::default();
+        let first = programs.add("^a$", &limits, &budget, &|| false).unwrap();
+        let second = programs.add("^b$", &limits, &budget, &|| false).unwrap();
+        calls.store(0, Relaxed);
+        assert!(
+            matches!(
+                programs.add("^c$", &limits, &budget, &|| calls.fetch_add(1, Relaxed)
+                    >= at),
+                Err(PreparationFailure {
+                    kind: PreparationFailureKind::Cancelled,
+                    ..
+                })
+            ),
+            "{at}"
+        );
+        assert_eq!(programs.forms.borrow()[&(3, 0)].len(), 2, "{at}");
+        assert!(Arc::ptr_eq(
+            &first,
+            &programs.add("^a$", &limits, &budget, &|| false).unwrap()
+        ));
+        assert!(Arc::ptr_eq(
+            &second,
+            &programs.add("^b$", &limits, &budget, &|| false).unwrap()
+        ));
     }
 }

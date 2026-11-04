@@ -215,13 +215,10 @@ fn unevaluated_keywords_beside_a_stub_refuse_or_agree_with_every_completion() {
     }
 }
 
-// A failure decided without reaching the stub keeps its verdict when it is
-// explained, but an explanation pass that reaches the stub states no problem:
-// the library's error would rest on the stub's stand-in answer. Two `oneOf`
-// branches accept 1, so the check decides before the third, the stub, while
-// the library's explanation collects every branch's errors.
+// Two established matching branches independently prove oneOf false, regardless
+// of an unavailable third resource. Explain can name that original assertion.
 #[test]
-fn an_explanation_that_reaches_the_stub_states_no_problem() {
+fn an_independent_one_of_witness_survives_a_missing_resource() {
     let schema =
         format!(r#"{{"oneOf":[{{"type":"integer"}},{{"minimum":0}},{{"$ref":"{MISSING}"}}]}}"#);
     let value = JsonValue::parse("1").unwrap();
@@ -235,7 +232,12 @@ fn an_explanation_that_reaches_the_stub_states_no_problem() {
             problems,
             problems_complete,
             ..
-        } => assert!(problems.is_empty() && !problems_complete, "{problems:?}"),
+        } => {
+            assert!(!problems_complete);
+            assert_eq!(problems.len(), 1);
+            assert_eq!(problems[0].code, "oneOf");
+            assert_eq!(problems[0].schema.pointer, "/operations/op/input/oneOf");
+        }
         other => panic!("{other:?}"),
     }
     // With the resource supplied, the same explanation names the `oneOf`.

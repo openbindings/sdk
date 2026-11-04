@@ -20,8 +20,11 @@ now pass bounded independent implementation review. The [joined factory and shar
 aggregate](alignment-checkpoint/joined-pattern-factory/README.md) also pass independent
 review and a 1,320-row current/minimum/actual-host replay. [Actual once-prepared ownership](alignment-checkpoint/prepared-pattern-ownership/README.md)
 is now integrated into the original route. Current/minimum Rust and forced-original
-required cases pass, including all three actual Wasm hosts. The ordinary default
-switch and outgoing compiler retirement remain open. The
+required cases pass, including all three actual Wasm hosts. The original plan is
+now the ordinary default; the outgoing projection compiler, divided pattern
+allowances and conversion-check feature are removed. Current retirement checks,
+remaining gates and test dispositions are recorded in
+[original default retirement](alignment-checkpoint/original-default-retirement/README.md). The
 [ordered Reader name index](alignment-checkpoint/reader-name-index/README.md)
 is independently reviewed and pushed as `f1d5d4d`; its native and actual-host gates
 pass. The preceding `e76ca51` checkpoint passes all hosted CI and performance jobs.
@@ -142,8 +145,8 @@ toolchain; the MSRV compatibility receipt explicitly records no matching Clippy 
    minimum-Rust workspace and final Node/package/browser checks pass. The complete
    portable verifier passes on clean pushed checkpoint `24ad294`. Finish remaining
    physical-stack/host qualification. Then force the
-   original engine through all gates, switch the default and retire the outgoing
-   projection/compiler code. No existing public API or internal architecture needs
+   original engine through all remaining gates. The default switch and outgoing
+   projection/compiler deletion are now implemented; full qualification is open. No existing public API or internal architecture needs
    preservation; no evaluator allowance or performance expectation is waived.
    The [identifier membership correction](alignment-checkpoint/identifier-range-results.md)
    also passes parent and independent qualification: pinned const ranges replace

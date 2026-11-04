@@ -95,10 +95,12 @@ fn only_reached_string_interpretation_refuses_and_scopes_do_not_leak() {
     // never skip an actual JSON string as if it were another JSON type.
     for (schema, value) in [
         (r#"{"pattern":"a"}"#, r#""\ud800""#),
-        (r#"{"minLength":1}"#, r#""\ud800""#),
-        (r#"{"maxLength":9}"#, r#""\ud800""#),
         (r#"{"propertyNames":{"pattern":"a"}}"#, r#"{"\ud800":1}"#),
-        (r#"{"patternProperties":{"a":true}}"#, r#"{"\ud800":1}"#),
+        (r#"{"patternProperties":{"a":false}}"#, r#"{"\ud800":1}"#),
+        (
+            r#"{"patternProperties":{"a":true},"unevaluatedProperties":false}"#,
+            r#"{"\ud800":1}"#,
+        ),
         (
             r#"{"properties":{"checked":{"pattern":"x"}}}"#,
             r#"{"checked":"\ud800"}"#,
@@ -126,6 +128,50 @@ fn only_reached_string_interpretation_refuses_and_scopes_do_not_leak() {
             ValueOutcome::Satisfies
         ));
     }
+}
+#[test]
+fn exact_lengths_and_irrelevant_matches_do_not_need_scalar_conversion() {
+    // This is the SDK's exact-string length policy, already qualified by the
+    // native primitive oracle: a pair counts once, an isolated unit once.
+    // RFC 8259 §8.2 does not promise cross-implementation agreement for the latter.
+    for (text, length) in [
+        (r#""\ud800""#, 1),
+        (r#""\udfff""#, 1),
+        (r#""\ud800\udfff""#, 1),
+        (r#""\udfff\ud800""#, 2),
+        (r#""\ud800\ud800""#, 2),
+        (r#""\ud800\udfff\ud800""#, 2),
+        (r#""a\ud800b""#, 3),
+        (r#""😀""#, 1),
+        (r#""""#, 0),
+    ] {
+        for bound in 0..=4 {
+            for (keyword, valid) in [
+                ("minLength", length >= bound),
+                ("maxLength", length <= bound),
+            ] {
+                let schema = format!(r#"{{"{keyword}":{bound}}}"#);
+                let prepared = prepare(&schema, "");
+                let value = JsonValue::parse(text).unwrap();
+                for result in [prepared.evaluate(&value), prepared.explain(&value)] {
+                    assert!(
+                        if valid {
+                            matches!(result, ValueOutcome::Satisfies)
+                        } else {
+                            matches!(result, ValueOutcome::Fails { .. })
+                        },
+                        "{schema} / {text}: {result:?}"
+                    );
+                }
+            }
+        }
+    }
+    // Either possible match applies `true`; without an annotation consumer,
+    // the undecidable regex cannot change validity (pinned spec §5.5).
+    assert!(matches!(
+        outcome(r#"{"patternProperties":{"a":true}}"#, r#"{"\ud800":1}"#),
+        ValueOutcome::Satisfies
+    ));
 }
 #[test]
 fn exact_equality_decides_strings_with_unpaired_units() {

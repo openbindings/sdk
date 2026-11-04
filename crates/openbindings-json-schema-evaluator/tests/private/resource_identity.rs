@@ -95,6 +95,19 @@ fn verdicts(contract: &PreparedSchema<ProbeValidator>, cases: &[(&str, &str)]) {
         assert_eq!(label(contract.explain(&value(text))), *expected, "{text}");
     }
 }
+fn capability_only(contract: &PreparedSchema<ProbeValidator>, cases: &[&str]) {
+    for text in cases {
+        let value = value(text);
+        for result in [contract.evaluate(&value), contract.explain(&value)] {
+            assert!(
+                matches!(result, ValueOutcome::NoVerdict { detail }
+                if detail.reason == NoVerdictReason::UnsupportedCapability),
+                "{text}"
+            );
+        }
+    }
+}
+
 // Exercise the adapter's private projection separately from compilation.
 enum Engine {
     Default,
@@ -566,14 +579,42 @@ fn ri13_15_unused_collisions_are_isolated_but_pointer_targets_refuse() {
 }
 #[test]
 fn ri14_direct_applicators_refuse_competing_carriers() {
-    for schema in [
-        json!({"properties":{"x":{"$id":U,"type":"string"}}}),
-        json!({"allOf":[{"$id":U,"type":"string"}]}),
+    for (schema, is_properties) in [
+        (json!({"properties":{"x":{"$id":U,"type":"string"}}}), true),
+        (json!({"allOf":[{"$id":U,"type":"string"}]}), false),
     ] {
         let doc = one(owner(), json!({"$ref":V}));
         let supplied = resources(&[(V, schema)]);
-        identity_refusal(&doc, &supplied, "op");
-        // Static inspection locates V; it does not promise V's closure is preparable.
+        let contract = ready(&conformant(&doc), &supplied, "op");
+        capability_only(&contract, &[r#"{"x":"a"}"#, r#"{"x":2}"#]);
+        if is_properties {
+            verdicts(
+                &contract,
+                &[
+                    ("{}", "satisfies"),
+                    ("null", "satisfies"),
+                    ("2", "satisfies"),
+                ],
+            );
+        } else {
+            capability_only(&contract, &["{}", "null", "2", r#""x""#]);
+        }
+        // A local identity inability is never an Undefined atom, but a
+        // concrete independent branch can settle validity under section 5.5.
+        for (schema, expected) in [
+            (json!({"anyOf":[true,{"$ref":V}]}), "satisfies"),
+            (json!({"allOf":[false,{"$ref":V}]}), "fails"),
+        ] {
+            let masked = one(owner(), schema);
+            let contract = ready(&conformant(&masked), &supplied, "op");
+            for text in [r#"{"x":"a"}"#, r#"{"x":2}"#] {
+                let value = value(text);
+                assert_eq!(label(contract.evaluate(&value)), expected);
+                assert_eq!(label(contract.explain(&value)), expected);
+            }
+        }
+        // Static inspection locates V; it does not promise its children's
+        // identities can be interpreted when an instance reaches them.
         located(
             &doc,
             &supplied,
@@ -790,6 +831,31 @@ fn ri21_sol02_winning_anchor_kind_controls_dynamic_dispatch_and_retained_owner()
         );
     }
 }
+fn assert_opaque_namespace(doc: &Document, supplied: &ExternalSchemas, operation: &str, uri: &str) {
+    let proof = conformant(doc);
+    let input = proof.resolve_operation(operation).unwrap().input().unwrap();
+    let environment = input
+        .environment(
+            supplied,
+            &PreparationLimits::default(),
+            &std::sync::atomic::AtomicBool::new(false),
+        )
+        .unwrap();
+    let failure = environment.resolve(&environment.root(), uri).unwrap_err();
+    assert_eq!(
+        failure.kind,
+        ResolutionFailureKind::UnsupportedCapability {
+            capability: "custom-profile-namespace".into(),
+        }
+    );
+    // Keep the precise query refusal while allowing Plan to retain it for
+    // value-dependent analysis. It must not invent a target or an absence.
+    capability_only(
+        &ready(&proof, supplied, operation),
+        &["null", "2", r#""x""#],
+    );
+}
+
 #[test]
 fn ri22_23_original_dialect_follows_selected_resource() {
     let supplied = resources(&[(
@@ -808,14 +874,7 @@ fn ri22_23_original_dialect_follows_selected_resource() {
     identity_refusal(&doc, &supplied, "alias");
     // Unknown required vocabulary can introduce competing names. It does not
     // prove that W is absent, even though no actual indexed child claims it.
-    assert_eq!(
-        refusal(prepare(&conformant(&doc), &supplied, "nested")).kind,
-        PreparationFailureKind::Resolution {
-            cause: ResolutionFailureKind::UnsupportedCapability {
-                capability: "custom-profile-namespace".into()
-            }
-        }
-    );
+    assert_opaque_namespace(&doc, &supplied, "nested", W);
     // Identical child bodies retain distinct resolved bases and inherited dialects.
     let child = json!({"$id":"child","type":"integer"});
     let supplied = resources(&[
@@ -832,16 +891,15 @@ fn ri22_23_original_dialect_follows_selected_resource() {
         json!({}),
         json!({"old":{"input":{"$ref":"https://identity.example.invalid/old/root"}},"fragment":{"input":{"$ref":"https://identity.example.invalid/old/root#/$defs/Child"}},"new":{"input":{"$ref":"https://identity.example.invalid/new/child"}}}),
     );
-    let proof = conformant(&doc);
-    for operation in ["old", "fragment", "new"] {
-        assert_eq!(
-            refusal(prepare(&proof, &supplied, operation)).kind,
-            PreparationFailureKind::Resolution {
-                cause: ResolutionFailureKind::UnsupportedCapability {
-                    capability: "custom-profile-namespace".into()
-                }
-            }
-        );
+    for (operation, uri) in [
+        ("old", "https://identity.example.invalid/old/root"),
+        (
+            "fragment",
+            "https://identity.example.invalid/old/root#/$defs/Child",
+        ),
+        ("new", "https://identity.example.invalid/new/child"),
+    ] {
+        assert_opaque_namespace(&doc, &supplied, operation, uri);
     }
     // Retain the independent base/inheritance control with two fully known
     // profiles; the opaque fixture above intentionally cannot prove it.
@@ -1106,17 +1164,31 @@ fn ri30_oversized_supplied_closure_keeps_limits_and_healthy_catalog_entries() {
 fn identity_refusal_location_is_optional_and_measured_before_copy() {
     for size in [64 * 1024 - 256, 64 * 1024] {
         let key = "x".repeat(size);
-        let supplied = resources(&[(V, json!({"properties":{key:{"$id":U}}}))]);
+        let supplied = resources(&[(V, json!({"properties":{&key:{"$id":U}}}))]);
         let doc = one(owner(), json!({"$ref":V}));
-        for engine in [
-            &Engine::Default as &dyn SchemaEvaluator<Validator = ProbeValidator>,
-            &Engine::Projection,
-        ] {
-            let detail = refusal(prepare_with(&conformant(&doc), &supplied, "op", engine));
-            assert_eq!(detail.kind, PreparationFailureKind::InvalidExternalSchema);
-            assert_eq!(detail.kind, PreparationFailureKind::InvalidExternalSchema);
-            // Source URI bytes share the same allowance as the full pointer.
-            assert_eq!(detail.origin.is_some(), size + 12 + V.len() <= 64 * 1024);
+        // Preserve the original fixture: an absent property needs no child
+        // interpretation, whereas a present property must not use a loser.
+        let contract = ready(&conformant(&doc), &supplied, "op");
+        verdicts(&contract, &[("{}", "satisfies")]);
+        capability_only(&contract, &[&json!({&key:1}).to_string()]);
+
+        // A real static reference conflict still fails preparation. Place its
+        // referrer at the same long original coordinate to keep the exact
+        // optional-origin boundary independent of projection/evaluation timing.
+        let supplied = resources(&[(
+            V,
+            json!({
+                "properties":{&key:{"$ref":format!("{V}#/$defs/collision")}},
+                "$defs":{"collision":{"$id":U}}
+            }),
+        )]);
+        let detail = refusal(prepare(&conformant(&doc), &supplied, "op"));
+        assert_eq!(detail.kind, PreparationFailureKind::InvalidExternalSchema);
+        // Source URI bytes share the allowance with the full original pointer.
+        assert_eq!(detail.origin.is_some(), size + 12 + V.len() <= 64 * 1024);
+        if let Some(origin) = detail.origin {
+            assert_eq!(origin.source_uri.as_deref(), Some(V));
+            assert_eq!(origin.pointer, format!("/properties/{key}"));
         }
     }
 }

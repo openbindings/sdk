@@ -104,9 +104,17 @@ fn recursive_coordinates_follow_selected_complete_producers() {
 }
 #[test]
 fn semantic_fallback_honors_construction_and_evaluation_limits() {
-    let cases: Vec<Case> =
+    let mut cases: Vec<Case> =
         serde_json::from_str(include_str!("fixtures/semantic-limits.json")).unwrap();
     assert_eq!(cases.len(), 16);
+    // Zero storage now refuses the ordinary original-engine path too; retain
+    // the same Boolean/value as a default-funded semantic success.
+    cases.push(
+        serde_json::from_str(
+            r#"{"id":"funded-program/ordinary","schema":true,"value":null,"required":"S"}"#,
+        )
+        .unwrap(),
+    );
     check_values(cases);
 }
 fn check_values(cases: Vec<Case>) {

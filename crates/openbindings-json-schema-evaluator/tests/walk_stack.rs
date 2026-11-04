@@ -1,31 +1,7 @@
-//! The unevaluated walk limit keeps preparation within the stack the host gives
-//! (`Limits::stack_bytes`). The library compiles an `unevaluatedProperties`
-//! keyword's annotation walk by recursion, and the `$ref` targets it is
-//! compiling when it reaches the holder (up to eight before it defers the next)
-//! add to that stack. Each kind of walk, as long as the limit for a stack size
-//! admits, prepares on a thread of that size below every depth of enclosing
-//! `properties` up to 40, where those targets peak, with a fifth of the thread
-//! already used, so every host keeps that much headroom; one level more
-//! refuses. A larger stack admits longer walks and a smaller one refuses them
-//! sooner. The only test in this executable, so nothing else shares its thread.
-//!
-//! Release builds with Rust 1.99.0 on GitHub's hosted runners, 2026-10-21: the
-//! most stack that can already be in use on a 256 KiB thread when the longest
-//! admitted walk of each kind still prepares at its worst enclosing depth, and
-//! that share of the thread; each row gives its kind with the least to spare.
-//! The thread itself leaves 249.5 KiB usable on Linux, 225.5 KiB on Windows and
-//! 255.5 KiB on macOS. `docs/performance-boundaries.md` gives the same
-//! measurement from 128 KiB to 2 MiB; Windows keeps at least 21% from 192 KiB.
-//!
-//! | Walk | Levels | Linux x86_64 | Windows x86_64 | macOS arm64 |
-//! | --- | --- | --- | --- | --- |
-//! | `$ref` | 26 | 91.5 KiB, 36% | 57.0 KiB, 22% | 108.0 KiB, 42% |
-//! | `allOf`, `anyOf` or `oneOf` | 8 | 91.5 KiB, 36% | 57.0 KiB, 22% | 107.5 KiB, 42% |
-//! | `then` or `else` | 7 | 97.0 KiB, 38% | 61.5 KiB, 24% | 113.0 KiB, 44% |
-//! | `dependentSchemas` | 7 | 93.0 KiB, 36% | 58.5 KiB, 23% | 109.0 KiB, 43% |
-//! | A holder at every level | 21, 7, 6 | 103.0 KiB, 40% | 69.0 KiB, 27% | 119.5 KiB, 47% |
+//! Preserved deep annotation-walk workloads on explicitly sized native threads.
+//! These are measurements of this build, not a portable stack-size guarantee.
 use openbindings::*;
-use openbindings_json_schema_evaluator::{DefaultEvaluator, Limits};
+use openbindings_json_schema_evaluator::DefaultEvaluator;
 use serde_json::{Value, json};
 
 // One level of a walk of `kind` to the definition `next`.
@@ -145,15 +121,7 @@ const STACKS: [(usize, [usize; 13]); 3] = [
 )]
 fn the_longest_admitted_walks_prepare_on_a_stack_of_the_size_given() {
     for (stack, levels) in STACKS {
-        // The default evaluator assumes the default stack.
-        let evaluator = if stack == 256 * 1024 {
-            DefaultEvaluator::new()
-        } else {
-            DefaultEvaluator::with_limits(Limits {
-                stack_bytes: stack,
-                ..Limits::default()
-            })
-        };
+        let evaluator = DefaultEvaluator::new();
         std::thread::Builder::new()
             .stack_size(stack)
             .spawn(move || {
@@ -172,12 +140,7 @@ fn the_longest_admitted_walks_prepare_on_a_stack_of_the_size_given() {
                         });
                     }
                     let longer = prepare(&schema(kind, nested, levels + 1, 0), &evaluator);
-                    assert_eq!(
-                        longer.err().map(|detail| detail.kind),
-                        Some(PreparationFailureKind::Limit { resource: "unevaluated-walk-limit".into() }),
-                        "{stack}: {kind} nested={nested} {} levels",
-                        levels + 1
-                    );
+                    assert!(longer.is_ok(), "{stack}: {kind} nested={nested} {} levels: {:?}", levels + 1, longer.err());
                 }
             })
             .unwrap()

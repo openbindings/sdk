@@ -94,7 +94,7 @@ mod tests {
     }
 
     // Compare fresh observations across actual Cargo feature graphs. The verifier
-    // pairs this matrix with evaluator/ap/preserve_order/conversion-check runs.
+    // pairs this matrix with evaluator/ap/preserve_order runs.
     // Historical budget cutoffs and diagnostic prose are not SDK compatibility
     // requirements. Default-funded ordinary cases retain independent semantic answers.
     #[cfg(feature = "evaluator")]

@@ -315,6 +315,12 @@ fn a_decided_failure_names_the_keyword_that_decides_it() {
         let ValueOutcome::Fails { problems, .. } = contract.explain(&value) else {
             panic!("{schema}")
         };
+        if keyword == "/if" {
+            // Both branches fail, but if itself asserts nothing. The bounded
+            // witness pass may omit this correlation-only proof.
+            assert!(problems.is_empty(), "{schema}");
+            continue;
+        }
         assert_eq!(problems.len(), 1, "{schema}");
         assert_eq!(
             problems[0].schema,
@@ -505,20 +511,17 @@ fn nested_keywords_written_from_both_bounds_cost_a_multiple_of_the_verdict_pass(
         .expect("bounded bound passes");
 }
 
-// A failure the verdict pass establishes without reaching a stand-in is
-// explained by the schema's own first error. Where collecting that
-// error reaches a stand-in, a schema holding a stand-in for a cycle,
-// an invalid pattern or `patternProperties` names explains the failure
-// through its upper bound instead; one holding only stand-ins for missing
-// resources and unmatched `pattern` values names no problem.
+// Two known matching branches prove oneOf false independently of the third
+// branch's invalid pattern, recursion, unavailable resource or unsupported match.
+
 #[test]
-fn an_explanation_that_reaches_a_stand_in_falls_back_to_the_upper_bound() {
+fn an_independent_one_of_witness_does_not_depend_on_the_third_branch() {
     let value = JsonValue::parse(r#""a""#).unwrap();
-    for (third, explained) in [
-        (json!({"pattern": "["}), true),
-        (json!({"$ref": "#/operations/op/input"}), true),
-        (json!({"$ref": MISSING}), false),
-        (json!({"pattern": "(?=a)a"}), false),
+    for third in [
+        json!({"pattern": "["}),
+        json!({"$ref": "#/operations/op/input"}),
+        json!({"$ref": MISSING}),
+        json!({"pattern": "(?=a)a"}),
     ] {
         let schema = json!({"oneOf": [{"type": "string"}, {"type": "string"}, third]});
         let contract = prepare(&schema, &[]).unwrap();
@@ -529,15 +532,11 @@ fn an_explanation_that_reaches_a_stand_in_falls_back_to_the_upper_bound() {
         let ValueOutcome::Fails { problems, .. } = contract.explain(&value) else {
             panic!("{schema}")
         };
-        if explained {
-            assert_eq!(problems.len(), 1, "{schema}");
-            assert_eq!(
-                problems[0].schema,
-                SchemaOrigin::new(None, "/operations/op/input/oneOf".parse().unwrap()),
-                "{schema}"
-            );
-        } else {
-            assert!(problems.is_empty(), "{schema}");
-        }
+        assert_eq!(problems.len(), 1, "{schema}");
+        assert_eq!(
+            problems[0].schema,
+            SchemaOrigin::new(None, "/operations/op/input/oneOf".parse().unwrap()),
+            "{schema}"
+        );
     }
 }

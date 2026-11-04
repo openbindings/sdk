@@ -50,8 +50,7 @@ depends on a known undefined result under OpenBindings §5.5, with coherent oppo
 interpretations. Unsupported features, unavailable resources, exhausted budgets
 and cancellation alone do not establish undefinedness.
 
-The evaluator first uses its compiled engine and conservative validity bounds.
-When those cannot decide, a bounded analysis of original schema locations combines
+The evaluator uses one prepared plan over original schema locations, combining
 predicate results with evaluated-property and evaluated-item annotations. Repeated
 original predicates share the same exact JSON value identity; pattern predicates
 share the same original site and tested UTF-16 text. Numeric spellings and object
@@ -116,12 +115,10 @@ fn prepare_bounded(schema: &Schema, resources: &ExternalSchemas)
 | --- | --- | --- |
 | `evaluation_steps` | no cap | Evaluation and semantic proof work |
 | `schema_resources` | no cap | Reached original resource construction |
-| `stack_bytes` | 256 KiB | Compilation, evaluation and proof nesting |
-| `compile_json_depth` | 512 | Projected JSON sent to the compiled engine |
 | `pattern_bytes` | 1 MiB | One pattern source and its expanded form |
 | `pattern_depth` | 32 | Pattern group nesting |
-| `total_pattern_bytes` | 4 MiB | Retained pattern forms |
-| `total_pattern_memory` | 64 MiB | Matchers and their engine allowances |
+| `total_pattern_bytes` | 4 MiB | Unique normalized pattern forms across values and property names |
+| `total_pattern_memory` | 64 MiB | Immutable pattern-program representation |
 | `program_bytes` | 48 MiB | SDK program growth and semantic proof storage |
 
 `PreparationLimits` bounds the original schema environment's footprint, cooperative
@@ -138,9 +135,18 @@ These counters cover the SDK sites described above, including temporary and fail
 SDK construction; they do not count every dependency operation, allocator request
 or custom callback. Dependency construction has separate structural and retained
 representation limits, with measured resource qualification on supported builds.
-The replacement pattern compiler is not yet active. Algorithm and
+Patterns are prepared once; equivalent normalized forms share an immutable
+program, while search caches belong to individual value calls. Algorithm and
 allocation checks live in the evaluator tests and `tools/diagnostic-memory-probe`.
 Final matched-toolchain performance qualification remains part of the migration.
+
+Symbolic reasoning supports at most 64 distinct effects in one proof, including
+selected meta-schema and diagnostic passes. This is separate from concrete schema
+or instance depth. The implementation also samples stack use against a private
+256 KiB guard; this is an additional refusal check, not a guarantee about a host's
+available stack. The former compiler-depth and stack-byte options are removed and
+rejected as unknown settings. Build-specific physical-stack qualification remains
+part of the current alignment checkpoint.
 
 Cancellation is cooperative through `WorkControl`. Cancelled preparation produces
 no prepared owner; a cancelled evaluation does not poison cached predicates or

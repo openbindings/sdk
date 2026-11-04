@@ -275,13 +275,41 @@ fn uninterpreted_identifier_inventory_is_a_capability_refusal_not_a_defect() {
             r#"{{"$schema":"http://json-schema.org/draft-07/schema#","definitions":{{"opaque":{{"$id":"{id}","properties":{{"x":false}}}}}}}}"#
         );
         let contract = format!(r#"{{"$ref":"{RESOURCE}#/definitions/opaque/properties/x"}}"#);
-        let refusal = prepare(&contract, &resource).unwrap_err();
-        assert!(
-            matches!(refusal.kind, PreparationFailureKind::Resolution {
-            cause: ResolutionFailureKind::UnsupportedCapability { ref capability }
-        } if capability == "schema-identifier-form"),
-            "{refusal:?}"
-        );
+        let prepared = prepare(&contract, &resource).unwrap();
+        assert_identifier_inability(&prepared);
+        // The ready evaluator retains inability, not an invented undefined
+        // predicate or an interpretation of the stopped false target.
+        for (masked, satisfies) in [
+            (format!(r#"{{"anyOf":[true,{contract}]}}"#), true),
+            (format!(r#"{{"allOf":[false,{contract}]}}"#), false),
+        ] {
+            let prepared = prepare(&masked, &resource).unwrap();
+            for result in [
+                prepared.evaluate(&JsonValue::null()),
+                prepared.explain(&JsonValue::null()),
+            ] {
+                assert!(if satisfies {
+                    matches!(result, ValueOutcome::Satisfies)
+                } else {
+                    matches!(result, ValueOutcome::Fails { .. })
+                });
+            }
+        }
+    }
+}
+
+fn assert_identifier_inability(
+    prepared: &PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator>,
+) {
+    for text in ["null", "1", r#""x""#] {
+        let value = JsonValue::parse(text).unwrap();
+        for result in [prepared.evaluate(&value), prepared.explain(&value)] {
+            assert!(
+                matches!(result, ValueOutcome::NoVerdict { ref detail }
+                    if detail.reason == NoVerdictReason::UnsupportedCapability),
+                "{result:?}"
+            );
+        }
     }
 }
 
@@ -371,11 +399,8 @@ fn stopped_inventory_cannot_certify_external_names_but_contained_priority_surviv
         "https://dialects.test/r#nested",
         "https://dialects.test/r#absent",
     ] {
-        let error = prepare(&format!(r#"{{"$ref":"{reference}"}}"#), "").unwrap_err();
-        assert!(
-            matches!(error.kind, PreparationFailureKind::Resolution { cause: ResolutionFailureKind::UnsupportedCapability { ref capability } } if capability == "schema-identifier-form"),
-            "{error:?}"
-        );
+        let prepared = prepare(&format!(r#"{{"$ref":"{reference}"}}"#), "").unwrap();
+        assert_identifier_inability(&prepared);
     }
     for (contract, contained) in [
         (r#"{"type":"integer"}"#, ""),

@@ -16,6 +16,11 @@ impl Run<'_> {
         let text = value.number_text().ok_or_else(shape)?;
         self.graph
             .work(text.len().saturating_mul(8).saturating_add(1))?;
+        // A validated i64 token has at most 19 coefficient digits and no
+        // written exponent. Decimal keeps this representation inline.
+        if text.parse::<i64>().is_ok() {
+            return Ok(Decimal::parse(text));
+        }
         self.graph
             .charge(text.len().saturating_mul(16).saturating_add(256))?;
         Ok(Decimal::parse(text))
@@ -42,15 +47,13 @@ impl Run<'_> {
             )
         };
         let bytes = prepared.map_or_else(|| original.expect("original operand").len(), |p| p.bytes);
-        // A cached decimal still performs bound-dependent magnitude work and
-        // may allocate from a large exponent. Retain the schema-side allowance.
         self.graph.work(bytes.saturating_mul(8).saturating_add(1))?;
-        self.graph
-            .charge(bytes.saturating_mul(16).saturating_add(256))?;
         let parsed;
         let bound = if let Some(Reading::Parsed(bound)) = prepared.map(|p| &p.reading) {
             bound
         } else {
+            self.graph
+                .charge(bytes.saturating_mul(16).saturating_add(256))?;
             parsed = numeric::Bound::parse(keyword, original.expect("original operand"))
                 .map_err(|_| shape())?;
             &parsed
@@ -60,6 +63,17 @@ impl Run<'_> {
         };
         self.graph
             .work(number.len().saturating_mul(8).saturating_add(1))?;
+        if let Ok(integer) = number.parse::<i64>()
+            && let Some(valid) = bound.admits_integer(integer)
+        {
+            return Ok(valid);
+        }
+        // General decimal comparison may allocate magnitude scratch even with
+        // a prepared bound. Only the proven integer branch above skips it.
+        if matches!(prepared.map(|p| &p.reading), Some(Reading::Parsed(_))) {
+            self.graph
+                .charge(bytes.saturating_mul(16).saturating_add(256))?;
+        }
         self.graph
             .charge(number.len().saturating_mul(16).saturating_add(256))?;
         if keyword == "multipleOf" && (bytes > 20 || number.len() > 20) {

@@ -107,10 +107,13 @@ fn removed_limits_and_evaluator_detail_settings_are_rejected() {
 #[test]
 fn interrupted_explanation_cannot_weaken_an_established_failure() {
     use std::sync::atomic::{AtomicUsize, Ordering};
-    struct CancelAfterVerdict(AtomicUsize);
+    struct CancelAfterVerdict {
+        calls: AtomicUsize,
+        healthy: usize,
+    }
     impl WorkControl for CancelAfterVerdict {
         fn is_cancelled(&self) -> bool {
-            self.0.fetch_add(1, Ordering::Relaxed) >= 3
+            self.calls.fetch_add(1, Ordering::Relaxed) >= self.healthy
         }
     }
     let doc =
@@ -118,9 +121,27 @@ fn interrupted_explanation_cannot_weaken_an_established_failure() {
     let Ok(contract) = prepare_input(&doc) else {
         panic!()
     };
-    let result =
-        contract.explain_with_control(&JsonValue::null(), &CancelAfterVerdict(AtomicUsize::new(0)));
+    let baseline = CancelAfterVerdict {
+        calls: AtomicUsize::new(0),
+        healthy: usize::MAX,
+    };
+    assert!(matches!(
+        contract.evaluate_with_control(&JsonValue::null(), &baseline),
+        ValueOutcome::Fails { .. }
+    ));
+    // The completed Outcome pass defines the verdict boundary. A fixed old
+    // callback ordinal can instead cancel before the new engine decides.
+    let result = contract.explain_with_control(
+        &JsonValue::null(),
+        &CancelAfterVerdict {
+            calls: AtomicUsize::new(0),
+            healthy: baseline.calls.load(Ordering::Relaxed),
+        },
+    );
     assert!(
         matches!(result, ValueOutcome::Fails { problems, problems_complete:false, .. } if problems.is_empty())
+    );
+    assert!(
+        matches!(contract.explain(&JsonValue::null()), ValueOutcome::Fails { problems, .. } if !problems.is_empty())
     );
 }

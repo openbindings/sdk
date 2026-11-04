@@ -187,11 +187,14 @@
       "type": "integer"
     },
     "value": 1,
-    "limits": {
+    "limits": {},
+    "resources": [],
+    "required": "S",
+    "historical_limits": {
       "stack_bytes": 0
     },
-    "resources": [],
-    "required": "limit"
+    "historical_required": "limit",
+    "adjudication": "Retired compiler/stack option; original schema and value replay under the current fixed logical-effect profile."
   },
   {
     "id": "zero-stack/semantic",
@@ -214,11 +217,14 @@
       ]
     },
     "value": 1,
-    "limits": {
+    "limits": {},
+    "resources": [],
+    "required": "S",
+    "historical_limits": {
       "stack_bytes": 0
     },
-    "resources": [],
-    "required": "limit"
+    "historical_required": "limit",
+    "adjudication": "Retired compiler/stack option; original schema and value replay under the current fixed logical-effect profile."
   },
   {
     "id": "zero-compile-depth/ordinary",
@@ -226,11 +232,14 @@
       "type": "integer"
     },
     "value": 1,
-    "limits": {
+    "limits": {},
+    "resources": [],
+    "required": "S",
+    "historical_limits": {
       "compile_json_depth": 0
     },
-    "resources": [],
-    "required": "S"
+    "historical_required": "S",
+    "adjudication": "Retired compiler/stack option; original schema and value replay under the current fixed logical-effect profile."
   },
   {
     "id": "zero-compile-depth/semantic",
@@ -253,11 +262,14 @@
       ]
     },
     "value": 1,
-    "limits": {
+    "limits": {},
+    "resources": [],
+    "required": "S",
+    "historical_limits": {
       "compile_json_depth": 0
     },
-    "resources": [],
-    "required": "S"
+    "historical_required": "S",
+    "adjudication": "Retired compiler/stack option; original schema and value replay under the current fixed logical-effect profile."
   },
   {
     "id": "zero-program/ordinary",
@@ -267,7 +279,9 @@
       "program_bytes": 0
     },
     "resources": [],
-    "required": "S"
+    "required": "limit",
+    "historical_required": "S",
+    "adjudication": "The original engine has real initial proof storage; zero program_bytes cannot fund it. The outgoing compiled Boolean fast path's zero-storage success is retired."
   },
   {
     "id": "zero-program/semantic",

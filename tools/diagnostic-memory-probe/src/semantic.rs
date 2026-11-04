@@ -83,7 +83,7 @@ pub(super) fn recursive() {
         ("dense", 8, "U", 256 * 1024),
         ("annotations", 32, "S", 256 * 1024),
         ("annotations", 512, "limit", 256 * 1024),
-        ("annotations", 512, "S", 4 * 1024 * 1024),
+        ("annotations", 512, "limit", 4 * 1024 * 1024),
     ] {
         let (document, instance) = if mode == "dense" {
             let mut schemas = serde_json::Map::new();
@@ -117,7 +117,6 @@ pub(super) fn recursive() {
                 .prepare(
                     &DefaultEvaluator::with_limits(Limits {
                         program_bytes: budget,
-                        stack_bytes,
                         ..Limits::default()
                     }),
                     &ExternalSchemas::default(),
@@ -146,7 +145,7 @@ pub(super) fn recursive() {
                 let retained = crate::LIVE.load(Relaxed) as i128 - live as i128;
                 println!(
                     "{}",
-                    json!({"phase":"recursive-proof", "mode":mode,"width":width,"program_bytes":budget,"stack_bytes":stack_bytes,"warm":warm,"outcome":actual,"peak_bytes":peak,"retained_bytes":retained,"nanos":nanos})
+                    json!({"phase":"recursive-proof", "mode":mode,"width":width,"program_bytes":budget,"historical_stack_bytes":stack_bytes,"warm":warm,"outcome":actual,"peak_bytes":peak,"retained_bytes":retained,"nanos":nanos})
                 );
                 assert!(
                     peak <= budget * 2,

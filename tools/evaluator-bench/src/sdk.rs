@@ -8,14 +8,15 @@ use std::collections::BTreeMap;
 pub const ROOT: &str = "https://benchmark.invalid/root";
 #[derive(Clone, Default)]
 pub struct Limits(openbindings_json_schema_evaluator::Limits);
-// Requests name the evaluator's limits as they stand, except that a nesting of
-// schema evaluations (`evaluation_depth`) is given as the stack that holds it,
-// at the 256 bytes each the evaluator documents for `stack_bytes`.
+// The frozen baseline protocol includes evaluation_depth. It has no current
+// SDK counterpart: the candidate replays that historical input under the fixed
+// effect profile. Its changed result is adjudicated separately from equivalent
+// policy timing comparisons; this does not restore a public compatibility knob.
 impl<'de> Deserialize<'de> for Limits {
     fn deserialize<D: serde::Deserializer<'de>>(input: D) -> Result<Self, D::Error> {
         use serde::de::Error;
         let mut request = serde_json::Map::<String, Value>::deserialize(input)?;
-        let depth = match request.remove("evaluation_depth") {
+        let _historical_depth = match request.remove("evaluation_depth") {
             Some(depth) => Some(
                 depth
                     .as_u64()
@@ -24,11 +25,8 @@ impl<'de> Deserialize<'de> for Limits {
             ),
             None => None,
         };
-        let mut limits: openbindings_json_schema_evaluator::Limits =
+        let limits: openbindings_json_schema_evaluator::Limits =
             serde_json::from_value(Value::Object(request)).map_err(D::Error::custom)?;
-        if let Some(depth) = depth {
-            limits.stack_bytes = depth.saturating_mul(256);
-        }
         Ok(Limits(limits))
     }
 }

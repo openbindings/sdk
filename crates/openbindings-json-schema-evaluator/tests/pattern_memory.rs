@@ -1,15 +1,7 @@
-//! A contract's run matchers and compiled regular expressions share its
-//! pattern memory (`Limits::total_pattern_memory`, 64 MiB by default). Each
-//! distinct `pattern` form the run matcher does not match and each
-//! `patternProperties` name is compiled. A quarter of the memory, up to 2 MiB
-//! each, is their search caches, in equal parts. Each run matcher holds the
-//! bytes it takes and each form first compiles within 48 KiB, so the memory
-//! bounds how many patterns a contract compiles and what its run matchers
-//! hold; the forms that need more share what that leaves, each an equal part,
-//! and those that need less than their part leave the rest to those that need
-//! more. A name that does not fit what it is given refuses preparation, and a
-//! `pattern` value, compiled when a string first reaches it, gives that string
-//! no verdict.
+//! Immutable pattern programs share one defined footprint per preparation.
+//! Search caches belong to individual value calls. The retired compiler's
+//! fixed 48 KiB slots, quarter-cache division and first-use compilation are
+//! deliberately not expectations of this public policy test.
 use openbindings::*;
 use openbindings_json_schema_evaluator::{DefaultEvaluator, Limits};
 use serde_json::{Map, Value, json};
@@ -86,31 +78,32 @@ fn pattern_values(patterns: &[String]) -> Value {
 fn small(count: usize) -> Vec<String> {
     (0..count).map(|i| format!("a{i}|b")).collect()
 }
-// The refusal names the original location of the keyword holding the pattern
-// past the limit, `/operations/op/input` followed by `keyword`, which may hold
-// `*` for one array index.
-fn assert_memory_refusal(refused: &PreparationFailure, keyword: &str) {
+fn assert_memory_refusal(refused: &PreparationFailure) {
     assert_eq!(
         refused.kind,
         PreparationFailureKind::Limit {
-            resource: "pattern-total-memory-limit".into()
+            resource: "pattern-total-memory-limit".into(),
         }
     );
-    let location = refused.origin.as_ref().expect("located refusal");
-    let pointer = location.pointer.to_string();
-    let expected = format!("/operations/op/input{keyword}");
-    let matches = match expected.split_once('*') {
-        Some((head, tail)) => {
-            pointer.len() > head.len() + tail.len()
-                && pointer.starts_with(head)
-                && pointer.ends_with(tail)
-                && pointer[head.len()..pointer.len() - tail.len()]
-                    .bytes()
-                    .all(|b| b.is_ascii_digit())
+}
+// Measure a representation-policy boundary, never a semantic oracle. The same
+// schema/value expectations below stay fixed independently of this measurement.
+fn minimum_memory(schema: &Value) -> usize {
+    let (mut below, mut enough) = (0, MIB);
+    prepare(schema, memory(enough)).expect("funded representation");
+    while enough - below > 1 {
+        let midpoint = below + (enough - below) / 2;
+        match prepare(schema, memory(midpoint)) {
+            Ok(_) => enough = midpoint,
+            Err(failure) => {
+                assert_memory_refusal(&failure);
+                below = midpoint;
+            }
         }
-        None => pointer == expected,
-    };
-    assert!(matches, "{pointer} is not {expected}");
+    }
+    assert_memory_refusal(&prepare(schema, memory(enough - 1)).unwrap_err());
+    prepare(schema, memory(enough)).unwrap();
+    enough
 }
 
 #[test]
@@ -118,50 +111,48 @@ fn the_default_pattern_memory_is_64_mib() {
     assert_eq!(Limits::default().total_pattern_memory, 64 * MIB);
 }
 
-// Forty or three hundred such names once compiled each within the
-// per-pattern size, about 28 MB of process memory per name. Together they
-// need far more than the memory leaves, and each needs more than an equal
-// part, so preparation refuses at their keyword's original location.
+// These unchanged large jobs exhaust the shared structural construction
+// allowance before they reach the representation cap. Exhaustion aborts the
+// whole preparation, equally for names and value patterns.
 #[test]
-fn counted_repetitions_that_need_more_together_refuse_preparation() {
+fn counted_repetitions_exhaust_one_shared_construction_allowance() {
     for count in [40, 300] {
         let refused = prepare(&counted_names(count, json!(true)), Limits::default()).unwrap_err();
-        assert_memory_refusal(&refused, "/patternProperties");
+        assert_eq!(
+            refused.kind,
+            PreparationFailureKind::Limit {
+                resource: "pattern-construction-helper-payload".into(),
+            }
+        );
     }
 }
 
-// A single large counted repetition, alone or among a few patterns, has a
-// part large enough to compile, and its contract decides values.
 #[test]
-fn a_large_counted_repetition_among_few_patterns_compiles() {
+fn large_counted_repetitions_within_the_defined_footprint_decide() {
     let alone = json!({"type": "object", "patternProperties": {"^.{1,10000}$": false}});
-    let few = counted_names(4, json!(false));
-    for schema in [&alone, &few] {
-        let contract = prepare(schema, Limits::default()).expect("within its part");
+    // Five names no longer pay the retired compiler's per-slot cache share.
+    for schema in [
+        alone,
+        counted_names(4, json!(false)),
+        counted_names(5, json!(false)),
+    ] {
+        let contract = prepare(&schema, Limits::default()).unwrap();
         assert!(satisfies(&contract, r#"{"":1}"#));
         assert!(matches!(
             contract.evaluate(&value(r#"{"a0":1}"#)),
             ValueOutcome::Fails { .. }
         ));
     }
-    // Five such names need more than the memory leaves them.
-    let refused = prepare(&counted_names(5, json!(false)), Limits::default()).unwrap_err();
-    assert_memory_refusal(&refused, "/patternProperties");
 }
 
-// A pattern's outcome is local: the patterns that fit their first allowances
-// take only that from what a large one may use, so adding them elsewhere
-// changes nothing while the contract stays within its pattern memory. Past it,
-// the large one refuses.
 #[test]
-fn small_patterns_elsewhere_leave_a_large_pattern_its_outcome() {
-    for count in [0, 10, 100] {
+fn small_patterns_do_not_take_fixed_compiler_slots_from_large_patterns() {
+    for count in [0, 10, 100, 1000] {
         let schema = json!({
-            "type": "object",
-            "patternProperties": {"^.{1,10000}$": false},
-            "properties": {"small": pattern_values(&small(count))},
+            "type":"object", "patternProperties":{"^.{1,10000}$":false},
+            "properties":{"small":pattern_values(&small(count))},
         });
-        let contract = prepare(&schema, Limits::default()).expect("within the memory");
+        let contract = prepare(&schema, Limits::default()).unwrap();
         assert!(matches!(
             contract.evaluate(&value(r#"{"a":1}"#)),
             ValueOutcome::Fails { .. }
@@ -170,200 +161,138 @@ fn small_patterns_elsewhere_leave_a_large_pattern_its_outcome() {
         patterns.extend(small(count));
         let contract = prepare(&pattern_values(&patterns), Limits::default()).unwrap();
         assert!(satisfies(&contract, r#"{"p0":"a0"}"#));
+        if count > 0 {
+            assert!(satisfies(&contract, r#"{"p1":"b"}"#));
+        }
     }
-    // A thousand more leave less than the large one needs.
-    let schema = json!({
-        "type": "object",
-        "patternProperties": {"^.{1,10000}$": false},
-        "properties": {"small": pattern_values(&small(1000))},
-    });
-    let refused = prepare(&schema, Limits::default()).unwrap_err();
-    assert_memory_refusal(&refused, "/patternProperties");
-    let mut patterns = vec!["^.{1,10000}0$".to_owned()];
-    patterns.extend(small(1000));
-    let contract = prepare(&pattern_values(&patterns), Limits::default()).unwrap();
-    let refused = no_verdict(&contract, r#"{"p0":"a0"}"#);
-    assert_eq!(refused.code, "pattern-total-memory-limit");
-    assert!(satisfies(&contract, r#"{"p1":"b"}"#));
 }
 
-// A pattern that needs less than its equal part leaves the rest to one that
-// needs more, and what each pattern is given does not depend on the order
-// strings reach them.
 #[test]
-fn what_one_pattern_leaves_goes_to_one_that_needs_more() {
-    // About 1.3 and 3.9 MiB compiled, within 8 MiB of pattern memory: equal
-    // parts of what is left are about 2.9 MiB.
+fn prepared_programs_have_the_same_outcomes_in_every_call_order() {
     let patterns = ["^.{1,1000}a$".to_owned(), "^.{1,3000}b$".to_owned()];
-    let schema = pattern_values(&patterns);
     for order in [
         [r#"{"p0":"xa"}"#, r#"{"p1":"xb"}"#],
         [r#"{"p1":"xb"}"#, r#"{"p0":"xa"}"#],
     ] {
-        let contract = prepare(&schema, memory(8 * MIB)).unwrap();
+        let contract = prepare(&pattern_values(&patterns), memory(8 * MIB)).unwrap();
         for text in order {
-            assert!(satisfies(&contract, text), "{text}");
+            assert!(satisfies(&contract, text));
         }
     }
-    // A `patternProperties` name shares with the `pattern` values alike: the
-    // larger name takes what the smaller value leaves of its part.
     let schema = json!({
-        "type": "object",
-        "patternProperties": {"^.{1,3000}b$": false},
-        "properties": {"p0": {"pattern": "^.{1,1000}a$"}},
+        "type":"object", "patternProperties":{"^.{1,3000}b$":false},
+        "properties":{"p0":{"pattern":"^.{1,1000}a$"}},
     });
-    let contract = prepare(&schema, memory(8 * MIB)).expect("the name fits what is left");
+    let contract = prepare(&schema, memory(8 * MIB)).unwrap();
     assert!(satisfies(&contract, r#"{"p0":"xa"}"#));
     assert!(matches!(
         contract.evaluate(&value(r#"{"xb":1}"#)),
         ValueOutcome::Fails { .. }
     ));
-    // With a third such pattern, the two larger ones need more together than
-    // the smaller leaves them: each refuses, in either order, and the smaller
-    // still compiles.
     let patterns = [
         "^.{1,1000}a$".to_owned(),
         "^.{1,3000}b$".to_owned(),
         "^.{1,3000}c$".to_owned(),
     ];
-    let schema = pattern_values(&patterns);
     for first in [r#"{"p0":"xa"}"#, r#"{"p2":"xc"}"#] {
-        let contract = prepare(&schema, memory(8 * MIB)).unwrap();
-        let _ = contract.evaluate(&value(first));
-        assert!(satisfies(&contract, r#"{"p0":"xa"}"#));
-        for text in [r#"{"p1":"xb"}"#, r#"{"p2":"xc"}"#] {
-            let refused = no_verdict(&contract, text);
-            assert_eq!(refused.code, "pattern-total-memory-limit");
-            assert!(
-                refused
-                    .message
-                    .contains("those that need less than an equal part of it keep")
-                    && refused
-                        .message
-                        .contains("and the 2 that need more share the rest equally"),
-                "{}",
-                refused.message
-            );
+        let contract = prepare(&pattern_values(&patterns), memory(8 * MIB)).unwrap();
+        assert!(satisfies(&contract, first));
+        for text in [r#"{"p0":"xa"}"#, r#"{"p1":"xb"}"#, r#"{"p2":"xc"}"#] {
+            assert!(satisfies(&contract, text));
         }
     }
 }
 
-// A `pattern` value is compiled when a string first reaches it, within what
-// sharing the memory gives it, so a value reaching many large patterns cannot
-// spend more than the contract's pattern memory.
 #[test]
-fn a_pattern_compiled_on_first_use_stays_within_the_memory() {
+fn shared_preparation_exhaustion_cannot_be_deferred_to_first_use() {
     let patterns: Vec<String> = (0..40).map(|i| format!("^.{{1,10000}}{i}$")).collect();
     let one = prepare(&pattern_values(&patterns[..1]), Limits::default()).unwrap();
     assert!(satisfies(&one, r#"{"p0":"a0"}"#));
-    let many = prepare(&pattern_values(&patterns), Limits::default()).unwrap();
-    // A value that reaches no pattern is still decided.
-    assert!(satisfies(&many, "{}"));
-    let refused = no_verdict(&many, r#"{"p0":"a0"}"#);
-    assert_eq!(refused.code, "pattern-total-memory-limit");
-    assert_eq!(refused.reason, NoVerdictReason::LimitExceeded);
+    let failure = prepare(&pattern_values(&patterns), Limits::default()).unwrap_err();
+    assert_eq!(
+        failure.kind,
+        PreparationFailureKind::Limit {
+            resource: "pattern-construction-helper-payload".into(),
+        }
+    );
 }
 
-// Each compiled pattern holds 48 KiB, so the pattern memory bounds how many
-// patterns a contract compiles: preparation counts them as it reads them and
-// refuses at the first past that count, naming its keyword, before compiling
-// any. A repeated `pattern` form is compiled once, so it counts once.
 #[test]
-fn the_compiled_patterns_are_bounded_in_number() {
-    let compiled = |count: usize| -> Vec<Value> {
+fn the_footprint_counts_unique_programs_without_fixed_slots() {
+    let compiled = |count| {
         (0..count)
-            .map(|i| json!({"pattern": format!("a{i}|b")}))
-            .collect()
+            .map(|i| json!({"pattern":format!("a{i}|b")}))
+            .collect::<Vec<_>>()
     };
-    let schema = |items: Vec<Value>| json!({"prefixItems": items});
-    // Three patterns' 48 KiB, after a quarter for their search caches.
-    let three = memory(3 * 64 * KIB);
-    assert!(prepare(&schema(compiled(3)), three.clone()).is_ok());
-    let refused = prepare(&schema(compiled(4)), three.clone()).unwrap_err();
-    assert_memory_refusal(&refused, "/prefixItems/*/pattern");
-
-    // Run matchers compile nothing, but they hold their bytes of the same
-    // memory: 100 of them, 12,777 bytes, fit beside two compiled patterns,
-    // and one holds more than three leave.
-    let run_matched: Vec<Value> = (0..100)
-        .map(|i| json!({"pattern": format!("^a{{{i}}}$")}))
-        .collect();
-    assert!(prepare(&schema([compiled(2), run_matched].concat()), three.clone()).is_ok());
-    let one = vec![json!({"pattern": "^a{0}$"})];
-    let refused = prepare(&schema([compiled(3), one].concat()), three.clone()).unwrap_err();
-    assert_memory_refusal(&refused, "/prefixItems/*/pattern");
-
-    let repeated = vec![json!({"pattern": "a|b"}); 100];
-    assert!(prepare(&schema(repeated), three.clone()).is_ok());
-    let names = json!({"patternProperties": {"a|b": true, "c|d": true, "e|f": true, "g|h": true}});
-    assert_memory_refusal(&prepare(&names, three).unwrap_err(), "/patternProperties");
-    // The default admits 1,024.
-    assert!(prepare(&schema(compiled(1024)), Limits::default()).is_ok());
-    let refused = prepare(&schema(compiled(1025)), Limits::default()).unwrap_err();
-    assert_memory_refusal(&refused, "/prefixItems/*/pattern");
+    let schema = |items| json!({"prefixItems":items});
+    let old_three_slots = memory(3 * 64 * KIB);
+    for count in [3, 4] {
+        prepare(&schema(compiled(count)), old_three_slots.clone()).unwrap();
+    }
+    let runs = (0..100)
+        .map(|i| json!({"pattern":format!("^a{{{i}}}$")}))
+        .collect::<Vec<_>>();
+    prepare(
+        &schema([compiled(2), runs].concat()),
+        old_three_slots.clone(),
+    )
+    .unwrap();
+    prepare(
+        &schema([compiled(3), vec![json!({"pattern":"^a{0}$"})]].concat()),
+        old_three_slots.clone(),
+    )
+    .unwrap();
+    let repeated = schema(vec![json!({"pattern":"a|b"}); 100]);
+    prepare(&repeated, old_three_slots.clone()).unwrap();
+    let names = json!({"patternProperties":{"a|b":true,"c|d":true,"e|f":true,"g|h":true}});
+    prepare(&names, old_three_slots).unwrap();
+    for count in [1024, 1025] {
+        prepare(&schema(compiled(count)), Limits::default()).unwrap();
+    }
+    let one = minimum_memory(&schema(vec![json!({"pattern":"a|b"})]));
+    assert_eq!(minimum_memory(&repeated), one);
+    assert!(minimum_memory(&schema(compiled(4))) > minimum_memory(&schema(compiled(3))));
+    let contract = prepare(&repeated, memory(one)).unwrap();
+    assert!(satisfies(&contract, r#"["a","b"]"#));
+    assert!(matches!(
+        contract.evaluate(&value(r#"["z"]"#)),
+        ValueOutcome::Fails { .. }
+    ));
 }
 
-// A small pattern memory refuses a pattern that needs more than it leaves,
-// for both keywords, and the refusal states the arithmetic.
 #[test]
-fn a_small_pattern_memory_refuses_a_pattern_beyond_what_it_leaves() {
-    // One pattern in 256 KiB holds 64 KiB for its search cache, which leaves
-    // its form 192 KiB; `^.{1,100}x$` compiles to about 135 KiB and
-    // `^.{1,1000}x$` to about 1.3 MiB.
-    let limits = memory(256 * KIB);
-    let small = json!({"patternProperties": {"^.{1,100}x$": false}});
-    let contract = prepare(&small, limits.clone()).expect("within what is left");
+fn aggregate_pattern_memory_refuses_before_publishing_any_plan() {
+    let small = json!({"patternProperties":{"^.{1,100}x$":false}});
+    let contract = prepare(&small, memory(256 * KIB)).unwrap();
     assert!(matches!(
         contract.evaluate(&value(r#"{"ax":1}"#)),
         ValueOutcome::Fails { .. }
     ));
-    let large = json!({"patternProperties": {"^.{1,1000}x$": false}});
-    assert_memory_refusal(
-        &prepare(&large, limits.clone()).unwrap_err(),
-        "/patternProperties",
-    );
-    let contract = prepare(&json!({"pattern": "^.{1,1000}x$"}), limits).unwrap();
-    let refused = no_verdict(&contract, r#""ax""#);
-    assert_eq!(refused.code, "pattern-total-memory-limit");
-    assert_eq!(
-        refused.message,
-        "this schema's one compiled regular expression holds 48 KiB of its 256 KiB \
-         total_pattern_memory and 64 KiB for its search cache, which leaves 144 KiB; this \
-         one, which needs more, may take it all, but does not compile within the 192 KiB \
-         that gives it; raise total_pattern_memory (totalPatternMemory in TypeScript)"
-    );
-    // Two such names in 2 MiB: each needs more than an equal part.
-    let two = json!({"patternProperties": {"^.{1,1000}x$": false, "^.{1,1000}y$": false}});
-    let refused = prepare(&two, memory(2 * MIB)).unwrap_err();
-    assert_memory_refusal(&refused, "/patternProperties");
-
-    // No pattern memory admits no compiled pattern and no run matcher, and
-    // counts the immutable owner of an unsupported interpretation too. A
-    // pattern-free contract needs no pattern owner.
-    let none = memory(0);
-    assert_memory_refusal(
-        &prepare(&json!({"pattern": "a|b"}), none.clone()).unwrap_err(),
-        "/pattern",
-    );
-    let refused = prepare(&json!({"pattern": "^[a-z]+$"}), none.clone()).unwrap_err();
-    assert_memory_refusal(&refused, "/pattern");
-
-    // The original-node path now counts Arc<Program>, not just matcher storage.
-    // The old zero-byte unsupported preparation was a memory-division policy.
-    assert_eq!(
-        prepare(&json!({"pattern": "^(?=a)a"}), none.clone())
-            .unwrap_err()
-            .kind,
-        PreparationFailureKind::Limit {
-            resource: "pattern-total-memory-limit".into()
-        }
-    );
-    let unmatched = prepare(&json!({"pattern": "^(?=a)a"}), memory(1024)).unwrap();
+    for schema in [
+        json!({"patternProperties":{"^.{1,1000}x$":false}}),
+        json!({"pattern":"^.{1,1000}x$"}),
+    ] {
+        assert_memory_refusal(&prepare(&schema, memory(256 * KIB)).unwrap_err());
+    }
+    let two = json!({"patternProperties":{"^.{1,1000}x$":false,"^.{1,1000}y$":false}});
+    let contract = prepare(&two, memory(2 * MIB)).unwrap();
+    assert!(matches!(
+        contract.evaluate(&value(r#"{"ax":1}"#)),
+        ValueOutcome::Fails { .. }
+    ));
+    for schema in [
+        json!({"pattern":"a|b"}),
+        json!({"pattern":"^[a-z]+$"}),
+        json!({"pattern":"^(?=a)a"}),
+    ] {
+        assert_memory_refusal(&prepare(&schema, memory(0)).unwrap_err());
+    }
+    let unmatched = prepare(&json!({"pattern":"^(?=a)a"}), memory(1024)).unwrap();
     assert_eq!(
         no_verdict(&unmatched, r#""a""#).code,
         "pattern-backtracking"
     );
-    assert!(prepare(&json!({"type": "string"}), none).is_ok());
+    prepare(&json!({"type":"string"}), memory(0)).unwrap();
 }
 
 // A run matcher holds a step for each change of set and a byte for each byte
@@ -383,9 +312,8 @@ fn run_matchers_hold_about_their_text_of_the_pattern_memory() {
         contract.evaluate(&value(&json!({ "p7": &text[1..] }).to_string())),
         ValueOutcome::Fails { .. }
     ));
-    // Three quarters of 4 MiB hold 310 of them and not 311.
-    let limits = memory(4 * MIB);
-    assert!(prepare(&pattern_values(&patterns[..310]), limits.clone()).is_ok());
-    let refused = prepare(&pattern_values(&patterns[..311]), limits).unwrap_err();
-    assert_memory_refusal(&refused, "/properties/p*/pattern");
+    // No quarter is reserved for caches in the immutable-program footprint.
+    for count in [310, 311, 380] {
+        prepare(&pattern_values(&patterns[..count]), memory(4 * MIB)).unwrap();
+    }
 }

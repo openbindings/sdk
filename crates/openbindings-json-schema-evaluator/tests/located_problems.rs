@@ -131,19 +131,23 @@ fn failures_beneath_unpaired_names_never_report_a_library_spelling() {
         (
             r#"{"additionalProperties": {"type": "integer"}}"#,
             r#"{"\ud800":"s"}"#,
-            &[][..],
+            &[Pointer::from_utf16(&[47, 0xd800]).unwrap()][..],
         ),
         (
             r#"{"additionalProperties": {"required": ["b"]}}"#,
             r#"{"\ud800":{"a":1}}"#,
-            &[],
+            &[Pointer::from_utf16(&[47, 0xd800]).unwrap()],
         ),
         (
             r#"{"properties": {"x": {"type": "integer"}}}"#,
             r#"{"\ud800":"s","x":"t"}"#,
-            &["/x"],
+            &["/x".parse().unwrap()],
         ),
-        (r#"{"maxProperties": 0}"#, r#"{"\ud800":"s"}"#, &[""]),
+        (
+            r#"{"maxProperties": 0}"#,
+            r#"{"\ud800":"s"}"#,
+            &["".parse().unwrap()],
+        ),
     ] {
         let document = document(schema);
         let contract = contract(&document, &ExternalSchemas::default());
@@ -160,7 +164,7 @@ fn failures_beneath_unpaired_names_never_report_a_library_spelling() {
             .iter()
             .map(|problem| {
                 assert!(value.at_pointer(&problem.instance).is_some());
-                problem.instance.as_str().unwrap()
+                problem.instance.clone()
             })
             .collect();
         assert_eq!(pointers, expected, "{schema}");

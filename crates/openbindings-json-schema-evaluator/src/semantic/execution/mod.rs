@@ -329,6 +329,13 @@ impl Run<'_> {
             self.certify_coordinates(&key, value, &result)?;
         }
         self.context_copy(&key.context)?;
+        if complete && self.plan.queries.is_empty() {
+            // Original child positions form a finite tree without references.
+            // No cyclic refinement or repeated same-instance application can
+            // reuse this frame. Keep its result with the parent, not once per
+            // instance in a call-wide memo. Effect identities remain separate.
+            return Ok(result);
+        }
         if complete {
             let copied = result.copied(&mut self.graph)?;
             self.graph.charge(256)?;

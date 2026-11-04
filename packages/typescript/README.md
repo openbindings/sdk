@@ -231,20 +231,20 @@ for supported semantics and remaining limitations.
 | --- | --- | --- |
 | `evaluationSteps` | `null` | Evaluation and semantic proof work; no caller-selected cap by default |
 | `schemaResources` | `null` | Additional reached-resource count bound |
-| `stackBytes` | 256 KiB | Compilation, evaluation and proof-nesting budgets |
-| `compileJsonDepth` | 512 | Projected JSON admitted to the current compiled backend |
 | `patternBytes` | 1 MiB | One pattern and its expanded form |
 | `patternDepth` | 32 | Pattern group nesting |
-| `totalPatternBytes` | 4 MiB | Aggregate retained pattern forms |
-| `totalPatternMemory` | 64 MiB | Matcher storage and engine allowances |
+| `totalPatternBytes` | 4 MiB | Unique normalized pattern forms across both pattern keywords |
+| `totalPatternMemory` | 64 MiB | Immutable pattern-program representation |
 | `programBytes` | 48 MiB | SDK program growth and semantic proof storage |
 
 The original schema environment also has preparation footprint, work and
 allocation bounds, using Rust's default `PreparationLimits` in this facade.
 Those preparation settings are not currently exposed as TypeScript options.
-Budgets are not deadlines or process-memory measurements; underlying compiler
-allocation accounting and iterative evaluation remain migration work. Raising
-`stackBytes` does not enlarge the JavaScript host's stack. Exact `multipleOf`
+Budgets are not deadlines or process-memory measurements. The evaluator uses
+original schema locations and explicit evaluation frames, with a fixed supported
+maximum of 64 distinct symbolic effects per proof. The retired `stackBytes` and
+`compileJsonDepth` options are rejected. Host-specific stack and performance
+qualification remains part of the alignment work. Exact `multipleOf`
 retains an arithmetic capability bound. Exact equality preserves unpaired UTF-16
 units, while unsupported Unicode-text operations return a typed inability.
 

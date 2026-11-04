@@ -26,9 +26,6 @@ fn original(row: &Value) -> Plan {
     if let Some(bytes) = row["program_bytes"].as_u64() {
         limits.program_bytes = bytes as usize;
     }
-    if let Some(bytes) = row["stack_bytes"].as_u64() {
-        limits.stack_bytes = bytes as usize;
-    }
     openbindings_internal_schema::preparation::Attempt::run(
         preparation.max_sdk_work_units,
         preparation.max_sdk_reservation_bytes,
@@ -256,10 +253,10 @@ fn original_frame_stack_observations() {
         .into_iter()
         .find(|row| row["id"] == "mixed-64-S")
         .unwrap();
-    let mut plan = original(&row);
+    let plan = original(&row);
     let value = JsonValue::parse(row["value"].as_str().unwrap()).unwrap();
-    for bytes in [2048, 8192, 16_384, 32_768, 65_536, 131_072, 262_144] {
-        plan.limits.stack_bytes = bytes;
+    {
+        let bytes = SAMPLED_STACK_BYTES;
         let marker = 0u8;
         let origin = std::hint::black_box(std::ptr::addr_of!(marker)) as usize;
         let observe = Observe {
@@ -269,7 +266,7 @@ fn original_frame_stack_observations() {
         let outcome = plan.evaluate(&value, Detail::Outcome, &observe);
         std::hint::black_box(&marker);
         eprintln!(
-            "stack_budget={bytes} sampled_bytes={} outcome={}",
+            "sampled_stack_guard={bytes} sampled_bytes={} outcome={}",
             observe.maximum.load(Ordering::Relaxed),
             observed(outcome)
         );

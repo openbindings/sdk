@@ -71,10 +71,11 @@ fn default_preparation_matches_explicit_policy_and_retains_ready_work() {
     assert!(problems.is_empty());
     assert!(!problems_complete);
 
-    // The default pattern byte budget is applied before compilation.
+    // Preparation retains a local source-limit interpretation. Only a string
+    // reaching that pattern requires its unavailable matching program.
     let pattern = "x".repeat(1_048_577);
     let proof = document(&serde_json::json!({"pattern": pattern}).to_string());
-    let error = proof
+    let limited = proof
         .resolve_operation("find")
         .expect("declared alias")
         .input()
@@ -84,12 +85,14 @@ fn default_preparation_matches_explicit_policy_and_retains_ready_work() {
             &openbindings::ExternalSchemas::default(),
             &openbindings::PreparationLimits::default(),
         )
-        .unwrap_err();
-    assert_eq!(
-        error.kind,
-        PreparationFailureKind::Limit {
-            resource: "pattern-byte-limit".into()
-        }
+        .unwrap();
+    assert!(matches!(
+        limited.evaluate_json("null").unwrap(),
+        ValueOutcome::Satisfies
+    ));
+    assert!(
+        matches!(limited.evaluate_json("\"x\"").unwrap(), ValueOutcome::NoVerdict { detail }
+        if detail.reason == NoVerdictReason::LimitExceeded && detail.code == "pattern-byte-limit")
     );
 }
 

@@ -12,29 +12,13 @@ replacing an existing dependency.
 | Browser | Desktop Chromium and WebKit with explicit initialization; use a Worker for potentially expensive work. Firefox, mobile devices, and particular framework/bundler versions require their own qualification. |
 | Worker service | Local workerd with a compiled Wasm module and initialization in an allowed request context. This is not evidence of deployed Cloudflare latency, quotas, or service availability. |
 
-The 256 KiB small-stack document regression is qualified on the development
-toolchain. The following evaluator stack measurements describe the historical
-compiled lane recorded in [performance boundaries](performance-boundaries.md),
-not a depth guarantee for every path in the current mixed original/compiled engine.
-The recorded release builds on Linux, macOS and Windows prepare
-schemas whose patterns nest to the default `pattern_depth` and check
-values against them. The evaluator sizes its evaluation depth, stack guard and
-unevaluated walk limit from `Limits::stack_bytes` (256 KiB by default), and
-release builds on the same hosts prepare, check and explain values as deep as
-it admits for the 39 recursive schema shapes `evaluation_stack` covers,
-unevaluated keywords included, on threads of 192 KiB, 256 KiB and 1 MiB, and
-prepare the longest unevaluated annotation walk of each kind it admits with a
-fifth of a 192 KiB, 256 KiB or 512 KiB thread already in use (`walk_stack`);
-the derivations were measured from 128 KiB to 2 MiB. The static depth bound models
-the library's frames, and a schema holding an unevaluated keyword is also
-guarded by measuring the stack its pass uses. Unoptimized code needs more:
-compiling 32 nested quantified groups takes up to about 1 MiB of stack in debug
-builds, and debug evaluation frames exceed 256 KiB at the default depth, so
-debug runs ignore both tests and `tools/verify.py` runs them in release builds.
-Older supported compilers may need larger stacks in debug builds. MSRV CI runs
-all workspace tests except the exact stack-margin tests selected by [this
-inventory](../tools/stack-margin-tests.json), with reasons and scope.
-Development-toolchain jobs retain the workspace stack tests.
+The current evaluator uses original schema locations, explicit application frames
+and a fixed logical ceiling of64 symbolic effects. Removed compiler and stack-byte
+options do not govern its depth. A private sampled stack guard is an additional
+refusal check, not a portable host-stack promise. Historical compiled-engine
+measurements in [performance boundaries](performance-boundaries.md) apply only to
+the revisions named there. Current native/Wasm physical-stack qualification and
+matched performance gates are tracked in the [alignment checkpoint](alignment-checkpoint.md).
 
 The Rust and TypeScript APIs use the same engine and outcome meanings. They
 follow their languages' ownership conventions: Rust uses ordinary ownership and
@@ -56,8 +40,8 @@ own bounds and may be incomplete even when the failure is established.
 An empty problem list never turns an established failure into success.
 See the [evaluator policy](../crates/openbindings-json-schema-evaluator/README.md).
 
-The default evaluator combines compiled checks with bounded reasoning over
-original schema locations, exact values and evaluation annotations. It can
+The default evaluator uses bounded reasoning over original schema locations,
+exact values and evaluation annotations. It can
 establish `Undefined` when validity depends on a known undefined result under
 the specification. A missing resource, unsupported feature or exhausted allowance
 does not by itself establish undefinedness. Such cases remain `NoVerdict` unless

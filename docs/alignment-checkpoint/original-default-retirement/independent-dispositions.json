@@ -1,0 +1,34 @@
+{
+  "base": "e1cfe256551f36ff2c1a7eb0cad70abe5d9a7877",
+  "found_production_bug": false,
+  "rows": [
+    {
+      "suite": "supplied_resource_dialects",
+      "disposition": "Retain exact resources; ready Plan may defer ordinary capability refusal to dependent value. Require UnsupportedCapability, never U/S/F, for all unmasked stopped/incomplete-namespace queries. Preserve definite contained priority and add true/false masking controls."
+    },
+    {
+      "suite": "string_gates",
+      "disposition": "Keep scalar-regex capability boundary when validity depends on match. Count isolated UTF16 units per already-reviewed SDK length policy; pair counts one. patternProperties true with no annotation consumer is S irrespective of match. Add false-child and unevaluatedProperties false unknown-match controls."
+    },
+    {
+      "suite": "current_reference_obligations",
+      "disposition": "zero-program/ordinary now consumes real original-Graph storage and returns typed Limit. Preserve input, oldS in historical_required and default-funded positive."
+    },
+    {
+      "suite": "exact_operands/contracts numeric",
+      "disposition": "Code-only numeric-arithmetic-limit -> multiple-of-arithmetic-limit. Typed Limit and every later exact arithmetic/equality/retry assertion preserved; all pass independently."
+    },
+    {
+      "suite": "established_failures/diagnostic_budget",
+      "disposition": "Hardcoded1-3 cancellation checks are pre-verdict now. Measure Outcome completion count for each same-input seam; exhaustive earlier stops Cancelled, later Explain stops preserve F with empty/incomplete diagnostics, exact completion and retries healthy. S has no diagnostic second pass."
+    },
+    {
+      "suite": "contracts diagnostics parent-owned",
+      "disposition": "30 work now interrupts before established F. Independently unchanged input minimum Outcome work1094; exact+onebelow and retry preserve meaning. Use measured scope-boundary control, not an invented smaller quota."
+    },
+    {
+      "suite": "private/resource_identity",
+      "disposition": "Preserve direct reference IdentityConflict preparation refusal and all original alias/priority tests. RI14 conflicting applicator children are local capability only when needed; absent properties satisfy; decisive branches mask inability. RI22 public original query keeps exact custom-profile-namespace cause; ready Plan retains value-time capability. Original long child remains absent S/present capability; added same-coordinate referrer to separate conflicting child preserves real preparation InvalidExternalSchema and exact 64KiB origin boundary/source/pointer."
+    }
+  ]
+}

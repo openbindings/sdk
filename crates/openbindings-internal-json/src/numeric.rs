@@ -68,18 +68,10 @@ impl Bound {
     /// number it checks, so it is a candidate for inlining there.
     #[inline]
     pub fn admits(&self, token: &str) -> Option<bool> {
-        // Both tokens are exact signed integers. No rounding or exponent
-        // conversion is involved; every other spelling uses Decimal below.
-        if let (Some(limit), Ok(value)) = (self.limit.integer, token.parse::<i64>()) {
-            return Some(match self.keyword {
-                Keyword::Minimum => value >= limit,
-                Keyword::Maximum => value <= limit,
-                Keyword::ExclusiveMinimum => value > limit,
-                Keyword::ExclusiveMaximum => value < limit,
-                // Construction requires a positive divisor, excluding zero and
-                // MIN / -1 overflow. Keep the arithmetic checked nevertheless.
-                Keyword::MultipleOf => value.checked_rem(limit) == Some(0),
-            });
+        if let Ok(value) = token.parse::<i64>()
+            && let Some(result) = self.admits_integer(value)
+        {
+            return Some(result);
         }
         let value = Decimal::parse(token);
         let limit = &self.limit.decimal;
@@ -89,6 +81,22 @@ impl Bound {
             Keyword::ExclusiveMinimum => value.compare(limit) == Ordering::Greater,
             Keyword::ExclusiveMaximum => value.compare(limit) == Ordering::Less,
             Keyword::MultipleOf => return value.multiple_of(limit),
+        })
+    }
+    /// Check an exact signed integer without allocating, when the bound has
+    /// that same representation. `None` requires the general decimal path;
+    /// it does not mean that the value fails the bound.
+    #[inline]
+    pub fn admits_integer(&self, value: i64) -> Option<bool> {
+        let limit = self.limit.integer?;
+        Some(match self.keyword {
+            Keyword::Minimum => value >= limit,
+            Keyword::Maximum => value <= limit,
+            Keyword::ExclusiveMinimum => value > limit,
+            Keyword::ExclusiveMaximum => value < limit,
+            // Construction requires a positive divisor. Keep the operation
+            // checked so no signed-remainder overflow can be introduced.
+            Keyword::MultipleOf => value.checked_rem(limit) == Some(0),
         })
     }
     /// The keyword's name, for messages.
@@ -171,6 +179,49 @@ mod tests {
         assert!(Bound::parse("multipleOf", "0").is_err());
         assert!(Bound::parse("multipleOf", "-2").is_err());
         assert!(Bound::parse("minLength", "1").is_err());
+    }
+
+    #[test]
+    fn integer_fast_path_preserves_exact_boundaries_and_decimal_fallback() {
+        for limit in [i64::MIN, -1, 0, 1, i64::MAX] {
+            for value in [i64::MIN, -1, 0, 1, i64::MAX] {
+                let expected = [value >= limit, value <= limit, value > limit, value < limit];
+                for (keyword, expected) in COMPARISONS.into_iter().zip(expected) {
+                    let bound = Bound::parse(keyword, &limit.to_string()).unwrap();
+                    assert_eq!(bound.admits_integer(value), Some(expected));
+                    assert_eq!(bound.admits(&value.to_string()), Some(expected));
+                }
+            }
+        }
+        for (limit, token, expected) in [
+            ("9223372036854775807", "9223372036854775808", true),
+            ("-9223372036854775808", "-9223372036854775809", false),
+            ("0", "-0", true),
+            ("0", "0.0", true),
+            ("1", "1e0", true),
+            ("1.0", "1", true),
+            ("1e0", "0", false),
+        ] {
+            let bound = Bound::parse("minimum", limit).unwrap();
+            assert_eq!(bound.admits(token), Some(expected), "{limit}/{token}");
+            if limit.parse::<i64>().is_err() {
+                assert_eq!(bound.admits_integer(1), None);
+            }
+        }
+        for divisor in [1, 2, 7, i64::MAX] {
+            let bound = Bound::parse("multipleOf", &divisor.to_string()).unwrap();
+            for value in [i64::MIN, -21, -1, 0, 1, 21, i64::MAX] {
+                let expected = (value as i128) % (divisor as i128) == 0;
+                assert_eq!(bound.admits_integer(value), Some(expected));
+                assert_eq!(bound.admits(&value.to_string()), Some(expected));
+            }
+        }
+        for divisor in ["0", "-0", "-1", "-9223372036854775808"] {
+            assert!(Bound::parse("multipleOf", divisor).is_err());
+        }
+        let decimal = Bound::parse("multipleOf", "0.1").unwrap();
+        assert_eq!(decimal.admits_integer(1), None);
+        assert_eq!(decimal.admits("1"), Some(true));
     }
 
     #[test]

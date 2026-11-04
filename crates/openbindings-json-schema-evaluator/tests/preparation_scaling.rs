@@ -660,8 +660,7 @@ fn a_schema_nested_more_than_256_levels_deep_refuses_whatever_the_limits() {
         })
     }
     let raised = Limits {
-        stack_bytes: 16 << 20,
-        compile_json_depth: 100_000,
+        program_bytes: 256 << 20,
         ..Limits::default()
     };
     let refused = |result: Result<

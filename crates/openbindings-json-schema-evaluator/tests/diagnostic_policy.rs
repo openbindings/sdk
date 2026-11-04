@@ -337,37 +337,24 @@ fn reference_and_resource_messages_do_not_echo_source_identifiers() {
     assert_eq!(error.message, "duplicate retrieval URI");
 }
 #[test]
-fn messages_use_only_bounded_fixed_type_names_and_never_instance_or_schema_values() {
+fn messages_use_fixed_text_and_never_instance_or_schema_values() {
     let cases = [
-        (
-            serde_json::json!({"type":"integer"}),
-            "\"SECRET-instance\"",
-            "expected JSON type: integer",
-        ),
-        (
-            serde_json::json!({"type":["string","null"]}),
-            "17",
-            "expected one of JSON types: null, string",
-        ),
+        (serde_json::json!({"type":"integer"}), "\"SECRET-instance\""),
+        (serde_json::json!({"type":["string","null"]}), "17"),
         (
             serde_json::json!({"enum":["SECRET-schema"]}),
             "\"SECRET-instance\"",
-            "value is not one of the allowed values; inspect enum at the schema location",
         ),
-        (
-            serde_json::json!({"required":["SECRET-member"]}),
-            "{}",
-            "object is missing a required member; inspect the required keyword at the schema location",
-        ),
+        (serde_json::json!({"required":["SECRET-member"]}), "{}"),
     ];
-    for (schema, instance, expected) in cases {
+    for (schema, instance) in cases {
         let ValueOutcome::Fails { problems, .. } =
             ready(&document(schema)).explain(&JsonValue::parse(instance).unwrap())
         else {
             panic!()
         };
         assert!(!problems.is_empty());
-        assert_eq!(problems[0].message, expected);
+        assert_eq!(problems[0].message, "value fails this schema assertion");
         for problem in problems {
             safe(&problem.message);
         }

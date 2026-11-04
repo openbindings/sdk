@@ -5,6 +5,7 @@ use std::alloc::{GlobalAlloc, Layout, System};
 use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
 
 mod constructors;
+mod integers;
 mod limits;
 mod near_misses;
 mod patterns;
@@ -64,6 +65,10 @@ fn measured<T>(call: impl FnOnce() -> T) -> (T, usize, u128) {
     (result, PEAK.load(Relaxed).saturating_sub(before), nanos)
 }
 fn main() {
+    if std::env::args().any(|arg| arg == "--integers-only") {
+        integers::run();
+        return;
+    }
     if std::env::args().any(|arg| arg == "--recursive-only") {
         semantic::recursive();
         return;

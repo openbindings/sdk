@@ -1,0 +1,8 @@
+   Compiling openbindings-internal-json v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-internal-json)
+   Compiling openbindings-internal-schema v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-internal-schema)
+   Compiling openbindings v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings)
+   Compiling openbindings-json-schema-evaluator v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-json-schema-evaluator)
+   Compiling openbindings-diagnostic-memory-probe v0.0.0 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/tools/diagnostic-memory-probe)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.81s
+     Running `/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/openbindings-diagnostic-memory-probe --integers-only`
+{"allocations":0,"bound_checks":300000,"decimal_parses":60000,"phase":"integer-fast-path"}

@@ -215,7 +215,8 @@ fn compact_exponents_public_equality_and_arithmetic_refusal_remain_separate() {
             else {
                 panic!()
             };
-            assert_eq!(detail.code, "numeric-arithmetic-limit");
+            assert_eq!(detail.reason, NoVerdictReason::LimitExceeded);
+            assert_eq!(detail.code, "multiple-of-arithmetic-limit");
             let contract = prepare(r#"{"minimum":0}"#, mode, ExternalSchemas::default());
             assert!(matches!(
                 contract.evaluate(&JsonValue::parse(token).unwrap()),

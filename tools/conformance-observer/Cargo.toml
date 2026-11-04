@@ -9,4 +9,4 @@ openbindings = { path = "../../crates/openbindings" }
 serde_json = { version = "=1.0.151", features = ["arbitrary_precision"] }
 base64 = "=0.22.1"
 # The SDK's verification observer checks every preparation's conversion.
-openbindings-json-schema-evaluator = { path = "../../crates/openbindings-json-schema-evaluator", features = ["conversion-check"] }
+openbindings-json-schema-evaluator = { path = "../../crates/openbindings-json-schema-evaluator" }

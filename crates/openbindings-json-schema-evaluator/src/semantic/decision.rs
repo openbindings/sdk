@@ -164,7 +164,11 @@ impl<'a> Graph<'a> {
     pub(super) fn variable(&mut self, class: Class) -> Result<(u32, Formula), NoVerdict> {
         self.tick()?;
         if self.classes.len() >= self.maximum_variables {
-            return Err(limit("semantic-analysis-depth-limit"));
+            return Err(NoVerdict::new(
+                NoVerdictReason::LimitExceeded,
+                "semantic-effect-limit",
+                "the evaluation requires more symbolic effects than the supported maximum",
+            ));
         }
         let variable = self.classes.len() as u32;
         self.charge(32)?;

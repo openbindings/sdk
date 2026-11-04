@@ -5,11 +5,11 @@ library from the registry, under its own name. Core keeps the library's default
 pattern engine (jsonschema-regex 0.58.6 and fancy-regex 0.19.2) for its fixed
 checks (OBI-02 and OBI-10) and uses the library for the resource identity and
 reference resolution of its reference inspection. The evaluator matches schema
-patterns with the regex crate (regex 1.13.1, regex-automata 0.4.18 and
-regex-syntax 0.8.11) directly. jsonschema-value 0.58.6, referencing 0.58.6 and
+patterns with immutable regex-automata 0.4.18 NFAs or its own simple matcher,
+using regex-syntax 0.8.11 after strict ECMA interpretation. jsonschema-value 0.58.6, referencing 0.58.6 and
 serde_json 1.0.151 are unmodified too. The SDK carries no fork, vendored crate
-or patch of any dependency: every adaptation is SDK code, a transform of the
-schemas before they reach the library, or a documented extension point.
+or patch of any dependency: every adaptation is SDK code, a fixed-schema transformation, or a documented
+extension point. User schemas are evaluated at their original locations.
 `docs/dependency-isolation.json` records the nine upstream archive checksums
 and complete Rust source digests. `tools/verify-dependency-isolation.py` checks
 those sources, the single-serde graph, absence of SDK-requested arbitrary
@@ -70,214 +70,62 @@ so an upgrade of any of them fails the isolation check until it is reviewed: run
 the three regressions above, the 440-case specification corpus, and the document
 validation differential against the previous release, then refresh the records.
 
-## The default evaluator on the unmodified library
+## The default evaluator and dependency boundaries
 
-The evaluator compiles each prepared contract with
-`jsonschema::options_for::<FlatJson>()`, format assertion off and retrieval
-denied. What it changes, it changes in the schemas before the library sees
-them or through the library's documented `with_keyword` and `PatternOptions`
-APIs:
+The default evaluator prepares one immutable plan over original schema locations.
+It does not compile a projected user schema through jsonschema. Original resource
+identity, reference queries, dialects and dynamic scope remain SDK-owned. Explicit
+heap frames apply concrete keywords; bounded symbolic reasoning handles undefined
+predicates, missing content and incomplete capabilities without conflating them.
 
-- Core's schema space projects the contract after the meta-schema check of
-  every schema it reaches (a conformant document's own schemas passed that
-  check when the document was validated): each reached schema becomes a
-  definition of its own, `n<number>`, in one projected resource per original
-  resource, and every subschema position a `$ref` to its child's definition.
-  Core hands the evaluator these definitions directly; it writes them as JSON
-  text only to apply the text's fixed bounds when the projection could reach
-  them. A reference that identifies no schema refuses preparation and names
-  the schema holding it.
-- `missing.rs` stands in for resources the request does not supply. When the
-  projection fails for want of one, preparation adds an empty resource at each
-  missing URI and projects again, and every definition projected from a
-  stand-in compiles to the SDK's `$obMissing` keyword, which records the
-  stand-in and answers as if it held. A value whose evaluation never reaches a
-  stand-in keeps the library's verdict, which cannot depend on the missing
-  content where keywords decide by evaluating their subschemas. The library's
-  `unevaluatedProperties` and `unevaluatedItems` validators do not: they read
-  the structure of the schemas applying to the same instance to collect
-  annotations, and would read a stand-in as annotating nothing. So a contract
-  in which such a keyword's walk (through `$ref`, `$dynamicRef`, `allOf`,
-  `anyOf`, `oneOf`, `if`, `then`, `else` or `dependentSchemas`) reaches a
-  stand-in for a missing resource, a cycle or `patternProperties` names
-  refuses preparation, whatever order the library evaluates keywords in. A
-  reference to a fragment of a missing resource has no stand-in, and
-  preparation refuses as before.
-- `cycles.rs` stands in for in-place cycles. Core projects a contract whose
-  in-place applicators and references form a cycle for the evaluator (its own
-  `evaluation_program` still refuses it, `in-place-cycle`), and preparation
-  unfolds each cycle of the bundled same-instance references from each of its
-  entries, so that a reference back to a schema on the current path is a
-  definition holding the SDK's `$obCycle` keyword, which records the stand-in
-  as `$obMissing` does. The unfolding enumerates at most 1,024 copies in all,
-  charging a cycle that passes the budget for what it enumerated, and checks
-  the preparation's cancellation as it goes.
-- `bounds.rs` writes the bounds program that decides a pass reaching a
-  stand-in: two copies of every definition that can reach one, for the least
-  and the most validity the stand-ins' answers can give it, with each stand-in
-  `false` or `true`, `not` crossing to the other copy, and `oneOf`, an `if`
-  whose condition reaches a stand-in and a `contains` with a `maxContains`
-  written in ordinary keywords from both copies, beside the contract's own
-  definitions. The library compiles it as any bundle under its own resource URI,
-  behind a root whose `if` keywords ask the SDK's `$obPhase` keyword which entry
-  a pass evaluates: the lower copy, the upper copy or the contract's own entry,
-  each under `not` twice so that the library checks it by its validity test
-  while it collects errors, or the upper copy as it is, for an explanation. It
-  relies only on the keywords' 2020-12 semantics: an annotation-reading keyword
-  keeps copies of its sources in the same keywords, and a holder whose sources
-  would need others is `false` and `true`. A bounds pass calls the library's
-  error collection (`iter_errors`) through one non-inlined function, which the
-  contract's own passes never call, so the contract's verdict passes and
-  explanations compile as they would without it. Every definition that can reach
-  a stand-in, copies and the contract's own, applies its keywords under
-  `{"if": {"$obWork": 0}, "then": ...}`, and each pass runs within a work
-  allowance a multiple of what the contract's own entry measures there: this
-  relies on the library applying `then` only where `if` holds, in its validity
-  test and its error collection alike, since collection reaches every `allOf`
-  item even after one fails, and on `not` checking its subschema by the validity
-  test. `tests/stand_ins.rs` checks that thirty nested levels of keywords
-  written from both copies finish within it.
-- `bundle.rs` bundles the projected definitions into the `$defs` of one
-  resource (JSON Schema Core §9.3), so the library compiles each definition once,
-  whatever path reaches it. It resolves `$dynamicRef` itself: a definition is
-  specialized once for each dynamic context it is reached in, the context
-  recording, for each dynamically looked-up anchor name, the outermost resource
-  entered so far that declares it (§8.2.3.2). The bundle holds no
-  `$dynamicAnchor`, so the library never resolves through the dynamic scope.
-  Contexts hold only the names some `$dynamicRef` looks up, and only those
-  they assign. A contract whose dynamic references would specialize more than
-  100,000 definitions, add more than 16,777,216 units of JSON in specialized
-  copies (one per value and per byte of its strings and member names), or hold
-  more than 4,000,000 dynamic-scope entries across distinct contexts refuses
-  with `program-specialization-limit`. The SDK bounds its own output and does
-  not estimate the library's compiled memory.
-- `operands.rs` registers the SDK's keywords: exact numeric bounds and
-  `multipleOf`, `const` and `enum` as handles into the exact literal arena,
-  `pattern`, the `$obMissing`, `$obCycle` and `$obNames` stand-ins (the last
-  held by a schema whose `patternProperties` names the evaluator does not
-  match, recording the stand-in for a nonempty object and for each member its
-  `additionalProperties` reaches), the bounds program's `$obPhase`, and the
-  `$obWork` marker, which the bundle places before each reference when the
-  application sets an evaluation work cap and the bounds program places in its
-  guards.
-- `pattern.rs` reads every pattern as an ECMA-262 11th edition `u`-mode pattern
-  and writes a form in the regex crate's syntax meant to have the same matches,
-  spelling each character set out as the positive class of the scalar values
-  it matches: the regex crate's negation of a class whose ranges meet across
-  the surrogate gap adds a range across it, so no form holds `[^`. The empty
-  set is two contradicting ASCII word-boundary assertions, since
-  jsonschema-regex escapes class set operations. A form longer than
-  `pattern_bytes` is not written out, and each compiles within what the
-  contract's `total_pattern_memory` gives it, set through the regex crate's
-  documented `size_limit` (48 KiB first, at most 32 MiB) and `dfa_size_limit`
-  (at most 2 MiB), for the library's `patternProperties` names through
-  `PatternOptions::regex()`, which takes one setting for every name: when a
-  name needs more than 48 KiB, the SDK compiles each name's form itself to find
-  what it is given, and the library compiles them within the largest, relying
-  on a form compiling to the same program within any size limit it fits. A
-  seeded differential against V8, with fixed rows across the
-  surrogate gap, checks both keywords. The `pattern` keyword
-  matches through that form, compiled on first use, or through a run matcher
-  for one anchored sequence of single-character runs. `patternProperties`
-  names are written in their forms, which the library compiles with
-  `PatternOptions::regex()` and jsonschema-regex's translation leaves unchanged.
-  The word boundary `\b` becomes the regex crate's ASCII word boundary, which
-  reads word characters as ECMA-262 does and never falls inside a multi-byte
-  character. Its complement does, and the regex crate's `is_match` then
-  answers no for a pattern another branch matches (`\x{E9}|(?-u:\B)` on
-  "aéa", where `find` matches), so `\B` is not matched. A pattern holding
-  `\B`, one that only a backtracking engine can match (lookaround or a
-  backreference), one with a Unicode property escape and one invalid with
-  Unicode semantics have no form: each is a stand-in, as the `pattern`
-  keyword's matcher and as a `patternProperties` name left out of the names the
-  library compiles. Each keeps its own reason.
-- `depth.rs` bounds the schema objects any evaluation path can hold at once,
-  from the bundle's reference graph, as the lesser of two linear bounds in
-  the value's depth. Before evaluating a value, the evaluator compares that
-  bound with the nesting `stack_bytes` holds at 256 bytes each (`stack.rs`) in
-  constant time (from the value's node count when that suffices, otherwise
-  from its depth). The library's unevaluated validators take frames the bound
-  does not model, so a contract holding one is also guarded as it evaluates:
-  `openbindings-internal-json/src/work.rs` checks, at every read of a child
-  instance, the stack the pass has used since it started, and fails every read
-  once it is more than half of `stack_bytes`, so the library stops descending;
-  `tests/evaluation_stack.rs` checks 39 shapes on threads of 192 KiB, 256 KiB
-  and 1 MiB, and a library upgrade reruns it. A bundle that could still
-  recurse without consuming the instance after `cycles.rs` unfolds its cycles
-  refuses (`evaluation-cycle`), and one whose
-  unevaluated keyword's walk weighs more than `stack_bytes` admits refuses
-  (`unevaluated-walk-limit`), since the library compiles the walk by
-  recursion: `bundle.rs` weighs each reference by the keywords on its path,
-  `stack.rs` sizes the limit (a fifth of the stack left to the caller, 99 KiB
-  to the rest of preparation, 1 KiB per unit), and `tests/walk_stack.rs`
-  prepares the longest admitted walk of each kind below enclosing schemas on
-  threads of 192 KiB, 256 KiB and 512 KiB with a fifth of each already in use,
-  so a library whose compiled walk frames grow fails it. A library upgrade
-  that changes those frames remeasures the reserve and the unit on every host
-  (the method and per-host tables are in `docs/performance-boundaries.md`).
-- `explain.rs` maps the library's first error back to its keyword's original
-  schema location.
-- `openbindings-internal-json/src/work.rs` holds the optional evaluation
-  allowance and the stack guard. `FlatJson` charges its reads only under that
-  crate's `evaluator-work` feature, which only the evaluator enables, and only
-  inside a pass that has an allowance or a guard.
+- `semantic/construction.rs` shares preparation ownership across the root plan and
+  selected meta-schema plans. Completed syntax and reference facts are reused.
+- `pattern.rs` reads ECMA-262 Unicode-mode syntax, distinguishing invalid syntax
+  from valid unsupported features. A narrow anchored ASCII literal path produces
+  the same complete reading as the general Reader.
+- `semantic/patterns/preparation.rs` indexes normalized forms by length and hash,
+  then checks exact text within collisions. Equal programs share immutable owners;
+  their semantic effects and original locations remain separate.
+- `semantic/patterns/compiler` admits finite structural AST/HIR/NFA bounds before
+  one forward capture-free NFA build. There is no geometric compilation retry.
+  Local supported-profile failures become retained limitations; aggregate quota
+  exhaustion aborts preparation. The current resource contract is recorded in
+  `docs/alignment-checkpoint/compiler-resource-policy.md`.
+- `semantic/patterns/cache.rs` owns per-call search caches. Work reservations include
+  outgoing transitions and epsilon breadth. Immutable programs contain no mutable
+  search state. Reader, structural, NFA, cache and original-effect controls must be
+  rerun when upgrading regex-syntax or regex-automata.
+- Exact numbers use `openbindings-internal-json/src/numeric.rs`. Inline signed
+  integers avoid decimal scratch allocation; wider operands keep exact decimal
+  arithmetic and its explicit work/storage limits.
+- `semantic/execution` evaluates applicators with explicit frames. Reference-free
+  plans need no completed-application memo; reference plans retain it for coherent
+  reuse and recursive refinement. Annotation identity and value identity remain
+  separate.
+- `semantic/explain.rs` materializes bounded original-location witnesses after a
+  verdict. Fixed SDK messages never include authored values. Diagnostic exhaustion
+  preserves an established failure with incomplete problems.
+- Symbolic proofs have a private maximum of 64 distinct effects. A separate sampled
+  stack guard is a refusal check, not a portable physical-stack guarantee. Actual
+  native and Wasm stacks require qualification for each build.
 
-Core and the evaluator share one copy of the library and never exchange a value:
+The evaluator still uses jsonschema for fixed SDK-owned format validators, with
+retrieval denied. Core uses it for the fixed document/local meta-schema checks
+above. Neither path compiles arbitrary user schemas as an evaluator substitute.
+`FlatJson` implements the shared jsonschema-value traits without exposing upstream
+library types through public SDK APIs. Internal JSON reads observe work only in
+an evaluator scope; core-only consumers do not acquire the evaluator dependency.
 
-- `openbindings-internal-schema` and `openbindings-internal-json` expose no
-  library type. The evaluator reaches core's schema space, with its projections,
-  reference resolution and meta-schema checks, through SDK types only, and
-  builds its own validator from the bundle. `FlatJson` implements the shared
-  jsonschema-value traits once for both.
-- `openbindings-internal-json/src/numeric.rs` holds only exact arithmetic; each
-  side registers it: core's fixed checks the four comparisons, the evaluator
-  all five keywords.
-- Core opens no work scope, so within a workspace build, where the feature is
-  on, its reads still count nothing; core's own graph, built alone or by a
-  consumer of core alone, holds no evaluator.
+The outgoing bounds, bundle, cycle-unfolding, stand-in, depth-estimation and
+unevaluated-walk transforms are deleted. Their historical measurements describe
+older revisions, not requirements to preserve those implementations or quotas.
+The original unevaluated-placement workload remains a semantic regression test.
 
 Refresh both attribution inventories and notices offline with
-`python3 tools/attribution.py`; verify with `--check`. The native inventory is
-the union of the closures for Linux (GNU), macOS and Windows (MSVC) on x86_64
-and aarch64, so a dependency one of them alone pulls in is attributed; fetch
-every platform's sources first with `cargo fetch --locked`.
-
-## The unevaluated-walk transform
-
-`src/unevaluated_walk.rs` is a stopgap for an upstream bug in jsonschema
-0.58.6. To build an `unevaluatedProperties` keyword, the library walks the
-schemas that can evaluate the instance's members, following `allOf`, `anyOf`,
-`oneOf`, `if`, `then`, `else`, `dependentSchemas` and references. For each
-`patternProperties` it reaches, `compile_pattern_properties` in
-`keywords/unevaluated_properties.rs` compiles every subschema and then drops
-the compiled node, keeping only the pattern. A `$ref` target first compiled
-there can be one that a later compilation round still points at through a
-non-owning edge; validation then reaches the dropped target and panics with
-"pending schema target dropped", which aborts a WebAssembly host. As of release
-0.59.0 the walk still compiles and drops the subschemas.
-
-The transform keeps every subschema out of that walk. In each bundled
-definition the walk can reach, `patternProperties` keeps its patterns, each
-with the schema `true`, and the original subschemas apply from a definition of
-their own, `{"not": {"not": {"patternProperties": ...}}}`, which the
-definition's `allOf` references. The walk never enters `not`, so it compiles
-only `true`, and the subschemas are compiled once, owned by their `not`.
-Validity is unchanged (`not` twice is the schema itself), and so are the
-evaluated member names, which the walk still reads from the patterns left in
-place. An explanation whose first error lies in a moved subschema names the
-original `patternProperties` keyword, at the object holding the member.
-
-The transform depends on which keywords the library's walk follows. The
-evaluator's `unevaluated_walk` tests compile a bundled program without the
-transform and require the library to panic on it, and require the walk still to
-skip `not`. The reproducer's four placements run with the transform, natively
-and in the Wasm suite, and `reference_placement` compares 500 seeded random
-contracts, split across document, contained and supplied resources, with the
-same schemas in one resource. A library upgrade that fixes the bug fails the
-first test: remove the transform and its tests in that upgrade. One that makes
-the walk enter `not` fails the second: the transform must change before the
-upgrade lands. The benchmark's `unevaluated-patterns` workload guards the
-transform's retained heap.
+`python3 tools/attribution.py`; verify with `--check`. The native inventory is the
+union of closures for Linux (GNU), macOS and Windows (MSVC) on x86_64 and aarch64,
+so a dependency pulled in by only one platform is still attributed. Fetch every
+platform's sources first with `cargo fetch --locked`.
 
 ## Advisory policy
 

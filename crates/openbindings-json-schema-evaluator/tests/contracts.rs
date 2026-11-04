@@ -88,7 +88,7 @@ fn numeric_arithmetic_admission_preserves_carriage_types_counts_and_bounds() {
     let multiple = prepare("{\"multipleOf\":3}");
     for token in [&huge, &"7".repeat(4097)] {
         assert!(
-            matches!(multiple.explain(&value(token)),ValueOutcome::NoVerdict {detail:NoVerdict {reason:NoVerdictReason::LimitExceeded,ref code,..}} if code=="numeric-arithmetic-limit")
+            matches!(multiple.explain(&value(token)),ValueOutcome::NoVerdict {detail:NoVerdict {reason:NoVerdictReason::LimitExceeded,ref code,..}} if code=="multiple-of-arithmetic-limit")
         );
         assert!(matches!(
             multiple.explain(&value("3")),
@@ -442,11 +442,37 @@ fn diagnostics_have_a_separate_bounded_pass_and_healthy_reuse() {
         r#"{{"allOf":[false,{{"allOf":[{}]}}]}}"#,
         vec!["false"; 200].join(",")
     );
-    let evaluator = DefaultEvaluator::with_limits(Limits {
-        evaluation_steps: Some(30),
-
-        ..Limits::default()
-    });
+    // Retain the former 30-unit request as a real pre-verdict exhaustion.
+    // Work units belong to the current evaluator, not the retired compiler.
+    let with_work = |work| {
+        DefaultEvaluator::with_limits(Limits {
+            evaluation_steps: Some(work),
+            ..Limits::default()
+        })
+    };
+    assert!(
+        matches!(prepare_op(&conformant(&doc(&expensive)), &with_work(30)).evaluate(&value("0")),
+        ValueOutcome::NoVerdict { detail } if detail.reason == NoVerdictReason::LimitExceeded)
+    );
+    let (mut below, mut enough) = (30, 10_000);
+    assert!(matches!(
+        prepare_op(&conformant(&doc(&expensive)), &with_work(enough)).evaluate(&value("0")),
+        ValueOutcome::Fails { .. }
+    ));
+    while enough - below > 1 {
+        let middle = below + (enough - below) / 2;
+        match prepare_op(&conformant(&doc(&expensive)), &with_work(middle)).evaluate(&value("0")) {
+            ValueOutcome::Fails { .. } => enough = middle,
+            ValueOutcome::NoVerdict { detail }
+                if detail.reason == NoVerdictReason::LimitExceeded
+                    && detail.code == "evaluation-work-limit" =>
+            {
+                below = middle
+            }
+            other => panic!("unexpected outcome: {other:?}"),
+        }
+    }
+    let evaluator = with_work(enough);
     let prepared = prepare_op(&conformant(&doc(&expensive)), &evaluator);
     for _ in 0..5 {
         let result = prepared.evaluate(&value("0"));
@@ -461,6 +487,13 @@ fn diagnostics_have_a_separate_bounded_pass_and_healthy_reuse() {
         assert!(!problems_complete);
         assert!(problems.is_empty());
     }
+    // Exact verdict work leaves no allowance to complete a diagnostic pass.
+    assert!(
+        matches!(prepared.explain(&value("0")), ValueOutcome::Fails { problems, problems_complete:false, .. } if problems.is_empty())
+    );
+    assert!(
+        matches!(prepare(&expensive).explain(&value("0")), ValueOutcome::Fails { problems, .. } if problems.len() == 1)
+    );
     assert!(matches!(
         prepare("true").evaluate(&value("0")),
         ValueOutcome::Satisfies

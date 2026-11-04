@@ -9,14 +9,23 @@ use openbindings_internal_schema::Control;
 use std::{
     cell::{Cell, RefCell},
     collections::BTreeMap,
+    hash::{DefaultHasher, Hasher},
     sync::Arc,
 };
 
 const MAXIMUM_FOOTPRINT: usize = 64 * 1024 * 1024;
 
+struct Form {
+    text: String,
+    program: Arc<Program>,
+}
 #[derive(Default)]
 pub(in super::super) struct Programs {
-    forms: RefCell<BTreeMap<String, Arc<Program>>>,
+    // Fixed-size ordered keys keep unrelated long forms out of each other's
+    // comparison budgets. Hash collisions always compare exact normalized text.
+    forms: RefCell<BTreeMap<(usize, u64), Vec<Form>>>,
+    #[cfg(test)]
+    forced_hash: Cell<Option<u64>>,
     form_bytes: Cell<usize>,
     footprint: Cell<usize>,
     failure: Cell<Option<&'static str>>,
@@ -81,10 +90,10 @@ impl Programs {
             Err(pattern::Refusal::Depth) => {
                 return self.retain(Program::Limited("pattern-depth-limit"), limits, control);
             }
-            Err(pattern::Refusal::Invalid) | Ok(Reading::Unsupported(Unsupported::Invalid)) => {
+            Err(pattern::Refusal::Invalid) => {
                 return self.retain(Program::Undefined, limits, control);
             }
-            Ok(Reading::Unsupported(Unsupported::Size | Unsupported::Memory(_))) => {
+            Ok(Reading::Unsupported(Unsupported::Size)) => {
                 return self.retain(Program::Limited("pattern-size-limit"), limits, control);
             }
             Ok(Reading::Unsupported(why)) => {
@@ -94,17 +103,27 @@ impl Programs {
         };
         // The fixed policy belongs to Construction. Every hit has still passed
         // source extent, authored depth and Reader admission in this attempt.
+        control.charge_work(linear.form.len().saturating_add(1))?;
+        let mut hasher = DefaultHasher::new();
+        hasher.write(linear.form.as_bytes());
+        let hash = hasher.finish();
+        #[cfg(test)]
+        let hash = self.forced_hash.get().unwrap_or(hash);
+        let key = (linear.form.len(), hash);
         let height = self.forms.borrow().len().saturating_add(1).ilog2() as usize + 2;
-        control.charge_work(
-            linear
-                .form
-                .len()
-                .saturating_add(1)
-                .saturating_mul(height)
-                .saturating_mul(12),
-        )?;
-        if let Some(known) = self.forms.borrow().get(&linear.form).cloned() {
-            return Ok(known);
+        control.charge_work(height.saturating_mul(12))?;
+        let candidates = self.forms.borrow().get(&key).map_or(0, Vec::len);
+        for index in 0..candidates {
+            control.charge_work(height.saturating_mul(12))?;
+            control.charge_work(linear.form.len().saturating_add(1))?;
+            let found = {
+                let forms = self.forms.borrow();
+                let candidate = &forms[&key][index];
+                (candidate.text == linear.form).then(|| candidate.program.clone())
+            };
+            if let Some(known) = found {
+                return Ok(known);
+            }
         }
         let form_bytes = self
             .form_bytes
@@ -151,20 +170,59 @@ impl Programs {
             }
         };
         budget.check(control)?;
-        // Bound SDK-owned BTree node splits (at most one per level plus root).
-        // One charged temporary key permits rollback if allocation cancels.
-        // Only the index String survives; no form enters the Program or Plan.
+        // Reserve fixed-key tree growth and collision-bucket replacement
+        // backing before publication. The completed form moves into the index.
+        // Insertion lookup and a possible rollback lookup/scan are charged
+        // before publication; rollback cannot call user control while borrowed.
+        control.charge_work(
+            height
+                .saturating_mul(24)
+                .saturating_add(candidates.saturating_add(1)),
+        )?;
         control.charge_allocation(height.saturating_mul(1024))?;
+        let (length, capacity) = self
+            .forms
+            .borrow()
+            .get(&key)
+            .map_or((0, 0), |bucket| (bucket.len(), bucket.capacity()));
+        let requested = if length == capacity {
+            let capacity = capacity
+                .checked_mul(2)
+                .and_then(|n| n.max(4).checked_mul(size_of::<Form>()))
+                .ok_or_else(|| self.refuse("pattern-index-memory-limit"))?;
+            control.charge_allocation(capacity)?;
+            Some(capacity / size_of::<Form>())
+        } else {
+            None
+        };
         let program = self.retain(program, limits, control)?;
-        control.charge_allocation(linear.form.len())?;
-        self.forms
-            .borrow_mut()
-            .insert(linear.form.clone(), program.clone());
+        {
+            let mut forms = self.forms.borrow_mut();
+            let bucket = forms.entry(key).or_default();
+            if let Some(capacity) = requested
+                && bucket.try_reserve_exact(capacity - bucket.len()).is_err()
+            {
+                if bucket.is_empty() {
+                    forms.remove(&key);
+                }
+                return Err(self.refuse("pattern-index-memory-limit"));
+            }
+            bucket.push(Form {
+                text: linear.form,
+                program: program.clone(),
+            });
+        }
         self.form_bytes.set(form_bytes);
         if let Err(failure) = self.check(control) {
-            // An allocation/callback can cancel after the pre-publication check.
-            // Do not let a later lookup observe that interrupted insertion.
-            self.forms.borrow_mut().remove(&linear.form);
+            // Remove only this interrupted publication. Other exact forms in
+            // a colliding bucket remain available; aggregate charges stay spent.
+            let mut forms = self.forms.borrow_mut();
+            if let Some(bucket) = forms.get_mut(&key) {
+                bucket.retain(|entry| !Arc::ptr_eq(&entry.program, &program));
+                if bucket.is_empty() {
+                    forms.remove(&key);
+                }
+            }
             return Err(failure);
         }
         Ok(program)

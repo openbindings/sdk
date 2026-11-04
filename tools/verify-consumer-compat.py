@@ -84,7 +84,7 @@ with tempfile.TemporaryDirectory(prefix='openbindings-consumer-') as temporary:
     receipts = []
     baseline = None
     evaluator_observations = None
-    for features in ['', 'ap', 'sdk', 'sdk,ap', 'evaluator', 'evaluator,ap', 'evaluator,po,check', 'portable', 'context', 'kinds', 'comparison', 'pull', 'invocation', 'native', 'native,ap']:
+    for features in ['', 'ap', 'sdk', 'sdk,ap', 'evaluator', 'evaluator,ap', 'evaluator,po', 'portable', 'context', 'kinds', 'comparison', 'pull', 'invocation', 'native', 'native,ap']:
         label = features.replace(',', '-') or 'baseline'
         selection = ['--no-default-features'] + (['--features', features] if features else [])
         metadata = json.loads(run(['cargo', 'metadata', '--locked', '--format-version', '1', '--filter-platform', host, *selection], fixture).stdout)
