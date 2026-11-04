@@ -17,5 +17,7 @@ per browser). These inventories overlap.
 This does not switch all schemas to the existing semantic Plan or close the ordinary
 compiler allocation/performance gate. Prepared original instructions, compact
 annotation demand, iterative execution, original diagnostics and the final matched
-performance campaign remain in the reviewed sequence. Independent review of this
-increment is pending at this checkpoint; no whole-SDK completion is claimed.
+performance campaign remain in the reviewed sequence. Independent review passes at da39d8b: both Rust toolchains match 2,465,940
+truth-table/range comparisons, 200,000 concrete additions allocate no heap, and
+46 cancellation boundaries plus four resource-refusal controls preserve clean
+retries. No whole-SDK completion is claimed.

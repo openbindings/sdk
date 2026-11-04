@@ -23,4 +23,6 @@ configuration failures and subsequent successful checks remain in the logs.
 Workerd checks include all three unchanged workload tiers, 1,000 retained calls,
 200 snapshot replacements, cancellation/recovery and release to the warmed owner
 count (17 here). This is correctness/ownership evidence, not a timing campaign.
-Independent organizational review and whole-SDK final qualification are separate.
+Independent organizational/verifier review passes at da39d8b; its follow-up
+corrects stale evaluator retention and blanket-refusal documentation. Whole-SDK
+final qualification remains separate.

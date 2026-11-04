@@ -28,6 +28,25 @@ use std::{
 
 const RECURSIVE_SCOPE: &str = "#recursive-scope";
 
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+enum ReferenceKind {
+    Static,
+    Dynamic,
+    Recursive,
+}
+impl ReferenceKind {
+    fn for_keyword(keyword: &str) -> Self {
+        match keyword {
+            "$ref" => Self::Static,
+            "$dynamicRef" => Self::Dynamic,
+            "$recursiveRef" => Self::Recursive,
+            _ => unreachable!("reference keyword"),
+        }
+    }
+}
+type ReferenceQuery = Arc<Result<openbindings_internal_schema::Target, QueryFailure>>;
+type PreparedQueries = HashMap<(usize, ReferenceKind), ReferenceQuery>;
+
 #[derive(Clone, Copy)]
 struct Interpreted<'a> {
     value: JsonRef<'a>,
@@ -47,6 +66,7 @@ pub(super) struct Plan {
     custom: Vec<usize>,
     resources: Vec<usize>,
     formats: HashMap<usize, formats::Format>,
+    queries: PreparedQueries,
 }
 impl Plan {
     pub(super) fn new(
@@ -78,6 +98,7 @@ impl Plan {
             custom: checked.custom,
             resources: checked.resources,
             formats: checked.formats,
+            queries: checked.queries,
         })
     }
     pub(super) fn evaluate(
@@ -142,7 +163,6 @@ impl Plan {
             pending_facts: HashMap::new(),
             supports: HashMap::new(),
             support_memo_count: 0,
-            queries: HashMap::new(),
             patterns: HashMap::new(),
             depth: 0,
             maximum_depth: depth,
@@ -329,7 +349,6 @@ struct Run<'a> {
     pending_facts: HashMap<Visit, refinement::Facts>,
     supports: HashMap<Visit, Arc<Option<refinement::Support>>>,
     support_memo_count: usize,
-    queries: HashMap<(usize, u8), Arc<Result<openbindings_internal_schema::Target, QueryFailure>>>,
     patterns: HashMap<(usize, usize), patterns::Pattern>,
     depth: usize,
     maximum_depth: usize,
@@ -353,36 +372,19 @@ impl Run<'_> {
         self.graph.charge(uri.len().saturating_add(32))?;
         Ok(Some(uri.into()))
     }
-    fn query(
-        &mut self,
-        node: usize,
-        keyword: &str,
-        reference: &str,
-    ) -> Result<Arc<Result<openbindings_internal_schema::Target, QueryFailure>>, NoVerdict> {
-        let kind = match keyword {
-            "$ref" => 0,
-            "$dynamicRef" => 1,
-            "$recursiveRef" => 2,
-            _ => unreachable!("reference keyword"),
-        };
+    fn query(&mut self, node: usize, keyword: &str) -> Result<ReferenceQuery, NoVerdict> {
         self.graph.tick()?;
-        if let Some(known) = self.queries.get(&(node, kind)) {
-            return Ok(known.clone());
-        }
-        let space = self.plan.environment.space();
-        let base = space
-            .resource(space.node(node).resource)
-            .base
-            .as_ref()
-            .map_or(0, String::len);
-        let bytes = base.saturating_add(reference.len());
-        self.graph
-            .work(bytes.saturating_mul(16).saturating_add(1))?;
-        self.graph
-            .charge(bytes.saturating_mul(64).saturating_add(1024))?;
-        let target = Arc::new(space.query(node, reference));
-        self.queries.insert((node, kind), target.clone());
-        Ok(target)
+        self.plan
+            .queries
+            .get(&(node, ReferenceKind::for_keyword(keyword)))
+            .cloned()
+            .ok_or_else(|| {
+                no_verdict(
+                    NoVerdictReason::EvaluatorFailure,
+                    "unprepared-reference-query",
+                    "the evaluator reached a reference outside its prepared original-node graph",
+                )
+            })
     }
     fn context_copy(&mut self, context: &Context) -> Result<(), NoVerdict> {
         reserve_context(&mut self.graph, context)
@@ -736,7 +738,7 @@ impl Run<'_> {
                 if keyword == "$recursiveRef" && reference != "#" {
                     return Ok((node, context, false));
                 }
-                let query = self.query(node, keyword, reference)?;
+                let query = self.query(node, keyword)?;
                 let Ok(target) = query.as_ref() else {
                     return Ok((node, context, false));
                 };
@@ -1046,7 +1048,7 @@ impl Run<'_> {
         if keyword == "$recursiveRef" && reference != "#" {
             return self.effect(Class::Inability, node, keyword, value, context, None);
         }
-        let query = self.query(node, keyword, reference)?;
+        let query = self.query(node, keyword)?;
         match query.as_ref() {
             Ok(target) => {
                 let recursive = keyword == "$recursiveRef" && self.recursive_target(target.node);
@@ -1499,5 +1501,109 @@ mod summary_tests {
         assert!(state.independent(&mut graph, &cuts).unwrap());
         state.valid = cut;
         assert!(!state.independent(&mut graph, &cuts).unwrap());
+    }
+
+    fn original_plan(schema: &str, resources: &[(&str, &str)], limits: Limits) -> Plan {
+        let document = Document::parse(format!(
+            r#"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{schema}}}}}}}"#
+        ))
+        .unwrap()
+        .validate()
+        .unwrap()
+        .conformant()
+        .unwrap();
+        let external = ExternalSchemas::new(resources.iter().map(|(uri, schema)| ExternalSchema {
+            uri: (*uri).into(),
+            document: JsonValue::parse(schema).unwrap(),
+        }))
+        .unwrap();
+        let preparation = PreparationLimits::default();
+        let control = std::sync::atomic::AtomicBool::new(false);
+        let environment = document
+            .operation("op")
+            .unwrap()
+            .input()
+            .unwrap()
+            .environment(&external, &preparation, &control)
+            .unwrap();
+        openbindings_internal_schema::preparation::Attempt::run(
+            preparation.max_work_units,
+            preparation.max_allocation_bytes,
+            &control,
+            |attempt| Plan::new(environment, limits, preparation, attempt),
+        )
+        .unwrap()
+        .unwrap()
+    }
+
+    #[test]
+    fn prepared_query_keeps_long_uri_work_out_of_retained_evaluations() {
+        let uri = format!("https://example.test/{}", "q".repeat(10_000));
+        let schema = serde_json::json!({"$ref": uri}).to_string();
+        let plan = original_plan(
+            &schema,
+            &[(&uri, "true")],
+            Limits {
+                evaluation_steps: Some(128),
+                ..Limits::default()
+            },
+        );
+        let value = JsonValue::parse("1").unwrap();
+        let control = std::sync::atomic::AtomicBool::new(false);
+        for _ in 0..3 {
+            assert!(matches!(
+                plan.evaluate(&value, Detail::Outcome, &control),
+                ValueOutcome::Satisfies
+            ));
+        }
+        assert!(
+            matches!(plan.evaluate(&value, Detail::Outcome, &std::sync::atomic::AtomicBool::new(true)),
+            ValueOutcome::NoVerdict { detail } if detail.reason == NoVerdictReason::Cancelled)
+        );
+        assert!(matches!(
+            plan.evaluate(&value, Detail::Outcome, &control),
+            ValueOutcome::Satisfies
+        ));
+    }
+
+    #[test]
+    fn prepared_queries_preserve_original_bases_and_typed_missing_outcomes() {
+        let plan = original_plan(
+            r#"{"anyOf":[{"$ref":"https://example.test/a/entry"},{"$ref":"https://example.test/b/entry"}]}"#,
+            &[
+                ("https://example.test/a/entry", r#"{"$ref":"child"}"#),
+                ("https://example.test/b/entry", r#"{"$ref":"child"}"#),
+                ("https://example.test/a/child", r#"{"type":"string"}"#),
+                ("https://example.test/b/child", r#"{"type":"integer"}"#),
+            ],
+            Limits::default(),
+        );
+        let control = std::sync::atomic::AtomicBool::new(false);
+        for (text, valid) in [(r#""a""#, true), ("1", true), ("false", false)] {
+            let result = plan.evaluate(&JsonValue::parse(text).unwrap(), Detail::Outcome, &control);
+            assert!(
+                if valid {
+                    matches!(result, ValueOutcome::Satisfies)
+                } else {
+                    matches!(result, ValueOutcome::Fails { .. })
+                },
+                "{result:?}"
+            );
+        }
+        let missing = r#"{"$ref":"https://example.test/missing"}"#;
+        let plan = original_plan(missing, &[], Limits::default());
+        assert!(
+            matches!(plan.evaluate(&JsonValue::parse("1").unwrap(), Detail::Outcome, &control),
+            ValueOutcome::NoVerdict { detail } if detail.reason == NoVerdictReason::ResourceUnavailable)
+        );
+        let independent = original_plan(
+            &format!(r#"{{"anyOf":[true,{missing}]}}"#),
+            &[],
+            Limits::default(),
+        );
+        assert!(matches!(
+            independent.evaluate(&JsonValue::parse("1").unwrap(), Detail::Outcome, &control),
+            ValueOutcome::Satisfies
+        ));
     }
 }

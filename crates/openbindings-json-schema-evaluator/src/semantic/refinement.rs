@@ -106,10 +106,10 @@ impl Run<'_> {
                 return Ok(None);
             }
             if let Some(reference) = schema.get("$ref") {
-                let Some(reference) = reference.as_str() else {
+                if reference.as_str().is_none() {
                     return Ok(None);
-                };
-                let query = self.query(node, "$ref", reference)?;
+                }
+                let query = self.query(node, "$ref")?;
                 let Ok(target) = query.as_ref() else {
                     return Ok(None);
                 };

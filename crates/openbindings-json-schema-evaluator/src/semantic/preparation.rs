@@ -9,6 +9,7 @@ pub(super) struct Checked {
     pub custom: Vec<usize>,
     pub resources: Vec<usize>,
     pub formats: HashMap<usize, formats::Format>,
+    pub queries: PreparedQueries,
 }
 
 /// Syntax admission traverses every declared schema position, including unused
@@ -115,6 +116,7 @@ pub(super) fn check_from(
     let mut patterns = Patterns::default();
     let mut custom = Vec::new();
     let mut formats = HashMap::new();
+    let mut queries = PreparedQueries::new();
     while let Some(node) = queue.pop_front() {
         control.check()?;
         if visited.contains(&node) {
@@ -221,7 +223,13 @@ pub(super) fn check_from(
                     .ok_or_else(|| limit("preparation-allocation-bytes"))?;
                 control.charge_work(bytes.saturating_mul(16).saturating_add(1))?;
                 control.charge_allocation(bytes.saturating_mul(16).saturating_add(512))?;
-                match space.query(node, reference) {
+                // Retain the result already needed for graph admission. The
+                // insertion-only map and Arc are construction-owned; evaluation
+                // shares them without reparsing URI text or copying outcomes.
+                control.charge_allocation(1024)?;
+                let query = Arc::new(space.query(node, reference));
+                queries.insert((node, ReferenceKind::for_keyword(keyword)), query.clone());
+                match query.as_ref() {
                     Ok(target) => {
                         queue.push_back(target.node);
                         if keyword == "$recursiveRef"
@@ -244,17 +252,18 @@ pub(super) fn check_from(
                             );
                         }
                         if keyword == "$dynamicRef"
-                            && let Some(name) = target.dynamic_name
+                            && let Some(name) = &target.dynamic_name
                             && used.insert(name.clone())
                         {
-                            let count = dynamic.get(&name).map_or(0, BTreeSet::len);
+                            let count = dynamic.get(name).map_or(0, BTreeSet::len);
                             control.charge_work(count)?;
                             control.charge_allocation(count.saturating_mul(16))?;
-                            queue.extend(dynamic.get(&name).into_iter().flatten().copied());
+                            queue.extend(dynamic.get(name).into_iter().flatten().copied());
                         }
                     }
                     Err(QueryFailure::ResourceUnavailable(uri)) => {
-                        missing.insert(uri);
+                        control.charge_allocation(uri.len().saturating_add(32))?;
+                        missing.insert(uri.clone());
                         count_resources(resources.len(), missing.len(), limits)?;
                     }
                     Err(QueryFailure::IdentityConflict) => {
@@ -331,6 +340,7 @@ pub(super) fn check_from(
         custom,
         resources,
         formats,
+        queries,
     })
 }
 fn limit(resource: &str) -> PreparationFailure {

@@ -39,3 +39,27 @@ Implement and review these increments:
 No default evaluator limits are enlarged by this design. The old backend's
 allocation gate stays open until removal or a complete independent certificate;
 passing an isolated increment does not close whole-SDK qualification.
+
+## First prepared artifact: original reference queries
+
+`check_from` already queries each activated original reference to discover its
+possible targets and dynamic-anchor closure. Retain that typed result in the
+immutable Plan, keyed by original node and reference keyword within that Plan's
+single environment. This is not a URI-string cache or a new resolution authority.
+The stored result includes malformed, missing, unsupported and unavailable
+outcomes so preparation does not convert a locally irrelevant defect into a
+blanket refusal. Identity-conflict admission keeps its existing rejection.
+
+Per-value evaluation reads the prepared static query under its work/cancellation
+ledger; dynamic/recursive target selection still uses the current effective scope.
+Arc ownership permits sharing the result without copying its strings or retaining
+any preparation control. Reserve construction for the map, Arc and additional
+retained string copies before allocation. A missing prepared entry is an explicit
+internal inability, never permission to resolve through another environment or
+invent a semantic outcome.
+
+Controls must cover the current reference/recursive/coordinate/custom-meta suites,
+same spelling in distinct bases, retained calls after dropping the original public
+owners, cancellation and low preparation budgets. Record the actual hot-call work
+removed; this increment does not claim to fix repeated syntax accounting or the
+long-reference preparation gate.

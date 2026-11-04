@@ -70,7 +70,7 @@ pushed as `41874e2`. The TypeScript implementation is now split into document,
 schema, JSON, ownership, diagnostics, runtime and optional discovery modules, with
 no internal compatibility barrel. Node/type/reference/npm archive, Chromium/WebKit
 and workerd correctness checks pass; [module evidence](../receipts/2026-11-02-preparation/typescript-modules/README.md)
-records the exact scope. The default 10,000-item source-pull workflow now completes
+records the exact scope; independent organizational and verifier reviews pass. The default 10,000-item source-pull workflow now completes
 with audited B-tree search accounting and an explicit 64-million work-unit policy;
 the earlier 20-million refusal is preserved. The independent catalog-budget review passes; [scale evidence](../receipts/2026-11-02-preparation/source-pull-scale/README.md)
 retains the initial refusal, corrected accounting and current/native/MSRV/Wasm results. Remaining end-to-end jobs, all-host packaging,
@@ -78,7 +78,10 @@ ordinary backend replacement and matched-toolchain performance qualification rem
 active. The first original-engine increment replaces quadratic concrete contains
 counting with a scalar count and formula promotion only for uncertain matches.
 Native evaluator/required-value, MSRV targeted, Node/package and both browser
-semantic checks pass; independent review is in progress. No whole-SDK completion
+semantic checks pass; independent counting review passes. Checkpoint `da39d8b`
+is committed and pushed. The next increment retains original static query results
+during preparation, keeping per-evaluation dynamic scope selection; native/MSRV,
+required-value and browser gates pass, with independent review in progress. No whole-SDK completion
 claim is made. Older receipts remain historical.
 
 No decision currently requires Matthew. If a real decision arises, record it

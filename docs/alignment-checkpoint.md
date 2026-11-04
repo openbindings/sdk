@@ -15,6 +15,11 @@ existing unpublished APIs have no compatibility protection.
 - `42cd6f0`: bounded exact schema identity against the pinned comparison profile.
 - `a7e4548`: Matthew's requested safety checkpoint, including the carrier foundation.
 - `574dc05`: independently reviewed shared finite-provider cancellation lifecycle.
+- `41874e2`: removed obsolete inspection/synthesis/shared-interface components,
+  qualified the current external invocation workflow and current role inventories.
+- `da39d8b`: domain-organized TypeScript facade, isolated consumer builds,
+  default 10,000-item catalog and concrete contains counting. Independent reviews
+  now pass for the module boundaries, verifier integrity, catalog policy and counter.
 
 Canonical owned document entries, exact JSON, conformance, original schema context,
 major evaluator semantics and current context/invocation APIs are implemented.
@@ -65,19 +70,27 @@ toolchain; the MSRV compatibility receipt explicitly records no matching Clippy 
 
 1. Source-pull and current invocation consumers pass source/archive and Node/Wasm
    checks. Independent invocation review adds rejected-output, exact context,
-   selection, embedded-kind, late-error and cancellation witnesses. Complete the
-   remaining current-spec catalog/performance jobs and final consumer audit.
+   selection, embedded-kind, late-error and cancellation witnesses. The intended
+   10,000-item catalog now completes under the independently reviewed 64M work
+   default; initial refusals remain recorded. Complete end-to-end composition,
+   the final performance campaign and consumer audit.
    Obsolete inspection/synthesis crates, records, verifiers and consumers are
    deleted; package inventories, feature matrices and CI now name current roles.
    Historical APIs, test counts and incidental behavior have no protection.
-2. Close ordinary compiler allocation accounting. The independent construction
-   design calls for one attempt through SDK conversion/projection/diagnostics,
-   early semantic routing for uncertified shapes, and a version-locked allocation
-   schedule before enabling each backend lane. Do not substitute an unproved
-   per-node multiplier or relax semantic/performance expectations.
-3. Finish remaining invocation/discovery consumers and TypeScript organization,
-   full workspace/host/CI/package checks, matched performance measurements and the
-   complete specification-to-code audit. No whole-SDK completion claim is made.
+2. Replace the ordinary compiler with the reviewed prepared original-node engine.
+   The [architecture review](alignment-checkpoint/original-evaluator-architecture-review.md)
+   and [implementation sequence](alignment-checkpoint/original-evaluator-implementation.md)
+   supersede pursuing the old compiler allocation schedule as the preferred path.
+   Concrete contains counting is qualified. Immutable reference-query preparation
+   is the next increment; compact demanded annotations, prepared operands/patterns,
+   iterative traversal and bounded original diagnostics follow. The existing Plan
+   cannot replace the compiler unchanged: unchanged large-container, depth,
+   long-reference and Explain workloads must first recover. Do not relax evaluator
+   limits or performance expectations to make that switch.
+3. TypeScript organization is implemented and independently reviewed. Finish
+   remaining invocation/discovery composition, full workspace/host/CI/package
+   checks, matched performance measurements and the complete specification-to-code
+   audit. No whole-SDK completion claim is made.
 
 ## Boundaries that must survive
 

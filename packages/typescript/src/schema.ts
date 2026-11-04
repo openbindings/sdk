@@ -23,7 +23,7 @@ import {
 import type { ExactInput, JsonInput } from "./json.js";
 import { Managed, adopt, handle } from "./ownership.js";
 
-/** A keyword or schema in an original schema source, by source URI and exact pointer. sourceUri null denotes the OpenBindings document; supplied URIs identify explicit resources and never initiate acquisition. Private evaluator projection identities are not exposed. Line and column come from the source's holder: ConformantDocument.locate() for the document and ExternalSchemas.locate() for a supplied resource; a prepared value contract keeps no source text. */
+/** A keyword or schema in an original schema source, by source URI and exact pointer. sourceUri null denotes the OpenBindings document; supplied URIs identify explicit resources and never initiate acquisition. Private evaluator projection identities are not exposed. Line and column come from the source's holder: ConformantDocument.locate() for the document and ExternalSchemas.locate() for a supplied resource; prepared schemas may retain immutable original sources needed for evaluation. Keep the corresponding document or external-schema owner when explicit coordinate lookup is needed. */
 export interface SchemaOrigin {
   /** Original source retrieval URI, or null for the OpenBindings document; distinct from a nested resource’s $id. */
   sourceUri: string | null;
@@ -362,7 +362,7 @@ export interface EvaluatorLimits {
   schemaResources: number | null;
 }
 
-/** Inputs for one preparation with the built-in JSON Schema 2020-12 evaluator, which performs no resource I/O, treats format as annotation and matches patterns with a linear-time engine. It prepares a stand-in for a resource that was not supplied, a schema that could apply again without consuming the instance, and a pattern that is invalid with Unicode semantics, needs a backtracking engine, applies a Unicode property escape or holds the non-word boundary `\B`: a value whose verdict depends on how a stand-in comes out returns a no-verdict naming it (resource-unavailable, in-place-cycle, schema-pattern-compilation, pattern-backtracking, unicode-property-matching or pattern-non-word-boundary), and every other value keeps the verdict that holds however the stand-ins come out. It refuses a value contract in which an unevaluatedProperties or unevaluatedItems keyword's annotation sources reach a stand-in for a missing resource, a cycle or patternProperties names, or a reference to a fragment of a missing resource. A pre-aborted signal returns no-verdict. */
+/** Inputs for one bounded preparation with the built-in evaluator. Resources are explicit immutable inputs and are never fetched. The evaluator interprets the selected original schema profile, including supported external dialects and custom vocabularies. Missing content, local undefined effects and unsupported capabilities remain distinct: evaluation may establish a result through an independent branch, prove undefined dependence, or return a typed no-verdict. Evaluated annotations and bounded recursive reasoning participate in that decision. Pre-aborted work returns a cancelled preparation failure. */
 export interface PrepareOptions extends WorkOptions {
   /** Explicit resources borrowed for this preparation; omitted means none. No URI is fetched and the passed owner remains caller-owned. */
   resources?: ExternalSchemas;
@@ -494,7 +494,7 @@ export class ExternalSchemas extends Managed {
   }
 }
 
-/** An original contextual schema, not yet prepared. Obtain it from Operation.input(), output(), or ConformantDocument.schema(); it retains its proved revision and survives operation and document disposal. Each prepare() compiles anew; retain the PreparedSchema for repeated validation. */
+/** An original contextual schema, not yet prepared. Obtain it from Operation.input(), output(), or ConformantDocument.schema(); it retains its proved revision and survives operation and document disposal. Each prepare() returns an independent prepared owner; retain the PreparedSchema for repeated evaluation. */
 export class Schema extends Managed {
   private constructor(raw: wasm.WasmSchema) {
     super(raw);
@@ -506,7 +506,7 @@ export class Schema extends Managed {
   json(): ExactJson {
     return new ExactJson(schemaRaw(this).json());
   }
-  /** Prepare with the built-in evaluator. Ready transfers a new disposable PreparedSchema independent of this owner; it does not promise every value is decidable. The default evaluator prepares a value contract with a stand-in for a resource that was not supplied, a schema that could apply again without consuming the instance, and a pattern it does not match. Validation returns the stand-in's no-verdict, such as resource-unavailable, when the verdict depends on how the stand-in comes out, and otherwise the verdict that holds however it comes out. A value contract in which an unevaluatedProperties or unevaluatedItems keyword's annotation sources reach a stand-in for a missing resource, a cycle or patternProperties names, a reference to a fragment of a missing resource, and known errors still refuse preparation; prepare again with resources to recover, while existing prepared owners retain their original snapshot. Cancelled/transient failures do not poison retries. Pre-aborted work returns a cancelled preparation failure. */
+  /** Prepare with the built-in evaluator. Ready transfers a disposable PreparedSchema independent of this owner and preserves its original reference environment; it does not promise every value is decidable. Missing external content or a locally undefined predicate is not a blanket refusal: each evaluation accounts for applicator dependence and evaluated annotations. Unsupported reasoning, exhausted limits and cancellation remain explicit failures or no-verdict outcomes. Supplying a different resource snapshot requires a new preparation; existing prepared owners keep their original meaning. Cancelled/transient failures do not poison retries. Pre-aborted work returns a cancelled preparation failure. */
   prepare(options: PrepareOptions = {}): SchemaPreparation {
     requireReady();
     const raw = schemaRaw(this);

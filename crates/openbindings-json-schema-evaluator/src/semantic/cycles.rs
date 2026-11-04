@@ -103,10 +103,10 @@ impl Run<'_> {
             };
             match shape.operator {
                 Operator::Reference => {
-                    let Some(reference) = shape.operand.view().as_str() else {
+                    if shape.operand.view().as_str().is_none() {
                         return Ok(None);
-                    };
-                    let query = self.query(node, "$ref", reference)?;
+                    }
+                    let query = self.query(node, "$ref")?;
                     let target = match query.as_ref() {
                         Ok(target) => target,
                         Err(QueryFailure::ResourceUnavailable(uri)) => {
