@@ -1,0 +1,16 @@
+{
+  "head": "511a1bf3b6a4ccdf78298c72c009926d93bb66f9",
+  "files": {
+    "examples/source-pull-consumer/src/kinds.rs": "1c1525dddbef7b69259770521af930a89c93ee312811979ae54b30fd547f92cd",
+    "examples/source-pull-consumer/src/lib.rs": "7ac4ddebed315ee9d6fa8b3b9e397269e07f58828ab9cf8601ac3a35415a014a",
+    "examples/source-pull-consumer/Cargo.toml": "a370c49b0973d0fb6bf04e6eef5b9034c72ce49fa366721fe3de411ff3bd2f16",
+    "examples/invocation-consumer/Cargo.toml": "04e75b9f8dcbbd49bc5796887dc0bdc143cdfe947cb83ff269b8806786525c34",
+    "examples/invocation-consumer/src/lib.rs": "ef86c38cfd6c8439e2437620b4b7dce29d8ca90706455eb0c896259c92de18b1",
+    "examples/invocation-consumer/src/wasm.rs": "4280de930902d13ba28575b34a0cc75149ab57629c33bf1bf03650e5cdfe84e6",
+    "examples/invocation-consumer/tests/journey.rs": "b52759578861c793c825ab6d66466e5bd58421b3b703e976b822a989d96863d6",
+    "examples/invocation-consumer/wasm-probe.ts": "29bd835402d67c7a564bb17043c26690db738be9de02d93a7563af91be9024d5",
+    "tools/verify-invocation.py": "db846876f384420ddff5622a8948ea1fb0dee37add0820380a991dfb2c337bf7",
+    "tools/verify-source-pull.py": "831b3c546a936a8eed38a84213adffaaaa20ef4f5679d253a47e87d769166f67",
+    "tools/consumer_qualification.py": "d24de513db7b981c66cd914de554cb3478b1e74b75f62b828262027387583b46"
+  }
+}

@@ -29,3 +29,5 @@ Independent injected-command integration controls accept valid source/archive ru
 The moved `schema.ts` retains obsolete evaluator wording from `internal.ts`: `SchemaOrigin` says prepared contracts retain no source text, and `Schema.prepare` describes older blanket stand-in/unevaluated preparation refusals. The original semantic Plan can retain original sources and now handles more such schemas. This predates the split and does not invalidate the move; correct it alongside the already planned evaluator documentation update rather than treating those statements as current lifetime/capability guarantees.
 
 No behavioral blocker found in the reviewed changes. Original snapshots, exact source hashes, independent probes and results are retained here.
+
+Follow-up at `511a1bf`: the reported retained-source and obsolete blanket-refusal comments were corrected in `schema.ts`, without behavioral edits. Reviewed wording and its hash are retained in `corrected-schema-documentation.ts` and `documentation-correction.json`.

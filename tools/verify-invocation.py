@@ -23,6 +23,7 @@ LOCAL = [
     "crates/openbindings-internal-cancellation", "crates/openbindings-internal-schema",
     "crates/openbindings-context", "crates/openbindings-schema-comparison",
     "crates/openbindings-source-pull",
+    "crates/openbindings-kind-description",
     "crates/openbindings-invocation", "crates/openbindings-json-schema-evaluator",
 ]
 
@@ -148,14 +149,14 @@ def main():
     copy_fresh(FIXTURE / "invoker-only", standalone)
     standalone_patches = "\n[patch.crates-io]\n" + "".join(
         f"{name}={{path={json.dumps(str(source))}}}\n" for name, source in sources.items()
-        if name not in {"openbindings-source-pull", "openbindings-schema-comparison", "source-pull-consumer"})
+        if name not in {"openbindings-source-pull", "openbindings-schema-comparison", "openbindings-kind-description", "source-pull-consumer"})
     (standalone / "Cargo.toml").write_text((FIXTURE / "invoker-only/Cargo.toml").read_text(encoding='utf-8') + standalone_patches)
     shutil.copyfile(ROOT / "Cargo.lock", standalone / "Cargo.lock")
     run("invoker-only", ["cargo", "test"], standalone)
     isolated = json.loads(run("invoker-only-metadata", ["cargo", "metadata", "--locked", "--format-version", "1"], standalone))
     standalone_lock = verify_resolution(isolated, standalone, sources,
         {"invoker-only-consumer": standalone}, args.archives, out)
-    forbidden = {"openbindings-source-pull", "openbindings-schema-comparison",
+    forbidden = {"openbindings-source-pull", "openbindings-schema-comparison", "openbindings-kind-description",
         "openbindings-http-discovery", "openbindings-json-schema-evaluator", "reqwest",
         "tokio", "futures-executor"}
     leaks = sorted({p["name"] for p in isolated["packages"]} & forbidden)

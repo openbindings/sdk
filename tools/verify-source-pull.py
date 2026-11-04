@@ -21,6 +21,7 @@ LOCAL = [
     "crates/openbindings", "crates/openbindings-internal-json",
     "crates/openbindings-internal-cancellation", "crates/openbindings-internal-schema",
     "crates/openbindings-context", "crates/openbindings-schema-comparison",
+    "crates/openbindings-kind-description",
     "crates/openbindings-source-pull",
 ]
 

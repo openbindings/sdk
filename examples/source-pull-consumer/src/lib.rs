@@ -7,6 +7,9 @@ use openbindings_schema_comparison::{
 use openbindings_source_pull::*;
 use std::{collections::BTreeMap, future::Future, pin::Pin};
 
+mod kinds;
+pub use kinds::KindCatalog;
+
 fn json(text: &str) -> JsonValue {
     JsonValue::parse(text).unwrap()
 }

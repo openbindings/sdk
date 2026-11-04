@@ -10,6 +10,34 @@ use wasm_bindgen::prelude::*;
 fn failure(error: impl std::fmt::Display) -> JsValue {
     JsValue::from_str(&error.to_string())
 }
+
+/// Exercise actual kind descriptions for the host's independent Unicode controls.
+#[wasm_bindgen(js_name = describeLocalKinds)]
+pub async fn describe_local_kinds() -> Result<String, JsValue> {
+    use openbindings_kind_description::{DescribeKindRequest, KindClient};
+    let client = KindClient::new(source_pull_consumer::KindCatalog::default());
+    let listed = client
+        .list_kinds(CancellationToken::new())
+        .await
+        .map_err(failure)?;
+    let mut descriptions = Vec::new();
+    for kind in listed {
+        let request = DescribeKindRequest::from_json(
+            JsonValue::parse(format!(
+                r#"{{"kind":{}}}"#,
+                kind.value().value().get("kind").unwrap().text()
+            ))
+            .map_err(failure)?,
+        )
+        .map_err(failure)?;
+        let description = client
+            .describe_kind(request, CancellationToken::new())
+            .await
+            .map_err(failure)?;
+        descriptions.push(description.value().value().text().to_owned());
+    }
+    Ok(format!("[{}]", descriptions.join(",")))
+}
 async fn exchange<F: Future<Output = Result<(), InvocationError>>>(
     call: Invocation<F>,
     value: JsonValue,

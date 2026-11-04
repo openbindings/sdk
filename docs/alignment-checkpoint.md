@@ -20,6 +20,11 @@ existing unpublished APIs have no compatibility protection.
 - `da39d8b`: domain-organized TypeScript facade, isolated consumer builds,
   default 10,000-item catalog and concrete contains counting. Independent reviews
   now pass for the module boundaries, verifier integrity, catalog policy and counter.
+- `511a1bf`: immutable original reference queries, with independent scope, lifetime,
+  preparation-budget and 194 cancellation/retry controls passing.
+- The [finite consumer journey](alignment-checkpoint/end-to-end-consumer-results.md)
+  passes independent review and both Rust/source/archive lanes. Full workflow is
+  native-only; the actual Wasm probes qualify a disclosed partial workflow.
 
 Canonical owned document entries, exact JSON, conformance, original schema context,
 major evaluator semantics and current context/invocation APIs are implemented.
@@ -72,8 +77,8 @@ toolchain; the MSRV compatibility receipt explicitly records no matching Clippy 
    checks. Independent invocation review adds rejected-output, exact context,
    selection, embedded-kind, late-error and cancellation witnesses. The intended
    10,000-item catalog now completes under the independently reviewed 64M work
-   default; initial refusals remain recorded. Complete end-to-end composition,
-   the final performance campaign and consumer audit.
+   default; initial refusals remain recorded. The complete finite native composition
+   is reviewed and qualified. Finish the final performance campaign and consumer audit.
    Obsolete inspection/synthesis crates, records, verifiers and consumers are
    deleted; package inventories, feature matrices and CI now name current roles.
    Historical APIs, test counts and incidental behavior have no protection.
@@ -81,8 +86,8 @@ toolchain; the MSRV compatibility receipt explicitly records no matching Clippy 
    The [architecture review](alignment-checkpoint/original-evaluator-architecture-review.md)
    and [implementation sequence](alignment-checkpoint/original-evaluator-implementation.md)
    supersede pursuing the old compiler allocation schedule as the preferred path.
-   Concrete contains counting is qualified. Immutable reference-query preparation
-   is the next increment; compact demanded annotations, prepared operands/patterns,
+   Concrete contains counting and immutable reference-query preparation are qualified.
+   Compact demanded annotations, prepared operands/patterns,
    iterative traversal and bounded original diagnostics follow. The existing Plan
    cannot replace the compiler unchanged: unchanged large-container, depth,
    long-reference and Explain workloads must first recover. Do not relax evaluator

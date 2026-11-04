@@ -15,6 +15,7 @@ owners, cancellation/retry, and repeated evaluation of a 10,000-character URI un
 
 Native and Rust 1.88 evaluator suites, required-value replays (1,546 each), strict
 current lint, Wasm/Node (180), type/reference checks and Chromium/WebKit independent
-judgments (505 core plus 1,546 evaluator values each) pass. Independent review is
-pending at this checkpoint. This does not close repeated syntax-accounting,
+judgments (505 core plus 1,546 evaluator values each) pass. Independent review passes at 511a1bf, including alternating dynamic/recursive
+scopes, original bases and snapshots, malformed/missing/decisive outcomes and all
+194 observed cancellation boundaries with clean retry. This does not close repeated syntax-accounting,
 diagnostic, retained-memory or whole-engine performance gates.
