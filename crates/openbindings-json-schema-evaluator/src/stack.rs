@@ -1,7 +1,7 @@
 //! The bounds the evaluator sizes from the stack the host gives it
 //! (`Limits::stack_bytes`), and the refusals that name it.
 //!
-//! Three costs recurse with the value contract or the value: evaluation, which the
+//! Three costs recurse with the schema or the value: evaluation, which the
 //! library runs by recursion through the schemas it enters; the library's
 //! `unevaluatedProperties` and `unevaluatedItems` validators, which recurse in
 //! ways the static depth bound does not model; and the library's compilation
@@ -62,11 +62,11 @@ impl Stack {
         );
         let message = match deepest {
             Some(levels) => format!(
-                "this value nests more than {levels} levels, the deepest this value contract \
+                "this value nests more than {levels} levels, the deepest this schema \
                  evaluates within {admitted}; {RAISE}"
             ),
             None => format!(
-                "evaluating any value against this value contract could nest more than \
+                "evaluating any value against this schema could nest more than \
                  {admitted}; {RAISE}"
             ),
         };

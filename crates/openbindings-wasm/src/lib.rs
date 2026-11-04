@@ -1145,9 +1145,7 @@ impl WasmResourceEntries {
             .map_err(|e| error("resource", e))
     }
 }
-/// A selected operation of a proved revision. Reads delegate to the plain view;
-/// only this handle hands out value contracts.
-/// One declared value contract, retained with its proved operation.
+/// One original contextual schema, retaining its proved document revision.
 #[wasm_bindgen]
 pub struct WasmSchema {
     schema: Schema,
@@ -1211,7 +1209,7 @@ impl WasmSchema {
         }
     }
 }
-/// A private transfer wrapper. Dropping it drops any untaken prepared value contract.
+/// A private transfer wrapper. Dropping it drops any untaken prepared schema.
 #[wasm_bindgen]
 pub struct WasmPreparation {
     preparation: Option<Result<PreparedSchema<DefaultValidator>, PreparationFailure>>,

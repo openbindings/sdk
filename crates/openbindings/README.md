@@ -21,7 +21,7 @@ assert_eq!(operation.key(), "lookup");
 evidence as met, violated or inconclusive where applicable. Text that is not JSON
 is an OBI-01 violation in the report, with its location. Only established
 conformance produces a `ConformantDocument`, with infallible typed field reads
-and operations that hand out value contracts. An unsupported specification
+and operations that hand out schemas. An unsupported specification
 version is a separate refusal.
 
 To author, create an OBI with `Document::new()` or parse exact JSON with
@@ -70,7 +70,7 @@ validator; the default evaluator shares compiled state when cloned.
 Core performs no resource acquisition, binding selection or invocation. Source
 and binding data remain opaque. Kind implementations interpret them outside
 core. Document conformance does not establish that a binding works or that an
-example satisfies its value contract.
+example satisfies its schema.
 
 Default JSON admission allows 32 MiB, 10,000 container levels and 1,000,000 nodes:
 `Document::parse`, `Document::parse_owned` and `JsonValue::parse` apply all three.

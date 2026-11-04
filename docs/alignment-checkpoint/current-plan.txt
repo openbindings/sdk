@@ -99,6 +99,18 @@ original-Plan-only independent bridge. The foreign-leaf support finding is fixed
 57 independent controls and 1,206 cancellation checkpoints pass. Current/MSRV and
 actual host lanes pass at this checkpoint. This is not the default-engine switch. No whole-SDK completion claim is made. Older receipts remain historical.
 
+Current public terminology and API guidance are corrected: schema/prepared-schema
+names, immutable edits, actual retained original sources and current Rust role
+boundaries replace stale recipes. The removed-diagnostics special option branch
+is deleted; generic unknown-option rejection remains. Public diagnostic wording
+and redaction/arithmetic controls now name schemas. Native/reference/snippet,
+actual Wasm/Node/package and both browser checks pass. Independent documentation
+review corrects required-meta admission and historical stack scope. The numeric
+design review rejects eager-all parsing and uncharged retained-bound comparisons;
+the accepted next increment is a bounded per-node cache with charged original
+fallback for oversized/excess operands. This does not preserve old APIs or exact
+incidental admission cutoffs. Final map, engine, performance and host gates remain.
+
 No decision currently requires Matthew. If a real decision arises, record it
 and continue every independent unblocked path before considering a stop.
 

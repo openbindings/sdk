@@ -31,7 +31,7 @@ export interface SchemaOrigin {
   pointer: string;
 }
 
-/** Known refusal causes for this facade and its bundled engine. Unsupported capability, conservative preparation, unavailable resources, limits, cancellation and evaluator failure do not establish satisfaction/failure. A potential cycle alone is conservative-preparation. Later package versions may add causes. A value contract that reaches a resource that was not supplied can prepare ready; values whose evaluation reaches the missing content return resource-unavailable during validation. For unavailable resources, Document.references() exposes document-wide reference spellings and original keyword locations, not an exact per-value-contract missing-resource list; apply an application disclosure policy before logging them. */
+/** Known refusal causes for this facade and its bundled engine. Unsupported capability, conservative preparation, unavailable resources, limits, cancellation and evaluator failure do not establish satisfaction/failure. A potential cycle alone does not establish undefinedness. Later package versions may add causes. Missing content for an ordinary value-evaluation reference does not by itself refuse preparation or decide a value outcome: independent assertions may establish satisfaction or failure. Missing a required meta-schema can instead prevent admission and produce a preparation failure. Document.references() exposes document-wide reference spellings and original keyword locations, not an exact per-schema missing-resource list; apply an application disclosure policy before logging them. */
 export type NoVerdictReason =
   | "unsupported-capability"
   | "conservative-preparation"
@@ -52,7 +52,7 @@ export interface NoVerdict {
   location: SchemaOrigin | null;
 }
 
-/** Established undefined result under the value-contract rules, separate from an evaluator's inability to answer. */
+/** Established undefined result under the schema evaluation rules, separate from an evaluator's inability to answer. */
 export interface UndefinedResult {
   /** Stable evaluator-defined detail code. */
   code: string;
@@ -97,7 +97,7 @@ export type ValueProblemDetails =
 
 /** Established instance failure, located in the value and in the schema. Failure messages avoid echoing instance values by default; pointers still contain source-controlled strings and must be rendered as text. */
 export interface ValueProblem {
-  /** Exact RFC 6901 pointer to the failing node, from the value passed to validate/explain (also when that value was acquired from a larger text); it can hold an unpaired UTF-16 unit. ExactJson.locate(instance) gives its byte offset, line and column when asked; an ordinary value is located in its exact JSON serialization. */
+  /** Exact RFC 6901 pointer to the failing node, from the value passed to evaluate/explain (also when that value was acquired from a larger text); it can hold an unpaired UTF-16 unit. ExactJson.locate(instance) gives its byte offset, line and column when asked; an ordinary value is located in its exact JSON serialization. */
   instance: string;
   /** The failing keyword in its original schema source, from that document's or resource's root: ConformantDocument.locate() or ExternalSchemas.locate() gives its coordinates. When the evaluator cannot map a keyword to the original source, the selected schema itself rather than a guessed keyword. */
   schema: SchemaOrigin;
@@ -340,25 +340,25 @@ export interface WorkOptions {
   signal?: AbortSignal;
 }
 
-/** Default-evaluator limits, each a nonnegative 32-bit integer; `evaluationSteps` and `schemaResources` may also be `null`, their defaults. A limit that protects the process (its stack or memory) has a default; one that would only bound time is off unless set. Exceeding a limit produces no-verdict, except that exhausted post-verdict diagnostics leave an established failure without problems. */
+/** Built-in evaluator budgets. Each numeric value is a nonnegative 32-bit integer; evaluationSteps and schemaResources also accept null. Preparation exhaustion returns a preparation failure; evaluation exhaustion returns no-verdict. Exhausted diagnostics preserve an established failure with problemsComplete false. These budgets are not elapsed-time deadlines or total process-memory bounds. */
 export interface EvaluatorLimits {
-  /** Work units per verdict/diagnostic pass. `null`, the default, sets no cap, so a pass takes time that grows with the schema (exponentially for some, such as an `anyOf` naming the next level twice) and the value; an application evaluating untrusted value contracts or values within a deadline sets one. A number charges a unit for each schema a reference enters and each element, member and literal comparison step, and yields `evaluation-work-limit` once a pass spends it. A cap places a work marker before every reference, so each reference a value's evaluation follows nests one more schema evaluation: within the same `stackBytes` a recursive value contract decides fewer levels, at worst about half as many (an array nested through one subschema reference per level decides 203 levels at the default stack instead of 340). */
+  /** Evaluation and semantic proof work; null (default) sets no caller-selected cap. Internal capability bounds still apply. */
   evaluationSteps: number | null;
-  /** Bytes of stack preparation and evaluation may use; default 262,144 (256 KiB). The evaluator sizes three bounds from it: a value is evaluated only if the schema evaluations it could nest fit 256 bytes each (1,024 at the default; with `evaluationSteps` set, each reference followed nests one more), otherwise it yields the `evaluation-depth-limit` no-verdict without being evaluated, and an explanation is built only within half that; a value contract holding `unevaluatedProperties` or `unevaluatedItems` is also guarded as it evaluates, and a pass that uses more than half the stack (128 KiB at the default) stops with the same no-verdict, a bound on the stack's bytes, so the depth it admits varies with the build and the host; and preparation refuses an unevaluated keyword's annotation walk weighing more than the stack admits with `unevaluated-walk-limit` (a fifth left to the caller, 99 KiB to the rest of preparation, 1 KiB per unit: 105 at the default). Each refusal states its arithmetic. In Wasm the guard measures the module's own 1 MiB stack, while the JavaScript engine's call stack bounds how deep the module's calls go: Node 22 checked and explained the deepest admitted values of the shapes probed up to 524,288 (512 KiB), and at 1 MiB a guarded value contract's deepest admitted value overflowed the engine's stack. */
+  /** Stack budget used to derive compilation, evaluation and proof-nesting bounds; default 262,144 bytes. Actual admitted nesting depends on schema shape and host. Raising this cannot enlarge the host's stack. */
   stackBytes: number;
-  /** Projected JSON nesting admitted to compilation; default 512. */
+  /** Projected JSON nesting admitted to the current compiled backend; default 512. */
   compileJsonDepth: number;
-  /** Maximum UTF-8 bytes per schema regex, and in the form the linear-time engine compiles it from; default 1,048,576 (1 MiB). A longer form yields the `pattern-size-limit` no-verdict. */
+  /** Maximum UTF-8 bytes in one schema pattern and its expanded form; default 1,048,576. */
   patternBytes: number;
-  /** Maximum regex group nesting; default 32. */
+  /** Maximum pattern group nesting; default 32. */
   patternDepth: number;
-  /** Maximum UTF-8 bytes in the forms the evaluator keeps for one value contract's schema regexes together: each distinct form of its `pattern` values and the form of each `patternProperties` name; default 4,194,304 (4 MiB). A form spells every set out, so it can be far longer than its regex (`\S` takes 191 bytes). Preparation counts each form as it is written and yields the `pattern-total-byte-limit` no-verdict at the first that passes the limit. */
+  /** Aggregate retained pattern-form bytes; default 4,194,304. Each distinct normalized form of a pattern value and each patternProperties name contributes. Expanded forms can be larger than their authored patterns. */
   totalPatternBytes: number;
-  /** Bytes of memory one value contract's schema regexes may use together, in the SDK's run matchers and the linear-time engine; default 67,108,864 (64 MiB). A distinct `pattern` form that is one anchored sequence of single-character runs, every run but the last with a fixed count, is matched by a run matcher, which holds 104 bytes, 24 for each step (adjacent literal characters share one, as adjacent runs of one set do), 16 for each character of a short fixed part of ASCII held as a table instead, 8 for each range of a run's members past ASCII and a byte for each byte of literal text. Each other distinct `pattern` form and each `patternProperties` name is compiled through the regex crate's two size settings. A quarter of the memory, at most 2 MiB each, is their search caches in equal parts, which bound only how fast a search runs. Each form first compiles within 48 KiB, and the run matchers and these first allowances share the other three quarters: at the default those are 48 MiB, which hold 1,024 first allowances, and each 48 KiB or part of it that the run matchers hold takes the place of one. Preparation reads the patterns in order and yields the `pattern-total-memory-limit` no-verdict at the first pattern past what the three quarters hold, before any is compiled, so run matchers read early can bring the refusal to an earlier compiled pattern; when the compiled patterns read by then pass the count on their own, the message states the count, and otherwise the run matchers' bytes too. The forms that need more share what is left equally, those that need less than their part keep only what they need and leave the rest to the others, at most 32 MiB each; so small patterns elsewhere change a large one's outcome only through what they hold, 48 KiB for each compiled pattern and its bytes for each run matcher, and no outcome depends on the order strings reach the patterns. A `patternProperties` name that does not fit what it is given refuses preparation, and a `pattern` value, compiled the first time a string reaches it, gives that string no verdict: `pattern-total-memory-limit`, whose message states the arithmetic, or `pattern-size-limit` when the form needs more than 32 MiB. */
+  /** Aggregate matcher storage and engine allowances; default 67,108,864 bytes. Compiler and search-cache policies divide this allowance; it is not a process-memory measurement. */
   totalPatternMemory: number;
-  /** Bytes the SDK's program for one value contract may grow by beyond its projected schemas; default 50,331,648 (48 MiB). Dynamic specialization copies a schema reached through `$dynamicRef` once for each dynamic context it is reached in; preparation estimates the memory each copy and each context takes as the SDK holds it, and refuses a value contract whose copies and contexts would pass the projected schemas' own estimate by more than this with the `program-specialization-limit` no-verdict, whose message states the arithmetic. It counts the SDK's own program, not the library's compiled program. */
+  /** SDK program growth and semantic proof-storage allowance; default 50,331,648 bytes. This does not account for every allocation in the underlying compiled library. */
   programBytes: number;
-  /** Schema resources one value contract may reach: the document resource holding its schema and each embedded `$id`, supplied and packaged meta-schema resource it reaches. Ordinary value contracts reach one or a few. `null`, the default, sets no cap. A number refuses a value contract reaching more with the `schema-resource-limit` no-verdict before compiling it, so an application preparing untrusted documents or resources can bound preparation at the size it chooses. The refusal comes after the value contract is projected and before the library compiles it, so it bounds the time and memory of that compilation. */
+  /** Reached schema-resource bound; null (default) sets no additional resource-count cap. Original-environment preparation still has its own footprint, work and allocation bounds. */
   schemaResources: number | null;
 }
 
@@ -539,7 +539,7 @@ export class Schema extends Managed {
       preparation.free();
     }
   }
-  /** Return a NEW independently disposable owner of this unprepared value contract. */
+  /** Return a NEW independently disposable owner of this original schema. */
   retain(): Schema {
     return Schema.fromRaw(schemaRaw(this).retain());
   }
@@ -556,11 +556,6 @@ function prepareOptions(options: PrepareOptions): {
       "Preparation options must be an object.",
     );
   const { resources, limits, ...work } = options;
-  if (Object.prototype.hasOwnProperty.call(work, "diagnostics"))
-    throw new SdkError(
-      "invalid-work-options",
-      "The diagnostics option was removed: call explain(value) on the prepared value contract to learn why a value fails.",
-    );
   return { resources, limits, signal: workSignal(work) };
 }
 
@@ -610,7 +605,7 @@ function cancelledValue(): ValueOutcome {
   };
 }
 
-/** Disposable prepared value contract, independent of its document, resources, operation and contract owners. Repeated validation borrows exact input; ordinary inputs are admitted and temporary owners released within the call. No verdict here proves whole-document conformance. */
+/** Disposable prepared schema that survives disposal of its document, external-schema, operation and original-schema handles. Its evaluator may retain immutable original sources. Repeated evaluation borrows exact input; ordinary inputs are admitted and temporary owners released within the call. No verdict here proves whole-document conformance. */
 export class PreparedSchema extends Managed {
   private constructor(raw: wasm.WasmPrepared) {
     super(raw);
@@ -659,27 +654,27 @@ export class PreparedSchema extends Managed {
     value: Exclude<JsonInput, ExactJson>,
     options?: WorkOptions,
   ): ValueCheck;
-  /** Explain an exact root: the verdict evaluate() returns, and for a failure the library's first error with redacted messages and original schema facts. Explanation costs more than the cheap check: it allocates in proportion to the schema and value, so keep evaluate() on paths that check untrusted input. It is built only for values within half the nesting `stackBytes` admits, and a deeper failure is reported without its problem; a `stackBytes` larger than the JavaScript engine's call stack holds can still overflow that stack (see `stackBytes`). Cancellation after the verdict keeps an established failure with problemsComplete false. */
+  /** Explain an exact root with the same verdict as evaluate() and available bounded problems at original locations. Explanation can allocate more than the cheap check. Missing witnesses, exhausted diagnostic limits or cancellation after an established failure leave problemsComplete false without changing the verdict. */
   explain(value: ExactJson, options?: WorkOptions): ValueOutcome;
   /** Explain a value that may be ordinary or exact: an ordinary one is admitted first, so input-error remains possible. */
   explain(value: JsonInput, options?: WorkOptions): ValueCheck;
   explain(value: JsonInput, options: WorkOptions = {}): ValueCheck {
     return checkValue(this, value, options, true);
   }
-  /** Return a NEW independently disposable owner sharing compiled state; it remains valid after the prior prepared owner is disposed. */
+  /** Return a NEW independently disposable owner sharing prepared state; it remains valid after the prior prepared owner is disposed. */
   retain(): PreparedSchema {
     return PreparedSchema.fromRaw(handle<wasm.WasmPrepared>(this).retain());
   }
 }
 
 function checkValue(
-  contract: PreparedSchema,
+  schema: PreparedSchema,
   value: JsonInput,
   options: WorkOptions,
   explain: boolean,
 ): ValueCheck {
   requireReady();
-  const prepared = handle<wasm.WasmPrepared>(contract);
+  const prepared = handle<wasm.WasmPrepared>(schema);
   const exact = isExact(value) ? jsonRaw(value) : undefined;
   const signal = workSignal(options);
   if (isAborted(signal)) return cancelledValue();

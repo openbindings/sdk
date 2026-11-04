@@ -130,14 +130,16 @@ pub enum NoVerdictReason {
     /// Sound preparation or evaluation could not be established, for example a potential non-progressing cycle. This does not prove semantic undefinedness.
     ConservativePreparation,
     /// A resource required by the evaluator's preparation or evaluation is absent;
-    /// no network retrieval is attempted. The default evaluator prepares an empty
-    /// stand-in for a missing resource and returns this cause during validation
-    /// when an instance's evaluation reaches it; a reference to a fragment of a
-    /// missing resource refuses at preparation. This does not prove that missing
-    /// content is necessary to the instance's semantic verdict.
+    /// no network retrieval is attempted. The default evaluator retains typed
+    /// original-environment lookup results. Missing content for an ordinary
+    /// value-evaluation reference does not by itself refuse preparation or
+    /// determine a value outcome: independent assertions may establish
+    /// satisfaction or failure. Missing a required meta-schema can instead prevent
+    /// schema admission and produce a preparation failure. This cause reports an
+    /// inability to establish the outcome with the resources available.
     /// Use [`Document::references`] to inspect document-wide reference spellings
     /// and original keyword locations, then prepare again with supplied resources.
-    /// That inventory is not an exact per-value-contract missing-resource list.
+    /// That inventory is not an exact per-schema missing-resource list.
     /// Apply your disclosure policy before logging it.
     ResourceUnavailable,
     /// A work or representation limit prevented a verdict: one the application
@@ -155,7 +157,9 @@ pub enum NoVerdictReason {
 /// pointer; generated evaluation-program identities are mapped back before
 /// exposure. Line and column come from the source's holder:
 /// [`ConformantDocument::locate`] for the document and [`ExternalSchemas::locate`] for a
-/// supplied resource. A prepared value contract keeps no source text. Serializes as JSON text; a pointer through a member name with an unpaired UTF-16 unit has no `serde_json::Value` form, so `serde_json::to_value` refuses such a record and `json!` panics: use `serde_json::to_string` or `to_writer`.
+/// supplied resource. This record contains coordinates, not source text; a
+/// prepared schema may retain immutable original sources needed by its evaluator.
+/// Serializes as JSON text; a pointer through a member name with an unpaired UTF-16 unit has no `serde_json::Value` form, so `serde_json::to_value` refuses such a record and `json!` panics: use `serde_json::to_string` or `to_writer`.
 ///
 /// Custom evaluators build one with [`Self::new`] or [`SchemaNode::origin`].
 /// Later versions may add fields: read them by name and match with `..`.
@@ -232,7 +236,7 @@ impl fmt::Display for NoVerdict {
 impl std::error::Error for NoVerdict {}
 
 #[derive(Clone, PartialEq, Eq, Serialize)]
-/// An established undefined result under the value-contract rules. Custom
+/// An established undefined result under the schema evaluation rules. Custom
 /// evaluators build one with [`Self::new`] and [`Self::with_location`] when
 /// semantic provenance and disagreeing completions are proved. Later versions
 /// may add fields: read them by name and match with `..`.
@@ -440,7 +444,7 @@ pub enum ValueOutcome {
         /// Whether selected diagnostics, including requested details, completed. False does not weaken the established failure verdict.
         problems_complete: bool,
     },
-    /// Whether the value satisfies its value contract is established to be undefined.
+    /// Whether the value satisfies the selected schema is established to be undefined.
     Undefined {
         /// Explanation of the undefined result, including an original schema location when known.
         detail: UndefinedResult,
@@ -486,7 +490,7 @@ impl ConformantDocument {
     /// Locate a schema location in this document: the node its pointer names,
     /// with line and column in the document's text. `None` for a location in a
     /// supplied resource, or a pointer that names no node in this revision.
-    /// Positions are computed on this call; a prepared value contract keeps none.
+    /// Line and column are computed on this call from the original text.
     pub fn locate(&self, at: &SchemaOrigin) -> Option<SourceLocation> {
         if at.source_uri.is_some() {
             return None;

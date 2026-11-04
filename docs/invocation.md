@@ -2,7 +2,7 @@
 
 `BindingClient<P>` runs an explicitly named binding from an owned conformant
 interface. `OperationClient<P,E>` also resolves operation keys/aliases, applies the
-caller's binding choice, and validates each declared value contract. Both return
+caller's binding choice, and evaluates values against each declared input/output schema. Both return
 an invocation with separate input, output and control handles.
 
 ## Call an operation

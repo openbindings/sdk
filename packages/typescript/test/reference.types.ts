@@ -32,7 +32,7 @@ export async function referenceExample(wasmBytes: Uint8Array, source: string) {
   using operation = validated.resolveOperation("run"); // primary name or alias
   if (!operation) return { status: "operation-missing" as const };
   using input = operation.input();
-  if (!input) return { status: "no-value-contract" as const };
+  if (!input) return { status: "no-schema" as const };
   const setup: SchemaPreparation = input.prepare({
     limits: { evaluationSteps: 2000000 },
   });

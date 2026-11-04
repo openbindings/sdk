@@ -13,17 +13,20 @@ replacing an existing dependency.
 | Worker service | Local workerd with a compiled Wasm module and initialization in an allowed request context. This is not evidence of deployed Cloudflare latency, quotas, or service availability. |
 
 The 256 KiB small-stack document regression is qualified on the development
-toolchain. On the same stack, release builds on Linux, macOS and Windows prepare
-value contracts whose patterns nest to the default `pattern_depth` and check
+toolchain. The following evaluator stack measurements describe the historical
+compiled lane recorded in [performance boundaries](performance-boundaries.md),
+not a depth guarantee for every path in the current mixed original/compiled engine.
+The recorded release builds on Linux, macOS and Windows prepare
+schemas whose patterns nest to the default `pattern_depth` and check
 values against them. The evaluator sizes its evaluation depth, stack guard and
 unevaluated walk limit from `Limits::stack_bytes` (256 KiB by default), and
 release builds on the same hosts prepare, check and explain values as deep as
-it admits for the 39 recursive value contract shapes `evaluation_stack` covers,
+it admits for the 39 recursive schema shapes `evaluation_stack` covers,
 unevaluated keywords included, on threads of 192 KiB, 256 KiB and 1 MiB, and
 prepare the longest unevaluated annotation walk of each kind it admits with a
 fifth of a 192 KiB, 256 KiB or 512 KiB thread already in use (`walk_stack`);
 the derivations were measured from 128 KiB to 2 MiB. The static depth bound models
-the library's frames, and a value contract holding an unevaluated keyword is also
+the library's frames, and a schema holding an unevaluated keyword is also
 guarded by measuring the stack its pass uses. Unoptimized code needs more:
 compiling 32 nested quantified groups takes up to about 1 MiB of stack in debug
 builds, and debug evaluation frames exceed 256 KiB at the default depth, so

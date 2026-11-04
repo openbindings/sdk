@@ -76,7 +76,7 @@ test("source editor requires conformance and retains prepared partial snapshots"
       editor.update(
         '{"openbindings":"0.2.0","operations":{"lookup":{"aliases":["find"]}}}',
       ).status,
-      "no-value-contract",
+      "no-schema",
     );
     const partialText =
       '{"openbindings":"0.2.0","operations":{"lookup":{"aliases":["find"],"input":{"$ref":"https://schema.example/missing"}}}}';

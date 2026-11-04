@@ -563,7 +563,7 @@ export class ConformantDocument extends DocumentSnapshot {
       throw error;
     }
   }
-  /** Locate a schema location in this document: the node its pointer names, with line and column in the document's text. null for a location in a supplied resource, or a pointer that names no node in this revision. Positions are computed on this call; a prepared value contract keeps none. A malformed location throws SdkError with code invalid-schema-location. */
+  /** Locate a schema location in this document: the node its pointer names, with line and column in the document's text. null for a location in a supplied resource, or a pointer that names no node in this revision. Line and column are computed on this call from the original text. A malformed location throws SdkError with code invalid-schema-location. */
   locate(at: SchemaOrigin): SourceLocation | null {
     const raw = conformantRaw(this);
     return decode(sdkCall(() => raw.locate(schemaLocationText(at))));

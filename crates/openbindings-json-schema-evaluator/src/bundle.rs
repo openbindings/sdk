@@ -1,6 +1,6 @@
 //! One schema resource for the JSON Schema library.
 //!
-//! The projection gives every schema a value contract reaches its own definition,
+//! The projection gives every schema a schema reaches its own definition,
 //! `<resource>#/$defs/n<number>`, in one projected resource per original
 //! resource, and writes every subschema position as a `$ref` to its child's
 //! definition. Definition numbers are unique across resources, so this module
@@ -266,7 +266,7 @@ impl Bundle {
     /// entry under `not` twice, which the library checks by its validity test
     /// even while it collects errors, so such a pass reports at most that one
     /// error and takes no longer than a validity test; the phases for errors
-    /// apply the upper entry and the value contract's own entry as they are.
+    /// apply the upper entry and the schema's own entry as they are.
     pub(crate) fn document_with_bounds(self, lower: u32, upper: u32, original: u32) -> Value {
         use crate::pass::Phase;
         let entry = |index: u32| serde_json::json!({ "$ref": format!("#/$defs/{}", self.names[index as usize]) });

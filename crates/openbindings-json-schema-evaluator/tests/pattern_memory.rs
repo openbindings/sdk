@@ -327,7 +327,7 @@ fn a_small_pattern_memory_refuses_a_pattern_beyond_what_it_leaves() {
     assert_eq!(refused.code, "pattern-total-memory-limit");
     assert_eq!(
         refused.message,
-        "this value contract's one compiled regular expression holds 48 KiB of its 256 KiB \
+        "this schema's one compiled regular expression holds 48 KiB of its 256 KiB \
          total_pattern_memory and 64 KiB for its search cache, which leaves 144 KiB; this \
          one, which needs more, may take it all, but does not compile within the 192 KiB \
          that gives it; raise total_pattern_memory (totalPatternMemory in TypeScript)"

@@ -13,6 +13,7 @@ Definition-level Rustdoc and JSDoc specify each method's ownership, result and l
 | Shared context | [openbindings-context](../crates/openbindings-context/src/lib.rs) | `cargo doc --locked --no-deps -p openbindings-context` |
 | Invocation | [openbindings-invocation](../crates/openbindings-invocation/src/lib.rs) | `cargo doc --locked --no-deps -p openbindings-invocation` |
 | Schema identity comparison | [openbindings-schema-comparison](../crates/openbindings-schema-comparison/src/lib.rs) | `cargo doc --locked --no-deps -p openbindings-schema-comparison` |
+| Source pulling | [openbindings-source-pull](../crates/openbindings-source-pull/src/lib.rs) | `cargo doc --locked --no-deps -p openbindings-source-pull` |
 | Kind description and source checking | [openbindings-kind-description](../crates/openbindings-kind-description/src/lib.rs) | `cargo doc --locked --no-deps -p openbindings-kind-description` |
 | HTTP discovery | [openbindings-http-discovery](../crates/openbindings-http-discovery/src/lib.rs) | `cargo doc --locked --no-deps -p openbindings-http-discovery --features native` |
 | TypeScript core and HTTP discovery | [core entry](../packages/typescript/src/index.ts), [discovery entry](../packages/typescript/src/http-discovery.ts) | Build, then run `node packages/typescript/scripts/check-api-reference.mjs target/api-reference` |
@@ -21,8 +22,8 @@ Definition-level Rustdoc and JSDoc specify each method's ownership, result and l
 The renderer follows actual exported declarations and inherited SDK members. It
 checks documentation and rejects public signatures that import private Wasm bindings.
 Private compiler graphs, scalar bridge records and lookup indexes are implementation
-mechanisms, not additional public document models. Role companions still awaiting
-replacement are outside this canonical foundation's completion claim.
+mechanisms, not additional public document models. Current role companions are Rust
+APIs; the TypeScript facade does not expose their provider protocols.
 
 ## Exact documents and conformance
 

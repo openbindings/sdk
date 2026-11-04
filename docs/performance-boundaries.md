@@ -15,7 +15,10 @@ original schema inventory. The older carrier-inspection caches described with
 these historical measurements have been removed. Their timing and allocation
 tables are historical evidence, not measurements of this implementation. The
 matched-toolchain comparison against the pinned SDK baseline remains a release
-gate; no current performance conclusion is implied by those tables.
+gate; no current performance conclusion is implied by those tables. The older
+API names, preparation algorithms and limit policies below describe those measured
+revisions. Use [current capabilities](../CAPABILITIES.md) and the
+[evaluator guide](../crates/openbindings-json-schema-evaluator/README.md) for current behavior.
 
 ## Prepared value contracts
 

@@ -2,7 +2,7 @@
 //!
 //! The library names a failing keyword by its location in the bundled
 //! resource, `<bundle>#/$defs/<definition>/<keyword>`, which means nothing to
-//! the document's author. A prepared value contract keeps, for each bundled
+//! the document's author. A prepared schema keeps, for each bundled
 //! definition, the original location of the schema it was projected from, and
 //! nothing else of the document: the error maps back to that location and the
 //! keyword. Every subschema position is a definition of its own, so the
@@ -16,7 +16,7 @@ use openbindings_internal_json::backend;
 use openbindings_internal_schema::SchemaSpace;
 use std::collections::HashMap;
 
-/// The original schema locations a prepared value contract's explanations name.
+/// The original schema locations a prepared schema's explanations name.
 pub(crate) struct Locations {
     // Original pointers, escaped and concatenated.
     text: String,

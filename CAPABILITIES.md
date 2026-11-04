@@ -1,7 +1,7 @@
 # Capabilities and limits
 
 Use this SDK to read, validate, author and inspect OpenBindings interface
-documents, and to validate caller-facing values against their value contracts.
+documents, and to evaluate caller-facing values against their input/output schemas.
 Start with a working example in the [Rust guide](docs/rust-first-use.md) or
 [TypeScript guide](packages/typescript/README.md).
 
@@ -9,14 +9,14 @@ Start with a working example in the [Rust guide](docs/rust-first-use.md) or
 
 Core checks OpenBindings 0.2 document rules and reports met, violated or
 inconclusive evidence where applicable. A parsed document keeps its exact bytes
-and can be edited in place; validation that establishes every rule yields a
+and supports immutable edits that return a new revision; validation that establishes every rule yields a
 conformant document. Unsupported specification versions
 are refused separately. A document's conformance does not establish its author
 claims about examples, bindings, availability or dependencies.
 
 Exact JSON retains numeric tokens, escaped UTF-16, duplicate-member evidence,
-unknown fields and original source locations. Typed authoring preserves opaque
-values while re-encoding typed fields. Checked conversion of ordinary application
+unknown fields and original source locations. Batched edits target exact JSON
+Pointers and preserve untouched bytes and opaque values. Checked conversion of ordinary application
 data refuses unsupported or inexact representations. Conversion cannot restore
 precision already lost by the application. Document conformance rejects an escaped
 unpaired surrogate in any member name or string value as OBI-01, including opaque
@@ -31,15 +31,16 @@ admission limits are a setting at `validate_document_with_limits`,
 `Document::parse_with_limits` and `JsonValue::parse_with_limits` (`JsonLimits`),
 and at TypeScript's `validateDocument`, `Document.parse` and `parseJson`
 (`limits`). `Document::new`, `Document::from_json`, `JsonValue::parse`,
-`JsonValue::string`, `Publication::from_bytes` and `validate_json` use the
+`JsonValue::string`, `Publication::from_bytes` and `PreparedSchema::evaluate_json` use the
 defaults, as do TypeScript's `Document.create()`, `ExactJson.from`,
-`validateJson` and a prepared value contract's `validate` and `explain` of an ordinary
+`evaluateJson` and a prepared schema's `evaluate` and `explain` of an ordinary
 value.
 A document keeps the limits it was admitted under, and its edits apply them to
 the edited document. Discovery raises only the byte limit, to its configured
 body bound; a body past the default nodes comes back undetermined and is admitted
-by validating it again with `validate_document_with_limits`. Value-contract
-preparation keeps fixed bounds of its own, which no setting raises. Every
+by validating it again with `validate_document_with_limits`. Schema preparation
+has separate footprint, work and allocation bounds through `PreparationLimits`,
+plus the selected evaluator's capability and execution limits. Every
 admission and edit limit refusal names how to admit more, including the route
 for calls that take no limits.
 Ordinary Rust Serde conversion has a 128-container ceiling. Document reports retain at
@@ -115,7 +116,9 @@ annotations in the semantic path. Draft-07 reference siblings are ignored;
 2019-09 recursive references and contains annotations retain their dialect's
 behavior. Unsupported identifier forms retain explicit capability refusals,
 including external identity selection when a stopped inventory could hide names.
-Required custom vocabulary and format-assertion interpretation remains unfinished.
+Supported custom vocabulary combinations and required format assertion use the
+original meta-schema and vocabulary declarations; unknown required vocabularies
+and format attributes have explicit preparation refusals.
 
 Construction and evaluation honor explicit resource/work limits and cooperative
 cancellation. The semantic path charges its decision graph, annotations, value
@@ -132,14 +135,14 @@ unnecessary original sources; a semantic validator retains the original schema
 environment it needs. `evaluate` requests an outcome; `explain` may provide bounded
 original-location evidence. Missing diagnostic detail never changes the verdict.
 
-Current migration gates are not all green: the native strict core has 505/505
-exact answers, and the native required evaluator kit has 1537/1546; the nine
-remaining cases require custom vocabulary interpretation. The last complete
-auxiliary host replay passed 2348 preserved/adjudicated inputs; full Wasm/host
-qualification must be refreshed after the standard-dialect changes. Independently reviewed recursive controls close
-three earlier F gaps, but two further required Undefined cases remain open.
-The migration's matched-toolchain performance and all-host qualification must be
-completed before claiming these changes fully qualified. Earlier measurements in
+The saved migration checkpoint passes all 505 required core cases and 1,546
+required evaluator cases on the qualified native and browser runs, including
+custom vocabulary and format cases. Independent recursive controls and the finite
+describe/check/pull/adopt/invoke journey also pass. This is bounded evidence:
+the original-engine replacement, complete allocation accounting, iterative depth,
+diagnostic witnesses, final API/map audit and matched-toolchain performance
+qualification remain open. See the [current checkpoint](docs/alignment-checkpoint.md)
+for receipts and the remaining sequence. Earlier measurements in
 [performance boundaries](docs/performance-boundaries.md) remain historical evidence.
 
 ## Schema comparison

@@ -60,7 +60,7 @@ pub(crate) enum Unsupported {
     /// within the most compiled size any one pattern is given
     /// ([`COMPILED_SIZE`]), which is found when the pattern is first compiled.
     Size,
-    /// Its form does not compile within what the value contract's pattern memory
+    /// Its form does not compile within what the schema's pattern memory
     /// gives it, found when the pattern is first compiled.
     Memory(Shortfall),
 }
@@ -69,7 +69,7 @@ impl Unsupported {
     /// limit: its match is then a stand-in, which a value's verdict need not
     /// depend on. A pattern a limit leaves unmatched is no stand-in: as a
     /// `pattern`, it gives no verdict wherever a string reaches it, and as a
-    /// `patternProperties` name, it refuses the value contract.
+    /// `patternProperties` name, it refuses the schema.
     pub(crate) fn stands_in(self) -> bool {
         matches!(
             self,
@@ -80,10 +80,10 @@ impl Unsupported {
         )
     }
 }
-/// How a value contract's pattern memory fell short, for the refusal to state.
+/// How a schema's pattern memory fell short, for the refusal to state.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Shortfall {
-    /// The value contract's run matchers, holding `matched` bytes, and its
+    /// The schema's run matchers, holding `matched` bytes, and its
     /// `compiled` patterns' first allowances need more than its `total` bytes
     /// hold for them ([`Memory::most_patterns`]).
     Count {
@@ -129,7 +129,7 @@ pub(crate) const SEARCH_CACHE: usize = 2 * 1024 * 1024;
 /// The compiled size every pattern's form first compiles within, in bytes.
 /// Every compiled pattern also holds memory that neither of the engine's size
 /// settings counts, so holding this much of the pattern memory bounds how many
-/// patterns a value contract compiles as well as their size.
+/// patterns a schema compiles as well as their size.
 pub(crate) const FIRST: usize = 48 * 1024;
 
 /// What the linear-time engine may build for one compiled pattern, through the
@@ -152,7 +152,7 @@ pub(crate) fn compile(form: &str, allowance: Allowance) -> Option<regex::Regex> 
         .ok()
 }
 
-/// A value contract's pattern memory (`Limits::total_pattern_memory`) and how it is
+/// A schema's pattern memory (`Limits::total_pattern_memory`) and how it is
 /// divided. A quarter of it, up to [`SEARCH_CACHE`] for each, is the compiled
 /// patterns' search caches, in equal parts, which bound only how fast a search
 /// runs. The run matchers hold the bytes they take, and each compiled
@@ -192,7 +192,7 @@ impl Memory {
             .checked_sub(matched)
             .map(|rest| rest / FIRST)
     }
-    /// The memory of a value contract compiling `patterns` patterns beside
+    /// The memory of a schema compiling `patterns` patterns beside
     /// run matchers holding `matched` bytes, at most
     /// [`Self::most_patterns`].
     pub(crate) fn new(total: usize, patterns: usize, matched: usize) -> Self {
@@ -1208,7 +1208,7 @@ const TEXT: u32 = u32::MAX;
 // The most characters a run matcher's fixed part is tabled for.
 const TABLE: usize = 64;
 impl Simple {
-    /// The heap bytes the matcher holds, which a value contract's pattern
+    /// The heap bytes the matcher holds, which a schema's pattern
     /// memory counts: 16 for each character of its table, 24 for each step,
     /// 8 for each range of members past ASCII and a byte for each byte of
     /// text, on every host.

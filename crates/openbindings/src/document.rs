@@ -26,8 +26,8 @@ pub(crate) struct DocumentInner {
     // document under them.
     limits: JsonLimits,
     pub schemas: OnceLock<Arc<SchemaIndex>>,
-    // Value-contract resolution spaces are assembled only when an evaluator asks
-    // for the core projection. The space without supplied resources lives here;
+    // Original schema environments are assembled on demand. The resolution
+    // space without supplied resources lives here;
     // a space with a nonempty set lives in that set, which this revision tells
     // to release it when the revision is dropped.
     resolution: OnceLock<Arc<SchemaSpace>>,
@@ -96,12 +96,12 @@ impl fmt::Debug for Document {
 /// use openbindings::{ConformantDocument, Document};
 /// fn consume(proof: ConformantDocument) { let document = proof.into_inner(); proof.operations(); }
 /// ```
-/// Only a conformant operation hands out value contracts:
+/// Only a conformant operation hands out its input and output schemas:
 /// ```compile_fail,E0599
 /// use openbindings::Document;
-/// fn contracts(doc: Document) { let _ = doc.operation("op"); }
+/// fn schemas(doc: Document) { let _ = doc.operation("op"); }
 /// ```
-/// Obtain it through [`DocumentValidation::conformant`]; value contract preparation is still a separate evaluator-dependent step.
+/// Obtain it through [`DocumentValidation::conformant`]; schema preparation is still a separate evaluator-dependent step.
 pub struct ConformantDocument {
     pub(crate) document: Document,
 }
@@ -110,7 +110,7 @@ impl Document {
     /// Parse and retain exact bytes and source locations without establishing conformance.
     /// Use [`Self::validate`] before treating this as a conformant document. See the
     /// [Rust first-use guide](https://github.com/openbindings/sdk/blob/main/docs/rust-first-use.md)
-    /// for the progression from parsing to a prepared input contract.
+    /// for the progression from parsing to a prepared input schema.
     ///
     /// # Errors
     /// Returns an input error for invalid UTF-8, a byte order mark, invalid JSON syntax, or an exceeded admission limit.
@@ -474,7 +474,7 @@ mod resolution_reuse {
     }
 
     #[test]
-    fn a_prepared_value_contract_keeps_no_space_of_a_set_it_never_received() {
+    fn a_prepared_schema_keeps_no_space_of_a_set_it_never_received() {
         let proof = proof();
         let operation = proof.resolve_operation("op").unwrap();
         // Prepared without external resources and retaining its environment, hence the document.

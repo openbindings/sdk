@@ -13,7 +13,7 @@ self.onmessage = async ({ data }) => {
     direction = "input",
     value,
   } = data;
-  let document, proof, selected, contract, prepared, input;
+  let document, proof, selected, schema, prepared, input;
   try {
     await initialize(); // retryable if a previous attempt failed
     if (data.kind === "initialize") {
@@ -54,17 +54,17 @@ self.onmessage = async ({ data }) => {
       self.postMessage({ id, status: "operation-missing", operation });
       return;
     }
-    contract = direction === "input" ? selected.input() : selected.output();
-    if (!contract) {
+    schema = direction === "input" ? selected.input() : selected.output();
+    if (!schema) {
       self.postMessage({
         id,
-        status: "no-value-contract",
+        status: "no-schema",
         operation,
         direction,
       });
       return;
     }
-    const setup = contract.prepare();
+    const setup = schema.prepare();
     if (setup.status !== "ready") {
       self.postMessage({ id, status: "preparation", preparation: setup });
       return;
@@ -88,7 +88,7 @@ self.onmessage = async ({ data }) => {
   } finally {
     input?.dispose();
     prepared?.dispose();
-    contract?.dispose();
+    schema?.dispose();
     selected?.dispose();
     proof?.dispose();
     document?.dispose();

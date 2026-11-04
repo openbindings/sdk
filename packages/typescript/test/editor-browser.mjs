@@ -68,7 +68,7 @@ export async function editorPage(browser, url) {
     );
     assert.match(
       corrected,
-      /Document is conformant; the input contract is ready/,
+      /Document is conformant; the input schema is ready/,
     );
     assert.match(corrected, /Selected input satisfies/);
     const active = await owners();

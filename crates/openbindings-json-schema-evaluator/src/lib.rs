@@ -28,159 +28,40 @@ use std::{collections::HashMap, sync::Arc};
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 #[serde(default, deny_unknown_fields)]
-/// Default-evaluator limits. A limit that protects the process (its stack or
-/// its memory) has a default. `evaluation_steps`, which bounds only time, is
-/// the application's to set and is off unless it does, and so is
-/// `schema_resources`, which bounds the time and memory of compiling a value contract
-/// that reaches many resources. Exceeding a limit yields no verdict.
+/// Built-in evaluator budgets, separate from [`PreparationLimits`].
+/// Preparation exhaustion returns a preparation failure; evaluation exhaustion
+/// returns no verdict. Exhausted diagnostics preserve an established failure
+/// with incomplete problems. These are not elapsed-time deadlines or total
+/// process-memory bounds.
 pub struct Limits {
-    /// Evaluation work units per verdict or explanation pass. `None`, the
-    /// default, sets no cap: the time a pass takes then grows with the schema,
-    /// exponentially for some (an `anyOf` naming the next level twice), and
-    /// with the value, so an application that evaluates untrusted value contracts
-    /// or values within a deadline sets one. `Some(n)` charges one unit for each
-    /// schema a reference enters and for each element, member and literal
-    /// comparison step, and gives `evaluation-work-limit` once a pass spends
-    /// `n`. Preparing with a cap places a work marker before every reference,
-    /// which wraps it in one more schema, so the validator is slightly larger
-    /// and each reference a value's evaluation follows nests one more schema
-    /// evaluation. Within the same `stack_bytes`, a recursive value contract
-    /// therefore decides fewer levels with a cap, at worst about half as many:
-    /// an array nested through one subschema reference per level nests five
-    /// schema evaluations per level instead of three, so at the default stack
-    /// it decides 203 levels instead of 340.
+    /// Evaluation and semantic proof work. `None` (default) sets no
+    /// caller-selected cap; internal capability bounds still apply.
     pub evaluation_steps: Option<usize>,
-    /// Bytes of stack the thread that prepares value contracts and evaluates values
-    /// has; default 256 KiB (262,144 bytes). Preparation and evaluation
-    /// recurse with the value contract and the value, so the evaluator sizes three
-    /// bounds from this stack, each with a stack cost measured in release
-    /// builds on Linux, macOS and Windows:
-    ///
-    /// - A value is evaluated only if the schema evaluations it could nest
-    ///   fit 256 bytes of this stack each (1,024 at the default). Before
-    ///   evaluating a value, the evaluator bounds that nesting from the
-    ///   value contract's schemas and the value's depth; a value whose bound is
-    ///   larger yields `evaluation-depth-limit` without being evaluated, and
-    ///   an explanation is built only within half that nesting. With
-    ///   `evaluation_steps` set, each reference followed nests one more
-    ///   schema evaluation, so the same stack admits fewer levels of a
-    ///   recursive value contract.
-    /// - A value contract holding `unevaluatedProperties` or `unevaluatedItems`,
-    ///   whose library validators recurse in ways the bound does not model, is
-    ///   also guarded as it evaluates: a pass that uses more than half this
-    ///   stack (128 KiB at the default) stops with `evaluation-depth-limit`.
-    ///   The guard bounds the stack's bytes, not a depth: how deep a value it
-    ///   admits depends on the frames the code takes, so it varies with the
-    ///   build and the host.
-    /// - The library compiles an unevaluated keyword's annotation walk by
-    ///   recursion, so preparation refuses a walk weighing more than this
-    ///   stack admits with `unevaluated-walk-limit`: a fifth of the stack is
-    ///   left to the caller's frames, 99 KiB to the rest of preparation, and
-    ///   each unit of the walk's weight takes 1 KiB (105 units at the
-    ///   default).
-    ///
-    /// Each refusal states its arithmetic. A thread with more stack admits
-    /// deeper values and longer walks; one with less refuses them sooner.
-    /// These bounds were measured with stacks from 128 KiB to 2 MiB. The
-    /// other recursion preparation does is bounded by `pattern_depth`,
-    /// `compile_json_depth`, core's admission limits and core's fixed schema
-    /// depth: whatever these limits set, preparation refuses a reached schema
-    /// nested more than 256 schemas below the schema position or supplied
-    /// resource root that holds it (`schema-depth-limit`). The defaults and
-    /// that depth fit the default stack; a host giving less stack lowers the
-    /// configurable bounds too.
+    /// Stack budget used to derive compilation, evaluation and proof-nesting
+    /// bounds; default 256 KiB. Actual admitted nesting depends on schema shape,
+    /// build and host. Raising this cannot enlarge the host's stack.
     pub stack_bytes: usize,
-    /// Maximum projected JSON nesting admitted to evaluator compilation; default 512.
+    /// Maximum projected JSON nesting admitted to the current compiled backend;
+    /// default 512.
     pub compile_json_depth: usize,
-    /// Maximum UTF-8 bytes in each schema regular expression, and in the form
-    /// the linear-time engine compiles it from; default 1 MiB (1,048,576
-    /// bytes). A pattern whose form would be longer gives `pattern-size-limit`.
+    /// Maximum UTF-8 bytes in one pattern and its expanded form; default 1 MiB.
     pub pattern_bytes: usize,
-    /// Maximum group nesting in a schema regular expression; default 32. The
-    /// regular-expression compiler recurses at each group level.
+    /// Maximum pattern group nesting; default 32.
     pub pattern_depth: usize,
-    /// Maximum UTF-8 bytes in the forms the evaluator keeps for one value contract's
-    /// schema regular expressions: each distinct form of its `pattern` values
-    /// and the form of each `patternProperties` name; default 4 MiB (4,194,304
-    /// bytes). The forms spell every set out, so they can be far longer than
-    /// the patterns (`\S` takes 191 bytes). Preparation counts each form
-    /// as it is written and refuses with `pattern-total-byte-limit` at the
-    /// first that passes the limit.
+    /// Aggregate retained pattern-form bytes; default 4 MiB. Each distinct
+    /// normalized form of a pattern value and each `patternProperties` name contributes. Expanded
+    /// forms can be larger than their authored patterns.
     pub total_pattern_bytes: usize,
-    /// Bytes of memory one value contract's schema regular expressions may
-    /// use together, in the SDK's run matchers and the linear-time engine;
-    /// default 64 MiB (67,108,864 bytes). A distinct form of a `pattern`
-    /// value that is one anchored sequence of single-character runs, every
-    /// run but the last with a fixed count, is matched by a run matcher, which
-    /// holds 104 bytes, 24 for each step (adjacent literal characters share
-    /// one, as adjacent runs of one set do), 16 for each character of a short
-    /// fixed part of ASCII it holds as a table instead, 8 for each range of a
-    /// run's members past ASCII and a byte for each byte of literal text. The
-    /// value contract compiles each other distinct `pattern` form, and the
-    /// form of each `patternProperties` name, through the regex crate's two
-    /// documented size settings. A quarter of the memory, at most 2 MiB for
-    /// each compiled pattern, is their search caches (`dfa_size_limit`), in
-    /// equal parts, which bound only how fast a search runs. Each form first
-    /// compiles within 48 KiB (`size_limit`), and the run matchers and these
-    /// first allowances share the other three quarters: at the default those
-    /// are 48 MiB, which hold 1,024 first allowances, and each 48 KiB or part
-    /// of it that the run matchers hold takes the place of one. Preparation
-    /// reads the patterns in order and refuses with
-    /// `pattern-total-memory-limit` at the first pattern past what the three
-    /// quarters hold, before any is compiled, so run matchers read early can
-    /// bring the refusal to an earlier compiled pattern. When the compiled
-    /// patterns read by then pass the count on their own, the message states
-    /// the count; otherwise it states the run matchers' bytes too. The
-    /// forms that need more share what is left equally; those that need less
-    /// than their part keep only what they need, to within a sixteenth, and
-    /// leave the rest to the others, at most 32 MiB each. So small patterns
-    /// elsewhere in a value contract change a large one's outcome only through
-    /// what they hold, 48 KiB for each compiled pattern and its bytes for each
-    /// run matcher, and no outcome depends on the order strings reach the
-    /// patterns. The first time a form is found that does not fit its 48 KiB,
-    /// the value contract's compiled patterns not yet compiled are compiled
-    /// then. A `patternProperties` name that does not fit what it is given
-    /// refuses preparation, and a `pattern` value, compiled the first time a
-    /// string reaches it, gives that string no verdict: with
-    /// `pattern-total-memory-limit`, whose message states the arithmetic, or
-    /// `pattern-size-limit` when the form needs more than 32 MiB.
+    /// Aggregate matcher storage and engine allowances; default 64 MiB.
+    /// Compiler and search-cache policies divide this allowance; it is not a
+    /// process-memory measurement.
     pub total_pattern_memory: usize,
-    /// Bytes the SDK's program for one value contract may grow by beyond its
-    /// projected schemas; default 48 MiB (50,331,648 bytes). Dynamic
-    /// specialization copies a schema reached through `$dynamicRef` once for
-    /// each dynamic context it is reached in. Preparation estimates the memory
-    /// each copy takes as the SDK holds it (160 bytes for the definition, 640
-    /// for each object's map, 56 for each member, 32 for each array element
-    /// and a byte for each byte of its strings and member names) and each
-    /// context (64 bytes and 8 for each dynamic-scope entry), and refuses a
-    /// value contract whose copies and contexts would pass the projected schemas'
-    /// own estimate by more than this with `program-specialization-limit`,
-    /// whose message states the arithmetic. The copies an in-place cycle's
-    /// unfolding and a stand-in's bounds program make are estimated the same
-    /// way, within what specialization leaves: past it, a cycle stands in at
-    /// each of its references instead and the value contract keeps no bounds
-    /// program. An unfolding also enumerates at most 1,024 copies, holding at
-    /// most the larger of 2 MiB and four times the bytes of the cycles' own
-    /// schemas, before every further cycle stands in at its references. The
-    /// projected schemas themselves
-    /// are bounded by core's admission limits and its 100,000 schema positions
-    /// per value contract. This counts the SDK's own program, not the memory the
-    /// library's compiled program takes.
+    /// SDK program growth and semantic proof-storage allowance; default 48 MiB.
+    /// This does not account for every allocation in the underlying compiler.
     pub program_bytes: usize,
-    /// Schema resources one value contract may reach, counted as its projection
-    /// holds them: the document resource holding the value contract's schema and
-    /// each embedded `$id` resource, supplied resource and packaged
-    /// meta-schema resource it reaches. Ordinary value contracts reach one or a
-    /// few. `None`, the default, sets no cap. `Some(n)` refuses a value contract
-    /// reaching more than `n` with `LimitExceeded` and `schema-resource-limit`
-    /// before compiling it, so an application preparing untrusted documents or
-    /// resource sets can bound preparation at the size it chooses. The refusal
-    /// comes after core projects the value contract, which its admission limits and
-    /// 100,000 schema positions bound, and before the evaluator copies the
-    /// resources and the library compiles them, so it bounds the time and
-    /// memory of that compilation: an 8 MB document whose input reaches a chain
-    /// of 99,990 `$id` resources prepared in 8.1 s at a 725 MB peak without a
-    /// cap, and refused in 1.1 s at a 499 MB peak with a cap of 1,000.
+    /// Reached schema-resource bound. `None` (default) sets no additional
+    /// resource-count cap. Original-environment preparation still has its own
+    /// footprint, work and allocation bounds through [`PreparationLimits`].
     pub schema_resources: Option<usize>,
 }
 impl Default for Limits {
@@ -536,7 +417,7 @@ impl DefaultEvaluator {
             return Err(no_verdict(
                 NoVerdictReason::LimitExceeded,
                 "schema-resource-limit",
-                "the value contract reaches more schema resources than the configured limit",
+                "the schema reaches more schema resources than the configured limit",
             )
             .into());
         }
@@ -936,7 +817,7 @@ impl DefaultEvaluator {
                 .map(|(location, _)| location);
             return Err(detail.into());
         }
-        // A value contract with a stand-in has a bounds program, which decides
+        // A schema with a stand-in has a bounds program, which decides
         // the values a pass that reaches a stand-in leaves undecided when no
         // answer of the stand-ins can change their verdict. It takes what is
         // left of the program budget.
@@ -1017,7 +898,7 @@ impl DefaultEvaluator {
     }
     // Compile a bounds program, unless its depth bound, its unevaluated
     // keywords' walks or its `patternProperties` names do not fit what the
-    // value contract's own program leaves: then the contract has none.
+    // schema's own program leaves: then the contract has none.
     fn bounds(
         &self,
         program: bounds::Program,
@@ -1080,7 +961,7 @@ impl DefaultEvaluator {
         };
         control.check()?;
         let document = bundle.document_with_bounds(lower, upper, original);
-        // The value contract's own schemas hold its stand-ins' keywords.
+        // The schema's own schemas hold its stand-ins' keywords.
         let registered = operands::Registered {
             markers: true,
             phase: true,
@@ -1189,7 +1070,7 @@ fn patterns<'a>(
                 no_verdict(
                     NoVerdictReason::LimitExceeded,
                     "pattern-total-byte-limit",
-                    "the forms of the value contract's patterns exceed the admitted total byte limit",
+                    "the forms of the schema's patterns exceed the admitted total byte limit",
                 ),
             ));
         }
@@ -1362,7 +1243,7 @@ fn pattern_memory_limit(shortfall: pattern::Shortfall) -> NoVerdict {
             // otherwise the run matchers' bytes are part of why it refuses.
             if matched == 0 || compiled > most {
                 format!(
-                    "this value contract compiles more than {most} regular expressions, as \
+                    "this schema compiles more than {most} regular expressions, as \
                      many as its {} total_pattern_memory holds at {first} each once their \
                      search caches take a quarter; {RAISE}",
                     bytes(total),
@@ -1376,7 +1257,7 @@ fn pattern_memory_limit(shortfall: pattern::Shortfall) -> NoVerdict {
                     }
                 };
                 format!(
-                    "this value contract's run matchers hold {}{compiled}, more {}than the {} \
+                    "this schema's run matchers hold {}{compiled}, more {}than the {} \
                      its {} total_pattern_memory holds for them once search caches take a \
                      quarter; {RAISE}",
                     bytes_up(matched),
@@ -1398,27 +1279,27 @@ fn pattern_memory_limit(shortfall: pattern::Shortfall) -> NoVerdict {
         } => {
             let holding = match (matched, patterns) {
                 (0, 1) => format!(
-                    "this value contract's one compiled regular expression holds {first} of \
+                    "this schema's one compiled regular expression holds {first} of \
                      its {} total_pattern_memory and {} for its search cache",
                     bytes(total),
                     bytes(cache),
                 ),
                 (0, _) => format!(
-                    "this value contract's {patterns} compiled regular expressions hold \
+                    "this schema's {patterns} compiled regular expressions hold \
                      {first} each of its {} total_pattern_memory and {} each for their search \
                      caches",
                     bytes(total),
                     bytes(cache),
                 ),
                 (_, 1) => format!(
-                    "this value contract's run matchers hold {} of its {} total_pattern_memory, \
+                    "this schema's run matchers hold {} of its {} total_pattern_memory, \
                      and its one compiled regular expression {first} and {} for its search cache",
                     bytes(matched),
                     bytes(total),
                     bytes(cache),
                 ),
                 _ => format!(
-                    "this value contract's run matchers hold {} of its {} total_pattern_memory, \
+                    "this schema's run matchers hold {} of its {} total_pattern_memory, \
                      and its {patterns} compiled regular expressions {first} each and {} each \
                      for their search caches",
                     bytes(matched),
@@ -1462,7 +1343,7 @@ fn specialization_limit(growth: bundle::Growth) -> NoVerdict {
         NoVerdictReason::LimitExceeded,
         "program-specialization-limit",
         format!(
-            "this value contract's dynamic references specialize {} schemas, taking {}, and \
+            "this schema's dynamic references specialize {} schemas, taking {}, and \
              {} dynamic contexts holding {} entries, taking {}, before preparation stops: \
              together they pass its projected schemas' {} by more than its {} program_bytes; \
              raise program_bytes (programBytes in TypeScript)",
@@ -1659,7 +1540,7 @@ struct StandIns {
 /// How many times the work of a verdict pass that reached a stand-in the pass
 /// over a bound may do, as the evaluation work allowance counts work.
 const BOUNDS_WORK: usize = 8;
-/// How many times the work of collecting the value contract's own errors the
+/// How many times the work of collecting the schema's own errors the
 /// collection that explains a failure through a bound may do.
 const EXPLANATION_WORK: usize = 64;
 /// The work a pass over a bound may do beyond that, for the program's own
@@ -1685,7 +1566,7 @@ impl Bounds {
     // The first of the library's errors for `value` against the entry for
     // `phase`, which reaches the same verdict as its validity test. Every use
     // of the program goes through this one call to the library's error
-    // collection, which the value contract's own passes never call, so its
+    // collection, which the schema's own passes never call, so its
     // verdict passes and explanations are compiled as they would be without
     // the program. A verdict phase's root makes the library check its entry
     // by its validity test.
@@ -1705,7 +1586,7 @@ impl Bounds {
 }
 fn verdict_only_failure() -> ValueOutcome {
     ValueOutcome::Fails {
-        message: "value does not satisfy the value contract".into(),
+        message: "value does not satisfy the schema".into(),
         problems: Vec::new(),
         problems_complete: false,
     }
@@ -1814,7 +1695,7 @@ impl Compiled {
         }
     }
     // The work a pass over `bounds` for `value` may do: `times` the work of
-    // the value contract's own pass, which the program's own entry measures
+    // the schema's own pass, which the program's own entry measures
     // in `phase`, checking validity or collecting errors, and `BOUNDS_SLACK`
     // more. Past that, a pass gives up, so deciding or explaining a value
     // never costs more than a multiple of checking or explaining it. `None`
@@ -1951,7 +1832,7 @@ impl Compiled {
             ),
         }
     }
-    // The library's first error for `value`, which the value contract fails,
+    // The library's first error for `value`, which the schema fails,
     // at its keyword's original location.
     fn diagnostics(&self, value: &JsonValue, control: &dyn WorkControl) -> ValueOutcome {
         // Validity is already established. Failure to obtain detail (including
@@ -1995,15 +1876,15 @@ impl Compiled {
             _ => Vec::new(),
         };
         ValueOutcome::Fails {
-            message: "value does not satisfy the value contract".into(),
+            message: "value does not satisfy the schema".into(),
             problems,
             // A first error never claims exhaustive diagnostics.
             problems_complete: false,
         }
     }
     // The explanation of a failure the verdict pass established without
-    // reaching a stand-in: the value contract's own. Where that names no
-    // problem, a value contract holding a stand-in for an in-place cycle, an
+    // reaching a stand-in: the schema's own. Where that names no
+    // problem, a schema holding a stand-in for an in-place cycle, an
     // invalid pattern or `patternProperties` names explains the failure
     // through its bounds program, whose upper bound fails too.
     fn explained(&self, value: &JsonValue, control: &dyn WorkControl) -> ValueOutcome {
@@ -2024,8 +1905,8 @@ impl Compiled {
     // The explanation of a value whose failure the bounds program shows: the
     // library's first error for its upper bound, which fails however the
     // stand-ins come out, within a multiple of the work of collecting the
-    // value contract's own errors. It is a function of its own, beside the
-    // value contract's own explanation, which then compiles as it would
+    // schema's own errors. It is a function of its own, beside the
+    // schema's own explanation, which then compiles as it would
     // without it.
     #[inline(never)]
     fn bounds_diagnostics(
@@ -2075,7 +1956,7 @@ impl Compiled {
             _ => Vec::new(),
         };
         ValueOutcome::Fails {
-            message: "value does not satisfy the value contract".into(),
+            message: "value does not satisfy the schema".into(),
             problems,
             problems_complete: false,
         }

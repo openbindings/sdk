@@ -266,7 +266,7 @@ test("a contract's compiled patterns share its pattern memory", () => {
   assert.equal(unmatched.detail.code, "pattern-total-memory-limit");
   assert.equal(
     unmatched.detail.message,
-    "this value contract's one compiled regular expression holds 48 KiB of its 256 KiB " +
+    "this schema's one compiled regular expression holds 48 KiB of its 256 KiB " +
       "total_pattern_memory and 64 KiB for its search cache, which leaves 144 KiB; this " +
       "one, which needs more, may take it all, but does not compile within the 192 KiB " +
       "that gives it; " +

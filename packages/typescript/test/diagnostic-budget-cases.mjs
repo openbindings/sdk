@@ -20,7 +20,7 @@ export function diagnosticBudgetCases(sdk) {
         const result = setup.schema[call](42);
         check(result.status === "fails", "same verdict");
         check(
-          result.message === "value does not satisfy the value contract",
+          result.message === "value does not satisfy the schema",
           "fixed explanation",
         );
         check(

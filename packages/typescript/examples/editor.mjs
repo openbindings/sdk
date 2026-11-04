@@ -16,7 +16,7 @@ export const editorDocument = `{
   }
 }`;
 
-// The component keeps its latest prepared snapshot, including one whose contract
+// The component keeps its latest prepared snapshot, including one whose schema
 // reaches a resource that was not supplied. Each value check can still return
 // no verdict.
 export class DocumentEditor {
@@ -24,7 +24,7 @@ export class DocumentEditor {
   update(text, value = { id: 7 }, explain = false) {
     const parsed = Document.parse(text);
     if (parsed.status !== "parsed") return parsed;
-    let proof, operation, contract, input;
+    let proof, operation, schema, input;
     try {
       const checked = parsed.value.validate();
       if (checked.status !== "conformant") return checked;
@@ -38,9 +38,9 @@ export class DocumentEditor {
       }
       operation = proof.resolveOperation("find");
       if (!operation) return { status: "operation-missing" };
-      contract = operation.input();
-      if (!contract) return { status: "no-value-contract" };
-      const setup = contract.prepare();
+      schema = operation.input();
+      if (!schema) return { status: "no-schema" };
+      const setup = schema.prepare();
       if (setup.status !== "ready") {
         if (
           setup.status === "refused" &&
@@ -60,7 +60,7 @@ export class DocumentEditor {
       return { status: "updated", operations, result };
     } finally {
       input?.dispose();
-      contract?.dispose();
+      schema?.dispose();
       operation?.dispose();
       proof?.dispose();
       parsed.value.dispose();
@@ -89,10 +89,10 @@ function schemaLocation(location) {
 function valueLines(result) {
   switch (result.status) {
     case "satisfies":
-      return ["Selected input satisfies the input contract."];
+      return ["Selected input satisfies the input schema."];
     case "fails":
       return [
-        "Selected input does not satisfy the input contract.",
+        "Selected input does not satisfy the input schema.",
         ...result.problems.map(
           (problem) =>
             `Instance ${JSON.stringify(problem.instance)}; ${schemaLocation(problem.schema)}: ${problem.message}`,
@@ -135,15 +135,15 @@ export function formatEditorResult(result) {
       ].join("\n");
     case "operation-missing":
       return 'Document is conformant; operation "find" is missing.';
-    case "no-value-contract":
-      return 'Document is conformant; operation "find" has no input contract.';
+    case "no-schema":
+      return 'Document is conformant; operation "find" has no input schema.';
     case "refused":
       return `Document is conformant; input setup was refused (${result.failure.kind}); ${schemaLocation(result.failure.origin)}.`;
     case "resources-missing":
       return `Document is conformant; schema resources are missing. Previous prepared snapshot kept. One missing reference: ${result.evidence.details.cause.details.uri}. Prepare again with resources before replacement.`;
     case "updated":
       return [
-        "Document is conformant; the input contract is ready.",
+        "Document is conformant; the input schema is ready.",
         `Operations: ${JSON.stringify(result.operations.map((operation) => operation.key))}.`,
         ...valueLines(result.result),
       ].join("\n");

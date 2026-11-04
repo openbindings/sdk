@@ -506,8 +506,8 @@ fn nested_keywords_written_from_both_bounds_cost_a_multiple_of_the_verdict_pass(
 }
 
 // A failure the verdict pass establishes without reaching a stand-in is
-// explained by the value contract's own first error. Where collecting that
-// error reaches a stand-in, a value contract holding a stand-in for a cycle,
+// explained by the schema's own first error. Where collecting that
+// error reaches a stand-in, a schema holding a stand-in for a cycle,
 // an invalid pattern or `patternProperties` names explains the failure
 // through its upper bound instead; one holding only stand-ins for missing
 // resources and unmatched `pattern` values names no problem.

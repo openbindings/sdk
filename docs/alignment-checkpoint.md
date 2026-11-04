@@ -25,6 +25,10 @@ existing unpublished APIs have no compatibility protection.
 - The [finite consumer journey](alignment-checkpoint/end-to-end-consumer-results.md)
   passes independent review and both Rust/source/archive lanes. Full workflow is
   native-only; the actual Wasm probes qualify a disclosed partial workflow.
+- The [current public guidance](alignment-checkpoint/current-public-documentation-results.md)
+  uses schema terminology, immutable edits and actual original-source ownership.
+  Obsolete diagnostics-option handling is removed; strict unknown-option rejection
+  remains. Public examples, references, package checks and both browser lanes pass.
 
 Canonical owned document entries, exact JSON, conformance, original schema context,
 major evaluator semantics and current context/invocation APIs are implemented.
@@ -93,7 +97,10 @@ toolchain; the MSRV compatibility receipt explicitly records no matching Clippy 
    restore the unchanged large-container jobs, with independent direct-engine
    corpus/review evidence and the foreign-leaf support correction. Prepared
    operands, local syntax accounting, iterative traversal and original diagnostics
-   remain. Depth, long-reference and Explain workloads still need restoration
+   remain. The [numeric design review](alignment-checkpoint/prepared-numeric-design-review.md)
+   requires bounded optional readings with original fallback selected before
+   charges; cached Bound comparisons still need schema-dependent scratch allowances.
+   Depth, long-reference and Explain workloads still need restoration
    before the default-engine switch. Do not relax evaluator
    limits or performance expectations to make that switch.
 3. TypeScript organization is implemented and independently reviewed. Finish

@@ -12,7 +12,7 @@
 //! A bounds program computes that. It holds two copies of each schema that can
 //! reach a stand-in, one for the least validity its answers can give the
 //! schema (the lower bound) and one for the most (the upper bound), beside
-//! every schema of the value contract's own program, and its root applies the
+//! every schema of the schema's own program, and its root applies the
 //! lower copy of the entry, the upper copy or the entry itself, as the pass's
 //! phase (`crate::pass::Phase`) asks. A stand-in is
 //! `false` in a lower copy and `true` in an upper one. A keyword whose validity
@@ -47,20 +47,20 @@
 //! By induction over the schemas, a lower copy holds only where its schema
 //! holds every way the stand-ins' answers come out, independently at each
 //! place, and an upper copy fails only where its schema fails every way: so
-//! when the lower copy of the value contract holds, every way satisfies, and
+//! when the lower copy of the schema holds, every way satisfies, and
 //! when the upper copy fails, every way fails. A pass that reached a stand-in
 //! and holds checks the lower copy; one that fails checks the upper. The
 //! answers the pass gave are one of the ways, so the other bound cannot decide
-//! it. A value contract whose entry applies nothing but stand-ins, through
+//! it. A schema whose entry applies nothing but stand-ins, through
 //! `$ref` and `allOf`, has no bounds program: its copies are `false` and
 //! `true`, which decide nothing.
 //!
 //! A copy refers to both copies of a subschema where its keyword is written
 //! from both bounds, so nested `oneOf`, `if` and counted `contains` keywords
 //! multiply the work of a pass over the copies. Every definition that can
-//! reach a stand-in, copies and the value contract's own alike, is therefore
+//! reach a stand-in, copies and the schema's own alike, is therefore
 //! guarded by a work marker (`bundle::guard_definition`), and a pass over a
-//! bound may do only a multiple of the work of the value contract's own entry,
+//! bound may do only a multiple of the work of the schema's own entry,
 //! which a pass over it in this program measures in the same units: past
 //! that, a guard fails, the pass enters none of them more, and the value is
 //! not decided. A schema that reaches no stand-in reads as the value
@@ -83,7 +83,7 @@ use serde_json::{Map, Value};
 use std::collections::HashMap;
 
 /// A bounds program, with the bundled indices of its entries: the lower and
-/// upper copies of the value contract's entry and the entry itself.
+/// upper copies of the schema's entry and the entry itself.
 pub(crate) struct Program {
     pub(crate) bundle: Bundle,
     pub(crate) lower: u32,
@@ -170,7 +170,7 @@ struct Bounds<'s> {
 fn stand_in_definition(schema: &Value) -> bool {
     schema.get(crate::missing::KEYWORD).is_some() || schema.get(crate::operands::CYCLE).is_some()
 }
-// Whether the value contract's entry applies to its instance nothing but
+// Whether the schema's entry applies to its instance nothing but
 // stand-in definitions, through `$ref` and `allOf`, beside schemas that always
 // hold: its lower copy is then `false` and its upper `true`, which decide
 // nothing.
@@ -621,10 +621,10 @@ impl<'s> Bounds<'s> {
         out
     }
     // The program: every source definition, then every one it adds. Those
-    // that can reach a stand-in, copies and the value contract's own alike,
+    // that can reach a stand-in, copies and the schema's own alike,
     // are guarded by a work marker, which counts each entry and enters none
     // once a pass's work allowance is spent; every other definition reads as
-    // the value contract's own program writes it.
+    // the schema's own program writes it.
     fn finish(mut self, lower: u32, upper: u32) -> Program {
         let source = self.source;
         let count = source.schemas.len();

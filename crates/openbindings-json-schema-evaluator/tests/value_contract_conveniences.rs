@@ -67,7 +67,7 @@ fn default_preparation_matches_explicit_policy_and_retains_ready_work() {
     else {
         panic!("false schema must fail");
     };
-    assert_eq!(message, "value does not satisfy the value contract");
+    assert_eq!(message, "value does not satisfy the schema");
     assert!(problems.is_empty());
     assert!(!problems_complete);
 

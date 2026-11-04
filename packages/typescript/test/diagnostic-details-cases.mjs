@@ -167,26 +167,26 @@ export function diagnosticDetailsCases(sdk) {
   }
   const released = testing.liveStorageOwners();
   check(released === baseline, "all application owners released");
-  // An explaining contract keeps neither its document nor its resources.
+  // These compiled fixtures need no original arenas after preparation. This is
+  // fixture-specific: original-schema evaluation may retain immutable sources.
   check(
     defaultArenas === baseline &&
       preparedArenas === baseline &&
       explainedArenas === baseline,
-    "explanations retain no source arenas",
+    "these compiled fixtures retain no source arenas",
   );
   const probe = sdk.Document.parse(doc("true"));
   check(probe.status === "parsed", "option probe");
   try {
     let error;
     try {
-      prepareInput(probe.value, "op", { diagnostics: "upstream" });
+      prepareInput(probe.value, "op", { unknownPreparationOption: true });
     } catch (e) {
       error = e;
     }
     check(
-      error?.code === "invalid-work-options" &&
-        /explain\(value\)/.test(error.message),
-      "removed disclosure option rejected, naming explain",
+      error?.code === "invalid-work-options",
+      "unknown preparation option rejected",
     );
   } finally {
     probe.value.dispose();

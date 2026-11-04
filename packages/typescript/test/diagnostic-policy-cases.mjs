@@ -145,7 +145,9 @@ export function diagnosticPolicyCases(sdk) {
       contract.evaluate(NaN).status === "input-error",
       "ordinary input errors remain admission outcomes",
     );
-    const error = thrown(() => declared.prepare({ diagnostics: "sideways" }));
+    const error = thrown(() =>
+      declared.prepare({ unknownPreparationOption: true }),
+    );
     check(
       error instanceof sdk.SdkError &&
         error.code === "invalid-work-options" &&

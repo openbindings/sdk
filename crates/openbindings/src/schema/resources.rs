@@ -17,12 +17,11 @@ pub struct ExternalSchema {
 /// for different snapshots; this is not a process-wide registry or an acquirer.
 /// Clones share storage, including the identity index built by [`Self::new`].
 /// [`EvaluationRequest::environment`] reads that index, and the resolution
-/// space it assembles for a nonempty set and a document revision is kept with
-/// the set while both are alive, and released when either is dropped. The
-/// default evaluator reuses the index instead of indexing the set again, but
-/// assembles its own resolution space for each preparation, so its preparation
-/// time still grows with the set's resources, including those the value contract
-/// never reaches.
+/// space it assembles for a nonempty set and a document revision is cached with
+/// the set while both are alive. Dropping either releases that cache entry;
+/// independently retained environments and prepared schemas keep the original
+/// sources they need. Each preparation checks its requested footprint limits,
+/// including supplied resources that the selected schema never reaches.
 #[derive(Clone, Default)]
 pub struct ExternalSchemas {
     inner: Arc<ExternalSchemasInner>,
@@ -31,7 +30,7 @@ pub struct ExternalSchemas {
 pub(crate) struct ExternalSchemasInner {
     resources: Vec<ExternalSchema>,
     input_policy: openbindings_internal_schema::Supplied,
-    // One space per live revision this set was projected with. A revision's
+    // One space per live revision this set was prepared with. A revision's
     // entry leaves when the revision is dropped; all leave with the set.
     spaces: Mutex<Vec<(Weak<DocumentInner>, Arc<SchemaSpace>)>>,
 }
@@ -120,7 +119,7 @@ impl ExternalSchemas {
     /// after RFC resolution and empty-fragment removal are configuration errors.
     /// Canonical associations use the library's ordinary URI normalization;
     /// collisions and protected standard identities are retained as input policy
-    /// and refuse when reached, without poisoning unrelated contracts.
+    /// and refuse when reached, without poisoning unrelated schemas.
     ///
     /// # Errors
     /// Returns a resource error if a URI is not absolute or has a nonempty fragment, two resources have the same normalized URI, or a resource contains duplicate members.

@@ -13,7 +13,7 @@ pub(crate) enum Stop {
     /// A `multipleOf` division the exact arithmetic declined.
     Arithmetic,
     /// A pattern the evaluator does not match, and the site of the `pattern`
-    /// keyword that holds it, by the index its value contract's patterns give it.
+    /// keyword that holds it, by the index its schema's patterns give it.
     Unmatched(Unsupported, u32),
     /// The stand-in for a schema resource that was not supplied, by index.
     Missing(u32),
@@ -81,11 +81,11 @@ pub(crate) enum Phase {
     Lower,
     /// The most validity the stand-ins' answers can give.
     Upper,
-    /// The value contract's own schemas, as its verdict pass evaluates them.
+    /// The schema's own schemas, as its verdict pass evaluates them.
     Original,
     /// The upper bound, for the errors that explain a failure.
     UpperErrors,
-    /// The value contract's own schemas, for their errors.
+    /// The schema's own schemas, for their errors.
     OriginalErrors,
 }
 impl Phase {

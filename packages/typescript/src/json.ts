@@ -393,7 +393,7 @@ export class ExactJson extends Managed {
   }
 }
 
-/** Parse exact JSON under admission limits, by default 32 MiB UTF-8, 1,000,000 nodes and 10,000 container levels; `limits` overrides them, unspecified entries keeping those defaults, as Rust's `JsonValue::parse_with_limits` does. Returns a caller-owned ExactJson or input-error. Check a value larger than the defaults this way and pass the ExactJson to a prepared value contract. Malformed limits or options throw SdkError invalid-json-limits; initialization, wrong input types and literal unpaired UTF-16 text throw; JSON escapes preserve such units. */
+/** Parse exact JSON under admission limits, by default 32 MiB UTF-8, 1,000,000 nodes and 10,000 container levels; `limits` overrides them, unspecified entries keeping those defaults, as Rust's `JsonValue::parse_with_limits` does. Returns a caller-owned ExactJson or input-error. Check a value larger than the defaults this way and pass the ExactJson to a prepared schema. Malformed limits or options throw SdkError invalid-json-limits; initialization, wrong input types and literal unpaired UTF-16 text throw; JSON escapes preserve such units. */
 export function parseJson(
   input: ExactInput,
   options: {

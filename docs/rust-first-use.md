@@ -1,7 +1,7 @@
 # First useful result in Rust
 
 Validate an interface document's bytes, read an operation and prepare its input
-value contract. Select `openbindings` and `openbindings-json-schema-evaluator` from
+schema. Select `openbindings` and `openbindings-json-schema-evaluator` from
 an exact checkout or local archives through [source replay](REPLAY.md). Packages
 are unpublished; Rust needs no runtime initialization.
 
@@ -46,7 +46,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let operation = proof.resolve_operation("lookup").ok_or("operation is missing")?;
     let input = operation
         .input()
-        .ok_or("operation has no input contract")?
+        .ok_or("operation has no input schema")?
         .prepare(&DefaultEvaluator::new(), &ExternalSchemas::default(), &PreparationLimits::default())?;
     println!("value outcome: {:?}", input.evaluate_json("7")?);
     // The cheap check says whether a value fails; explaining it says why.

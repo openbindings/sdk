@@ -34,7 +34,7 @@ impl SchemaValidator for BooleanContract {
         // A cheap check reports the verdict only; an explanation says why.
         let explain = detail == Detail::Explain;
         ValueOutcome::Fails {
-            message: "value does not satisfy the value contract".into(),
+            message: "value does not satisfy the schema".into(),
             problems: explain
                 .then(|| {
                     // The whole value fails: the instance's root.

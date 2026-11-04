@@ -36,7 +36,7 @@ fn controls_reject_wrong_verdict_refusal_and_bogus_paths() {
     assert!(!judge(case, &value, &refusal).is_empty());
     let schema = SchemaOrigin::new(None, "/operations/op/input".parse().unwrap());
     let failure = |instance: &str| ValueOutcome::Fails {
-        message: "value does not satisfy the value contract".into(),
+        message: "value does not satisfy the schema".into(),
         problems: vec![ValueProblem::new(
             instance.parse().unwrap(),
             schema.clone(),
@@ -147,7 +147,7 @@ impl SchemaValidator for FaultyContract {
             Fault::DetailedCheck => self.0.evaluate(value, Detail::Explain, control),
             Fault::DisagreeingExplanation if detail == Detail::Explain => match outcome {
                 ValueOutcome::Satisfies => ValueOutcome::Fails {
-                    message: "value does not satisfy the value contract".into(),
+                    message: "value does not satisfy the schema".into(),
                     problems: vec![],
                     problems_complete: false,
                 },
@@ -164,7 +164,7 @@ impl SchemaValidator for FaultyContract {
             },
             Fault::InterruptedSatisfies => outcome,
             Fault::EmptyMismatch => ValueOutcome::Fails {
-                message: "value does not satisfy the value contract".into(),
+                message: "value does not satisfy the schema".into(),
                 problems: vec![],
                 problems_complete: true,
             },
@@ -183,7 +183,7 @@ impl SchemaValidator for FaultyContract {
                     ValueOutcome::Fails {
                         problems,
                         problems_complete,
-                        message: "value does not satisfy the value contract".into(),
+                        message: "value does not satisfy the schema".into(),
                     }
                 }
                 other => other,
@@ -201,7 +201,7 @@ impl SchemaValidator for FaultyContract {
                     ValueOutcome::Fails {
                         problems,
                         problems_complete,
-                        message: "value does not satisfy the value contract".into(),
+                        message: "value does not satisfy the schema".into(),
                     }
                 }
                 other => other,
@@ -264,7 +264,7 @@ fn real_runner_rejects_cross_context_compiled_state_leaks() {
 #[test]
 fn cheap_checks_report_no_problems_and_agree_with_explanations() {
     let failure = |problems: Vec<ValueProblem>, problems_complete| ValueOutcome::Fails {
-        message: "value does not satisfy the value contract".into(),
+        message: "value does not satisfy the schema".into(),
         problems,
         problems_complete,
     };
@@ -354,7 +354,7 @@ fn format_is_an_annotation_where_the_assertion_vocabulary_is_declared_false() {
     let value = JsonValue::parse(&case.value).unwrap();
     assert!(judge(case, &value, &ValueOutcome::Satisfies).is_empty());
     let failure = ValueOutcome::Fails {
-        message: "value does not satisfy the value contract".into(),
+        message: "value does not satisfy the schema".into(),
         problems: vec![],
         problems_complete: false,
     };

@@ -152,11 +152,11 @@ pub(crate) const NAME_MEMBER: &str = "$obNameMember";
 /// The keyword a bounds program's root asks which entry a pass evaluates;
 /// its value is the phase's index.
 pub(crate) const PHASE: &str = "$obPhase";
-/// The bytes a run matcher's place among a value contract's matchers takes,
+/// The bytes a run matcher's place among a schema's matchers takes,
 /// as 64-bit hosts lay a matcher out. A 32-bit host takes less, and the
 /// pattern memory counts this on every host, so no outcome depends on it.
 const MATCHER: usize = 104;
-/// The bytes a value contract holds for a run matcher: its place among the
+/// The bytes a schema holds for a run matcher: its place among the
 /// contract's matchers and the heap bytes it holds.
 pub(crate) fn run_matcher_bytes(matcher: &crate::pattern::Simple) -> usize {
     MATCHER + matcher.heap_bytes()
@@ -176,14 +176,14 @@ enum Compiled {
     Regex(regex::Regex),
     Refused(Unsupported),
 }
-/// A value contract's `pattern` matchers and its pattern memory. Each compiled
+/// A schema's `pattern` matchers and its pattern memory. Each compiled
 /// matcher first compiles within its first allowance. When a pattern is found
 /// that does not fit its own, at preparation for a `patternProperties` name or
 /// when a string first reaches a `pattern` matcher, every compiled pattern of
-/// the value contract not yet compiled is compiled within its first allowance, and
+/// the schema not yet compiled is compiled within its first allowance, and
 /// those that do not fit share what the first allowances leave. That happens
 /// once, so whether a pattern compiles does not depend on the order strings
-/// reach the value contract's patterns.
+/// reach the schema's patterns.
 pub(crate) struct Patterns {
     matchers: Box<[Matcher]>,
     memory: Memory,
@@ -345,7 +345,7 @@ const PROPERTY_ESCAPE: &str = "\u{1}property-escape";
 const NON_WORD_BOUNDARY: &str = "\u{1}non-word-boundary";
 const SIZE: &str = "\u{1}size";
 /// The SDK's `pattern` keyword, which matches with ECMA-262 semantics through
-/// its pattern's reading: the value contract's matchers, its matcher's index, and
+/// its pattern's reading: the schema's matchers, its matcher's index, and
 /// its own site. A string that reaches a pattern the evaluator does not match
 /// ends the pass with no verdict naming the keyword's location.
 struct Pattern(Arc<Patterns>, usize, u32);
@@ -742,8 +742,8 @@ impl Operands {
             .iter()
             .any(|matcher| matches!(matcher, Matcher::Unmatched(Unsupported::Invalid)))
     }
-    /// The SDK's keywords for this value contract, and the `pattern` keyword's
-    /// matchers, which compile within the value contract's `memory`.
+    /// The SDK's keywords for this schema, and the `pattern` keyword's
+    /// matchers, which compile within the schema's `memory`.
     pub(crate) fn keywords(self, memory: Memory) -> Keywords {
         // Only the matchers outlive preparation; their index by form does not.
         drop(self.indices);
@@ -770,16 +770,16 @@ impl Operands {
         }
     }
 }
-/// The SDK's keywords a value contract's validators compile, which share its
+/// The SDK's keywords a schema's validators compile, which share its
 /// literals, numeric operands and `pattern` matchers.
 pub(crate) struct Keywords {
     patterns: Arc<Patterns>,
-    // Whether the value contract holds a `pattern` matcher.
+    // Whether the schema holds a `pattern` matcher.
     matched: bool,
     numbers: Arc<numeric::Operands>,
     numeric: [bool; numeric::KEYWORDS.len()],
     literals: Arc<Vec<Literal>>,
-    // Whether the value contract holds a `const` and an `enum` literal.
+    // Whether the schema holds a `const` and an `enum` literal.
     held: [bool; 2],
 }
 /// Which of the SDK's own keywords a validator's bundle can hold besides the
@@ -798,13 +798,13 @@ pub(crate) struct Registered {
     pub(crate) phase: bool,
 }
 impl Keywords {
-    /// The value contract's `pattern` matchers.
+    /// The schema's `pattern` matchers.
     pub(crate) fn patterns(&self) -> &Arc<Patterns> {
         &self.patterns
     }
     /// The library's options with the SDK's keywords. Only the keywords the
     /// bundle can hold are registered: those `registered` names, and the
-    /// literal, numeric and `pattern` keywords this value contract's schemas
+    /// literal, numeric and `pattern` keywords this schema's schemas
     /// hold. The library compiles a keyword the bundle does not hold the same
     /// whether it is registered or not: it never meets it.
     pub(crate) fn register<'o, R>(

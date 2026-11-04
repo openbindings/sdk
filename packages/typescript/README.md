@@ -60,9 +60,9 @@ function checkInput(input: JsonInput) {
   finally { for (const entry of entries) entry.dispose(); }
   using operation = proof.resolveOperation("find"); // primary name or alias
   if (!operation) return { status: "operation-missing" } as const;
-  using contract = operation.input();
-  if (!contract) return { status: "no-input-contract" } as const;
-  const setup = contract.prepare();
+  using schema = operation.input();
+  if (!schema) return { status: "no-input-schema" } as const;
+  const setup = schema.prepare();
   if (setup.status !== "ready") return setup;
   using prepared = setup.schema;
   const result = prepared.evaluate(input); // narrow on result.status
@@ -204,116 +204,61 @@ the value. `discover` raises only the byte limit, to `maxDocumentBytes`; a body
 past the default 1,000,000 nodes comes back undetermined, and `validateDocument`
 with a larger `maxNodes` admits it. `Document.create()`, `ExactJson.from`,
 `evaluateJson` and a prepared schema's `evaluate` and `explain` of an ordinary
-value use the defaults. Value-contract preparation keeps fixed bounds of its own,
-which no setting raises, such as its 100,000 schema positions and a reached schema
-nested at most 256 schemas below the schema position or resource root holding it
-(`schema-depth-limit`). Every admission and edit limit refusal names how to
-admit more, including the route for calls that take no limits. To check a value past the
-defaults, parse it with `parseJson` and larger limits and pass the `ExactJson`
-to `validate`.
+value use the defaults. To evaluate a value beyond those defaults, admit it with
+`parseJson` and explicit limits, then pass the resulting `ExactJson` to `evaluate`.
 
-Schema resources are explicit and immutable. Pass `SchemaResources` to
-`prepare({ resources })`; the SDK never fetches a missing reference. A value
-contract prepares with a stand-in for what the evaluator cannot evaluate: a
-resource that was not supplied, a schema that could apply again without
-consuming the instance, such as one whose `$ref` names itself, and a pattern
-(in `pattern` or as a `patternProperties` name) invalid as an ECMA-262 11th
-edition (ES2020) regular expression with Unicode semantics, the dialect JSON
-Schema 2020-12 cites, or one that needs a backtracking engine, applies a
-Unicode property escape or holds the non-word boundary `\B`. A value whose
-verdict depends on how a stand-in comes out gets a no-verdict naming it
-(`resource-unavailable`, `in-place-cycle`, `schema-pattern-compilation`,
-`pattern-backtracking`, `unicode-property-matching` or
-`pattern-non-word-boundary`); every other value keeps the verdict that holds
-however each stand-in comes out, whatever order the keywords are in.
-Preparation refuses a value contract in which an `unevaluatedProperties` or
-`unevaluatedItems` keyword's annotation sources reach a stand-in for a
-missing resource, a cycle or `patternProperties` names, a reference to a
-fragment of a missing resource, or a reference that identifies no schema.
-Retain a prepared value contract for repeated validation. Ready
-does not promise a verdict for every value: a stand-in and an exhausted limit
-can produce no-verdict. Two
-further cases give no verdict whatever `limits` sets. Exact `multipleOf`
-divides within a fixed arithmetic bound: when the value or the divisor has more
-than 4,096 significant digits, or an exponent beyond ±20,000 once the trailing
-zeros of its digits are counted in it, a division the answer needs gives the
-`numeric-arithmetic-limit` no-verdict; other numeric keywords compare exactly at
-any size. And a value holding an unpaired UTF-16 unit (from a JSON `\u` escape)
-in a string or member name is decided by keywords that compare exactly, such as
-`const`, `enum`, `required` and `uniqueItems`, while one that reads the text,
-such as `minLength`, `maxLength`, `pattern`, `properties`, `patternProperties`
-or `propertyNames`, gives the `lone-surrogate-instance` no-verdict when it
-reaches it.
-Patterns, the word boundary `\b` included, match in time linear in the
-string, so no limit bounds pattern work. Replacing resources
-means preparing again. No evaluation work cap applies by default, and
-evaluation time can grow exponentially with some schemas (30 levels of `anyOf`
-that each name the next level twice take seconds); when validating untrusted value contracts or
-values within a deadline, pass `limits: { evaluationSteps: n }`. A cap nests one more schema evaluation for each
-reference a value's evaluation follows, so within the same `stackBytes` a recursive value contract decides fewer
-levels, at worst about half as many (203 instead of 340 for an array nested through one subschema reference per
-level). Preparation time and memory grow with the schema
-resources a value contract reaches (10,000 supplied resources prepare in about 0.2 s
-natively), and the SDK sets no cap by default. When preparing untrusted
-documents or resources, pass `limits: { schemaResources: n }`; a value contract
-reaching more than `n` refuses with the `schema-resource-limit` no-verdict
-before the library compiles it, which bounds the time and memory of that
-compilation: natively, an 8 MB document reaching a chain of 99,990 `$id`
-resources prepared in 8.1 s at a 725 MB peak without a cap, and refused in
-1.1 s at a 499 MB peak with a cap of 1,000.
+External schemas are explicit and immutable. Pass `ExternalSchemas` to
+`schema.prepare({ resources })`; no reference causes a fetch. A prepared schema
+retains the meaning of that resource snapshot, so replacing resources requires a
+new preparation. Retain the prepared owner for repeated evaluation. It survives
+disposal of the handles used to create it and may retain immutable original sources.
 
-The evaluator bounds what the SDK itself reads, writes and recurses through, not
-the memory of the JSON Schema library's compiled program. On by default:
-document admission limits (32 MiB and 1,000,000 nodes; see above); `stackBytes`
-(256 KiB), the stack the evaluator
-sizes its bounds from: 256 bytes for each nested schema evaluation (1,024 at
-the default), half of it for a pass of a value contract holding
-`unevaluatedProperties` or `unevaluatedItems` as it evaluates (a bound on the
-stack's bytes, so the depth it admits varies with the build and the host), and
-the unevaluated walk limit below. In Wasm the guard measures the module's own
-1 MiB stack, while the JavaScript engine's call stack bounds how deep the
-module's calls go: Node 22 checked and explained the deepest admitted values
-of the shapes probed up to `stackBytes: 524288`, and at 1 MiB a guarded
-value contract's deepest admitted value overflowed the engine's stack. Also on by
-default: `compileJsonDepth` (512), the projected JSON nesting compiled;
-`patternBytes` (1 MiB), `patternDepth` (32) and `totalPatternBytes`
-(4 MiB of the forms kept for a value contract's patterns);
-`totalPatternMemory` (64 MiB) for a value contract's patterns: the run matchers
-that match anchored sequences of single-character runs, which hold a few bytes
-for each step and each range of members past ASCII and a byte for each byte of
-literal text, and the
-compiled patterns, a quarter of it for their search caches in equal parts and
-the rest for their compiled forms beside the run matchers, each first within
-48 KiB while those that need more share what is
-left, so `^.{1,10000}$` (about 13 MiB) compiles beside up to 743 small
-patterns and four such counted repetitions compile together, while 40
-`patternProperties` names of the form `^.{1,10000}N$` refuse with
-`pattern-total-memory-limit`, whose message states the arithmetic;
-`programBytes` (48 MiB) for the memory dynamic specialization adds to a
-value contract's program (`program-specialization-limit`); and an unevaluated
-keyword's walk, refused past what `stackBytes` admits
-(`unevaluated-walk-limit`). Each refusal states its arithmetic and names the
-setting to raise. Within
-them, preparing a schema can still take more memory than a host may want:
-1,000 holders of `unevaluatedProperties` that each inherit 4,000 properties
-peak at 400 MB natively. A host preparing schemas from untrusted parties should
-prepare them in a Worker or process with a memory limit. Values checked against trusted
-schemas stay bounded by `stackBytes` and, when set, `evaluationSteps`.
+Preparation failure is distinct from every value outcome. A ready schema may
+return `satisfies`, `fails`, `undefined` or `no-verdict`. Missing content and
+unsupported capabilities do not establish undefinedness; a result can still be
+proved through independent assertions. A known undefined predicate participates
+in applicator and annotation dependence. Required format assertion and supported
+custom vocabularies use the original schema's dialect. An unavailable required
+meta-schema can prevent schema admission and fail preparation before any value
+is evaluated. See the
+[evaluator guide](https://github.com/openbindings/sdk/blob/main/crates/openbindings-json-schema-evaluator/README.md)
+for supported semantics and remaining limitations.
 
-`validate` returns an established failure with no problem list and
-`problemsComplete: false`. Call `explain` on the same prepared value contract for the
-library's first error. An explanation allocates in proportion to input and is
-made only for values within half the nesting `stackBytes` admits, so keep `validate`
-for untrusted input. The problem's `instance` is the failing node's exact
-pointer from the value passed, and its `schema` names the failing keyword by
-`resource` and `pointer`. `value.locate(problem.instance)`,
-`ConformantDocument.locate(problem.schema)` and
-`SchemaResources.locate(problem.schema)` give coordinates when asked. A
-prepared value contract keeps only the original locations of the schemas it
-compiled, never their text, its document, resources or any position. Messages are advisory; use result tags, codes and rule evidence for
-control flow. Result objects (reports, findings, outcomes, problems, locations,
-refusals and discovery results) may gain properties in later versions: read the
-properties you use rather than relying on an exact key set.
+`prepare({ limits })` accepts these evaluator budgets; omitted fields use
+`evaluatorLimits()`:
+
+| Setting | Default | Scope |
+| --- | --- | --- |
+| `evaluationSteps` | `null` | Evaluation and semantic proof work; no caller-selected cap by default |
+| `schemaResources` | `null` | Additional reached-resource count bound |
+| `stackBytes` | 256 KiB | Compilation, evaluation and proof-nesting budgets |
+| `compileJsonDepth` | 512 | Projected JSON admitted to the current compiled backend |
+| `patternBytes` | 1 MiB | One pattern and its expanded form |
+| `patternDepth` | 32 | Pattern group nesting |
+| `totalPatternBytes` | 4 MiB | Aggregate retained pattern forms |
+| `totalPatternMemory` | 64 MiB | Matcher storage and engine allowances |
+| `programBytes` | 48 MiB | SDK program growth and semantic proof storage |
+
+The original schema environment also has preparation footprint, work and
+allocation bounds, using Rust's default `PreparationLimits` in this facade.
+Those preparation settings are not currently exposed as TypeScript options.
+Budgets are not deadlines or process-memory measurements; underlying compiler
+allocation accounting and iterative evaluation remain migration work. Raising
+`stackBytes` does not enlarge the JavaScript host's stack. Exact `multipleOf`
+retains an arithmetic capability bound. Exact equality preserves unpaired UTF-16
+units, while unsupported Unicode-text operations return a typed inability.
+
+`evaluate` requests the outcome. An established failure has no problems and
+`problemsComplete: false`. `explain` requests available bounded failure evidence
+at original locations, with additional allocation and work. Missing witnesses or
+exhausted diagnostic limits leave the failure established with incomplete
+problems. A problem's `instance` is relative to the exact value passed;
+`schema.sourceUri` and `schema.pointer` identify the original schema source.
+`value.locate(problem.instance)`, `ConformantDocument.locate(problem.schema)` and
+`ExternalSchemas.locate(problem.schema)` compute source coordinates on demand.
+Keep the corresponding source owner when coordinate lookup is needed.
+Messages are advisory; use result tags, codes and rule evidence for control flow.
+Result records may gain properties: read the properties needed by the application.
 
 Document findings use exact JSON Pointers and UTF-8 byte coordinates in the assessed revision.
 A pointer keeps a member name's unpaired UTF-16 unit, as a JavaScript string can,

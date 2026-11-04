@@ -66,10 +66,9 @@ async function caller(
     using input = prepared.schema;
     using value = ExactJson.from(7);
     input.evaluate(value) satisfies ValueOutcome;
-    // Preparation chooses no detail; each call does.
     contract.prepare({
-      // @ts-expect-error diagnostics are chosen per call, not at preparation
-      diagnostics: "upstream",
+      // @ts-expect-error unknown preparation options are rejected
+      unknownPreparationOption: true,
     });
     const result: ValueOutcome = input.explain(value);
     if (result.status === "fails") {

@@ -55,14 +55,14 @@ const service = new ValidationService(setup.schema);
 let releaseBody, oldRequest;
 const outcomes = {};
 try {
-  // The service retains the old contract before awaiting the request body.
+  // The service retains the old schema before awaiting the request body.
   oldRequest = service.checkBytes(
     new Promise((resolve) => {
       releaseBody = resolve;
     }),
   );
   outcomes.replacement = replace(service, '{"type":"string"}');
-  outcomes.current = service.check("new prepared value contract");
+  outcomes.current = service.check("new prepared schema");
   releaseBody("9007199254740993");
   outcomes.inFlight = await oldRequest; // still uses the old exact const
   assert.equal(outcomes.current.status, "satisfies");

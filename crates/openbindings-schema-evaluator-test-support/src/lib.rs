@@ -44,7 +44,7 @@ pub struct Group {
     pub document: String,
     /// Keys of explicitly supplied resources in Suite::resources.
     pub resources: Vec<String>,
-    /// Finite observations sharing this prepared value contract.
+    /// Finite observations sharing this prepared schema.
     pub cases: Vec<Case>,
 }
 impl std::fmt::Debug for Group {
@@ -231,7 +231,7 @@ pub fn run<E: SchemaEvaluator + ?Sized>(evaluator: &E) -> Report {
         let operation = validated.resolve_operation("op");
         let Some(input) = operation.as_ref().and_then(|operation| operation.input()) else {
             report.configuration_failures.push(format!(
-                "{}: expected an input value contract on operation op",
+                "{}: expected an input schema on operation op",
                 group.id
             ));
             continue;
