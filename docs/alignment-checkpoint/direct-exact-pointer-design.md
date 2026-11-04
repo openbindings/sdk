@@ -2,9 +2,11 @@
 
 The Explain review found that an exact pointer through an unpaired UTF-16 name
 allocates temporary decoded segment vectors and speculative scalar text. Its
-128-segment witness requests 6,443 bytes for a 258-byte retained pointer. Replace
-that internal construction before using pointer size as an explanation allocation
-bound. Independent review accepts this direction, subject to the controls below.
+128-segment witness requests 6,443 bytes for a 258-byte retained pointer. The
+implemented direct writer now requests only 258 bytes for that witness. Parent
+native/MSRV/actual-host gates and independent implementation/resource review pass.
+This qualifies the construction helper; the diagnostic caller's bounds and
+ancestry checks still need implementation. The original design follows.
 
 Keep the existing scalar path's measured backward writer. When that path discovers
 an unpaired name between the selected node and selected ancestor root, measure the

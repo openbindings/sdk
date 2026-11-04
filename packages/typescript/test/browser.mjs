@@ -94,6 +94,10 @@ files.set(
   await fs.readFile(path.join(packageRoot, "test/pattern-cache.mjs")),
 );
 files.set(
+  "/exact-pointers.mjs",
+  await fs.readFile(path.join(packageRoot, "test/exact-pointers.mjs")),
+);
+files.set(
   "/syntax-facts-input.json",
   await fs.readFile(
     path.join(
@@ -176,6 +180,9 @@ try {
         executionFrames: executionFrameCases(sdk),
         referencePreparation: referencePreparationCases(sdk),
         syntaxFacts: syntaxFactCases(sdk, syntaxInput),
+        exactPointers: (await import("/exact-pointers.mjs")).exactPointerCases(
+          sdk,
+        ),
         patternCaches: (await import("/pattern-cache.mjs")).patternCacheCases(
           sdk,
         ),
@@ -256,6 +263,10 @@ try {
   await fs.writeFile(
     path.join(output, "pattern-cache.json"),
     JSON.stringify(result.patternCaches, null, 2),
+  );
+  await fs.writeFile(
+    path.join(output, "exact-pointers.json"),
+    JSON.stringify(result.exactPointers, null, 2),
   );
   await fs.writeFile(
     path.join(output, "host.json"),

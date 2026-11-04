@@ -74,6 +74,13 @@ impl Pointer {
         debug_assert!(valid(text.encode_utf16()));
         Self(Repr::Text(text))
     }
+    /// Already escaped units known to contain an unpaired surrogate. Avoid a
+    /// speculative scalar conversion when the original path established this.
+    pub(crate) fn from_escaped_unpaired_units(units: Vec<u16>) -> Self {
+        debug_assert!(valid(units.iter().copied()));
+        debug_assert!(char::decode_utf16(units.iter().copied()).any(|unit| unit.is_err()));
+        Self(Repr::Units(units.into_boxed_slice()))
+    }
     /// Escaped units; the scalar form when every unit pairs.
     pub(crate) fn from_escaped_units(units: Vec<u16>) -> Self {
         match String::from_utf16(&units) {

@@ -1472,6 +1472,74 @@ pub fn byte_range(value: crate::JsonRef<'_>) -> std::ops::Range<usize> {
 mod tests {
     use super::*;
     #[test]
+    fn direct_exact_pointers_round_trip_mixed_names_and_retained_subtrees() {
+        let value = crate::JsonValue::parse(
+            r#"{"\ud800":{"":{"~/":[0,1,2,3,4,5,6,7,8,9,{"😀":{"\udc00":false,"é":true}}]}},"scalar":{"😀":1}}"#,
+        )
+        .unwrap();
+        let subtree = member_at(value.view(), 0).unwrap().value.to_owned();
+        for root in [&value, &subtree] {
+            let mut pending = vec![root.view()];
+            while let Some(current) = pending.pop() {
+                let pointer = relative_pointer(current, root.view());
+                assert_eq!(
+                    occurrence(root.at_pointer(&pointer).unwrap()),
+                    occurrence(current)
+                );
+                let serialized = serde_json::to_string(&pointer).unwrap();
+                let token = crate::JsonValue::parse(serialized).unwrap();
+                assert_eq!(string_pointer(token.view()).unwrap(), pointer);
+                if let Some(items) = current.elements() {
+                    pending.extend(items);
+                } else if let Some(members) = current.members() {
+                    pending.extend(members.map(|member| member.value));
+                }
+            }
+            assert_eq!(
+                relative_pointer(root.view(), root.view()).as_str(),
+                Some("")
+            );
+        }
+        // An unpaired ancestor outside the chosen root does not change the
+        // representation of a scalar relative path, including empty segments.
+        let scalar = subtree.at("//~0~1/10/😀/é").unwrap();
+        assert_eq!(
+            relative_pointer(scalar, subtree.view()).as_str(),
+            Some("//~0~1/10/😀/é")
+        );
+        assert!(relative_pointer(scalar, value.view()).as_str().is_none());
+        let object = subtree.at("//~0~1/10/😀").unwrap();
+        let lone = member_at(object, 0).unwrap().value;
+        let pointer = relative_pointer(lone, subtree.view());
+        let mut expected: Vec<_> = "//~0~1/10/😀/".encode_utf16().collect();
+        expected.push(0xdc00);
+        assert_eq!(pointer.utf16_units().collect::<Vec<_>>(), expected);
+    }
+
+    #[test]
+    fn direct_exact_pointers_preserve_deep_empty_segments() {
+        for depth in [8, 32, 64, 128] {
+            let text = format!(
+                "{{\"\\ud800\":{}0{}}}",
+                "{\"\":".repeat(depth - 1),
+                "}".repeat(depth - 1)
+            );
+            let value = crate::JsonValue::parse(text).unwrap();
+            let mut leaf = value.view();
+            for _ in 0..depth {
+                leaf = member_at(leaf, 0).unwrap().value;
+            }
+            let pointer = relative_pointer(leaf, value.view());
+            let expected = std::iter::once(u16::from(b'/'))
+                .chain(std::iter::once(0xd800))
+                .chain(std::iter::repeat_n(u16::from(b'/'), depth - 1));
+            assert!(pointer.utf16_units().eq(expected));
+            assert_eq!(pointer_bytes(&pointer), 2 * (depth + 1));
+            assert_eq!(value.at_pointer(&pointer).unwrap().text(), "0");
+        }
+    }
+
+    #[test]
     fn measured_location_sizes_agree_with_each_walk() {
         // Escaped and multibyte names, multi-digit indices, nesting, and names
         // with unpaired units, alone and inside scalar and unpaired paths.

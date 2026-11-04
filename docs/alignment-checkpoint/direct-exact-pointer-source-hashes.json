@@ -1,0 +1,8 @@
+{
+  "crates/openbindings-internal-json/src/raw.rs": "57388b5aefcf218cd433399670dbe09ad16f654279d00ddbd7d6400e6c4aec04",
+  "crates/openbindings-internal-json/src/pointer.rs": "b5687c9b9279b977c5a14dbb2e6484d074777491491fec07ac2b08b77fda575b",
+  "crates/openbindings-internal-json/src/backend.rs": "f94069161c239ba33cf7f727e4b98c560a206da2f88a1d3be1ac4538292a3d95",
+  "packages/typescript/test/exact-pointers.mjs": "1a86a95d60438385e245149bdf16989c2b5be2b839e9865417b2fafbbaa62fb4",
+  "packages/typescript/test/exact-pointers.test.mjs": "bfb28276d218f8bdc4c6dc608a7f43789051caec7dd90aa1da8f8ed163ada466",
+  "packages/typescript/test/browser.mjs": "c6652c221da6ec7ee525b85cf854ee995b6222aa5d5f733a4ee5e0a5611852d7"
+}

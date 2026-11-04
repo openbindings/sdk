@@ -696,36 +696,67 @@ impl Arena {
         if let Some(text) = self.pointer_from(id, root) {
             return crate::Pointer::escaped(text);
         }
-        // An ancestor's name holds an unpaired unit: write escaped units.
-        let segments: Vec<Vec<u16>> = self
+        // The relative path contains an unpaired name. Measure and fill only
+        // the final buffer, avoiding decoded-name and ancestor vectors.
+        let name_len = |key| {
+            self.utf16(key)
+                .try_fold(0usize, |size, unit| {
+                    size.checked_add(
+                        1 + usize::from(unit == u16::from(b'~') || unit == u16::from(b'/')),
+                    )
+                })
+                .expect("pointer segment length fits address space")
+        };
+        let escaped = self
             .edges(id, root)
-            .map(|edge| match edge {
-                Edge::Index(index) => index.to_string().encode_utf16().collect(),
-                Edge::Key(key) => self.units(key).expect("member name is a string"),
+            .try_fold(0usize, |size, edge| {
+                let segment = match edge {
+                    Edge::Index(index) => index
+                        .checked_ilog10()
+                        .map_or(1, |digits| digits as usize + 1),
+                    Edge::Key(key) => name_len(key),
+                };
+                size.checked_add(1)?.checked_add(segment)
             })
-            .collect();
-        let escaped: usize = segments
-            .iter()
-            .map(|segment| {
-                1 + segment.len()
-                    + segment
-                        .iter()
-                        .filter(|&&unit| unit == u16::from(b'~') || unit == u16::from(b'/'))
-                        .count()
-            })
-            .sum();
-        let mut units = Vec::with_capacity(escaped);
-        for segment in segments.iter().rev() {
-            units.push(u16::from(b'/'));
-            for &unit in segment {
-                match u8::try_from(unit) {
-                    Ok(b'~') => units.extend([u16::from(b'~'), u16::from(b'0')]),
-                    Ok(b'/') => units.extend([u16::from(b'~'), u16::from(b'1')]),
-                    _ => units.push(unit),
+            .expect("pointer length fits address space");
+        let mut units = vec![0u16; escaped];
+        let mut end = units.len();
+        for edge in self.edges(id, root) {
+            match edge {
+                Edge::Index(mut index) => loop {
+                    end -= 1;
+                    units[end] = u16::from(b'0') + (index % 10) as u16;
+                    index /= 10;
+                    if index == 0 {
+                        break;
+                    }
+                },
+                Edge::Key(key) => {
+                    let start = end - name_len(key);
+                    let mut at = start;
+                    for unit in self.utf16(key) {
+                        let escape = match unit {
+                            0x7e => Some(u16::from(b'0')),
+                            0x2f => Some(u16::from(b'1')),
+                            _ => None,
+                        };
+                        if let Some(code) = escape {
+                            units[at] = u16::from(b'~');
+                            units[at + 1] = code;
+                            at += 2;
+                        } else {
+                            units[at] = unit;
+                            at += 1;
+                        }
+                    }
+                    end = start;
                 }
             }
+            end -= 1;
+            units[end] = u16::from(b'/');
         }
-        crate::Pointer::from_escaped_units(units)
+        debug_assert_eq!(end, 0);
+        crate::Pointer::from_escaped_unpaired_units(units)
     }
     /// One-based line and byte column of a node's offset, found by one pass
     /// over the bytes before it; nothing is indexed or retained.

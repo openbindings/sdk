@@ -109,8 +109,11 @@ toolchain; the MSRV compatibility receipt explicitly records no matching Clippy 
    bound. Parent native/MSRV/Node/browser/package checks and independent
    implementation/resource review pass on pushed `421706c`. Full immutable VM
    construction is still separate. The [original Explain design](alignment-checkpoint/original-explain-design.md)
-   has independent approval for compact seeds and bounded root-only materialization;
-   its implementation remains pending. Finish that work and physical-stack/host qualification. Then force the
+   has independent approval for compact seeds and bounded root-only materialization.
+   Its [direct exact-pointer foundation](alignment-checkpoint/direct-exact-pointer-results.md)
+   now passes parent and independent implementation/resource checks; witness
+   propagation and diagnostic caller budgeting remain pending. Finish that work
+   and physical-stack/host qualification. Then force the
    original engine through all gates, switch the default and retire the outgoing
    projection/compiler code. No existing public API or internal architecture needs
    preservation; no evaluator allowance or performance expectation is waived.
