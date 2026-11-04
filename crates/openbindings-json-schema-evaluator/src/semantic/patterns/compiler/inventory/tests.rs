@@ -3,7 +3,7 @@ use super::*;
 use openbindings_internal_schema::{FailureReason, preparation::Attempt};
 use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
 
-fn parsed(form: &str) -> Parsed {
+fn parsed(form: &str) -> Ast {
     ast::prepare(
         form,
         32,
@@ -178,7 +178,7 @@ fn original_forms_preserve_ast_and_candidate_admission() {
             continue;
         }
         let owned = inspect(parsed.unwrap(), &|| false).unwrap();
-        assert_eq!(owned.parsed.tree.span().end.offset, reading.form.len());
+        assert_eq!(owned.tree.span().end.offset, reading.form.len());
         assert!(
             super::super::profile::admits_translation(&owned.summary.pressure),
             "{}",

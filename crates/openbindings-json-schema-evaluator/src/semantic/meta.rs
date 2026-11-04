@@ -78,8 +78,7 @@ pub(super) fn validate(
                     .map_err(query_failure)?;
                 if let std::collections::hash_map::Entry::Vacant(entry) = plans.entry(meta) {
                     attempt.charge_allocation(512)?;
-                    let mut plan =
-                        Plan::at(construction, meta, root.limits.clone(), root.preparation)?;
+                    let mut plan = Plan::at(construction, meta, root.preparation)?;
                     // Every supplied resource used by the meta evaluator has
                     // its own complete syntax obligation, including referenced
                     // helpers whose unused definitions evaluation never enters.

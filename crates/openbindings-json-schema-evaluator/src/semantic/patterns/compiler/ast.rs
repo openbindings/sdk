@@ -1,16 +1,8 @@
 //! Fresh AST ownership after allocation-free structural admission.
-use super::{
-    normalized::{self, Summary},
-    profile,
-};
+use super::{normalized, profile};
 use openbindings_internal_schema::{Control, Failure};
 use regex_syntax::ast::{self, Ast};
 
-#[derive(Debug)]
-pub(super) struct Parsed {
-    pub tree: Ast,
-    pub inventory: Summary,
-}
 #[derive(Debug)]
 pub(super) enum Refusal {
     Normalized(normalized::Refusal),
@@ -42,7 +34,7 @@ pub(super) fn prepare(
     maximum_ast_depth: u32,
     budget: &profile::Budget,
     control: &dyn Control,
-) -> Result<Parsed, Error> {
+) -> Result<Ast, Error> {
     budget.check(control)?;
     let inventory = normalized::inspect(
         form,
@@ -68,7 +60,7 @@ pub(super) fn prepare(
     // Parser and dependency error owners are gone before the completion check.
     // A late shared failure also drops a successful tree before returning.
     budget.check(control)?;
-    result.map(|tree| Parsed { tree, inventory })
+    result
 }
 
 #[cfg(test)]

@@ -97,17 +97,19 @@ pub(super) fn check(
     limits: &Limits,
     control: &dyn openbindings_internal_schema::Control,
 ) -> Result<(), PreparationFailure> {
-    let construction = Construction::new(environment.clone(), control)?;
-    check_from(&construction, environment.entry(), limits).map(|_| ())
+    let construction = Construction::new(environment.clone(), limits.clone(), control)?;
+    let result = check_from(&construction, environment.entry()).map(|_| ());
+    construction.finish()?;
+    result
 }
 
 pub(super) fn check_from(
     construction: &Construction<'_>,
     entry: usize,
-    limits: &Limits,
 ) -> Result<Checked, PreparationFailure> {
     let space = construction.environment().space();
     let control = construction.control();
+    let limits = construction.limits();
     control.charge_allocation(512)?;
     let mut queue = VecDeque::from([entry]);
     let mut visited = HashSet::new();
@@ -115,7 +117,6 @@ pub(super) fn check_from(
     let mut missing = HashSet::new();
     let mut dynamic = BTreeMap::<String, BTreeSet<usize>>::new();
     let mut used = BTreeSet::<String>::new();
-    let mut patterns = Patterns::default();
     let mut readings = PreparedPatterns::new();
     let mut operands = operands::Preparation::default();
     let mut custom = Vec::new();
@@ -198,7 +199,7 @@ pub(super) fn check_from(
         if let Some(pattern) = schema.get("pattern")
             && let Some(source) = pattern.as_str()
         {
-            let reading = patterns.add(source, false, limits, control)?;
+            let reading = construction.pattern(source)?;
             control.charge_allocation(512)?;
             readings.insert(backend::occurrence(pattern), reading);
         }
@@ -206,7 +207,7 @@ pub(super) fn check_from(
             for entry in entries {
                 control.check()?;
                 if let Some(pattern) = entry.name.as_str() {
-                    let reading = patterns.add(pattern, true, limits, control)?;
+                    let reading = construction.pattern(pattern)?;
                     control.charge_allocation(512)?;
                     readings.insert(backend::occurrence(entry.name), reading);
                 }
@@ -410,101 +411,10 @@ fn count_resources(
         Ok(())
     }
 }
-#[derive(Default)]
-struct Patterns {
-    forms: HashMap<String, Arc<crate::pattern::Reading>>,
-    bytes: usize,
-    matched: usize,
-    compiled: usize,
-}
-impl Patterns {
-    fn add(
-        &mut self,
-        source: &str,
-        name: bool,
-        limits: &Limits,
-        control: &dyn openbindings_internal_schema::Control,
-    ) -> Result<Arc<crate::pattern::Reading>, PreparationFailure> {
-        control.check()?;
-        if source.len() > limits.pattern_bytes {
-            return Err(limit("pattern-byte-limit"));
-        }
-        // Debit the lexical preflight itself before scanning for expansions.
-        control.charge_work(source.len().saturating_add(1))?;
-        let (work, allocation) = super::super::pattern::preparation_cost(source)
-            .ok_or_else(|| limit("preparation-sdk-reservation-bytes"))?;
-        control.charge_work(work)?;
-        control.charge_allocation(allocation)?;
-        let reading = super::super::read_pattern(source, limits).map_err(|detail| {
-            PreparationFailure::new(PreparationFailureKind::Limit {
-                resource: detail.code.into_owned(),
-            })
-        })?;
-        let super::super::pattern::Reading::Linear(linear) = &reading else {
-            // Arc stores the full enum layout even for a small Unsupported
-            // payload; include its header/alignment before allocating it.
-            control.charge_allocation(std::mem::size_of::<crate::pattern::Reading>() + 64)?;
-            return Ok(Arc::new(reading));
-        };
-        if !name && let Some(known) = self.forms.get(&linear.form) {
-            return Ok(known.clone());
-        }
-        self.bytes = self.bytes.saturating_add(linear.form.len());
-        if self.bytes > limits.total_pattern_bytes {
-            return Err(limit("pattern-total-byte-limit"));
-        }
-        if let Some(simple) = &linear.simple {
-            self.matched = self
-                .matched
-                .saturating_add(std::mem::size_of_val(simple))
-                .saturating_add(simple.heap_bytes());
-        } else {
-            self.compiled = self.compiled.saturating_add(1);
-        }
-        if super::super::pattern::Memory::most_patterns(limits.total_pattern_memory, self.matched)
-            .is_none_or(|capacity| self.compiled > capacity)
-        {
-            return Err(limit("pattern-total-memory-limit"));
-        }
-        // The reader's reservation covers the retained form clone. Reserve
-        // the Arc and growing form index before constructing either. Pattern
-        // values with the same normalized form share the reading counted by
-        // the total-pattern policy; name operands are counted individually.
-        control.charge_allocation(512)?;
-        let reading = Arc::new(reading);
-        if !name && let crate::pattern::Reading::Linear(linear) = reading.as_ref() {
-            self.forms.insert(linear.form.clone(), reading.clone());
-        }
-        Ok(reading)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use openbindings_internal_schema::preparation::Attempt;
-    #[test]
-    fn short_unicode_properties_reserve_their_expansion_before_reading() {
-        let failed = Attempt::run(1_000_000, 2048, &|| false, |a| {
-            Patterns::default().add(r"\p{L}", false, &Limits::default(), a)
-        })
-        .unwrap_err();
-        assert_eq!(failed.code, "preparation-sdk-reservation-bytes");
-        let (reserved, retained) = Attempt::run(1_000_000, 8 * 1024 * 1024, &|| false, |a| {
-            let mut patterns = Patterns::default();
-            patterns
-                .add(r"\p{L}", false, &Limits::default(), a)
-                .unwrap();
-            (
-                a.allocated(),
-                patterns.forms.keys().map(String::len).sum::<usize>(),
-            )
-        })
-        .unwrap();
-        assert!(retained > 10_000);
-        assert!(reserved > retained * 4);
-    }
-
     #[test]
     fn unresolved_reference_names_are_reserved_before_query_and_retention() {
         let uri = format!("https://example.test/{}", "n".repeat(100_000));
@@ -529,20 +439,5 @@ mod tests {
             .unwrap()
             .is_ok()
         );
-    }
-
-    #[test]
-    fn literal_ranges_are_charged_again_for_repeated_shorthand_unions() {
-        let literals: String = (0..1000)
-            .map(|i| char::from_u32(0x1000 + i * 2).unwrap())
-            .collect();
-        let source = format!("[{literals}{}]", r"\s".repeat(1000));
-        let failed = Attempt::run(usize::MAX, 1024 * 1024, &|| false, |a| {
-            Patterns::default().add(&source, false, &Limits::default(), a)
-        })
-        .unwrap_err();
-        assert_eq!(failed.code, "preparation-sdk-reservation-bytes");
-        let (_, allocation) = super::super::super::pattern::preparation_cost(&source).unwrap();
-        assert!(allocation > 16_482_598);
     }
 }

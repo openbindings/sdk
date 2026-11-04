@@ -23,7 +23,7 @@ fn reset() {
     BUILDS.with(|n| n.set(0));
     WRAPS.with(|n| n.set(0));
 }
-fn counts() -> (usize, usize) {
+pub(super) fn counts() -> (usize, usize) {
     (BUILDS.with(Cell::get), WRAPS.with(Cell::get))
 }
 fn parse(form: &str) -> Hir {

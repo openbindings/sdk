@@ -1,6 +1,6 @@
 //! One forward, capture-free construction from an already admitted HIR.
 //!
-//! This stage is inactive. Its caller must first admit Reader expansion,
+//! Its caller must first admit Reader expansion,
 //! AST/HIR breadth and reconstruction. This stage admits actual-HIR path, helper
 //! payload and join pressure, then debits the shared aggregate before building.
 use super::profile;
@@ -188,3 +188,8 @@ pub(super) fn prepare(
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+pub(super) fn build_count() -> usize {
+    tests::counts().0
+}

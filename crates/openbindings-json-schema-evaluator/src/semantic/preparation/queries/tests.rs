@@ -261,8 +261,9 @@ fn repeated_results_keep_original_occurrences_and_full_miss_reservations() {
     let environment = environment(
         r#"{"allOf":[{"$ref":"https://review.invalid/missing"},{"$ref":"https://review.invalid/missing"}]}"#,
     );
-    let construction = Construction::new(environment.clone(), &|| false).unwrap();
-    let checked = check_from(&construction, environment.entry(), &Limits::default()).unwrap();
+    let construction =
+        Construction::new(environment.clone(), Limits::default(), &|| false).unwrap();
+    let checked = check_from(&construction, environment.entry()).unwrap();
     let queries: Vec<_> = checked.queries.iter().collect();
     assert_eq!(queries.len(), 2);
     assert_ne!(queries[0].0.0, queries[1].0.0);

@@ -53,7 +53,7 @@ impl ReferenceKind {
 }
 type ReferenceQuery = Arc<Result<openbindings_internal_schema::Target, QueryFailure>>;
 type PreparedQueries = HashMap<(usize, ReferenceKind), ReferenceQuery>;
-type PreparedPatterns = HashMap<(usize, usize), Arc<crate::pattern::Reading>>;
+type PreparedPatterns = HashMap<(usize, usize), Arc<patterns::Program>>;
 
 /// Conservative demand over this Plan's complete activated original graph.
 /// An omitted coordinate is unobserved, not a proof that it was unevaluated.
@@ -96,9 +96,9 @@ impl Plan {
         control: &dyn openbindings_internal_schema::Control,
     ) -> Result<Self, PreparationFailure> {
         let entry = environment.entry();
-        let construction = Construction::new(environment, control)?;
+        let construction = Construction::new(environment, limits, control)?;
         let result = (|| {
-            let plan = Self::at(&construction, entry, limits, preparation)?;
+            let plan = Self::at(&construction, entry, preparation)?;
             meta::validate(&plan, &construction)?;
             Ok(plan)
         })();
@@ -110,14 +110,13 @@ impl Plan {
     fn at(
         construction: &Construction<'_>,
         entry: usize,
-        limits: Limits,
         preparation: PreparationLimits,
     ) -> Result<Self, PreparationFailure> {
-        let checked = preparation::check_from(construction, entry, &limits)?;
+        let checked = preparation::check_from(construction, entry)?;
         Ok(Self {
             environment: construction.environment().clone(),
             entry,
-            limits,
+            limits: construction.limits().clone(),
             preparation,
             custom: checked.custom,
             resources: checked.resources,
@@ -491,7 +490,7 @@ struct Run<'a> {
     pending_facts: HashMap<Visit, refinement::Facts>,
     supports: HashMap<Visit, Arc<Option<refinement::Support>>>,
     support_memo_count: usize,
-    patterns: storage::Entries<(usize, usize), patterns::Pattern>,
+    patterns: storage::Entries<(usize, usize), patterns::Search>,
 }
 impl Run<'_> {
     fn units(&mut self, value: JsonRef<'_>) -> Result<Vec<u16>, NoVerdict> {
@@ -1078,14 +1077,14 @@ impl Run<'_> {
         let index = if let Some(index) = self.patterns.find(&key, 2, &mut self.graph)? {
             index
         } else {
-            let reading = self.plan.patterns.get(&key).ok_or_else(|| {
+            let program = self.plan.patterns.get(&key).ok_or_else(|| {
                 no_verdict(
                     NoVerdictReason::EvaluatorFailure,
-                    "unprepared-pattern-reading",
+                    "unprepared-pattern-program",
                     "the original pattern operand has no prepared interpretation",
                 )
             })?;
-            let compiled = patterns::Pattern::prepare(reading, &self.plan.limits, &mut self.graph)?;
+            let compiled = patterns::Search::new(program, &mut self.graph)?;
             let index = self.patterns.len();
             self.patterns.push(key, compiled, 2, &mut self.graph)?;
             index

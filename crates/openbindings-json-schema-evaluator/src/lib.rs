@@ -49,13 +49,17 @@ pub struct Limits {
     /// Caller-selected authored pattern group ceiling; default 32. The supported
     /// maximum remains 32 even when a larger value is requested.
     pub pattern_depth: usize,
-    /// Aggregate retained pattern-form bytes; default 4 MiB. Each distinct
-    /// normalized form of a pattern value and each `patternProperties` name contributes. Expanded
-    /// forms can be larger than their authored patterns.
+    /// Normalized pattern-form extent; default 4 MiB. Original-node preparation
+    /// shares equivalent values and names in one temporary construction index.
+    /// The outgoing compiler still counts each name separately until retired.
+    /// Expanded forms can be larger than authored patterns.
     pub total_pattern_bytes: usize,
-    /// Aggregate matcher storage and engine allowances; default 64 MiB.
-    /// Compiler and search-cache policies divide this allowance; it is not a
-    /// process-memory measurement.
+    /// Pattern representation footprint; default and supported maximum 64 MiB.
+    /// Original-node preparation counts unique Program/Arc owners, Simple backing
+    /// and NFA representation lengths, including terminal interpretations. Search
+    /// caches use each value call's separate allowance. The outgoing compiler
+    /// retains its older divided allowance until retired. Neither policy measures
+    /// allocator capacities, transient dependency allocations or process memory.
     pub total_pattern_memory: usize,
     /// SDK program growth and semantic proof-storage allowance; default 48 MiB.
     /// This does not account for every allocation in the underlying compiler.

@@ -149,25 +149,58 @@ fn original_meta_matching_obeys_each_attempt_and_retries_without_poisoning() {
                 &AtomicBool::new(false),
             )
             .unwrap();
-        for (limits, resource) in [
-            (
-                PreparationLimits {
-                    max_sdk_work_units: 10_000,
-                    ..PreparationLimits::default()
+        // Warm this unchanged job before measuring its scoped SDK boundaries.
+        // The old fixed 128 KiB compiler reservation is no longer the contract:
+        // programs are prepared once and dependency storage has structural gates.
+        schema
+            .prepare(
+                &DefaultEvaluator::default(),
+                &resources,
+                &PreparationLimits::default(),
+            )
+            .unwrap();
+        for allocation in [false, true] {
+            let defaults = PreparationLimits::default();
+            let resource = if allocation {
+                "preparation-sdk-reservation-bytes"
+            } else {
+                "preparation-sdk-work-units"
+            };
+            let prepare_with = |allowance| {
+                let mut limits = defaults;
+                if allocation {
+                    limits.max_sdk_reservation_bytes = allowance;
+                } else {
+                    limits.max_sdk_work_units = allowance;
+                }
+                schema.prepare(&DefaultEvaluator::default(), &resources, &limits)
+            };
+            let (mut low, mut high) = (
+                0,
+                if allocation {
+                    defaults.max_sdk_reservation_bytes
+                } else {
+                    defaults.max_sdk_work_units
                 },
-                "preparation-sdk-work-units",
-            ),
-            (
-                PreparationLimits {
-                    max_sdk_reservation_bytes: 128 * 1024,
-                    ..PreparationLimits::default()
-                },
-                "preparation-sdk-reservation-bytes",
-            ),
-        ] {
-            let failure = schema
-                .prepare(&DefaultEvaluator::default(), &resources, &limits)
-                .unwrap_err();
+            );
+            while low < high {
+                let middle = low + (high - low) / 2;
+                match prepare_with(middle) {
+                    Ok(_) => high = middle,
+                    Err(failure) => {
+                        assert_eq!(
+                            failure.kind,
+                            PreparationFailureKind::Limit {
+                                resource: resource.into()
+                            }
+                        );
+                        low = middle + 1;
+                    }
+                }
+            }
+            assert!(low > 0);
+            prepare_with(low).unwrap();
+            let failure = prepare_with(low - 1).unwrap_err();
             assert_eq!(
                 failure.kind,
                 PreparationFailureKind::Limit {

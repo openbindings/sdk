@@ -261,60 +261,132 @@
       "schema": "{\"if\":true,\"then\":true,\"else\":{\"pattern\":\"[A-Z]+[0-9]+\"}}",
       "value": "\"x\"",
       "external": true,
-      "required": "N:LimitExceeded",
+      "required": "S",
       "program_bytes": 131072,
       "semantic_required": "S",
-      "gate": "execution-demand compatibility for this mechanical increment; not a normative inability oracle"
+      "gate": "Reviewed once-prepared program disposition: same schema meaning; obsolete per-value compiler charge removed. Prior observation retained.",
+      "historical_per_value_compiler_required": "N:LimitExceeded"
     },
     {
       "id": "preserve-eager/pattern-nonmatch-child",
       "schema": "{\"patternProperties\":{\"^never$\":{\"pattern\":\"[A-Z]+[0-9]+\"}}}",
       "value": "{\"x\":\"abc\"}",
       "external": true,
-      "required": "N:LimitExceeded",
+      "required": "S",
       "program_bytes": 131072,
       "semantic_required": "S",
-      "gate": "execution-demand compatibility for this mechanical increment; not a normative inability oracle"
+      "gate": "Reviewed once-prepared program disposition: same schema meaning; obsolete per-value compiler charge removed. Prior observation retained.",
+      "historical_per_value_compiler_required": "N:LimitExceeded"
     },
     {
       "id": "preserve-eager/additional-selected-child",
       "schema": "{\"properties\":{\"x\":true},\"additionalProperties\":{\"pattern\":\"[A-Z]+[0-9]+\"}}",
       "value": "{\"x\":\"abc\"}",
       "external": true,
-      "required": "N:LimitExceeded",
+      "required": "S",
       "program_bytes": 131072,
       "semantic_required": "S",
-      "gate": "execution-demand compatibility for this mechanical increment; not a normative inability oracle"
+      "gate": "Reviewed once-prepared program disposition: same schema meaning; obsolete per-value compiler charge removed. Prior observation retained.",
+      "historical_per_value_compiler_required": "N:LimitExceeded"
     },
     {
       "id": "preserve-eager/unevaluated-already-evaluated",
       "schema": "{\"properties\":{\"x\":true},\"unevaluatedProperties\":{\"pattern\":\"[A-Z]+[0-9]+\"}}",
       "value": "{\"x\":\"abc\"}",
       "external": true,
-      "required": "N:LimitExceeded",
+      "required": "S",
       "program_bytes": 131072,
       "semantic_required": "S",
-      "gate": "execution-demand compatibility for this mechanical increment; not a normative inability oracle"
+      "gate": "Reviewed once-prepared program disposition: same schema meaning; obsolete per-value compiler charge removed. Prior observation retained.",
+      "historical_per_value_compiler_required": "N:LimitExceeded"
     },
     {
       "id": "preserve-eager/allof-false-then-cost",
       "schema": "{\"allOf\":[false,{\"pattern\":\"[A-Z]+[0-9]+\"}]}",
       "value": "\"x\"",
       "external": true,
-      "required": "N:LimitExceeded",
+      "required": "F",
       "program_bytes": 131072,
       "semantic_required": "F",
-      "gate": "execution-demand compatibility for this mechanical increment; not a normative inability oracle"
+      "gate": "Reviewed once-prepared program disposition: same schema meaning; obsolete per-value compiler charge removed. Prior observation retained.",
+      "historical_per_value_compiler_required": "N:LimitExceeded"
     },
     {
       "id": "preserve-eager/anyof-true-then-cost",
       "schema": "{\"anyOf\":[true,{\"pattern\":\"[A-Z]+[0-9]+\"}]}",
       "value": "\"x\"",
       "external": true,
+      "required": "S",
+      "program_bytes": 131072,
+      "semantic_required": "S",
+      "gate": "Reviewed once-prepared program disposition: same schema meaning; obsolete per-value compiler charge removed. Prior observation retained.",
+      "historical_per_value_compiler_required": "N:LimitExceeded"
+    },
+    {
+      "id": "eager-local-limit/if-unchosen-arm",
+      "schema": "{\"if\":true,\"then\":true,\"else\":{\"pattern\":\"a{65535}\"}}",
+      "value": "\"x\"",
+      "external": true,
       "required": "N:LimitExceeded",
       "program_bytes": 131072,
       "semantic_required": "S",
-      "gate": "execution-demand compatibility for this mechanical increment; not a normative inability oracle"
+      "gate": "Same actual eager reach with a confirmed prepared local Limited operand; terminal inability must remain observable.",
+      "required_pattern_state": "limited"
+    },
+    {
+      "id": "eager-local-limit/pattern-nonmatch-child",
+      "schema": "{\"patternProperties\":{\"^never$\":{\"pattern\":\"a{65535}\"}}}",
+      "value": "{\"x\":\"abc\"}",
+      "external": true,
+      "required": "N:LimitExceeded",
+      "program_bytes": 131072,
+      "semantic_required": "S",
+      "gate": "Same actual eager reach with a confirmed prepared local Limited operand; terminal inability must remain observable.",
+      "required_pattern_state": "limited"
+    },
+    {
+      "id": "eager-local-limit/additional-selected-child",
+      "schema": "{\"properties\":{\"x\":true},\"additionalProperties\":{\"pattern\":\"a{65535}\"}}",
+      "value": "{\"x\":\"abc\"}",
+      "external": true,
+      "required": "N:LimitExceeded",
+      "program_bytes": 131072,
+      "semantic_required": "S",
+      "gate": "Same actual eager reach with a confirmed prepared local Limited operand; terminal inability must remain observable.",
+      "required_pattern_state": "limited"
+    },
+    {
+      "id": "eager-local-limit/unevaluated-already-evaluated",
+      "schema": "{\"properties\":{\"x\":true},\"unevaluatedProperties\":{\"pattern\":\"a{65535}\"}}",
+      "value": "{\"x\":\"abc\"}",
+      "external": true,
+      "required": "N:LimitExceeded",
+      "program_bytes": 131072,
+      "semantic_required": "S",
+      "gate": "Same actual eager reach with a confirmed prepared local Limited operand; terminal inability must remain observable.",
+      "required_pattern_state": "limited"
+    },
+    {
+      "id": "eager-local-limit/allof-false-then-cost",
+      "schema": "{\"allOf\":[false,{\"pattern\":\"a{65535}\"}]}",
+      "value": "\"x\"",
+      "external": true,
+      "required": "N:LimitExceeded",
+      "program_bytes": 131072,
+      "semantic_required": "F",
+      "gate": "Same actual eager reach with a confirmed prepared local Limited operand; terminal inability must remain observable.",
+      "required_pattern_state": "limited"
+    },
+    {
+      "id": "eager-local-limit/anyof-true-then-cost",
+      "schema": "{\"anyOf\":[true,{\"pattern\":\"a{65535}\"}]}",
+      "value": "\"x\"",
+      "external": true,
+      "required": "N:LimitExceeded",
+      "program_bytes": 131072,
+      "semantic_required": "S",
+      "gate": "Same actual eager reach with a confirmed prepared local Limited operand; terminal inability must remain observable.",
+      "required_pattern_state": "limited"
     }
   ]
 }

@@ -25,13 +25,6 @@ pub(super) struct Scores {
     pub helper_payload: usize,
     pub empty_tail_pressure: usize,
 }
-impl Scores {
-    pub(super) fn admitted(self) -> bool {
-        self.dispatch <= super::super::profile::NFA_DISPATCH
-            && self.helper_payload <= super::super::profile::NFA_HELPER_PAYLOAD
-            && self.empty_tail_pressure <= super::super::profile::NFA_EMPTY_TAIL
-    }
-}
 #[derive(Clone, Copy, Debug)]
 struct Tail {
     prefix: usize,

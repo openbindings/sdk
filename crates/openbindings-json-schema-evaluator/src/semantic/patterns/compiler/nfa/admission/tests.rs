@@ -24,7 +24,9 @@ fn frozen_independent_triplets_and_profile_classification() {
         );
         let expected = &row["expected"];
         assert_eq!(
-            scores.admitted(),
+            scores.dispatch <= super::super::super::profile::NFA_DISPATCH
+                && scores.helper_payload <= super::super::super::profile::NFA_HELPER_PAYLOAD
+                && scores.empty_tail_pressure <= super::super::super::profile::NFA_EMPTY_TAIL,
             expected["dispatch"].as_u64().unwrap() <= 65_536
                 && expected["helper"].as_u64().unwrap() <= 1_048_576
                 && expected["tail_pressure"].as_u64().unwrap() <= 1_048_576

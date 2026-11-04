@@ -1,4 +1,4 @@
-//! Private construction stages, inactive pending structural and host qualification.
+//! Private one-build construction used by original-node pattern preparation.
 mod ast;
 mod hir;
 mod inventory;
@@ -70,3 +70,8 @@ pub(crate) fn prepare(
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+pub(in super::super) fn build_count() -> usize {
+    nfa::build_count()
+}

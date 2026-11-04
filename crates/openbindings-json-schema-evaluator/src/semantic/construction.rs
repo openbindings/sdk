@@ -10,15 +10,15 @@ pub(super) struct Construction<'a> {
     // Single-threaded construction shares facts through immutable borrows of
     // its environment. Neither these cells nor the control enter a Plan.
     syntax: Vec<Cell<usize>>,
-    // Temporary integration with the inactive compiler stages. Activation removes
-    // this cfg together with the compiler's cfg; the Plan never owns this state.
-    #[cfg(test)]
+    limits: Limits,
+    programs: patterns::Programs,
     pattern_budget: patterns::compiler::profile::Budget,
 }
 
 impl<'a> Construction<'a> {
     pub(super) fn new(
         environment: SchemaEnvironment,
+        limits: Limits,
         control: &'a dyn Control,
     ) -> Result<Self, PreparationFailure> {
         let nodes = environment.space().node_count();
@@ -31,7 +31,8 @@ impl<'a> Construction<'a> {
             environment,
             control,
             syntax,
-            #[cfg(test)]
+            limits,
+            programs: patterns::Programs::default(),
             pattern_budget: patterns::compiler::profile::Budget::default(),
         })
     }
@@ -49,12 +50,26 @@ impl<'a> Construction<'a> {
         &self.pattern_budget
     }
 
+    pub(super) fn limits(&self) -> &Limits {
+        &self.limits
+    }
+
+    pub(super) fn pattern(
+        &self,
+        source: &str,
+    ) -> Result<Arc<patterns::Program>, PreparationFailure> {
+        self.finish()?;
+        let result = self
+            .programs
+            .add(source, &self.limits, &self.pattern_budget, self.control);
+        self.finish()?;
+        result
+    }
+
     /// No ignored nested construction failure may publish a prepared Plan.
     pub(super) fn finish(&self) -> Result<(), PreparationFailure> {
-        #[cfg(test)]
         self.pattern_budget.check(self.control)?;
-        #[cfg(not(test))]
-        self.control.check()?;
+        self.programs.check(self.control)?;
         Ok(())
     }
 

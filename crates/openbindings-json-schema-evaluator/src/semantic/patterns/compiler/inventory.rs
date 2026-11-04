@@ -2,7 +2,6 @@
 //!
 //! One frame per AST ancestor folds scalar facts; wide alternatives never need
 //! a vector of child summaries. The owner keeps structural pressure facts with its AST.
-use super::ast::Parsed;
 use openbindings_internal_schema::{Control, Failure};
 use regex_syntax::ast::{Ast, ClassSet, ClassSetItem, GroupKind, RepetitionKind, RepetitionRange};
 use std::mem::size_of;
@@ -14,7 +13,7 @@ use fold::Frame;
 
 #[derive(Debug)]
 pub(super) struct Inventoried {
-    pub parsed: Parsed,
+    pub tree: Ast,
     pub summary: Summary,
 }
 
@@ -215,13 +214,10 @@ fn map_error(error: InternalError, control: &dyn Control) -> Error {
 }
 
 /// Structural facts remain attached to the immutable AST they describe.
-pub(super) fn inspect(
-    parsed: Parsed,
-    control: &dyn Control,
-) -> std::result::Result<Inventoried, Error> {
-    let summary = walk(&parsed.tree, control)?;
+pub(super) fn inspect(tree: Ast, control: &dyn Control) -> std::result::Result<Inventoried, Error> {
+    let summary = walk(&tree, control)?;
     control.check().map_err(Error::Attempt)?;
-    Ok(Inventoried { parsed, summary })
+    Ok(Inventoried { tree, summary })
 }
 
 fn walk(root: &Ast, control: &dyn Control) -> std::result::Result<Summary, Error> {

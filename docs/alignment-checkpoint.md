@@ -18,8 +18,10 @@ now passes bounded independent review. The lean
 and [actual-HIR admission scores](alignment-checkpoint/nfa-admission/README.md)
 now pass bounded independent implementation review. The [joined factory and shared
 aggregate](alignment-checkpoint/joined-pattern-factory/README.md) also pass independent
-review and a 1,320-row current/minimum/actual-host replay. Actual Program/index/Search
-integration and complete once-prepared ownership remain open. The
+review and a 1,320-row current/minimum/actual-host replay. [Actual once-prepared ownership](alignment-checkpoint/prepared-pattern-ownership/README.md)
+is now integrated into the original route. Current/minimum Rust and forced-original
+required cases pass, including all three actual Wasm hosts. The ordinary default
+switch and outgoing compiler retirement remain open. The
 [ordered Reader name index](alignment-checkpoint/reader-name-index/README.md)
 is independently reviewed and pushed as `f1d5d4d`; its native and actual-host gates
 pass. The preceding `e76ca51` checkpoint passes all hosted CI and performance jobs.

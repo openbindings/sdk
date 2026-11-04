@@ -80,7 +80,7 @@ fn a_shared_positive_is_only_local_syntax_and_hits_remove_actual_checker_work() 
     let environment = build_environment(&input());
     let helper = supplied_node(&environment, "https://facts.test/helper");
     let recording = Recording::default();
-    let construction = Construction::new(environment, &recording).unwrap();
+    let construction = Construction::new(environment, Limits::default(), &recording).unwrap();
     assert!(!positive(&construction, helper));
     assert!(construction.check_standard(helper).unwrap());
     let work = recording.work.load(Ordering::Relaxed);
@@ -92,7 +92,6 @@ fn a_shared_positive_is_only_local_syntax_and_hits_remove_actual_checker_work() 
     let plan = Plan::at(
         &construction,
         construction.environment.entry(),
-        Limits::default(),
         PreparationLimits::default(),
     )
     .unwrap();
@@ -171,7 +170,7 @@ fn node_identity_profile_and_new_environments_bound_the_facts() {
     let new = supplied_node(&environment, "https://facts.test/new#/properties/child");
     let helper = supplied_node(&environment, "https://facts.test/helper");
     let custom = supplied_node(&environment, "https://facts.test/c1");
-    let construction = Construction::new(environment, &|| false).unwrap();
+    let construction = Construction::new(environment, Limits::default(), &|| false).unwrap();
     assert!(construction.check_standard(old).unwrap());
     for _ in 0..2 {
         assert!(!construction.check_standard(new).unwrap());
@@ -181,7 +180,8 @@ fn node_identity_profile_and_new_environments_bound_the_facts() {
     }
     assert!(construction.check_standard(helper).unwrap());
     row["resources"]["https://facts.test/helper"]["required"] = false.into();
-    let replacement = Construction::new(build_environment(&row), &|| false).unwrap();
+    let replacement =
+        Construction::new(build_environment(&row), Limits::default(), &|| false).unwrap();
     let changed = supplied_node(replacement.environment(), "https://facts.test/helper");
     assert!(!positive(&replacement, changed));
     assert!(!replacement.check_standard(changed).unwrap());
@@ -190,7 +190,7 @@ fn node_identity_profile_and_new_environments_bound_the_facts() {
 #[test]
 fn packaged_identifiers_map_to_dense_distinct_local_fact_bits() {
     let environment = build_environment(&input());
-    let construction = Construction::new(environment, &|| false).unwrap();
+    let construction = Construction::new(environment, Limits::default(), &|| false).unwrap();
     let space = construction.environment.space();
     let ids: Vec<_> = space.nodes().map(|(id, _)| id).collect();
     assert!(ids.iter().any(|id| *id >= 1 << (usize::BITS - 1)));
@@ -219,7 +219,7 @@ impl Control for Stop {
 fn cancelled_misses_cannot_publish_and_hits_still_check_the_attempt() {
     let environment = build_environment(&input());
     let node = supplied_node(&environment, "https://facts.test/helper");
-    Construction::new(environment.clone(), &|| false)
+    Construction::new(environment.clone(), Limits::default(), &|| false)
         .unwrap()
         .check_standard(node)
         .unwrap();
@@ -227,7 +227,7 @@ fn cancelled_misses_cannot_publish_and_hits_still_check_the_attempt() {
         checks: AtomicUsize::new(0),
         at: usize::MAX,
     };
-    let construction = Construction::new(environment.clone(), &count).unwrap();
+    let construction = Construction::new(environment.clone(), Limits::default(), &count).unwrap();
     count.checks.store(0, Ordering::Relaxed);
     construction.check_standard(node).unwrap();
     let boundaries = count.checks.load(Ordering::Relaxed);
@@ -236,7 +236,8 @@ fn cancelled_misses_cannot_publish_and_hits_still_check_the_attempt() {
             checks: AtomicUsize::new(0),
             at: usize::MAX,
         };
-        let mut construction = Construction::new(environment.clone(), &stop).unwrap();
+        let mut construction =
+            Construction::new(environment.clone(), Limits::default(), &stop).unwrap();
         let stop = Stop {
             checks: AtomicUsize::new(0),
             at,
@@ -249,7 +250,7 @@ fn cancelled_misses_cannot_publish_and_hits_still_check_the_attempt() {
         checks: AtomicUsize::new(0),
         at: 0,
     };
-    let mut construction = Construction::new(environment, &|| false).unwrap();
+    let mut construction = Construction::new(environment, Limits::default(), &|| false).unwrap();
     construction.check_standard(node).unwrap();
     construction.control = &stop;
     assert!(construction.check_standard(node).is_err());
@@ -302,7 +303,7 @@ fn table_backing_and_shared_work_have_exact_sticky_boundaries() {
 #[test]
 fn nested_plans_cannot_renew_the_outer_pattern_construction_allowance() {
     let environment = build_environment(&input());
-    let construction = Construction::new(environment, &|| false).unwrap();
+    let construction = Construction::new(environment, Limits::default(), &|| false).unwrap();
     let budget = construction.pattern_budget();
     for _ in 0..7 {
         budget.nfa(0, 1_048_576, 0, construction.control()).unwrap();
@@ -310,7 +311,6 @@ fn nested_plans_cannot_renew_the_outer_pattern_construction_allowance() {
     let plan = Plan::at(
         &construction,
         construction.environment.entry(),
-        Limits::default(),
         PreparationLimits::default(),
     )
     .unwrap();
@@ -328,8 +328,97 @@ fn nested_plans_cannot_renew_the_outer_pattern_construction_allowance() {
         matches!(construction.finish().unwrap_err().kind, PreparationFailureKind::Limit {resource} if resource == "pattern-construction-helper-payload")
     );
     // A genuinely separate outer attempt starts fresh.
-    Construction::new(build_environment(&input()), &|| false)
+    Construction::new(build_environment(&input()), Limits::default(), &|| false)
         .unwrap()
         .finish()
         .unwrap();
+}
+
+#[test]
+fn actual_root_and_selected_meta_programs_share_one_index_and_aggregate() {
+    for reverse in [false, true] {
+        for prewarm in [false, true] {
+            for remaining in [8, 7] {
+                let mut row = input();
+                row["document"]["schemas"]["entry"]["pattern"] = "r?".into();
+                if reverse {
+                    row["document"]["schemas"]["entry"]["allOf"]
+                        .as_array_mut()
+                        .unwrap()
+                        .reverse();
+                }
+                for (uri, source) in [("m1", "m?"), ("m2", "n?"), ("helper", "h?")] {
+                    row["resources"][format!("https://facts.test/{uri}")]["pattern"] =
+                        source.into();
+                }
+                let environment = build_environment(&row);
+                let entry = environment.entry();
+                let construction =
+                    Construction::new(environment, Limits::default(), &|| false).unwrap();
+                if prewarm {
+                    for uri in ["m1", "m2", "helper"] {
+                        let node = supplied_node(
+                            construction.environment(),
+                            &format!("https://facts.test/{uri}"),
+                        );
+                        assert!(construction.check_standard(node).unwrap());
+                    }
+                }
+                // Each actual optional literal has independently fixed helper
+                // score two. Leave space for exactly four unique programs.
+                let budget = construction.pattern_budget();
+                for _ in 0..7 {
+                    budget.nfa(0, 1_048_576, 0, construction.control()).unwrap();
+                }
+                budget
+                    .nfa(0, 1_048_576 - remaining, 0, construction.control())
+                    .unwrap();
+                let before = patterns::compiler::build_count();
+                let root = Plan::at(&construction, entry, PreparationLimits::default()).unwrap();
+                let result = meta::validate(&root, &construction);
+                assert_eq!(
+                    patterns::compiler::build_count() - before,
+                    if remaining == 8 { 4 } else { 3 }
+                );
+                if remaining == 8 {
+                    result.unwrap();
+                    construction.finish().unwrap();
+                    // A second selected-meta walk hits completed programs even
+                    // though no helper admission remains.
+                    meta::validate(&root, &construction).unwrap();
+                    assert_eq!(patterns::compiler::build_count() - before, 4);
+                } else {
+                    for error in [result.unwrap_err(), construction.finish().unwrap_err()] {
+                        assert!(
+                            matches!(error.kind,PreparationFailureKind::Limit{resource}if resource=="pattern-construction-helper-payload")
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn selected_meta_demands_a_local_pattern_limit_only_on_a_string() {
+    for title in [
+        None,
+        Some(serde_json::json!(17)),
+        Some(serde_json::json!("text")),
+    ] {
+        let mut row = input();
+        row["resources"]["https://facts.test/m1"]["properties"] =
+            serde_json::json!({"title":{"pattern":"a{65535}"}});
+        if let Some(title) = &title {
+            row["resources"]["https://facts.test/c1"]["title"] = title.clone();
+        }
+        let result = prepare(&row);
+        if title.as_ref().is_some_and(serde_json::Value::is_string) {
+            assert!(
+                matches!(result,Err(PreparationFailure{kind:PreparationFailureKind::Limit{resource},..})if resource=="pattern-size-limit")
+            );
+        } else {
+            result.unwrap();
+        }
+    }
 }

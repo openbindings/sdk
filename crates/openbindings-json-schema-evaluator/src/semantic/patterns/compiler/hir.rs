@@ -28,7 +28,13 @@ impl From<ast::Error> for Error {
         match error {
             ast::Error::Attempt(failure) => Self::Attempt(failure),
             ast::Error::Refused(ast::Refusal::ConstructionLimit) => Self::ConstructionLimit,
-            ast::Error::Refused(_) => Self::Representation,
+            ast::Error::Refused(ast::Refusal::Normalized(super::normalized::Refusal::Depth {
+                ..
+            })) => Self::ConstructionLimit,
+            ast::Error::Refused(
+                ast::Refusal::Normalized(super::normalized::Refusal::Grammar { .. })
+                | ast::Refusal::Representation,
+            ) => Self::Representation,
         }
     }
 }
@@ -71,12 +77,10 @@ pub(super) fn prepare(
         #[cfg(test)]
         tests::entered_translator();
         let mut translator = TranslatorBuilder::new().utf8(true).build();
-        translator
-            .translate(form, &owned.parsed.tree)
-            .map_err(|error| {
-                drop(error);
-                Error::Representation
-            })
+        translator.translate(form, &owned.tree).map_err(|error| {
+            drop(error);
+            Error::Representation
+        })
     };
     drop(owned);
     budget.check(control)?;

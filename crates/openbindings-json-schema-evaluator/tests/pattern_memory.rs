@@ -338,8 +338,8 @@ fn a_small_pattern_memory_refuses_a_pattern_beyond_what_it_leaves() {
     assert_memory_refusal(&refused, "/patternProperties");
 
     // No pattern memory admits no compiled pattern and no run matcher, and
-    // leaves patterns the evaluator does not match and contracts without
-    // patterns alone.
+    // counts the immutable owner of an unsupported interpretation too. A
+    // pattern-free contract needs no pattern owner.
     let none = memory(0);
     assert_memory_refusal(
         &prepare(&json!({"pattern": "a|b"}), none.clone()).unwrap_err(),
@@ -348,7 +348,17 @@ fn a_small_pattern_memory_refuses_a_pattern_beyond_what_it_leaves() {
     let refused = prepare(&json!({"pattern": "^[a-z]+$"}), none.clone()).unwrap_err();
     assert_memory_refusal(&refused, "/pattern");
 
-    let unmatched = prepare(&json!({"pattern": "^(?=a)a"}), none.clone()).unwrap();
+    // The original-node path now counts Arc<Program>, not just matcher storage.
+    // The old zero-byte unsupported preparation was a memory-division policy.
+    assert_eq!(
+        prepare(&json!({"pattern": "^(?=a)a"}), none.clone())
+            .unwrap_err()
+            .kind,
+        PreparationFailureKind::Limit {
+            resource: "pattern-total-memory-limit".into()
+        }
+    );
+    let unmatched = prepare(&json!({"pattern": "^(?=a)a"}), memory(1024)).unwrap();
     assert_eq!(
         no_verdict(&unmatched, r#""a""#).code,
         "pattern-backtracking"

@@ -1,3 +1,4 @@
+use super::normalized::Summary;
 use super::*;
 use crate::pattern::{self, Reading};
 use openbindings_internal_schema::{FailureReason, preparation::Attempt};
@@ -52,15 +53,12 @@ impl Control for Recorder {
 }
 
 #[test]
-fn owns_one_complete_tree_and_its_exact_inventory() {
+fn owns_one_complete_tree_after_guard_admission() {
     reset_entries();
     let form = r"((?-u:\b))[0-9A-Z\x{E000}]a{12,34}?";
     let parsed = prepare(form, 2, 32, &|| false).unwrap();
     assert_eq!(entries(), 1);
-    assert_eq!(parsed.inventory.groups, 2);
-    assert_eq!(parsed.inventory.class_items, 3);
-    assert_eq!(parsed.inventory.repetitions, 1);
-    assert_eq!(parsed.tree.span().end.offset, form.len());
+    assert_eq!(parsed.span().end.offset, form.len());
 }
 
 #[test]
@@ -248,6 +246,6 @@ fn unchanged_reader_forms_use_the_guarded_stage() {
     assert_eq!(linear, 1142);
 }
 
-fn prepare(form: &str, groups: usize, depth: u32, control: &dyn Control) -> Result<Parsed, Error> {
+fn prepare(form: &str, groups: usize, depth: u32, control: &dyn Control) -> Result<Ast, Error> {
     super::prepare(form, groups, depth, &profile::Budget::default(), control)
 }
