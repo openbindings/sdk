@@ -1,0 +1,67 @@
+{
+  "status": "Bounded local evaluator checks passed; independent implementation review and performance acceptance remain open",
+  "sdk_head": "2fb2f5092ec402fbea6cbaacf27eb0cc0d526bda",
+  "uncommitted_source": {
+    "crates/openbindings-json-schema-evaluator/src/semantic/mod.rs": "7ef6730f088cd0c2c4b323c7c0165dd6527d4ec1e2f3eaa1dbfa0e979714ec6b",
+    "crates/openbindings-json-schema-evaluator/src/semantic/preparation.rs": "fc1ccb5bda511e7874bb80105a02a5d06d7abaabf06efde2fd6db0be350a845e",
+    "crates/openbindings-json-schema-evaluator/src/semantic/execution/mod.rs": "12896ccca6248acd80b4a0c45d7b007b6d472b8152f92563da2b1019240a433b",
+    "crates/openbindings-json-schema-evaluator/src/semantic/refinement.rs": "df6d211957e842bf1ad23bcd1b30a8ad7c3e5751d25a20d4786452e7a2abe9d5",
+    "crates/openbindings-json-schema-evaluator/src/semantic/readings.rs": "7eac54dc4ec9c58e203434b72555a499fa218c82f5d5853f6bede5364358aff7"
+  },
+  "evaluator": {
+    "passed": 385,
+    "failed": 0,
+    "ignored": 5,
+    "targets": 43
+  },
+  "clippy": "passed with warnings denied",
+  "kit": {
+    "observations": 1546,
+    "configuration_failures": []
+  },
+  "logs": {
+    "evaluator": {
+      "file": "ob-mask-only-evaluator.log",
+      "sha256": "a444ad78beaec8320957bbd966f430b496c6cb91ef6e98c07aefb7c56d2e2881"
+    },
+    "clippy": {
+      "file": "ob-mask-only-clippy.log",
+      "sha256": "9c8db4ebd848f6e0ef1b083dd0ef3cd43960f4877e31298276d6a8cfe76ce73d"
+    },
+    "kit": {
+      "file": "ob-mask-only-kit.log",
+      "sha256": "5e9fe8584e32a16b011ffae1bde490763dfa99ffca664b55503e28edb9815643"
+    },
+    "kit-observations": {
+      "file": "ob-mask-only-kit.json",
+      "sha256": "a0be873fedc981a34b07c33bdd61ae1195c33e2e37093d8acde59a5ef66ae11b"
+    },
+    "evaluation-stack": {
+      "file": "ob-mask-only-evaluation-stack.log",
+      "sha256": "def1c68e8be6fb3b5219550885cd1c289c54f9d552034b049d3a7a0e395a212e"
+    },
+    "walk-stack": {
+      "file": "ob-mask-only-walk-stack.log",
+      "sha256": "aa371b9ef7329e2f6489edae42d0dd351a38ca68401b537f40d55eed0324e3d2"
+    },
+    "original-frame": {
+      "file": "ob-mask-only-original-frame.log",
+      "sha256": "57da8b29d93638b028d8f98ef482a3c4c50631c5e20efa8e851af1fd4504fc66"
+    }
+  },
+  "not_claimed": [
+    "full current workspace and packaged/host qualification",
+    "unchanged pattern_stack release target rerun in this bounded increment",
+    "performance G6 acceptance",
+    "whole-SDK completion"
+  ],
+  "required_release_frame_controls": {
+    "evaluation_stack": 1,
+    "walk_stack": 1,
+    "original_frame": 2,
+    "failed": 0,
+    "sampled_stack_bytes": 7616,
+    "sampled_guard_bytes": 262144,
+    "physical_stack_claim": "Separate native small-stack witnesses pass; sampled guard alone is not a physical certificate"
+  }
+}

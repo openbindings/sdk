@@ -67,7 +67,7 @@ impl Run<'_> {
             // preparation certificate still proves that they produce no
             // annotations, including under a foreign or custom profile.
             // This is structural absence, not an omitted-demand map.
-            if self.plan.leaves.contains(&node) {
+            if self.plan.fields(node).is_leaf() {
                 continue;
             }
             // A complete State already incorporates conditional selection and

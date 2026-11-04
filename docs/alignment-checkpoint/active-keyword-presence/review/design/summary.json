@@ -1,0 +1,17 @@
+{
+  "status": "Bounded design approved for implementation review",
+  "variant": "mask-only, no slots; original fallback explicit",
+  "controls": 20,
+  "profile_filter_premise_verified": true,
+  "conditions": [
+    "Separate provisional mask; preparation views remain Original until full scan/postcheck",
+    "Unmapped keyword getters fall back to original Profile.get",
+    "Refresh mask after alias target changes",
+    "Preserve independent leaf certificate and all opaque/profile fallbacks",
+    "Skip only absent whole phases; retain State and actual child demand",
+    "Reserve new active-node map and actual Frame layout; no default increases"
+  ],
+  "sdk_edits": false,
+  "implementation_approved": false,
+  "performance_accepted": false
+}

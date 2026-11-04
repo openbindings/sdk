@@ -13,6 +13,7 @@ mod operands;
 mod patterns;
 mod preparation;
 mod primitive;
+mod readings;
 mod refinement;
 mod regex_format;
 mod stack;
@@ -80,10 +81,15 @@ struct AnnotationDemand {
 struct Interpreted<'a> {
     value: JsonRef<'a>,
     profile: Profile,
+    fields: readings::Fields,
 }
 impl<'a> Interpreted<'a> {
     fn get(self, keyword: &str) -> Option<JsonRef<'a>> {
-        self.profile.get(self.value, keyword)
+        if self.fields.may_read(keyword) {
+            self.profile.get(self.value, keyword)
+        } else {
+            None
+        }
     }
 }
 
@@ -99,7 +105,7 @@ pub(super) struct Plan {
     patterns: PreparedPatterns,
     operands: HashMap<usize, operands::Prepared>,
     annotations: AnnotationDemand,
-    leaves: HashSet<usize>,
+    fields: HashMap<usize, readings::Fields>,
     // Keep candidate ordering stable for repeated attempts on this contract.
     value_hash: std::collections::hash_map::RandomState,
 }
@@ -140,9 +146,15 @@ impl Plan {
             patterns: checked.patterns,
             operands: checked.operands,
             annotations: checked.annotations,
-            leaves: checked.leaves,
+            fields: checked.fields,
             value_hash: std::collections::hash_map::RandomState::new(),
         })
+    }
+    fn fields(&self, node: usize) -> readings::Fields {
+        self.fields
+            .get(&node)
+            .copied()
+            .unwrap_or(readings::Fields::ORIGINAL)
     }
     pub(super) fn evaluate(
         &self,
@@ -883,8 +895,9 @@ impl Run<'_> {
                 self.graph.charge(64)?;
                 return Ok((canonical, Arc::new(relevant), true));
             }
-            let original = self.space().node(node);
-            let schema = original.value.clone();
+            let plan = self.plan;
+            let original = plan.environment.space().node(node);
+            let schema = &original.value;
             if !self.space().eligible(original.resource)
                 || original.profile.is_none()
                 || self.space().query_inventory(original.resource).is_err()

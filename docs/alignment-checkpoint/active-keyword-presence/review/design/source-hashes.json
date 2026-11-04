@@ -1,0 +1,15 @@
+{
+  "base": "2fb2f5092ec402fbea6cbaacf27eb0cc0d526bda",
+  "files": {
+    "sdk/crates/openbindings-internal-schema/src/dialect/profile.rs": "cefad0a11ad19cdf585b244e909d822eda33114cbe72ab844c09c1ec0a05aaa4",
+    "sdk/crates/openbindings-internal-schema/src/dialect.rs": "60a8e3aed1ed130dcf0154602a74483ba122202f1a7074b27d96e3739c4affe3",
+    "sdk/crates/openbindings-json-schema-evaluator/src/semantic/preparation.rs": "d06d63164a47962ce81a5cf432a7a009606f8c30d6bb37682c6ec5fae072db05",
+    "sdk/crates/openbindings-json-schema-evaluator/src/semantic/mod.rs": "7639c8fd43af5f655772c53374f4d63daf0805d9555dbc9369c0df0f0e0bd21d",
+    "sdk/crates/openbindings-json-schema-evaluator/src/semantic/execution/mod.rs": "7a5c53f08a7789b6d57b058e450e1048f6d8d9e4ddfbf0e07ddd63b0e3b02ff2",
+    "sdk/crates/openbindings-json-schema-evaluator/src/semantic/execution/logical.rs": "700e37bbba9a23c2b65e321e2d1c8c8a20fe99da18997a207e2fca751711bb10",
+    "sdk/crates/openbindings-json-schema-evaluator/src/semantic/execution/object.rs": "0643649252bae4f32aeba78e113c1a3ddaba8edafb5a051c9ae988fef800c2e3",
+    "sdk/crates/openbindings-json-schema-evaluator/src/semantic/execution/array.rs": "48f2650952d7ce1f4bbb9c7d9fd3db9e0a488942afd0a32485e4b707e2c0fa57",
+    "sdk/crates/openbindings-json-schema-evaluator/src/semantic/refinement.rs": "fec0a0eb852627ef74e95468381b92e05f1c21604f6d2441464fb49a12c2b8d7"
+  },
+  "activity": "Static design review only; no SDK edits/builds/tests/benchmarks"
+}

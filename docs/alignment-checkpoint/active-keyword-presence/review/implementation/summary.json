@@ -1,0 +1,46 @@
+{
+  "status": "PASS: bounded mask-only implementation review; no production finding",
+  "production_files": 5,
+  "production_changed_by_reviewer": false,
+  "toolchains": [
+    "Rust1.99.0 native",
+    "Rust1.88.0 native",
+    "Rust1.99.0 wasm32 target layout only"
+  ],
+  "independent_mask_groups_per_native_toolchain": 11,
+  "getter_rows_per_native_toolchain": 430,
+  "complete_public_observations_per_lane": 106,
+  "public_observation_differences": 0,
+  "preparation_cancellation_checkpoints_per_toolchain": 136,
+  "public_evaluation_stop_rows_per_toolchain": 838,
+  "sdk_boundary": {
+    "work": 8805,
+    "reservation_bytes": 49400,
+    "exact_and_one_below": true
+  },
+  "layout_delta_frame_bytes_native_and_wasm": 8,
+  "map_reservation": "136 bytes per certified activated node, scoped SDK estimate; finite native allocation samples verified but no universal HashMap certificate",
+  "reviewer_corrections": [
+    "metadata-only leaf premise corrected against unchanged child_shape; failed control retained",
+    "5000-shorthand repeated380 positive uses exact contained setup; mistakenly supplied variant failed on original and candidate, cause redacted in this probe",
+    "Wasm driver stale dependency selection corrected to exact current fingerprint set; initial failures retained"
+  ],
+  "parent_evidence_only": {
+    "evaluator_checks": 385,
+    "ignored": 5,
+    "required_kit": 1546,
+    "release_stack_controls": 4,
+    "selected_timing": "mask-only-measurement/comparison.json",
+    "selected_allocations": "mask-only selected parent observations"
+  },
+  "not_claimed": [
+    "G6 acceptance or baseline performance recovery",
+    "new full2348 auxiliary replay",
+    "new actual Wasm/browser runtime replay by independent reviewer",
+    "general physical allocation/stack bound"
+  ],
+  "source_manifest": "final-source-hashes.json",
+  "controls": "control-disposition.json",
+  "layouts": "layouts.json",
+  "observation_comparison": "public-observation-comparison.json"
+}

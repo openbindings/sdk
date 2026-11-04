@@ -22,6 +22,7 @@ struct Request<'v> {
 struct Frame<'v> {
     visit: Visit,
     value: JsonRef<'v>,
+    fields: readings::Fields,
     state: State,
     phase: Phase,
 }
@@ -73,6 +74,7 @@ impl<'v> Frame<'v> {
         Interpreted {
             value: original.value.view(),
             profile: original.profile.expect("entered known schema"),
+            fields: self.fields,
         }
     }
     fn advance(
@@ -85,7 +87,12 @@ impl<'v> Frame<'v> {
             let phase = std::mem::replace(&mut self.phase, Phase::Done);
             let action = match phase {
                 Phase::Start => {
-                    match run.begin(self.visit.schema, self.value, &self.visit.context)? {
+                    match run.begin(
+                        self.visit.schema,
+                        self.fields,
+                        self.value,
+                        &self.visit.context,
+                    )? {
                         Beginning::Ready(state) => {
                             self.state = state;
                             Action::Complete
@@ -164,9 +171,32 @@ impl<'v> Frame<'v> {
                         Action::Continue
                     }
                 }
-                Phase::Logical(cursor) => logical::advance(self, run, cursor, returned.take())?,
-                Phase::Object(cursor) => object::advance(self, run, cursor, returned.take())?,
-                Phase::Array(cursor) => array::advance(self, run, cursor, returned.take())?,
+                Phase::Logical(cursor) => {
+                    if self.fields.logical() {
+                        logical::advance(self, run, cursor, returned.take())?
+                    } else {
+                        debug_assert!(returned.is_none());
+                        self.phase = Phase::Object(object::Cursor::start());
+                        Action::Continue
+                    }
+                }
+                Phase::Object(cursor) => {
+                    if self.fields.object() {
+                        object::advance(self, run, cursor, returned.take())?
+                    } else {
+                        debug_assert!(returned.is_none());
+                        self.phase = Phase::Array(array::Cursor::start());
+                        Action::Continue
+                    }
+                }
+                Phase::Array(cursor) => {
+                    if self.fields.array() {
+                        array::advance(self, run, cursor, returned.take())?
+                    } else {
+                        debug_assert!(returned.is_none());
+                        Action::Complete
+                    }
+                }
                 Phase::Done => Action::Complete,
             };
             if !matches!(action, Action::Continue) {
@@ -232,9 +262,10 @@ impl Run<'_> {
             context,
         } = request;
         self.graph.tick()?;
-        if self.plan.leaves.contains(&node) {
+        let fields = self.plan.fields(node);
+        if fields.is_leaf() {
             let context = self.enter(node, &context)?;
-            return match self.begin(node, value, &context)? {
+            return match self.begin(node, fields, value, &context)? {
                 Beginning::Ready(state) => Ok(Entry::Ready(state)),
                 _ => unreachable!("certified leaf has no child application"),
             };
@@ -252,8 +283,9 @@ impl Run<'_> {
                 )
                 .map(Entry::Ready);
         }
-        if self.plan.leaves.contains(&node) {
-            return match self.begin(node, value, &context)? {
+        let fields = self.plan.fields(node);
+        if fields.is_leaf() {
+            return match self.begin(node, fields, value, &context)? {
                 Beginning::Ready(state) => Ok(Entry::Ready(state)),
                 _ => unreachable!("alias reached a certified leaf"),
             };
@@ -304,6 +336,7 @@ impl Run<'_> {
         Ok(Entry::Frame(Frame {
             visit: key,
             value,
+            fields,
             state: State::truth(TRUE),
             phase: Phase::Start,
         }))
@@ -352,10 +385,14 @@ impl Run<'_> {
     fn begin(
         &mut self,
         node: usize,
+        fields: readings::Fields,
         value: JsonRef<'_>,
         context: &Context,
     ) -> Result<Beginning, NoVerdict> {
-        let schema = self.space().node(node).value.clone();
+        // Plan owns the original source for this entire run. Borrowing through
+        // that immutable owner keeps later mutable Run calls independent.
+        let plan = self.plan;
+        let schema = &plan.environment.space().node(node).value;
         if let Some(boolean) = schema.view().as_bool() {
             let mut state = State::truth(if boolean { TRUE } else { FALSE });
             if !boolean {
@@ -385,6 +422,7 @@ impl Run<'_> {
         let schema = Interpreted {
             value: schema.view(),
             profile,
+            fields,
         };
         if profile.reference_object(schema.value) {
             return Ok(Beginning::ReferenceObject);
@@ -447,7 +485,7 @@ impl Run<'_> {
                 self.record_failure(&mut state, node, value, Some("pattern"))?;
             }
         }
-        if self.plan.leaves.contains(&node) {
+        if fields.is_leaf() {
             return Ok(Beginning::Ready(state));
         }
         Ok(Beginning::Body(state))

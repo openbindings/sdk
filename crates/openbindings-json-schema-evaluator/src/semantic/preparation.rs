@@ -14,7 +14,7 @@ pub(super) struct Checked {
     pub patterns: PreparedPatterns,
     pub operands: HashMap<usize, operands::Prepared>,
     pub annotations: AnnotationDemand,
-    pub leaves: HashSet<usize>,
+    pub fields: HashMap<usize, readings::Fields>,
 }
 
 /// Syntax admission traverses every declared schema position, including unused
@@ -124,7 +124,7 @@ pub(super) fn check_from(
     let mut queries = PreparedQueries::new();
     let mut shared_queries = queries::Queries::new(space);
     let mut annotations = AnnotationDemand::default();
-    let mut leaves = HashSet::new();
+    let mut fields = HashMap::new();
     while let Some(node) = queue.pop_front() {
         control.check()?;
         if visited.contains(&node) {
@@ -182,7 +182,11 @@ pub(super) fn check_from(
         let schema = Interpreted {
             value: original.value.view(),
             profile,
+            fields: readings::Fields::ORIGINAL,
         };
+        // All preparation reads retain Original fallback until the complete
+        // member scan and post-check publish this separate accumulator.
+        let mut present = readings::Fields::EMPTY;
         operands.add(node, schema, control)?;
         annotations.properties |= schema.get("unevaluatedProperties").is_some();
         annotations.items |= schema.get("unevaluatedItems").is_some();
@@ -299,13 +303,17 @@ pub(super) fn check_from(
                 // Presence disqualifies even empty or malformed applicators.
                 // A permissive custom meta-schema can admit those operands;
                 // finding no child positions does not make their behavior inert.
-                if schema.get(keyword).is_some()
+                let active = schema.get(keyword).is_some();
+                if active {
+                    present.include(keyword);
+                }
+                if active
                     && (child_shape(keyword).is_some()
                         || matches!(keyword, "dependencies" | "additionalItems"))
                 {
                     leaf = false;
                 }
-                if schema.get(keyword).is_none()
+                if !active
                     || (child_shape(keyword).is_none()
                         && !matches!(keyword, "dependencies" | "additionalItems"))
                     || (matches!(keyword, "then" | "else") && schema.get("if").is_none())
@@ -343,9 +351,14 @@ pub(super) fn check_from(
             }
         }
         if leaf {
-            control.charge_allocation(128)?;
-            leaves.insert(node);
+            present.certify_leaf();
         }
+        // The existing map reservation policy includes bucket/growth slack.
+        // This replaces the 128-byte leaf-set estimate and also charges every
+        // non-leaf descriptor, before allocation or publication.
+        control.check()?;
+        control.charge_allocation(128 + std::mem::size_of::<readings::Fields>())?;
+        fields.insert(node, present);
     }
     control.charge_allocation(resources.len().saturating_mul(8))?;
     let mut resources: Vec<_> = resources.into_iter().collect();
@@ -358,7 +371,7 @@ pub(super) fn check_from(
         patterns: readings,
         operands: operands.records,
         annotations,
-        leaves,
+        fields,
     })
 }
 fn limit(resource: &str) -> PreparationFailure {

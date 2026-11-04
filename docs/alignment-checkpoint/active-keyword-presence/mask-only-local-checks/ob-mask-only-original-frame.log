@@ -1,0 +1,11 @@
+   Compiling openbindings-json-schema-evaluator v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-json-schema-evaluator)
+    Finished `release` profile [optimized] target(s) in 36.39s
+     Running unittests src/lib.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/release/deps/openbindings_json_schema_evaluator-67e37a3520d902e3)
+
+running 2 tests
+sampled_stack_guard=262144 sampled_bytes=7616 outcome=S
+test semantic::execution::tests::original_frame_stack_observations ... ok
+test semantic::execution::tests::original_frames_run_deep_values_on_a_small_native_stack ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 185 filtered out; finished in 0.01s
+
