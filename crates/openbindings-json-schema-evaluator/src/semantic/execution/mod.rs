@@ -285,6 +285,11 @@ impl Run<'_> {
         }
         let fields = self.plan.fields(node);
         if fields.is_leaf() {
+            if backend::ref_id(value) == self.root_instance && fields.is_shared_leaf() {
+                return self
+                    .root_leaf(node, fields, value, context)
+                    .map(Entry::Ready);
+            }
             return match self.begin(node, fields, value, &context)? {
                 Beginning::Ready(state) => Ok(Entry::Ready(state)),
                 _ => unreachable!("alias reached a certified leaf"),
@@ -340,6 +345,33 @@ impl Run<'_> {
             state: State::truth(TRUE),
             phase: Phase::Start,
         }))
+    }
+    fn root_leaf(
+        &mut self,
+        node: usize,
+        fields: readings::Fields,
+        value: JsonRef<'_>,
+        context: Context,
+    ) -> Result<State, NoVerdict> {
+        self.context_copy(&context)?;
+        let key = Visit {
+            schema: node,
+            instance: self.root_instance,
+            context,
+        };
+        if let Some(known) = self.memo.get(&key) {
+            return known.copied(&mut self.graph);
+        }
+        let Beginning::Ready(state) = self.begin(node, fields, value, &key.context)? else {
+            unreachable!("certified alias target has no child application");
+        };
+        if state.independent(&mut self.graph, &self.cuts)? {
+            self.context_copy(&key.context)?;
+            let copied = state.copied(&mut self.graph)?;
+            self.graph.charge(256)?;
+            self.memo.insert(key, copied);
+        }
+        Ok(state)
     }
     fn complete_application(&mut self, frame: Frame<'_>) -> Result<State, NoVerdict> {
         let Frame {

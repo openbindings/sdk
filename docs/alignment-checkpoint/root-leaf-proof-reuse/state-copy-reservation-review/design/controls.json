@@ -1,0 +1,50 @@
+{
+  "status": "frozen design controls; not executed",
+  "groups": [
+    {
+      "id": "SC-01",
+      "name": "Exact byte/work matrix",
+      "required": "Graph-level copies: empty=>0bytes/1work; property only with3 UTF16units=>518bytes/6work; one item=>384bytes/2work; both=>646bytes/7work. Include zero-length/lone-surrogate/astral names and multiple entries. Nonempty old/new charges identical; empty work unchanged and bytes differ by exactly256."
+    },
+    {
+      "id": "SC-02",
+      "name": "Control event preservation",
+      "required": "Compare event order and calls to Graph.work/name work/Graph.charge and actual nested controls. Empty still calls charge(0). Only reservation byte argument changes on both-empty path. Cancel at every observed event; work exact/one-below; errors before cloning retain earlier-cause behavior."
+    },
+    {
+      "id": "SC-03",
+      "name": "Empty actual allocations",
+      "required": "Current/minimum Rust actual requested-allocation probes, source created before measurement: empty State with TRUE/FALSE and actual nonterminal effect formula, with/without Arc witness (witness only for F). Repeated cold/warm copies allocate zero and release all clone ownership. Include maps emptied after insert/remove and clear, rather than relying only on freshly new maps."
+    },
+    {
+      "id": "SC-04",
+      "name": "Nonempty actual allocations",
+      "required": "Properties-only/items-only/both with enough width to split nodes, exact names and witness/no witness. Existing reservation totals unchanged. Measure requests and cleanup separately from scoped SDK reservation units; this review does not convert the nonempty schedule into a new universal allocator certificate."
+    },
+    {
+      "id": "SC-05",
+      "name": "Witness/effect/source ownership",
+      "required": "Formula unchanged in same Graph; cloned witness Arc shares same seed, drops its reference cleanly, preserves original node/instance/location and sources. Outcome remains seed-free. Explain uses separate Run/pass and cumulative remaining allowance; no cache source lifetime changes."
+    },
+    {
+      "id": "SC-06",
+      "name": "Nested sticky/overflow boundaries",
+      "required": "Actual enclosing/nested Attempt prior work, reservation, tighter-child failure and arithmetic overflow must still refuse an empty copy through work/charge(0). Distinguish healthy exactly-zero allocation remainder from already-spent state. Cancellation retains existing priority. No caught error converted to success; clean independent retry."
+    },
+    {
+      "id": "SC-07",
+      "name": "Exact runtime reservation boundaries",
+      "required": "Empty copy succeeds with zero new bytes and adequate work; an actual one-below work limit refuses. Nonempty exact/one-below byte tests remain unchanged. Test pre-spent graph allowance, checked addition near usize::MAX and existing shared-overflow causes without constructing impossible map lengths."
+    },
+    {
+      "id": "SC-08",
+      "name": "Preserved 64KiB positive",
+      "required": "Replay the exact unchanged request in root-alias-leaf-memo-small-reservation/witness.json under64KiB: cleanf62S; corrected root-memo candidate must restoreS. Keep prior failure/binary/request evidence. Do not change quota, schema, value, URI, expected semantic result or treat refusal as acceptable."
+    },
+    {
+      "id": "SC-09",
+      "name": "Global semantic and measurement scope",
+      "required": "Use the same State::copied rule everywhere, not a root-specific bypass. Preserve annotations and root/non-root memo results, required positive jobs, eager limits, public/cumulative Explain cancellation and actual pointer evidence. Separate matched timing/allocation campaign decides whether to retain root memo; no G6 acceptance follows from this correction."
+    }
+  ]
+}

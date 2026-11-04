@@ -1,0 +1,58 @@
+error[E0308]: mismatched types
+   --> /Users/matt/Code/ob-pj/openbindings/sdk-migration/receipts/2026-11-02-preparation/original-default-performance/root-alias-leaf-memo-review/implementation/layout-candidate/src/semantic/execution/mod.rs:536:43
+    |
+536 | const REVIEW_FRAME_LAYOUT_MISMATCH:[();0]=[();std::mem::size_of::<Frame<'static>>()];
+    |                                    ------ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected an array with a size of 0, found one with a size of 136
+    |                                    |
+    |                                    expected because of the type of the constant
+    |
+help: consider specifying the actual array length
+    |
+536 - const REVIEW_FRAME_LAYOUT_MISMATCH:[();0]=[();std::mem::size_of::<Frame<'static>>()];
+536 + const REVIEW_FRAME_LAYOUT_MISMATCH:[();136]=[();std::mem::size_of::<Frame<'static>>()];
+    |
+
+error[E0308]: mismatched types
+   --> /Users/matt/Code/ob-pj/openbindings/sdk-migration/receipts/2026-11-02-preparation/original-default-performance/root-alias-leaf-memo-review/implementation/layout-candidate/src/semantic/execution/mod.rs:537:43
+    |
+537 | const REVIEW_STATE_LAYOUT_MISMATCH:[();0]=[();std::mem::size_of::<State>()];
+    |                                    ------ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected an array with a size of 0, found one with a size of 32
+    |                                    |
+    |                                    expected because of the type of the constant
+    |
+help: consider specifying the actual array length
+    |
+537 - const REVIEW_STATE_LAYOUT_MISMATCH:[();0]=[();std::mem::size_of::<State>()];
+537 + const REVIEW_STATE_LAYOUT_MISMATCH:[();32]=[();std::mem::size_of::<State>()];
+    |
+
+error[E0308]: mismatched types
+    --> /Users/matt/Code/ob-pj/openbindings/sdk-migration/receipts/2026-11-02-preparation/original-default-performance/root-alias-leaf-memo-review/implementation/layout-candidate/src/semantic/mod.rs:1940:41
+     |
+1940 | const REVIEW_RUN_LAYOUT_MISMATCH:[();0]=[();std::mem::size_of::<Run>()];
+     |                                  ------ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected an array with a size of 0, found one with a size of 600
+     |                                  |
+     |                                  expected because of the type of the constant
+     |
+help: consider specifying the actual array length
+     |
+1940 | const REVIEW_RUN_LAYOUT_MISMATCH:[();600]=[();std::mem::size_of::<Run>()];
+     |                                      ++
+
+error[E0308]: mismatched types
+    --> /Users/matt/Code/ob-pj/openbindings/sdk-migration/receipts/2026-11-02-preparation/original-default-performance/root-alias-leaf-memo-review/implementation/layout-candidate/src/semantic/mod.rs:1941:44
+     |
+1941 | const REVIEW_FIELDS_LAYOUT_MISMATCH:[();0]=[();std::mem::size_of::<readings::Fields>()];
+     |                                     ------ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected an array with a size of 0, found one with a size of 8
+     |                                     |
+     |                                     expected because of the type of the constant
+     |
+help: consider specifying the actual array length
+     |
+1941 - const REVIEW_FIELDS_LAYOUT_MISMATCH:[();0]=[();std::mem::size_of::<readings::Fields>()];
+1941 + const REVIEW_FIELDS_LAYOUT_MISMATCH:[();8]=[();std::mem::size_of::<readings::Fields>()];
+     |
+
+error: aborting due to 4 previous errors
+
+For more information about this error, try `rustc --explain E0308`.

@@ -61,6 +61,8 @@ keywords! {
 }
 const ORIGINAL: u64 = 1 << 63;
 const LEAF: u64 = 1 << 62;
+const REFERENCED_TARGET: u64 = 1 << 43;
+const SHARED_TARGET: u64 = 1 << 44;
 const LOGICAL: u64 = ALL_OF | ANY_OF | ONE_OF | NOT | IF | THEN | ELSE;
 const OBJECT: u64 = DEPENDENT_SCHEMAS
     | DEPENDENCIES
@@ -95,6 +97,17 @@ impl Fields {
     pub(super) fn is_leaf(self) -> bool {
         self.0 & (ORIGINAL | LEAF) == LEAF
     }
+    pub(super) fn note_reference_target(&mut self) {
+        if self.is_leaf() {
+            if self.0 & REFERENCED_TARGET != 0 {
+                self.0 |= SHARED_TARGET;
+            }
+            self.0 |= REFERENCED_TARGET;
+        }
+    }
+    pub(super) fn is_shared_leaf(self) -> bool {
+        self.is_leaf() && self.0 & SHARED_TARGET != 0
+    }
     pub(super) fn may_read(self, keyword: &str) -> bool {
         self.0 & ORIGINAL != 0 || bit(keyword).is_none_or(|bit| self.0 & bit != 0)
     }
@@ -115,7 +128,7 @@ mod tests {
 
     #[test]
     fn closed_inventory_has_independent_bits_and_explicit_fallback() {
-        let mut seen = ORIGINAL | LEAF;
+        let mut seen = ORIGINAL | LEAF | REFERENCED_TARGET | SHARED_TARGET;
         for &(keyword, bit) in KEYWORDS {
             assert_eq!(seen & bit, 0, "overlapping {keyword}");
             seen |= bit;
@@ -138,5 +151,27 @@ mod tests {
         }
         assert!(!Fields::ORIGINAL.is_leaf());
         assert!(!Fields::EMPTY.is_leaf());
+    }
+
+    #[test]
+    fn reference_multiplicity_does_not_create_leaf_or_keyword_facts() {
+        for mut fields in [Fields::ORIGINAL, Fields::EMPTY] {
+            fields.note_reference_target();
+            fields.note_reference_target();
+            assert!(!fields.is_shared_leaf());
+            assert!(!fields.is_leaf());
+        }
+        let mut fields = Fields::EMPTY;
+        fields.include("type");
+        fields.certify_leaf();
+        fields.note_reference_target();
+        assert!(!fields.is_shared_leaf());
+        fields.note_reference_target();
+        fields.note_reference_target();
+        assert!(fields.is_shared_leaf());
+        for &(keyword, _) in KEYWORDS {
+            assert_eq!(fields.may_read(keyword), keyword == "type");
+        }
+        assert!(!fields.logical() && !fields.object() && !fields.array());
     }
 }

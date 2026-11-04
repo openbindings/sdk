@@ -1,0 +1,289 @@
+diff --git a/crates/openbindings-json-schema-evaluator/src/semantic/execution/mod.rs b/crates/openbindings-json-schema-evaluator/src/semantic/execution/mod.rs
+index 3f8b08f..4706a89 100644
+--- a/crates/openbindings-json-schema-evaluator/src/semantic/execution/mod.rs
++++ b/crates/openbindings-json-schema-evaluator/src/semantic/execution/mod.rs
+@@ -285,6 +285,11 @@ impl Run<'_> {
+         }
+         let fields = self.plan.fields(node);
+         if fields.is_leaf() {
++            if fields.is_shared_leaf() && backend::ref_id(value) == self.root_instance {
++                return self
++                    .root_leaf(node, fields, value, context)
++                    .map(Entry::Ready);
++            }
+             return match self.begin(node, fields, value, &context)? {
+                 Beginning::Ready(state) => Ok(Entry::Ready(state)),
+                 _ => unreachable!("alias reached a certified leaf"),
+@@ -341,6 +346,33 @@ impl Run<'_> {
+             phase: Phase::Start,
+         }))
+     }
++    fn root_leaf(
++        &mut self,
++        node: usize,
++        fields: readings::Fields,
++        value: JsonRef<'_>,
++        context: Context,
++    ) -> Result<State, NoVerdict> {
++        self.context_copy(&context)?;
++        let key = Visit {
++            schema: node,
++            instance: self.root_instance,
++            context,
++        };
++        if let Some(known) = self.memo.get(&key) {
++            return known.copied(&mut self.graph);
++        }
++        let Beginning::Ready(state) = self.begin(node, fields, value, &key.context)? else {
++            unreachable!("certified alias target has no child application");
++        };
++        if state.independent(&mut self.graph, &self.cuts)? {
++            self.context_copy(&key.context)?;
++            let copied = state.copied(&mut self.graph)?;
++            self.graph.charge(256)?;
++            self.memo.insert(key, copied);
++        }
++        Ok(state)
++    }
+     fn complete_application(&mut self, frame: Frame<'_>) -> Result<State, NoVerdict> {
+         let Frame {
+             visit: key,
+diff --git a/crates/openbindings-json-schema-evaluator/src/semantic/mod.rs b/crates/openbindings-json-schema-evaluator/src/semantic/mod.rs
+index 04e97bf..325f1c1 100644
+--- a/crates/openbindings-json-schema-evaluator/src/semantic/mod.rs
++++ b/crates/openbindings-json-schema-evaluator/src/semantic/mod.rs
+@@ -266,6 +266,7 @@ impl Plan {
+         }
+         let mut run = Run {
+             plan: self,
++            root_instance: backend::ref_id(value.view()),
+             record_witnesses,
+             graph,
+             atoms: Vec::new(),
+@@ -467,7 +468,14 @@ impl State {
+                 .saturating_add(self.properties.len())
+                 .saturating_add(1),
+         )?;
+-        let mut bytes = 256usize.saturating_add(self.items.len().saturating_mul(128));
++        // Empty maps clone without owned storage; formula and witness Arc
++        // handles stay inline/shared. Keep work and even the zero-byte charge
++        // so enclosing attempt failures retain the same checks and precedence.
++        let mut bytes = if self.properties.is_empty() && self.items.is_empty() {
++            0
++        } else {
++            256usize.saturating_add(self.items.len().saturating_mul(128))
++        };
+         for name in self.properties.keys() {
+             graph.work(name.len().saturating_add(1))?;
+             bytes = bytes.saturating_add(name.len().saturating_mul(2).saturating_add(256));
+@@ -508,6 +516,9 @@ fn independent(
+ 
+ struct Run<'a> {
+     plan: &'a Plan,
++    // Occurrence identity in this call's live immutable value arena. Child and
++    // member-name tokens retain distinct IDs; no value or proof enters Plan.
++    root_instance: usize,
+     record_witnesses: bool,
+     graph: Graph<'a>,
+     atoms: Vec<Atom>,
+@@ -1325,6 +1336,51 @@ impl Run<'_> {
+ mod summary_tests {
+     use super::*;
+ 
++    #[test]
++    fn state_copy_reserves_only_owned_annotation_storage() {
++        let control = std::sync::atomic::AtomicBool::new(false);
++        for (properties, items, bytes, work) in [
++            (false, false, 0, 1),
++            (true, false, 518, 6),
++            (false, true, 384, 2),
++            (true, true, 646, 7),
++        ] {
++            let mut state = State::truth(TRUE);
++            if properties {
++                state
++                    .properties
++                    .insert(vec![b'x' as u16, 0xd800, b'y' as u16], TRUE);
++            }
++            if items {
++                state.items.insert(0, TRUE);
++            }
++            let mut graph = Graph::new(bytes, Some(work), 0, &control);
++            let copied = state.copied(&mut graph).unwrap();
++            assert_eq!(copied.valid, state.valid);
++            assert_eq!(copied.properties, state.properties);
++            assert_eq!(copied.items, state.items);
++            assert_eq!(graph.remaining().bytes, 0);
++            assert_eq!(graph.remaining().work, Some(0));
++            if bytes > 0 {
++                let mut graph = Graph::new(bytes - 1, Some(work), 0, &control);
++                assert_eq!(
++                    state.copied(&mut graph).err().unwrap().code,
++                    "semantic-analysis-memory-limit"
++                );
++            }
++        }
++        let mut emptied = State::truth(FALSE);
++        emptied.properties.insert(vec![0xd800], TRUE);
++        emptied.properties.remove(&vec![0xd800]);
++        emptied.items.insert(0, TRUE);
++        emptied.items.remove(&0);
++        let mut graph = Graph::new(0, Some(1), 0, &control);
++        let copied = emptied.copied(&mut graph).unwrap();
++        assert_eq!(copied.valid, FALSE);
++        assert!(copied.properties.is_empty() && copied.items.is_empty());
++        assert_eq!(graph.remaining().bytes, 0);
++    }
++
+     #[test]
+     fn certification_includes_every_evaluated_annotation() {
+         let control = std::sync::atomic::AtomicBool::new(false);
+diff --git a/crates/openbindings-json-schema-evaluator/src/semantic/preparation.rs b/crates/openbindings-json-schema-evaluator/src/semantic/preparation.rs
+index 676f1e8..f2d4ab4 100644
+--- a/crates/openbindings-json-schema-evaluator/src/semantic/preparation.rs
++++ b/crates/openbindings-json-schema-evaluator/src/semantic/preparation.rs
+@@ -360,9 +360,20 @@ pub(super) fn check_from(
+         control.charge_allocation(128 + std::mem::size_of::<readings::Fields>())?;
+         fields.insert(node, present);
+     }
++    // Count original query occurrences, even when their immutable results are
++    // shared. These saturating flags add no descriptor or second target map.
++    for query in queries.values() {
++        control.check()?;
++        if let Ok(target) = query.as_ref()
++            && let Some(fields) = fields.get_mut(&target.node)
++        {
++            fields.note_reference_target();
++        }
++    }
+     control.charge_allocation(resources.len().saturating_mul(8))?;
+     let mut resources: Vec<_> = resources.into_iter().collect();
+     resources.sort_unstable();
++    control.check()?;
+     Ok(Checked {
+         custom,
+         resources,
+diff --git a/crates/openbindings-json-schema-evaluator/src/semantic/readings.rs b/crates/openbindings-json-schema-evaluator/src/semantic/readings.rs
+index 4318986..4bf52bb 100644
+--- a/crates/openbindings-json-schema-evaluator/src/semantic/readings.rs
++++ b/crates/openbindings-json-schema-evaluator/src/semantic/readings.rs
+@@ -61,6 +61,8 @@ keywords! {
+ }
+ const ORIGINAL: u64 = 1 << 63;
+ const LEAF: u64 = 1 << 62;
++const REFERENCED_TARGET: u64 = 1 << 43;
++const SHARED_TARGET: u64 = 1 << 44;
+ const LOGICAL: u64 = ALL_OF | ANY_OF | ONE_OF | NOT | IF | THEN | ELSE;
+ const OBJECT: u64 = DEPENDENT_SCHEMAS
+     | DEPENDENCIES
+@@ -95,6 +97,17 @@ impl Fields {
+     pub(super) fn is_leaf(self) -> bool {
+         self.0 & (ORIGINAL | LEAF) == LEAF
+     }
++    pub(super) fn note_reference_target(&mut self) {
++        if self.is_leaf() {
++            if self.0 & REFERENCED_TARGET != 0 {
++                self.0 |= SHARED_TARGET;
++            }
++            self.0 |= REFERENCED_TARGET;
++        }
++    }
++    pub(super) fn is_shared_leaf(self) -> bool {
++        self.is_leaf() && self.0 & SHARED_TARGET != 0
++    }
+     pub(super) fn may_read(self, keyword: &str) -> bool {
+         self.0 & ORIGINAL != 0 || bit(keyword).is_none_or(|bit| self.0 & bit != 0)
+     }
+@@ -115,7 +128,7 @@ mod tests {
+ 
+     #[test]
+     fn closed_inventory_has_independent_bits_and_explicit_fallback() {
+-        let mut seen = ORIGINAL | LEAF;
++        let mut seen = ORIGINAL | LEAF | REFERENCED_TARGET | SHARED_TARGET;
+         for &(keyword, bit) in KEYWORDS {
+             assert_eq!(seen & bit, 0, "overlapping {keyword}");
+             seen |= bit;
+@@ -139,4 +152,26 @@ mod tests {
+         assert!(!Fields::ORIGINAL.is_leaf());
+         assert!(!Fields::EMPTY.is_leaf());
+     }
++
++    #[test]
++    fn reference_multiplicity_does_not_create_leaf_or_keyword_facts() {
++        for mut fields in [Fields::ORIGINAL, Fields::EMPTY] {
++            fields.note_reference_target();
++            fields.note_reference_target();
++            assert!(!fields.is_shared_leaf());
++            assert!(!fields.is_leaf());
++        }
++        let mut fields = Fields::EMPTY;
++        fields.include("type");
++        fields.certify_leaf();
++        fields.note_reference_target();
++        assert!(!fields.is_shared_leaf());
++        fields.note_reference_target();
++        fields.note_reference_target();
++        assert!(fields.is_shared_leaf());
++        for &(keyword, _) in KEYWORDS {
++            assert_eq!(fields.may_read(keyword), keyword == "type");
++        }
++        assert!(!fields.logical() && !fields.object() && !fields.array());
++    }
+ }
+diff --git a/crates/openbindings-json-schema-evaluator/tests/evaluation_budgets.rs b/crates/openbindings-json-schema-evaluator/tests/evaluation_budgets.rs
+index 9be5578..da6c3cd 100644
+--- a/crates/openbindings-json-schema-evaluator/tests/evaluation_budgets.rs
++++ b/crates/openbindings-json-schema-evaluator/tests/evaluation_budgets.rs
+@@ -1,6 +1,5 @@
+-//! Evaluation work is uncapped unless the application sets a cap, which then
+-//! applies to every pass whatever the value's size; exhausted depth is
+-//! reported as such.
++//! Evaluation work has no default cap. A caller-selected cap covers every
++//! pass; storage admission and cooperative cancellation remain separate.
+ use openbindings::*;
+ use openbindings_json_schema_evaluator::{DefaultEvaluator, Limits};
+ 
+@@ -34,7 +33,7 @@ fn code(outcome: &ValueOutcome) -> Option<&str> {
+ }
+ 
+ const SCHEMA: &str = r#"{"type":"array","items":{"type":"integer","minimum":0}}"#;
+-// Under a cap, two units per element: reading it and entering its schema.
++// Large values exercise traversal and primitive work under one allowance.
+ const ITEMS: usize = 700_000;
+ fn large() -> JsonValue {
+     JsonValue::parse(format!("[{}0]", "1,".repeat(ITEMS - 1))).unwrap()
+@@ -49,6 +48,34 @@ fn explicit(steps: usize) -> PreparedSchema<openbindings_json_schema_evaluator::
+     )
+ }
+ 
++#[test]
++fn repeated_root_proofs_fit_a_small_reservation_without_copying_empty_storage() {
++    let references = vec![r##"{"$ref":"#/$defs/leaf"}"##; 5000].join(",");
++    let schema = format!(
++        r#"{{"$id":"https://budget.example/root","$defs":{{"leaf":{{"type":"integer"}}}},"allOf":[{references}]}}"#
++    );
++    let contract = prepared(
++        &schema,
++        Limits {
++            program_bytes: 64 * 1024,
++            ..Limits::default()
++        },
++    );
++    for (text, satisfies) in [("1", true), (r#""wrong""#, false)] {
++        let value = JsonValue::parse(text).unwrap();
++        for outcome in [contract.evaluate(&value), contract.explain(&value)] {
++            assert!(
++                matches!(
++                    outcome,
++                    ValueOutcome::Satisfies | ValueOutcome::Fails { .. }
++                ),
++                "{text}: {outcome:?}"
++            );
++            assert_eq!(matches!(outcome, ValueOutcome::Satisfies), satisfies);
++        }
++    }
++}
++
+ #[test]
+ fn uncapped_evaluation_decides_large_values() {
+     let defaults = prepared(SCHEMA, Limits::default());

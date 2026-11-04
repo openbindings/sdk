@@ -1,0 +1,10 @@
+{
+  "/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/wasm32-unknown-unknown/release/deps/libregex_syntax-435e92dd50080a59.rlib": "8ef37db20fef2ef317fba97f0a3918afc98bbb302772857072ecc47ceb576e63",
+  "/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/wasm32-unknown-unknown/release/deps/libserde_json-30b1401bf4aa4e9f.rlib": "716f13e0b8546344b0aa197dce3335aa652c6fa975ced7cc1cffcff636642e13",
+  "/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/wasm32-unknown-unknown/release/deps/libjsonschema-138ef7d2396645c9.rlib": "3e19f22213a537997ea93807f25c17c505fc032ed421bdaa40227a0a064dd8c0",
+  "/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/wasm32-unknown-unknown/release/deps/libserde-25eda5272a4a3b2f.rlib": "91ce42a2548f6b57089366d740d840c305c4becc4a50d2044ebb2c2fb1389e90",
+  "/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/wasm32-unknown-unknown/release/deps/libopenbindings_internal_json-df33d3ea1d6c57b9.rlib": "c96f6960f1262488affc04a49831324935a7a178d19ead702ec785d952bb1f9e",
+  "/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/wasm32-unknown-unknown/release/deps/libopenbindings-12863828ca946b99.rlib": "5013be608105037c246baf3f6a2b6984026df74c6ba17c98fece4b318eb7efa2",
+  "/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/wasm32-unknown-unknown/release/deps/libregex_automata-26c1525ee63842fb.rlib": "c3ba8c360f7cefa782f489783843d5c2eb9fee9be467ae69340873592ec57c86",
+  "/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/wasm32-unknown-unknown/release/deps/libopenbindings_internal_schema-2646c7940bb33d23.rlib": "e9c5841a354bbfc4e78d6912143f9cd6db1f66a235f0bdde298d9e6a17a5b6e1"
+}

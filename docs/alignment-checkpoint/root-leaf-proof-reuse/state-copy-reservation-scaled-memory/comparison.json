@@ -1,0 +1,228 @@
+{
+  "status": "complete",
+  "scope": "Matched allocator observations for an increment; no timing or G6 acceptance.",
+  "binaries": {
+    "before": {
+      "sha256": "3c1dbf24cb318f71893629fbbe89c7905c33ac7df340080bf0bae4e23aa1c4b7",
+      "provenance": {
+        "instrument": "0464ed6974956429",
+        "sdk": "ff7f517b0c4f2c16"
+      }
+    },
+    "after": {
+      "sha256": "e31909038d87f384eeb80f3fde6f4df91c1c68a3a01d32493343656dea15be70",
+      "provenance": {
+        "instrument": "0464ed6974956429",
+        "sdk": "8a3cb6a3552b6655"
+      }
+    }
+  },
+  "supplemental": {
+    "file": "supplemental-fixtures.json",
+    "sha256": "735f5526b2965c8a0922847278d24ef7b46952a42b1343bbff2336658b8eb7a5"
+  },
+  "rows": [
+    {
+      "workload": "rl-array20k-shared-children",
+      "mode": "eval",
+      "observation": {
+        "status": "satisfies"
+      },
+      "samples": [
+        {
+          "before": {
+            "observation": {
+              "status": "satisfies"
+            },
+            "memory": {
+              "allocations_per_op": 20.0,
+              "baseline_live_bytes": 2706106,
+              "ending_live_bytes": 2706106,
+              "incremental_peak_bytes": 4376120,
+              "peak_live_bytes": 7082226,
+              "requested_bytes_per_op": 5834036.0
+            }
+          },
+          "after": {
+            "observation": {
+              "status": "satisfies"
+            },
+            "memory": {
+              "allocations_per_op": 20.0,
+              "baseline_live_bytes": 2706106,
+              "ending_live_bytes": 2706106,
+              "incremental_peak_bytes": 4376120,
+              "peak_live_bytes": 7082226,
+              "requested_bytes_per_op": 5834036.0
+            }
+          }
+        },
+        {
+          "after": {
+            "observation": {
+              "status": "satisfies"
+            },
+            "memory": {
+              "allocations_per_op": 20.0,
+              "baseline_live_bytes": 2706106,
+              "ending_live_bytes": 2706106,
+              "incremental_peak_bytes": 4376120,
+              "peak_live_bytes": 7082226,
+              "requested_bytes_per_op": 5834036.0
+            }
+          },
+          "before": {
+            "observation": {
+              "status": "satisfies"
+            },
+            "memory": {
+              "allocations_per_op": 20.0,
+              "baseline_live_bytes": 2706106,
+              "ending_live_bytes": 2706106,
+              "incremental_peak_bytes": 4376120,
+              "peak_live_bytes": 7082226,
+              "requested_bytes_per_op": 5834036.0
+            }
+          }
+        },
+        {
+          "before": {
+            "observation": {
+              "status": "satisfies"
+            },
+            "memory": {
+              "allocations_per_op": 20.0,
+              "baseline_live_bytes": 2706106,
+              "ending_live_bytes": 2706106,
+              "incremental_peak_bytes": 4376120,
+              "peak_live_bytes": 7082226,
+              "requested_bytes_per_op": 5834036.0
+            }
+          },
+          "after": {
+            "observation": {
+              "status": "satisfies"
+            },
+            "memory": {
+              "allocations_per_op": 20.0,
+              "baseline_live_bytes": 2706106,
+              "ending_live_bytes": 2706106,
+              "incremental_peak_bytes": 4376120,
+              "peak_live_bytes": 7082226,
+              "requested_bytes_per_op": 5834036.0
+            }
+          }
+        }
+      ],
+      "delta": {
+        "allocations_per_op": 0.0,
+        "baseline_live_bytes": 0,
+        "ending_live_bytes": 0,
+        "incremental_peak_bytes": 0,
+        "peak_live_bytes": 0,
+        "requested_bytes_per_op": 0.0
+      }
+    },
+    {
+      "workload": "rl-object50k-shared-children",
+      "mode": "eval",
+      "observation": {
+        "status": "satisfies"
+      },
+      "samples": [
+        {
+          "before": {
+            "observation": {
+              "status": "satisfies"
+            },
+            "memory": {
+              "allocations_per_op": 21.0,
+              "baseline_live_bytes": 9241590,
+              "ending_live_bytes": 9241590,
+              "incremental_peak_bytes": 8750648,
+              "peak_live_bytes": 17992238,
+              "requested_bytes_per_op": 11666748.0
+            }
+          },
+          "after": {
+            "observation": {
+              "status": "satisfies"
+            },
+            "memory": {
+              "allocations_per_op": 21.0,
+              "baseline_live_bytes": 9241590,
+              "ending_live_bytes": 9241590,
+              "incremental_peak_bytes": 8750648,
+              "peak_live_bytes": 17992238,
+              "requested_bytes_per_op": 11666748.0
+            }
+          }
+        },
+        {
+          "after": {
+            "observation": {
+              "status": "satisfies"
+            },
+            "memory": {
+              "allocations_per_op": 21.0,
+              "baseline_live_bytes": 9241590,
+              "ending_live_bytes": 9241590,
+              "incremental_peak_bytes": 8750648,
+              "peak_live_bytes": 17992238,
+              "requested_bytes_per_op": 11666748.0
+            }
+          },
+          "before": {
+            "observation": {
+              "status": "satisfies"
+            },
+            "memory": {
+              "allocations_per_op": 21.0,
+              "baseline_live_bytes": 9241590,
+              "ending_live_bytes": 9241590,
+              "incremental_peak_bytes": 8750648,
+              "peak_live_bytes": 17992238,
+              "requested_bytes_per_op": 11666748.0
+            }
+          }
+        },
+        {
+          "before": {
+            "observation": {
+              "status": "satisfies"
+            },
+            "memory": {
+              "allocations_per_op": 21.0,
+              "baseline_live_bytes": 9241590,
+              "ending_live_bytes": 9241590,
+              "incremental_peak_bytes": 8750648,
+              "peak_live_bytes": 17992238,
+              "requested_bytes_per_op": 11666748.0
+            }
+          },
+          "after": {
+            "observation": {
+              "status": "satisfies"
+            },
+            "memory": {
+              "allocations_per_op": 21.0,
+              "baseline_live_bytes": 9241590,
+              "ending_live_bytes": 9241590,
+              "incremental_peak_bytes": 8750648,
+              "peak_live_bytes": 17992238,
+              "requested_bytes_per_op": 11666748.0
+            }
+          }
+        }
+      ],
+      "delta": {
+        "allocations_per_op": 0.0,
+        "baseline_live_bytes": 0,
+        "ending_live_bytes": 0,
+        "incremental_peak_bytes": 0,
+        "peak_live_bytes": 0,
+        "requested_bytes_per_op": 0.0
+      }
+    }
+  ]
+}

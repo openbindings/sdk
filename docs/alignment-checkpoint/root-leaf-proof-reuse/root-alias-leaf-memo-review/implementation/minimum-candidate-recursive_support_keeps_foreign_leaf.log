@@ -1,0 +1,6 @@
+
+running 1 test
+test semantic::summary_tests::recursive_support_keeps_foreign_leaf_absence_without_leaf_memo ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 233 filtered out; finished in 0.06s
+

@@ -1,0 +1,22 @@
+{
+  "status": "passed",
+  "scope": "The exact prior baseline request succeeds on both peers; no quota/request change",
+  "rows": {
+    "baseline": {
+      "binary_sha256": "5a2b9e54f4de278906847a132446c85ef3f0f51f91639bc1acda4c36e548bd7d",
+      "request_sha256": "87756bb80c84287da44b84f84ac870422dd4c268eeb80d88c22e53977bf35ed3",
+      "observation": {
+        "status": "satisfies"
+      },
+      "stdout": "{\"iterations\":1,\"memory\":null,\"nanoseconds\":2125292,\"observation\":{\"status\":\"satisfies\"},\"outcomes\":{\"satisfies\":1}}\n"
+    },
+    "candidate": {
+      "binary_sha256": "66c9bb8f49253d6f6fed8c544a0cfdb317314693a1b209a26ed4eeec73b38896",
+      "request_sha256": "87756bb80c84287da44b84f84ac870422dd4c268eeb80d88c22e53977bf35ed3",
+      "observation": {
+        "status": "satisfies"
+      },
+      "stdout": "{\"iterations\":1,\"memory\":null,\"nanoseconds\":1864166,\"observation\":{\"status\":\"satisfies\"},\"outcomes\":{\"satisfies\":1}}\n"
+    }
+  }
+}

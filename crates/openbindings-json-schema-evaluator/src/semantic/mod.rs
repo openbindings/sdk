@@ -266,6 +266,7 @@ impl Plan {
         }
         let mut run = Run {
             plan: self,
+            root_instance: backend::ref_id(value.view()),
             record_witnesses,
             graph,
             atoms: Vec::new(),
@@ -467,7 +468,14 @@ impl State {
                 .saturating_add(self.properties.len())
                 .saturating_add(1),
         )?;
-        let mut bytes = 256usize.saturating_add(self.items.len().saturating_mul(128));
+        // Empty maps clone without owned storage; formula and witness Arc
+        // handles stay inline/shared. Keep work and even the zero-byte charge
+        // so enclosing attempt failures retain the same checks and precedence.
+        let mut bytes = if self.properties.is_empty() && self.items.is_empty() {
+            0
+        } else {
+            256usize.saturating_add(self.items.len().saturating_mul(128))
+        };
         for name in self.properties.keys() {
             graph.work(name.len().saturating_add(1))?;
             bytes = bytes.saturating_add(name.len().saturating_mul(2).saturating_add(256));
@@ -508,6 +516,9 @@ fn independent(
 
 struct Run<'a> {
     plan: &'a Plan,
+    // Occurrence identity in this call's live immutable value arena. Child and
+    // member-name tokens retain distinct IDs; no value or proof enters Plan.
+    root_instance: usize,
     record_witnesses: bool,
     graph: Graph<'a>,
     atoms: Vec<Atom>,
@@ -1324,6 +1335,51 @@ impl Run<'_> {
 #[cfg(test)]
 mod summary_tests {
     use super::*;
+
+    #[test]
+    fn state_copy_reserves_only_owned_annotation_storage() {
+        let control = std::sync::atomic::AtomicBool::new(false);
+        for (properties, items, bytes, work) in [
+            (false, false, 0, 1),
+            (true, false, 518, 6),
+            (false, true, 384, 2),
+            (true, true, 646, 7),
+        ] {
+            let mut state = State::truth(TRUE);
+            if properties {
+                state
+                    .properties
+                    .insert(vec![b'x' as u16, 0xd800, b'y' as u16], TRUE);
+            }
+            if items {
+                state.items.insert(0, TRUE);
+            }
+            let mut graph = Graph::new(bytes, Some(work), 0, &control);
+            let copied = state.copied(&mut graph).unwrap();
+            assert_eq!(copied.valid, state.valid);
+            assert_eq!(copied.properties, state.properties);
+            assert_eq!(copied.items, state.items);
+            assert_eq!(graph.remaining().bytes, 0);
+            assert_eq!(graph.remaining().work, Some(0));
+            if bytes > 0 {
+                let mut graph = Graph::new(bytes - 1, Some(work), 0, &control);
+                assert_eq!(
+                    state.copied(&mut graph).err().unwrap().code,
+                    "semantic-analysis-memory-limit"
+                );
+            }
+        }
+        let mut emptied = State::truth(FALSE);
+        emptied.properties.insert(vec![0xd800], TRUE);
+        emptied.properties.remove(&vec![0xd800]);
+        emptied.items.insert(0, TRUE);
+        emptied.items.remove(&0);
+        let mut graph = Graph::new(0, Some(1), 0, &control);
+        let copied = emptied.copied(&mut graph).unwrap();
+        assert_eq!(copied.valid, FALSE);
+        assert!(copied.properties.is_empty() && copied.items.is_empty());
+        assert_eq!(graph.remaining().bytes, 0);
+    }
 
     #[test]
     fn certification_includes_every_evaluated_annotation() {

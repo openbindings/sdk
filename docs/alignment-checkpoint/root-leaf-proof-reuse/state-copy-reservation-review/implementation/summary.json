@@ -1,0 +1,383 @@
+{
+  "status": "bounded PASS; root memo performance acceptance remains separate",
+  "toolchains": {
+    "current": {
+      "test_groups": [
+        {
+          "filter": "independent_state_copy",
+          "passed": 9,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "filter": "independent_root",
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "filter": "independent_hot_path_ownership",
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "filter": "semantic::explain::tests",
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "filter": "review_semantic_interruption",
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "filter": "review_preparation_budgets",
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "passed": 35,
+      "allocation_rows": 66,
+      "empty_allocation_rows": 48,
+      "nonempty_allocation_pairs": 18,
+      "empty_allocation_requests": 0,
+      "retained_clone_bytes": 0,
+      "trace_stop_boundaries": 28,
+      "matrix": [
+        {
+          "bytes": 256,
+          "name": "empty",
+          "new": false,
+          "work": 1
+        },
+        {
+          "bytes": 0,
+          "name": "empty",
+          "new": true,
+          "work": 1
+        },
+        {
+          "bytes": 518,
+          "name": "props",
+          "new": false,
+          "work": 6
+        },
+        {
+          "bytes": 518,
+          "name": "props",
+          "new": true,
+          "work": 6
+        },
+        {
+          "bytes": 384,
+          "name": "items",
+          "new": false,
+          "work": 2
+        },
+        {
+          "bytes": 384,
+          "name": "items",
+          "new": true,
+          "work": 2
+        },
+        {
+          "bytes": 646,
+          "name": "both",
+          "new": false,
+          "work": 7
+        },
+        {
+          "bytes": 646,
+          "name": "both",
+          "new": true,
+          "work": 7
+        },
+        {
+          "bytes": 1292,
+          "name": "names",
+          "new": false,
+          "work": 15
+        },
+        {
+          "bytes": 1292,
+          "name": "names",
+          "new": true,
+          "work": 15
+        }
+      ],
+      "complete_observations": 106,
+      "unchanged_complete_observations": true,
+      "public_stop_boundaries": 798,
+      "public_count_changes": [],
+      "root_stops": [
+        {
+          "count": 158,
+          "detail": "Outcome",
+          "text": "1"
+        },
+        {
+          "count": 158,
+          "detail": "Explain",
+          "text": "1"
+        },
+        {
+          "count": 158,
+          "detail": "Outcome",
+          "text": "\"bad\""
+        },
+        {
+          "count": 320,
+          "detail": "Explain",
+          "text": "\"bad\""
+        }
+      ],
+      "root_boundaries": [
+        {
+          "allocation": false,
+          "minimum": 179,
+          "text": "1"
+        },
+        {
+          "allocation": true,
+          "minimum": 2112,
+          "text": "1"
+        },
+        {
+          "allocation": false,
+          "minimum": 203,
+          "text": "\"bad\""
+        },
+        {
+          "allocation": true,
+          "minimum": 2145,
+          "text": "\"bad\""
+        }
+      ],
+      "exact_64k_observations": [
+        {
+          "status": "satisfies"
+        },
+        {
+          "status": "satisfies"
+        },
+        {
+          "status": "satisfies"
+        }
+      ],
+      "layouts": [
+        {
+          "fields": 8,
+          "frame": 256,
+          "run": 984,
+          "state": 64
+        }
+      ]
+    },
+    "minimum": {
+      "test_groups": [
+        {
+          "filter": "independent_state_copy",
+          "passed": 9,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "filter": "independent_root",
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "filter": "independent_hot_path_ownership",
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "filter": "semantic::explain::tests",
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "filter": "review_semantic_interruption",
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "filter": "review_preparation_budgets",
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "passed": 35,
+      "allocation_rows": 66,
+      "empty_allocation_rows": 48,
+      "nonempty_allocation_pairs": 18,
+      "empty_allocation_requests": 0,
+      "retained_clone_bytes": 0,
+      "trace_stop_boundaries": 28,
+      "matrix": [
+        {
+          "bytes": 256,
+          "name": "empty",
+          "new": false,
+          "work": 1
+        },
+        {
+          "bytes": 0,
+          "name": "empty",
+          "new": true,
+          "work": 1
+        },
+        {
+          "bytes": 518,
+          "name": "props",
+          "new": false,
+          "work": 6
+        },
+        {
+          "bytes": 518,
+          "name": "props",
+          "new": true,
+          "work": 6
+        },
+        {
+          "bytes": 384,
+          "name": "items",
+          "new": false,
+          "work": 2
+        },
+        {
+          "bytes": 384,
+          "name": "items",
+          "new": true,
+          "work": 2
+        },
+        {
+          "bytes": 646,
+          "name": "both",
+          "new": false,
+          "work": 7
+        },
+        {
+          "bytes": 646,
+          "name": "both",
+          "new": true,
+          "work": 7
+        },
+        {
+          "bytes": 1292,
+          "name": "names",
+          "new": false,
+          "work": 15
+        },
+        {
+          "bytes": 1292,
+          "name": "names",
+          "new": true,
+          "work": 15
+        }
+      ],
+      "complete_observations": 106,
+      "unchanged_complete_observations": true,
+      "public_stop_boundaries": 798,
+      "public_count_changes": [],
+      "root_stops": [
+        {
+          "count": 158,
+          "detail": "Outcome",
+          "text": "1"
+        },
+        {
+          "count": 158,
+          "detail": "Explain",
+          "text": "1"
+        },
+        {
+          "count": 158,
+          "detail": "Outcome",
+          "text": "\"bad\""
+        },
+        {
+          "count": 320,
+          "detail": "Explain",
+          "text": "\"bad\""
+        }
+      ],
+      "root_boundaries": [
+        {
+          "allocation": false,
+          "minimum": 179,
+          "text": "1"
+        },
+        {
+          "allocation": true,
+          "minimum": 2112,
+          "text": "1"
+        },
+        {
+          "allocation": false,
+          "minimum": 203,
+          "text": "\"bad\""
+        },
+        {
+          "allocation": true,
+          "minimum": 2145,
+          "text": "\"bad\""
+        }
+      ],
+      "exact_64k_observations": [
+        {
+          "status": "satisfies"
+        },
+        {
+          "status": "satisfies"
+        },
+        {
+          "status": "satisfies"
+        }
+      ],
+      "layouts": [
+        {
+          "fields": 8,
+          "frame": 256,
+          "run": 984,
+          "state": 64
+        }
+      ]
+    }
+  },
+  "source_changes_from_reviewed_root": {
+    "semantic/mod.rs": {
+      "previous": "ef984b0da0071567c11f631f8cfba97e26d7a5d9bad2d753ec8c2332eeacfa10",
+      "current": "160cdb7dc2f39a613542b49bd87c037d8fa76e34411ebda71909c29db15f4473",
+      "changed": true
+    },
+    "semantic/execution/mod.rs": {
+      "previous": "60c64c3f2689ff30ce412a3f184795532b7682b042d929d909fbba672766d588",
+      "current": "60c64c3f2689ff30ce412a3f184795532b7682b042d929d909fbba672766d588",
+      "changed": false
+    },
+    "semantic/preparation.rs": {
+      "previous": "9fded76a459726beb736b8f36b6e5bded22b5d7b638fa7e8f5f9a452dfb5aeab",
+      "current": "9fded76a459726beb736b8f36b6e5bded22b5d7b638fa7e8f5f9a452dfb5aeab",
+      "changed": false
+    },
+    "semantic/readings.rs": {
+      "previous": "1a2663e4a817422c165ebf1592a017dc2d3f56ee1dd1a54daf035505344bc0e9",
+      "current": "1a2663e4a817422c165ebf1592a017dc2d3f56ee1dd1a54daf035505344bc0e9",
+      "changed": false
+    }
+  },
+  "actual_allocator_toolchains_agree": true,
+  "source_frozen_at_review_end": true,
+  "no_sdk_edits": true,
+  "build_failures": []
+}

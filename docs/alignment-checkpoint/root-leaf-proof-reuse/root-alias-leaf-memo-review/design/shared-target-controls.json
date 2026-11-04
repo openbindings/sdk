@@ -1,0 +1,50 @@
+{
+  "status": "independently specified; not executed",
+  "supersedes": [
+    "RL-02 coarse query-count eligibility",
+    "RL-03 coarse-query false-positive expectations"
+  ],
+  "retains": "all other existing root memo semantic/resource requirements",
+  "groups": [
+    {
+      "id": "ST-01",
+      "name": "Flag isolation and layout",
+      "required": "Seen/shared bits disjoint from all existing reserved/keyword bits. Original/EMPTY/non-leaf never shared-eligible. For every known/unknown keyword and phase, adding flags does not change readings. Fields size/alignment and Frame size unchanged."
+    },
+    {
+      "id": "ST-02",
+      "name": "Zero/one/two/many direct targets",
+      "required": "0/1/2/5000 direct query entries to one certified leaf yield false/false/true/true. Repeated queries may share Arc; every original entry still counts. Multiple independent target leaves get their own saturated flags."
+    },
+    {
+      "id": "ST-03",
+      "name": "Chains and wrappers",
+      "required": "Public contained/direct leaves, one external wrapper and multi-query linear alias chains ending at a leaf stay unmarked at that terminal leaf. Preserve no new runtime memo/key/copy allocation for these jobs. Direct repeated5000 refs mark and reuse."
+    },
+    {
+      "id": "ST-04",
+      "name": "Bad or missing targets",
+      "required": "Err query, absent descriptor, unsupported/unknown profile, malformed inventory and existing Original fallback do not gain or replace a descriptor. Two Ok queries to a non-leaf do not certify it. No new semantic refusal."
+    },
+    {
+      "id": "ST-05",
+      "name": "Order and publication",
+      "required": "Permute query iteration order and obtain identical final flags. Every observed pass/check cancellation and exact/one-below work boundary refuses before Plan publication, including last iteration/final shared check. Ignored parent/nested Attempt failure stays sticky; healthy retry has no partial flags."
+    },
+    {
+      "id": "ST-06",
+      "name": "Indirect and dynamic underestimation",
+      "required": "Two queries to a shared alias object with one final leaf edge may leave leaf unmarked. A dynamic override to an unmarked leaf uses original evaluation. Marked static target with a different final dynamic target cannot borrow the marked target result; Context remains part of Visit."
+    },
+    {
+      "id": "ST-07",
+      "name": "Different instance negative",
+      "required": "Two direct query occurrences target one leaf but execute at separate array items/object members/property-name tokens. Descriptor is shared; root guard prevents new leaf memo entries. Include semantically equal child values and a nonzero retained root ID."
+    },
+    {
+      "id": "ST-08",
+      "name": "Preparation and evaluation cost",
+      "required": "No new allocation/site/record from pass, only scalar mutation and checked work. Preserve default preparation capacity and broad source outcomes. Measure new compile pass, canonical root5000, simple scalar/chain and different-instance negatives separately; no G6 replacement."
+    }
+  ]
+}

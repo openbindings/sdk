@@ -1,6 +1,5 @@
-//! Evaluation work is uncapped unless the application sets a cap, which then
-//! applies to every pass whatever the value's size; exhausted depth is
-//! reported as such.
+//! Evaluation work has no default cap. A caller-selected cap covers every
+//! pass; storage admission and cooperative cancellation remain separate.
 use openbindings::*;
 use openbindings_json_schema_evaluator::{DefaultEvaluator, Limits};
 
@@ -34,7 +33,7 @@ fn code(outcome: &ValueOutcome) -> Option<&str> {
 }
 
 const SCHEMA: &str = r#"{"type":"array","items":{"type":"integer","minimum":0}}"#;
-// Under a cap, two units per element: reading it and entering its schema.
+// Large values exercise traversal and primitive work under one allowance.
 const ITEMS: usize = 700_000;
 fn large() -> JsonValue {
     JsonValue::parse(format!("[{}0]", "1,".repeat(ITEMS - 1))).unwrap()
@@ -47,6 +46,34 @@ fn explicit(steps: usize) -> PreparedSchema<openbindings_json_schema_evaluator::
             ..Limits::default()
         },
     )
+}
+
+#[test]
+fn repeated_root_proofs_fit_a_small_reservation_without_copying_empty_storage() {
+    let references = vec![r##"{"$ref":"#/$defs/leaf"}"##; 5000].join(",");
+    let schema = format!(
+        r#"{{"$id":"https://budget.example/root","$defs":{{"leaf":{{"type":"integer"}}}},"allOf":[{references}]}}"#
+    );
+    let contract = prepared(
+        &schema,
+        Limits {
+            program_bytes: 64 * 1024,
+            ..Limits::default()
+        },
+    );
+    for (text, satisfies) in [("1", true), (r#""wrong""#, false)] {
+        let value = JsonValue::parse(text).unwrap();
+        for outcome in [contract.evaluate(&value), contract.explain(&value)] {
+            assert!(
+                matches!(
+                    outcome,
+                    ValueOutcome::Satisfies | ValueOutcome::Fails { .. }
+                ),
+                "{text}: {outcome:?}"
+            );
+            assert_eq!(matches!(outcome, ValueOutcome::Satisfies), satisfies);
+        }
+    }
 }
 
 #[test]

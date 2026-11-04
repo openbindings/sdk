@@ -360,9 +360,20 @@ pub(super) fn check_from(
         control.charge_allocation(128 + std::mem::size_of::<readings::Fields>())?;
         fields.insert(node, present);
     }
+    // Count original query occurrences, even when their immutable results are
+    // shared. These saturating flags add no descriptor or second target map.
+    for query in queries.values() {
+        control.check()?;
+        if let Ok(target) = query.as_ref()
+            && let Some(fields) = fields.get_mut(&target.node)
+        {
+            fields.note_reference_target();
+        }
+    }
     control.charge_allocation(resources.len().saturating_mul(8))?;
     let mut resources: Vec<_> = resources.into_iter().collect();
     resources.sort_unstable();
+    control.check()?;
     Ok(Checked {
         custom,
         resources,

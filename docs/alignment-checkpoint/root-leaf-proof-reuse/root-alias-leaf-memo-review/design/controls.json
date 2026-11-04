@@ -1,0 +1,179 @@
+{
+  "status": "independently specified, not executed",
+  "groups": [
+    {
+      "id": "RL-01",
+      "group": "Repeated root reference",
+      "inputs": {
+        "target": {
+          "type": "integer"
+        },
+        "ref_counts": [
+          2,
+          64,
+          5000
+        ],
+        "values": [
+          "1",
+          "\"x\""
+        ]
+      },
+      "required": "Same funded S/F and full Explain observation as baseline. One completed target memo key; first target body once per Run/pass, later identical post-alias visits reuse it. Alias/entry/child checks still execute."
+    },
+    {
+      "id": "RL-02",
+      "group": "No-opportunity retention",
+      "inputs": {
+        "jobs": [
+          "direct leaf",
+          "contained scalar leaf",
+          "ordinary external root wrapper to leaf",
+          "no-reference composite",
+          "one-query leaf via singleton wrappers"
+        ]
+      },
+      "required": "Inspect actual prepared query count. Guard-false paths do not construct the new Visit, copy State, insert memo or allocate backing. Existing direct leaf exit is unchanged."
+    },
+    {
+      "id": "RL-03",
+      "group": "Filter false positives",
+      "inputs": {
+        "jobs": [
+          "two-edge linear alias chain ending in leaf",
+          "one root leaf visit plus another inventoried query",
+          "two distinct target leaves"
+        ]
+      },
+      "required": "More than one query only permits caching; it does not assert a hit. Keep complete observations and bounded exact/one-below storage. Record the extra one-use entry cost without claiming zero overhead."
+    },
+    {
+      "id": "RL-04",
+      "group": "Root identity is an occurrence",
+      "inputs": {
+        "jobs": [
+          "retained nonzero-ID numeric subtree",
+          "retained nonzero-ID object subtree",
+          "member-name root if supported by public retained-value API",
+          "root object with propertyNames refs and equal textual child values"
+        ]
+      },
+      "required": "Set root_instance from actual root view ID, never assume0 or interned semantic identity. Different child/member-name token IDs cannot qualify accidentally. Same Run always uses one live instance arena."
+    },
+    {
+      "id": "RL-05",
+      "group": "No per-item growth",
+      "inputs": {
+        "jobs": [
+          "50001 integer items via repeated aliases",
+          "50001 late-invalid items",
+          "large additionalProperties aliases",
+          "propertyNames alias over many distinct tokens"
+        ]
+      },
+      "required": "Required S/F unchanged at defaults. New root-leaf cache does not retain a State per child/item/name occurrence. Verify alias-root leaf entry count separately from existing legitimate non-leaf memo."
+    },
+    {
+      "id": "RL-06",
+      "group": "Original node and scope keys",
+      "inputs": {
+        "jobs": [
+          "equal text in two original schema occurrences",
+          "same leaf via two static aliases",
+          "dynamic/recursive target selection with same and different effective contexts",
+          "ambiguous dynamic binding"
+        ]
+      },
+      "required": "Share only identical final node, exact instance occurrence and full content-based entered Context. Different contexts remain separate even for identical leaf syntax; ambiguous/unsupported dispatch keeps existing refusal/effect behavior."
+    },
+    {
+      "id": "RL-07",
+      "group": "Known undefined correlation",
+      "inputs": {
+        "schema_family": "two or more root aliases to a certified leaf with a known undefined predicate; include that leaf and its negation under allOf/anyOf"
+      },
+      "required": "Preserve coherent same-subject formulas, F contradiction and S excluded middle, and original Undefined outcome where unmasked. Distinct original nodes/scopes remain distinct effects."
+    },
+    {
+      "id": "RL-08",
+      "group": "Inability and local limitations",
+      "inputs": {
+        "jobs": [
+          "admitted custom malformed primitive leaf",
+          "unsupported pattern leaf",
+          "locally Limited a{65535} leaf in eager anyOf(true,...) and allOf(false,...) contexts",
+          "cancelled or low-memory predicate miss"
+        ]
+      },
+      "required": "Completed independent Inability State may be reused with its existing cause. Limit/Cancelled/errors are never cached. Preserve genuine eager terminal-limit fixtures; no earlier Boolean result suppresses a requested child."
+    },
+    {
+      "id": "RL-09",
+      "group": "Cut independence and rounds",
+      "inputs": {
+        "jobs": [
+          "existing recursive annotation controls with root leaf sibling",
+          "leaf result during a provisional round",
+          "synthetic cut-dependent State at publication guard"
+        ]
+      },
+      "required": "Only existing independent predicate admits publication. New memo growth may trigger existing support invalidation/retry; no permanent unbounded retry, no unfinished/provisional certificate publication, no change to leaf no-producer proof."
+    },
+    {
+      "id": "RL-10",
+      "group": "Witness ownership",
+      "inputs": {
+        "jobs": [
+          "F leaf reached through repeated aliases in Outcome and Explain",
+          "non-scalar/escaped original schema locations",
+          "two same-text leaves with different origins",
+          "all external/document source handles dropped before repeated concurrent calls"
+        ]
+      },
+      "required": "First original contributing witness stays exact. No witness in Outcome. Explain second pass has a fresh Run/memo and its own witness mode; no cross-pass or cross-call State/Arc reuse."
+    },
+    {
+      "id": "RL-11",
+      "group": "Publication and hit boundaries",
+      "inputs": {
+        "lanes": [
+          "before/inside alias",
+          "miss body",
+          "independence",
+          "key work",
+          "State.copied",
+          "memo reserve/publication",
+          "memo hit copy",
+          "returned-child dispatch"
+        ]
+      },
+      "required": "Recompute all actually observed cancellation checkpoints; clean same-Plan retries. Prior SDK work/reservation and nested Attempt refusal remain visible on hit and miss. Never catch errors to turn them into memo entries."
+    },
+    {
+      "id": "RL-12",
+      "group": "Resource accounting",
+      "inputs": {
+        "jobs": [
+          "one cached target, many hits",
+          "many distinct root leaf targets",
+          "many contexts",
+          "both detail modes and selected-meta evaluation"
+        ]
+      },
+      "required": "Retain existing key context work before lookup and before insertion, State.copied and memo insertion charge. Exact/one-below work/storage, overflow/prior cause, shared selected-meta Attempt. No renewed limits. This is scoped SDK accounting, not a new physical allocator certificate."
+    },
+    {
+      "id": "RL-13",
+      "group": "Layout and measured selection",
+      "inputs": {
+        "jobs": [
+          "current/minimum Rust",
+          "actual shipped Wasm when qualifying",
+          "same frozen repeated-reference5000",
+          "scalar/array/large-object",
+          "no-hit multi-query control"
+        ]
+      },
+      "required": "Record actual Run size/alignment; no new Plan or Frame field/map. Compare complete observations and actual allocated/retained memory. Measure unchanged compile/eval requests; retain only if useful without unacceptable new regressions. No G6 acceptance follows."
+    }
+  ]
+}

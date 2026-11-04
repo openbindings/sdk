@@ -1,0 +1,19 @@
+{
+  "status": "CONDITIONAL_GO_DESIGN_ONLY",
+  "commit": "f62f47757ba6682bea316492056428a665a7bea4",
+  "control_groups": 13,
+  "sdk_edits": false,
+  "builds_tests_or_probes": false,
+  "conditions": [
+    "post-alias certified leaf only",
+    "actual root occurrence and queries>1 guard",
+    "existing Visit context accounting on lookup and publication",
+    "existing cut-independent State and State.copied semantics",
+    "no errors/cross-run/cross-detail memo",
+    "no per-child memo growth"
+  ],
+  "performance_acceptance": false,
+  "latest_refinement": "GO: shared-leaf descriptor flags replace global query-count guard",
+  "refinement_controls": 8,
+  "refinement_artifact": "shared-target-addendum.md"
+}

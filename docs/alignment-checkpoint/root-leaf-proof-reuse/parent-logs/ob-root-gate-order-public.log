@@ -1,0 +1,15 @@
+   Compiling openbindings-json-schema-evaluator v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-json-schema-evaluator)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.73s
+     Running tests/evaluation_budgets.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/evaluation_budgets-7ff08b32953918c1)
+
+running 7 tests
+test an_evaluator_reports_the_budgets_it_was_given ... ok
+test long_alias_chains_do_not_inherit_the_retired_compiler_stack_bound ... ok
+test deep_concrete_values_do_not_spend_symbolic_effects ... ok
+test repeated_root_proofs_fit_a_small_reservation_without_copying_empty_storage ... ok
+test uncapped_evaluation_decides_large_values ... ok
+test an_explicit_work_allowance_caps_every_pass_whatever_the_value_size ... ok
+test explicit_caps_bracket_a_checks_work_and_the_default_sets_none ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 45.15s
+
