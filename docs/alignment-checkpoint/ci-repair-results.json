@@ -1,0 +1,22 @@
+{
+  "commit": "6988e6d252ea224a77b464c9ed83e6d28be3f22f",
+  "status": "local artifacts verified; publication not performed",
+  "archive_consumers": "passed",
+  "cargo_archives": 13,
+  "publication_order_libraries": 12,
+  "npm_sha256": "5118016a941c1e564f4e25314b0f325bf84ce18c86054399c0fb1335e25ca3fe",
+  "manifest_sha256": "f735d0268241e72ce172ae6f1edd333cfe4b49d5925a92f97b725b905c7781bf",
+  "independent_source_review": "pass",
+  "whole_workspace_verification": "pass",
+  "final_matched_performance": "open",
+  "workspace_tests_doctests": 888,
+  "workspace_existing_ignored": 4,
+  "release_stack_checks": "pass",
+  "core_cases": 505,
+  "windows_checkout_simulation": {
+    "files": 28,
+    "before_exact": 0,
+    "after_exact": 28
+  },
+  "hosted_ci": "in progress; Windows checkout correction awaiting fresh run"
+}

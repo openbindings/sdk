@@ -117,7 +117,11 @@ and pushed as `b380d61`. See
 [prepared operand evidence](../receipts/2026-11-02-preparation/prepared-numeric-operands/README.md).
 This does not preserve old APIs or exact incidental admission cutoffs. Current CI
 repairs separately correct digest-ledger parsing, missing package attribution and
-a stale benchmark lock; their review and clean-archive gate remain in progress.
+a stale benchmark lock; their independent review and clean-archive gate pass at
+`6988e6d`. Full local verification passes, including 888 workspace tests/doctests
+and all release stack checks. A Windows checkout-byte correction has a passing
+Git filter reproduction; actual hosted requalification remains open. See
+[CI repair evidence](../receipts/2026-11-02-preparation/ci-repairs/README.md).
 Final map, engine, performance and host gates remain.
 
 No decision currently requires Matthew. If a real decision arises, record it
