@@ -124,6 +124,17 @@ Git filter reproduction; actual hosted requalification remains open. See
 [CI repair evidence](../receipts/2026-11-02-preparation/ci-repairs/README.md).
 Final map, engine, performance and host gates remain.
 
+
+Local standard syntax accounting now uses a guarded per-position read extent,
+while complete original-position admission and actual custom-meta checks remain.
+Independent implementation review passes after the selected-root snapshot guard
+was corrected. Native current/minimum-toolchain, required-value, exact resource,
+actual Wasm/Node/browser/package and focused guard checks pass at their recorded
+identities. See [local syntax evidence](../receipts/2026-11-02-preparation/local-syntax-admission/README.md).
+No syntax-fact cache or default-engine switch is included. The next explicit-frame
+execution design is under independent review; pattern VM preparation, original
+witnesses, final performance/host and alignment-map gates remain open.
+
 No decision currently requires Matthew. If a real decision arises, record it
 and continue every independent unblocked path before considering a stop.
 

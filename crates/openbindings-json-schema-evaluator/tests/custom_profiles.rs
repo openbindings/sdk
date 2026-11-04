@@ -429,3 +429,42 @@ fn date_time_formats_require_ascii_digits_and_utc_month_boundaries() {
         verdict(&prepared, &serde_json::to_string(value).unwrap(), valid);
     }
 }
+
+#[test]
+fn local_meta_checks_do_not_hide_invalid_unused_original_positions() {
+    const HELPER: &str = "https://custom.test/standard-helper";
+    for dialect in [
+        "http://json-schema.org/draft-07/schema",
+        "https://json-schema.org/draft/2019-09/schema",
+        "https://json-schema.org/draft/2020-12/schema",
+    ] {
+        for body in [
+            r#""definitions":{"unused":{"type":17}}"#,
+            r#""then":{"type":17}"#,
+            r#""else":{"type":17}"#,
+            r#""dependencies":{"unused":{"type":17}}"#,
+        ] {
+            let helper = format!(r#"{{"$schema":"{dialect}",{body}}}"#);
+            invalid(prepare(
+                VOCABULARIES,
+                &format!(r#""$ref":"{HELPER}""#),
+                r#""type":"integer""#,
+                &[(HELPER, &helper)],
+            ));
+        }
+        // Identical-looking data is not a syntax position. The complete local
+        // extent is still charged, but it does not invent an admission rule.
+        let helper = format!(
+            r#"{{"$schema":"{dialect}","default":{{"definitions":{{"unused":{{"type":17}}}}}},"unknown":{{"then":{{"type":17}}}}}}"#
+        );
+        let prepared = prepare(
+            VOCABULARIES,
+            &format!(r#""$ref":"{HELPER}""#),
+            r#""type":"integer""#,
+            &[(HELPER, &helper)],
+        )
+        .unwrap();
+        verdict(&prepared, "1", true);
+        verdict(&prepared, "false", false);
+    }
+}

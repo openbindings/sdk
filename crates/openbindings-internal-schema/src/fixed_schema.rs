@@ -10,6 +10,7 @@
 //! no budget of its own: the admission limits bound it. Its memory is the
 //! document's own arena plus a bounded matcher cache and the capped findings,
 //! and its stack depth follows the fixed schemas, not the instance.
+mod local;
 use crate::{JsonRef, JsonValue};
 use jsonschema::json::{JsonNumber, Node};
 use jsonschema::{Draft, Keyword, Retrieve, ValidationError, ValidationOptions, Validator};
@@ -185,6 +186,63 @@ pub fn validity(value: &JsonValue, is_meta: bool) -> Result<bool, String> {
         .map_err(Clone::clone)?;
     Ok(backend::fixed_strings(|| valid(validator, value.view())))
 }
+fn localize_foreign(value: &mut Value) {
+    match value {
+        Value::Object(fields) => {
+            if fields.get("$schema").is_some_and(Value::is_string) {
+                fields.remove("$schema");
+            }
+            for reference in ["$ref", "$recursiveRef"] {
+                if fields.get(reference).and_then(Value::as_str) == Some("#") {
+                    fields.remove(reference);
+                    fields.insert("type".into(), serde_json::json!(["object", "boolean"]));
+                }
+            }
+            for (key, value) in fields {
+                if matches!(key.as_str(), "$id" | "$ref")
+                    && let Some(text) = value.as_str()
+                {
+                    *value = Value::String(
+                        text.replace(
+                            "http://json-schema.org/",
+                            "https://openbindings.invalid/foreign-meta/",
+                        )
+                        .replace(
+                            "https://json-schema.org/",
+                            "https://openbindings.invalid/foreign-meta/",
+                        ),
+                    );
+                } else {
+                    localize_foreign(value);
+                }
+            }
+        }
+        Value::Array(values) => values.iter_mut().for_each(localize_foreign),
+        _ => {}
+    }
+}
+
+fn foreign_meta_resources(files: &[&str]) -> Result<(Value, BTreeMap<String, Value>), String> {
+    let mut resources = BTreeMap::new();
+    let mut root = None;
+    for text in files {
+        let mut schema: Value = serde_json::from_str(text).map_err(|e| e.to_string())?;
+        localize_foreign(&mut schema);
+        if root.is_none() {
+            root = Some(schema.clone());
+        }
+        let id = schema["$id"]
+            .as_str()
+            .ok_or("foreign meta-schema identifier missing")?
+            .to_owned();
+        resources.insert(id, schema);
+    }
+    Ok((
+        root.ok_or("empty foreign meta-schema inventory")?,
+        resources,
+    ))
+}
+
 /// A single original foreign schema position, with recursive meta edges cut.
 /// Its schema children are checked at their own inventory positions.
 pub fn dialect_validity(
@@ -202,61 +260,10 @@ pub fn dialect_validity(
     };
     let compiled = cell
         .get_or_init(|| {
-            fn localize_foreign(value: &mut Value) {
-                match value {
-                    Value::Object(fields) => {
-                        if fields.get("$schema").is_some_and(Value::is_string) {
-                            fields.remove("$schema");
-                        }
-                        for reference in ["$ref", "$recursiveRef"] {
-                            if fields.get(reference).and_then(Value::as_str) == Some("#") {
-                                fields.remove(reference);
-                                fields.insert(
-                                    "type".into(),
-                                    serde_json::json!(["object", "boolean"]),
-                                );
-                            }
-                        }
-                        for (key, value) in fields {
-                            if matches!(key.as_str(), "$id" | "$ref")
-                                && let Some(text) = value.as_str()
-                            {
-                                *value = Value::String(
-                                    text.replace(
-                                        "http://json-schema.org/",
-                                        "https://openbindings.invalid/foreign-meta/",
-                                    )
-                                    .replace(
-                                        "https://json-schema.org/",
-                                        "https://openbindings.invalid/foreign-meta/",
-                                    ),
-                                );
-                            } else {
-                                localize_foreign(value);
-                            }
-                        }
-                    }
-                    Value::Array(values) => values.iter_mut().for_each(localize_foreign),
-                    _ => {}
-                }
-            }
-            let mut resources = BTreeMap::new();
-            let mut root = None;
-            for text in files {
-                let mut schema: Value = serde_json::from_str(text).map_err(|e| e.to_string())?;
-                localize_foreign(&mut schema);
-                if root.is_none() {
-                    root = Some(schema.clone());
-                }
-                let id = schema["$id"]
-                    .as_str()
-                    .ok_or("foreign meta-schema identifier missing")?
-                    .to_owned();
-                resources.insert(id, schema);
-            }
+            let (root, resources) = foreign_meta_resources(files)?;
             options(resources)
                 .with_draft(draft)
-                .build(&root.expect("nonempty fixed files"))
+                .build(&root)
                 .map_err(|e| e.to_string())
         })
         .as_ref()
@@ -283,9 +290,7 @@ pub fn dialect_validity_bounded(
         control.charge_allocation(allocation)?;
         control.charge_work(work)?;
     }
-    let bytes = value.text().len();
-    control.charge_allocation(bytes.saturating_mul(64).saturating_add(4096))?;
-    control.charge_work(bytes.saturating_mul(64).saturating_add(1))?;
+    local::reserve(value.view(), dialect, control)?;
     let result = dialect_validity(value, dialect);
     control.check()?;
     result.map_err(|_| {
@@ -375,13 +380,15 @@ fn meta_resources() -> Result<BTreeMap<String, Value>, String> {
     }
     Ok(resources)
 }
+fn meta_root(resources: &BTreeMap<String, Value>) -> Result<&Value, String> {
+    resources
+        .get("https://openbindings.invalid/internal-meta/schema")
+        .ok_or_else(|| "embedded root meta-schema is missing".into())
+}
 fn meta() -> &'static Compiled {
     META.get_or_init(|| {
         let resources = meta_resources()?;
-        let root = resources
-            .get("https://openbindings.invalid/internal-meta/schema")
-            .ok_or("embedded root meta-schema is missing")?
-            .clone();
+        let root = meta_root(&resources)?.clone();
         compile(&root, resources)
     })
 }
