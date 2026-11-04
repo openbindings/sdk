@@ -39,10 +39,10 @@ export async function fixtureSet(root) {
 export async function identity(packageRoot) {
   const assets = {};
   for (const name of [
-    "dist/index.js",
-    "dist/testing.js",
-    "dist/internal.js",
-    "dist/http-discovery.js",
+    ...(await fs.readdir(path.join(packageRoot, "dist")))
+      .filter((name) => name.endsWith(".js"))
+      .sort()
+      .map((name) => "dist/" + name),
     "dist/wasm/openbindings_wasm.js",
     "dist/wasm/openbindings_wasm_signature.js",
     "dist/wasm/openbindings_wasm_bg.wasm",

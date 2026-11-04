@@ -245,7 +245,10 @@ export function runTier(sdk, testing, fixture, timed = true) {
     invalidValue?.dispose();
     invalidContract.dispose();
   }
-  check(testing.liveStorageOwners() === warmedOwners, "diagnostic batch cleanup");
+  check(
+    testing.liveStorageOwners() === warmedOwners,
+    "diagnostic batch cleanup",
+  );
   return {
     samplesMs: timed ? samples : null,
     repetitions,
@@ -276,7 +279,7 @@ export function lifetime(sdk, testing, fixture, timed = true) {
   const uri = "https://qualification.invalid/schema";
   const make = (type, generation) => {
     const resource = parsed(sdk, JSON.stringify({ type }));
-    const resources = new sdk.SchemaResources([[uri, resource]]);
+    const externalSchemas = new sdk.ExternalSchemas([[uri, resource]]);
     const document = parsed(
       sdk,
       JSON.stringify({
@@ -297,14 +300,14 @@ export function lifetime(sdk, testing, fixture, timed = true) {
     let proof;
     try {
       proof = conformant(document);
-      const contract = prepareInput(proof, "run", { resources });
+      const contract = prepareInput(proof, "run", { resources: externalSchemas });
       for (let n = 0; n < 6; n++)
-        prepareInput(proof, `op${n}`, { resources }).dispose();
+        prepareInput(proof, `op${n}`, { resources: externalSchemas }).dispose();
       return contract; // survives later preparations and all parent disposal
     } finally {
       proof?.dispose();
       document.dispose();
-      resources.dispose();
+      externalSchemas.dispose();
       resource.dispose();
     }
   };
@@ -391,7 +394,14 @@ export function lifetime(sdk, testing, fixture, timed = true) {
     replacementSamplesMs: timed ? replacementSamples : null,
   };
 }
-export async function discovery(sdk, testing, http, fixtures, timed = true, origin) {
+export async function discovery(
+  sdk,
+  testing,
+  http,
+  fixtures,
+  timed = true,
+  origin,
+) {
   const rows = {};
   for (const [tier, fixture] of Object.entries(fixtures)) {
     const samples = [];

@@ -46,7 +46,7 @@ a chosen dependency-closed subset or applies permitted proposal fields through
 explicit document edits, then revalidates that edited snapshot.
 
 `PullLimits` defaults to 32 MiB request/response handoffs, 100,000 indexed entries
-and uses labels, 20 million relationship work units and 64 MiB cumulative
+and uses labels, 64 million relationship work units and 64 MiB cumulative
 relationship-index/edit-metadata reservations. They exclude provider work and
 already admitted carriers. Core prospective rebuilding/validation uses the
 original document's JSON limits and core finding limits, not the relationship
@@ -55,11 +55,20 @@ Requests read through `from_json` are admitted before client limits, so byte
 consumers should first choose explicit JSON parsing limits. Native operational
 errors are not measured as JSON; exact context challenges are.
 
+The work default supports the intended 10,000-item catalog workflow while staying
+finite. Its checked B-tree search accounting follows the supported Rust node
+fanout, rather than a binary-tree height. The measured catalog requires
+46,765,436 relationship work units and 48,471,232 reserved bytes; the earlier
+20-million work policy refused it. This is an explicit SDK policy revision,
+not a specification requirement or a whole-call memory guarantee. Wider keys,
+denser relationships or larger catalogs may still require caller-selected limits.
+
 The publication has no proposal deletion representation. Omission means no
 change, `data: null` sets null, and null is invalid for input/output schemas.
 Removal-only drift requires operational inability or a separate caller-owned
 removal edit; it must not become a fabricated current/unmatched report.
 
 Qualification includes the 21 pinned pull-report cases, five published examples,
-74 independently designed controls and two illustrative kind consumers. Legacy
-companion/consumer retirement and full SDK integration remain separate work.
+74 independently designed controls and two illustrative kind consumers. The old
+inspection/synthesis companions and consumers are removed; full SDK integration
+and final performance qualification remain separate work.

@@ -2,6 +2,7 @@
 //! The ordinary compiled engine remains the fast path. This layer represents
 //! local effects and applicator annotations together when that path cannot
 //! establish a value's result. It does not infer Undefined from failed bounds.
+mod counts;
 mod cycles;
 mod decision;
 mod formats;
@@ -1306,21 +1307,10 @@ impl Run<'_> {
         }
         if let Some(child) = schema.get("contains") {
             let child = self.child(node, child)?;
-            self.graph.charge(32)?;
-            let mut counts = vec![TRUE];
+            let mut counts = counts::Matches::default();
             for (index, item) in value.elements().expect("array").enumerate() {
                 let result = self.schema(child, item, context)?;
-                let not = self.graph.not(result.valid)?;
-                self.graph
-                    .charge(counts.len().saturating_add(1).saturating_mul(8))?;
-                let mut next = vec![FALSE; counts.len() + 1];
-                for (count, &formula) in counts.iter().enumerate() {
-                    let same = self.graph.and(formula, not)?;
-                    next[count] = self.graph.or(next[count], same)?;
-                    let more = self.graph.and(formula, result.valid)?;
-                    next[count + 1] = self.graph.or(next[count + 1], more)?;
-                }
-                counts = next;
+                counts.add(result.valid, &mut self.graph)?;
                 if schema.profile.edition() == Dialect::Draft202012 {
                     let old = state.items.get(&index).copied().unwrap_or(FALSE);
                     self.graph.charge(96)?;
@@ -1343,12 +1333,7 @@ impl Run<'_> {
             };
             let minimum = count("minContains", 1)?;
             let maximum = count("maxContains", u64::MAX)?;
-            let mut valid = FALSE;
-            for (count, &formula) in counts.iter().enumerate() {
-                if (minimum..=maximum).contains(&(count as u64)) {
-                    valid = self.graph.or(valid, formula)?;
-                }
-            }
+            let valid = counts.within(minimum, maximum, &mut self.graph)?;
             state.valid = self.graph.and(state.valid, valid)?;
         }
         if let Some(child) = schema.get("unevaluatedItems") {

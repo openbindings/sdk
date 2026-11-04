@@ -42,8 +42,10 @@ qualification and the corrected identifier-dependence adjudication. The existing
 2,348-case auxiliary ledger remains unchanged. Complete producer formulas and
 between-attempt coordinate certificates preserve annotation meaning; narrow
 original-graph certificates settle the supported direct cycles. General recursive
-capability remains explicitly bounded. Ordinary compiled-backend allocation is the
-next foundation gate; independent review has reproduced an accounting gap.
+capability remains explicitly bounded. Ordinary compiled-backend allocation remains open; independent review reproduced
+an accounting gap. The reviewed replacement is one prepared original-node engine,
+with concrete execution and bounded semantic reasoning. Its implementation sequence
+and unchanged restoration gates are in [the refined design](../design/2026-11-02/original-evaluator-implementation.md).
 The kind-description companion is implemented and independently reviewed.
 [Kind-description evidence](../receipts/2026-11-02-preparation/kind-description-progress/README.md)
 records exact carriers, distinct provider failures, cancellation handoff and both
@@ -55,14 +57,29 @@ records its scope and explicit capability refusals. Source-pull carriers, reques
 APIs, document relationships and prospective conformance are now implemented. The
 21 pinned cases, five published examples, 74 independent controls and illustrative
 kind/consumer witnesses pass. Independent implementation review closes its
-annotation-drift finding; 500 closure controls and 48 allocation lanes pass. Legacy
-consumer migration and retirement remain active. The external source-pull consumer
+annotation-drift finding; 500 closure controls and 48 allocation lanes pass. The obsolete inspection/synthesis/internal-interface crates, consumers and tools
+are removed; current role inventories drive CI and package checks. The external source-pull consumer
 passes against extracted packages and both Rust/Wasm hosts. Its non-static borrowed
 provider test exposed a finite-client Send constraint; the reviewed concrete-future
-boundary fixes it for pulling and all three kind operations without global bounds. Remaining consumers,
-TypeScript organization, all-host packaging, ordinary backend allocation and final
-matched-toolchain performance qualification remain active. No whole-SDK completion
-claim is made. Older progress receipts remain historical.
+boundary fixes it for pulling and all three kind operations without global bounds.
+[Current consumer retirement evidence](../receipts/2026-11-02-preparation/legacy-retirement/README.md)
+records the external invocation workflow and resolved verifier findings, 873 current
+workspace tests/doctests (four existing release-only controls ignored), strict lint,
+15 feature graphs, and all 20 current invocation resource jobs. This checkpoint is
+pushed as `41874e2`. The TypeScript implementation is now split into document,
+schema, JSON, ownership, diagnostics, runtime and optional discovery modules, with
+no internal compatibility barrel. Node/type/reference/npm archive, Chromium/WebKit
+and workerd correctness checks pass; [module evidence](../receipts/2026-11-02-preparation/typescript-modules/README.md)
+records the exact scope. The default 10,000-item source-pull workflow now completes
+with audited B-tree search accounting and an explicit 64-million work-unit policy;
+the earlier 20-million refusal is preserved. The independent catalog-budget review passes; [scale evidence](../receipts/2026-11-02-preparation/source-pull-scale/README.md)
+retains the initial refusal, corrected accounting and current/native/MSRV/Wasm results. Remaining end-to-end jobs, all-host packaging,
+ordinary backend replacement and matched-toolchain performance qualification remain
+active. The first original-engine increment replaces quadratic concrete contains
+counting with a scalar count and formula promotion only for uncertain matches.
+Native evaluator/required-value, MSRV targeted, Node/package and both browser
+semantic checks pass; independent review is in progress. No whole-SDK completion
+claim is made. Older receipts remain historical.
 
 No decision currently requires Matthew. If a real decision arises, record it
 and continue every independent unblocked path before considering a stop.
@@ -548,7 +565,7 @@ changes, rather than recreated only at the next large migration.
 - Sources are present; binding kinds, root resources, §7.6 shared-value lookup and resource
   pruning are not the target. Old D3/D4 work based on that intermediate model is retired.
 - Current source-puller, kind-descriptor and context publications settle the old interface-design
-  prerequisite. Their SDK implementations are pending; their designs need not be reopened merely
+  prerequisite. Their SDK implementations are now present; their designs need not be reopened merely
   to preserve old SDK code.
 - "Schema", external-schema terminology and readable generated order remain the API direction,
   but old signatures and layouts have no compatibility protection. Field order is presentation.

@@ -14,6 +14,7 @@ import shutil
 import subprocess
 import tarfile
 import tomllib
+from consumer_qualification import verify_resolution as check_resolution
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE = ROOT / "examples/invocation-consumer"
@@ -27,7 +28,8 @@ LOCAL = [
 
 
 def input_hashes():
-    paths = {ROOT / "Cargo.toml", ROOT / "Cargo.lock", Path(__file__).resolve()}
+    paths = {ROOT / "Cargo.toml", ROOT / "Cargo.lock", Path(__file__).resolve(),
+             ROOT / "tools/consumer_qualification.py"}
     for directory in [*(ROOT / path for path in LOCAL), FIXTURE,
                       ROOT / "examples/source-pull-consumer"]:
         paths.update(path for path in directory.rglob("*") if path.is_file()
@@ -57,32 +59,7 @@ def extract_fresh(archive, destination):
 
 
 def verify_resolution(metadata, consumer, sources, fixtures, archives, out):
-    """Verify both the selected lock identities and every local resolution path.
-
-    A smaller external graph may drop root-lock packages. It may add only named
-    local fixtures; no registry dependency may change version/source/checksum.
-    """
-    identity = lambda p: (p["name"], p["version"], p.get("source"), p.get("checksum"))
-    original = tomllib.loads((ROOT / "Cargo.lock").read_text(encoding="utf-8"))
-    generated_path = consumer / "Cargo.lock"
-    generated = tomllib.loads(generated_path.read_text(encoding="utf-8"))
-    allowed = {identity(p) for p in original["package"]}
-    allowed.update((name, "0.0.0", None, None) for name in fixtures)
-    changed = {identity(p) for p in generated["package"]} - allowed
-    if changed:
-        raise SystemExit(f"Consumer changed pinned dependency identities: {sorted(changed, key=repr)}")
-    locked = {(p["name"], p["version"], p.get("source")) for p in generated["package"]}
-    paths = {**sources, **fixtures}
-    for package in metadata["packages"]:
-        path = Path(package["manifest_path"]).resolve().parent
-        if (package["name"], package["version"], package.get("source")) not in locked:
-            raise SystemExit("Consumer metadata disagrees with its checked lock")
-        if package.get("source") is None:
-            if package["name"] not in paths or path != paths[package["name"]].resolve():
-                raise SystemExit("Consumer resolved an unexpected local dependency")
-        if archives and path.is_relative_to(ROOT) and not path.is_relative_to(out):
-            raise SystemExit("Archive consumer resolved checkout source")
-    return hashlib.sha256(generated_path.read_bytes()).hexdigest()
+    return check_resolution(ROOT, metadata, consumer, sources, fixtures, archives, out)
 
 
 def main():
@@ -140,6 +117,11 @@ def main():
                             raise SystemExit(f"Packaged path dependency: {name}")
         sources[name] = source
 
+    # Keep fixture builds separate from the workspace and other source/archive
+    # qualifications. Same-name fixture crates must never share mutable artifacts.
+    build = out / "build"
+    env["CARGO_TARGET_DIR"] = str(build)
+
     # Reuse the existing test-kind authoring implementation as a fixture package,
     # never as part of the published invocation dependency graph.
     authoring = out / "authoring-fixture"
@@ -188,7 +170,7 @@ def main():
             run("wasm-lint", ["cargo", "clippy", "--locked", "--lib", "--target", "wasm32-unknown-unknown", "--features", "wasm-probe", "--", "-D", "warnings"], consumer)
         host = out / "host"
         host.mkdir(exist_ok=True)
-        run("wasm-bindgen", ["wasm-bindgen", "--target", "nodejs", "--out-dir", host / "wasm", target / "wasm32-unknown-unknown/debug/invocation_consumer.wasm"])
+        run("wasm-bindgen", ["wasm-bindgen", "--target", "nodejs", "--out-dir", host / "wasm", build / "wasm32-unknown-unknown/debug/invocation_consumer.wasm"])
         shutil.copyfile(FIXTURE / "wasm-probe.ts", host / "wasm-probe.ts")
         run("typescript", ["node", args.tsc.resolve(), "--strict", "--target", "ES2022", "--module", "commonjs", "--lib", "ES2022,DOM,ESNext.Disposable", host / "wasm-probe.ts"])
         run("wasm-host", ["node", host / "wasm-probe.js"])

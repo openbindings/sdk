@@ -14,7 +14,7 @@ pub struct PullLimits {
     pub max_response_bytes: usize,
     /// Cumulative indexed entries and declared uses labels; default 100,000.
     pub max_entries: usize,
-    /// Monotone relationship scanning/search work; default 20 million.
+    /// Monotone relationship scanning/search work; default 64 million.
     pub max_relationship_work: usize,
     /// Cumulative reservations for relationship indexes and edit metadata; default 64 MiB.
     pub max_relationship_allocation_bytes: usize,
@@ -26,7 +26,7 @@ impl Default for PullLimits {
             max_request_bytes: 32 * 1024 * 1024,
             max_response_bytes: 32 * 1024 * 1024,
             max_entries: 100_000,
-            max_relationship_work: 20_000_000,
+            max_relationship_work: 64_000_000,
             max_relationship_allocation_bytes: 64 * 1024 * 1024,
         }
     }
@@ -145,12 +145,17 @@ impl<'a> Attempt<'a> {
         Ok(())
     }
     pub(crate) fn search(&mut self, entries: usize, key_bytes: usize) -> Result<(), Failure> {
-        let height = entries.saturating_add(1).ilog2() as usize + 1;
-        self.work(
-            12usize
-                .saturating_mul(height)
-                .saturating_mul(key_bytes.saturating_add(1)),
-        )
+        self.check()?;
+        // The supported Rust BTreeMap has at most 11 keys per node, at least
+        // 5 in each non-root node and at least 2 root children. A height h tree
+        // therefore has at least 2*6^h - 1 keys. Charge one extra comparison per
+        // visited node and all possible compared key bytes. The recurrence
+        // avoids logarithm rounding and checked arithmetic covers huge inputs.
+        let amount = btree_levels(entries)
+            .checked_mul(12)
+            .and_then(|n| n.checked_mul(key_bytes.checked_add(1)?))
+            .ok_or_else(|| self.refuse("relationship-work"))?;
+        self.work(amount)
     }
     pub(crate) fn map_insert<K, V>(
         &mut self,
@@ -173,11 +178,64 @@ impl<'a> Attempt<'a> {
     }
 }
 
+fn btree_levels(entries: usize) -> usize {
+    let mut levels = 1;
+    let mut minimum = 1usize;
+    while let Some(next) = minimum.checked_mul(6).and_then(|n| n.checked_add(5)) {
+        if next > entries {
+            break;
+        }
+        levels += 1;
+        minimum = next;
+    }
+    levels
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use openbindings::{Document, JsonValue};
     use std::sync::atomic::AtomicBool;
+
+    #[test]
+    fn search_height_covers_sparse_tree_boundaries_and_refuses_overflow() {
+        for (entries, levels) in [
+            (0, 1),
+            (1, 1),
+            (10, 1),
+            (11, 2),
+            (70, 2),
+            (71, 3),
+            (430, 3),
+            (431, 4),
+            (2590, 4),
+            (2591, 5),
+            (10_000, 5),
+            (15_550, 5),
+            (15_551, 6),
+            (93_310, 6),
+            (93_311, 7),
+        ] {
+            assert_eq!(btree_levels(entries), levels, "{entries}");
+        }
+        assert!(btree_levels(usize::MAX) <= usize::BITS as usize);
+        let control = AtomicBool::new(false);
+        let mut attempt = Attempt::new(
+            PullLimits {
+                max_relationship_work: usize::MAX,
+                ..PullLimits::default()
+            },
+            &control,
+        );
+        assert!(matches!(
+            attempt.search(1, usize::MAX),
+            Err(Failure::LimitExceeded("relationship-work"))
+        ));
+        assert!(matches!(
+            attempt.search(0, 0),
+            Err(Failure::LimitExceeded("relationship-work"))
+        ));
+    }
 
     #[test]
     fn compact_request_size_counts_context_and_all_source_escape_forms() {

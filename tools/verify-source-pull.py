@@ -13,6 +13,7 @@ import shutil
 import subprocess
 import tarfile
 import tomllib
+from consumer_qualification import verify_resolution
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE = ROOT / "examples/source-pull-consumer"
@@ -22,6 +23,16 @@ LOCAL = [
     "crates/openbindings-context", "crates/openbindings-schema-comparison",
     "crates/openbindings-source-pull",
 ]
+
+
+def input_hashes():
+    paths = {ROOT / "Cargo.toml", ROOT / "Cargo.lock", Path(__file__).resolve(),
+             ROOT / "tools/consumer_qualification.py"}
+    for directory in [*(ROOT / path for path in LOCAL), FIXTURE]:
+        paths.update(path for path in directory.rglob("*") if path.is_file()
+                     and not {"target", ".git", "__pycache__"}.intersection(path.relative_to(directory).parts))
+    return {str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest()
+            for path in sorted(paths)}
 
 
 def extract_fresh(archive, destination):
@@ -50,6 +61,7 @@ def main():
     # A receipt certifies this completed run, never an earlier run at the same
     # revision. Invalidate it before any operation that can fail.
     (out / "receipt.json").unlink(missing_ok=True)
+    input_snapshot = input_hashes()
     commands = []
     (out / "commands.json").write_text("[]\n")
 
@@ -88,6 +100,8 @@ def main():
                             raise SystemExit(f"Packaged path dependency: {name}")
         sources[name] = source
 
+    build = out / "build"
+    env["CARGO_TARGET_DIR"] = str(build)
     consumer = out / "consumer"
     if consumer.exists():
         shutil.rmtree(consumer)
@@ -103,12 +117,8 @@ def main():
     if not args.no_clippy:
         run("consumer-lint", ["cargo", "clippy", "--locked", "--all-targets", "--", "-D", "warnings"], consumer)
     metadata = json.loads(run("consumer-metadata", ["cargo", "metadata", "--locked", "--format-version", "1"], consumer))
-    for package in metadata["packages"]:
-        path = Path(package["manifest_path"]).resolve().parent
-        if package["name"] in sources and path != sources[package["name"]]:
-            raise SystemExit("Consumer resolved an unexpected local dependency")
-        if args.archives and path.is_relative_to(ROOT) and not path.is_relative_to(out):
-            raise SystemExit("Archive consumer resolved checkout source")
+    consumer_lock = verify_resolution(ROOT, metadata, consumer, sources,
+        {"source-pull-consumer": consumer}, args.archives, out)
 
     if args.wasm:
         if not args.tsc.is_file():
@@ -116,14 +126,17 @@ def main():
         run("wasm-build", ["cargo", "build", "--locked", "--lib", "--target", "wasm32-unknown-unknown", "--features", "wasm-probe"], consumer)
         host = out / "host"
         host.mkdir(exist_ok=True)
-        run("wasm-bindgen", ["wasm-bindgen", "--target", "nodejs", "--out-dir", host / "wasm", target / "wasm32-unknown-unknown/debug/source_pull_consumer.wasm"])
+        run("wasm-bindgen", ["wasm-bindgen", "--target", "nodejs", "--out-dir", host / "wasm", build / "wasm32-unknown-unknown/debug/source_pull_consumer.wasm"])
         shutil.copyfile(FIXTURE / "wasm-probe.ts", host / "wasm-probe.ts")
         run("typescript", ["node", args.tsc.resolve(), "--strict", "--target", "ES2022", "--module", "commonjs", "--lib", "ES2022,DOM", host / "wasm-probe.ts"])
         run("wasm-host", ["node", host / "wasm-probe.js"])
 
+    if input_hashes() != input_snapshot:
+        raise SystemExit("Qualification inputs changed during the run; rerun for a coherent receipt")
     receipt = {
         "head": run("head", ["git", "rev-parse", "HEAD"]).strip(),
         "dirty": bool(run("status", ["git", "status", "--porcelain"]).strip()),
+        "inputHashes": input_snapshot, "consumerLockSha256": consumer_lock,
         "archives": hashes, "wasmProbe": args.wasm, "clippy": not args.no_clippy,
         "fixtureHashes": {str(path.relative_to(FIXTURE)): hashlib.sha256(path.read_bytes()).hexdigest()
                           for path in sorted(FIXTURE.rglob("*")) if path.is_file()},

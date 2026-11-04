@@ -48,6 +48,38 @@ fn complete<F: Future>(future: F) -> F::Output {
 }
 
 #[test]
+fn default_checked_pull_completes_a_ten_thousand_item_catalog() {
+    let items = (0..10_000)
+        .map(|i| format!(r#"{{"key":"unit{i}","operation":{{"input":true,"output":true}},"data":{{"item":"unit{i}"}}}}"#))
+        .collect::<Vec<_>>()
+        .join(",");
+    let original = document(&format!(
+        r#"{{"openbindings":"0.2.0","operations":{{}},"sources":{{"catalog":{{"kind":"example.embedded@1","data":{{"items":[{items}]}}}}}}}}"#
+    ));
+    let request = PullRequest::new(original.clone(), "catalog");
+    let result =
+        complete(PullClient::new(Embedded).pull_source(request.clone(), CancellationToken::new()))
+            .unwrap();
+    assert_eq!(result.report().added().len(), 10_000);
+    assert!(result.report().is_complete());
+    let adopted = result
+        .validate_for(&request, &PullLimits::default(), &AtomicBool::new(false))
+        .unwrap();
+    assert_eq!(adopted.operations().len(), 10_000);
+    assert_eq!(adopted.value().get("bindings").unwrap().len(), Some(10_000));
+    assert!(original.operations().is_empty());
+    assert!(original.value().get("bindings").is_none());
+    let insufficient = PullLimits {
+        max_relationship_work: 20_000_000,
+        ..PullLimits::default()
+    };
+    assert!(matches!(
+        result.validate_for(&request, &insufficient, &AtomicBool::new(false)),
+        Err(PullValidationError::LimitExceeded("relationship-work"))
+    ));
+}
+
+#[test]
 fn stale_schema_annotations_are_not_erased_by_the_operation_reuse_profile() {
     for (current, offered, expected) in [
         (

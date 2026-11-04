@@ -354,3 +354,49 @@ async fn cancellation_before_dispatch_has_no_consumption_and_a_fused_terminal() 
     assert_eq!(end.unwrap_err().code(), "ERR_CANCELLED");
     assert_eq!(p.values(), 0);
 }
+
+#[tokio::test]
+async fn unresolved_input_is_distinct_from_mismatch_and_decisive_branch_can_proceed() {
+    for (schema, success) in [
+        (r#"{"$ref":"https://unavailable.test/schema"}"#, false),
+        (
+            r#"{"anyOf":[true,{"$ref":"https://unavailable.test/schema"}]}"#,
+            true,
+        ),
+    ] {
+        let d = doc(&format!(
+            r#"{{"openbindings":"0.2.0","operations":{{"echo":{{"input":{schema}}}}},"sources":{{"fixed":{{"kind":"example.fixed@1"}}}},"bindings":{{"b":{{"source":"fixed","operation":"echo","data":{{"item":"echo"}}}}}}}}"#
+        ));
+        let p = Arc::new(Catalog::default());
+        let c = OperationClient::new(
+            p.clone(),
+            DefaultEvaluator::new(),
+            ExternalSchemas::default(),
+        );
+        let call = c
+            .invoke(
+                OperationRequest::operation(d, "echo"),
+                CancellationToken::new(),
+            )
+            .unwrap();
+        let control = call.control();
+        let (out, end) = exchange(call, vec![j("null")]).await;
+        if success {
+            end.unwrap();
+            assert_eq!(out.len(), 1);
+            assert_eq!(out[0].text(), "null");
+            assert_eq!(p.values(), 1);
+            assert!(control.validation_failure().is_none());
+        } else {
+            let e = end.unwrap_err();
+            assert_eq!(e.code(), "ERR_SCHEMA_UNRESOLVED");
+            assert!(e.data().is_none());
+            assert!(out.is_empty());
+            assert_eq!(p.values(), 0);
+            assert_eq!(
+                control.validation_failure().unwrap().direction(),
+                openbindings_invocation::operation::Direction::Input
+            );
+        }
+    }
+}

@@ -61,3 +61,14 @@ ownership checks. It does not yet retire all historical catalog jobs above, nor
 claim to be a complete implementation for arbitrary data under its example kinds.
 The crate-local witnesses remain until relocation and external qualification are
 recorded, so no existing evidence is removed merely to obtain a green build.
+
+## Execution checkpoint 41874e2
+
+The obsolete crates, consumers and verifier scripts are removed. Current source-pull
+and invocation consumers, package inventory, role feature graphs, CI and documentation
+replace them. Native workspace/lint and bounded source/archive/Node-Wasm consumer
+checks pass. Historical tiny-budget diagnostic snapshots were retired in favor of
+fresh cross-feature matrices with independently derived semantic and typed-limit
+constraints. The v2 invocation resource probe retains all 20 logical jobs. Remaining
+scale/end-to-end and all-host/performance qualification stays open; no old API is
+kept to make a legacy harness compile. See the legacy-retirement receipt for scope.

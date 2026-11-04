@@ -32,10 +32,9 @@ const requests = JSON.parse(
 const files = new Map();
 await usingExampleFiles(packageRoot, files);
 for (const name of [
-  "index.js",
-  "testing.js",
-  "internal.js",
-  "http-discovery.js",
+  ...(await fs.readdir(path.join(packageRoot, "dist")))
+    .filter((name) => name.endsWith(".js"))
+    .sort(),
   "wasm/openbindings_wasm.js",
   "wasm/openbindings_wasm_signature.js",
   "wasm/openbindings_wasm_bg.wasm",

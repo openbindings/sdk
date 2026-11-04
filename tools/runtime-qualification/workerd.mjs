@@ -45,9 +45,9 @@ const modules = [
   `(name="workloads.mjs",esModule=embed "workloads.mjs")`,
   `(name="asset",wasm=embed ${quote(path.join(packageRoot, "dist/wasm/openbindings_wasm_bg.wasm"))})`,
   ...[
-    "index.js",
-    "testing.js",
-    "internal.js",
+    ...(await fs.readdir(path.join(packageRoot, "dist")))
+      .filter((name) => name.endsWith(".js"))
+      .sort(),
     "wasm/openbindings_wasm.js",
     "wasm/openbindings_wasm_signature.js",
   ].map(
