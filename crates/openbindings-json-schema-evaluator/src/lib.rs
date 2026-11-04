@@ -127,7 +127,11 @@ impl jsonschema::Retrieve for NoRetrieval {
         Err("resource is not in the prepared program".into())
     }
 }
-fn no_verdict(reason: NoVerdictReason, code: &str, message: impl Into<String>) -> NoVerdict {
+fn no_verdict(
+    reason: NoVerdictReason,
+    code: impl Into<std::borrow::Cow<'static, str>>,
+    message: impl Into<std::borrow::Cow<'static, str>>,
+) -> NoVerdict {
     NoVerdict::new(reason, code, message)
 }
 /// Opaque owned validator produced by [`DefaultEvaluator`]. Clones share its
@@ -325,21 +329,21 @@ fn preparation_detail(detail: NoVerdict) -> PreparationFailure {
     let kind = match detail.reason {
         NoVerdictReason::Cancelled => PreparationFailureKind::Cancelled,
         NoVerdictReason::LimitExceeded => PreparationFailureKind::Limit {
-            resource: detail.code,
+            resource: detail.code.into_owned(),
         },
         NoVerdictReason::ConservativePreparation if detail.code == "invalid-schema" => {
             PreparationFailureKind::InvalidExternalSchema
         }
         NoVerdictReason::UnsupportedCapability | NoVerdictReason::ConservativePreparation => {
             PreparationFailureKind::UnsupportedCapability {
-                capability: detail.code,
+                capability: detail.code.into_owned(),
             }
         }
         NoVerdictReason::ResourceUnavailable => PreparationFailureKind::Implementation {
             message: "the compiler omitted the unavailable resource identity".into(),
         },
         _ => PreparationFailureKind::Implementation {
-            message: detail.message,
+            message: detail.message.into_owned(),
         },
     };
     PreparationFailure {
@@ -1021,7 +1025,7 @@ struct UnmatchedNames {
     unsupported: pattern::Unsupported,
     location: Option<SchemaOrigin>,
 }
-fn in_place_cycle(message: &str) -> NoVerdict {
+fn in_place_cycle(message: &'static str) -> NoVerdict {
     no_verdict(
         NoVerdictReason::ConservativePreparation,
         "in-place-cycle",

@@ -437,7 +437,7 @@ impl Patterns {
         control.charge_allocation(allocation)?;
         let reading = super::super::read_pattern(source, limits).map_err(|detail| {
             PreparationFailure::new(PreparationFailureKind::Limit {
-                resource: detail.code,
+                resource: detail.code.into_owned(),
             })
         })?;
         let super::super::pattern::Reading::Linear(linear) = &reading else {

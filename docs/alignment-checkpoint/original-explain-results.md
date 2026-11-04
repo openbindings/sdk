@@ -1,7 +1,8 @@
 # Original Explain implementation progress
 
-This is an unfinished feature-branch increment against the pinned specification
-c1419c9 and interfaces 5815fb1. It implements the approved compact-witness design,
+Independent implementation/resource review now PASSES this bounded increment,
+against pinned specification c1419c9 and interfaces 5815fb1. Final broad corrected
+source validation is running. It implements the approved compact-witness design,
 not the default-engine switch or whole-SDK completion. The prepared original-node
 interpreter now records concrete false witnesses only in an optional second pass;
 both passes consume one cumulative allowance. Exact source and instance pointers
@@ -73,15 +74,27 @@ library tests pass; the independent property-name and uncertain-guard allocator
 reruns now fit the ledger. Actual Wasm layouts are WitnessSeed 16 / Arc 24 /
 State 32 / Frame 128 bytes, with zero retained allocation after drop.
 
-R-EW4 remains OPEN at this safety checkpoint: when optional materialization
+R-EW4 remained OPEN at safety checkpoint d687e50: when optional materialization
 exhausts its work allowance, constructing and discarding an owned NoVerdict
 carrier allocates code/message bytes. The external false-schema control with a
 1,000-byte source URI and 1,000 work units preserves Fails but requests 851 bytes
 against 818 charged. Larger 10k/100k URI controls show the same deficit, while
 funded URI copies fit their reservations. Resolve this internal refusal carrier
-before claiming the original Explain resource gate complete. The candidate fix
-must avoid speculative owned errors or derive an explicit finite carrier reserve;
-an unexplained larger constant is not an acceptable certificate.
+before claiming the original Explain resource gate complete. The subsequent
+approved correction borrows fixed NoVerdict/internal Failure text with
+Cow<'static,str>, moves dynamic owned text, and maps SDK Attempt Limit/Cancelled
+directly without an allocating preparation-error detour. The long-URI refusal
+cases now request 770 bytes against 818 charged. Cold/warm fixed refusal creation,
+cloning and actual SDK Attempt conversions request zero bytes. Dynamic strings
+move without copying and release on drop; wire strings are unchanged.
+
+Independent final qualification passes 13 copied test groups, all 42 original
+controls, five additional correlation cases, 1,546 forced-original values and
+62 inherited controls. All 39 allocator rows fit reservations and retain zero
+owners after drop; Entries growth and reuse are included. No independent finding
+remains open in this increment. See the implementation review and its exact
+source hashes. Arbitrary caller callback allocations and all preparation-error
+construction are outside this narrow text-carrier claim.
 
 Hosted CI for preceding checkpoint 51e1dc7 passed macOS/Linux native, browser,
 package, Wasm reproducibility, minimum Rust, Node floors, advisories and performance.
@@ -89,7 +102,13 @@ The Windows native job was cancelled after 30 minutes; the required aggregate
 check correctly failed. This is not an all-host green claim. Its logs and exact
 head SHA are preserved separately.
 
-Independent implementation/resource review, final corrected-source validation and
-checkpoint identities are still in progress. Full pattern compiler construction,
+Final corrected-source parent gates pass: 939 minimum-Rust workspace tests
+(six deliberately ignored), current-Rust strict lint/reference and focused
+tests, 186 Node tests, 352 installed-package assertions, and both actual browsers.
+Each browser passes 505 core / 1,546 required values / 42 Explain cases plus prior
+frame/reference/syntax/pattern/pointer groups. Exact final artifacts and hashes
+are in results-final.json. The complete portable verifier on the reviewed commit
+is the next gate. The safety checkpoint d687e50 is committed and pushed.
+Full pattern compiler construction,
 remaining physical-stack qualification, outgoing compiler retirement, matched
 performance and the final alignment audit remain open.

@@ -115,9 +115,12 @@ toolchain; the MSRV compatibility receipt explicitly records no matching Clippy 
    [Explain implementation](alignment-checkpoint/original-explain-results.md)
    now passes all 42 independent cases natively and through the public Wasm API,
    cumulative limits, cancellation, enclosing-attempt and concurrency controls.
-   Independent resource review is in progress; its failure-message and pattern
-   table accounting findings are corrected and final source validation is running. Finish review,
-   resource and physical-stack/host qualification. Then force the
+   Independent [implementation/resource review](alignment-checkpoint/original-explain-review.md)
+   now passes after correcting failure-message, pattern-table and discarded-refusal
+   allocation accounting. Fixed inability text uses static/owned Rust strings;
+   minimum-Rust workspace and final Node/package/browser checks pass. The complete
+   portable verifier on the reviewed commit is next. Finish remaining
+   physical-stack/host qualification. Then force the
    original engine through all gates, switch the default and retire the outgoing
    projection/compiler code. No existing public API or internal architecture needs
    preservation; no evaluator allowance or performance expectation is waived.

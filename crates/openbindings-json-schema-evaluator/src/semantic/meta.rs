@@ -138,7 +138,7 @@ pub(super) fn validate(
                         let kind = match detail.reason {
                             NoVerdictReason::Cancelled => PreparationFailureKind::Cancelled,
                             NoVerdictReason::LimitExceeded => PreparationFailureKind::Limit {
-                                resource: detail.code,
+                                resource: detail.code.into_owned(),
                             },
                             NoVerdictReason::ResourceUnavailable => {
                                 PreparationFailureKind::Resolution {
@@ -151,11 +151,11 @@ pub(super) fn validate(
                             }
                             NoVerdictReason::EvaluatorFailure => {
                                 PreparationFailureKind::Implementation {
-                                    message: detail.message,
+                                    message: detail.message.into_owned(),
                                 }
                             }
                             _ => PreparationFailureKind::UnsupportedCapability {
-                                capability: detail.code,
+                                capability: detail.code.into_owned(),
                             },
                         };
                         return Err(PreparationFailure::new(kind));

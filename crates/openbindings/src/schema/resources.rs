@@ -332,11 +332,11 @@ fn registration_failure(failure: openbindings_internal_schema::Failure) -> Exter
             ExternalSchemaErrorKind::Cancelled
         } else {
             ExternalSchemaErrorKind::Limit {
-                resource: failure.code,
+                resource: failure.code.into_owned(),
             }
         },
         uri: String::new(),
-        message: failure.message,
+        message: failure.message.into_owned(),
     }
 }
 

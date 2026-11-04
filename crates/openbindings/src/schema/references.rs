@@ -166,7 +166,7 @@ fn reference_refusal(f: embedding::Failure) -> ReferenceRefusal {
         }
         F::ResourceUnavailable => R::ResourceUnavailable,
         F::UnsupportedCapability => R::UnsupportedCapability,
-        _ => match f.code.as_str() {
+        _ => match f.code.as_ref() {
             "resource-identity-conflict" | "ambiguous-resource" => R::IdentityConflict,
             "ambiguous-anchor" | "ambiguous-dynamic-anchor" => R::AmbiguousTarget,
             "non-schema-target" | "anchor-missing" | "resource-root" => R::MissingTarget,
@@ -180,8 +180,8 @@ fn reference_refusal(f: embedding::Failure) -> ReferenceRefusal {
     };
     ReferenceRefusal {
         reason,
-        code: f.code,
-        message: f.message,
+        code: f.code.into_owned(),
+        message: f.message.into_owned(),
         location: f.location.map(crate::schema::evaluation::original_location),
     }
 }

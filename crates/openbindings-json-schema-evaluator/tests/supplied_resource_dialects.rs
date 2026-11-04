@@ -39,7 +39,7 @@ fn prepare(
 fn outcome(contract: &str, resource: &str, value: &str) -> char {
     let dialect = |detail: &NoVerdict| {
         assert_eq!(
-            (detail.reason, detail.code.as_str()),
+            (detail.reason, detail.code.as_ref()),
             (NoVerdictReason::UnsupportedCapability, "schema-dialect"),
             "{resource}"
         );

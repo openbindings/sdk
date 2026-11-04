@@ -860,8 +860,8 @@ impl SchemaSpace {
         &self,
         node: usize,
         reason: FailureReason,
-        code: &str,
-        message: impl Into<String>,
+        code: impl Into<std::borrow::Cow<'static, str>>,
+        message: impl Into<std::borrow::Cow<'static, str>>,
     ) -> Failure {
         Failure::new(reason, code, message).located(self.location(node))
     }
@@ -1909,7 +1909,7 @@ mod projection_tests {
                 } else {
                     assert!(
                         matches!(
-                            refusal.code.as_str(),
+                            refusal.code.as_ref(),
                             "invalid-schema" | "lone-surrogate-schema"
                         ),
                         "{schema} {reference:?}: {refusal:?}"

@@ -191,9 +191,10 @@ pub struct NoVerdict {
     /// Extensible broad refusal category.
     pub reason: NoVerdictReason,
     /// Evaluator-specific stable detail code; use with the broad reason for branching.
-    pub code: String,
-    /// Explanatory text. Custom evaluators own its content and should avoid echoing source or instance data.
-    pub message: String,
+    /// Static text is borrowed; dynamic text is owned by this record.
+    pub code: std::borrow::Cow<'static, str>,
+    /// Static or owned explanatory text. Custom evaluators should avoid echoing source or instance data.
+    pub message: std::borrow::Cow<'static, str>,
     /// Original schema location when known; no generated or guessed location is substituted.
     pub location: Option<SchemaOrigin>,
 }
@@ -209,10 +210,12 @@ impl std::fmt::Debug for NoVerdict {
 impl NoVerdict {
     /// Construct an unlocated refusal; add an original schema location with
     /// [`Self::with_location`] when original-source evidence is available.
+    /// String literals require no allocation; owned strings are moved. Make a
+    /// nonstatic borrowed string owned before passing it to this constructor.
     pub fn new(
         reason: NoVerdictReason,
-        code: impl Into<String>,
-        message: impl Into<String>,
+        code: impl Into<std::borrow::Cow<'static, str>>,
+        message: impl Into<std::borrow::Cow<'static, str>>,
     ) -> Self {
         Self {
             reason,
@@ -784,7 +787,7 @@ impl From<openbindings_internal_schema::Failure> for PreparationFailure {
         let kind = match failure.reason {
             F::Cancelled => PreparationFailureKind::Cancelled,
             F::LimitExceeded => PreparationFailureKind::Limit {
-                resource: failure.code,
+                resource: failure.code.into_owned(),
             },
             _ if failure.query_failure.is_some() => {
                 let cause = crate::schema::references::query_kind(
@@ -801,14 +804,14 @@ impl From<openbindings_internal_schema::Failure> for PreparationFailure {
             }
             F::UnsupportedCapability | F::ConservativePreparation => {
                 PreparationFailureKind::UnsupportedCapability {
-                    capability: failure.code,
+                    capability: failure.code.into_owned(),
                 }
             }
             F::ResourceUnavailable => PreparationFailureKind::Implementation {
                 message: "the resolver omitted the unavailable resource identity".into(),
             },
             F::EvaluatorFailure => PreparationFailureKind::Implementation {
-                message: failure.message,
+                message: failure.message.into_owned(),
             },
         };
         Self { kind, origin }

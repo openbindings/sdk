@@ -4,6 +4,16 @@
 
 ### Changed
 
+- Rust `NoVerdict` code/message fields accept static or owned text through
+  `Cow<'static, str>`. Fixed SDK limit/cancellation records and their clones avoid
+  heap allocation; dynamic strings move into the record. Serialized fields remain
+  strings.
+
+- The original-schema evaluator explains one concretely proved failure with exact
+  original source and instance locations. Verdict and optional explanation share
+  one cumulative allowance; later diagnostic interruption preserves the verdict.
+  Explanations remain explicitly incomplete.
+
 - Begin the current 0.2 foundation against specification
   `c1419c9fc3ae5a00c2b83da710c11bf67dab7934`: source/binding `data`,
   OBI-01–14, pointers into identified schemas, and admission of references into

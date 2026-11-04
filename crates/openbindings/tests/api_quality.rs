@@ -1,4 +1,27 @@
 use openbindings::*;
+
+#[test]
+fn inability_text_borrows_literals_and_moves_owned_strings() {
+    use std::borrow::Cow;
+    let fixed = NoVerdict::new(NoVerdictReason::LimitExceeded, "budget", "limit reached");
+    assert!(matches!(fixed.code, Cow::Borrowed("budget")));
+    assert!(matches!(fixed.message, Cow::Borrowed("limit reached")));
+    let cloned = fixed.clone();
+    assert!(matches!(cloned.code, Cow::Borrowed("budget")));
+    assert!(matches!(cloned.message, Cow::Borrowed("limit reached")));
+    let code = String::from("custom-code");
+    let message = String::from("owned Unicode: é\n");
+    let (code_pointer, message_pointer) = (code.as_ptr(), message.as_ptr());
+    let owned = NoVerdict::new(NoVerdictReason::EvaluatorFailure, code, message);
+    assert!(matches!(owned.code, Cow::Owned(_)));
+    assert!(matches!(owned.message, Cow::Owned(_)));
+    assert_eq!(owned.code.as_ptr(), code_pointer);
+    assert_eq!(owned.message.as_ptr(), message_pointer);
+    let serialized = serde_json::to_value(&owned).unwrap();
+    assert_eq!(serialized["code"], "custom-code");
+    assert_eq!(serialized["message"], "owned Unicode: é\n");
+    assert!(!format!("{owned:?}").contains("custom-code"));
+}
 use serde::{Serialize, Serializer, ser::SerializeMap};
 use std::{collections::BTreeMap, sync::Arc};
 fn parsed(operations: &str) -> Document {
@@ -635,8 +658,8 @@ fn evaluator_records_build_with_constructors_and_optional_fields() {
     assert_eq!(
         (
             refusal.reason,
-            refusal.code.as_str(),
-            refusal.message.as_str()
+            refusal.code.as_ref(),
+            refusal.message.as_ref()
         ),
         (
             NoVerdictReason::LimitExceeded,
@@ -705,7 +728,7 @@ fn outcome_and_report_records_compare_by_value() {
         assert_eq!(left, &left.clone());
     }
     let mut changed = refusal.clone();
-    changed.code.push('!');
+    changed.code.to_mut().push('!');
     assert_ne!(refusal, changed);
     assert_eq!(problem, problem.clone());
     assert_eq!(undefined, undefined.clone());

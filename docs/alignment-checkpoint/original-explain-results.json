@@ -1,104 +1,81 @@
 {
-  "status": "safety checkpoint; R-EW4 optional-refusal allocation remains open",
-  "base": "51e1dc72e8fea47bcde98d84bf5a324995e1f2b3",
-  "required_controls": 42,
-  "native_groups": 7,
-  "prior_message_fix_gates": {
-    "workspace_passed": 937,
-    "workspace_ignored": 6,
-    "msrv_library_passed": 176,
-    "msrv_ignored": 2,
-    "recursive_cancellation": 3,
-    "small_stack_release": 2,
+  "status": "bounded implementation/resource review and final parent gates pass; clean-commit full verifier next",
+  "prior_safety_commit": "d687e50",
+  "open_increment_findings": 0,
+  "independent": {
+    "controls": 42,
+    "additional_correlations": 5,
+    "copied_test_groups": 13,
+    "required_original_values": 1546,
+    "inherited_controls_both_modes": 62,
+    "allocation_rows": 39,
+    "undercharges": 0,
+    "retained_owners": 0,
+    "fixed_refusal_requested_bytes": 0
+  },
+  "parent": {
+    "msrv_workspace_passed": 939,
+    "msrv_workspace_ignored": 6,
+    "current_strict_clippy": "pass",
+    "rust_reference": "pass",
+    "explain_resource_groups": 8,
     "node_tests": 186,
     "package_assertions": 352,
+    "types_and_format": "pass"
+  },
+  "browser": {
     "chromium": {
       "core": 505,
       "required": 1546,
-      "original_explain": 42
+      "original_explain": 42,
+      "patterns": 9,
+      "pointers": 4
     },
     "webkit": {
       "core": 505,
       "required": 1546,
-      "original_explain": 42
+      "original_explain": 42,
+      "patterns": 9,
+      "pointers": 4
     }
   },
-  "pattern_storage_fix": {
-    "private_library_passed": 113,
-    "ignored": 2,
-    "whole_workspace": "running",
-    "independent_allocator": "property-name and uncertain-guard rows fit actual layout ledger"
+  "wasm_build": {
+    "rustSource": "027b6bf71fe0f945746ec4512716a448080a565aa6ad2382a68e818654873c17",
+    "artifacts": {
+      "openbindings_wasm.js": "a6c4872bed0e3d6e9b059403bfcfe0da3e21a0bb264fa4372b4d4464ff440e2e",
+      "openbindings_wasm_bg.wasm": "a8486ce55ac8ef66dd0af5ecad68ac5a067e3e4f3d7165bdc92e48ed13eefac3",
+      "openbindings_wasm_signature.js": "b7a98f3e14387a59804c6b4c025b0d03cf5671acd66490e03ec47e89cedc3f6f"
+    }
   },
-  "native_layouts": {
-    "WitnessSeed": 32,
-    "Arc_WitnessSeed": 48,
-    "State": 64,
-    "Frame": 248
+  "log_sha256": {
+    "chromium-final.log": "c284a6ef7499964fe343e68789110a35acff0c46e51e40a25e2484d654e6c1a4",
+    "chromium-judge-final.log": "daf3b54a131340ee014d49e865fa5b56c04333a58a37539fc8f525ae57c34faa",
+    "static-text-api-quality.log": "a4d91d14e478066a109af4433edc69ca40367656390095afed5933178f402513",
+    "static-text-cancellation.log": "4df4f66369629f58aeb67f658713b568daaf9b85433f8e3adc414adf2778437e",
+    "static-text-check-1.log": "34ddf353a5b748e2556b0d179c95a20429a8371bded2a0c5578db232a9c684a0",
+    "static-text-check-2.log": "ee96b318468a6ad1b3994132235cf935eb93b0c02e0801e427fcd7b5abff1cc6",
+    "static-text-check-3.log": "758499bc129b3657f578c9fa353e26de113790ab6549ba7866154ad102cfad73",
+    "static-text-check-4.log": "052b3b8d200b13ca548057832f7acb38dece3b56df25a6651be8fbab2099a0d0",
+    "static-text-check-5.log": "899182d1b89d334c60a35afb1794585132229ebddd08c8878819b6d0eea82cb1",
+    "static-text-check-final.log": "e07e4b535919aeff0caf967ec1c9ee447eb60a1a7d58b39a4f306dbc2377ef38",
+    "static-text-clippy.log": "509a1e66637d0a69a6773ced88df701d780090298011365352926b0ddb2a2ff1",
+    "static-text-doc-links.log": "a7aec155109754007323f85caed10c0fc110f37ff3d328066175b7754f142944",
+    "static-text-explain.log": "c2f7a767ec83d86c36b4c864c641821c7626a9b2cf264ce365ba9d9358913f01",
+    "static-text-format.log": "1cfc077f1514d44a2d3e23e8272b6c79111490cf2d0f408d9b4d093a941cc098",
+    "static-text-msrv-workspace.log": "ae2c4a1061a31605d3e6ef7888232e53f3d81c0cd4a61fb9050cc58c4785ca1c",
+    "static-text-node.log": "fa1f1f349b77464fdc3022a6467b147d6ea88b3ac1fa769bd775c67d32c11143",
+    "static-text-package.log": "66bec2a008a9cbbee96ca477b8ec00f0dee2e555d673dd8d86004ab9b24b91b5",
+    "static-text-preparation.log": "dfa6eafd8898bc963554398420db22d0e6c24c16b1ae999a8b7fbcfb1ae7d165",
+    "static-text-reference.log": "7bbdaca5fe360fa3cf58e629de836b85c8fc286079289067599fe39d645d0ec9",
+    "static-text-types.log": "9d01015fc418b66651cf69fbcf72b176e114d0f1e0a9bdfa91c24b548e2cbdb1",
+    "static-text-typescript.log": "c478142e26b8f6c3e071780e91d75175bb1e67f4ae9e8f2c497a09c845858018",
+    "static-text-wasm.log": "541b1b17e17741db7ac4f3f1e20bb1aa846b2f81a9dcc7d8b42d3ef21f009ad3",
+    "webkit-final.log": "2df836eb9542ad4b1cd367699de811106051dfbae1e22940060cfc1518000435",
+    "webkit-judge-final.log": "daf3b54a131340ee014d49e865fa5b56c04333a58a37539fc8f525ae57c34faa"
   },
-  "cold_owner_arenas": {
-    "cold": 0,
-    "warmed": 17,
-    "repeated": 17,
-    "firstCases": 42,
-    "secondCases": 42,
-    "meaning": "Exact JSON arenas only; cold fixed meta-schema retention is separate from warmed per-call cleanup, not allocator bytes or Wasm capacity."
-  },
-  "findings": [
-    "R-EW2 message charge corrected and independently remeasured",
-    "R-EW3 inline Pattern table moved to explicit Entries allocation ledger; remeasurement pending",
-    "R-EW4 OPEN: optional work-limit refusal allocates a discarded owned NoVerdict outside the ledger; F verdict preserved"
-  ],
-  "logs": {
-    "chromium-after-message-charge.log": "c284a6ef7499964fe343e68789110a35acff0c46e51e40a25e2484d654e6c1a4",
-    "chromium-judge-after-message-charge.log": "daf3b54a131340ee014d49e865fa5b56c04333a58a37539fc8f525ae57c34faa",
-    "chromium-judge.log": "daf3b54a131340ee014d49e865fa5b56c04333a58a37539fc8f525ae57c34faa",
-    "chromium.log": "c284a6ef7499964fe343e68789110a35acff0c46e51e40a25e2484d654e6c1a4",
-    "clippy-after-message-charge.log": "1d9681e804fdb0963737a2a5142cdc9dc11dd997932d3129a2127e223ecb31f0",
-    "clippy-final.log": "8bd718a436872512f1800978fa4654b1aa81e2a618082eb81b7f738b14e2c378",
-    "clippy.log": "ff8b81fc6470ebe60ab1d736f75d54b9ff841ffac250bd9a764a22852518bd9d",
-    "controls-after-message-charge.log": "c68b13da443088250aa27daa716d6bfbe9c2a78dc7b24c088687814fc49b0ff1",
-    "controls-budgets.log": "89826d5640d1d79fc8c4774d83cc9c67839691ea624620cfeacd650ca6026eae",
-    "controls-first.log": "4f9efec5b55fa9697bd76d9abd88905b67389a5185c4e9bba96fa8151aa581d2",
-    "controls-resources.log": "164aa34307b7f597913f4f252e8fabb651c78b1bb91f8d6d372255f7ff64b228",
-    "doc-links.log": "f34c0072e9a86d0cdbb49ae0524957f3432d6d8033a951e6894cce5f26a5bcf4",
-    "fixture-digests.log": "54cdebd8762803aa1007eb1a1265470c8e64f80aa94c6f876e0f4a44825aa45d",
-    "format-after-message-charge.log": "1cfc077f1514d44a2d3e23e8272b6c79111490cf2d0f408d9b4d093a941cc098",
-    "format.log": "1cfc077f1514d44a2d3e23e8272b6c79111490cf2d0f408d9b4d093a941cc098",
-    "js-format.log": "e871418b21ead55f89df1cd76fcdaa458ed1aa82dec760f97b7108d8463b5fa3",
-    "msrv-after-message-charge.log": "ca26f6f36ded68c81a175b6d9c77f087bc9b2941812a3fea1e2d1d7228e63492",
-    "msrv-cancellation.log": "1c47d72f6ced7663ef6d7c0e7375c6c994a3c274335f3b8dec4eb6b8bbd008fa",
-    "msrv.log": "e4f1a5ab7bd750f2804e285831a35fd56c6029d66324599f9f18d34e4a93a6af",
-    "native-after-message-charge.log": "62667db80315f96eb8be5d7c02bf10f623f080a3710f7b3da7d09a4d288c2fdb",
-    "native-final.log": "6edc22f0588ecf6c0fd0a12251523ddaafe1788343a9cd7f0b69bac061671334",
-    "native-layout.log": "3e9cb157eb53dc41bb75cd2de7bdb47655124e8be663aa0078917cfed26fb6da",
-    "native-with-loopback.log": "a2b1be1d494ed236dbb31f0c63370bfe353a0b7014ba913eb81a308e9bbaa44d",
-    "native.log": "db3459bf7be4df1e65412b12ac23f291c0b1b07ee4120cd243f9e249660751ad",
-    "node-after-message-charge.log": "18782bcf7e575012f9a78edb0db87db02f0b14523460a662206fa134e94c160d",
-    "node-focused.log": "b76a9758c7672022e90300c738ca99cb9385a37d14bc3ae7255ae8d8c880b962",
-    "node.log": "47f9da2ade9e99db6d286c5f86cfbf4ae9a9d1ce7b12ef688f2cbce44251a43d",
-    "package-after-message-charge.log": "749b37d1107f2f8dd60a53510e6aa6759db7199e4451ac0aa82e6c0112b7a674",
-    "package.log": "06d0c612c7e49c091395e42e2c96bb58dc95970b53f42e6e9b11be8e2098a0b7",
-    "pointer-measure.log": "e345b90fa20a9f0f59ed0161a02c8ef281b340159da3d052d86717e3f231f496",
-    "private-after-pattern-storage.log": "87eb47eb8d69b9ec1926837a0931a6d2c171a611cf8e93f47b9365ccaa222e7e",
-    "product-labels.log": "64660ca1f68c7dcebe7214a3e3c7ff71e80996572023a3c98d1ef72625ea8cad",
-    "recursive-cancellation-after-message-charge.log": "3c48e07e29aa9166c3b5ea5b600b9b8b530afd57c11c06510d2d2db41719c624",
-    "recursive-cancellation.log": "19f91e311b6472a4b23418938715f5459ebf6c3d4b216709a5e0ece77cd7c824",
-    "release-stack.log": "b22f6b8e30534e14d3db7d462a10799f4f42eb3fd6a15e26b00e5be95de646ec",
-    "types-after-message-charge.log": "9d01015fc418b66651cf69fbcf72b176e114d0f1e0a9bdfa91c24b548e2cbdb1",
-    "types.log": "9d01015fc418b66651cf69fbcf72b176e114d0f1e0a9bdfa91c24b548e2cbdb1",
-    "typescript-after-message-charge.log": "c478142e26b8f6c3e071780e91d75175bb1e67f4ae9e8f2c497a09c845858018",
-    "typescript-build.log": "c478142e26b8f6c3e071780e91d75175bb1e67f4ae9e8f2c497a09c845858018",
-    "wasm-after-message-charge.log": "e97f503cc5ce5925b80638c1d39684f8169bacb770d1f117e232d5c91afbbf20",
-    "wasm-build.log": "a3618d9e732e5472961a5fd0022533339b1e8fb1137b9406474ff35ae4c3fc17",
-    "webkit-after-message-charge.log": "2df836eb9542ad4b1cd367699de811106051dfbae1e22940060cfc1518000435",
-    "webkit-judge-after-message-charge.log": "daf3b54a131340ee014d49e865fa5b56c04333a58a37539fc8f525ae57c34faa",
-    "webkit-judge.log": "daf3b54a131340ee014d49e865fa5b56c04333a58a37539fc8f525ae57c34faa",
-    "webkit.log": "2df836eb9542ad4b1cd367699de811106051dfbae1e22940060cfc1518000435"
-  },
-  "wasm_layouts": {
-    "WitnessSeed": 16,
-    "Arc_WitnessSeed": 24,
-    "State": 32,
-    "Frame": 128
-  }
+  "remaining": [
+    "Full VM construction certificate and once-prepared VM publication",
+    "Remaining physical stack qualification and default switch/outgoing compiler retirement",
+    "Final matched performance, clean source/archive/reference/all-host CI and actual spec-to-code audit"
+  ]
 }

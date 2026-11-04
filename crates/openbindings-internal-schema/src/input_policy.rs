@@ -123,7 +123,7 @@ impl Supplied {
     }
     pub fn new(resources: impl IntoIterator<Item = ProjectedResource>) -> Result<Self, String> {
         Self::new_bounded(resources, 100_000, crate::DEFAULT_IDENTITY_BYTES, &|| false)
-            .map_err(|failure| failure.code)
+            .map_err(|failure| failure.code.into_owned())
     }
     pub fn new_bounded(
         resources: impl IntoIterator<Item = ProjectedResource>,

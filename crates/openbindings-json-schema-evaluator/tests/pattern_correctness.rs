@@ -261,7 +261,7 @@ fn generated_patterns_match_as_ecmascript_does_through_both_keywords() {
                 ValueOutcome::Satisfies if expected(row, at) => {}
                 ValueOutcome::Fails { .. } if !expected(row, at) => {}
                 ValueOutcome::NoVerdict { detail }
-                    if UNMATCHED.contains(&detail.code.as_str())
+                    if UNMATCHED.contains(&detail.code.as_ref())
                         && may_be_unmatched(&row.pattern) =>
                 {
                     *counts.entry("pattern unmatched").or_default() += 1;
@@ -301,7 +301,7 @@ fn generated_patterns_match_as_ecmascript_does_through_both_keywords() {
         for (at, string) in row.strings.iter().enumerate() {
             let value = JsonValue::parse(json!({ string: 0 }).to_string()).unwrap();
             match contract.evaluate(&value) {
-                ValueOutcome::NoVerdict { detail } if UNMATCHED.contains(&detail.code.as_str()) => {
+                ValueOutcome::NoVerdict { detail } if UNMATCHED.contains(&detail.code.as_ref()) => {
                     unmatched += 1;
                 }
                 outcome => {

@@ -439,3 +439,42 @@ fn concurrent_calls_keep_exact_occurrences_and_independent_controls() {
         }
     });
 }
+
+#[test]
+fn sdk_control_refusals_keep_static_text_through_mapping_and_cloning() {
+    use openbindings_internal_schema::preparation::Attempt;
+    use std::borrow::Cow;
+    let healthy = AtomicBool::new(false);
+    for (work, bytes) in [(0, usize::MAX), (usize::MAX, 0)] {
+        let failure = Attempt::run(work, bytes, &|| false, |attempt| {
+            let mut graph = Graph::with_preparation(usize::MAX, None, 1, &healthy, Some(attempt));
+            let detail = if work == 0 {
+                graph.work(1)
+            } else {
+                graph.charge(1)
+            }
+            .unwrap_err();
+            assert_eq!(detail.reason, NoVerdictReason::LimitExceeded);
+            assert!(matches!(detail.code, Cow::Borrowed(_)));
+            assert!(matches!(detail.message, Cow::Borrowed(_)));
+            let clone = detail.clone();
+            assert!(matches!(clone.code, Cow::Borrowed(_)));
+            assert!(matches!(clone.message, Cow::Borrowed(_)));
+        })
+        .unwrap_err();
+        assert!(matches!(failure.code, Cow::Borrowed(_)));
+        assert!(matches!(failure.message, Cow::Borrowed(_)));
+    }
+    let cancelled = AtomicBool::new(true);
+    let detail = Graph::new(usize::MAX, None, 1, &cancelled)
+        .work(1)
+        .unwrap_err();
+    assert_eq!(detail.reason, NoVerdictReason::Cancelled);
+    assert!(matches!(detail.code, Cow::Borrowed("caller-cancelled")));
+    assert!(matches!(detail.message, Cow::Borrowed(_)));
+    let failure = Attempt::run(usize::MAX, usize::MAX, &cancelled, |_| ()).unwrap_err();
+    let detail = preparation_control_inability(failure);
+    assert_eq!(detail.reason, NoVerdictReason::Cancelled);
+    assert!(matches!(detail.code, Cow::Borrowed("caller-cancelled")));
+    assert!(matches!(detail.message, Cow::Borrowed(_)));
+}

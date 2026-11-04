@@ -75,9 +75,12 @@ has independent bounded design approval. It uses compact seeds and separately
 audited root-only pointer materialization. The implementation now passes all 42
 independent semantic/location cases natively and through the public Wasm API,
 with cumulative budget, cancellation, enclosing-attempt and concurrency controls.
-Independent implementation/resource review is in progress; its uncharged failure
-message and inline pattern table accounting findings are corrected and final
-validation is running. The recursive
+Independent implementation/resource review now passes. Findings in failure-message,
+inline pattern-table and discarded-refusal allocation accounting are corrected;
+minimum-Rust workspace and final Node/package/browser validation pass. The complete
+portable verifier on the reviewed commit is next. Fixed inability text now uses
+static/owned Rust strings, with allocation-free SDK limit/cancellation conversion.
+The recursive
 post-verdict cancellation and fixed diagnostic wording adjudications preserve all
 substantive verdict/location/resource obligations. See the
 [current progress receipt](../receipts/2026-11-02-preparation/original-explain-progress/README.md). A

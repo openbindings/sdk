@@ -337,7 +337,17 @@ impl Run<'_> {
     }
 }
 fn preparation_control_inability(failure: openbindings_internal_schema::Failure) -> NoVerdict {
-    preparation_inability(failure.into())
+    use openbindings_internal_schema::FailureReason;
+    let reason = match failure.reason {
+        FailureReason::LimitExceeded => NoVerdictReason::LimitExceeded,
+        FailureReason::Cancelled => NoVerdictReason::Cancelled,
+        _ => return preparation_inability(failure.into()),
+    };
+    NoVerdict::new(
+        reason,
+        failure.code,
+        "semantic analysis could not prepare a primitive predicate",
+    )
 }
 fn preparation_inability(failure: PreparationFailure) -> NoVerdict {
     let (reason, code) = match failure.kind {
@@ -355,7 +365,7 @@ fn preparation_inability(failure: PreparationFailure) -> NoVerdict {
     };
     no_verdict(
         reason,
-        &code,
+        code,
         "semantic analysis could not prepare a primitive predicate",
     )
 }

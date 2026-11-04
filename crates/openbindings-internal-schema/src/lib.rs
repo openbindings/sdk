@@ -92,8 +92,8 @@ pub enum FailureReason {
 #[derive(Clone, Serialize)]
 pub struct Failure {
     pub reason: FailureReason,
-    pub code: String,
-    pub message: String,
+    pub code: std::borrow::Cow<'static, str>,
+    pub message: std::borrow::Cow<'static, str>,
     pub location: Option<Location>,
     /// Established static-reference semantics, independent of evaluator ability.
     #[serde(skip)]
@@ -119,7 +119,11 @@ pub enum StaticReferenceDefect {
     MalformedReference,
 }
 impl Failure {
-    pub fn new(reason: FailureReason, code: impl Into<String>, message: impl Into<String>) -> Self {
+    pub fn new(
+        reason: FailureReason,
+        code: impl Into<std::borrow::Cow<'static, str>>,
+        message: impl Into<std::borrow::Cow<'static, str>>,
+    ) -> Self {
         Self {
             reason,
             code: code.into(),
