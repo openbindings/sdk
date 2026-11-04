@@ -446,7 +446,7 @@ fn diagnostics_have_a_separate_bounded_pass_and_healthy_reuse() {
     // Work units belong to the current evaluator, not the retired compiler.
     let with_work = |work| {
         DefaultEvaluator::with_limits(Limits {
-            evaluation_steps: Some(work),
+            evaluation_sdk_work_units: Some(work),
             ..Limits::default()
         })
     };
@@ -501,7 +501,7 @@ fn diagnostics_have_a_separate_bounded_pass_and_healthy_reuse() {
     let limited = prepare_op(
         &conformant(&doc(r#"{"allOf":[true,true,true]}"#)),
         &DefaultEvaluator::with_limits(Limits {
-            evaluation_steps: Some(1),
+            evaluation_sdk_work_units: Some(1),
             ..Limits::default()
         }),
     );

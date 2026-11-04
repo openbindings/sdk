@@ -1,0 +1,61 @@
++ rustc -vV
++ cargo metadata --locked --format-version 1 --filter-platform aarch64-apple-darwin --no-default-features
++ cargo tree --locked --prefix none --no-dedupe --edges normal,build --format {p}|{f} --no-default-features
++ cargo test --locked --no-default-features
+{"configuration": "baseline", "serde_json_features": ["default", "std"], "serde_json_identities": ["serde_json v1.0.151"], "normal_and_build_packages_excluding_consumer": 11, "schema_libraries": [], "direct_shared_versions": {"serde": "1.0.229", "serde_json": "1.0.151", "itoa": "1.0.18"}, "tests": "passed"}
++ cargo metadata --locked --format-version 1 --filter-platform aarch64-apple-darwin --no-default-features --features ap
++ cargo tree --locked --prefix none --no-dedupe --edges normal,build --format {p}|{f} --no-default-features --features ap
++ cargo test --locked --no-default-features --features ap
+{"configuration": "ap", "serde_json_features": ["arbitrary_precision", "default", "std"], "serde_json_identities": ["serde_json v1.0.151"], "normal_and_build_packages_excluding_consumer": 11, "schema_libraries": [], "direct_shared_versions": {"serde": "1.0.229", "serde_json": "1.0.151", "itoa": "1.0.18"}, "tests": "passed"}
++ cargo metadata --locked --format-version 1 --filter-platform aarch64-apple-darwin --no-default-features --features sdk
++ cargo tree --locked --prefix none --no-dedupe --edges normal,build --format {p}|{f} --no-default-features --features sdk
++ cargo test --locked --no-default-features --features sdk
+{"configuration": "sdk", "serde_json_features": ["default", "float_roundtrip", "raw_value", "std", "unbounded_depth"], "serde_json_identities": ["serde_json v1.0.151"], "normal_and_build_packages_excluding_consumer": 68, "schema_libraries": ["jsonschema", "regex"], "direct_shared_versions": {"serde": "1.0.229", "serde_json": "1.0.151", "itoa": "1.0.18", "fluent-uri": "0.4.1", "num-bigint": "0.4.8", "num-traits": "0.2.19"}, "tests": "passed"}
++ cargo metadata --locked --format-version 1 --filter-platform aarch64-apple-darwin --no-default-features --features sdk,ap
++ cargo tree --locked --prefix none --no-dedupe --edges normal,build --format {p}|{f} --no-default-features --features sdk,ap
++ cargo test --locked --no-default-features --features sdk,ap
+{"configuration": "sdk-ap", "serde_json_features": ["arbitrary_precision", "default", "float_roundtrip", "raw_value", "std", "unbounded_depth"], "serde_json_identities": ["serde_json v1.0.151"], "normal_and_build_packages_excluding_consumer": 68, "schema_libraries": ["jsonschema", "regex"], "direct_shared_versions": {"serde": "1.0.229", "serde_json": "1.0.151", "itoa": "1.0.18", "fluent-uri": "0.4.1", "num-bigint": "0.4.8", "num-traits": "0.2.19"}, "tests": "passed"}
++ cargo metadata --locked --format-version 1 --filter-platform aarch64-apple-darwin --no-default-features --features evaluator
++ cargo tree --locked --prefix none --no-dedupe --edges normal,build --format {p}|{f} --no-default-features --features evaluator
++ cargo test --locked --no-default-features --features evaluator
+{"configuration": "evaluator", "serde_json_features": ["default", "float_roundtrip", "raw_value", "std", "unbounded_depth"], "serde_json_identities": ["serde_json v1.0.151"], "normal_and_build_packages_excluding_consumer": 93, "schema_libraries": ["jsonschema", "regex"], "direct_shared_versions": {"serde": "1.0.229", "serde_json": "1.0.151", "itoa": "1.0.18", "fluent-uri": "0.4.1", "num-bigint": "0.4.8", "num-traits": "0.2.19"}, "tests": "passed"}
++ cargo metadata --locked --format-version 1 --filter-platform aarch64-apple-darwin --no-default-features --features evaluator,ap
++ cargo tree --locked --prefix none --no-dedupe --edges normal,build --format {p}|{f} --no-default-features --features evaluator,ap
++ cargo test --locked --no-default-features --features evaluator,ap
+{"configuration": "evaluator-ap", "serde_json_features": ["arbitrary_precision", "default", "float_roundtrip", "raw_value", "std", "unbounded_depth"], "serde_json_identities": ["serde_json v1.0.151"], "normal_and_build_packages_excluding_consumer": 93, "schema_libraries": ["jsonschema", "regex"], "direct_shared_versions": {"serde": "1.0.229", "serde_json": "1.0.151", "itoa": "1.0.18", "fluent-uri": "0.4.1", "num-bigint": "0.4.8", "num-traits": "0.2.19"}, "tests": "passed"}
++ cargo metadata --locked --format-version 1 --filter-platform aarch64-apple-darwin --no-default-features --features evaluator,po
++ cargo tree --locked --prefix none --no-dedupe --edges normal,build --format {p}|{f} --no-default-features --features evaluator,po
++ cargo test --locked --no-default-features --features evaluator,po
+{"configuration": "evaluator-po", "serde_json_features": ["default", "float_roundtrip", "indexmap", "preserve_order", "raw_value", "std", "unbounded_depth"], "serde_json_identities": ["serde_json v1.0.151"], "normal_and_build_packages_excluding_consumer": 94, "schema_libraries": ["jsonschema", "regex"], "direct_shared_versions": {"serde": "1.0.229", "serde_json": "1.0.151", "itoa": "1.0.18", "fluent-uri": "0.4.1", "num-bigint": "0.4.8", "num-traits": "0.2.19"}, "tests": "passed"}
++ cargo metadata --locked --format-version 1 --filter-platform aarch64-apple-darwin --no-default-features --features portable
++ cargo tree --locked --prefix none --no-dedupe --edges normal,build --format {p}|{f} --no-default-features --features portable
++ cargo test --locked --no-default-features --features portable
+{"configuration": "portable", "serde_json_features": ["default", "float_roundtrip", "raw_value", "std", "unbounded_depth"], "serde_json_identities": ["serde_json v1.0.151"], "normal_and_build_packages_excluding_consumer": 96, "schema_libraries": ["jsonschema", "regex"], "direct_shared_versions": {"serde": "1.0.229", "serde_json": "1.0.151", "itoa": "1.0.18", "fluent-uri": "0.4.1", "num-bigint": "0.4.8", "num-traits": "0.2.19"}, "tests": "passed"}
++ cargo metadata --locked --format-version 1 --filter-platform aarch64-apple-darwin --no-default-features --features context
++ cargo tree --locked --prefix none --no-dedupe --edges normal,build --format {p}|{f} --no-default-features --features context
++ cargo test --locked --no-default-features --features context
+{"configuration": "context", "serde_json_features": ["default", "float_roundtrip", "raw_value", "std", "unbounded_depth"], "serde_json_identities": ["serde_json v1.0.151"], "normal_and_build_packages_excluding_consumer": 69, "schema_libraries": ["jsonschema", "regex"], "direct_shared_versions": {"serde": "1.0.229", "serde_json": "1.0.151", "itoa": "1.0.18", "fluent-uri": "0.4.1", "num-bigint": "0.4.8", "num-traits": "0.2.19"}, "tests": "passed"}
++ cargo metadata --locked --format-version 1 --filter-platform aarch64-apple-darwin --no-default-features --features kinds
++ cargo tree --locked --prefix none --no-dedupe --edges normal,build --format {p}|{f} --no-default-features --features kinds
++ cargo test --locked --no-default-features --features kinds
+{"configuration": "kinds", "serde_json_features": ["default", "float_roundtrip", "raw_value", "std", "unbounded_depth"], "serde_json_identities": ["serde_json v1.0.151"], "normal_and_build_packages_excluding_consumer": 71, "schema_libraries": ["jsonschema", "regex"], "direct_shared_versions": {"serde": "1.0.229", "serde_json": "1.0.151", "itoa": "1.0.18", "fluent-uri": "0.4.1", "num-bigint": "0.4.8", "num-traits": "0.2.19"}, "tests": "passed"}
++ cargo metadata --locked --format-version 1 --filter-platform aarch64-apple-darwin --no-default-features --features comparison
++ cargo tree --locked --prefix none --no-dedupe --edges normal,build --format {p}|{f} --no-default-features --features comparison
++ cargo test --locked --no-default-features --features comparison
+{"configuration": "comparison", "serde_json_features": ["default", "float_roundtrip", "raw_value", "std", "unbounded_depth"], "serde_json_identities": ["serde_json v1.0.151"], "normal_and_build_packages_excluding_consumer": 69, "schema_libraries": ["jsonschema", "regex"], "direct_shared_versions": {"serde": "1.0.229", "serde_json": "1.0.151", "itoa": "1.0.18", "fluent-uri": "0.4.1", "num-bigint": "0.4.8", "num-traits": "0.2.19"}, "tests": "passed"}
++ cargo metadata --locked --format-version 1 --filter-platform aarch64-apple-darwin --no-default-features --features pull
++ cargo tree --locked --prefix none --no-dedupe --edges normal,build --format {p}|{f} --no-default-features --features pull
++ cargo test --locked --no-default-features --features pull
+{"configuration": "pull", "serde_json_features": ["default", "float_roundtrip", "raw_value", "std", "unbounded_depth"], "serde_json_identities": ["serde_json v1.0.151"], "normal_and_build_packages_excluding_consumer": 71, "schema_libraries": ["jsonschema", "regex"], "direct_shared_versions": {"serde": "1.0.229", "serde_json": "1.0.151", "itoa": "1.0.18", "fluent-uri": "0.4.1", "num-bigint": "0.4.8", "num-traits": "0.2.19"}, "tests": "passed"}
++ cargo metadata --locked --format-version 1 --filter-platform aarch64-apple-darwin --no-default-features --features invocation
++ cargo tree --locked --prefix none --no-dedupe --edges normal,build --format {p}|{f} --no-default-features --features invocation
++ cargo test --locked --no-default-features --features invocation
+{"configuration": "invocation", "serde_json_features": ["default", "float_roundtrip", "raw_value", "std", "unbounded_depth"], "serde_json_identities": ["serde_json v1.0.151"], "normal_and_build_packages_excluding_consumer": 72, "schema_libraries": ["jsonschema", "regex"], "direct_shared_versions": {"serde": "1.0.229", "serde_json": "1.0.151", "itoa": "1.0.18", "fluent-uri": "0.4.1", "num-bigint": "0.4.8", "num-traits": "0.2.19"}, "tests": "passed"}
++ cargo metadata --locked --format-version 1 --filter-platform aarch64-apple-darwin --no-default-features --features native
++ cargo tree --locked --prefix none --no-dedupe --edges normal,build --format {p}|{f} --no-default-features --features native
++ cargo test --locked --no-default-features --features native
+{"configuration": "native", "serde_json_features": ["default", "float_roundtrip", "raw_value", "std", "unbounded_depth"], "serde_json_identities": ["serde_json v1.0.151"], "normal_and_build_packages_excluding_consumer": 152, "schema_libraries": ["jsonschema", "regex"], "direct_shared_versions": {"serde": "1.0.229", "serde_json": "1.0.151", "itoa": "1.0.18", "fluent-uri": "0.4.1", "reqwest": "0.13.5", "tokio": "1.54.1", "bytes": "1.12.1", "num-bigint": "0.4.8", "num-traits": "0.2.19"}, "tests": "passed"}
++ cargo metadata --locked --format-version 1 --filter-platform aarch64-apple-darwin --no-default-features --features native,ap
++ cargo tree --locked --prefix none --no-dedupe --edges normal,build --format {p}|{f} --no-default-features --features native,ap
++ cargo test --locked --no-default-features --features native,ap
+{"configuration": "native-ap", "serde_json_features": ["arbitrary_precision", "default", "float_roundtrip", "raw_value", "std", "unbounded_depth"], "serde_json_identities": ["serde_json v1.0.151"], "normal_and_build_packages_excluding_consumer": 152, "schema_libraries": ["jsonschema", "regex"], "direct_shared_versions": {"serde": "1.0.229", "serde_json": "1.0.151", "itoa": "1.0.18", "fluent-uri": "0.4.1", "reqwest": "0.13.5", "tokio": "1.54.1", "bytes": "1.12.1", "num-bigint": "0.4.8", "num-traits": "0.2.19"}, "tests": "passed"}

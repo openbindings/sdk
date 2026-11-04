@@ -137,7 +137,7 @@ test("preparation keeps original schemas without projected dynamic copies throug
 
 test("current evaluator policy rejects compiler knobs and keeps deep concrete values", () => {
   const limits = sdk.evaluatorLimits();
-  assert.equal(limits.programBytes, 50331648);
+  assert.equal(limits.evaluationSdkReservationBytes, 50331648);
   for (const key of ["evaluationDepth", "stackBytes", "compileJsonDepth"]) {
     assert.equal(key in limits, false);
     assert.throws(
@@ -145,8 +145,10 @@ test("current evaluator policy rejects compiler knobs and keeps deep concrete va
       (e) => e.code === "invalid-evaluator-limits",
     );
   }
-  for (const programBytes of [4 << 20, 8 << 20]) {
-    const prepared = preparation(dynamicChoices(8), { programBytes });
+  for (const evaluationSdkReservationBytes of [4 << 20, 8 << 20]) {
+    const prepared = preparation(dynamicChoices(8), {
+      evaluationSdkReservationBytes,
+    });
     assert.equal(prepared.status, "ready");
     prepared.schema.dispose();
   }

@@ -576,7 +576,7 @@ fn verdicts_do_not_depend_on_where_referenced_schemas_live() {
     // Diamonds can take exponentially many evaluation paths; a value that needs more work than
     // this reaches no verdict in either placement and is not compared.
     let evaluator = DefaultEvaluator::with_limits(Limits {
-        evaluation_steps: Some(20_000),
+        evaluation_sdk_work_units: Some(20_000),
         ..Limits::default()
     });
     let mut compared = 0;

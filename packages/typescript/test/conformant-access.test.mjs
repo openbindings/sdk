@@ -10,6 +10,59 @@ await sdk.initialize(
 );
 const text = String.raw`{"openbindings":"0.2.0","name":"\ud800\udc00","version":"\uffff","description":"\ud800\udc00","schemas":{"t":true,"f":false,"o":{}},"operations":{"run":{"aliases":["go"],"description":"\ud800\udc00","tags":["\ud800\udc00"],"input":true,"output":false,"examples":{"e":{"description":"\ud800\udc00","input":null}}}},"sources":{"s":{"kind":"\ud800\udc00","description":"\ud800\udc00","data":null}},"dependencies":{"d":{"operation":"run","kinds":["\ud800\udc00"],"description":"\ud800\udc00"}},"bindings":{"b":{"source":"s","operation":"run","description":"\ud800\udc00"}}}`;
 
+test("raw Wasm evaluation allowances expose current keys and reject retired ones", () => {
+  const defaults = JSON.parse(bridge.evaluatorLimits());
+  assert.equal(defaults.evaluation_sdk_work_units, null);
+  assert.equal(defaults.evaluation_sdk_reservation_bytes, 48 * 1024 * 1024);
+  assert.equal("evaluation_steps" in defaults, false);
+  assert.equal("program_bytes" in defaults, false);
+  const parsed = bridge.WasmDocument.parseBytes(new TextEncoder().encode(text));
+  const transfer = parsed.validate();
+  const proof = transfer.takeConformant();
+  const operation = proof.resolveOperation("run");
+  const contract = operation.input();
+  try {
+    for (const work of [null, 0, 17, 0xffffffff]) {
+      const result = contract.prepare(
+        JSON.stringify({
+          evaluation_sdk_work_units: work,
+          evaluation_sdk_reservation_bytes: 41,
+        }),
+        false,
+      );
+      try {
+        assert.equal(JSON.parse(result.result()).status, "ready");
+      } finally {
+        result.free();
+      }
+    }
+    for (const limits of [
+      { evaluation_steps: null },
+      { program_bytes: 0 },
+      { evaluation_steps: null, evaluation_sdk_work_units: null },
+      { program_bytes: 0, evaluation_sdk_reservation_bytes: 0 },
+      { evaluation_sdk_work_units: 0x100000000 },
+      ...[null, -1, 1.5, 0x100000000].map(
+        (evaluation_sdk_reservation_bytes) => ({
+          evaluation_sdk_reservation_bytes,
+        }),
+      ),
+    ]) {
+      assert.throws(
+        () => contract.prepare(JSON.stringify(limits), false),
+        (error) =>
+          JSON.parse(String(error)).code === "invalid-evaluator-limits",
+      );
+    }
+  } finally {
+    contract.free();
+    operation.free();
+    proof.free();
+    transfer.free();
+    parsed.free();
+  }
+});
+
 test("Rust proof transfer is single-use and unavailable to parsed or forged handles", () => {
   const parsed = bridge.WasmDocument.parseBytes(new TextEncoder().encode(text));
   assert.equal(typeof parsed.resolveOperation, "undefined");

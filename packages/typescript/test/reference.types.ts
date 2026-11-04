@@ -34,7 +34,7 @@ export async function referenceExample(wasmBytes: Uint8Array, source: string) {
   using input = operation.input();
   if (!input) return { status: "no-schema" as const };
   const setup: SchemaPreparation = input.prepare({
-    limits: { evaluationSteps: 2000000 },
+    limits: { evaluationSdkWorkUnits: 2000000 },
   });
   if (setup.status !== "ready") return setup;
   using contract: PreparedSchema = setup.schema;

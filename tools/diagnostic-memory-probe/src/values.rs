@@ -8,7 +8,7 @@ pub fn run(only: Option<&str>) {
     // A failing branch over every element: the library builds an error for each.
     let types = json!({"anyOf":[{"type":"string"},{"items":{"type":"string"}}]});
     let capped = DefaultEvaluator::with_limits(Limits {
-        evaluation_steps: Some(1_000),
+        evaluation_sdk_work_units: Some(1_000),
         ..Limits::default()
     });
     let default = DefaultEvaluator::new();

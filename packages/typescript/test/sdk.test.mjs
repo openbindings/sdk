@@ -411,20 +411,20 @@ test("explicit resources, evaluator limits and pre-cancellation keep their disti
   );
   assert.equal(healthy.evaluate(value).status, "satisfies");
   const input = ready(
-    contract.prepare({ resources, limits: { evaluationSteps: 0 } }),
+    contract.prepare({ resources, limits: { evaluationSdkWorkUnits: 0 } }),
   );
   assert.equal(input.evaluate(value).status, "no-verdict");
   assert.equal(input.evaluate(value).detail.reason, "limit-exceeded");
   input.dispose();
   // By default no work cap applies; null selects that, and a number caps
   // every pass.
-  assert.equal(sdk.evaluatorLimits().evaluationSteps, null);
+  assert.equal(sdk.evaluatorLimits().evaluationSdkWorkUnits, null);
   const grown = ready(
-    contract.prepare({ resources, limits: { evaluationSteps: null } }),
+    contract.prepare({ resources, limits: { evaluationSdkWorkUnits: null } }),
   );
   assert.equal(grown.evaluate(value).status, "satisfies");
   grown.dispose();
-  // Only evaluationSteps and schemaResources have null defaults, and the
+  // Only evaluationSdkWorkUnits and schemaResources have null defaults, and the
   // refusal says so.
   assert.throws(
     () => contract.prepare({ limits: { patternDepth: null } }),
@@ -432,14 +432,14 @@ test("explicit resources, evaluator limits and pre-cancellation keep their disti
       e.code === "invalid-evaluator-limits" &&
       e.message.includes("4294967295") &&
       e.message.includes(
-        "evaluationSteps and schemaResources may also be null",
+        "evaluationSdkWorkUnits and schemaResources may also be null",
       ),
   );
   const partial = document.references({ resources, signal: control.signal });
   assert.equal(partial.complete, false);
   assert.equal(partial.limitation.reason, "cancelled");
   assert.throws(
-    () => contract.prepare({ limits: { evaluationSteps: -1 } }),
+    () => contract.prepare({ limits: { evaluationSdkWorkUnits: -1 } }),
     (e) => e.code === "invalid-evaluator-limits",
   );
   assert.throws(

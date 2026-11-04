@@ -87,9 +87,18 @@ Storage reservations include temporary and failed SDK construction. They do not
 count every dependency operation, allocator request or custom callback, and are
 not deadlines or process memory ceilings. A custom evaluator must declare its own
 resource scope. Dependency construction requires separate structural admission,
-representation limits and measured build qualification. The migration's single-
-build pattern compiler and full resource qualification remain in progress; older
-exact dependency-accounting receipts do not define the current public contract.
+representation limits and measured build qualification. Pattern construction now
+shares equivalent programs within one preparation Attempt. Whole-source resource,
+performance and host qualification remains separate; older exact dependency-
+accounting receipts do not define the current public contract.
+
+The built-in evaluator's `Limits::evaluation_sdk_work_units` and
+`Limits::evaluation_sdk_reservation_bytes` apply to each value invocation. Verdict
+and diagnostic passes share its remaining allowance; repeated evaluations start
+fresh. Required custom-meta evaluation debits both its evaluation allowance and
+the enclosing preparation Attempt, so either exhaustion can return a preparation
+Limit. Immutable pattern representation retains its separate limits. SDK work
+and reservation units do not count all dependency work or physical allocation.
 
 Implement OpenBindings' schema evaluation semantics, including its JSON Schema
 provisions and original-source locations. Declare unsupported capabilities with

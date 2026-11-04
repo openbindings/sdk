@@ -59,7 +59,7 @@ async function caller(
     if (!contract) return undefined;
     const prepared = contract.prepare({
       resources,
-      limits: { evaluationSteps: 2000000 },
+      limits: { evaluationSdkWorkUnits: 2000000 },
       signal: new AbortController().signal,
     });
     if (prepared.status !== "ready") return undefined;
@@ -70,6 +70,16 @@ async function caller(
       // @ts-expect-error unknown preparation options are rejected
       unknownPreparationOption: true,
     });
+    contract.prepare({
+      limits: {
+        evaluationSdkWorkUnits: null,
+        evaluationSdkReservationBytes: 0,
+      },
+    });
+    // @ts-expect-error Retired work name has no compatibility alias.
+    contract.prepare({ limits: { evaluationSteps: 1 } });
+    // @ts-expect-error Retired storage name has no compatibility alias.
+    contract.prepare({ limits: { programBytes: 1 } });
     const result: ValueOutcome = input.explain(value);
     if (result.status === "fails") {
       result.problems[0]!.instance satisfies string;

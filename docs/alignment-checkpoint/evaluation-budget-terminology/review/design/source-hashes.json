@@ -1,0 +1,10 @@
+{
+  "design/2026-11-02/evaluation-budget-terminology.md": "03139e77079ee05ef8cc5b269133c1cc6ceeab047b7a129d22f31cea00c09f31",
+  "sdk/crates/openbindings-json-schema-evaluator/src/lib.rs": "114e37274e21064551dd888f21ecd1102cfaa5ca08f53c9c798e1f303f81edfe",
+  "sdk/crates/openbindings-json-schema-evaluator/src/semantic/mod.rs": "160cdb7dc2f39a613542b49bd87c037d8fa76e34411ebda71909c29db15f4473",
+  "sdk/crates/openbindings-json-schema-evaluator/src/semantic/decision.rs": "5dadc1c7074bea686c9552286c0760f27c349d32e33319f07ad305f9534c59d9",
+  "sdk/crates/openbindings-json-schema-evaluator/src/semantic/meta.rs": "977be5ed6e21262191f9f566f56c95f6bce3efce7ba5b43f7532284b7ed1fccb",
+  "sdk/crates/openbindings-wasm/src/lib.rs": "6a09911fd18b007a6d582bed6f44dbe9ddc524f46d8c93e905f294d488300c52",
+  "sdk/packages/typescript/src/schema.ts": "647c3b1688055ebbaed979a1f042beec82a50ba0183cc542708c2fa6448b712c",
+  "sdk/tools/evaluator-bench/src/sdk.rs": "a4ea8e1fdfcc4c016f7269bd066bcfd0ffb7860df537acfc391165bf18a9a708"
+}

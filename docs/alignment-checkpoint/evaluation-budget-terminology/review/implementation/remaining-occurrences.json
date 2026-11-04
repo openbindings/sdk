@@ -1,0 +1,46 @@
+{
+  "status": "passed bounded maintained-source occurrence inventory",
+  "exclusions": [
+    "historical checkpoint receipts",
+    "historical performance-boundaries guide",
+    "generated/ignored build artifacts"
+  ],
+  "allowed_remaining_paths": [
+    "tools/evaluator-bench/src/sdk.rs",
+    "tools/evaluator-bench/fixtures.py",
+    "packages/typescript/test/api.types.ts",
+    "packages/typescript/test/diagnostic-budget-cases.mjs",
+    "packages/typescript/test/conformant-access.test.mjs",
+    "crates/openbindings-json-schema-evaluator/tests/evaluation_budgets.rs"
+  ],
+  "matches": [
+    "tools/evaluator-bench/src/sdk.rs:31:            (\"evaluation_steps\", \"evaluation_sdk_work_units\"),",
+    "tools/evaluator-bench/src/sdk.rs:32:            (\"program_bytes\", \"evaluation_sdk_reservation_bytes\"),",
+    "tools/evaluator-bench/src/sdk.rs:58:                    \"evaluation_steps\": work,",
+    "tools/evaluator-bench/src/sdk.rs:59:                    \"program_bytes\": bytes,",
+    "tools/evaluator-bench/src/sdk.rs:78:                keys[\"evaluation_steps\"] = Value::Null;",
+    "tools/evaluator-bench/src/sdk.rs:79:                keys[\"program_bytes\"] = json!(0);",
+    "tools/evaluator-bench/src/sdk.rs:84:            (\"evaluation_steps\", json!(-1)),",
+    "tools/evaluator-bench/src/sdk.rs:85:            (\"evaluation_steps\", json!(1.5)),",
+    "tools/evaluator-bench/src/sdk.rs:86:            (\"evaluation_steps\", json!(\"17\")),",
+    "tools/evaluator-bench/src/sdk.rs:87:            (\"program_bytes\", Value::Null),",
+    "tools/evaluator-bench/src/sdk.rs:88:            (\"program_bytes\", json!(-1)),",
+    "tools/evaluator-bench/src/sdk.rs:89:            (\"program_bytes\", json!(1.5)),",
+    "tools/evaluator-bench/fixtures.py:71:    add('work-stop', {'type': 'array', 'items': {'type': 'integer'}}, array, 'no-verdict', limits=dict(evaluation_steps=16))",
+    "packages/typescript/test/diagnostic-budget-cases.mjs:54:      \"evaluationSteps\",",
+    "packages/typescript/test/diagnostic-budget-cases.mjs:55:      \"programBytes\",",
+    "packages/typescript/test/diagnostic-budget-cases.mjs:67:      { evaluationSteps: null, evaluationSdkWorkUnits: null },",
+    "packages/typescript/test/diagnostic-budget-cases.mjs:68:      { programBytes: 0, evaluationSdkReservationBytes: 0 },",
+    "packages/typescript/test/api.types.ts:80:    contract.prepare({ limits: { evaluationSteps: 1 } });",
+    "packages/typescript/test/api.types.ts:82:    contract.prepare({ limits: { programBytes: 1 } });",
+    "packages/typescript/test/conformant-access.test.mjs:17:  assert.equal(\"evaluation_steps\" in defaults, false);",
+    "packages/typescript/test/conformant-access.test.mjs:18:  assert.equal(\"program_bytes\" in defaults, false);",
+    "packages/typescript/test/conformant-access.test.mjs:40:      { evaluation_steps: null },",
+    "packages/typescript/test/conformant-access.test.mjs:41:      { program_bytes: 0 },",
+    "packages/typescript/test/conformant-access.test.mjs:42:      { evaluation_steps: null, evaluation_sdk_work_units: null },",
+    "packages/typescript/test/conformant-access.test.mjs:43:      { program_bytes: 0, evaluation_sdk_reservation_bytes: 0 },",
+    "crates/openbindings-json-schema-evaluator/tests/evaluation_budgets.rs:143:    assert!(defaults.get(\"evaluation_steps\").is_none());",
+    "crates/openbindings-json-schema-evaluator/tests/evaluation_budgets.rs:144:    assert!(defaults.get(\"program_bytes\").is_none());",
+    "crates/openbindings-json-schema-evaluator/tests/evaluation_budgets.rs:158:    for retired in [\"evaluation_steps\", \"program_bytes\"] {"
+  ]
+}

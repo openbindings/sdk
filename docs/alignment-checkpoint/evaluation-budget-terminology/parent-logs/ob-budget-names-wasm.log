@@ -1,0 +1,12 @@
+
+> @openbindings/sdk@0.2.0-alpha.1 build:wasm
+> node scripts/build-wasm.mjs
+
+   Compiling openbindings-internal-schema v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-internal-schema)
+   Compiling openbindings v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings)
+   Compiling openbindings-internal-cancellation v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-internal-cancellation)
+   Compiling openbindings-json-schema-evaluator v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-json-schema-evaluator)
+   Compiling openbindings-http-discovery v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-http-discovery)
+   Compiling openbindings-wasm v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-wasm)
+    Finished `release` profile [optimized] target(s) in 20.00s
+{"rustSource":"2fec3cc1e7377523f3bfbbae83bbe1533d1f732d4ac5b42b1fd6a6b7de019dd7","artifacts":{"openbindings_wasm.js":"a6c4872bed0e3d6e9b059403bfcfe0da3e21a0bb264fa4372b4d4464ff440e2e","openbindings_wasm_bg.wasm":"b51fbb55ff9bf5224a232fb18daa5a695d094d9ee2ba6aa91594a4343bd2f68d","openbindings_wasm_signature.js":"b7a98f3e14387a59804c6b4c025b0d03cf5671acd66490e03ec47e89cedc3f6f"}}

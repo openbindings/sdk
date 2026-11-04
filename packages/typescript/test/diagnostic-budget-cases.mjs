@@ -40,7 +40,20 @@ export function diagnosticBudgetCases(sdk) {
     } finally {
       setup.schema.dispose();
     }
-    for (const field of ["diagnosticBytes", "maxProblems"]) {
+    check(
+      sdk.evaluatorLimits().evaluationSdkWorkUnits === null,
+      "work default",
+    );
+    check(
+      sdk.evaluatorLimits().evaluationSdkReservationBytes === 48 * 1024 * 1024,
+      "reservation default",
+    );
+    for (const field of [
+      "diagnosticBytes",
+      "maxProblems",
+      "evaluationSteps",
+      "programBytes",
+    ]) {
       check(!(field in sdk.evaluatorLimits()), "retired default");
       let rejected = false;
       try {
@@ -49,6 +62,21 @@ export function diagnosticBudgetCases(sdk) {
         rejected = true;
       }
       check(rejected, "retired limit rejected");
+    }
+    for (const limits of [
+      { evaluationSteps: null, evaluationSdkWorkUnits: null },
+      { programBytes: 0, evaluationSdkReservationBytes: 0 },
+      ...[null, -1, 1.5, 0x100000000].map((evaluationSdkReservationBytes) => ({
+        evaluationSdkReservationBytes,
+      })),
+    ]) {
+      let rejected = false;
+      try {
+        prepareInput(parsed.value, "op", { limits });
+      } catch (e) {
+        rejected = e.code === "invalid-evaluator-limits";
+      }
+      check(rejected, "retired mixed or invalid reservation rejected");
     }
     // Detail is chosen per call; preparation has no mode option.
     for (const diagnostics of [

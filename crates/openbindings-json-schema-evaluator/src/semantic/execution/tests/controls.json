@@ -262,7 +262,7 @@
       "value": "\"x\"",
       "external": true,
       "required": "S",
-      "program_bytes": 131072,
+      "evaluation_sdk_reservation_bytes": 131072,
       "semantic_required": "S",
       "gate": "Reviewed once-prepared program disposition: same schema meaning; obsolete per-value compiler charge removed. Prior observation retained.",
       "historical_per_value_compiler_required": "N:LimitExceeded"
@@ -273,7 +273,7 @@
       "value": "{\"x\":\"abc\"}",
       "external": true,
       "required": "S",
-      "program_bytes": 131072,
+      "evaluation_sdk_reservation_bytes": 131072,
       "semantic_required": "S",
       "gate": "Reviewed once-prepared program disposition: same schema meaning; obsolete per-value compiler charge removed. Prior observation retained.",
       "historical_per_value_compiler_required": "N:LimitExceeded"
@@ -284,7 +284,7 @@
       "value": "{\"x\":\"abc\"}",
       "external": true,
       "required": "S",
-      "program_bytes": 131072,
+      "evaluation_sdk_reservation_bytes": 131072,
       "semantic_required": "S",
       "gate": "Reviewed once-prepared program disposition: same schema meaning; obsolete per-value compiler charge removed. Prior observation retained.",
       "historical_per_value_compiler_required": "N:LimitExceeded"
@@ -295,7 +295,7 @@
       "value": "{\"x\":\"abc\"}",
       "external": true,
       "required": "S",
-      "program_bytes": 131072,
+      "evaluation_sdk_reservation_bytes": 131072,
       "semantic_required": "S",
       "gate": "Reviewed once-prepared program disposition: same schema meaning; obsolete per-value compiler charge removed. Prior observation retained.",
       "historical_per_value_compiler_required": "N:LimitExceeded"
@@ -306,7 +306,7 @@
       "value": "\"x\"",
       "external": true,
       "required": "F",
-      "program_bytes": 131072,
+      "evaluation_sdk_reservation_bytes": 131072,
       "semantic_required": "F",
       "gate": "Reviewed once-prepared program disposition: same schema meaning; obsolete per-value compiler charge removed. Prior observation retained.",
       "historical_per_value_compiler_required": "N:LimitExceeded"
@@ -317,7 +317,7 @@
       "value": "\"x\"",
       "external": true,
       "required": "S",
-      "program_bytes": 131072,
+      "evaluation_sdk_reservation_bytes": 131072,
       "semantic_required": "S",
       "gate": "Reviewed once-prepared program disposition: same schema meaning; obsolete per-value compiler charge removed. Prior observation retained.",
       "historical_per_value_compiler_required": "N:LimitExceeded"
@@ -328,7 +328,7 @@
       "value": "\"x\"",
       "external": true,
       "required": "N:LimitExceeded",
-      "program_bytes": 131072,
+      "evaluation_sdk_reservation_bytes": 131072,
       "semantic_required": "S",
       "gate": "Same actual eager reach with a confirmed prepared local Limited operand; terminal inability must remain observable.",
       "required_pattern_state": "limited"
@@ -339,7 +339,7 @@
       "value": "{\"x\":\"abc\"}",
       "external": true,
       "required": "N:LimitExceeded",
-      "program_bytes": 131072,
+      "evaluation_sdk_reservation_bytes": 131072,
       "semantic_required": "S",
       "gate": "Same actual eager reach with a confirmed prepared local Limited operand; terminal inability must remain observable.",
       "required_pattern_state": "limited"
@@ -350,7 +350,7 @@
       "value": "{\"x\":\"abc\"}",
       "external": true,
       "required": "N:LimitExceeded",
-      "program_bytes": 131072,
+      "evaluation_sdk_reservation_bytes": 131072,
       "semantic_required": "S",
       "gate": "Same actual eager reach with a confirmed prepared local Limited operand; terminal inability must remain observable.",
       "required_pattern_state": "limited"
@@ -361,7 +361,7 @@
       "value": "{\"x\":\"abc\"}",
       "external": true,
       "required": "N:LimitExceeded",
-      "program_bytes": 131072,
+      "evaluation_sdk_reservation_bytes": 131072,
       "semantic_required": "S",
       "gate": "Same actual eager reach with a confirmed prepared local Limited operand; terminal inability must remain observable.",
       "required_pattern_state": "limited"
@@ -372,7 +372,7 @@
       "value": "\"x\"",
       "external": true,
       "required": "N:LimitExceeded",
-      "program_bytes": 131072,
+      "evaluation_sdk_reservation_bytes": 131072,
       "semantic_required": "F",
       "gate": "Same actual eager reach with a confirmed prepared local Limited operand; terminal inability must remain observable.",
       "required_pattern_state": "limited"
@@ -383,7 +383,7 @@
       "value": "\"x\"",
       "external": true,
       "required": "N:LimitExceeded",
-      "program_bytes": 131072,
+      "evaluation_sdk_reservation_bytes": 131072,
       "semantic_required": "S",
       "gate": "Same actual eager reach with a confirmed prepared local Limited operand; terminal inability must remain observable.",
       "required_pattern_state": "limited"

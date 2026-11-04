@@ -184,8 +184,8 @@ impl Plan {
     }
     fn allowance(&self) -> decision::Allowance {
         decision::Allowance {
-            bytes: self.limits.program_bytes,
-            work: self.limits.evaluation_steps,
+            bytes: self.limits.evaluation_sdk_reservation_bytes,
+            work: self.limits.evaluation_sdk_work_units,
         }
     }
     fn evaluate_tracking_unavailable(
@@ -1441,7 +1441,7 @@ mod summary_tests {
             &schema,
             &[(&uri, "true")],
             Limits {
-                evaluation_steps: Some(128),
+                evaluation_sdk_work_units: Some(128),
                 ..Limits::default()
             },
         );
@@ -1471,7 +1471,7 @@ mod summary_tests {
             Limits {
                 // Reading this source alone costs over 1,000 work units. A
                 // retained call needs only the original predicate and match.
-                evaluation_steps: Some(128),
+                evaluation_sdk_work_units: Some(128),
                 ..Limits::default()
             },
         );
@@ -1524,7 +1524,7 @@ mod summary_tests {
                 &schema,
                 &[],
                 Limits {
-                    evaluation_steps: Some(128),
+                    evaluation_sdk_work_units: Some(128),
                     ..Limits::default()
                 },
             );
@@ -1624,7 +1624,7 @@ mod summary_tests {
             &source,
             &[],
             Limits {
-                evaluation_steps: Some(128),
+                evaluation_sdk_work_units: Some(128),
                 ..Limits::default()
             },
         );
@@ -1695,8 +1695,8 @@ mod summary_tests {
                 &source,
                 &[],
                 Limits {
-                    program_bytes: 32 * 1024,
-                    evaluation_steps: Some(1_000_000_000),
+                    evaluation_sdk_reservation_bytes: 32 * 1024,
+                    evaluation_sdk_work_units: Some(1_000_000_000),
                     ..Limits::default()
                 },
             );
@@ -1707,12 +1707,12 @@ mod summary_tests {
             assert!(matches!(measured.outcome, ValueOutcome::Satisfies));
             let used = 1_000_000_000 - measured.remaining.work.unwrap();
             eprintln!("reference_free branches={branches} items=4096 work={used}");
-            plan.limits.evaluation_steps = Some(used - 1);
+            plan.limits.evaluation_sdk_work_units = Some(used - 1);
             assert!(
                 matches!(plan.evaluate(&value, Detail::Outcome, &control), ValueOutcome::NoVerdict { detail }
                 if detail.reason == NoVerdictReason::LimitExceeded && detail.code == "evaluation-work-limit")
             );
-            plan.limits.evaluation_steps = Some(used);
+            plan.limits.evaluation_sdk_work_units = Some(used);
             for detail in [Detail::Outcome, Detail::Explain] {
                 let outcome = plan.evaluate(&value, detail, &control);
                 assert!(

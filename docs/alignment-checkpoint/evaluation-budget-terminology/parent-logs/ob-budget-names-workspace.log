@@ -1,0 +1,1772 @@
+   Compiling openbindings-internal-json v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-internal-json)
+   Compiling openbindings-internal-schema v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-internal-schema)
+   Compiling openbindings v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings)
+   Compiling openbindings-json-schema-evaluator v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-json-schema-evaluator)
+   Compiling openbindings-internal-cancellation v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-internal-cancellation)
+   Compiling openbindings-context v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-context)
+   Compiling openbindings-invocation v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-invocation)
+   Compiling openbindings-kind-description v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-kind-description)
+   Compiling openbindings-source-pull v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-source-pull)
+   Compiling openbindings-http-discovery v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-http-discovery)
+   Compiling openbindings-schema-comparison v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-schema-comparison)
+   Compiling openbindings-schema-evaluator-test-support v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-schema-evaluator-test-support)
+   Compiling openbindings-wasm v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-wasm)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 15.07s
+     Running unittests src/lib.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/openbindings-941e92483f7375db)
+
+running 19 tests
+test conformance::finding_identity_tests::each_rule_names_the_identifier_it_indexes ... ok
+test document::edit::tests::bounded_writer_reserves_remaining_exact_bytes ... ok
+test conformance::finding_identity_tests::direct_findings_with_equal_text_are_distinct_at_distinct_locations ... ok
+test conformance::finding_identity_tests::final_identity_includes_rule_status_code_message_and_original_occurrence ... ok
+test document::edit::tests::byte_budget_is_preflighted_before_writing_any_replacement ... ok
+test conformance::finding_identity_tests::a_later_inconclusive_result_keeps_an_established_violation ... ok
+test document::edit::tests::final_parse_charges_node_and_depth_limits_atomically ... ok
+test document::edit::tests::removal_planning_indexes_each_parent_once ... ok
+test document::index::tests::cached_namespaces_and_retained_entries_have_no_owner_cycle ... ok
+test version::tests::unbounded_components_and_exact_syntax ... ok
+test document::resolution_reuse::evaluators_that_never_inventory_assemble_no_space ... ok
+test document::resolution_reuse::a_prepared_schema_keeps_no_space_of_a_set_it_never_received ... ok
+test document::resolution_reuse::repeated_and_alternating_sets_reuse_one_space_per_live_pair ... ok
+test document::resolution_reuse::dropping_a_set_or_every_document_owner_releases_its_space ... ok
+test document::index::tests::aliases_share_one_primary_allocation ... ok
+test document::resolution_reuse::concurrent_preparations_resolve_their_own_set ... ok
+test conformance::finding_identity_tests::final_dedup_precedes_count_and_pointer_caps_and_preserves_evidence ... ok
+test conformance::finding_identity_tests::direct_findings_beyond_the_cap_are_counted_as_truncated ... ok
+test conformance::finding_identity_tests::fixed_stream_excludes_already_retained_findings_before_intermediate_cap ... ok
+
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.30s
+
+     Running tests/api_quality.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/api_quality-b6945a2ffbe19c04)
+
+running 14 tests
+test errors_are_owned_send_sync_without_bounds_on_serialized_values ... ok
+test inability_text_borrows_literals_and_moves_owned_strings ... ok
+test evaluator_records_build_with_constructors_and_optional_fields ... ok
+test emitted_limits_duplicates_and_diagnostics_are_bounded_and_located ... ok
+test serde_profile_depth_is_explicit_and_smaller_limits_apply ... ok
+test version_refusals_are_built_only_for_unsupported_declarations ... ok
+test serde_json_numbers_preserve_tokens_and_protocol_cannot_inject_json ... ok
+test batched_strings_preserve_utf8_escaping_and_every_byte_limit_boundary ... ok
+test serde_profile_preserves_numbers_enums_unicode_and_refuses_loss ... ok
+test ignored_serializer_and_formatter_errors_cannot_resume_admission ... ok
+test static_struct_fields_keep_duplicate_and_fused_admission_checks ... ok
+test contextual_schemas_and_prepared_validators_own_their_inputs ... ok
+test outcome_and_report_records_compare_by_value ... ok
+test malformed_operation_fields_and_alias_collisions_never_acquire_proof ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/assessment_gates.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/assessment_gates-54bb76d183b4f4ad)
+
+running 12 tests
+test parse_findings_explain_the_syntax_failure ... ok
+test edit_limits_apply_to_the_edited_document ... ok
+test x_prefixed_operation_keys_enter_the_identifier_namespace ... ok
+test version_declarations_follow_the_specification_examples ... ok
+test native_names_compare_decoded_pairs_even_when_grammar_is_violated ... ok
+test unpaired_document_strings_are_lossless_drafts_without_conformance ... ok
+test later_rules_require_scalar_document_strings_but_allow_deep_opaque_data ... ok
+test assessment_admission_is_caller_selected_and_precedes_version ... ok
+test the_default_byte_limit_admits_32_mib_and_names_its_setting_past_it ... ok
+test every_embedded_schema_reaches_a_meta_schema_verdict_at_every_admitted_size ... ok
+test a_raised_byte_limit_admits_documents_to_it_and_they_keep_it_for_edits ... ok
+test the_whole_document_check_reaches_a_verdict_at_every_admitted_size ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.86s
+
+     Running tests/debug_redaction.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/debug_redaction-a928537e1ed264a9)
+
+running 2 tests
+test exact_json_and_canonical_owners_do_not_print_source_data ... ok
+test evaluator_requests_and_resources_redact_original_snapshots_and_identifiers ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/debug_redaction_table.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/debug_redaction_table-f0c1aa9e0caf7ae8)
+
+running 4 tests
+test debug_and_display_write_their_structure ... ok
+test undefined_result_redacts_text_and_locations_but_shows_the_fixed_code ... ok
+test preparation_refusals_redact_payloads_like_no_verdict ... ok
+test debug_redacts_caller_text_at_every_boundary ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/diagnostic_bounds.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/diagnostic_bounds-d37d9392cac000be)
+
+running 7 tests
+test deep_duplicate_pointer_retains_its_original_coordinates ... ok
+test duplicate_under_unpaired_ancestor_keeps_its_exact_pointer_and_byte_coordinates ... ok
+test identical_invalid_schemas_at_distinct_locations_are_both_reported ... ok
+test report_serialization_keeps_specification_evidence_without_application_policy ... ok
+test duplicate_cap_preserves_order_coordinates_and_truthful_truncation ... ok
+test nonfixed_findings_keep_coordinates_and_evidence_after_the_cap ... ok
+test aggregate_pointer_budget_applies_to_duplicates_and_keeps_rule_evidence ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.43s
+
+     Running tests/document_boundary.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/document_boundary-154e7dc0aa4d8559)
+
+running 9 tests
+test lone_surrogates_remain_exact_but_violate_document_conformance ... ok
+test version_priority_requires_one_complete_declaration ... ok
+test as_bytes_include_whitespace_and_rebased_children_have_local_locations ... ok
+test immutable_snapshot_is_independent_of_authoring_mutation ... ok
+test deep_carriage_and_deeper_grammar_have_distinct_limits ... ok
+test opaque_data_is_not_a_schema_but_document_pointers_cross_resource_boundaries ... ok
+test meta_checks_find_local_errors_before_a_depth_limit ... ok
+test states_do_not_confuse_empty_findings_with_conformance ... ok
+test indexed_reference_checks_keep_primary_key_and_diagnostic_semantics ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/document_edit.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/document_edit-7f5d2f8d08747ab1)
+
+running 15 tests
+test an_exact_pointer_inserts_and_appends_like_its_text ... ok
+test owned_edits_retain_paths_and_exact_values_across_reuse ... ok
+test duplicates_remain_inspectable_but_cannot_be_edited_or_proven ... ok
+test overlapping_edits_are_refused_without_changing_bytes ... ok
+test removing_the_only_child_and_inserting_siblings_uses_one_separator_group ... ok
+test positions_follow_current_bytes_and_untouched_extensions_stay_exact ... ok
+test removing_any_set_of_siblings_in_one_batch_matches_removing_them_one_at_a_time ... ok
+test successful_edits_preserve_original_snapshot_and_exact_owners ... ok
+test atomic_failure_keeps_bytes_caches_views_and_proof ... ok
+test a_finding_pointer_through_an_unpaired_name_edits_the_member_it_reports ... ok
+test sibling_insertions_coalesce_in_batch_order_and_escape_keys ... ok
+test exact_namespace_batch_preserves_exact_bytes_and_is_atomic ... ok
+test exact_parts_preserve_absence_null_and_original_values ... ok
+test every_namespace_edit_matches_an_exact_reference_sequence ... ok
+test generated_edit_sequences_over_every_corpus_document_match_reparsed_text ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.70s
+
+     Running tests/document_stack.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/document_stack-bdc23258229e3822)
+
+running 1 test
+test local_meta_checks_at_arbitrary_depth_on_small_stack ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s
+
+     Running tests/domain.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/domain-955428464eb6de36)
+
+running 6 tests
+test paired_escapes_and_noncharacters_are_scalar_text_without_normalization ... ok
+test absent_empty_false_and_null_remain_distinct ... ok
+test exact_keys_aliases_kinds_and_unranked_relations ... ok
+test all_32_declared_fields_have_canonical_access ... ok
+test owners_keep_original_entries_and_relations_across_drop_and_edits ... ok
+test preference_reads_proved_mathematical_integers_not_token_syntax ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/draft_domain_boundary.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/draft_domain_boundary-4a35588b8e866a9e)
+
+running 3 tests
+test unpaired_draft_text_is_exact_without_a_domain_proof ... ok
+test malformed_original_drafts_remain_unproved ... ok
+test malformed_namespaces_and_declared_fields_remain_conformance_negatives ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/fixed_diagnostics.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/fixed_diagnostics-586b8835f31a28f9)
+
+running 11 tests
+test ambiguous_json_refusals_are_not_replaced_by_field_guidance ... ok
+test name_guidance_describes_the_existing_grammar_for_every_name_position ... ok
+test fixed_message_preserves_rule_location_and_rejected_value_privacy ... ok
+test unexpected_fields_locate_original_key_tokens_in_source_order ... ok
+test required_failure_points_at_the_original_containing_object ... ok
+test independent_container_findings_keep_children_and_truthful_omissions ... ok
+test all_closed_objects_are_diagnosed_without_entering_opaque_or_schema_values ... ok
+test document_and_meta_failures_use_fixed_messages ... ok
+test fixed_messages_are_value_free_and_property_names_locate_original_tokens ... ok
+test localized_findings_preserve_all_rule_evidence_under_the_findings_cap ... ok
+test findings_respect_aggregate_source_pointer_allowance ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.54s
+
+     Running tests/foundation_02.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/foundation_02-abdffad1c0e04902)
+
+running 5 tests
+test duplicate_resource_and_anchor_names_never_choose_a_winner ... ok
+test kind_data_is_exact_opaque_and_presence_sensitive ... ok
+test adjudicated_historical_cases_are_rejected_at_document_admission ... ok
+test document_pointers_reach_contained_schemas_but_not_primitive_schema_slots ... ok
+test deeply_nested_relative_identifiers_and_references_remain_admissible ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
+     Running tests/generic_evaluation.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/generic_evaluation-4a254fcdc032a3f9)
+
+running 5 tests
+test exact_ingress_precedes_controlled_evaluation ... ok
+test preparation_cancellation_never_returns_or_leaks_a_ready_validator ... ok
+test owned_send_validator_does_not_require_sync_or_arc ... ok
+test local_nonclone_validator_owns_only_what_it_retains ... ok
+test local_reference_defect_is_a_preparation_cause_not_an_instance_verdict ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/indexed_lookup_measurement.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/indexed_lookup_measurement-63be36853a1767ec)
+
+running 1 test
+test release_medians ... ignored, manual release measurement; run with --release --ignored --nocapture
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/owned_input.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/owned_input-63d2fd2c0f8c68b7)
+
+running 3 tests
+test owned_and_borrowed_parsing_agree ... ok
+test owned_input_becomes_the_text_without_a_copy ... ok
+test owned_and_borrowed_validation_agree ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running tests/reference_inspection_boundary.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/reference_inspection_boundary-880ae58465084d1e)
+
+running 2 tests
+test diagnostic_inspection_refuses_document_preconditions_without_schema_locations ... ok
+test nonconformant_drafts_still_supply_original_reference_diagnostics ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/schema_environment.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/schema_environment-65e4df85cbb28fb6)
+
+running 12 tests
+test a_failed_attempt_does_not_materialize_an_unbounded_origin ... ok
+test registration_stops_consuming_inputs_at_the_first_budget_overrun ... ok
+test preparation_attempts_bound_work_and_allocations_without_poisoning_caches ... ok
+test exact_contained_identifiers_outrank_normalized_aliases_for_general_queries ... ok
+test dynamic_lookup_tracks_declaration_and_actual_resource_identity ... ok
+test defects_are_distinct_from_unavailable_content_and_unknown_dialects ... ok
+test certificate_known_unevaluated_dialect_retains_original_root_metadata ... ok
+test checked_subschemas_never_promote_maps_literals_or_opaque_objects ... ok
+test original_sources_bases_and_resource_roots_are_separate ... ok
+test unknown_required_vocabularies_do_not_certify_external_name_absence ... ok
+test limits_and_cancellation_leave_retriable_immutable_inputs ... ok
+test expanded_identifiers_are_bounded_before_environment_and_registration_indexes ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/surrogate_conformance.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/surrogate_conformance-49d7abe08ff1a2a9)
+
+running 6 tests
+test unpaired_high_surrogate_value_violates_only_json_conformance ... ok
+test reversed_surrogates_are_not_a_pair ... ok
+test unpaired_low_surrogate_member_in_schema_locates_the_name_token ... ok
+test surrogate_exclusion_follows_version_selection_and_precedes_later_rules ... ok
+test surrogate_findings_obey_the_document_finding_cap ... ok
+test escaped_pairs_and_noncharacters_remain_conformant ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/validated_access.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/validated_access-58dda8974fa9c2c6)
+
+running 7 tests
+test exact_string_equality_is_decoded_and_non_strings_are_distinct ... ok
+test conformant_kind_filters_compare_text_independent_of_escape_spelling ... ok
+test every_conformant_text_read_decodes_escapes_and_preserves_original_locations ... ok
+test decoded_text_and_exact_tokens_survive_in_retained_domain_entries ... ok
+test migrated_unreached_uncopied_target_cases_reject_at_obi12 ... ok
+test rejected_and_undetermined_documents_cannot_produce_proof ... ok
+test canonical_presence_and_invalid_draft_fields_remain_distinct ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running unittests src/lib.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/openbindings_context-2eb50420baecb853)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/contracts.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/contracts-549adfea5b6bc5a0)
+
+running 5 tests
+test applied_context_authority_is_separate_from_package_version ... ok
+test exact_opaque_values_and_schema_owners_survive_the_envelope ... ok
+test diagnostic_formatting_contains_no_authored_data ... ok
+test checked_fields_use_decoded_names_and_reject_ambiguous_carriers ... ok
+test every_pinned_context_challenge_case_has_its_original_shape_answer ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/openbindings_http_discovery-5453dfdbcef0b201)
+
+running 1 test
+test client::review_tests::malformed_location_is_refused_for_exposed_and_host_followed_hops ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/cancellation_identity.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/cancellation_identity-af0a74b925b8a70a)
+
+running 1 test
+test companions_reexport_one_token_and_future_identity ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/debug_redaction.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/debug_redaction-31757c0e4012676b)
+
+running 1 test
+test http_debug_omits_credentials_urls_and_source_bodies ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/debug_redaction_table.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/debug_redaction_table-223a5e92059269de)
+
+running 1 test
+test debug_redacts_caller_text_at_every_boundary ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/native.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/native-73a231d1e57500aa)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/portable.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/portable-18a8a0cd9b3ca671)
+
+running 23 tests
+test alternate_loopback_hosts_are_normalized_before_admission ... ok
+test origins_normalize_hosts_and_reject_non_loopback_http ... ok
+test portable_hidden_redirect_is_a_typed_policy_refusal ... ok
+test incomplete_body_and_transport_failure_are_distinct ... ok
+test no_timeout_waits_until_the_caller_cancels ... ok
+test eof_boundary_retains_complete_body_on_timeout_or_cancellation ... ok
+test publication_route_matches_encoded_unreserved_characters_but_not_reserved_escapes ... ok
+test publication_cors_default_and_explicit_omission ... ok
+test portable_discovery_reports_the_url_it_resolved ... ok
+test cancellation_during_pending_io_wakes_without_transport_cooperation ... ok
+test status_cleanup_is_bounded_by_remaining_attempt_time ... ok
+test transports_report_failures_with_the_request_error_constructor ... ok
+test publication_copies_a_conformant_snapshot_and_serves_head_and_method_policy ... ok
+test validation_boundary_expiry_retains_complete_bytes_and_no_success ... ok
+test portable_redirects_obey_statuses_relative_location_limit_and_total_time ... ok
+test whole_attempt_timer_wakes_pending_io_and_cancellation_wins_ties ... ok
+test zero_timeout_refuses_before_io ... ok
+test status_is_never_collapsed_into_absence_and_every_body_is_released ... ok
+test fixed_cors_origin_matches_the_published_syntax_policy ... ok
+test complete_bad_body_and_version_priority_survive_with_metadata ... ok
+test size_is_decoded_bytes_with_one_sentinel_and_no_prefix_assessment ... ok
+test publication_refuses_every_unestablished_conformance_state ... ok
+test a_raised_body_limit_validates_bodies_past_the_default_byte_limit ... ok
+
+test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.18s
+
+     Running unittests src/lib.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/openbindings_internal_cancellation-25525a995db5c281)
+
+running 7 tests
+test tests::cancellation_before_poll_and_in_both_clone_windows_is_ready ... ok
+test tests::unpolled_pending_and_completed_waiters_release_owners ... ok
+test tests::distinct_waiters_replace_only_their_own_registration_and_cancel_once ... ok
+test tests::waking_can_reenter_cancellation_and_poll ... ok
+test tests::last_waker_drop_and_replacement_can_reenter_cancellation ... ok
+test tests::waiters_wake_and_are_released_on_cancel_or_drop ... ok
+test tests::cancellation_racing_registration_never_loses_a_wakeup ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests src/lib.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/openbindings_internal_json-adc91b6425705641)
+
+running 66 tests
+test backend::tests::fixed_checks_read_strings_in_place_unless_unpaired_units_need_the_escape ... ok
+test backend::tests::indexed_members_preserve_each_exact_occurrence ... ok
+test backend::tests::node_counts_cover_a_value_and_everything_below_it ... ok
+test backend::tests::batched_locations_match_original_coordinates_with_linear_source_scans ... ok
+test backend::tests::pointers_through_unpaired_names_are_exact_and_charge_their_units ... ok
+test backend::tests::subtree_ends_are_found_down_the_last_items ... ok
+test backend::tests::duplicate_member_names_keep_each_original_token_occurrence ... ok
+test backend::tests::bounded_depth_agrees_with_depth_for_values_and_subtrees ... ok
+test backend::tests::uniqueness_verifies_every_forced_hash_collision ... ok
+test backend::tests::direct_exact_pointers_preserve_deep_empty_segments ... ok
+test backend::tests::direct_exact_pointers_round_trip_mixed_names_and_retained_subtrees ... ok
+test decimal::tests::divisibility ... ok
+test decimal::tests::comparison ... ok
+test decimal::tests::huge_exponents_stay_compact_and_arithmetic_refusal_is_selective ... ok
+test backend::tests::measured_location_sizes_agree_with_each_walk ... ok
+test conversion::tests::refused_map_never_accumulates_new_keys_or_output ... ok
+test backend::tests::duplicate_locations_are_materialized_only_for_retained_nodes ... ok
+test json::tests::input_errors_display_what_was_expected_and_where ... ok
+test json::tests::limits_are_not_syntax ... ok
+test json::tests::locations_display_their_pointer_and_coordinates ... ok
+test json::tests::members_and_presence ... ok
+test json::tests::objects_compare_without_order_or_numeric_spelling ... ok
+test json::tests::retained_child_and_exact_serde ... ok
+test json::tests::exact_deep_equality ... ok
+test numeric::tests::bounds_compare_exact_spellings ... ok
+test numeric::tests::handles_name_their_operands ... ok
+test json::tests::string_encoding_and_admission_match_serialized_input ... ok
+test object::tests::decoded_duplicates_are_ambiguous_and_exact_values_outlive_the_object ... ok
+test object::tests::object_shape_does_not_forge_uniqueness_or_document_validity ... ok
+test numeric::tests::integer_fast_path_preserves_exact_boundaries_and_decimal_fallback ... ok
+test pointer::tests::text_is_checked_and_read_back_exactly ... ok
+test pointer::tests::unpaired_units_are_kept_and_written_as_escapes ... ok
+test raw::tests::borrowed_name_candidates_keep_threshold_collisions_and_exact_units ... ok
+test backend::tests::deep_unevaluated_diagnostics_do_not_materialize_values ... ok
+test raw::tests::checkpoint_storage_grows_geometrically_with_a_source_cap ... ok
+test raw::tests::borrowed_name_hash_cancellation_never_uses_a_partial_hash ... ok
+test raw::tests::evaluator_index_preserves_collision_work_accounting ... ok
+test raw::tests::exact_and_duplicate ... ok
+test raw::tests::depth_and_drop ... ok
+test raw::tests::forced_collisions_keep_exact_names_order_and_coordinates ... ok
+test raw::tests::invalid_json ... ok
+test raw::tests::indexed_pointers_and_nested_retained_views_are_thread_safe ... ok
+test backend::tests::uniqueness_is_exact_and_stack_safe ... ok
+test raw::tests::member_index_threshold_keeps_first_match_and_absence ... ok
+test raw::tests::nodes_are_fixed_records_and_containers_own_no_allocation ... ok
+test raw::tests::pointers_name_every_node_with_escaped_segments ... ok
+test raw::tests::position_index_recovers_complete_prefix_after_mutex_poison ... ok
+test raw::tests::positions_are_lazy_bounded_and_reused_in_any_order ... ok
+test backend::tests::small_scalar_arrays_decide_and_charge_as_hashing_does ... ok
+test raw::tests::retained_values_share_positions_across_concurrent_requests ... ok
+test raw::tests::source_locations ... ok
+test raw::tests::valid_unpaired_is_not_json_error ... ok
+test work::tests::a_guarded_pass_fails_every_charge_once_it_uses_more_stack_than_it_may ... ok
+test work::tests::a_measured_pass_counts_its_charges_within_the_enclosing_allowance ... ok
+test work::tests::a_scope_left_by_unwinding_restores_the_enclosing_allowance ... ok
+test work::tests::an_allowance_is_spent_by_its_charges_and_restored_after ... ok
+test work::tests::an_inner_allowance_shares_the_outer_one ... ok
+test raw::tests::escaped_strings_decode_exactly_as_their_utf16_units ... ok
+test backend::tests::uniqueness_work_stays_linear_when_unequal_elements_share_hashes ... ok
+test decimal::tests::signed_decimal_exponent_offsets_match_independent_bigint_arithmetic ... ok
+test raw::tests::many_schema_pointer_references_have_linear_member_probes ... ok
+test raw::tests::key_comparisons_and_member_probes_are_linear ... ok
+test json::tests::duplicate_queries_match_container_membership_and_bound_search_work ... ok
+test backend::tests::unpaired_queries_match_subtree_membership_and_bound_search_work ... ok
+test raw::tests::positions_match_prefix_oracle_at_every_utf8_boundary ... ok
+test decimal::tests::inline_values_decide_exactly_as_their_digit_text ... ok
+
+test result: ok. 66 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.29s
+
+     Running tests/debug_redaction_table.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/debug_redaction_table-9cd0379e5c42eb54)
+
+running 1 test
+test debug_redacts_caller_text_at_every_boundary ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/openbindings_internal_schema-c7df4444016aa25b)
+
+running 98 tests
+test dialect::certificate::tests::edition_selectors_and_reference_siblings_stay_distinct ... ok
+test dialect::certificate::tests::v1_unknown_extensions_preserve_namespace_uncertainty ... ok
+test dialect::certificate::tests::certificate_knowledge_does_not_claim_evaluation_support ... ok
+test dialect::profile::tests::required_format_assertion_is_separate_from_annotation_membership ... ok
+test dialect::profile::tests::core_is_required_and_unknown_vocabulary_requirements_are_honest ... ok
+test dialect::profile::tests::vocabulary_names_do_not_inherit_schema_resource_aliases ... ok
+test dialect::profile::tests::vocabulary_uri_normalization_is_checked_before_optional_handling ... ok
+test dialect::profile::tests::optional_known_vocabularies_are_active_but_absent_ones_are_not ... ok
+test dialect::profile::tests::custom_inventory_uses_declared_vocabularies_not_standard_deprecated_positions ... ok
+test dialect::certificate::tests::normalized_identity_guard_refuses_unimplemented_normalization ... ok
+test fixed_locations::tests::compilation_refuses_embedded_dialects_and_copied_anchors ... ok
+test fixed_locations::tests::compilation_refuses_nested_resource_shadowing_in_retained_applicators ... ok
+test fixed_locations::tests::compilation_preserves_root_metadata_and_opaque_scope_named_data ... ok
+test fixed_locations::tests::local_ref_siblings_and_percent_escaped_pointer_are_conjunctive ... ok
+test fixed_locations::tests::missing_members_container_constraints_and_unions_stop_at_container ... ok
+test fixed_locations::tests::independent_container_assertions_survive_failing_children ... ok
+test fixed_schema::equivalence::fixed_string_presentation_preserves_every_pinned_string_constraint ... ok
+test fixed_schema::equivalence::localization_changes_only_recursive_edges_and_identities ... ok
+test fixed_locations::tests::container_projections_keep_reference_scope_and_evaluated_positions ... ok
+test fixed_locations::tests::overlapping_applicators_refs_names_and_array_elements_keep_deepest_positions ... ok
+test fixed_schema::equivalence::original_recursive_positions_equal_the_complete_walker_table ... ok
+test fixed_schema::equivalence::actual_walk_matches_derived_shapes_and_occurrences ... ok
+test fixed_schema::local::tests::constrained_names_match_the_complete_fixed_graph_in_every_edition ... ok
+test fixed_schema::local::tests::complete_localized_graph_is_the_reviewed_read_shape ... ok
+test fixed_schema::local::tests::every_localized_recursive_terminal_is_only_a_kind_check ... ok
+test fixed_locations::tests::pinned_container_projections_do_not_increase_schema_depth ... ok
+test fixed_schema::local::tests::graph_guard_covers_the_compilers_selected_entry ... ok
+test fixed_schema::local::tests::impossible_extents_refuse_instead_of_wrapping_or_erasing_exhaustion ... ok
+test fixed_locations::tests::pinned_schema_keywords_have_explicit_location_policy ... ok
+test fixed_locations::tests::local_fragments_preserve_utf8_and_pointer_admission ... ok
+test fixed_schema::equivalence::reviewer_meta_cases_agree_with_original_and_local_checks ... ok
+test fixed_schema::tests::cut_meta_schema_meets_each_node_at_a_bounded_number_of_positions ... ok
+test fixed_schema::tests::document_schema_meets_each_node_at_a_bounded_number_of_positions ... ok
+test fixed_schema::local::tests::graph_guard_rejects_child_inspecting_and_nonrecursive_changes ... ok
+test fixed_schema::local::tests::reference_operand_audit_and_nonasserting_format_policy_are_fixed ... ok
+test fixed_schema::tests::each_keyword_check_decides_as_the_meta_schemas_do ... ok
+test fixed_schema::tests::expanded_problems_preserve_violation_when_no_slots_remain ... ok
+test fixed_schema::tests::fixed_problem_count_paths_and_truncation_are_preserved ... ok
+test fixed_schema::tests::independent_container_and_child_findings_obey_the_same_cap ... ok
+test fixed_schema::tests::fixed_schemas_assert_only_exact_comparisons_of_small_integers ... ok
+test fixed_schema::local::tests::arrays_opaque_data_wrong_kinds_and_exact_spelling_remain_charged ... ok
+test fixed_schema::tests::meta_failures_are_located_at_each_failing_keyword ... ok
+test fixed_schema::tests::repeated_meta_null_error_does_not_consume_capacity_or_claim_truncation ... ok
+test fixed_schema::tests::retained_problem_identity_precedes_both_allowances ... ok
+test fixed_schema::tests::same_source_with_different_message_and_distinct_source_are_retained ... ok
+test fixed_schema::local::tests::only_audited_reference_strings_drop_their_payload_extent ... ok
+test fixed_schema::local::tests::exact_limits_cancellation_and_nested_attempts_remain_authoritative ... ok
+test fixed_schema::tests::localized_meta_matches_unmodified_meta_on_keyword_shapes ... ok
+test fixed_schema::local::tests::each_cut_family_retains_headers_and_only_skips_schema_payloads ... ok
+test fixed_schema::local::tests::depth_and_payload_growth_do_not_repeat_descendant_extent_at_the_parent ... ok
+test fixed_schema::tests::fixed_checks_run_their_patterns_on_the_default_engines_finite_automaton ... ok
+test fixed_schema::local::tests::unread_unknown_payloads_keep_their_names_and_preserve_bounded_checks ... ok
+test identifiers::tests::copied_labels_read_back_from_every_block ... ok
+test input_policy::profile_tests::completed_profiles_change_actual_inventory_without_mutating_shared_inputs ... ok
+test input_policy::profile_tests::profile_inventory_refusal_does_not_publish_a_partial_input_policy ... ok
+test preparation::tests::allocation_is_aggregate_checked_and_sticky ... ok
+test preparation::tests::an_ignored_tighter_child_allocation_failure_stops_the_parent ... ok
+test preparation::tests::an_unwind_restores_and_debits_enclosing_backend_work ... ok
+test preparation::tests::backend_and_explicit_work_share_one_nonrenewable_allowance ... ok
+test preparation::tests::cancellation_is_not_budget_exhaustion_and_retry_is_independent ... ok
+test preparation::tests::identity_reservation_overflow_remains_sticky_if_its_error_is_ignored ... ok
+test preparation::tests::nested_attempts_cannot_reset_allocation_or_backend_work ... ok
+test preparation::tests::parent_allocation_exhaustion_stops_the_current_child_checks ... ok
+test identifiers::tests::nested_relative_identifiers_take_linear_pieces ... ok
+test schema_index::tests::pointer_escapes_arrays_and_resource_boundaries ... ok
+test schema_index::tests::supplied_nodes_walk_the_supplied_positions ... ok
+test space::custom::tests::a_meta_pointer_must_select_an_actual_resource_root ... ok
+test space::custom::tests::actual_custom_indexes_share_original_meta_carriers_and_not_literal_positions ... ok
+test space::custom::tests::contained_meta_precedence_survives_an_unproved_external_group ... ok
+test fixed_schema::tests::long_near_misses_of_every_fixed_pattern_fail ... ok
+test space::potential::tests::canonical_identity_and_retrieval_alias_are_both_protected ... ok
+test space::custom::tests::one_unstable_external_candidate_cannot_certify_another_from_the_same_assumptions ... ok
+test space::potential::tests::disabled_positions_can_prevent_certification_but_never_create_real_claims ... ok
+test space::potential::tests::equal_json_and_reused_arenas_do_not_merge_source_records ... ok
+test space::potential::tests::fragment_aliases_cannot_hide_duplicate_meta_anchors ... ok
+test space::potential::tests::discovery_closes_possible_custom_boundaries_without_reading_literal_data ... ok
+test space::potential::tests::guarded_foreign_editions_exclude_collisions_without_installing_profiles ... ok
+test space::potential::tests::literals_and_optional_extension_payloads_do_not_add_possible_claims ... ok
+test space::potential::tests::potential_work_is_bounded_and_failed_scans_do_not_mutate_inputs ... ok
+test space::potential::tests::nested_relative_bases_and_absolute_resets_are_accounted_for ... ok
+test space::potential::tests::unsupported_scope_cannot_prove_a_name_absent_or_unique ... ok
+test space::potential::tests::stopped_plain_fragment_scopes_keep_known_selectors_and_absolute_resets ... ok
+test space::projection_tests::malformed_reached_shapes_refuse_before_projection ... ok
+test space::projection_tests::only_checking_every_schema_marks_a_document_checked ... ok
+test space::projection_tests::origins_through_unpaired_names_are_left_to_the_exact_location ... ok
+test space::projection_tests::generated_name_changes_preserve_dynamic_scope_annotations_opaque_strings_and_locations ... ok
+test space::projection_tests::unmapped_programs_are_the_same_projection_and_name_every_origin ... ok
+test uri::tests::rfc_examples ... ok
+test uri::tests::spelling ... ok
+test space::projection_tests::the_shared_packaged_layer_assembles_the_flat_space ... ok
+test identifiers::bounded_block_tests::a_single_large_identifier_can_exceed_chunk_target_without_losing_text ... ok
+test schema_index::tests::many_same_document_references_keep_the_target ... ok
+test identifiers::tests::long_paths_and_dot_segments_match_compared_strings_and_their_order ... ok
+test identifiers::bounded_block_tests::capped_blocks_preserve_every_original_identifier_and_duplicate_handle ... ok
+test fixed_schema::tests::schemas_of_any_admitted_size_get_a_meta_schema_verdict ... ok
+test identifiers::tests::identifiers_match_compared_strings_and_their_order ... ok
+test fixed_schema::ecma_patterns::fixed_patterns_match_as_ecmascript_does_through_every_keyword ... ok
+test identifiers::tests::identifiers_hold_runs_of_segments_not_segments ... ok
+
+test result: ok. 98 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.81s
+
+     Running tests/debug_redaction_table.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/debug_redaction_table-e43f8ddd565a6f06)
+
+running 1 test
+test debug_redacts_caller_text_at_every_boundary ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/openbindings_invocation-70332f8edb541073)
+
+running 17 tests
+test channel::tests::dropped_acknowledged_output_is_never_committed ... ok
+test channel::tests::caller_close_drains_but_provider_close_discards_and_notifies_once ... ok
+test channel::tests::epoch_guard_clears_active_state_on_unwind ... ok
+test channel::tests::ready_bypass_and_graceful_eof_yield_but_post_terminal_output_cleanup_resolves ... ok
+test channel::tests::epoch_entry_waker_panic_clears_active_flag ... ok
+test channel::tests::only_output_drives_and_committed_values_precede_the_terminal ... ok
+test channel::tests::dropped_checked_output_and_stale_failure_cannot_affect_a_new_send ... ok
+test channel::tests::cancelled_input_read_retains_value_but_owner_close_invalidates_check ... ok
+test channel::tests::rejected_input_is_never_a_clean_eof_in_either_poll_context ... ok
+test channel::tests::blocked_polls_do_not_spend_credits_or_create_a_busy_wake_loop ... ok
+test channel::tests::scoped_output_read_releases_callers_waker_while_provider_stays_pending ... ok
+test channel::tests::terminal_suppresses_an_undelivered_input_closed_notification ... ok
+test channel::validation::tests::a_busy_slot_preserves_its_owner_and_identity_never_wraps ... ok
+test channel::validation::tests::acknowledgement_is_not_output_commit_and_withdrawal_wins_before_commit ... ok
+test channel::validation::tests::half_close_or_terminal_revokes_every_phase ... ok
+test channel::validation::tests::retained_values_leave_the_slot_before_their_destructors_run ... ok
+test channel::validation::tests::stale_success_and_failure_cannot_acknowledge_or_reject_the_next_request ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/conformance_corpus.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/conformance_corpus-0834fccce8154b0d)
+
+running 1 test
+test published_selection_cases_resolve_through_invocation_preparation_and_preflight ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/debug_redaction_table.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/debug_redaction_table-1716551aa9a079f2)
+
+running 1 test
+test debug_redacts_caller_text_at_every_boundary ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/frame_correspondence.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/frame_correspondence-be27e4b9406cde1e)
+
+running 12 tests
+test outer_closure_synthesizes_failure_only_when_no_inner_terminal_was_seen ... ok
+test malformed_output_and_invalid_safe_challenges_are_not_portable_successes ... ok
+test pinned_interface_has_the_complete_closed_frame_envelopes_used_by_the_mapper ... ok
+test operation_interface_reuses_the_same_closed_frame_protocol ... ok
+test malformed_envelopes_and_first_nonopen_frames_are_protocol_errors_before_work ... ok
+test provider_input_closure_needs_no_caller_close_and_keeps_output_open ... ok
+test cancellation_drains_committed_outputs_before_one_terminal_frame ... ok
+test echo_frames_correspond_to_native_half_close_exact_values_and_complete ... ok
+test native_empty_completion_and_output_then_failure_have_distinct_terminal_frames ... ok
+test second_open_is_a_protocol_error_even_with_bad_payload_or_after_input_closure ... ok
+test late_input_is_ignored_only_after_its_envelope_passes_validation ... ok
+test valid_open_envelopes_refuse_invalid_carried_payloads_before_work ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/interface_regressions.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/interface_regressions-604ee6ed27513853)
+
+running 9 tests
+test invocation_writer_preserves_exact_values_and_byte_limits ... ok
+test display_shows_every_code_and_debug_shows_only_governed_codes ... ok
+test independent_provider_output_after_settlement_reports_the_terminal ... ok
+test borrowed_generic_provider_futures_are_send_without_static_configuration ... ok
+test unsupported_ordered_selection_is_not_found_but_explicit_binding_is_attempted ... ok
+test pointer_forwarding_preserves_separate_preflight_hooks ... ok
+test only_current_operation_owned_codes_are_reserved_at_provider_boundary ... ok
+test established_validation_or_size_failure_wins_over_later_oversized_output ... ok
+test explain_detail_covers_both_directions_and_names_value_members ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/lifecycle.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/lifecycle-2640089382650816)
+
+running 19 tests
+test cases::dropped_pending_read_does_not_keep_its_waker_alive ... ok
+test cases::cancelled_full_input_wakes_pending_submission_before_output_is_repolled ... ok
+test cases::cancellation_full_queues_preserves_committed_output_order_and_releases_job ... ok
+test cases::delivery_limits_are_local_on_input_and_terminal_on_bad_provider_output ... ok
+test cases::lazy_admission_and_advisory_no_prediction_do_no_provider_work ... ok
+test cases::accepted_input_drains_on_half_close_and_early_close_keeps_output_open ... ok
+test cases::challenge_boundary_is_checked_without_inventing_retry_or_effect_guarantees ... ok
+test cases::native_borrowed_nonclone_provider_is_send_and_retained_output_survives ... ok
+test cases::dropped_and_cancelled_attempts_preserve_live_siblings_and_other_parents ... ok
+test cases::no_preflight_prediction_does_not_suppress_a_live_context_challenge ... ok
+test cases::pending_write_drop_and_pending_read_drop_do_not_consume_or_duplicate ... ok
+test cases::no_busy_self_wake_when_provider_is_pending ... ok
+test cases::per_handle_cancel_before_first_poll_does_no_provider_work ... ok
+test cases::supplied_unusable_context_can_receive_a_safe_renewed_challenge ... ok
+test cases::pre_cancel_external_control_and_output_abandonment_do_not_cancel_siblings ... ok
+test cases::advisory_preflight_can_challenge_or_fail_without_becoming_an_invocation_gate ... ok
+test cases::oversized_terminal_and_preflight_answers_fall_back_without_data_or_retry_claim ... ok
+test cases::zero_null_and_output_then_failure_require_terminal_observation ... ok
+test cases::all_cardinalities_share_output_driving_and_bounded_bidi_handoffs ... ok
+
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/operation.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/operation-9e07bb533c4ed69e)
+
+running 31 tests
+test cases::dropping_output_cancels_parked_provider_and_input_cannot_drive ... ok
+test cases::cancelled_before_first_poll_never_constructs_provider_work ... ok
+test cases::absent_schema_operation_forwards_all_exact_values_context_and_original_document ... ok
+test cases::binding_is_lazy_owned_exact_and_descriptorless ... ok
+test cases::all_selection_keys_are_checked_before_any_support_query ... ok
+test cases::aliases_ordered_selection_and_ambiguity_follow_caller_policy ... ok
+test cases::duplicate_alias_documents_remain_obi05_admission_negatives ... ok
+test cases::explicit_operation_binding_bypasses_selection_support ... ok
+test cases::invalid_binding_targets_are_rejected_before_invoker_construction ... ok
+test cases::current_wire_addressing_is_closed_and_preserves_exact_values ... ok
+test cases::missing_binding_is_terminal_but_empty_key_is_local ... ok
+test cases::preparation_cancellation_has_a_direction_only_when_a_schema_was_being_prepared ... ok
+test cases::preflight_is_send_with_a_non_send_evaluator_and_never_prepares ... ok
+test cases::explicit_preparation_distinguishes_absence_missing_name_and_declared_refusal ... ok
+test cases::historical_contained_reference_defects_remain_obi12_negatives ... ok
+test cases::declared_schemas_without_values_do_not_prepare_even_when_unresolvable ... ok
+test cases::preparation_refusal_keeps_preparation_evidence_without_value_verdict ... ok
+test cases::prepared_choice_admission_and_complete_membership_checks_precede_support ... ok
+test cases::prepared_driver_is_send_without_sync_validator_or_send_evaluator ... ok
+test cases::absent_contracts_and_error_data_are_not_validated ... ok
+test cases::thread_safe_composition_yields_send_driver_and_provider_handles ... ok
+test cases::local_typed_validators_prepare_once_per_declared_direction ... ok
+test cases::second_direction_failure_or_late_cancel_releases_partial_preparation_and_allows_retry ... ok
+test cases::unpaired_metadata_is_rejected_before_invoker_construction ... ok
+test cases::prepared_local_validators_are_reused_without_requiring_provider_clone ... ok
+test cases::undefined_and_no_verdict_withhold_both_directions_and_keep_exact_evidence ... ok
+test cases::input_is_checked_before_delivery_and_rejection_is_not_eof ... ok
+test cases::valid_output_precedes_rejected_output_terminal ... ok
+test cases::late_input_mismatch_preserves_prior_output_without_a_clean_eof ... ok
+test cases::prepared_snapshot_and_operation_membership_are_stable ... ok
+test cases::concurrent_prepared_clones_keep_selection_context_cancellation_and_evidence_separate ... ok
+
+test result: ok. 31 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/operation_cancellation.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/operation_cancellation-0757436d69bf24f7)
+
+running 7 tests
+test cancellation_during_poll_overrides_ready_preflight_success ... ok
+test cancellation_during_poll_overrides_ready_provider_success ... ok
+test rejected_input_cannot_turn_into_eof_on_second_poll ... ok
+test already_settled_validation_keeps_its_evidence_when_external_cancel_follows ... ok
+test external_cancel_reaches_preparation_in_current_poll ... ok
+test external_cancel_reaches_cooperative_evaluator ... ok
+test synchronous_provider_and_preflight_start_observe_relay ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/prepared_sharing.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/prepared_sharing-53cef464c7366bcc)
+
+running 1 test
+test prepared_operation_moves_into_spawned_tasks_and_outlives_its_client ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/provider_stream.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/provider_stream-17565081f5e2a742)
+
+running 50 tests
+test lifecycle::dropped_pending_read_does_not_keep_its_waker_alive ... ok
+test lifecycle::cancellation_full_queues_preserves_committed_output_order_and_releases_job ... ok
+test lifecycle::cancelled_full_input_wakes_pending_submission_before_output_is_repolled ... ok
+test lifecycle::accepted_input_drains_on_half_close_and_early_close_keeps_output_open ... ok
+test lifecycle::delivery_limits_are_local_on_input_and_terminal_on_bad_provider_output ... ok
+test lifecycle::challenge_boundary_is_checked_without_inventing_retry_or_effect_guarantees ... ok
+test lifecycle::native_borrowed_nonclone_provider_is_send_and_retained_output_survives ... ok
+test lifecycle::lazy_admission_and_advisory_no_prediction_do_no_provider_work ... ok
+test lifecycle::dropped_and_cancelled_attempts_preserve_live_siblings_and_other_parents ... ok
+test lifecycle::no_preflight_prediction_does_not_suppress_a_live_context_challenge ... ok
+test lifecycle::pending_write_drop_and_pending_read_drop_do_not_consume_or_duplicate ... ok
+test lifecycle::advisory_preflight_can_challenge_or_fail_without_becoming_an_invocation_gate ... ok
+test lifecycle::no_busy_self_wake_when_provider_is_pending ... ok
+test lifecycle::supplied_unusable_context_can_receive_a_safe_renewed_challenge ... ok
+test lifecycle::per_handle_cancel_before_first_poll_does_no_provider_work ... ok
+test lifecycle::pre_cancel_external_control_and_output_abandonment_do_not_cancel_siblings ... ok
+test lifecycle::oversized_terminal_and_preflight_answers_fall_back_without_data_or_retry_claim ... ok
+test operation::absent_schema_operation_forwards_all_exact_values_context_and_original_document ... ok
+test operation::cancelled_before_first_poll_never_constructs_provider_work ... ok
+test lifecycle::zero_null_and_output_then_failure_require_terminal_observation ... ok
+test operation::all_selection_keys_are_checked_before_any_support_query ... ok
+test operation::binding_is_lazy_owned_exact_and_descriptorless ... ok
+test operation::aliases_ordered_selection_and_ambiguity_follow_caller_policy ... ok
+test operation::dropping_output_cancels_parked_provider_and_input_cannot_drive ... ok
+test operation::explicit_operation_binding_bypasses_selection_support ... ok
+test operation::duplicate_alias_documents_remain_obi05_admission_negatives ... ok
+test operation::invalid_binding_targets_are_rejected_before_invoker_construction ... ok
+test operation::current_wire_addressing_is_closed_and_preserves_exact_values ... ok
+test operation::missing_binding_is_terminal_but_empty_key_is_local ... ok
+test lifecycle::all_cardinalities_share_output_driving_and_bounded_bidi_handoffs ... ok
+test operation::preparation_cancellation_has_a_direction_only_when_a_schema_was_being_prepared ... ok
+test operation::preflight_is_send_with_a_non_send_evaluator_and_never_prepares ... ok
+test operation::explicit_preparation_distinguishes_absence_missing_name_and_declared_refusal ... ok
+test operation::declared_schemas_without_values_do_not_prepare_even_when_unresolvable ... ok
+test operation::historical_contained_reference_defects_remain_obi12_negatives ... ok
+test operation::preparation_refusal_keeps_preparation_evidence_without_value_verdict ... ok
+test operation::prepared_choice_admission_and_complete_membership_checks_precede_support ... ok
+test operation::absent_contracts_and_error_data_are_not_validated ... ok
+test operation::prepared_driver_is_send_without_sync_validator_or_send_evaluator ... ok
+test operation::local_typed_validators_prepare_once_per_declared_direction ... ok
+test operation::thread_safe_composition_yields_send_driver_and_provider_handles ... ok
+test operation::unpaired_metadata_is_rejected_before_invoker_construction ... ok
+test operation::second_direction_failure_or_late_cancel_releases_partial_preparation_and_allows_retry ... ok
+test operation::prepared_local_validators_are_reused_without_requiring_provider_clone ... ok
+test operation::undefined_and_no_verdict_withhold_both_directions_and_keep_exact_evidence ... ok
+test operation::input_is_checked_before_delivery_and_rejection_is_not_eof ... ok
+test operation::valid_output_precedes_rejected_output_terminal ... ok
+test operation::late_input_mismatch_preserves_prior_output_without_a_clean_eof ... ok
+test operation::prepared_snapshot_and_operation_membership_are_stable ... ok
+test operation::concurrent_prepared_clones_keep_selection_context_cancellation_and_evidence_separate ... ok
+
+test result: ok. 50 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/review_regressions.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/review_regressions-9ad4d0067e872cf9)
+
+running 5 tests
+test tests::external_cancellation_withholds_independent_acknowledged_output_before_commit ... ok
+test tests::external_cancellation_withholds_independent_acknowledged_input_before_delivery ... ok
+test tests::cell_validator_is_send_without_sync_and_advisory_drop_cancels_provider ... ok
+test tests::stale_refusal_is_discarded_but_stale_observed_cancellation_is_global ... ok
+test tests::cancellation_inside_prepare_and_evaluate_withholds_input_and_releases_validator ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/values.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/values-094b85a8fd3aa3fb)
+
+running 9 tests
+test current_challenges_use_only_message_and_object_schema ... ok
+test explicit_encoding_limits_bound_bytes_depth_and_nodes ... ok
+test portable_errors_preserve_unknown_codes_and_absent_null_exact_data ... ok
+test historical_opaque_document_payloads_do_not_bypass_current_obi01_admission ... ok
+test debug_redacts_current_carriers_and_fixed_admission_paths ... ok
+test owned_document_request_preserves_exact_payloads_and_owners ... ok
+test data_and_context_absence_are_distinct_from_null_and_empty_object ... ok
+test requests_reject_closed_shape_violations_and_require_document_conformance ... ok
+test document_preference_is_read_by_core_without_a_second_invocation_parser ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running unittests src/lib.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/openbindings_json_schema_evaluator-1b1084a1dfe92d09)
+
+running 192 tests
+test pattern::tests::group_nesting_is_bounded ... ok
+test pattern::tests::a_run_holds_exactly_its_set_inside_and_beyond_ascii ... ok
+test pattern::tests::linear_forms_spell_sets_out ... ok
+test pattern::tests::invalid_patterns_are_refused ... ok
+test pattern::identifier::tests::named_group_grammar_keeps_explicit_additions_and_decoded_identity ... ok
+test pattern::tests::a_run_matcher_holds_a_step_for_each_change_of_set ... ok
+test pattern::tests::no_form_negates_a_class ... ok
+test pattern::tests::unsupported_assertions_and_backreferences_are_read_but_not_matched ... ok
+test resource_identity::obi13_exact_contained_host_spelling_selects_the_matching_schema ... ok
+test resource_identity::inherited_conservative_policy_case_has_both_value_controls ... ok
+test resource_identity::collision_policy_matrix_used_and_unused ... ok
+test resource_identity::ri04_05_contained_authority_ignores_supplied_body_and_keeps_raw_catalog ... ok
+test resource_identity::packaged_retrieval_aliases_conflict_even_with_a_different_declared_id ... ok
+test resource_identity::ri06_duplicate_contained_owners_refuse_lookup_and_direct_entry ... ok
+test resource_identity::ri07_external_references_back_use_contained_target ... ok
+test pattern::tests::many_names_preserve_source_order_and_reference_identity ... ok
+test resource_identity::ri11_31_invalid_resource_configuration_is_not_hidden_by_precedence ... ok
+test resource_identity::ri13_15_unused_collisions_are_isolated_but_pointer_targets_refuse ... ok
+test resource_identity::ri09_10_distinct_canonical_identity_preserves_alias_provenance_and_base ... ok
+test es2020_properties::reservation_tests::every_admitted_property_fits_the_preparation_range_reservation ... ok
+test resource_identity::ri16_nested_resource_does_not_invent_losing_parent_dynamic_scope ... ok
+test resource_identity::ri14_direct_applicators_refuse_competing_carriers ... ok
+test resource_identity::ri16_17_unique_nested_resources_survive_losing_lexical_ancestors ... ok
+test resource_identity::ri21_sol02_winning_anchor_kind_controls_dynamic_dispatch_and_retained_owner ... ok
+test resource_identity::ri18_19_uri_resolution_follows_the_library_and_contained_identity_wins ... ok
+test resource_identity::ri08_12_aliases_cannot_bypass_canonical_conflicts ... ok
+test resource_identity::ri20_34_missing_winner_fragments_never_fall_back_to_loser ... ok
+test resource_identity::ri28_29_conflicts_do_not_poison_healthy_preparation_or_become_holes ... ok
+test resource_identity::ri25_27_preparations_and_retained_owners_are_independent ... ok
+test resource_identity::ri01_03_b32_value_cases_use_current_data_members ... ok
+test resource_identity::ri28_unused_contained_and_supplied_peer_conflicts_are_local ... ok
+test resource_identity::ri30_precancellation_and_fresh_retry_preserve_identity_policy ... ok
+test resource_identity::ri33_anonymous_document_has_no_acquisition_or_generated_identity ... ok
+test resource_identity::sol01_supplied_alias_and_canonical_names_are_strict_peers ... ok
+test resource_identity::ri30_oversized_supplied_closure_keeps_limits_and_healthy_catalog_entries ... ok
+test resource_identity::supplied_normalized_identity_peers_remain_ambiguous ... ok
+test resource_identity::standard_identity_claims_are_ambiguous_not_completions ... ok
+test semantic::construction::tests::a_shared_positive_is_only_local_syntax_and_hits_remove_actual_checker_work ... ok
+test resource_identity::identity_refusal_location_is_optional_and_measured_before_copy ... ok
+test semantic::construction::tests::cached_parent_still_discovers_custom_dependencies_and_obligation_cycles ... ok
+test semantic::construction::tests::cancelled_misses_cannot_publish_and_hits_still_check_the_attempt ... ok
+test semantic::construction::tests::nested_plans_cannot_renew_the_outer_pattern_construction_allowance ... ok
+test semantic::construction::tests::actual_root_and_selected_meta_programs_share_one_index_and_aggregate ... ok
+test resource_identity::ri32_selected_unsupported_or_invalid_owner_never_falls_back ... ok
+test semantic::construction::tests::packaged_identifiers_map_to_dense_distinct_local_fact_bits ... ok
+test semantic::construction::tests::table_backing_and_shared_work_have_exact_sticky_boundaries ... ok
+test resource_identity::ri24_user_standard_names_do_not_replace_trusted_assessment ... ok
+test semantic::construction::tests::cached_meta_helpers_still_admit_unused_children_and_actual_consumers ... ok
+test semantic::counts::tests::promotion_keeps_shared_and_complementary_effects_correlated ... ok
+test semantic::decision::tests::coherent_repetition_and_quantifier_order_match_concrete_completions ... ok
+test semantic::decision::tests::exhausted_or_cancelled_analysis_never_produces_a_formula ... ok
+test semantic::counts::tests::concrete_count_needs_no_formula_allocation_and_keeps_exact_bounds ... ok
+test semantic::decision::tests::trivial_composition_is_not_a_symbolic_work_boundary ... ok
+test semantic::decision::tests::trivial_composition_preserves_shared_attempt_exhaustion ... ok
+test semantic::decision::tests::unknown_content_can_correlate_with_undefined_choices ... ok
+test semantic::construction::tests::selected_meta_demands_a_local_pattern_limit_only_on_a_string ... ok
+test semantic::construction::tests::node_identity_profile_and_new_environments_bound_the_facts ... ok
+test semantic::execution::tests::frame_backing_growth_has_an_exact_requested_byte_gate ... ok
+test semantic::execution::tests::alias_leaf_patterns_keep_equal_text_correlation_across_distinct_scopes ... ok
+test semantic::decision::tests::private_effects_remain_independent_of_external_content_but_not_opaque_local_summaries ... ok
+test semantic::execution::tests::original_frame_stack_observations ... ignored, release-only stack observations, separate from allocation and timing
+test semantic::execution::tests::original_frames_run_deep_values_on_a_small_native_stack ... ignored, release-only small-thread-stack qualification
+test semantic::execution::tests::shared_scope_identity_is_content_based_and_preserves_ambiguity ... ok
+test semantic::explain::tests::a_failed_primitive_does_not_skip_later_work_or_its_refusal ... ok
+test resource_identity::ri22_23_original_dialect_follows_selected_resource ... ok
+test semantic::explain::tests::enclosing_attempt_exhaustion_is_not_hidden_by_the_established_verdict ... ok
+test semantic::explain::tests::concurrent_calls_keep_exact_occurrences_and_independent_controls ... ok
+test semantic::explain::tests::every_cancellation_boundary_distinguishes_before_and_after_the_verdict ... ok
+test semantic::explain::tests::sdk_control_refusals_keep_static_text_through_mapping_and_cloning ... ok
+test semantic::explain::tests::two_pass_storage_and_work_are_cumulative_at_exact_boundaries ... ok
+test semantic::explain::tests::zero_unlimited_and_overflow_allowances_do_not_renew_work ... ok
+test semantic::formats::tests::regex_format_preparation_needs_no_identifier_initialization ... ok
+test semantic::execution::tests::independently_fixed_applicator_scope_and_depth_controls ... ok
+test semantic::patterns::cache::tests::cache_work_and_cancellation_refuse_before_construction ... ok
+test semantic::patterns::cache::tests::impossible_vector_layouts_refuse_without_reaching_the_dependency ... ok
+test semantic::patterns::cache::tests::prior_reservations_cannot_wrap_into_an_unlimited_cache_budget ... ok
+test semantic::patterns::cache::tests::repeated_searches_keep_their_original_cache_and_matching_semantics ... ok
+test semantic::patterns::cache::tests::broad_epsilon_closures_need_more_than_a_state_only_reservation ... ok
+test semantic::patterns::compiler::ast::tests::cancellation_before_and_after_parsing_cannot_publish_ownership ... ok
+test semantic::patterns::compiler::ast::tests::exact_shared_allowances_and_one_below ... ok
+test semantic::patterns::compiler::ast::tests::grammar_depth_and_backend_representation_are_local_refusals ... ok
+test semantic::patterns::compiler::ast::tests::owns_one_complete_tree_after_guard_admission ... ok
+test semantic::patterns::compiler::ast::tests::refused_precharges_never_enter_the_parser ... ok
+test semantic::explain::tests::independent_original_explanation_controls_preserve_proof_and_exact_locations ... ok
+test semantic::counts::tests::original_engine_completes_concrete_contains_and_required_annotations ... ok
+test semantic::patterns::compiler::ast::tests::bare_empty_alternations_use_their_actual_linear_node_bound ... ok
+test semantic::patterns::compiler::hir::tests::cancellation_and_prior_failure_are_sticky_and_retry_is_fresh ... ok
+test semantic::patterns::compiler::hir::tests::cancellation_at_the_profile_refusal_takes_precedence ... ok
+test semantic::patterns::compiler::hir::tests::configured_semantics_match_independent_values ... ok
+test semantic::patterns::compiler::hir::tests::exact_and_one_below_cumulative_reservations ... ok
+test semantic::patterns::compiler::hir::tests::excluded_backend_grammar_never_enters_translator ... ok
+test semantic::patterns::compiler::hir::tests::independent_reconstruction_boundary_refuses_before_translation ... ok
+test semantic::patterns::compiler::hir::tests::independently_fixed_logical_profile_boundaries ... ok
+test semantic::patterns::compiler::hir::tests::nested_attempts_share_reservations_and_cannot_hide_a_lower_refusal ... ok
+test semantic::patterns::compiler::hir::tests::normalized_depth_accounts_for_reader_synthesized_groups ... ok
+test pattern::tests::direct_anchored_literals_equal_the_general_unicode_reader ... ok
+test semantic::patterns::compiler::hir::tests::owns_hir_after_source_and_control_drop_and_supports_independent_callers ... ok
+test semantic::patterns::compiler::hir::tests::shared_pressure_exhaustion_refuses_before_translation ... ok
+test semantic::patterns::compiler::inventory::tests::arithmetic_refusal_is_local_but_preserves_a_prior_shared_cause ... ok
+test semantic::patterns::compiler::inventory::tests::cancellation_never_publishes_a_partial_certificate ... ok
+test semantic::patterns::compiler::inventory::tests::exact_and_one_below_allowances ... ok
+test semantic::patterns::compiler::inventory::tests::independent_shapes_and_structural_pressure_keep_frozen_meaning ... ok
+test semantic::patterns::compiler::inventory::tests::lineage_survives_smart_collapses_and_later_nonconcat ... ok
+test semantic::patterns::compiler::ast::tests::unchanged_reader_forms_use_the_guarded_stage ... ok
+test semantic::patterns::compiler::ast::tests::shared_node_exhaustion_refuses_before_another_parser_entry ... ok
+test semantic::patterns::compiler::nfa::admission::tests::an_unreviewed_look_mode_cannot_inherit_the_closed_profile ... ok
+test semantic::patterns::compiler::nfa::admission::tests::cancellation_during_unicode_and_ancestor_work_never_publishes_scores ... ok
+test semantic::patterns::compiler::nfa::admission::tests::capped_arithmetic_preserves_zero_and_never_wraps ... ok
+test semantic::patterns::compiler::nfa::admission::tests::frozen_independent_triplets_and_profile_classification ... ok
+test semantic::patterns::compiler::nfa::admission::tests::unicode_inventory_reuses_one_scratch_owner_and_ascii_allocates_none ... ok
+test semantic::patterns::compiler::inventory::tests::wide_inputs_keep_constant_frame_storage ... ok
+test semantic::patterns::compiler::nfa::tests::a_local_actual_hir_profile_limit_never_enters_the_backend ... ok
+test semantic::patterns::compiler::nfa::tests::cancellation_at_each_boundary_prevents_publication_and_retry_is_fresh ... ok
+test semantic::patterns::compiler::nfa::tests::failed_builds_spend_shared_admission_and_exhaustion_stops_before_entry ... ok
+test semantic::patterns::compiler::nfa::tests::final_representation_check_is_separate_from_approximate_builder_limit ... ok
+test semantic::patterns::compiler::nfa::tests::independent_named_compiler_paths ... ok
+test semantic::patterns::compiler::nfa::tests::limits_are_local_and_never_retry_the_backend ... ok
+test semantic::patterns::compiler::nfa::tests::one_forward_capture_free_program_has_independent_search_caches ... ok
+test semantic::patterns::compiler::nfa::tests::prior_shared_failure_wins_over_local_limit_and_cannot_be_hidden ... ok
+test semantic::patterns::compiler::normalized::tests::arithmetic_refusal_is_sticky_and_preserves_an_existing_cause ... ok
+test semantic::patterns::compiler::normalized::tests::boundary_group_and_flat_class_summary ... ok
+test semantic::patterns::compiler::nfa::tests::synthetic_logical_boundaries_do_not_claim_source_or_physical_stack_support ... ok
+test semantic::patterns::compiler::normalized::tests::cancellation_is_checked_inside_each_long_loop ... ok
+test semantic::patterns::compiler::normalized::tests::exact_shared_work_and_one_below ... ok
+test semantic::patterns::compiler::normalized::tests::independent_exclusions_and_boundaries ... ok
+test semantic::patterns::compiler::profile::budget::tests::aggregate_arithmetic_is_checked_and_never_uses_nfa_saturation ... ok
+test semantic::patterns::compiler::profile::budget::tests::each_aggregate_is_inclusive_and_sticky ... ok
+test semantic::patterns::compiler::profile::budget::tests::earlier_sdk_failure_and_cancellation_precede_a_local_profile_refusal ... ok
+test semantic::patterns::compiler::profile::budget::tests::local_refusals_do_not_debit_or_poison_shared_construction ... ok
+test semantic::patterns::compiler::profile::budget::tests::nested_borrows_share_prior_spending_and_outer_check_catches_ignored_failure ... ok
+test semantic::patterns::compiler::profile::tests::translation_pressure_boundaries_are_inclusive_and_independent ... ok
+test pattern::identifier::tests::pinned_tables_and_all_scalar_membership_match_the_property_parser ... ok
+test semantic::patterns::compiler::tests::cancellation_at_every_factory_boundary_prevents_publication ... ok
+test semantic::patterns::compiler::tests::joined_factory_owns_one_program_after_source_budget_and_control_drop ... ok
+test semantic::patterns::compiler::tests::local_failures_and_shared_failures_keep_separate_meaning ... ok
+test semantic::patterns::preparation::tests::authored_cache_miss_and_hit_keep_exact_attempt_boundaries ... ok
+test semantic::patterns::preparation::tests::authored_hits_skip_reader_reservations_but_keep_reader_policy ... ok
+test semantic::patterns::preparation::tests::completed_normalized_programs_are_shared_without_rebuilding ... ok
+test semantic::patterns::preparation::tests::hash_collisions_preserve_exact_forms_sharing_and_interrupted_siblings ... ok
+test semantic::patterns::preparation::tests::interrupted_source_alias_preserves_healthy_normalized_owner_and_collision ... ok
+test semantic::patterns::preparation::tests::literal_ranges_are_charged_again_for_repeated_shorthand_unions ... ok
+test semantic::patterns::preparation::tests::local_refusals_and_shared_footprint_exhaustion_have_different_owners ... ok
+test semantic::patterns::preparation::tests::reader_refusals_never_publish_partial_normalized_keys ... ok
+test semantic::patterns::preparation::tests::interrupted_insertions_never_become_reusable_programs ... ok
+test semantic::patterns::tests::cancellation_and_concurrent_searches_do_not_poison_shared_programs ... ok
+test semantic::patterns::preparation::tests::short_unicode_properties_reserve_their_expansion_before_reading ... ok
+test semantic::patterns::tests::limited_programs_are_terminal_only_when_reached ... ok
+test semantic::patterns::tests::sharing_never_merges_distinct_undefined_effects ... ok
+test semantic::patterns::compiler::normalized::tests::unchanged_reader_inventory_stays_inside_the_guard ... ok
+test semantic::patterns::tests::values_names_and_original_occurrences_share_only_immutable_programs ... ok
+test semantic::patterns::compiler::inventory::tests::original_forms_preserve_ast_and_candidate_admission ... ok
+test semantic::patterns::compiler::ast::tests::structural_boundaries_refuse_before_parser_entry ... ok
+test semantic::preparation::queries::tests::independent_reference_context_and_keyword_order_controls ... ok
+test semantic::preparation::queries::tests::repeated_results_keep_original_occurrences_and_full_miss_reservations ... ok
+test semantic::preparation::queries::tests::saturated_cache_keeps_hits_and_resolves_new_keys_without_retaining_them ... ok
+test semantic::preparation::queries::tests::storage_overflow_and_refused_backing_are_sticky_before_allocation ... ok
+test semantic::patterns::tests::unused_wide_pattern_keeps_its_own_sibling_reason ... ok
+test semantic::patterns::compiler::hir::tests::retained_forms_translate_once_with_matching_hir ... ok
+test semantic::readings::tests::closed_inventory_has_independent_bits_and_explicit_fallback ... ok
+test semantic::readings::tests::reference_multiplicity_does_not_create_leaf_or_keyword_facts ... ok
+test semantic::storage::tests::growth_refuses_before_allocation_and_collision_work_is_bounded ... ok
+test semantic::storage::tests::collisions_rehash_pop_and_clear_preserve_exact_path_positions ... ok
+test semantic::summary_tests::certification_includes_every_evaluated_annotation ... ok
+test semantic::summary_tests::annotation_demand_preserves_local_selection_counts_and_consumers ... ok
+test semantic::summary_tests::empty_custom_applicators_are_not_classified_as_leaves ... ok
+test semantic::summary_tests::prepared_counts_remove_schema_parsing_from_repeated_calls ... ok
+test semantic::preparation::tests::unresolved_reference_names_are_reserved_before_query_and_retention ... ok
+test semantic::summary_tests::prepared_operand_aggregate_fallback_and_comparison_costs_remain_real ... ok
+test semantic::summary_tests::prepared_pattern_readings_keep_local_outcomes_and_call_owned_vm_state ... ok
+test semantic::summary_tests::prepared_queries_preserve_original_bases_and_typed_missing_outcomes ... ok
+test semantic::summary_tests::prepared_query_keeps_long_uri_work_out_of_retained_evaluations ... ok
+test semantic::summary_tests::prepared_simple_patterns_do_not_repeat_parser_work ... ok
+test semantic::summary_tests::recursive_support_keeps_foreign_leaf_absence_without_leaf_memo ... ok
+test semantic::summary_tests::reference_free_composites_preserve_annotations_and_equal_subject_effects ... ok
+test semantic::patterns::tests::fixed_tiny_program_jobs_prepare_once_under_defaults ... ok
+test semantic::summary_tests::state_copy_reserves_only_owned_annotation_storage ... ok
+test semantic::value_predicates::tests::duplicate_literal_check_is_subtree_local_and_does_not_select_first_member ... ok
+test semantic::value_predicates::tests::exact_values_keep_number_string_order_and_kind_meanings ... ok
+test semantic::value_predicates::tests::forced_collisions_verify_nonadjacent_candidates_exactly ... ok
+test semantic::value_predicates::tests::integer_predicate_preserves_numeric_admission_and_exact_answers ... ok
+test semantic::value_predicates::tests::refusal_cannot_become_a_false_predicate_and_fresh_retry_succeeds ... ok
+test supplied_reuse::preparation_shares_the_sets_admitted_resources ... ok
+test supplied_reuse::shared_and_freshly_admitted_resources_project_identically ... ok
+test semantic::summary_tests::prepared_operand_fallback_preserves_large_unused_and_reached_counts ... ok
+test semantic::preparation::queries::tests::frozen_repeated_long_references_fit_unchanged_preparation_allowances ... ok
+test semantic::preparation::queries::tests::hit_growth_and_cap_fallback_observe_exact_budgets_and_cancellation ... ok
+test pattern::tests::a_form_past_its_limit_is_not_written ... ok
+test semantic::execution::tests::alias_leaves_do_not_retain_per_item_frames_or_memo_entries ... ok
+test semantic::execution::tests::interruption_at_entry_return_and_retry_boundaries_does_not_poison_reuse ... ok
+test semantic::summary_tests::ordinary_large_containers_keep_no_unused_annotation_or_leaf_states ... ok
+test pattern::tests::run_matchers_match_as_their_forms_do ... ok
+test semantic::summary_tests::reference_free_large_composites_stream_with_bounded_frame_storage ... ok
+
+test result: ok. 190 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 1.81s
+
+     Running tests/contained_identity.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/contained_identity-414d29f612e15c5f)
+
+running 1 test
+test contained_identities_and_fragments_preserve_the_specified_resource ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+     Running tests/contracts.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/contracts-cda6aa2fd837880a)
+
+running 16 tests
+test document_resource_dynamic_anchor_is_an_obi14_admission_violation ... ok
+test explicit_preparation_and_retained_validation_have_caller_owned_lifetimes ... ok
+test cancellation_during_preparation_allows_independent_retries ... ok
+test diagnostics_are_original_and_do_not_expose_instance_values ... ok
+test a_missing_resource_gives_no_verdict_only_where_evaluation_reaches_it ... ok
+test resources_reject_compared_uri_duplicates_even_for_equal_bytes ... ok
+test known_dependence_is_distinct_from_evaluator_inability ... ok
+test retained_contracts_outlive_documents_and_distinguish_absent_sides ... ok
+test upstream_test_dispositions_use_the_supported_exact_ecma_u_path ... ok
+test property_escape_matching_is_lazy_and_does_not_poison_thread_state ... ok
+test diagnostic_allocation_admission_bounds_many_missing_names ... ok
+test numeric_arithmetic_admission_preserves_carriage_types_counts_and_bounds ... ok
+test same_uri_resources_are_isolated_and_precancellation_does_not_poison ... ok
+test preparation_separates_setup_from_value_and_keeps_ready_healthy ... ok
+test deep_literal_and_opaque_data_do_not_inherit_compiler_tree_depth ... ok
+test diagnostics_have_a_separate_bounded_pass_and_healthy_reuse ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+     Running tests/current_reference_obligations.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/current_reference_obligations-da0ad6d9f3b5e5c1)
+
+running 8 tests
+test semantic_fallback_honors_construction_and_evaluation_limits ... ok
+test recursive_summaries_preserve_validity_and_evaluated_annotations ... ok
+test semantic_review_counterexamples_keep_their_adjudicated_results ... ok
+test auxiliary_cases_have_required_semantic_results ... ok
+test historical_invalid_documents_remain_admission_negatives ... ok
+test recursive_extension_meets_independently_adjudicated_results ... ok
+test recursive_coordinates_follow_selected_complete_producers ... ok
+test current_reference_obligations_have_required_semantic_results ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+     Running tests/custom_profiles.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/custom_profiles-393bcfc7ff32bd7b)
+
+running 16 tests
+test meta_reference_missing_bytes_remain_a_structured_preparation_failure ... ok
+test admission_dependency_cycles_do_not_count_as_validated ... ok
+test meta_primitives_preserve_exact_utf16_names_values_and_decimal_operands ... ok
+test meta_uses_its_own_profile_while_omitted_consumer_keywords_are_data ... ok
+test actual_meta_required_and_const_restrictions_gate_the_validator ... ok
+test recursive_meta_validation_retains_original_dynamic_scope ... ok
+test meta_must_itself_be_a_valid_schema_under_its_own_profile ... ok
+test selected_meta_references_resolve_from_its_original_base ... ok
+test custom_primitive_assertions_read_original_operands_across_arenas ... ok
+test original_meta_dependent_and_unevaluated_constraints_are_active ... ok
+test unknown_required_formats_refuse_preparation_and_exact_pointer_units_survive ... ok
+test a_permissive_custom_meta_can_admit_an_empty_type_union ... ok
+test required_standard_formats_optional_annotation_and_nonstring_values ... ok
+test regex_format_matches_independent_no_flags_syntax_controls ... ok
+test local_meta_checks_do_not_hide_invalid_unused_original_positions ... ok
+test date_time_formats_require_ascii_digits_and_utc_month_boundaries ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+     Running tests/debug_redaction_table.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/debug_redaction_table-a9e446184e5f2b91)
+
+running 1 test
+test debug_redacts_caller_text_at_every_boundary ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/diagnostic_amplification.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/diagnostic_amplification-015fedc2dc7d8e1a)
+
+running 1 test
+test default_diagnostics_omit_problems_with_long_source_locations ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/diagnostic_budget.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/diagnostic_budget-46e7b7a1d64c03c8)
+
+running 3 tests
+test removed_limits_and_evaluator_detail_settings_are_rejected ... ok
+test interrupted_explanation_cannot_weaken_an_established_failure ... ok
+test cheap_checks_are_value_free_and_explanations_are_one_first_error ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/diagnostic_details.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/diagnostic_details-64948720c50a1fa4)
+
+running 3 tests
+test nested_coordinates_and_escaped_names_in_a_supplied_resource ... ok
+test every_keyword_is_explained_at_its_original_location ... ok
+test explained_locations_exist_in_original_document_and_supplied_resources ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/diagnostic_policy.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/diagnostic_policy-8ecd70f77daf60f7)
+
+running 8 tests
+test external_evaluator_construction_and_matching_stay_supported ... ok
+test explanations_carry_no_schema_facts_and_redact_debug ... ok
+test messages_use_fixed_text_and_never_instance_or_schema_values ... ok
+test a_cycle_costs_only_values_whose_verdict_depends_on_it ... ok
+test reference_and_resource_messages_do_not_echo_source_identifiers ... ok
+test draft_metadata_and_semantic_setup_partitions_remain_distinct ... ok
+test namespace_is_checked_before_preparation_or_any_selection ... ok
+test invalid_patterns_use_original_locations_and_safe_messages ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running tests/dynamic_references.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/dynamic_references-880cba4fceaeac9d)
+
+running 1 test
+test dynamic_references_follow_each_paths_scope_through_reference_cycles ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/effect_limits.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/effect_limits-26dd09a0e944293f)
+
+running 5 tests
+test removed_compiler_and_stack_options_are_rejected ... ok
+test same_original_effect_and_equal_subjects_reuse_one_variable ... ok
+test actual_work_and_storage_exhaustion_precede_the_effect_ceiling ... ok
+test selected_meta_evaluation_uses_the_same_effect_profile ... ok
+test distinct_effects_have_one_63_64_65_boundary_in_both_detail_modes ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/established_failures.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/established_failures-06b3cc5fe71225d5)
+
+running 4 tests
+test cancellation_before_verdict_still_yields_no_verdict ... ok
+test boolean_failure_survives_cancellation_after_verdict ... ok
+test established_satisfaction_survives_cancellation_after_verdict ... ok
+test type_failure_survives_cancellation_after_verdict ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/evaluation_budgets.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/evaluation_budgets-ef82697419f64649)
+
+running 8 tests
+test an_evaluator_reports_the_budgets_it_was_given ... ok
+test evaluation_allowance_serialization_uses_only_current_names ... ok
+test long_alias_chains_do_not_inherit_the_retired_compiler_stack_bound ... ok
+test deep_concrete_values_do_not_spend_symbolic_effects ... ok
+test repeated_root_proofs_fit_a_small_reservation_without_copying_empty_storage ... ok
+test uncapped_evaluation_decides_large_values ... ok
+test an_explicit_work_allowance_caps_every_pass_whatever_the_value_size ... ok
+test explicit_caps_bracket_a_checks_work_and_the_default_sets_none ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 43.56s
+
+     Running tests/evaluation_stack.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/evaluation_stack-6ed8589ba233fde5)
+
+running 1 test
+test each_stack_admits_only_values_it_evaluates ... ignored, physical thread-stack qualification runs in release
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/exact_operands.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/exact_operands-d679d377b43e6964)
+
+running 6 tests
+test substituted_resource_nodes_keep_distinct_original_provenance ... ok
+test compact_exponents_public_equality_and_arithmetic_refusal_remain_separate ... ok
+test repeated_uniqueness_checks_keep_the_same_control_allowance ... ok
+test every_numeric_family_uses_exact_values_in_both_detail_modes ... ok
+test exact_bounds_and_choices_fail_at_their_original_keywords ... ok
+test integer_fast_path_edges_preserve_exact_bounds_and_equality ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+
+     Running tests/explanation_retention.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/explanation_retention-891daf14d6c1ae05)
+
+running 1 test
+test explaining_contracts_release_the_original_environment_on_final_drop ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/generic_boundary.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/generic_boundary-344c063d7000c0b5)
+
+running 2 tests
+test direct_default_validator_refuses_ambiguous_instances ... ok
+test unavailable_annotation_source_retains_its_resolution_cause ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/literal_storage.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/literal_storage-dbacd861c1e31f74)
+
+running 2 tests
+test long_literal_comparisons_honor_work_cancellation_and_healthy_retries ... ok
+test large_scalar_literals_decide_with_small_proof_storage ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.02s
+
+     Running tests/located_problems.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/located_problems-ad0ccc00b367c4e5)
+
+running 9 tests
+test draft_references_beneath_unpaired_names_are_exact ... ok
+test a_root_failure_displays_its_coordinates_without_the_empty_pointer ... ok
+test explained_problems_locate_the_failing_node_and_the_documents_keyword ... ok
+test requests_locate_the_schema_nodes_an_evaluator_was_given ... ok
+test a_subtree_value_is_named_from_itself_and_located_in_its_text ... ok
+test supplied_resources_locate_their_own_keywords ... ok
+test member_names_holding_the_views_marker_are_named_as_the_caller_spells_them ... ok
+test failures_beneath_unpaired_names_never_report_a_library_spelling ... ok
+test schema_locations_beneath_unpaired_names_are_exact ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/marker_references.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/marker_references-9a1da145f5be73b8)
+
+running 3 tests
+test a_reference_to_an_absent_marker_name_identifies_no_schema ... ok
+test a_reference_names_the_member_with_the_markers_it_encodes ... ok
+test supplied_resources_resolve_marker_names_with_or_without_unpaired_units ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/missing_resources.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/missing_resources-70c1b8e77f28ce76)
+
+running 3 tests
+test an_independent_one_of_witness_survives_a_missing_resource ... ok
+test unevaluated_keywords_beside_a_stub_refuse_or_agree_with_every_completion ... ok
+test a_verdict_given_without_the_resource_is_every_completions_verdict ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+
+     Running tests/original_reference_queries.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/original_reference_queries-c4cd9ebc212e9d8a)
+
+running 5 tests
+test missing_callbacks_report_only_unavailable_resource_identities ... ok
+test opaque_dialects_require_namespace_certificates_before_root_selection ... ok
+test queries_retain_exact_contained_selection_and_supplied_alias_conflicts ... ok
+test dynamic_lookup_flags_and_anchor_ambiguity_are_resource_local ... ok
+test original_queries_and_reached_checks_isolate_the_two_supplied_false_refusals ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/pattern_correctness.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/pattern_correctness-3d729edd09ad1e08)
+
+running 6 tests
+test invalid_patterns_locate_authored_keywords_in_document_and_supplied_resources ... ok
+test a_non_word_boundary_is_not_matched_and_a_word_boundary_is ... ok
+test unmatched_patterns_keep_their_own_reasons ... ok
+test independently_reviewed_property_and_assertion_capabilities ... ok
+test node_surrogate_differential_for_both_pattern_keywords ... ok
+test generated_patterns_match_as_ecmascript_does_through_both_keywords ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.71s
+
+     Running tests/pattern_memory.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/pattern_memory-f13d0aa426dca7d6)
+
+running 9 tests
+test the_default_pattern_memory_is_64_mib ... ok
+test aggregate_pattern_memory_refuses_before_publishing_any_plan ... ok
+test the_footprint_counts_unique_programs_without_fixed_slots ... ok
+test prepared_programs_have_the_same_outcomes_in_every_call_order ... ok
+test small_patterns_do_not_take_fixed_compiler_slots_from_large_patterns ... ok
+test run_matchers_hold_about_their_text_of_the_pattern_memory ... ok
+test large_counted_repetitions_within_the_defined_footprint_decide ... ok
+test shared_preparation_exhaustion_cannot_be_deferred_to_first_use ... ok
+test counted_repetitions_exhaust_one_shared_construction_allowance ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.60s
+
+     Running tests/pattern_stack.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/pattern_stack-685af0e6369ed7aa)
+
+running 1 test
+test patterns_at_the_default_depth_prepare_and_check_on_a_small_stack ... ignored, unoptimized pattern compilation exceeds 256 KiB at the default depth; verified in release
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/preparation_budgets.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/preparation_budgets-5185778ced11212b)
+
+running 3 tests
+test neither_compiled_nor_semantic_preparation_can_ignore_an_exhausted_attempt ... ok
+test a_cached_inventory_does_not_reset_the_remaining_compiler_work ... ok
+test original_meta_matching_obeys_each_attempt_and_retries_without_poisoning ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.40s
+
+     Running tests/preparation_scaling.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/preparation_scaling-c75aaf2c18925d46)
+
+running 13 tests
+test dynamic_anchors_resolve_per_scope ... ok
+test layered_models_reuse_original_schemas_across_resources ... ok
+test a_schema_nested_more_than_256_levels_deep_refuses_whatever_the_limits ... ok
+test resource_diamonds_reuse_completed_applications ... ok
+test concrete_alias_chains_decide_without_compiler_stack_bounds ... ok
+test the_program_storage_boundary_names_the_actual_proof_budget ... ok
+test dynamic_scope_is_prepared_once_and_runtime_work_remains_bounded ... ok
+test reference_chains_prepare_and_release_on_a_small_stack ... ok
+test long_required_lists_are_shared_across_resource_paths ... ok
+test generated_annotation_walks_with_dynamic_meta_anchors_preserve_results ... ok
+test former_specialization_budgets_fund_the_actual_dynamic_proof ... ok
+test generated_annotation_walks_preserve_original_results ... ok
+test admitted_large_documents_and_resources_keep_required_capabilities ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.24s
+
+     Running tests/property_name_recheck.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/property_name_recheck-dc3104128b8b2c13)
+
+running 1 test
+test cheap_property_name_failures_do_not_request_diagnostics ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running tests/reference_placement.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/reference_placement-badff62ca641b894)
+
+running 1 test
+test verdicts_do_not_depend_on_where_referenced_schemas_live ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.27s
+
+     Running tests/resolver_behavior.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/resolver_behavior-e507cbe865874041)
+
+running 5 tests
+test library_normalizes_the_frozen_case_variant_unmatched_identity ... ok
+test library_treats_encoded_leading_slash_as_an_anchor ... ok
+test recording_retrieval_and_borrowed_identity_controls ... ok
+test documented_registry_routes_require_preparing_the_malformed_carrier ... ok
+test encoded_plain_names_resolve_in_each_original_resource ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/resource_limit.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/resource_limit-65a6db97216ce1af)
+
+running 8 tests
+test the_default_sets_no_resource_cap ... ok
+test zero_refuses_every_contract ... ok
+test a_resource_cap_precedes_evaluation_of_a_local_pattern_limit ... ok
+test a_contract_s_patterns_are_bounded_together ... ok
+test the_pattern_total_counts_the_forms_kept ... ok
+test packaged_meta_schema_resources_count_when_reached ... ok
+test a_cap_admits_exactly_the_resources_a_contract_reaches ... ok
+test a_refusal_takes_time_linear_in_the_resources ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.59s
+
+     Running tests/schema_embedding.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/schema_embedding-716d14d2252cf87c)
+
+running 3 tests
+test unused_malformed_siblings_do_not_change_the_selected_schema ... ok
+test inspection_root_never_masks_missing_references_including_suffix_candidates ... ok
+test contained_draft_and_supplied_surrogate_collision_preserves_each_original_target ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/schema_ownership.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/schema_ownership-c02c919f064292de)
+
+running 2 tests
+test absent_false_true_and_null_schemas_remain_distinct_owned_values ... ok
+test named_and_operation_schemas_retain_original_reference_context ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/semantic_interruption.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/semantic_interruption-7456b96796ad3dd6)
+
+running 3 tests
+test direct_validator_checks_cancellation_before_inspecting_duplicates ... ok
+test interruption_does_not_poison_a_prepared_predicate ... ok
+test every_recursive_refinement_and_certificate_stop_keeps_clean_retries ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.54s
+
+     Running tests/stand_ins.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/stand_ins-b66330bf34fde12e)
+
+running 8 tests
+test additional_properties_beside_an_unmatched_name ... ok
+test a_cycle_stands_in_where_a_schema_would_apply_again ... ok
+test a_decided_failure_names_the_keyword_that_decides_it ... ok
+test an_independent_one_of_witness_does_not_depend_on_the_third_branch ... ok
+test unevaluated_annotation_dependence_is_evaluated_per_value ... ok
+test a_dense_cycle_stands_in_at_each_reference ... ok
+test nested_keywords_written_from_both_bounds_cost_a_multiple_of_the_verdict_pass ... ok
+test verdicts_given_with_a_stand_in_are_every_completions ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.51s
+
+     Running tests/static_reference_defects.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/static_reference_defects-66d967ad3913591c)
+
+running 4 tests
+test defective_contained_references_are_admission_negatives_before_preparation ... ok
+test preparation_and_validation_honor_cancellation ... ok
+test values_reaching_a_missing_resource_give_no_verdict_naming_it ... ok
+test matrix_and_concrete_reference_completions ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.48s
+
+     Running tests/string_gates.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/string_gates-ddb9ecaaea6d553e)
+
+running 5 tests
+test visiting_values_does_not_interpret_their_names_and_diagnostics_preserve_failure ... ok
+test exact_equality_decides_strings_with_unpaired_units ... ok
+test uninterpreted_surrogates_do_not_disable_contracts ... ok
+test only_reached_string_interpretation_refuses_and_scopes_do_not_leak ... ok
+test exact_lengths_and_irrelevant_matches_do_not_need_scalar_conversion ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running tests/supplied_resource_dialects.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/supplied_resource_dialects-ad2671a382b77208)
+
+running 14 tests
+test fragment_alias_allocation_is_bounded_and_ignored_siblings_are_not_charged ... ok
+test mixed_resource_boundary_and_reference_object_have_one_profile_and_base ... ok
+test stopped_inventory_cannot_certify_external_names_but_contained_priority_survives ... ok
+test draft7_reference_siblings_and_modern_keywords_are_opaque ... ok
+test draft7_fragment_name_preserves_the_enclosing_pointer_root ... ok
+test legacy_dependencies_and_tuple_items_retain_their_assertions ... ok
+test uninterpreted_identifier_inventory_is_a_capability_refusal_not_a_defect ... ok
+test inherited_draft7_schema_dependencies_and_nonresource_declarations ... ok
+test contains_annotations_follow_the_resource_dialect ... ok
+test foreign_schema_shape_failures_and_ignored_reference_siblings_are_distinct ... ok
+test exact_foreign_property_and_dependency_names_are_not_silently_skipped ... ok
+test supplied_resources_are_read_in_the_dialect_they_declare ... ok
+test embedded_resources_take_their_enclosing_resources_dialect_unless_they_declare_one ... ok
+test recursive_references_use_the_outermost_enabled_2019_scope ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+     Running tests/unevaluated_walk.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/unevaluated_walk-cce9e211e6c63b19)
+
+running 3 tests
+test pattern_subschema_failures_name_the_original_child_assertion ... ok
+test the_original_annotation_walk_is_not_compiler_recursion ... ok
+test pattern_subschemas_reached_through_references_stay_evaluable ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/value_contract_conveniences.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/value_contract_conveniences-b09c0f71d250f771)
+
+running 6 tests
+test preparation_refusal_is_the_original_record_and_propagates_as_an_error ... ok
+test selection_distinguishes_absent_contracts_missing_and_ambiguous_operations ... ok
+test json_validation_preserves_duplicate_members_and_exact_numbers ... ok
+test json_validation_returns_all_four_outcomes_after_admission ... ok
+test json_validation_returns_original_admission_errors ... ok
+test default_preparation_matches_explicit_policy_and_retains_ready_work ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+     Running tests/walk_stack.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/walk_stack-aa375f09a6d75adf)
+
+running 1 test
+test the_longest_admitted_walks_prepare_on_a_stack_of_the_size_given ... ignored, unoptimized compilation frames exceed 256 KiB at the walk limit; verified in release
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/openbindings_kind_description-0709e149fc4b318b)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/borrowed_send.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/borrowed_send-7a34659dbef34b62)
+
+running 1 test
+test all_three_clients_accept_non_static_send_futures_for_each_provider_ownership ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/carriers.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/carriers-a2e3dd9cf698966d)
+
+running 9 tests
+test source_data_absence_null_and_runtime_context_remain_distinct ... ok
+test support_is_per_operation_and_repeated_decoded_keys_are_rejected ... ok
+test open_output_members_and_exact_schema_data_survive_without_reconstruction ... ok
+test outer_ambiguity_is_rejected_without_interpreting_opaque_nested_values ... ok
+test explicit_check_claims_and_disclosure_cannot_contradict_each_other ... ok
+test check_disclosure_is_owned_and_is_not_permission ... ok
+test check_rejection_preserves_exact_message_data_and_reserved_challenge_boundary ... ok
+test all_pinned_carrier_cases_keep_their_published_answers ... ok
+test exact_extension_prefixes_do_not_claim_document_unicode_conformance ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/clients.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/clients-cd54ea13b08ae392)
+
+running 5 tests
+test external_cancel_and_future_drop_stop_only_the_local_attempt ... ok
+test dispatch_is_lazy_and_pre_cancelled_calls_do_not_reach_providers ... ok
+test clients_enforce_exact_request_response_kind_identity ... ok
+test two_kinds_keep_queries_checks_context_and_authored_data_separate ... ok
+test finite_handoff_limits_are_local_failures_and_do_not_dispatch_oversized_requests ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/handoff.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/handoff-7900c1755515de22)
+
+running 3 tests
+test malformed_provider_outputs_remain_operational_failures_and_never_kind_rejections ... ok
+test check_failures_keep_exact_payloads_and_are_subject_to_carrier_handoff_bounds ... ok
+test cancellation_precedes_every_success_and_failure_after_provider_cleanup ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/openbindings_schema_comparison-306d6a3d48324fa6)
+
+running 6 tests
+test value::tests::schema_union_arrays_are_multisets_with_multiplicity ... ok
+test budget::tests::every_resource_refusal_remains_sticky ... ok
+test reference::tests::pointer_ambiguity_missing_context_and_resource_aliases_are_failures ... ok
+test value::tests::resources_and_cancellation_refuse_without_comparison_verdict ... ok
+test reference::tests::references_use_each_supplied_root_base_and_external_context ... ok
+test value::tests::exact_values_distinguish_number_type_absence_unicode_and_authored_arrays ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/independent.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/independent-fabd0a74fdcafe6a)
+
+running 6 tests
+test unresolved_enum_intersection_multiplicity_is_a_failure_while_standalone_values_stay_ordered ... ok
+test merge_uses_the_published_keyword_table_without_an_invented_satisfiability_solver ... ok
+test exact_and_one_below_resource_allowances_bound_both_sides_together ... ok
+test independently_authored_design_controls_keep_their_expected_classifications ... ok
+test every_observed_public_checkpoint_cancels_and_a_fresh_attempt_is_unchanged ... ok
+test source_projection_and_owned_core_schema_consumers_keep_their_own_roots ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/profile.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/profile-64c42f801e60b3d5)
+
+running 2 tests
+test all_10_exact_value_identity_groups_preserve_the_published_verdicts ... ok
+test all_14_original_identity_groups_preserve_the_published_verdicts ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests src/lib.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/openbindings_schema_evaluator_test_support-e1c4866e1d3b5379)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/admission.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/admission-72af500b13348251)
+
+running 2 tests
+test every_moved_value_case_keeps_its_exact_negative_admission_witness ... ok
+test supplied_schema_reexpressions_keep_original_dialect_admission_negatives ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/debug_redaction_table.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/debug_redaction_table-cb802ccfdaceead3)
+
+running 1 test
+test debug_redacts_caller_text_at_every_boundary ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.11s
+
+     Running tests/default.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/default-74eaa180ed2ff86e)
+
+running 10 tests
+test cheap_checks_report_no_problems_and_agree_with_explanations ... ok
+test capability_refusals_are_gaps_for_every_finite_semantic_case ... ok
+test undefined_is_an_answer_and_declining_it_is_not_that_answer ... ok
+test format_is_an_annotation_where_the_assertion_vocabulary_is_declared_false ... ok
+test controls_reject_wrong_verdict_refusal_and_bogus_paths ... ok
+test controls_exercise_real_runner_and_reject_wrong_answers ... ok
+test real_runner_rejects_cross_context_compiled_state_leaks ... ok
+test external_adapter_receives_original_context_and_passes_the_kit ... ok
+test pinned_suite_and_adversarial_contracts ... ok
+test real_runner_rejects_malformed_outcomes_fabricated_sources_and_broad_refusals ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 17.43s
+
+     Running unittests src/lib.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/openbindings_source_pull-0ab2b02238610598)
+
+running 3 tests
+test budget::tests::ledger_refusals_and_overflows_do_not_reset_on_later_operations ... ok
+test budget::tests::search_height_covers_sparse_tree_boundaries_and_refuses_overflow ... ok
+test budget::tests::compact_request_size_counts_context_and_all_source_escape_forms ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/carriers.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/carriers-1242bf2ebb193492)
+
+running 8 tests
+test duplicate_members_and_uses_are_rejected_without_rewriting_nested_opaque_data ... ok
+test opaque_output_fields_and_owned_children_keep_exact_values_after_parent_drop ... ok
+test absence_null_and_removal_only_drift_are_not_interchangeable ... ok
+test binding_carrier_preferences_use_exact_integer_and_safe_range_rules ... ok
+test proposal_authority_is_role_local_and_unknown_metadata_never_gains_edit_power ... ok
+test complete_pull_checks_only_exhaustive_and_implementation_unsupported ... ok
+test all_five_published_example_results_are_admitted_without_projection_or_edits ... ok
+test all_21_pinned_pull_report_cases_keep_shape_and_complete_answers ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/clients.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/clients-eca242b294d8578e)
+
+running 5 tests
+test pending_drop_and_ready_destructor_cancellation_preserve_cleanup_order ... ok
+test original_owner_context_and_native_local_errors_are_preserved_without_retry ... ok
+test dispatch_is_lazy_and_preconditions_do_not_construct_provider_work ... ok
+test challenges_are_exact_bounded_and_never_automatically_satisfied ... ok
+test send_futures_can_borrow_non_static_providers_in_each_ownership_form ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/kinds.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/kinds-f7a1f70ca48ee6df)
+
+running 6 tests
+test a_caller_can_discard_or_explicitly_adopt_one_dependency_closed_subset ... ok
+test comparison_failure_and_removal_only_drift_are_operational_inability ... ok
+test embedded_kind_reports_stale_current_unmatched_and_partial_without_overwriting_authorship ... ok
+test stale_schema_annotations_are_not_erased_by_the_operation_reuse_profile ... ok
+test two_sources_of_the_same_kind_reuse_one_operation_without_cross_source_suppression ... ok
+test no_data_kind_projects_before_destination_identity_and_does_not_adapt_to_conflicts ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/relationships.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/relationships-9ce9ed4a76b1f4f1)
+
+running 5 tests
+test request_and_response_boundaries_refuse_before_prospective_work ... ok
+test prospective_snapshot_adds_only_declared_maps_and_never_applies_proposals ... ok
+test five_published_examples_pass_request_relationship_and_prospective_gates ... ok
+test every_validation_cancellation_checkpoint_allows_an_independent_retry ... ok
+test independent_74_design_controls_keep_their_original_classifications ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running unittests src/lib.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/openbindings_wasm-72563ab03c000eaa)
+
+running 4 tests
+test location_transfer_tests::instance_pointers_are_located_on_demand_as_exact_text ... ok
+test location_transfer_tests::reports_and_locations_keep_pointers_through_unpaired_names ... ok
+test proof_mutation_tests::proof_revision_has_no_mutable_document_even_in_an_editor_wrapper ... ok
+test location_transfer_tests::schema_locations_cross_as_exact_text ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+   Doc-tests openbindings
+
+running 7 tests
+test crates/openbindings/src/schema/evaluation.rs - schema::evaluation::ValueProblem (line 334) ... ok
+test crates/openbindings/src/conformance.rs - conformance::Finding (line 100) ... ok
+test crates/openbindings/src/version.rs - version::VersionDecision (line 18) ... ok
+test crates/openbindings/src/control.rs - control::WorkControl (line 34) ... ok
+test crates/openbindings/src/schema/references.rs - schema::references::ReferenceResolution (line 194) ... ok
+test crates/openbindings/src/../README.md - (line 7) ... ok
+test crates/openbindings/src/schema/evaluation.rs - schema::evaluation::SchemaEvaluator (line 536) ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+
+running 10 tests
+test crates/openbindings/src/schema/mod.rs - schema::Schema (line 20) - compile fail ... ok
+test crates/openbindings/src/conformance.rs - conformance::Finding (line 89) - compile fail ... ok
+test crates/openbindings/src/conformance.rs - conformance::Finding (line 94) - compile fail ... ok
+test crates/openbindings/src/schema/evaluation.rs - schema::evaluation::ValueProblem (line 327) - compile fail ... ok
+test crates/openbindings/src/conformance.rs - conformance::DocumentValidation (line 246) - compile fail ... ok
+test crates/openbindings/src/document.rs - document::ConformantDocument (line 84) - compile fail ... ok
+test crates/openbindings/src/conformance.rs - conformance::DocumentValidation (line 251) - compile fail ... ok
+test crates/openbindings/src/document.rs - document::ConformantDocument (line 95) - compile fail ... ok
+test crates/openbindings/src/document.rs - document::ConformantDocument (line 89) - compile fail ... ok
+test crates/openbindings/src/document.rs - document::ConformantDocument (line 100) - compile fail ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+
+all doctests ran in 1.09s; merged doctests compilation took 0.36s
+   Doc-tests openbindings_context
+
+running 1 test
+test crates/openbindings-context/src/lib.rs - (line 8) ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+all doctests ran in 0.54s; merged doctests compilation took 0.30s
+   Doc-tests openbindings_http_discovery
+
+running 4 tests
+test crates/openbindings-http-discovery/src/client.rs - client::DiscoveryResult (line 630) ... ok
+test crates/openbindings-http-discovery/src/client.rs - client::DiscoveryOutcome (line 552) ... ok
+test crates/openbindings-http-discovery/src/publication.rs - publication::Publication::new (line 83) ... ok
+test crates/openbindings-http-discovery/src/../README.md - (line 14) ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+
+running 2 tests
+test crates/openbindings-http-discovery/src/client.rs - client::DiscoveryResult (line 626) - compile fail ... ok
+test crates/openbindings-http-discovery/src/client.rs - client::DiscoveryOutcome (line 533) - compile fail ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+all doctests ran in 0.87s; merged doctests compilation took 0.35s
+   Doc-tests openbindings_internal_cancellation
+
+running 1 test
+test crates/openbindings-internal-cancellation/src/lib.rs - CancellationToken (line 23) ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+all doctests ran in 0.50s; merged doctests compilation took 0.30s
+   Doc-tests openbindings_internal_json
+
+running 2 tests
+test crates/openbindings-internal-json/src/json.rs - json::JsonKind (line 187) ... ok
+test crates/openbindings-internal-json/src/json.rs - json::JsonMember (line 305) ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+
+running 1 test
+test crates/openbindings-internal-json/src/json.rs - json::JsonValue::bytes (line 364) - compile fail ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+all doctests ran in 0.53s; merged doctests compilation took 0.24s
+   Doc-tests openbindings_internal_schema
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests openbindings_invocation
+
+running 1 test
+test crates/openbindings-invocation/src/../README.md - (line 12) ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+all doctests ran in 0.54s; merged doctests compilation took 0.32s
+   Doc-tests openbindings_json_schema_evaluator
+
+running 2 tests
+test crates/openbindings-json-schema-evaluator/src/../README.md - (line 98) ... ok
+test crates/openbindings-json-schema-evaluator/src/../README.md - (line 8) ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+all doctests ran in 0.82s; merged doctests compilation took 0.37s
+   Doc-tests openbindings_kind_description
+
+running 1 test
+test crates/openbindings-kind-description/src/../README.md - (line 25) ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+all doctests ran in 0.51s; merged doctests compilation took 0.30s
+   Doc-tests openbindings_schema_comparison
+
+running 1 test
+test crates/openbindings-schema-comparison/src/../README.md - (line 9) ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+all doctests ran in 0.54s; merged doctests compilation took 0.32s
+   Doc-tests openbindings_schema_evaluator_test_support
+
+running 2 tests
+test crates/openbindings-schema-evaluator-test-support/src/lib.rs - Report (line 144) ... ok
+test crates/openbindings-schema-evaluator-test-support/src/../README.md - (line 8) ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.90s
+
+
+running 1 test
+test crates/openbindings-schema-evaluator-test-support/src/lib.rs - Report (line 138) - compile fail ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+all doctests ran in 5.08s; merged doctests compilation took 0.64s
+   Doc-tests openbindings_source_pull
+
+running 1 test
+test crates/openbindings-source-pull/src/../README.md - (line 21) ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+all doctests ran in 0.48s; merged doctests compilation took 0.29s
+   Doc-tests openbindings_wasm
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

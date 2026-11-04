@@ -1,0 +1,4 @@
+
+> @openbindings/sdk@0.2.0-alpha.1 build
+> node scripts/clean-dist.mjs && tsc -p tsconfig.json && node scripts/copy-wasm.mjs
+

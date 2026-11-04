@@ -1,0 +1,1149 @@
+
+> @openbindings/sdk@0.2.0-alpha.1 test
+> node --test test/*.test.mjs
+
+TAP version 13
+# Subtest: validateDocument admits 32 MiB and names the byte limit's setting one byte past it
+ok 1 - validateDocument admits 32 MiB and names the byte limit's setting one byte past it
+  ---
+  duration_ms: 448.789916
+  type: 'test'
+  ...
+# Subtest: a raised byte limit admits documents and values to it and refuses one byte more
+ok 2 - a raised byte limit admits documents and values to it and refuses one byte more
+  ---
+  duration_ms: 1007.380875
+  type: 'test'
+  ...
+# Subtest: unspecified limits keep the JsonLimits defaults, and malformed limits throw
+ok 3 - unspecified limits keep the JsonLimits defaults, and malformed limits throw
+  ---
+  duration_ms: 3.034208
+  type: 'test'
+  ...
+# Subtest: edits on a document admitted with raised limits parse under them, and every route names the setting
+ok 4 - edits on a document admitted with raised limits parse under them, and every route names the setting
+  ---
+  duration_ms: 603.9535
+  type: 'test'
+  ...
+# Subtest: edit limits apply to what the edit writes, as in Rust, not to the edit's own structure
+ok 5 - edit limits apply to what the edit writes, as in Rust, not to the edit's own structure
+  ---
+  duration_ms: 11.072083
+  type: 'test'
+  ...
+# Subtest: edit rows hold only their op's members, before any limit applies
+ok 6 - edit rows hold only their op's members, before any limit applies
+  ---
+  duration_ms: 0.434917
+  type: 'test'
+  ...
+# Subtest: a projection keeps its own bounds whatever the document was admitted under
+ok 7 - a projection keeps its own bounds whatever the document was admitted under
+  ---
+  duration_ms: 767.590292
+  type: 'test'
+  ...
+# Subtest: discovery with a raised body limit validates a body past the default byte limit
+ok 8 - discovery with a raised body limit validates a body past the default byte limit
+  ---
+  duration_ms: 112.716125
+  type: 'test'
+  ...
+# Subtest: a document reports the limits it keeps
+ok 9 - a document reports the limits it keeps
+  ---
+  duration_ms: 0.50725
+  type: 'test'
+  ...
+# Subtest: ExactJson.from refuses an ordinary value past the nesting limit with a RangeError
+ok 10 - ExactJson.from refuses an ordinary value past the nesting limit with a RangeError
+  ---
+  duration_ms: 91.191333
+  type: 'test'
+  ...
+# Subtest: accepted API schemas: tagged states, exact/ordinary input, failure cleanup and shared realm
+ok 11 - accepted API schemas: tagged states, exact/ordinary input, failure cleanup and shared realm
+  ---
+  duration_ms: 166.163459
+  type: 'test'
+  ...
+# Subtest: reference check rejects missing NoVerdict documentation
+ok 12 - reference check rejects missing NoVerdict documentation
+  ---
+  duration_ms: 1321.289625
+  type: 'test'
+  ...
+# Subtest: reference check rejects missing UndefinedResult.location documentation
+ok 13 - reference check rejects missing UndefinedResult.location documentation
+  ---
+  duration_ms: 892.883833
+  type: 'test'
+  ...
+# Subtest: reference check rejects missing SourceLocation.byteColumn documentation
+ok 14 - reference check rejects missing SourceLocation.byteColumn documentation
+  ---
+  duration_ms: 581.816792
+  type: 'test'
+  ...
+# Subtest: reference check rejects missing ExactJson.dispose documentation
+ok 15 - reference check rejects missing ExactJson.dispose documentation
+  ---
+  duration_ms: 539.029833
+  type: 'test'
+  ...
+# Subtest: reference check rejects missing SourceLocation.undocumentedMethod documentation
+ok 16 - reference check rejects missing SourceLocation.undocumentedMethod documentation
+  ---
+  duration_ms: 513.96975
+  type: 'test'
+  ...
+# Subtest: reference check rejects declarations that import the generated Wasm bindings
+ok 17 - reference check rejects declarations that import the generated Wasm bindings
+  ---
+  duration_ms: 500.488125
+  type: 'test'
+  ...
+# Subtest: A03
+ok 18 - A03
+  ---
+  duration_ms: 2.715459
+  type: 'test'
+  ...
+# Subtest: A04
+ok 19 - A04
+  ---
+  duration_ms: 2.063125
+  type: 'test'
+  ...
+# Subtest: A05
+ok 20 - A05
+  ---
+  duration_ms: 14.308
+  type: 'test'
+  ...
+# Subtest: A06
+ok 21 - A06
+  ---
+  duration_ms: 38.442791
+  type: 'test'
+  ...
+# Subtest: A07
+ok 22 - A07
+  ---
+  duration_ms: 16.710291
+  type: 'test'
+  ...
+# Subtest: A08
+ok 23 - A08
+  ---
+  duration_ms: 1.530333
+  type: 'test'
+  ...
+# Subtest: A09
+ok 24 - A09
+  ---
+  duration_ms: 0.580542
+  type: 'test'
+  ...
+# Subtest: A10
+ok 25 - A10
+  ---
+  duration_ms: 10.877042
+  type: 'test'
+  ...
+# Subtest: A11
+ok 26 - A11
+  ---
+  duration_ms: 74.76775
+  type: 'test'
+  ...
+# Subtest: A12
+ok 27 - A12
+  ---
+  duration_ms: 0.724541
+  type: 'test'
+  ...
+# Subtest: P01
+ok 28 - P01
+  ---
+  duration_ms: 3.368583
+  type: 'test'
+  ...
+# Subtest: P02
+ok 29 - P02
+  ---
+  duration_ms: 0.196583
+  type: 'test'
+  ...
+# Subtest: X01
+ok 30 - X01
+  ---
+  duration_ms: 0.447375
+  type: 'test'
+  ...
+# Subtest: X02
+ok 31 - X02
+  ---
+  duration_ms: 45.26625
+  type: 'test'
+  ...
+# Subtest: owned preparation wrappers release untaken children on decode/take failure
+ok 32 - owned preparation wrappers release untaken children on decode/take failure
+  ---
+  duration_ms: 133.76575
+  type: 'test'
+  ...
+# Subtest: ordinary admission maps only known engine limits and preserves unexpected exceptions
+ok 33 - ordinary admission maps only known engine limits and preserves unexpected exceptions
+  ---
+  duration_ms: 1.429417
+  type: 'test'
+  ...
+# Subtest: canonical collections release adopted and untaken owners on partial transfer failure
+ok 34 - canonical collections release adopted and untaken owners on partial transfer failure
+  ---
+  duration_ms: 3.66275
+  type: 'test'
+  ...
+# Subtest: raw Wasm evaluation allowances expose current keys and reject retired ones
+ok 35 - raw Wasm evaluation allowances expose current keys and reject retired ones
+  ---
+  duration_ms: 108.762542
+  type: 'test'
+  ...
+# Subtest: Rust proof transfer is single-use and unavailable to parsed or forged handles
+ok 36 - Rust proof transfer is single-use and unavailable to parsed or forged handles
+  ---
+  duration_ms: 80.252958
+  type: 'test'
+  ...
+# Subtest: raw document receiver substitution rechecks proof at every authority entry
+ok 37 - raw document receiver substitution rechecks proof at every authority entry
+  ---
+  duration_ms: 8.772917
+  type: 'test'
+  ...
+# Subtest: raw draft inspection preserves malformed fields, exact text and absence
+ok 38 - raw draft inspection preserves malformed fields, exact text and absence
+  ---
+  duration_ms: 1.048083
+  type: 'test'
+  ...
+# Subtest: validated text and retained reads preserve decoded text and presence
+ok 39 - validated text and retained reads preserve decoded text and presence
+  ---
+  duration_ms: 6.487125
+  type: 'test'
+  ...
+# Subtest: conformant kind filters compare decoded text and handle unpaired caller strings
+ok 40 - conformant kind filters compare decoded text and handle unpaired caller strings
+  ---
+  duration_ms: 2.936708
+  type: 'test'
+  ...
+# Subtest: undetermined admission evidence cannot produce a proof through Rust/Wasm or TypeScript
+ok 41 - undetermined admission evidence cannot produce a proof through Rust/Wasm or TypeScript
+  ---
+  duration_ms: 83.917916
+  type: 'test'
+  ...
+# Subtest: custom meta admission and retained validators survive caller disposal
+ok 42 - custom meta admission and retained validators survive caller disposal
+  ---
+  duration_ms: 102.324667
+  type: 'test'
+  ...
+# Subtest: required formats enforce exact date/time syntax while optional formats annotate
+ok 43 - required formats enforce exact date/time syntax while optional formats annotate
+  ---
+  duration_ms: 2.918792
+  type: 'test'
+  ...
+# Subtest: cheap checks and library-bounded explanations
+ok 44 - cheap checks and library-bounded explanations
+  ---
+  duration_ms: 92.724042
+  type: 'test'
+  ...
+# Subtest: explanations at original locations and source retention
+ok 45 - explanations at original locations and source retention
+  ---
+  duration_ms: 142.3285
+  type: 'test'
+  ...
+# Subtest: diagnostic fidelity, safe messages and reason coherence
+ok 46 - diagnostic fidelity, safe messages and reason coherence
+  ---
+  duration_ms: 138.272292
+  type: 'test'
+  ...
+# Subtest: Node refuses an HTTPS to plaintext to HTTPS chain before the plaintext hop
+ok 47 - Node refuses an HTTPS to plaintext to HTTPS chain before the plaintext hop
+  ---
+  duration_ms: 204.869792
+  type: 'test'
+  ...
+# Subtest: Node follows at most ten redirects and never dispatches the next hop
+ok 48 - Node follows at most ten redirects and never dispatches the next hop
+  ---
+  duration_ms: 124.73075
+  type: 'test'
+  ...
+# Subtest: each admitted hop is a fresh request, so origin-scoped credentials stay home
+ok 49 - each admitted hop is a fresh request, so origin-scoped credentials stay home
+  ---
+  duration_ms: 7.931417
+  type: 'test'
+  ...
+# Subtest: no terminating chunk is a body error
+ok 50 - no terminating chunk is a body error
+  ---
+  duration_ms: 26.022417
+  type: 'test'
+  ...
+# Subtest: a cut inside a chunk is a body error
+ok 51 - a cut inside a chunk is a body error
+  ---
+  duration_ms: 3.4505
+  type: 'test'
+  ...
+# Subtest: a cut across chunks is a body error
+ok 52 - a cut across chunks is a body error
+  ---
+  duration_ms: 4.944959
+  type: 'test'
+  ...
+# Subtest: a cut in the last chunk's size line is a body error
+ok 53 - a cut in the last chunk's size line is a body error
+  ---
+  duration_ms: 7.511875
+  type: 'test'
+  ...
+# Subtest: no final empty line is a body error
+ok 54 - no final empty line is a body error
+  ---
+  duration_ms: 2.544167
+  type: 'test'
+  ...
+# Subtest: a short fixed-length body is a body error
+ok 55 - a short fixed-length body is a body error
+  ---
+  duration_ms: 1.372833
+  type: 'test'
+  ...
+# Subtest: no terminating chunk under Connection: close is a body error
+ok 56 - no terminating chunk under Connection: close is a body error
+  ---
+  duration_ms: 4.113041
+  type: 'test'
+  ...
+# Subtest: a cut inside a chunk under Connection: close is a body error
+ok 57 - a cut inside a chunk under Connection: close is a body error
+  ---
+  duration_ms: 1.968917
+  type: 'test'
+  ...
+# Subtest: a cut across chunks under Connection: close is a body error
+ok 58 - a cut across chunks under Connection: close is a body error
+  ---
+  duration_ms: 3.771875
+  type: 'test'
+  ...
+# Subtest: a cut in the last chunk's size line under Connection: close is a body error
+ok 59 - a cut in the last chunk's size line under Connection: close is a body error
+  ---
+  duration_ms: 4.106375
+  type: 'test'
+  ...
+# Subtest: no final empty line under Connection: close is a body error
+ok 60 - no final empty line under Connection: close is a body error
+  ---
+  duration_ms: 1.3965
+  type: 'test'
+  ...
+# Subtest: a short fixed-length body under Connection: close is a body error
+ok 61 - a short fixed-length body under Connection: close is a body error
+  ---
+  duration_ms: 1.376875
+  type: 'test'
+  ...
+# Subtest: a reset after the chunks is a body error
+ok 62 - a reset after the chunks is a body error
+  ---
+  duration_ms: 1.354416
+  type: 'test'
+  ...
+# Subtest: a reset after the chunks under Connection: close is a body error
+ok 63 - a reset after the chunks under Connection: close is a body error
+  ---
+  duration_ms: 1.38225
+  type: 'test'
+  ...
+# Subtest: complete chunked and connection-delimited bodies are found
+ok 64 - complete chunked and connection-delimited bodies are found
+  ---
+  duration_ms: 71.523916
+  type: 'test'
+  ...
+# Subtest: normalized literal loopback admission and manual redirect dispatch
+ok 65 - normalized literal loopback admission and manual redirect dispatch
+  ---
+  duration_ms: 50.440875
+  type: 'test'
+  ...
+# Subtest: a host hiding redirects is followed by the host and its final URL checked
+ok 66 - a host hiding redirects is followed by the host and its final URL checked
+  ---
+  duration_ms: 5.540958
+  type: 'test'
+  ...
+# Subtest: a transport seen hiding redirects is followed directly afterwards, others keep hop checks
+ok 67 - a transport seen hiding redirects is followed directly afterwards, others keep hop checks
+  ---
+  duration_ms: 1.510666
+  type: 'test'
+  ...
+# Subtest: final HTTPS downgrade and opaque responses cannot establish policy
+ok 68 - final HTTPS downgrade and opaque responses cannot establish policy
+  ---
+  duration_ms: 0.783958
+  type: 'test'
+  ...
+# Subtest: unfollowed visible redirect is a redirect-policy refusal
+ok 69 - unfollowed visible redirect is a redirect-policy refusal
+  ---
+  duration_ms: 0.841417
+  type: 'test'
+  ...
+# Subtest: checked hops follow the five redirect statuses with relative Locations
+ok 70 - checked hops follow the five redirect statuses with relative Locations
+  ---
+  duration_ms: 2.805625
+  type: 'test'
+  ...
+# Subtest: refused redirect destinations are never dispatched
+ok 71 - refused redirect destinations are never dispatched
+  ---
+  duration_ms: 4.320708
+  type: 'test'
+  ...
+# Subtest: checked hops stop at ten redirects
+ok 72 - checked hops stop at ten redirects
+  ---
+  duration_ms: 0.8855
+  type: 'test'
+  ...
+# Subtest: hidden following by a manual transport is a redirect-policy refusal
+ok 73 - hidden following by a manual transport is a redirect-policy refusal
+  ---
+  duration_ms: 0.449708
+  type: 'test'
+  ...
+# Subtest: a later hop's network failure is a transport error
+ok 74 - a later hop's network failure is a transport error
+  ---
+  duration_ms: 0.414583
+  type: 'test'
+  ...
+# Subtest: SDK deadline interrupts stalled acquisition and retains body-phase metadata
+ok 75 - SDK deadline interrupts stalled acquisition and retains body-phase metadata
+  ---
+  duration_ms: 24.756583
+  type: 'test'
+  ...
+# Subtest: an attempt without timeoutMs waits until the caller aborts
+ok 76 - an attempt without timeoutMs waits until the caller aborts
+  ---
+  duration_ms: 45.586875
+  type: 'test'
+  ...
+# Subtest: caller cancellation and timeout remain distinct with deterministic ties
+ok 77 - caller cancellation and timeout remain distinct with deterministic ties
+  ---
+  duration_ms: 6.788166
+  type: 'test'
+  ...
+# Subtest: over-deadline synchronous validation releases handles and retains complete bytes
+ok 78 - over-deadline synchronous validation releases handles and retains complete bytes
+  ---
+  duration_ms: 1.95475
+  type: 'test'
+  ...
+# Subtest: invalid body chunks have a typed non-network failure
+ok 79 - invalid body chunks have a typed non-network failure
+  ---
+  duration_ms: 1.39125
+  type: 'test'
+  ...
+# Subtest: publication uses serialized origins and matches the route by URI equivalence
+ok 80 - publication uses serialized origins and matches the route by URI equivalence
+  ---
+  duration_ms: 4.5485
+  type: 'test'
+  ...
+# Subtest: a timer only for a set timeoutMs and late response cleanup
+ok 81 - a timer only for a set timeoutMs and late response cleanup
+  ---
+  duration_ms: 14.283792
+  type: 'test'
+  ...
+# Subtest: EOF expiry retains complete bytes while interrupted prefixes stay absent
+ok 82 - EOF expiry retains complete bytes while interrupted prefixes stay absent
+  ---
+  duration_ms: 0.7735
+  type: 'test'
+  ...
+# Subtest: proof constructors and plain-object forgeries cannot grant authority
+ok 83 - proof constructors and plain-object forgeries cannot grant authority
+  ---
+  duration_ms: 54.550292
+  type: 'test'
+  ...
+# Subtest: consuming proof revokes all aliases while retained proofs and editable copies survive
+ok 84 - consuming proof revokes all aliases while retained proofs and editable copies survive
+  ---
+  duration_ms: 3.564292
+  type: 'test'
+  ...
+# Subtest: one batch commits once and preserves decimal spelling and every untouched byte
+ok 85 - one batch commits once and preserves decimal spelling and every untouched byte
+  ---
+  duration_ms: 0.561917
+  type: 'test'
+  ...
+# Subtest: failed batches preserve bytes and retained canonical entries
+ok 86 - failed batches preserve bytes and retained canonical entries
+  ---
+  duration_ms: 0.686542
+  type: 'test'
+  ...
+# Subtest: coalesced insertions, escaped keys and explicit namespace edits construct one document
+ok 87 - coalesced insertions, escaped keys and explicit namespace edits construct one document
+  ---
+  duration_ms: 40.062333
+  type: 'test'
+  ...
+# Subtest: duplicate documents remain inspectable and immutable until replaced by a distinct document
+ok 88 - duplicate documents remain inspectable and immutable until replaced by a distinct document
+  ---
+  duration_ms: 1.09025
+  type: 'test'
+  ...
+# Subtest: exact text edits preserve lone UTF-16 and source positions follow the current revision
+ok 89 - exact text edits preserve lone UTF-16 and source positions follow the current revision
+  ---
+  duration_ms: 0.662042
+  type: 'test'
+  ...
+# Subtest: released edited owners and consumed proofs release their arenas
+ok 90 - released edited owners and consumed proofs release their arenas
+  ---
+  duration_ms: 0.392875
+  type: 'test'
+  ...
+# Subtest: exact owners survive failed batches, repeated references and whole-entry edits
+ok 91 - exact owners survive failed batches, repeated references and whole-entry edits
+  ---
+  duration_ms: 0.659958
+  type: 'test'
+  ...
+# Subtest: an oversized exact batch returns borrowed owners without changing bytes
+ok 92 - an oversized exact batch returns borrowed owners without changing bytes
+  ---
+  duration_ms: 86.900042
+  type: 'test'
+  ...
+# Subtest: exact namespace construction and exact pointer edits share one atomic bridge call
+ok 93 - exact namespace construction and exact pointer edits share one atomic bridge call
+  ---
+  duration_ms: 0.791708
+  type: 'test'
+  ...
+# Subtest: a finding pointer through an unpaired name edits the member it reports
+ok 94 - a finding pointer through an unpaired name edits the member it reports
+  ---
+  duration_ms: 1.608167
+  type: 'test'
+  ...
+# Subtest: edits return distinct owners while the original snapshot and proof remain usable
+ok 95 - edits return distinct owners while the original snapshot and proof remain usable
+  ---
+  duration_ms: 0.417417
+  type: 'test'
+  ...
+# Subtest: finalizing an editable document preserves separately acquired exact owners
+ok 96 - finalizing an editable document preserves separately acquired exact owners
+  ---
+  duration_ms: 4.14775
+  type: 'test'
+  ...
+# Subtest: a returned exact owner is finalized once after a failed edit
+ok 97 - a returned exact owner is finalized once after a failed edit
+  ---
+  duration_ms: 0.945292
+  type: 'test'
+  ...
+# Subtest: the Python exchange carries requests and answers larger than any pipe buffer
+ok 98 - the Python exchange carries requests and answers larger than any pipe buffer
+  ---
+  duration_ms: 398.544334
+  type: 'test'
+  ...
+# Subtest: all 505 corpus documents use the same admission and proof evidence
+ok 99 - all 505 corpus documents use the same admission and proof evidence
+  ---
+  duration_ms: 103.588125
+  type: 'test'
+  ...
+# Subtest: all 20 moved evaluator cases retain their exact negative admission evidence
+ok 100 - all 20 moved evaluator cases retain their exact negative admission evidence
+  ---
+  duration_ms: 1.680459
+  type: 'test'
+  ...
+# Subtest: all 486 evaluator groups through ConformantDocument, evaluate
+ok 101 - all 486 evaluator groups through ConformantDocument, evaluate
+  ---
+  duration_ms: 942.330833
+  type: 'test'
+  ...
+# Subtest: all 486 evaluator groups through ConformantDocument, explain
+ok 102 - all 486 evaluator groups through ConformantDocument, explain
+  ---
+  duration_ms: 827.264375
+  type: 'test'
+  ...
+# Subtest: all 32 domain fields and their relationships match the Rust fixture
+ok 103 - all 32 domain fields and their relationships match the Rust fixture
+  ---
+  duration_ms: 55.280292
+  type: 'test'
+  ...
+# Subtest: canonical owners keep same-snapshot relationships and operation-local examples
+ok 104 - canonical owners keep same-snapshot relationships and operation-local examples
+  ---
+  duration_ms: 2.875291
+  type: 'test'
+  ...
+# Subtest: optional namespaces retain absence versus empty and metadata retains false versus absent
+ok 105 - optional namespaces retain absence versus empty and metadata retains false versus absent
+  ---
+  duration_ms: 0.37875
+  type: 'test'
+  ...
+# Subtest: direct exact pointers preserve deep names and retained subtrees in Wasm
+ok 106 - direct exact pointers preserve deep names and retained subtrees in Wasm
+  ---
+  duration_ms: 3.367417
+  type: 'test'
+  ...
+# Subtest: raw member cursor preserves source order, duplicates, escaped/unpaired names and independent ownership
+ok 107 - raw member cursor preserves source order, duplicates, escaped/unpaired names and independent ownership
+  ---
+  duration_ms: 3.663875
+  type: 'test'
+  ...
+# Subtest: member/element cursors preserve the first terminal reason for every closing order
+ok 108 - member/element cursors preserve the first terminal reason for every closing order
+  ---
+  duration_ms: 0.677208
+  type: 'test'
+  ...
+# Subtest: array iteration is shallow, supports early break/throw and retained children after parent release
+ok 109 - array iteration is shallow, supports early break/throw and retained children after parent release
+  ---
+  duration_ms: 0.493667
+  type: 'test'
+  ...
+# Subtest: cursor failure closes only cursor; metadata-only prefix never acquires unvisited child owners
+ok 110 - cursor failure closes only cursor; metadata-only prefix never acquires unvisited child owners
+  ---
+  duration_ms: 1.850208
+  type: 'test'
+  ...
+# Subtest: document edits and prototype-sensitive names preserve exact unrelated values
+ok 111 - document edits and prototype-sensitive names preserve exact unrelated values
+  ---
+  duration_ms: 9.33775
+  type: 'test'
+  ...
+# Subtest: edits retain removed leaves and never adopt external owners
+ok 112 - edits retain removed leaves and never adopt external owners
+  ---
+  duration_ms: 0.338959
+  type: 'test'
+  ...
+# Subtest: malformed documents stay inspectable and repairable independently of conformance
+ok 113 - malformed documents stay inspectable and repairable independently of conformance
+  ---
+  duration_ms: 80.451625
+  type: 'test'
+  ...
+# Subtest: failed edit encoding and native commits release temporary state
+ok 114 - failed edit encoding and native commits release temporary state
+  ---
+  duration_ms: 0.438417
+  type: 'test'
+  ...
+# Subtest: canonical fields are narrow/frozen/lexical and exact children outlive the proof
+ok 115 - canonical fields are narrow/frozen/lexical and exact children outlive the proof
+  ---
+  duration_ms: 3.442875
+  type: 'test'
+  ...
+# Subtest: invalid domain rows stay exact and diagnostic while only conformance exposes canonical entries
+ok 116 - invalid domain rows stay exact and diagnostic while only conformance exposes canonical entries
+  ---
+  duration_ms: 9.473375
+  type: 'test'
+  ...
+# Subtest: text and its UTF-8 bytes are admitted alike by every exact entry point
+ok 117 - text and its UTF-8 bytes are admitted alike by every exact entry point
+  ---
+  duration_ms: 19.993125
+  type: 'test'
+  ...
+# Subtest: unpaired UTF-16 is refused alike with and without the host's isWellFormed
+ok 118 - unpaired UTF-16 is refused alike with and without the host's isWellFormed
+  ---
+  duration_ms: 473.908916
+  type: 'test'
+  ...
+# Subtest: first-use caller keeps setup refusals separate and releases its owners
+ok 119 - first-use caller keeps setup refusals separate and releases its owners
+  ---
+  duration_ms: 109.680125
+  type: 'test'
+  ...
+# Subtest: source editor requires conformance and retains prepared partial snapshots
+ok 120 - source editor requires conformance and retains prepared partial snapshots
+  ---
+  duration_ms: 3.788917
+  type: 'test'
+  ...
+# Subtest: editor presentation quotes original pointers and reports diagnostic truncation
+ok 121 - editor presentation quotes original pointers and reports diagnostic truncation
+  ---
+  duration_ms: 9.4835
+  type: 'test'
+  ...
+# Subtest: original schema frames handle deep and large values through Wasm
+ok 122 - original schema frames handle deep and large values through Wasm
+  ---
+  duration_ms: 344.959125
+  type: 'test'
+  ...
+# Subtest: public fixed-schema diagnostics explain safe repairs at original locations
+ok 123 - public fixed-schema diagnostics explain safe repairs at original locations
+  ---
+  duration_ms: 507.257541
+  type: 'test'
+  ...
+# Subtest: the fixed patterns' recorded results are ECMAScript RegExp results
+ok 124 - the fixed patterns' recorded results are ECMAScript RegExp results
+  ---
+  duration_ms: 319.783166
+  type: 'test'
+  ...
+# Subtest: initialization rejects unavailable entropy and invalid modules, then permits healthy retry
+ok 125 - initialization rejects unavailable entropy and invalid modules, then permits healthy retry
+  ---
+  duration_ms: 129.537083
+  type: 'test'
+  ...
+# Subtest: browser default initialization still fetches the module-relative asset
+ok 126 - browser default initialization still fetches the module-relative asset
+  ---
+  duration_ms: 103.648208
+  type: 'test'
+  ...
+# Subtest: a failed initialization (rejected input promise) leaves the package retryable
+ok 127 - a failed initialization (rejected input promise) leaves the package retryable
+  ---
+  duration_ms: 109.075375
+  type: 'test'
+  ...
+# Subtest: a failed initialization (failed fetch of a URL) leaves the package retryable
+ok 128 - a failed initialization (failed fetch of a URL) leaves the package retryable
+  ---
+  duration_ms: 118.380875
+  type: 'test'
+  ...
+# Subtest: a failed initialization (unsuccessful response) leaves the package retryable
+ok 129 - a failed initialization (unsuccessful response) leaves the package retryable
+  ---
+  duration_ms: 100.35825
+  type: 'test'
+  ...
+# Subtest: a failed initialization (invalid bytes) leaves the package retryable
+ok 130 - a failed initialization (invalid bytes) leaves the package retryable
+  ---
+  duration_ms: 144.089041
+  type: 'test'
+  ...
+# Subtest: a failed initialization (empty module) leaves the package retryable
+ok 131 - a failed initialization (empty module) leaves the package retryable
+  ---
+  duration_ms: 127.426167
+  type: 'test'
+  ...
+# Subtest: a failed initialization (impostor module bytes) leaves the package retryable
+ok 132 - a failed initialization (impostor module bytes) leaves the package retryable
+  ---
+  duration_ms: 145.347958
+  type: 'test'
+  ...
+# Subtest: a failed initialization (impostor compiled module) leaves the package retryable
+ok 133 - a failed initialization (impostor compiled module) leaves the package retryable
+  ---
+  duration_ms: 114.602417
+  type: 'test'
+  ...
+# Subtest: a failed initialization (impostor response) leaves the package retryable
+ok 134 - a failed initialization (impostor response) leaves the package retryable
+  ---
+  duration_ms: 121.971833
+  type: 'test'
+  ...
+# Subtest: failures of every kind in turn leave the package retryable
+ok 135 - failures of every kind in turn leave the package retryable
+  ---
+  duration_ms: 216.390542
+  type: 'test'
+  ...
+# Subtest: explained problems locate the value's node and the document's keyword
+ok 136 - explained problems locate the value's node and the document's keyword
+  ---
+  duration_ms: 81.184333
+  type: 'test'
+  ...
+# Subtest: a subtree value is named from itself and located in its text
+ok 137 - a subtree value is named from itself and located in its text
+  ---
+  duration_ms: 0.861875
+  type: 'test'
+  ...
+# Subtest: supplied resources locate their keywords, including through unpaired names
+ok 138 - supplied resources locate their keywords, including through unpaired names
+  ---
+  duration_ms: 3.145625
+  type: 'test'
+  ...
+# Subtest: at selects the node locate reports, including through unpaired names
+ok 139 - at selects the node locate reports, including through unpaired names
+  ---
+  duration_ms: 0.685625
+  type: 'test'
+  ...
+# Subtest: original explanations preserve independently fixed proofs and exact locations
+ok 140 - original explanations preserve independently fixed proofs and exact locations
+  ---
+  duration_ms: 165.783166
+  type: 'test'
+  ...
+# Subtest: owner acquisition is a method; property access creates no owner
+ok 141 - owner acquisition is a method; property access creates no owner
+  ---
+  duration_ms: 1.702709
+  type: 'test'
+  ...
+# Subtest: original patterns handle Unicode identifiers and broad epsilon closures in Wasm
+ok 142 - original patterns handle Unicode identifiers and broad epsilon closures in Wasm
+  ---
+  duration_ms: 91.474083
+  type: 'test'
+  ...
+# Subtest: the generated patterns' recorded results are ECMA-262 11th edition RegExp results
+ok 143 - the generated patterns' recorded results are ECMA-262 11th edition RegExp results
+  ---
+  duration_ms: 148.780208
+  type: 'test'
+  ...
+# Subtest: preparation keeps original schemas without projected dynamic copies through Wasm
+ok 144 - preparation keeps original schemas without projected dynamic copies through Wasm
+  ---
+  duration_ms: 164.882625
+  type: 'test'
+  ...
+# Subtest: current evaluator policy rejects compiler knobs and keeps deep concrete values
+ok 145 - current evaluator policy rejects compiler knobs and keeps deep concrete values
+  ---
+  duration_ms: 9.996584
+  type: 'test'
+  ...
+# Subtest: runtime-private edit helpers cannot expose or mutate a proof's revision
+ok 146 - runtime-private edit helpers cannot expose or mutate a proof's revision
+  ---
+  duration_ms: 36.220875
+  type: 'test'
+  ...
+# Subtest: Wasm proof storage refuses every borrowed editing entry
+ok 147 - Wasm proof storage refuses every borrowed editing entry
+  ---
+  duration_ms: 1.594875
+  type: 'test'
+  ...
+# Subtest: raw JSON and wrong canonical owners cannot be borrowed to produce schemas
+ok 148 - raw JSON and wrong canonical owners cannot be borrowed to produce schemas
+  ---
+  duration_ms: 28.356416
+  type: 'test'
+  ...
+# Subtest: every canonical Wasm owner checks its Rust variant before borrowed reads
+ok 149 - every canonical Wasm owner checks its Rust variant before borrowed reads
+  ---
+  duration_ms: 15.934833
+  type: 'test'
+  ...
+# Subtest: README source is captured verbatim with LF or CRLF
+ok 150 - README source is captured verbatim with LF or CRLF
+  ---
+  duration_ms: 0.666833
+  type: 'test'
+  ...
+# Subtest: README guard rejects missing, duplicate, and unclosed example fences
+ok 151 - README guard rejects missing, duplicate, and unclosed example fences
+  ---
+  duration_ms: 4.465333
+  type: 'test'
+  ...
+# Subtest: browser bootstrap remains a single verbatim executable README block
+ok 152 - browser bootstrap remains a single verbatim executable README block
+  ---
+  duration_ms: 0.266584
+  type: 'test'
+  ...
+# Subtest: README guard rejects an example swallowed by the preceding shell fence
+ok 153 - README guard rejects an example swallowed by the preceding shell fence
+  ---
+  duration_ms: 0.605833
+  type: 'test'
+  ...
+# Subtest: fence length, delimiter and info strings follow top-level Markdown rules
+ok 154 - fence length, delimiter and info strings follow top-level Markdown rules
+  ---
+  duration_ms: 0.68875
+  type: 'test'
+  ...
+# Subtest: original repeated reference preparation fits unchanged Wasm limits
+ok 155 - original repeated reference preparation fits unchanged Wasm limits
+  ---
+  duration_ms: 181.844916
+  type: 'test'
+  ...
+# Subtest: the default sets no resource cap
+ok 156 - the default sets no resource cap
+  ---
+  duration_ms: 0.771375
+  type: 'test'
+  ...
+# Subtest: a resource cap counts reached resources as natively
+ok 157 - a resource cap counts reached resources as natively
+  ---
+  duration_ms: 125.091
+  type: 'test'
+  ...
+# Subtest: a resource cap precedes a demanded local pattern limit
+ok 158 - a resource cap precedes a demanded local pattern limit
+  ---
+  duration_ms: 0.497959
+  type: 'test'
+  ...
+# Subtest: a contract's patterns are bounded together
+ok 159 - a contract's patterns are bounded together
+  ---
+  duration_ms: 0.830708
+  type: 'test'
+  ...
+# Subtest: pattern preparation bounds construction and unique program storage
+ok 160 - pattern preparation bounds construction and unique program storage
+  ---
+  duration_ms: 669.697292
+  type: 'test'
+  ...
+# Subtest: large resource requests remain bounded before registration
+ok 161 - large resource requests remain bounded before registration
+  ---
+  duration_ms: 383.100833
+  type: 'test'
+  ...
+# Subtest: expanded pattern preparation preserves default capacity and exact sharing
+ok 162 - expanded pattern preparation preserves default capacity and exact sharing
+  ---
+  duration_ms: 170.450542
+  type: 'test'
+  ...
+# Subtest: named and operation schemas retain the original document after disposal and edits
+ok 163 - named and operation schemas retain the original document after disposal and edits
+  ---
+  duration_ms: 102.779541
+  type: 'test'
+  ...
+# Subtest: preparation failures remain distinct from owned instance outcomes
+ok 164 - preparation failures remain distinct from owned instance outcomes
+  ---
+  duration_ms: 86.79125
+  type: 'test'
+  ...
+# Subtest: unavailable annotation content remains a per-value inability without invented provenance
+ok 165 - unavailable annotation content remains a per-value inability without invented provenance
+  ---
+  duration_ms: 3.823625
+  type: 'test'
+  ...
+# Subtest: author every normative object; absence/null and exact opaque values survive
+ok 166 - author every normative object; absence/null and exact opaque values survive
+  ---
+  duration_ms: 100.154375
+  type: 'test'
+  ...
+# Subtest: ordinary conversion rejects lossy/side-effecting values and exact handles retain ownership
+ok 167 - ordinary conversion rejects lossy/side-effecting values and exact handles retain ownership
+  ---
+  duration_ms: 1.033209
+  type: 'test'
+  ...
+# Subtest: ordinary number serialization stays distinct from exact JSON conversion
+ok 168 - ordinary number serialization stays distinct from exact JSON conversion
+  ---
+  duration_ms: 9.024417
+  type: 'test'
+  ...
+# Subtest: retained contracts and metadata support repeated native-feeling caller use
+ok 169 - retained contracts and metadata support repeated native-feeling caller use
+  ---
+  duration_ms: 168.917
+  type: 'test'
+  ...
+# Subtest: publication copies the snapshot and uses ordinary Fetch request/response values
+ok 170 - publication copies the snapshot and uses ordinary Fetch request/response values
+  ---
+  duration_ms: 10.680333
+  type: 'test'
+  ...
+# Subtest: Fetch discovery keeps assessment and transport distinctions with complete bounded bytes
+ok 171 - Fetch discovery keeps assessment and transport distinctions with complete bounded bytes
+  ---
+  duration_ms: 45.880375
+  type: 'test'
+  ...
+# Subtest: AbortSignal cancels before dispatch and during a pending reader
+ok 172 - AbortSignal cancels before dispatch and during a pending reader
+  ---
+  duration_ms: 40.747084
+  type: 'test'
+  ...
+# Subtest: explicit resources, evaluator limits and pre-cancellation keep their distinctions
+ok 173 - explicit resources, evaluator limits and pre-cancellation keep their distinctions
+  ---
+  duration_ms: 40.405125
+  type: 'test'
+  ...
+# Subtest: Wasm reports retain specification evidence without application policy
+ok 174 - Wasm reports retain specification evidence without application policy
+  ---
+  duration_ms: 0.382167
+  type: 'test'
+  ...
+# Subtest: schema resources admit every entry in one pass
+ok 175 - schema resources admit every entry in one pass
+  ---
+  duration_ms: 1.947041
+  type: 'test'
+  ...
+# Subtest: canonical operations retain their proof and contracts independently
+ok 176 - canonical operations retain their proof and contracts independently
+  ---
+  duration_ms: 0.345084
+  type: 'test'
+  ...
+# Subtest: evaluateJson admits JSON text as parseJson does, then validates
+ok 177 - evaluateJson admits JSON text as parseJson does, then validates
+  ---
+  duration_ms: 1.152916
+  type: 'test'
+  ...
+# Subtest: current semantic obligations through Wasm: current-reference-obligations.json
+ok 178 - current semantic obligations through Wasm: current-reference-obligations.json
+  ---
+  duration_ms: 170.07475
+  type: 'test'
+  ...
+# Subtest: current semantic obligations through Wasm: current-auxiliary-obligations.json
+ok 179 - current semantic obligations through Wasm: current-auxiliary-obligations.json
+  ---
+  duration_ms: 21.90475
+  type: 'test'
+  ...
+# Subtest: current semantic obligations through Wasm: semantic-soundness.json
+ok 180 - current semantic obligations through Wasm: semantic-soundness.json
+  ---
+  duration_ms: 27.4805
+  type: 'test'
+  ...
+# Subtest: current semantic obligations through Wasm: semantic-recursive-summaries.json
+ok 181 - current semantic obligations through Wasm: semantic-recursive-summaries.json
+  ---
+  duration_ms: 18.281041
+  type: 'test'
+  ...
+# Subtest: current semantic obligations through Wasm: semantic-recursive-extension.json
+ok 182 - current semantic obligations through Wasm: semantic-recursive-extension.json
+  ---
+  duration_ms: 15.430541
+  type: 'test'
+  ...
+# Subtest: current semantic obligations through Wasm: semantic-coordinate-refinement.json
+ok 183 - current semantic obligations through Wasm: semantic-coordinate-refinement.json
+  ---
+  duration_ms: 72.198333
+  type: 'test'
+  ...
+# Subtest: current semantic obligations through Wasm: semantic-limits.json
+ok 184 - current semantic obligations through Wasm: semantic-limits.json
+  ---
+  duration_ms: 5.211041
+  type: 'test'
+  ...
+# Subtest: service replacement retains in-flight work and handles partial contracts
+ok 185 - service replacement retains in-flight work and handles partial contracts
+  ---
+  duration_ms: 74.096042
+  type: 'test'
+  ...
+# Subtest: static reference matrix and concrete completions through Wasm
+ok 186 - static reference matrix and concrete completions through Wasm
+  ---
+  duration_ms: 449.424291
+  type: 'test'
+  ...
+# Subtest: shared syntax facts preserve complete schema admission in Wasm
+ok 187 - shared syntax facts preserve complete schema admission in Wasm
+  ---
+  duration_ms: 74.888917
+  type: 'test'
+  ...
+# Subtest: patternProperties subschemas reached through references stay evaluable through Wasm
+ok 188 - patternProperties subschemas reached through references stay evaluable through Wasm
+  ---
+  duration_ms: 95.395625
+  type: 'test'
+  ...
+# Subtest: validating the probe's costliest documents adds no more module memory than it does now
+ok 189 - validating the probe's costliest documents adds no more module memory than it does now
+  ---
+  duration_ms: 1997.809625
+  type: 'test'
+  ...
+# [{"name":"copied identifier paths","bytes":33262164,"added":232062976,"conclusion":"conformant","findings":0},{"name":"copied identifier paths with pieces","bytes":33262164,"added":238813184,"conclusion":"non-conformant","findings":4096}]
+1..189
+# tests 189
+# suites 0
+# pass 189
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 4791.781334

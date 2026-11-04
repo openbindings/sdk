@@ -81,14 +81,14 @@ fn actual_work_and_storage_exhaustion_precede_the_effect_ceiling() {
     for (limits, code) in [
         (
             Limits {
-                evaluation_steps: Some(0),
+                evaluation_sdk_work_units: Some(0),
                 ..Limits::default()
             },
             "evaluation-work-limit",
         ),
         (
             Limits {
-                program_bytes: 0,
+                evaluation_sdk_reservation_bytes: 0,
                 ..Limits::default()
             },
             "semantic-analysis-memory-limit",

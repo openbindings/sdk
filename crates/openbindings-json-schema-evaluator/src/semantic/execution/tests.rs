@@ -23,8 +23,8 @@ fn original(row: &Value) -> Plan {
         .environment(&resources, &preparation, &control)
         .unwrap();
     let mut limits = Limits::default();
-    if let Some(bytes) = row["program_bytes"].as_u64() {
-        limits.program_bytes = bytes as usize;
+    if let Some(bytes) = row["evaluation_sdk_reservation_bytes"].as_u64() {
+        limits.evaluation_sdk_reservation_bytes = bytes as usize;
     }
     openbindings_internal_schema::preparation::Attempt::run(
         preparation.max_sdk_work_units,

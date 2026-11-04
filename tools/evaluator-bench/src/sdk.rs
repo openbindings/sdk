@@ -25,9 +25,73 @@ impl<'de> Deserialize<'de> for Limits {
             ),
             None => None,
         };
+        // Only the frozen private request carrier retains these old names.
+        // Reject new-only and mixed input rather than enlarging its protocol.
+        for (carrier, current) in [
+            ("evaluation_steps", "evaluation_sdk_work_units"),
+            ("program_bytes", "evaluation_sdk_reservation_bytes"),
+        ] {
+            if request.contains_key(current) {
+                return Err(D::Error::custom(format!(
+                    "{current} is not a frozen benchmark carrier key"
+                )));
+            }
+            if let Some(value) = request.remove(carrier) {
+                request.insert(current.into(), value);
+            }
+        }
         let limits: openbindings_json_schema_evaluator::Limits =
             serde_json::from_value(Value::Object(request)).map_err(D::Error::custom)?;
         Ok(Limits(limits))
+    }
+}
+
+#[cfg(test)]
+mod limits_tests {
+    use super::*;
+
+    #[test]
+    fn frozen_carrier_moves_values_without_accepting_current_sdk_keys() {
+        for work in [Value::Null, json!(0), json!(17)] {
+            for bytes in [0, 41] {
+                let parsed: Limits = serde_json::from_value(json!({
+                    "evaluation_steps": work,
+                    "program_bytes": bytes,
+                }))
+                .unwrap();
+                let encoded = serde_json::to_value(parsed.0).unwrap();
+                assert_eq!(encoded["evaluation_sdk_work_units"], work);
+                assert_eq!(encoded["evaluation_sdk_reservation_bytes"], bytes);
+            }
+        }
+        let omitted: Limits = serde_json::from_value(json!({})).unwrap();
+        assert_eq!(omitted.0.evaluation_sdk_work_units, None);
+        assert_eq!(omitted.0.evaluation_sdk_reservation_bytes, 48 << 20);
+        for current in [
+            "evaluation_sdk_work_units",
+            "evaluation_sdk_reservation_bytes",
+        ] {
+            for value in [Value::Null, json!(0), json!(17)] {
+                let mut keys = json!({});
+                keys[current] = value;
+                assert!(serde_json::from_value::<Limits>(keys.clone()).is_err());
+                keys["evaluation_steps"] = Value::Null;
+                keys["program_bytes"] = json!(0);
+                assert!(serde_json::from_value::<Limits>(keys).is_err());
+            }
+        }
+        for (key, invalid) in [
+            ("evaluation_steps", json!(-1)),
+            ("evaluation_steps", json!(1.5)),
+            ("evaluation_steps", json!("17")),
+            ("program_bytes", Value::Null),
+            ("program_bytes", json!(-1)),
+            ("program_bytes", json!(1.5)),
+        ] {
+            let mut keys = json!({});
+            keys[key] = invalid;
+            assert!(serde_json::from_value::<Limits>(keys).is_err());
+        }
     }
 }
 // Reusable preparation inputs: the proof, one resource set and one evaluator.
@@ -194,20 +258,20 @@ impl Outcome {
                 value["code"] = json!(detail.code);
                 value["detail"] = serde_json::to_value(detail).unwrap();
                 // The instrument's location protocol is fixed across SDK revisions.
-                if let Some(location) = value["detail"]["location"].as_object_mut() {
-                    if let Some(uri) = location.remove("source_uri") {
-                        location.insert("resource".into(), uri);
-                    }
+                if let Some(location) = value["detail"]["location"].as_object_mut()
+                    && let Some(uri) = location.remove("source_uri")
+                {
+                    location.insert("resource".into(), uri);
                 }
             }
             ValueOutcome::Undefined { detail } => {
                 value["code"] = json!(detail.code);
                 value["detail"] = serde_json::to_value(detail).unwrap();
                 // The instrument's location protocol is fixed across SDK revisions.
-                if let Some(location) = value["detail"]["location"].as_object_mut() {
-                    if let Some(uri) = location.remove("source_uri") {
-                        location.insert("resource".into(), uri);
-                    }
+                if let Some(location) = value["detail"]["location"].as_object_mut()
+                    && let Some(uri) = location.remove("source_uri")
+                {
+                    location.insert("resource".into(), uri);
                 }
             }
             ValueOutcome::Fails {

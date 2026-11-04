@@ -1,0 +1,58 @@
+{
+  "status": "bounded API terminology checkpoint passes; final G1\u2013G7 qualification open",
+  "base": "4e4cdfbd1d8aa537a8de2dcf1bf34e81c9be5cf7",
+  "sdk_digest": "d8430ea45d8da187",
+  "instrument_digest": "3e82ba886b9ac89e",
+  "independent_review": "review/implementation/review.md",
+  "results": {
+    "workspace_default_features": {
+      "passed": 1013,
+      "failed": 0,
+      "ignored": 6
+    },
+    "workspace_all_target_clippy": "passed",
+    "evaluator_values": 1546,
+    "adapter_unit_test": "passed",
+    "adapter_tool_clippy": "passed after two equivalent let-chain fixes",
+    "independent_current_and_minimum_rust_tests": 27,
+    "unchanged_frozen_release_observations": 101,
+    "frozen_fixtures": 42,
+    "wasm_rebuild": "passed",
+    "typescript_build_types_reference": "passed",
+    "rust_public_reference": "passed",
+    "node": {
+      "passed": 189,
+      "failed": 0
+    },
+    "rust_consumer_configurations": [
+      "base",
+      "arbitrary-precision",
+      "native",
+      "native-arbitrary-precision"
+    ],
+    "typescript_installed_package": "passed, including README and lifecycle examples",
+    "fixture_input_checks": "passed"
+  },
+  "recovered_attempts": [
+    {
+      "log": "ob-budget-names-node.log",
+      "cause": "18 local-listener EPERM failures; 171 passed",
+      "resolution": "Authorized full rerun with local listeners: 189/189"
+    },
+    {
+      "log": "ob-budget-names-ts-package.log",
+      "cause": "Shared npm cache was not writable",
+      "resolution": "Isolated writable task cache; installed-package checks pass"
+    },
+    {
+      "log": "ob-budget-names-tool-clippy.log",
+      "cause": "Two pre-existing nested-if style warnings in private adapter",
+      "resolution": "Equivalent short-circuit let chains; lint and complete release replay pass"
+    }
+  ],
+  "remaining": [
+    "Full original/candidate performance gate; no accepted residual",
+    "Final native-feature/host/browser/package/consumer qualification",
+    "Final whole-source G1\u2013G7 completion audit"
+  ]
+}

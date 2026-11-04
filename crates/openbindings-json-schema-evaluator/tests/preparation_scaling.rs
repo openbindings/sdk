@@ -261,7 +261,7 @@ fn resource_diamonds_reuse_completed_applications() {
             &text,
             &ExternalSchemas::default(),
             Limits {
-                evaluation_steps: Some(1_000_000),
+                evaluation_sdk_work_units: Some(1_000_000),
                 ..Limits::default()
             },
         )
@@ -271,7 +271,7 @@ fn resource_diamonds_reuse_completed_applications() {
         &text,
         &ExternalSchemas::default(),
         Limits {
-            evaluation_steps: Some(0),
+            evaluation_sdk_work_units: Some(0),
             ..Limits::default()
         },
     )
@@ -391,7 +391,7 @@ fn dynamic_scope_is_prepared_once_and_runtime_work_remains_bounded() {
         &text,
         &ExternalSchemas::default(),
         Limits {
-            evaluation_steps: Some(1_000_000),
+            evaluation_sdk_work_units: Some(1_000_000),
             ..Limits::default()
         },
     )
@@ -406,13 +406,15 @@ fn dynamic_scope_is_prepared_once_and_runtime_work_remains_bounded() {
 
 #[test]
 fn former_specialization_budgets_fund_the_actual_dynamic_proof() {
-    for (levels, program_bytes) in [(8, 4 << 20), (8, 8 << 20), (9, 8 << 20), (9, 16 << 20)] {
+    for (levels, evaluation_sdk_reservation_bytes) in
+        [(8, 4 << 20), (8, 8 << 20), (9, 8 << 20), (9, 16 << 20)]
+    {
         decides(
             &prepare_within(
                 &dynamic_choices(levels),
                 &ExternalSchemas::default(),
                 Limits {
-                    program_bytes,
+                    evaluation_sdk_reservation_bytes,
                     ..Limits::default()
                 },
             )
@@ -424,7 +426,7 @@ fn former_specialization_budgets_fund_the_actual_dynamic_proof() {
         &chain(3),
         &ExternalSchemas::default(),
         Limits {
-            program_bytes: 0,
+            evaluation_sdk_reservation_bytes: 0,
             ..Limits::default()
         },
     )
@@ -439,12 +441,12 @@ fn former_specialization_budgets_fund_the_actual_dynamic_proof() {
 #[test]
 fn the_program_storage_boundary_names_the_actual_proof_budget() {
     let text = dynamic_choices(3);
-    let within = |program_bytes| {
+    let within = |evaluation_sdk_reservation_bytes| {
         prepare_within(
             &text,
             &ExternalSchemas::default(),
             Limits {
-                program_bytes,
+                evaluation_sdk_reservation_bytes,
                 ..Limits::default()
             },
         )
@@ -453,7 +455,7 @@ fn the_program_storage_boundary_names_the_actual_proof_budget() {
         .unwrap()
     };
     let mut low = 0;
-    let mut high = Limits::default().program_bytes;
+    let mut high = Limits::default().evaluation_sdk_reservation_bytes;
     assert!(matches!(within(high), ValueOutcome::Satisfies));
     while low < high {
         let middle = low + (high - low) / 2;
@@ -669,7 +671,7 @@ fn a_schema_nested_more_than_256_levels_deep_refuses_whatever_the_limits() {
         })
     }
     let raised = Limits {
-        program_bytes: 256 << 20,
+        evaluation_sdk_reservation_bytes: 256 << 20,
         ..Limits::default()
     };
     let refused = |result: Result<

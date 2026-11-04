@@ -18,8 +18,8 @@ fn prepare(schema: &str, steps: Option<usize>) -> PreparedSchema<DefaultValidato
     .unwrap()
     .prepare(
         &DefaultEvaluator::with_limits(Limits {
-            program_bytes: 64 * 1024,
-            evaluation_steps: steps,
+            evaluation_sdk_reservation_bytes: 64 * 1024,
+            evaluation_sdk_work_units: steps,
             ..Limits::default()
         }),
         &ExternalSchemas::default(),

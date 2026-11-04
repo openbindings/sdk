@@ -10554,7 +10554,7 @@
           "stage": "preparation"
         },
         "limits": {
-          "evaluation_steps": 0
+          "evaluation_sdk_work_units": 0
         }
       },
       "document_construction": "original-schema-as-operations.op.input",

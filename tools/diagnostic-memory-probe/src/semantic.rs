@@ -6,7 +6,7 @@ use serde_json::json;
 pub(super) fn run() {
     for size in [100_000, 1_000_000] {
         for mode in ["pattern", "pattern-limited", "origin", "origin-forced"] {
-            let program_bytes = if mode == "pattern" {
+            let evaluation_sdk_reservation_bytes = if mode == "pattern" {
                 8 * 1024 * 1024
             } else {
                 64 * 1024
@@ -41,7 +41,7 @@ pub(super) fn run() {
                 .unwrap()
                 .prepare(
                     &DefaultEvaluator::with_limits(Limits {
-                        program_bytes,
+                        evaluation_sdk_reservation_bytes,
                         ..Limits::default()
                     }),
                     &ExternalSchemas::default(),
@@ -52,7 +52,7 @@ pub(super) fn run() {
             println!(
                 "{}",
                 json!({"phase":"semantic-evaluation", "mode":mode, "source_or_instance_bytes":size,
-                "program_bytes":program_bytes, "peak_bytes":added_peak, "nanos":nanos, "outcome": result})
+                "evaluation_sdk_reservation_bytes":evaluation_sdk_reservation_bytes, "peak_bytes":added_peak, "nanos":nanos, "outcome": result})
             );
             assert!(
                 added_peak < 128 * 1024,
@@ -114,7 +114,7 @@ pub(super) fn recursive() {
             let prepared = schema
                 .prepare(
                     &DefaultEvaluator::with_limits(Limits {
-                        program_bytes: budget,
+                        evaluation_sdk_reservation_bytes: budget,
                         ..Limits::default()
                     }),
                     &ExternalSchemas::default(),
@@ -143,7 +143,7 @@ pub(super) fn recursive() {
                 let retained = crate::LIVE.load(Relaxed) as i128 - live as i128;
                 println!(
                     "{}",
-                    json!({"phase":"recursive-proof", "mode":mode,"width":width,"program_bytes":budget,"historical_stack_bytes":stack_bytes,"warm":warm,"outcome":actual,"peak_bytes":peak,"retained_bytes":retained,"nanos":nanos})
+                    json!({"phase":"recursive-proof", "mode":mode,"width":width,"evaluation_sdk_reservation_bytes":budget,"historical_stack_bytes":stack_bytes,"warm":warm,"outcome":actual,"peak_bytes":peak,"retained_bytes":retained,"nanos":nanos})
                 );
                 assert!(
                     peak <= budget * 2,

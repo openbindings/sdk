@@ -176,7 +176,7 @@ fn two_pass_storage_and_work_are_cumulative_at_exact_boundaries() {
     );
     let value = JsonValue::parse(r#"{"a":"x"}"#).unwrap();
     let control = AtomicBool::new(false);
-    plan.limits.evaluation_steps = Some(1_000_000);
+    plan.limits.evaluation_sdk_work_units = Some(1_000_000);
     let allowance = plan.allowance();
     let first = plan.evaluate_pass(&value, &control, None, &mut None, allowance, false);
     let first_bytes = allowance.bytes - first.remaining.bytes;
@@ -186,34 +186,34 @@ fn two_pass_storage_and_work_are_cumulative_at_exact_boundaries() {
     let work = allowance.work.unwrap() - second.remaining.work.unwrap();
     assert!(bytes > first_bytes);
 
-    plan.limits.program_bytes = bytes;
-    plan.limits.evaluation_steps = Some(work);
+    plan.limits.evaluation_sdk_reservation_bytes = bytes;
+    plan.limits.evaluation_sdk_work_units = Some(work);
     assert!(has_problem(&plan.evaluate(
         &value,
         Detail::Explain,
         &control
     )));
-    plan.limits.program_bytes = bytes - 1;
+    plan.limits.evaluation_sdk_reservation_bytes = bytes - 1;
     let result = plan.evaluate(&value, Detail::Explain, &control);
     assert_eq!(category(&result), "fails");
     assert!(!has_problem(&result));
-    plan.limits.program_bytes = bytes;
-    plan.limits.evaluation_steps = Some(work - 1);
+    plan.limits.evaluation_sdk_reservation_bytes = bytes;
+    plan.limits.evaluation_sdk_work_units = Some(work - 1);
     let result = plan.evaluate(&value, Detail::Explain, &control);
     assert_eq!(category(&result), "fails");
     assert!(!has_problem(&result));
 
-    plan.limits.evaluation_steps = allowance.work;
-    plan.limits.program_bytes = first_bytes;
+    plan.limits.evaluation_sdk_work_units = allowance.work;
+    plan.limits.evaluation_sdk_reservation_bytes = first_bytes;
     let result = plan.evaluate(&value, Detail::Explain, &control);
     assert_eq!(category(&result), "fails");
     assert!(!has_problem(&result));
-    plan.limits.program_bytes = first_bytes - 1;
+    plan.limits.evaluation_sdk_reservation_bytes = first_bytes - 1;
     assert_eq!(
         category(&plan.evaluate(&value, Detail::Explain, &control)),
         "no-verdict"
     );
-    plan.limits.program_bytes = allowance.bytes;
+    plan.limits.evaluation_sdk_reservation_bytes = allowance.bytes;
     assert!(has_problem(&plan.evaluate(
         &value,
         Detail::Explain,
@@ -351,17 +351,17 @@ fn a_failed_primitive_does_not_skip_later_work_or_its_refusal() {
     );
     let value = JsonValue::parse(format!("\"{}\"", "x".repeat(2048))).unwrap();
     let control = AtomicBool::new(false);
-    plain.limits.evaluation_steps = Some(1_000_000);
+    plain.limits.evaluation_sdk_work_units = Some(1_000_000);
     let first = plain.evaluate_pass(&value, &control, None, &mut None, plain.allowance(), false);
     assert_eq!(category(&first.outcome), "fails");
-    more.limits.evaluation_steps = Some(1_000_000 - first.remaining.work.unwrap());
+    more.limits.evaluation_sdk_work_units = Some(1_000_000 - first.remaining.work.unwrap());
     for detail in [Detail::Outcome, Detail::Explain] {
         assert_eq!(
             category(&more.evaluate(&value, detail, &control)),
             "no-verdict"
         );
     }
-    more.limits.evaluation_steps = None;
+    more.limits.evaluation_sdk_work_units = None;
     let ValueOutcome::Fails { problems, .. } = more.evaluate(&value, Detail::Explain, &control)
     else {
         panic!("the fully funded assertion fails");
@@ -376,20 +376,20 @@ fn zero_unlimited_and_overflow_allowances_do_not_renew_work() {
     let value = JsonValue::parse("null").unwrap();
     let control = AtomicBool::new(false);
     for work in [None, Some(usize::MAX)] {
-        plan.limits.evaluation_steps = work;
+        plan.limits.evaluation_sdk_work_units = work;
         assert!(has_problem(&plan.evaluate(
             &value,
             Detail::Explain,
             &control
         )));
     }
-    plan.limits.evaluation_steps = Some(0);
+    plan.limits.evaluation_sdk_work_units = Some(0);
     assert_eq!(
         category(&plan.evaluate(&value, Detail::Explain, &control)),
         "no-verdict"
     );
-    plan.limits.evaluation_steps = None;
-    plan.limits.program_bytes = 0;
+    plan.limits.evaluation_sdk_work_units = None;
+    plan.limits.evaluation_sdk_reservation_bytes = 0;
     assert_eq!(
         category(&plan.evaluate(&value, Detail::Explain, &control)),
         "no-verdict"

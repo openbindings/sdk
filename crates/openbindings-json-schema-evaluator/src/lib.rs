@@ -19,10 +19,15 @@ use std::sync::Arc;
 /// returns no verdict. Exhausted diagnostics preserve an established failure
 /// with incomplete problems. These are not elapsed-time deadlines or total
 /// process-memory bounds.
+/// Each value invocation starts a fresh evaluation allowance; verdict and
+/// diagnostic passes share what remains. Required custom-meta evaluation debits
+/// its own evaluation allowance and the enclosing preparation attempt, so either
+/// exhaustion can return a preparation limit.
 pub struct Limits {
-    /// Evaluation and semantic proof work. `None` (default) sets no
-    /// caller-selected cap; internal capability bounds still apply.
-    pub evaluation_steps: Option<usize>,
+    /// Cooperative SDK evaluation work units. `None` (default) sets no
+    /// caller-selected cap; internal capability bounds still apply. These are
+    /// SDK-defined debits, not CPU operations or a count of schema steps.
+    pub evaluation_sdk_work_units: Option<usize>,
     /// Maximum UTF-8 bytes in one pattern and its expanded form; default 1 MiB.
     pub pattern_bytes: usize,
     /// Caller-selected authored pattern group ceiling; default 32. The supported
@@ -38,9 +43,11 @@ pub struct Limits {
     /// caches use each value call's separate allowance. This does not measure
     /// allocator capacities, transient dependency allocations or process memory.
     pub total_pattern_memory: usize,
-    /// SDK program growth and semantic proof-storage allowance; default 48 MiB.
-    /// This is an SDK reservation allowance, not total process memory.
-    pub program_bytes: usize,
+    /// Cumulative SDK evaluation storage reservations; default 48 MiB. This
+    /// includes proof, memo, scratch, search-cache and diagnostic storage. These
+    /// are SDK estimates, not allocator requests, peak live memory, immutable
+    /// pattern-program size or a total process-memory bound.
+    pub evaluation_sdk_reservation_bytes: usize,
     /// Reached schema-resource bound. `None` (default) sets no additional
     /// resource-count cap. Original-environment preparation still has its own
     /// footprint, work and allocation bounds through [`PreparationLimits`].
@@ -49,12 +56,12 @@ pub struct Limits {
 impl Default for Limits {
     fn default() -> Self {
         Self {
-            evaluation_steps: None,
+            evaluation_sdk_work_units: None,
             pattern_bytes: 1024 * 1024,
             pattern_depth: pattern::MAX_GROUP_DEPTH,
             total_pattern_bytes: 4 * 1024 * 1024,
             total_pattern_memory: 64 * 1024 * 1024,
-            program_bytes: 48 * 1024 * 1024,
+            evaluation_sdk_reservation_bytes: 48 * 1024 * 1024,
             schema_resources: None,
         }
     }

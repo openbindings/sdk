@@ -229,13 +229,20 @@ for supported semantics and remaining limitations.
 
 | Setting | Default | Scope |
 | --- | --- | --- |
-| `evaluationSteps` | `null` | Evaluation and semantic proof work; no caller-selected cap by default |
+| `evaluationSdkWorkUnits` | `null` | Cooperative SDK evaluation work units; no caller-selected cap by default |
 | `schemaResources` | `null` | Additional reached-resource count bound |
 | `patternBytes` | 1 MiB | One pattern and its expanded form |
 | `patternDepth` | 32 | Pattern group nesting |
 | `totalPatternBytes` | 4 MiB | Unique normalized pattern forms across both pattern keywords |
 | `totalPatternMemory` | 64 MiB | Immutable pattern-program representation |
-| `programBytes` | 48 MiB | SDK program growth and semantic proof storage |
+| `evaluationSdkReservationBytes` | 48 MiB | Cumulative SDK proof, memo, scratch, search-cache and diagnostic storage reservations |
+
+Each value invocation starts a fresh evaluation allowance. Verdict and diagnostic
+passes share what remains; diagnostic exhaustion preserves an established failure
+with incomplete problems. Required custom-meta evaluation debits its own evaluation
+allowance and the shared preparation allowance, so either exhaustion can return a
+preparation failure. Reservation bytes are SDK estimates, not exact allocator
+requests, live heap or immutable pattern-program size.
 
 The original schema environment also has preparation footprint, work and
 allocation bounds, using Rust's default `PreparationLimits` in this facade.

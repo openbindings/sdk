@@ -340,20 +340,20 @@ export interface WorkOptions {
   signal?: AbortSignal;
 }
 
-/** Built-in evaluator budgets. Each numeric value is a nonnegative 32-bit integer; evaluationSteps and schemaResources also accept null. Preparation exhaustion returns a preparation failure; evaluation exhaustion returns no-verdict. Exhausted diagnostics preserve an established failure with problemsComplete false. These budgets are not elapsed-time deadlines or total process-memory bounds. */
+/** Built-in evaluator budgets. Each numeric value is a nonnegative 32-bit integer; evaluationSdkWorkUnits and schemaResources also accept null. Preparation exhaustion returns a preparation failure; evaluation exhaustion returns no-verdict. Exhausted diagnostics preserve an established failure with problemsComplete false. These budgets are not elapsed-time deadlines or total process-memory bounds. */
 export interface EvaluatorLimits {
-  /** Evaluation and semantic proof work; null (default) sets no caller-selected cap. Internal capability bounds still apply. */
-  evaluationSteps: number | null;
+  /** Cooperative SDK evaluation work units; null (default) sets no caller-selected cap. Internal capability bounds still apply. These are SDK-defined debits, not CPU operations or a count of schema steps. */
+  evaluationSdkWorkUnits: number | null;
   /** Maximum UTF-8 bytes in one schema pattern and its expanded form; default 1,048,576. */
   patternBytes: number;
   /** Caller-selected authored pattern group ceiling; default 32. The supported maximum remains 32 even when a larger value is requested. */
   patternDepth: number;
   /** Aggregate retained pattern-form bytes; default 4,194,304. Equivalent normalized forms share one immutable program across value patterns and property names. Expanded forms can be larger than their authored patterns. */
   totalPatternBytes: number;
-  /** Immutable pattern-program footprint; default and supported maximum 67,108,864 bytes. Per-call search caches use the separate program allowance; this is not a process-memory measurement. */
+  /** Immutable pattern-program footprint; default and supported maximum 67,108,864 bytes. Per-call search caches use evaluationSdkReservationBytes; this is not a process-memory measurement. */
   totalPatternMemory: number;
-  /** SDK program growth and semantic proof-storage allowance; default 50,331,648 bytes. This is an SDK reservation allowance, not total process memory. */
-  programBytes: number;
+  /** Cumulative SDK evaluation storage reservations; default 50,331,648 bytes. Includes proof, memo, scratch, search-cache and diagnostic storage. These are SDK estimates, not allocator requests, peak live memory, immutable pattern-program size or a process-memory bound. */
+  evaluationSdkReservationBytes: number;
   /** Reached schema-resource bound; null (default) sets no additional resource-count cap. Original-environment preparation still has its own footprint, work and allocation bounds. */
   schemaResources: number | null;
 }
@@ -397,7 +397,7 @@ function encodedLimits(limits: Partial<EvaluatorLimits> = {}): string {
     )
       throw new SdkError(
         "invalid-evaluator-limits",
-        "Evaluator limits must be known budgets, each a nonnegative integer no greater than 4294967295; evaluationSteps and schemaResources may also be null for their defaults.",
+        "Evaluator limits must be known budgets, each a nonnegative integer no greater than 4294967295; evaluationSdkWorkUnits and schemaResources may also be null for their defaults.",
       );
     encoded[key.replace(/[A-Z]/g, (c) => "_" + c.toLowerCase())] = value;
   }

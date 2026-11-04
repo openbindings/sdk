@@ -127,7 +127,7 @@ fn json_validation_returns_all_four_outcomes_after_admission() {
         ValueOutcome::Fails { .. }
     ));
     let capped = DefaultEvaluator::with_limits(openbindings_json_schema_evaluator::Limits {
-        evaluation_steps: Some(0),
+        evaluation_sdk_work_units: Some(0),
         ..Default::default()
     });
     let proof = document(r#"{"items":{"type":"integer"}}"#);

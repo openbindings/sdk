@@ -42,7 +42,7 @@ fn explicit(steps: usize) -> PreparedSchema<openbindings_json_schema_evaluator::
     prepared(
         SCHEMA,
         Limits {
-            evaluation_steps: Some(steps),
+            evaluation_sdk_work_units: Some(steps),
             ..Limits::default()
         },
     )
@@ -57,7 +57,7 @@ fn repeated_root_proofs_fit_a_small_reservation_without_copying_empty_storage() 
     let contract = prepared(
         &schema,
         Limits {
-            program_bytes: 64 * 1024,
+            evaluation_sdk_reservation_bytes: 64 * 1024,
             ..Limits::default()
         },
     );
@@ -104,7 +104,7 @@ fn explicit_caps_bracket_a_checks_work_and_the_default_sets_none() {
     let value = JsonValue::parse(format!("[{}0]", "1,".repeat(4 * 65_536 - 2))).unwrap();
     let outcome = |schema: &str, limits| prepared(schema, limits).evaluate(&value);
     let capped = |steps| Limits {
-        evaluation_steps: Some(steps),
+        evaluation_sdk_work_units: Some(steps),
         ..Limits::default()
     };
     // Original-engine work includes exact primitive and frame dispatch work.
@@ -132,19 +132,70 @@ fn explicit_caps_bracket_a_checks_work_and_the_default_sets_none() {
 }
 
 #[test]
+fn evaluation_allowance_serialization_uses_only_current_names() {
+    use serde_json::json;
+    let defaults = serde_json::to_value(Limits::default()).unwrap();
+    assert_eq!(defaults["evaluation_sdk_work_units"], json!(null));
+    assert_eq!(
+        defaults["evaluation_sdk_reservation_bytes"],
+        json!(48 << 20)
+    );
+    assert!(defaults.get("evaluation_steps").is_none());
+    assert!(defaults.get("program_bytes").is_none());
+    for work in [json!(null), json!(0), json!(17)] {
+        for bytes in [0, 41] {
+            let supplied = json!({
+                "evaluation_sdk_work_units": work,
+                "evaluation_sdk_reservation_bytes": bytes,
+            });
+            let limits: Limits = serde_json::from_value(supplied.clone()).unwrap();
+            let encoded = serde_json::to_value(limits).unwrap();
+            for (key, value) in supplied.as_object().unwrap() {
+                assert_eq!(&encoded[key], value);
+            }
+        }
+    }
+    for retired in ["evaluation_steps", "program_bytes"] {
+        for value in [json!(null), json!(0), json!(17)] {
+            let mut keys = json!({});
+            keys[retired] = value;
+            assert!(serde_json::from_value::<Limits>(keys.clone()).is_err());
+            keys["evaluation_sdk_work_units"] = json!(null);
+            keys["evaluation_sdk_reservation_bytes"] = json!(0);
+            assert!(serde_json::from_value::<Limits>(keys).is_err());
+        }
+    }
+    for invalid in [json!(null), json!(-1), json!(1.5), json!("41")] {
+        assert!(
+            serde_json::from_value::<Limits>(json!({
+                "evaluation_sdk_reservation_bytes": invalid,
+            }))
+            .is_err()
+        );
+    }
+    #[cfg(target_pointer_width = "64")]
+    assert_eq!(
+        serde_json::from_value::<Limits>(json!({"evaluation_sdk_work_units": 4_294_967_296u64}))
+            .unwrap()
+            .evaluation_sdk_work_units,
+        Some(4_294_967_296)
+    );
+}
+
+#[test]
 fn an_evaluator_reports_the_budgets_it_was_given() {
     let limits = Limits {
-        evaluation_steps: Some(7),
+        evaluation_sdk_work_units: Some(7),
         pattern_bytes: 19,
         pattern_depth: 23,
         total_pattern_bytes: 31,
         total_pattern_memory: 37,
-        program_bytes: 41,
+        evaluation_sdk_reservation_bytes: 41,
         schema_resources: Some(29),
     };
     let evaluator = DefaultEvaluator::with_limits(limits);
     let reported = evaluator.limits();
-    assert_eq!(reported.evaluation_steps, Some(7));
+    assert_eq!(reported.evaluation_sdk_work_units, Some(7));
     assert_eq!(reported.schema_resources, Some(29));
     assert_eq!(reported.total_pattern_bytes, 31);
     assert_eq!(reported.total_pattern_memory, 37);
@@ -156,10 +207,18 @@ fn an_evaluator_reports_the_budgets_it_was_given() {
         DefaultEvaluator::new().limits().total_pattern_memory,
         64 << 20
     );
-    assert_eq!(reported.program_bytes, 41);
-    assert_eq!(DefaultEvaluator::new().limits().program_bytes, 48 << 20);
+    assert_eq!(reported.evaluation_sdk_reservation_bytes, 41);
+    assert_eq!(
+        DefaultEvaluator::new()
+            .limits()
+            .evaluation_sdk_reservation_bytes,
+        48 << 20
+    );
     assert_eq!((reported.pattern_bytes, reported.pattern_depth), (19, 23));
-    assert_eq!(DefaultEvaluator::new().limits().evaluation_steps, None);
+    assert_eq!(
+        DefaultEvaluator::new().limits().evaluation_sdk_work_units,
+        None
+    );
     assert_eq!(DefaultEvaluator::new().limits().schema_resources, None);
 }
 

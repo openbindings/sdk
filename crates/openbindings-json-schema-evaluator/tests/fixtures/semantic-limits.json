@@ -276,12 +276,12 @@
     "schema": true,
     "value": null,
     "limits": {
-      "program_bytes": 0
+      "evaluation_sdk_reservation_bytes": 0
     },
     "resources": [],
     "required": "limit",
     "historical_required": "S",
-    "adjudication": "The original engine has real initial proof storage; zero program_bytes cannot fund it. The outgoing compiled Boolean fast path's zero-storage success is retired."
+    "adjudication": "The original engine has real initial proof storage; zero evaluation_sdk_reservation_bytes cannot fund it. The outgoing compiled Boolean fast path's zero-storage success is retired."
   },
   {
     "id": "zero-program/semantic",
@@ -303,7 +303,7 @@
     },
     "value": null,
     "limits": {
-      "program_bytes": 0
+      "evaluation_sdk_reservation_bytes": 0
     },
     "resources": [],
     "required": "limit"

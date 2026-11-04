@@ -103,7 +103,7 @@ fn prepare_bounded(schema: &Schema, resources: &ExternalSchemas)
     -> Result<PreparedSchema<DefaultValidator>, PreparationFailure>
 {
     let evaluator = DefaultEvaluator::with_limits(Limits {
-        evaluation_steps: Some(10_000_000),
+        evaluation_sdk_work_units: Some(10_000_000),
         schema_resources: Some(1_000),
         ..Limits::default()
     });
@@ -113,13 +113,20 @@ fn prepare_bounded(schema: &Schema, resources: &ExternalSchemas)
 
 | Limit | Default | What it bounds |
 | --- | --- | --- |
-| `evaluation_steps` | no cap | Evaluation and semantic proof work |
+| `evaluation_sdk_work_units` | no cap | Cooperative SDK evaluation work units |
 | `schema_resources` | no cap | Reached original resource construction |
 | `pattern_bytes` | 1 MiB | One pattern source and its expanded form |
 | `pattern_depth` | 32 | Pattern group nesting |
 | `total_pattern_bytes` | 4 MiB | Unique normalized pattern forms across values and property names |
 | `total_pattern_memory` | 64 MiB | Immutable pattern-program representation |
-| `program_bytes` | 48 MiB | SDK program growth and semantic proof storage |
+| `evaluation_sdk_reservation_bytes` | 48 MiB | Cumulative SDK proof, memo, scratch, search-cache and diagnostic storage reservations |
+
+Each value invocation starts a fresh evaluation allowance. Verdict and diagnostic
+passes share what remains; diagnostic exhaustion preserves an established failure
+with incomplete problems. Required custom-meta evaluation debits both its own
+evaluation allowance and the enclosing preparation Attempt, so either exhaustion
+can return a preparation Limit. Reservation bytes are SDK estimates, not exact
+allocator requests, live heap or immutable pattern-program size.
 
 `PreparationLimits` bounds the original schema environment's footprint, cooperative
 SDK work (`max_sdk_work_units`) and explicit SDK storage reservations
