@@ -5,6 +5,14 @@ export function patternCacheCases(sdk) {
   const root = "https://cache.test/root";
   const meta = "https://cache.test/meta";
   const rows = [
+    ...["é", "éé", "𐐀", "\\u00e9"].map((name, index) => ({
+      id: `unicode-group-${index}`,
+      pattern: `(?<${name}>x)`,
+      values: [
+        ["x", "satisfies"],
+        ["y", "fails"],
+      ],
+    })),
     ...[100, 1_000, 10_000].map((count) => ({
       id: `empty-alternatives-${count}`,
       pattern: "|".repeat(count),

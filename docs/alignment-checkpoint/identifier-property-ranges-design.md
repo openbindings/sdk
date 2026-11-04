@@ -1,5 +1,9 @@
 # Allocation-free Unicode identifier membership
 
+Implemented with parent native/MSRV/actual-host qualification and independent
+implementation/resource review PASS. The Windows exact-byte checkout finding is
+resolved. The original design and remaining scope boundary follow.
+
 The independent pattern audit found unaccounted cold construction of two global
 regex engines while checking non-ASCII capture-group names. A short `(?<é>x)`
 reader call requests 798,632 bytes against a 1,536-byte reader reservation; using

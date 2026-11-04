@@ -117,6 +117,10 @@ toolchain; the MSRV compatibility receipt explicitly records no matching Clippy 
    original engine through all gates, switch the default and retire the outgoing
    projection/compiler code. No existing public API or internal architecture needs
    preservation; no evaluator allowance or performance expectation is waived.
+   The [identifier membership correction](alignment-checkpoint/identifier-range-results.md)
+   also passes parent and independent qualification: pinned const ranges replace
+   hidden cold regex initialization, with a required exact reproduction gate.
+   This does not certify the separate full reader/compiler construction schedule.
 3. TypeScript organization is implemented and independently reviewed. Finish
    remaining invocation/discovery composition, full workspace/host/CI/package
    checks, matched performance measurements and the complete specification-to-code

@@ -18,3 +18,5 @@
 /crates/openbindings-json-schema-evaluator/tests/fixtures/** -text
 # The independently adjudicated evaluator corpus has its own byte-hash gate.
 /crates/openbindings-schema-evaluator-test-support/fixtures/** -text
+# The required Unicode-table reproducer compares these generated source bytes.
+/crates/openbindings-json-schema-evaluator/src/pattern/identifier/ranges.rs -text

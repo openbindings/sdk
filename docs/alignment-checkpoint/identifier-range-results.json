@@ -1,0 +1,100 @@
+{
+  "status": "parent and independent implementation/resource gates pass",
+  "sdk_base": "a6b3bea3ca3f6e00636819968d105ea3481ddac8",
+  "scope": "fixed identifier membership, not the entire reader or VM compiler certificate",
+  "native": {
+    "native": {
+      "passed": 315,
+      "ignored": 5
+    },
+    "msrv": {
+      "passed": 106,
+      "ignored": 2
+    }
+  },
+  "generator_reproduction_current_and_msrv": "pass",
+  "strict_clippy_sdk_and_generator": "pass",
+  "attribution": "pass",
+  "node_tests": 185,
+  "types": "pass",
+  "format": "pass",
+  "installed_package_assertions": 352,
+  "wasm_build": {
+    "rustSource": "58095534d9b541ad2a8ab9f24c56078a646993e0f029484637078c231d6d15ad",
+    "artifacts": {
+      "openbindings_wasm.js": "a6c4872bed0e3d6e9b059403bfcfe0da3e21a0bb264fa4372b4d4464ff440e2e",
+      "openbindings_wasm_bg.wasm": "05fdb0699350d5089814a7c9bbc87d70c6c52679526610b45474115f7828fbf0",
+      "openbindings_wasm_signature.js": "b7a98f3e14387a59804c6b4c025b0d03cf5671acd66490e03ec47e89cedc3f6f"
+    }
+  },
+  "browser": {
+    "chromium": {
+      "core": 505,
+      "required": 1546,
+      "pattern_and_identifier_cases": 9,
+      "pointer_cases": 4,
+      "syntax_facts": 7,
+      "frames": 8,
+      "reference_preparation": 4
+    },
+    "webkit": {
+      "core": 505,
+      "required": 1546,
+      "pattern_and_identifier_cases": 9,
+      "pointer_cases": 4,
+      "syntax_facts": 7,
+      "frames": 8,
+      "reference_preparation": 4
+    }
+  },
+  "independent": {
+    "status": "pass",
+    "scalar_comparisons": 2224128,
+    "private_tests": 16,
+    "concurrent_reads": 800,
+    "generator_controls": 8,
+    "required": 1546,
+    "inherited_controls_both_modes": 62,
+    "findings_resolved": [
+      "R-PP3 hidden cold initialization",
+      "Windows CRLF generated-source drift"
+    ],
+    "unresolved_increment_findings": 0
+  },
+  "log_sha256": {
+    "attribution.log": "13edc0efccf4488c1125ea46f14b04c813a1ed5b265273260d745a6c4bb59c37",
+    "chromium-judge.log": "daf3b54a131340ee014d49e865fa5b56c04333a58a37539fc8f525ae57c34faa",
+    "chromium.log": "c284a6ef7499964fe343e68789110a35acff0c46e51e40a25e2484d654e6c1a4",
+    "clippy.log": "b7f5b57a6f2393210ef40ced59d3a1b1eb3eb1f916c5838dd6193ae525659d3d",
+    "focused.log": "4a37afba20413bdb8784ad4369225688d289f93d464c358c79bd932e621d2af2",
+    "format.log": "1cfc077f1514d44a2d3e23e8272b6c79111490cf2d0f408d9b4d093a941cc098",
+    "generate.log": "e5d27bf44e6c9f82df07f5ccd578831e2ae5d7822d2c27c835b8c832cd1c7852",
+    "generator-clippy.log": "6dd6765f3fcc6a9d12ed9802bd7024b906934511e88e0cc989e8ed7450f40774",
+    "grammar-final.log": "2b211195ce34957a64321cb28609ff210d26c43b21a97d9af935b5f48edb2bc1",
+    "grammar.log": "b72bce19da90940bb6dfa9807e10432244bc4b0098c6397499dce4bb83d168d1",
+    "msrv-generator.log": "598214b8d2471ed69ae63d3ebd3626e96e0a6de72a6638f00cc4f3c6747509b6",
+    "msrv.log": "c2814327ddab6004f0a448c85a7d9863951d3822bd25e870b35948431e37c94c",
+    "native.log": "e5d8568e95d256dba18d6461fa92954aa16925489db28b6c8a87c0349edad67d",
+    "node-focused.log": "8793abaf87e0e442fcd3a8e296efb4f1facc160e35e66efa1d5f433fec5bf4b3",
+    "node.log": "a42e16c7fc15bbf364d0ba120457ab752f89f2045ea642b72f9013fa4ca68366",
+    "package.log": "7a7655dfc8e7a0b92e75800c36b7f31a37f9be989c45bd809894c36e2280aee6",
+    "reader-build-path-error.log": "4f324228b08ed725b08c99a5ac6e53e6c7e8840d84ab0acf196761a09d1c7d5f",
+    "reader-build.log": "148e6e89fc0be938e74ee5b64165b48430005237bb4baf630b8e386832a0f3b4",
+    "reproduce-final.log": "214014e81d6fe3389327cbf5466100a8d1c02b410d74c2aa24b1b77c61757df8",
+    "reproduce.log": "8855b7d9a99eb7bbf8e931030858a0bf668d8d896963f7344e3d88025c3c215f",
+    "types.log": "9d01015fc418b66651cf69fbcf72b176e114d0f1e0a9bdfa91c24b548e2cbdb1",
+    "typescript-build.log": "c478142e26b8f6c3e071780e91d75175bb1e67f4ae9e8f2c497a09c845858018",
+    "wasm-build.log": "b1e7b5ee68a7adcafc6880314344d9d5b0f2bf8db178501085f60aeda45f40f4",
+    "webkit-judge.log": "daf3b54a131340ee014d49e865fa5b56c04333a58a37539fc8f525ae57c34faa",
+    "webkit.log": "2df836eb9542ad4b1cd367699de811106051dfbae1e22940060cfc1518000435"
+  },
+  "harness_notes": [
+    "Corrected a unit-test import that climbed one module too far.",
+    "The standalone reader probe now mirrors the ordinary module layout; copied production source bytes are identical. Prior direct-path driver error retained."
+  ],
+  "open": [
+    "Full reader/AST/HIR/NFA construction certificate, including duplicate-name width cost",
+    "Original Explain propagation/cumulative budgeting and physical-stack qualification",
+    "Default switch, outgoing compiler retirement and final matched performance/host/map audit"
+  ]
+}

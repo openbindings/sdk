@@ -8,6 +8,6 @@ await sdk.initialize(
     new URL("../dist/wasm/openbindings_wasm_bg.wasm", import.meta.url),
   ),
 );
-test("original pattern caches handle broad epsilon closures in Wasm", () => {
-  assert.equal(patternCacheCases(sdk).length, 5);
+test("original patterns handle Unicode identifiers and broad epsilon closures in Wasm", () => {
+  assert.equal(patternCacheCases(sdk).length, 9);
 });

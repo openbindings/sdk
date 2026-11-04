@@ -79,9 +79,12 @@ implementation/resource review pass. The correction is pushed as `421706c`.
 The [direct exact-pointer writer](../design/2026-11-02/direct-exact-pointer.md) is
 also implemented and independently qualified, removing temporary decoded ancestry
 and speculative scalar conversion before original Explain uses that helper.
-The next bounded reader correction replaces hidden cold regex initialization for
+The bounded reader correction now replaces hidden cold regex initialization for
 Unicode group-name membership with [pinned const ranges](../design/2026-11-02/identifier-property-ranges.md).
-Full reader/compiler resource certification remains open.
+Parent native/MSRV/actual-host gates and independent implementation/resource review
+pass; the required reproducibility check preserves exact table bytes on Windows.
+Full reader/compiler resource certification, including duplicate-name width cost,
+remains open. Original Explain propagation and cumulative budgeting are next.
 
 Finish the pattern-program schedule and search-cache correction,
 original Explain witnesses, remaining native/Wasm stack qualification, and forced

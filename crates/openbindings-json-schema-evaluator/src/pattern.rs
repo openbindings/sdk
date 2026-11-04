@@ -613,26 +613,7 @@ fn hex(chars: &[char], at: &mut usize, digits: usize) -> Result<u32, Refusal> {
     Ok(value)
 }
 
-pub(crate) mod identifier {
-    //! `ID_Start` and `ID_Continue`, for group names, read from the `regex`
-    //! crate's Unicode tables.
-    use std::sync::OnceLock;
-    fn class(cell: &'static OnceLock<regex::Regex>, set: &str, c: char) -> bool {
-        let regex = cell.get_or_init(|| regex::Regex::new(set).expect("fixed class"));
-        let mut buffer = [0; 4];
-        regex.is_match(c.encode_utf8(&mut buffer))
-    }
-    pub(crate) fn start(c: char) -> bool {
-        static START: OnceLock<regex::Regex> = OnceLock::new();
-        c.is_ascii_alphabetic() || (!c.is_ascii() && class(&START, r"\A\p{ID_Start}\z", c))
-    }
-    pub(crate) fn part(c: char) -> bool {
-        static PART: OnceLock<regex::Regex> = OnceLock::new();
-        c.is_ascii_alphanumeric()
-            || c == '_'
-            || (!c.is_ascii() && class(&PART, r"\A\p{ID_Continue}\z", c))
-    }
-}
+pub(crate) mod identifier;
 
 // One class member: a code point, or a set a class escape names.
 enum Member {
