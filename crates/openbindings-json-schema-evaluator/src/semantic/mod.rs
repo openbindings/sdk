@@ -7,6 +7,7 @@ mod counts;
 mod cycles;
 mod decision;
 mod execution;
+mod explain;
 mod formats;
 mod meta;
 mod operands;
@@ -127,37 +128,69 @@ impl Plan {
     pub(super) fn evaluate(
         &self,
         value: &JsonValue,
-        _detail: Detail,
+        detail: Detail,
         control: &dyn WorkControl,
     ) -> ValueOutcome {
-        self.evaluate_with_preparation(value, _detail, control, None)
+        self.evaluate_with_preparation(value, detail, control, None)
     }
     pub(super) fn evaluate_with_preparation(
         &self,
         value: &JsonValue,
-        _detail: Detail,
+        detail: Detail,
         control: &dyn WorkControl,
         attempt: Option<&dyn openbindings_internal_schema::Control>,
     ) -> ValueOutcome {
-        self.evaluate_recording(value, control, attempt, &mut None)
+        let first = self.evaluate_pass(value, control, attempt, &mut None, self.allowance(), false);
+        if detail != Detail::Explain || !matches!(first.outcome, ValueOutcome::Fails { .. }) {
+            return first.outcome;
+        }
+        let second = self.evaluate_pass(value, control, attempt, &mut None, first.remaining, true);
+        if matches!(second.outcome, ValueOutcome::Fails { .. }) {
+            second.outcome
+        } else {
+            first.outcome
+        }
     }
-    #[inline(never)]
-    fn evaluate_recording(
+    fn allowance(&self) -> decision::Allowance {
+        decision::Allowance {
+            bytes: self.limits.program_bytes,
+            work: self.limits.evaluation_steps,
+        }
+    }
+    fn evaluate_tracking_unavailable(
         &self,
         value: &JsonValue,
         control: &dyn WorkControl,
         attempt: Option<&dyn openbindings_internal_schema::Control>,
         unavailable: &mut Option<String>,
     ) -> ValueOutcome {
-        let marker = 0u8;
-        let origin = std::hint::black_box(std::ptr::addr_of!(marker)) as usize;
-        let outcome = self.evaluate_bounded(
+        self.evaluate_pass(
             value,
             control,
             attempt,
             unavailable,
-            stack::Observation::new(origin, self.limits.stack_bytes),
-        );
+            self.allowance(),
+            false,
+        )
+        .outcome
+    }
+    #[inline(never)]
+    fn evaluate_pass(
+        &self,
+        value: &JsonValue,
+        control: &dyn WorkControl,
+        attempt: Option<&dyn openbindings_internal_schema::Control>,
+        unavailable: &mut Option<String>,
+        allowance: decision::Allowance,
+        record_witnesses: bool,
+    ) -> Completed {
+        let marker = 0u8;
+        let origin = std::hint::black_box(std::ptr::addr_of!(marker)) as usize;
+        let depth = (self.limits.stack_bytes / 4096).max(1);
+        let mut graph =
+            Graph::with_preparation(allowance.bytes, allowance.work, depth, control, attempt);
+        graph.observe_stack(stack::Observation::new(origin, self.limits.stack_bytes));
+        let outcome = self.evaluate_bounded(value, control, unavailable, graph, record_witnesses);
         std::hint::black_box(&marker);
         outcome
     }
@@ -166,43 +199,44 @@ impl Plan {
         &self,
         value: &JsonValue,
         control: &dyn WorkControl,
-        attempt: Option<&dyn openbindings_internal_schema::Control>,
         unavailable: &mut Option<String>,
-        stack: stack::Observation,
-    ) -> ValueOutcome {
+        mut graph: Graph<'_>,
+        record_witnesses: bool,
+    ) -> Completed {
         if let Err(cancelled) = control.check() {
-            return ValueOutcome::NoVerdict {
-                detail: cancelled.into(),
+            return Completed {
+                outcome: ValueOutcome::NoVerdict {
+                    detail: cancelled.into(),
+                },
+                remaining: graph.remaining(),
             };
         }
         if value.has_duplicate_names() {
-            return ValueOutcome::NoVerdict {
-                detail: no_verdict(
-                    NoVerdictReason::UnsupportedCapability,
-                    "duplicate-instance-members",
-                    "a value with repeated JSON member names has no unambiguous interpretation",
-                ),
+            return Completed {
+                outcome: ValueOutcome::NoVerdict {
+                    detail: no_verdict(
+                        NoVerdictReason::UnsupportedCapability,
+                        "duplicate-instance-members",
+                        "a value with repeated JSON member names has no unambiguous interpretation",
+                    ),
+                },
+                remaining: graph.remaining(),
             };
         }
-        let depth = (self.limits.stack_bytes / 4096).max(1);
-        let mut graph = Graph::with_preparation(
-            self.limits.program_bytes,
-            self.limits.evaluation_steps,
-            depth,
-            control,
-            attempt,
-        );
-        graph.observe_stack(stack);
         if let Err(detail) = graph.tick().and_then(|()| graph.charge(64)) {
-            return ValueOutcome::NoVerdict { detail };
+            return Completed {
+                outcome: ValueOutcome::NoVerdict { detail },
+                remaining: graph.remaining(),
+            };
         }
         let mut run = Run {
             plan: self,
+            record_witnesses,
             graph,
             atoms: Vec::new(),
             values: values::Values::default(),
             effects: HashMap::new(),
-            active: storage::Path::default(),
+            active: storage::Entries::default(),
             empty_context: Arc::new(Vec::new()),
             opaque_cycles: HashSet::new(),
             pending_cycles: HashSet::new(),
@@ -213,51 +247,89 @@ impl Plan {
             pending_facts: HashMap::new(),
             supports: HashMap::new(),
             support_memo_count: 0,
-            patterns: HashMap::new(),
+            patterns: storage::Entries::default(),
         };
+        let (mut outcome, witness) = run.evaluate_root(value, unavailable);
+        if record_witnesses
+            && let ValueOutcome::Fails { problems, .. } = &mut outcome
+            && let Some(seed) = witness
+            && let Ok(Some(problem)) = run.materialize(&seed, value)
+        {
+            *problems = vec![problem];
+        }
+        Completed {
+            outcome,
+            remaining: run.graph.remaining(),
+        }
+    }
+}
+struct Completed {
+    outcome: ValueOutcome,
+    remaining: decision::Allowance,
+}
+impl Run<'_> {
+    fn evaluate_root(
+        &mut self,
+        value: &JsonValue,
+        unavailable: &mut Option<String>,
+    ) -> (ValueOutcome, Option<Arc<explain::WitnessSeed>>) {
         loop {
-            let result = run.execute(self.entry, value.view());
+            let result = self.execute(self.plan.entry, value.view());
             if matches!(&result, Ok(execution::Attempt::Abort)) {
-                match run.finish_attempt() {
+                match self.finish_attempt() {
                     Ok(true) => continue,
                     Ok(false) => {
-                        return run.finish_root(
-                            value.view(),
-                            ValueOutcome::NoVerdict {
-                                detail: cycle_inability(),
-                            },
-                            unavailable,
+                        return (
+                            self.finish_root(
+                                value.view(),
+                                ValueOutcome::NoVerdict {
+                                    detail: cycle_inability(),
+                                },
+                                unavailable,
+                            ),
+                            None,
                         );
                     }
-                    Err(detail) => return ValueOutcome::NoVerdict { detail },
+                    Err(detail) => return (ValueOutcome::NoVerdict { detail }, None),
                 }
             }
             let result = result.and_then(|attempt| {
                 let execution::Attempt::Complete(state) = attempt else {
                     unreachable!("handled abort")
                 };
-                if run.pending_cycles.is_empty()
-                    || independent(state.valid, &mut run.graph, &run.cuts)?
+                if self.pending_cycles.is_empty()
+                    || independent(state.valid, &mut self.graph, &self.cuts)?
                 {
-                    return run.conclude(state.valid, unavailable).map(Some);
+                    debug_assert!(state.witness.is_none() || state.valid == FALSE);
+                    return self
+                        .conclude(state.valid, unavailable)
+                        .map(|outcome| Some((outcome, state.witness)));
                 }
                 // An enclosing applicator may eliminate a provisional cut. Only
                 // make unresolved components opaque after completing that proof
                 // attempt. Certified summaries remain valid across retries.
-                if run.finish_attempt()? {
+                if self.finish_attempt()? {
                     Ok(None)
                 } else {
                     Err(cycle_inability())
                 }
             });
             match result {
-                Ok(Some(outcome)) => return run.finish_root(value.view(), outcome, unavailable),
+                Ok(Some((outcome, witness))) => {
+                    return (
+                        self.finish_root(value.view(), outcome, unavailable),
+                        witness,
+                    );
+                }
                 Ok(None) => {}
                 Err(detail) => {
-                    return run.finish_root(
-                        value.view(),
-                        ValueOutcome::NoVerdict { detail },
-                        unavailable,
+                    return (
+                        self.finish_root(
+                            value.view(),
+                            ValueOutcome::NoVerdict { detail },
+                            unavailable,
+                        ),
+                        None,
                     );
                 }
             }
@@ -335,11 +407,13 @@ struct Atom {
 #[derive(Clone)]
 struct State {
     valid: Formula,
+    witness: Option<Arc<explain::WitnessSeed>>,
     properties: BTreeMap<Vec<u16>, Formula>,
     items: BTreeMap<usize, Formula>,
 }
 impl State {
     fn copied(&self, graph: &mut Graph<'_>) -> Result<Self, NoVerdict> {
+        debug_assert!(self.witness.is_none() || self.valid == FALSE);
         graph.work(
             self.items
                 .len()
@@ -357,6 +431,7 @@ impl State {
     fn truth(valid: Formula) -> Self {
         Self {
             valid,
+            witness: None,
             properties: BTreeMap::new(),
             items: BTreeMap::new(),
         }
@@ -386,11 +461,12 @@ fn independent(
 
 struct Run<'a> {
     plan: &'a Plan,
+    record_witnesses: bool,
     graph: Graph<'a>,
     atoms: Vec<Atom>,
     values: values::Values,
     effects: HashMap<Effect, Formula>,
-    active: storage::Path<Visit>,
+    active: storage::Entries<Visit>,
     empty_context: Context,
     opaque_cycles: HashSet<Visit>,
     pending_cycles: HashSet<Visit>,
@@ -401,7 +477,7 @@ struct Run<'a> {
     pending_facts: HashMap<Visit, refinement::Facts>,
     supports: HashMap<Visit, Arc<Option<refinement::Support>>>,
     support_memo_count: usize,
-    patterns: HashMap<(usize, usize), patterns::Pattern>,
+    patterns: storage::Entries<(usize, usize), patterns::Pattern>,
 }
 impl Run<'_> {
     fn units(&mut self, value: JsonRef<'_>) -> Result<Vec<u16>, NoVerdict> {
@@ -717,6 +793,7 @@ impl Run<'_> {
     }
     fn conjunction(&mut self, target: &mut State, other: &State) -> Result<(), NoVerdict> {
         target.valid = self.graph.and(target.valid, other.valid)?;
+        target.inherit_failure(other, TRUE);
         self.annotations(target, other, TRUE)
     }
     fn alias(
@@ -726,7 +803,7 @@ impl Run<'_> {
     ) -> Result<(usize, Context, bool), NoVerdict> {
         self.context_copy(incoming)?;
         let mut context = incoming.clone();
-        let mut path = storage::Path::<(usize, Context), Option<String>>::default();
+        let mut path = storage::Entries::<(usize, Context), Option<String>>::default();
         loop {
             self.graph.tick()?;
             context = self.enter(node, &context)?;
@@ -984,7 +1061,9 @@ impl Run<'_> {
             return self.pattern_atom(Class::Inability, node, keyword, value);
         }
         let key = backend::occurrence(pattern);
-        if !self.patterns.contains_key(&key) {
+        let index = if let Some(index) = self.patterns.find(&key, 2, &mut self.graph)? {
+            index
+        } else {
             let reading = self.plan.patterns.get(&key).ok_or_else(|| {
                 no_verdict(
                     NoVerdictReason::EvaluatorFailure,
@@ -992,14 +1071,14 @@ impl Run<'_> {
                     "the original pattern operand has no prepared interpretation",
                 )
             })?;
-            self.graph.charge(512)?;
             let compiled = patterns::Pattern::prepare(reading, &self.plan.limits, &mut self.graph)?;
-            self.patterns.insert(key, compiled);
-        }
+            let index = self.patterns.len();
+            self.patterns.push(key, compiled, 2, &mut self.graph)?;
+            index
+        };
         match self
             .patterns
-            .get_mut(&key)
-            .expect("prepared pattern")
+            .value_mut(index)
             .evaluate(value.as_str(), &mut self.graph)?
         {
             patterns::ResultKind::Matched(matched) => Ok(if matched { TRUE } else { FALSE }),
@@ -1108,6 +1187,8 @@ impl Run<'_> {
             return Ok(ValueOutcome::Satisfies);
         }
         if formula == FALSE {
+            self.graph.work(super::FAILURE_MESSAGE.len())?;
+            self.graph.charge(super::FAILURE_MESSAGE.len())?;
             return Ok(super::verdict_only_failure());
         }
         let yes = self.graph.witness(formula)?;

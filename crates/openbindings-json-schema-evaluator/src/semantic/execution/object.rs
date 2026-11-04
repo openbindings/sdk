@@ -115,6 +115,7 @@ pub(super) fn advance<'v>(
                 MemberPhase::PropertyReturned => {
                     let child = returned.expect("property result");
                     frame.state.valid = run.graph.and(frame.state.valid, child.valid)?;
+                    frame.state.inherit_failure(&child, TRUE);
                     cursor.selected = TRUE;
                     insert_name(frame, run, cursor.name.as_deref(), TRUE)?;
                     cursor.phase = MemberPhase::Pattern(0);
@@ -147,6 +148,7 @@ pub(super) fn advance<'v>(
                     let child = returned.expect("pattern property result");
                     let applies = run.graph.implies(matched, child.valid)?;
                     frame.state.valid = run.graph.and(frame.state.valid, applies)?;
+                    frame.state.inherit_failure(&child, matched);
                     cursor.selected = run.graph.or(cursor.selected, matched)?;
                     if let Some(name) = &cursor.name {
                         let old = frame.state.properties.get(name).copied().unwrap_or(FALSE);
@@ -167,6 +169,9 @@ pub(super) fn advance<'v>(
                     let child = returned.expect("additional property result");
                     let applies = run.graph.or(cursor.selected, child.valid)?;
                     frame.state.valid = run.graph.and(frame.state.valid, applies)?;
+                    if cursor.selected == FALSE {
+                        frame.state.inherit_failure(&child, TRUE);
+                    }
                     insert_name(frame, run, cursor.name.as_deref(), TRUE)?;
                     cursor.phase = MemberPhase::Name;
                 }
@@ -179,10 +184,16 @@ pub(super) fn advance<'v>(
                     cursor.phase = MemberPhase::Finish;
                 }
                 MemberPhase::NameReturned => {
-                    frame.state.valid = run.graph.and(
-                        frame.state.valid,
-                        returned.expect("property name result").valid,
-                    )?;
+                    let child = returned.expect("property name result");
+                    frame.state.valid = run.graph.and(frame.state.valid, child.valid)?;
+                    if child.valid == FALSE {
+                        run.record_failure(
+                            &mut frame.state,
+                            frame.visit.schema,
+                            frame.value,
+                            Some("propertyNames"),
+                        )?;
+                    }
                     cursor.phase = MemberPhase::Finish;
                 }
                 MemberPhase::Finish => {
@@ -204,6 +215,9 @@ pub(super) fn advance<'v>(
                 let result = returned.expect("unevaluated property result");
                 let valid = run.graph.or(evaluated, result.valid)?;
                 frame.state.valid = run.graph.and(frame.state.valid, valid)?;
+                if evaluated == FALSE {
+                    frame.state.inherit_failure(&result, TRUE);
+                }
                 run.graph.charge(96)?;
                 frame.state.properties.insert(name, TRUE);
                 index += 1;

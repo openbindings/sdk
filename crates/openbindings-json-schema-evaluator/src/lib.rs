@@ -1584,9 +1584,10 @@ impl Bounds {
         })
     }
 }
+const FAILURE_MESSAGE: &str = "value does not satisfy the schema";
 fn verdict_only_failure() -> ValueOutcome {
     ValueOutcome::Fails {
-        message: "value does not satisfy the schema".into(),
+        message: FAILURE_MESSAGE.into(),
         problems: Vec::new(),
         problems_complete: false,
     }

@@ -7,6 +7,11 @@ use std::collections::{HashMap, HashSet};
 pub(super) type Formula = u32;
 pub(super) const FALSE: Formula = 0;
 pub(super) const TRUE: Formula = 1;
+#[derive(Clone, Copy)]
+pub(super) struct Allowance {
+    pub(super) bytes: usize,
+    pub(super) work: Option<usize>,
+}
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Class {
     /// An effect in a resource external content could address.
@@ -51,6 +56,14 @@ pub(super) fn limit(resource: &'static str) -> NoVerdict {
     )
 }
 impl<'a> Graph<'a> {
+    pub(super) fn remaining(&self) -> Allowance {
+        Allowance {
+            bytes: self.maximum_bytes.saturating_sub(self.bytes),
+            work: self
+                .maximum_steps
+                .map(|maximum| maximum.saturating_sub(self.steps)),
+        }
+    }
     #[cfg(test)]
     pub(super) fn new(
         bytes: usize,

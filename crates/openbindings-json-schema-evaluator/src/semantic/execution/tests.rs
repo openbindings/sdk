@@ -182,9 +182,16 @@ fn frame_backing_growth_has_an_exact_requested_byte_gate() {
     assert_eq!(frames.capacity(), 0);
     storage::reserve(&mut frames, 1, &mut Graph::new(bytes, None, 0, &control)).unwrap();
     eprintln!(
-        "frame_bytes={} phase_bytes={} initial_backing_bytes={bytes}",
+        "frame_bytes={} phase_bytes={} state_bytes={} witness_bytes={} initial_backing_bytes={bytes}",
         size_of::<Frame<'_>>(),
-        size_of::<Phase>()
+        size_of::<Phase>(),
+        size_of::<State>(),
+        size_of::<explain::WitnessSeed>(),
+    );
+    assert!(size_of::<State>() <= 256, "State::copied base reserve");
+    assert_eq!(
+        size_of::<Option<Arc<explain::WitnessSeed>>>(),
+        size_of::<usize>()
     );
 }
 #[test]
@@ -195,14 +202,23 @@ fn original_frames_run_deep_values_on_a_small_native_stack() {
         .find(|row| row["id"] == "mixed-64-S")
         .unwrap();
     let plan = original(&row);
-    let value = JsonValue::parse(format!("{}1{}", "[".repeat(256), "]".repeat(256))).unwrap();
+    let values = [("1", "S"), ("false", "F")].map(|(leaf, expected)| {
+        (
+            JsonValue::parse(format!("{}{leaf}{}", "[".repeat(256), "]".repeat(256))).unwrap(),
+            expected,
+        )
+    });
     let result = std::thread::Builder::new()
         .stack_size(128 * 1024)
         .spawn(move || {
-            assert_eq!(
-                observed(plan.evaluate(&value, Detail::Outcome, &AtomicBool::new(false))),
-                "S"
-            );
+            for (value, expected) in values {
+                for detail in [Detail::Outcome, Detail::Explain] {
+                    assert_eq!(
+                        observed(plan.evaluate(&value, detail, &AtomicBool::new(false))),
+                        expected
+                    );
+                }
+            }
         })
         .unwrap()
         .join();

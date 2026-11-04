@@ -58,6 +58,9 @@ pub(super) fn advance<'v>(
                 } else {
                     run.graph.or(combined.valid, result.valid)?
                 };
+                if operator == 0 {
+                    combined.inherit_failure(&result, TRUE);
+                }
                 if operator == 2 {
                     let chosen = run.graph.and(zero, result.valid)?;
                     let no = run.graph.not(result.valid)?;
@@ -84,6 +87,14 @@ pub(super) fn advance<'v>(
                 if operator == 2 {
                     combined.valid = one;
                 }
+                if operator != 0 && combined.valid == FALSE {
+                    run.record_failure(
+                        &mut combined,
+                        frame.visit.schema,
+                        frame.value,
+                        Some(keyword),
+                    )?;
+                }
                 run.conjunction(&mut frame.state, &combined)?;
             }
             frame.phase = Phase::Logical(if operator < 2 {
@@ -97,6 +108,14 @@ pub(super) fn advance<'v>(
                 let result = returned.expect("not result");
                 let not = run.graph.not(result.valid)?;
                 frame.state.valid = run.graph.and(frame.state.valid, not)?;
+                if not == FALSE {
+                    run.record_failure(
+                        &mut frame.state,
+                        frame.visit.schema,
+                        frame.value,
+                        Some("not"),
+                    )?;
+                }
             } else if let Some(child) = schema.get("not") {
                 frame.phase = Phase::Logical(Cursor::Not { waiting: true });
                 return frame.child(run, child, frame.value);
@@ -157,6 +176,11 @@ fn finish(
 ) -> Result<(), NoVerdict> {
     let selected = run.graph.choose(condition.valid, yes.valid, no.valid)?;
     frame.state.valid = run.graph.and(frame.state.valid, selected)?;
+    if condition.valid == TRUE {
+        frame.state.inherit_failure(yes, TRUE);
+    } else if condition.valid == FALSE {
+        frame.state.inherit_failure(no, TRUE);
+    }
     run.annotations(&mut frame.state, condition, TRUE)?;
     run.annotations(&mut frame.state, yes, condition.valid)?;
     let otherwise = run.graph.not(condition.valid)?;

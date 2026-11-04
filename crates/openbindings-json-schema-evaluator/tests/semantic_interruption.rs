@@ -135,6 +135,13 @@ fn every_recursive_refinement_and_certificate_stop_keeps_clean_retries() {
             }
             _ => "unexpected",
         };
+        let verdict_counter = CancelAfter {
+            calls: AtomicUsize::new(0),
+            allowance: usize::MAX,
+        };
+        let verdict = prepared.evaluate_with_control(&value, &verdict_counter);
+        let verdict_checks = verdict_counter.calls.load(Ordering::Relaxed);
+        let established_failure = matches!(verdict, ValueOutcome::Fails { .. });
         for explain in [false, true] {
             let invoke = |control: &dyn WorkControl| {
                 if explain {
@@ -162,11 +169,21 @@ fn every_recursive_refinement_and_certificate_stop_keeps_clean_retries() {
                 };
                 let result = invoke(&control);
                 if control.calls.load(Ordering::Relaxed) > allowance {
-                    assert!(
-                        matches!(result, ValueOutcome::NoVerdict { detail } if detail.reason == NoVerdictReason::Cancelled),
-                        "{} stop {allowance}",
-                        case["id"]
-                    );
+                    if explain && established_failure && allowance >= verdict_checks {
+                        // Later diagnostic cancellation cannot erase an already
+                        // established failure, including a recursive proof.
+                        assert!(
+                            matches!(result, ValueOutcome::Fails { problems, problems_complete: false, .. } if problems.is_empty()),
+                            "{} diagnostic stop {allowance}",
+                            case["id"]
+                        );
+                    } else {
+                        assert!(
+                            matches!(result, ValueOutcome::NoVerdict { detail } if detail.reason == NoVerdictReason::Cancelled),
+                            "{} stop {allowance}",
+                            case["id"]
+                        );
+                    }
                     interruptions += 1;
                 } else {
                     assert_eq!(

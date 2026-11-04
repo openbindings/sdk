@@ -350,11 +350,11 @@ impl Run<'_> {
     ) -> Result<Beginning, NoVerdict> {
         let schema = self.space().node(node).value.clone();
         if let Some(boolean) = schema.view().as_bool() {
-            return Ok(Beginning::Ready(State::truth(if boolean {
-                TRUE
-            } else {
-                FALSE
-            })));
+            let mut state = State::truth(if boolean { TRUE } else { FALSE });
+            if !boolean {
+                self.record_failure(&mut state, node, value, None)?;
+            }
+            return Ok(Beginning::Ready(state));
         }
         if !self.space().eligible(self.space().node(node).resource) {
             return self
@@ -388,8 +388,11 @@ impl Run<'_> {
         // a reference actually depends on that context; reference() retains
         // the original query failure instead of inventing a validity atom.
         match self.primitives(node, &schema, value) {
-            Ok(true) => {}
-            Ok(false) => state.valid = FALSE,
+            Ok(None) => {}
+            Ok(Some(keyword)) => {
+                state.valid = FALSE;
+                self.record_failure(&mut state, node, value, Some(keyword))?;
+            }
             Err(detail)
                 if matches!(
                     detail.reason,
@@ -408,7 +411,10 @@ impl Run<'_> {
         if let Some(format) = self.plan.formats.get(&node) {
             match format.evaluate(value, &mut self.graph) {
                 Ok(true) => {}
-                Ok(false) => state.valid = FALSE,
+                Ok(false) => {
+                    state.valid = FALSE;
+                    self.record_failure(&mut state, node, value, Some("format"))?;
+                }
                 Err(detail)
                     if matches!(
                         detail.reason,
@@ -430,6 +436,9 @@ impl Run<'_> {
         {
             let matched = self.pattern(node, "pattern", pattern, value, context)?;
             state.valid = self.graph.and(state.valid, matched)?;
+            if matched == FALSE {
+                self.record_failure(&mut state, node, value, Some("pattern"))?;
+            }
         }
         if self.plan.leaves.contains(&node) {
             return Ok(Beginning::Ready(state));

@@ -155,8 +155,13 @@ impl Run<'_> {
         node: usize,
         schema: &Interpreted<'_>,
         value: JsonRef<'_>,
-    ) -> Result<bool, NoVerdict> {
-        let mut valid = true;
+    ) -> Result<Option<&'static str>, NoVerdict> {
+        let mut failed = None;
+        let mut record = |valid: bool, keyword: &'static str| {
+            if !valid && failed.is_none() {
+                failed = Some(keyword);
+            }
+        };
         if let Some(types) = schema.get("type") {
             if let Some(names) = types.elements() {
                 let mut any = false;
@@ -164,14 +169,17 @@ impl Run<'_> {
                     self.graph.tick()?;
                     any |= self.typed(name, value)?;
                 }
-                valid &= any;
+                record(any, "type");
             } else {
-                valid &= self.typed(types, value)?;
+                record(self.typed(types, value)?, "type");
             }
         }
         if let Some(constant) = schema.get("const") {
             let actual = self.values.intern(value, &mut self.graph)?;
-            valid &= actual == self.values.intern(constant, &mut self.graph)?;
+            record(
+                actual == self.values.intern(constant, &mut self.graph)?,
+                "const",
+            );
         }
         if let Some(choices) = schema.get("enum") {
             let actual = self.values.intern(value, &mut self.graph)?;
@@ -180,18 +188,21 @@ impl Run<'_> {
                 self.graph.tick()?;
                 any |= actual == self.values.intern(choice, &mut self.graph)?;
             }
-            valid &= any;
+            record(any, "enum");
         }
         let prepared = self.plan.operands.get(&node);
         if let Some(prepared) = prepared {
             for number in &prepared.numbers {
-                valid &= self.numeric_operand(schema, number.keyword, Some(number), value)?;
+                record(
+                    self.numeric_operand(schema, number.keyword, Some(number), value)?,
+                    number.keyword,
+                );
             }
         } else {
             // A missing record is deferred preparation, never absent predicates.
             for keyword in numeric::KEYWORDS {
                 if schema.get(keyword).is_some() {
-                    valid &= self.numeric_operand(schema, keyword, None, value)?;
+                    record(self.numeric_operand(schema, keyword, None, value)?, keyword);
                 }
             }
         }
@@ -201,8 +212,10 @@ impl Run<'_> {
                 let bound = self
                     .count_operand(schema, size.keyword, Some(&size.reading))?
                     .ok_or_else(shape)?;
-                valid &=
-                    self.size_bound(bound, size.kind, size.minimum, value, &mut string_length)?;
+                record(
+                    self.size_bound(bound, size.kind, size.minimum, value, &mut string_length)?,
+                    size.keyword,
+                );
             }
         } else {
             for (minimum, maximum, kind) in operands::SIZES {
@@ -211,13 +224,16 @@ impl Run<'_> {
                         let bound = self
                             .count_operand(schema, keyword, None)?
                             .ok_or_else(shape)?;
-                        valid &= self.size_bound(
-                            bound,
-                            kind,
-                            keyword == minimum,
-                            value,
-                            &mut string_length,
-                        )?;
+                        record(
+                            self.size_bound(
+                                bound,
+                                kind,
+                                keyword == minimum,
+                                value,
+                                &mut string_length,
+                            )?,
+                            keyword,
+                        );
                     }
                 }
             }
@@ -230,12 +246,12 @@ impl Run<'_> {
                     self.graph.tick()?;
                     let identity = self.values.intern(item, &mut self.graph)?;
                     self.graph.charge(64)?;
-                    valid &= seen.insert(identity);
+                    record(seen.insert(identity), "uniqueItems");
                 }
             }
         }
         if let Some(names) = schema.get("required") {
-            valid &= self.required(names, value)?;
+            record(self.required(names, value)?, "required");
         }
         for keyword in ["dependentRequired", "dependencies"] {
             let Some(dependencies) = schema.get(keyword) else {
@@ -250,12 +266,15 @@ impl Run<'_> {
                     && self.named(value, dependency.name)?.is_some();
                 // Validate operand shape even when its triggering property is
                 // absent. An array instance does not activate required checks.
-                valid &= self.required(
-                    dependency.value,
-                    if applies { value } else { dependency.value },
-                )?;
+                record(
+                    self.required(
+                        dependency.value,
+                        if applies { value } else { dependency.value },
+                    )?,
+                    keyword,
+                );
             }
         }
-        Ok(valid)
+        Ok(failed)
     }
 }

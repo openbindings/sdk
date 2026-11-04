@@ -1,0 +1,104 @@
+{
+  "status": "safety checkpoint; R-EW4 optional-refusal allocation remains open",
+  "base": "51e1dc72e8fea47bcde98d84bf5a324995e1f2b3",
+  "required_controls": 42,
+  "native_groups": 7,
+  "prior_message_fix_gates": {
+    "workspace_passed": 937,
+    "workspace_ignored": 6,
+    "msrv_library_passed": 176,
+    "msrv_ignored": 2,
+    "recursive_cancellation": 3,
+    "small_stack_release": 2,
+    "node_tests": 186,
+    "package_assertions": 352,
+    "chromium": {
+      "core": 505,
+      "required": 1546,
+      "original_explain": 42
+    },
+    "webkit": {
+      "core": 505,
+      "required": 1546,
+      "original_explain": 42
+    }
+  },
+  "pattern_storage_fix": {
+    "private_library_passed": 113,
+    "ignored": 2,
+    "whole_workspace": "running",
+    "independent_allocator": "property-name and uncertain-guard rows fit actual layout ledger"
+  },
+  "native_layouts": {
+    "WitnessSeed": 32,
+    "Arc_WitnessSeed": 48,
+    "State": 64,
+    "Frame": 248
+  },
+  "cold_owner_arenas": {
+    "cold": 0,
+    "warmed": 17,
+    "repeated": 17,
+    "firstCases": 42,
+    "secondCases": 42,
+    "meaning": "Exact JSON arenas only; cold fixed meta-schema retention is separate from warmed per-call cleanup, not allocator bytes or Wasm capacity."
+  },
+  "findings": [
+    "R-EW2 message charge corrected and independently remeasured",
+    "R-EW3 inline Pattern table moved to explicit Entries allocation ledger; remeasurement pending",
+    "R-EW4 OPEN: optional work-limit refusal allocates a discarded owned NoVerdict outside the ledger; F verdict preserved"
+  ],
+  "logs": {
+    "chromium-after-message-charge.log": "c284a6ef7499964fe343e68789110a35acff0c46e51e40a25e2484d654e6c1a4",
+    "chromium-judge-after-message-charge.log": "daf3b54a131340ee014d49e865fa5b56c04333a58a37539fc8f525ae57c34faa",
+    "chromium-judge.log": "daf3b54a131340ee014d49e865fa5b56c04333a58a37539fc8f525ae57c34faa",
+    "chromium.log": "c284a6ef7499964fe343e68789110a35acff0c46e51e40a25e2484d654e6c1a4",
+    "clippy-after-message-charge.log": "1d9681e804fdb0963737a2a5142cdc9dc11dd997932d3129a2127e223ecb31f0",
+    "clippy-final.log": "8bd718a436872512f1800978fa4654b1aa81e2a618082eb81b7f738b14e2c378",
+    "clippy.log": "ff8b81fc6470ebe60ab1d736f75d54b9ff841ffac250bd9a764a22852518bd9d",
+    "controls-after-message-charge.log": "c68b13da443088250aa27daa716d6bfbe9c2a78dc7b24c088687814fc49b0ff1",
+    "controls-budgets.log": "89826d5640d1d79fc8c4774d83cc9c67839691ea624620cfeacd650ca6026eae",
+    "controls-first.log": "4f9efec5b55fa9697bd76d9abd88905b67389a5185c4e9bba96fa8151aa581d2",
+    "controls-resources.log": "164aa34307b7f597913f4f252e8fabb651c78b1bb91f8d6d372255f7ff64b228",
+    "doc-links.log": "f34c0072e9a86d0cdbb49ae0524957f3432d6d8033a951e6894cce5f26a5bcf4",
+    "fixture-digests.log": "54cdebd8762803aa1007eb1a1265470c8e64f80aa94c6f876e0f4a44825aa45d",
+    "format-after-message-charge.log": "1cfc077f1514d44a2d3e23e8272b6c79111490cf2d0f408d9b4d093a941cc098",
+    "format.log": "1cfc077f1514d44a2d3e23e8272b6c79111490cf2d0f408d9b4d093a941cc098",
+    "js-format.log": "e871418b21ead55f89df1cd76fcdaa458ed1aa82dec760f97b7108d8463b5fa3",
+    "msrv-after-message-charge.log": "ca26f6f36ded68c81a175b6d9c77f087bc9b2941812a3fea1e2d1d7228e63492",
+    "msrv-cancellation.log": "1c47d72f6ced7663ef6d7c0e7375c6c994a3c274335f3b8dec4eb6b8bbd008fa",
+    "msrv.log": "e4f1a5ab7bd750f2804e285831a35fd56c6029d66324599f9f18d34e4a93a6af",
+    "native-after-message-charge.log": "62667db80315f96eb8be5d7c02bf10f623f080a3710f7b3da7d09a4d288c2fdb",
+    "native-final.log": "6edc22f0588ecf6c0fd0a12251523ddaafe1788343a9cd7f0b69bac061671334",
+    "native-layout.log": "3e9cb157eb53dc41bb75cd2de7bdb47655124e8be663aa0078917cfed26fb6da",
+    "native-with-loopback.log": "a2b1be1d494ed236dbb31f0c63370bfe353a0b7014ba913eb81a308e9bbaa44d",
+    "native.log": "db3459bf7be4df1e65412b12ac23f291c0b1b07ee4120cd243f9e249660751ad",
+    "node-after-message-charge.log": "18782bcf7e575012f9a78edb0db87db02f0b14523460a662206fa134e94c160d",
+    "node-focused.log": "b76a9758c7672022e90300c738ca99cb9385a37d14bc3ae7255ae8d8c880b962",
+    "node.log": "47f9da2ade9e99db6d286c5f86cfbf4ae9a9d1ce7b12ef688f2cbce44251a43d",
+    "package-after-message-charge.log": "749b37d1107f2f8dd60a53510e6aa6759db7199e4451ac0aa82e6c0112b7a674",
+    "package.log": "06d0c612c7e49c091395e42e2c96bb58dc95970b53f42e6e9b11be8e2098a0b7",
+    "pointer-measure.log": "e345b90fa20a9f0f59ed0161a02c8ef281b340159da3d052d86717e3f231f496",
+    "private-after-pattern-storage.log": "87eb47eb8d69b9ec1926837a0931a6d2c171a611cf8e93f47b9365ccaa222e7e",
+    "product-labels.log": "64660ca1f68c7dcebe7214a3e3c7ff71e80996572023a3c98d1ef72625ea8cad",
+    "recursive-cancellation-after-message-charge.log": "3c48e07e29aa9166c3b5ea5b600b9b8b530afd57c11c06510d2d2db41719c624",
+    "recursive-cancellation.log": "19f91e311b6472a4b23418938715f5459ebf6c3d4b216709a5e0ece77cd7c824",
+    "release-stack.log": "b22f6b8e30534e14d3db7d462a10799f4f42eb3fd6a15e26b00e5be95de646ec",
+    "types-after-message-charge.log": "9d01015fc418b66651cf69fbcf72b176e114d0f1e0a9bdfa91c24b548e2cbdb1",
+    "types.log": "9d01015fc418b66651cf69fbcf72b176e114d0f1e0a9bdfa91c24b548e2cbdb1",
+    "typescript-after-message-charge.log": "c478142e26b8f6c3e071780e91d75175bb1e67f4ae9e8f2c497a09c845858018",
+    "typescript-build.log": "c478142e26b8f6c3e071780e91d75175bb1e67f4ae9e8f2c497a09c845858018",
+    "wasm-after-message-charge.log": "e97f503cc5ce5925b80638c1d39684f8169bacb770d1f117e232d5c91afbbf20",
+    "wasm-build.log": "a3618d9e732e5472961a5fd0022533339b1e8fb1137b9406474ff35ae4c3fc17",
+    "webkit-after-message-charge.log": "2df836eb9542ad4b1cd367699de811106051dfbae1e22940060cfc1518000435",
+    "webkit-judge-after-message-charge.log": "daf3b54a131340ee014d49e865fa5b56c04333a58a37539fc8f525ae57c34faa",
+    "webkit-judge.log": "daf3b54a131340ee014d49e865fa5b56c04333a58a37539fc8f525ae57c34faa",
+    "webkit.log": "2df836eb9542ad4b1cd367699de811106051dfbae1e22940060cfc1518000435"
+  },
+  "wasm_layouts": {
+    "WitnessSeed": 16,
+    "Arc_WitnessSeed": 24,
+    "State": 32,
+    "Frame": 128
+  }
+}

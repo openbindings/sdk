@@ -114,7 +114,7 @@ pub(super) fn validate(
                     .ok_or_else(|| unsupported("custom-consumer-resource-root"))?;
                 let value = &root.environment.space().node(original).value;
                 let mut unavailable = None;
-                let outcome = plans[&meta].evaluate_recording(
+                let outcome = plans[&meta].evaluate_tracking_unavailable(
                     value,
                     &cancelled,
                     Some(attempt),

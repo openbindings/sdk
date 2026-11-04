@@ -39,6 +39,7 @@ pub(super) fn advance<'v>(
             if waiting {
                 let result = returned.expect("item result");
                 frame.state.valid = run.graph.and(frame.state.valid, result.valid)?;
+                frame.state.inherit_failure(&result, TRUE);
                 if run.plan.annotations.items {
                     run.graph.charge(96)?;
                     frame.state.items.insert(index, TRUE);
@@ -115,6 +116,14 @@ pub(super) fn advance<'v>(
                 let maximum = count(1, "maxContains", u64::MAX)?;
                 let valid = counts.within(minimum, maximum, &mut run.graph)?;
                 frame.state.valid = run.graph.and(frame.state.valid, valid)?;
+                if valid == FALSE {
+                    run.record_failure(
+                        &mut frame.state,
+                        frame.visit.schema,
+                        frame.value,
+                        Some("contains"),
+                    )?;
+                }
             }
             frame.phase = Phase::Array(Cursor::Unevaluated {
                 index: 0,
@@ -131,6 +140,9 @@ pub(super) fn advance<'v>(
                 let result = returned.expect("unevaluated item result");
                 let valid = run.graph.or(evaluated, result.valid)?;
                 frame.state.valid = run.graph.and(frame.state.valid, valid)?;
+                if evaluated == FALSE {
+                    frame.state.inherit_failure(&result, TRUE);
+                }
                 run.graph.charge(96)?;
                 frame.state.items.insert(index, TRUE);
                 index += 1;

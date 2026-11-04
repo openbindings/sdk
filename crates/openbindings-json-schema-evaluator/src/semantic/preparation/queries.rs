@@ -1,7 +1,7 @@
 //! Static resolution shared only within one immutable original environment.
 //! This lookup borrows source text; only query-result Arcs enter the plan.
 use super::*;
-use crate::semantic::storage::{Ledger, Path};
+use crate::semantic::storage::{Entries, Ledger};
 use openbindings_internal_schema::Control;
 
 const MAX_KEYS: usize = 1024;
@@ -30,13 +30,13 @@ impl Ledger for Preparation<'_> {
 
 pub(super) struct Queries<'s> {
     space: &'s SchemaSpace,
-    entries: Path<Key<'s>, ReferenceQuery>,
+    entries: Entries<Key<'s>, ReferenceQuery>,
 }
 impl<'s> Queries<'s> {
     pub(super) fn new(space: &'s SchemaSpace) -> Self {
         Self {
             space,
-            entries: Path::default(),
+            entries: Entries::default(),
         }
     }
     pub(super) fn query(

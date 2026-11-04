@@ -844,6 +844,53 @@ pub fn relative_pointer(value: crate::JsonRef<'_>, root: crate::JsonRef<'_>) -> 
     debug_assert!(std::sync::Arc::ptr_eq(value.owner, root.owner));
     value.owner.exact_pointer_from(value.id, root.id)
 }
+/// Measure the exact relative representation and establish same-arena ancestry
+/// without constructing it. This excludes names above the selected root.
+pub fn relative_pointer_size(
+    value: crate::JsonRef<'_>,
+    root: crate::JsonRef<'_>,
+    limit: usize,
+) -> Option<usize> {
+    if !std::sync::Arc::ptr_eq(value.owner, root.owner) {
+        return None;
+    }
+    let (mut bytes, mut units, mut unpaired) = (0usize, 0usize, false);
+    let mut current = value.id;
+    while current != root.id {
+        let (parent, edge) = value.owner.edge(current)?;
+        bytes = bytes.checked_add(1)?;
+        units = units.checked_add(1)?;
+        match edge {
+            crate::raw::Edge::Index(index) => {
+                let digits = index.checked_ilog10().map_or(1, |n| n as usize + 1);
+                bytes = bytes.checked_add(digits)?;
+                units = units.checked_add(digits)?;
+            }
+            crate::raw::Edge::Key(key) => {
+                if let Some(name) = value.owner.string(key) {
+                    bytes = bytes.checked_add(name.len())?;
+                    for unit in name.encode_utf16() {
+                        let escape = usize::from(unit == 0x7e || unit == 0x2f);
+                        units = units.checked_add(1 + escape)?;
+                        bytes = bytes.checked_add(escape)?;
+                    }
+                } else {
+                    unpaired = true;
+                    for unit in value.owner.unpaired_units(key)? {
+                        units = units.checked_add(1 + usize::from(unit == 0x7e || unit == 0x2f))?;
+                    }
+                }
+            }
+        }
+        current = parent;
+    }
+    let size = if unpaired {
+        units.checked_mul(2)?
+    } else {
+        bytes
+    };
+    (size <= limit && size <= isize::MAX as usize).then_some(size)
+}
 /// Append escaped RFC 6901 text, such as a keyword's `/minimum`.
 pub fn push_pointer(pointer: &mut crate::Pointer, escaped: &str) {
     pointer.push_escaped(escaped);
@@ -1482,6 +1529,14 @@ mod tests {
             let mut pending = vec![root.view()];
             while let Some(current) = pending.pop() {
                 let pointer = relative_pointer(current, root.view());
+                let size = pointer_bytes(&pointer);
+                assert_eq!(
+                    relative_pointer_size(current, root.view(), size),
+                    Some(size)
+                );
+                if size > 0 {
+                    assert_eq!(relative_pointer_size(current, root.view(), size - 1), None);
+                }
                 assert_eq!(
                     occurrence(root.at_pointer(&pointer).unwrap()),
                     occurrence(current)
@@ -1514,6 +1569,20 @@ mod tests {
         let mut expected: Vec<_> = "//~0~1/10/😀/".encode_utf16().collect();
         expected.push(0xdc00);
         assert_eq!(pointer.utf16_units().collect::<Vec<_>>(), expected);
+        assert_eq!(
+            relative_pointer_size(value.view(), subtree.view(), usize::MAX),
+            None
+        );
+        let unrelated = crate::JsonValue::parse("0").unwrap();
+        assert_eq!(
+            relative_pointer_size(unrelated.view(), value.view(), usize::MAX),
+            None
+        );
+        let sibling = value.at("/scalar").unwrap();
+        assert_eq!(
+            relative_pointer_size(sibling, subtree.view(), usize::MAX),
+            None
+        );
     }
 
     #[test]

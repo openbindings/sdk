@@ -98,6 +98,19 @@ files.set(
   await fs.readFile(path.join(packageRoot, "test/exact-pointers.mjs")),
 );
 files.set(
+  "/original-explain.mjs",
+  await fs.readFile(path.join(packageRoot, "test/original-explain.mjs")),
+);
+files.set(
+  "/original-explain-controls.json",
+  await fs.readFile(
+    path.join(
+      root,
+      "crates/openbindings-json-schema-evaluator/src/semantic/explain/controls.json",
+    ),
+  ),
+);
+files.set(
   "/syntax-facts-input.json",
   await fs.readFile(
     path.join(
@@ -180,6 +193,13 @@ try {
         executionFrames: executionFrameCases(sdk),
         referencePreparation: referencePreparationCases(sdk),
         syntaxFacts: syntaxFactCases(sdk, syntaxInput),
+        originalExplain: (
+          await import("/original-explain.mjs")
+        ).originalExplainCases(
+          sdk,
+          await (await fetch("/original-explain-controls.json")).json(),
+          await import("/dist/testing.js"),
+        ),
         exactPointers: (await import("/exact-pointers.mjs")).exactPointerCases(
           sdk,
         ),
@@ -267,6 +287,10 @@ try {
   await fs.writeFile(
     path.join(output, "exact-pointers.json"),
     JSON.stringify(result.exactPointers, null, 2),
+  );
+  await fs.writeFile(
+    path.join(output, "original-explain.json"),
+    JSON.stringify(result.originalExplain, null, 2),
   );
   await fs.writeFile(
     path.join(output, "host.json"),

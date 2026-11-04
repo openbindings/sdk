@@ -96,5 +96,13 @@
     "Full reader/AST/HIR/NFA construction certificate, including duplicate-name width cost",
     "Original Explain propagation/cumulative budgeting and physical-stack qualification",
     "Default switch, outgoing compiler retirement and final matched performance/host/map audit"
-  ]
+  ],
+  "saved_commit": "51e1dc7",
+  "pushed": true,
+  "full_portable_verifier": {
+    "status": "pass",
+    "commit": "51e1dc7",
+    "log": "full-verify-51e1dc7.log",
+    "sha256": "1da3ac3e145ed96f27965556edbe7d3ce523e0768892e8ce5ff96e2fec5977b7"
+  }
 }

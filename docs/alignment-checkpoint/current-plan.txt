@@ -37,8 +37,10 @@ and [frame checkpoint evidence](../receipts/2026-11-02-preparation/iterative-exe
 The frame checkpoint is pushed as `98ab475`; its full portable verifier passes.
 All hosted CI jobs for that frame checkpoint, including Windows, have passed.
 Later CI runs at `aecf09e` and `57cdc22` were superseded and cancelled by newer
-pushes. The latest `fc1ade8` run is in progress; its hosted performance check
-passes. These checks do not replace the final matched-performance gate.
+pushes. Hosted `51e1dc7` passed macOS/Linux, browser, package, minimum Rust, Node
+floors, Wasm reproducibility, advisories and performance. Its Windows job was
+cancelled after 30 minutes, so the required aggregate check failed. These checks
+do not replace final all-host qualification or the matched-performance gate.
 The [acquisition/reference repairs](../receipts/2026-11-02-preparation/ci-reference-acquisition/README.md)
 also have independent review and a clean reference-candidate pass.
 
@@ -70,7 +72,15 @@ companion text delta changes terminology/cross-references, not HTTP behavior;
 
 The [original Explain witness design](../design/2026-11-02/original-explain-witnesses.md)
 has independent bounded design approval. It uses compact seeds and separately
-audited root-only pointer materialization; implementation remains pending. A
+audited root-only pointer materialization. The implementation now passes all 42
+independent semantic/location cases natively and through the public Wasm API,
+with cumulative budget, cancellation, enclosing-attempt and concurrency controls.
+Independent implementation/resource review is in progress; its uncharged failure
+message and inline pattern table accounting findings are corrected and final
+validation is running. The recursive
+post-verdict cancellation and fixed diagnostic wording adjudications preserve all
+substantive verdict/location/resource obligations. See the
+[current progress receipt](../receipts/2026-11-02-preparation/original-explain-progress/README.md). A
 separate [pattern cache reservation correction](../design/2026-11-02/pattern-search-cache.md)
 is implemented after design approval and addresses a concrete epsilon-branch
 breadth defect in the existing call-local matcher, independently of full compiler
@@ -84,9 +94,11 @@ Unicode group-name membership with [pinned const ranges](../design/2026-11-02/id
 Parent native/MSRV/actual-host gates and independent implementation/resource review
 pass; the required reproducibility check preserves exact table bytes on Windows.
 Full reader/compiler resource certification, including duplicate-name width cost,
-remains open. Original Explain propagation and cumulative budgeting are next.
+remains open. The complete portable verifier passes on pushed `51e1dc7`, before
+the current original Explain changes. Final Explain resource/host qualification
+and the compiler construction schedule are the next completion gates.
 
-Finish the pattern-program schedule and search-cache correction,
+Finish the pattern-program schedule,
 original Explain witnesses, remaining native/Wasm stack qualification, and forced
 original-engine validation. Then switch the default and retire the outgoing
 projection/compiler paths; run the final matched performance and clean-package/

@@ -111,16 +111,22 @@ toolchain; the MSRV compatibility receipt explicitly records no matching Clippy 
    construction is still separate. The [original Explain design](alignment-checkpoint/original-explain-design.md)
    has independent approval for compact seeds and bounded root-only materialization.
    Its [direct exact-pointer foundation](alignment-checkpoint/direct-exact-pointer-results.md)
-   now passes parent and independent implementation/resource checks; witness
-   propagation and diagnostic caller budgeting remain pending. Finish that work
-   and physical-stack/host qualification. Then force the
+   now passes parent and independent implementation/resource checks. Original
+   [Explain implementation](alignment-checkpoint/original-explain-results.md)
+   now passes all 42 independent cases natively and through the public Wasm API,
+   cumulative limits, cancellation, enclosing-attempt and concurrency controls.
+   Independent resource review is in progress; its failure-message and pattern
+   table accounting findings are corrected and final source validation is running. Finish review,
+   resource and physical-stack/host qualification. Then force the
    original engine through all gates, switch the default and retire the outgoing
    projection/compiler code. No existing public API or internal architecture needs
    preservation; no evaluator allowance or performance expectation is waived.
    The [identifier membership correction](alignment-checkpoint/identifier-range-results.md)
    also passes parent and independent qualification: pinned const ranges replace
    hidden cold regex initialization, with a required exact reproduction gate.
-   This does not certify the separate full reader/compiler construction schedule.
+   Its complete portable verifier passes on pushed `51e1dc7`, before the current
+   Explain changes. This does not certify the separate full reader/compiler
+   construction schedule.
 3. TypeScript organization is implemented and independently reviewed. Finish
    remaining invocation/discovery composition, full workspace/host/CI/package
    checks, matched performance measurements and the complete specification-to-code

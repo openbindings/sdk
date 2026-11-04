@@ -1,5 +1,5 @@
 //! Call-local backing allocations with an explicit requested-size ledger.
-//! The ordered hash path supports append/pop and construction-local lookup.
+//! Indexed entries support bounded lookup, append/pop and in-place value access.
 use super::{Graph, NoVerdict, decision::limit};
 use std::hash::{DefaultHasher, Hash, Hasher};
 
@@ -59,11 +59,11 @@ struct Entry<K, V> {
     hash: u64,
     prior: usize,
 }
-pub(super) struct Path<K, V = ()> {
+pub(super) struct Entries<K, V = ()> {
     entries: Vec<Entry<K, V>>,
     buckets: Vec<usize>,
 }
-impl<K, V> Default for Path<K, V> {
+impl<K, V> Default for Entries<K, V> {
     fn default() -> Self {
         Self {
             entries: Vec::new(),
@@ -71,7 +71,7 @@ impl<K, V> Default for Path<K, V> {
         }
     }
 }
-impl<K: Hash + Eq, V> Path<K, V> {
+impl<K: Hash + Eq, V> Entries<K, V> {
     fn hash<L: Ledger>(key: &K, work: usize, ledger: &mut L) -> Result<u64, L::Error> {
         ledger.work(work)?;
         let mut hasher = DefaultHasher::new();
@@ -154,6 +154,9 @@ impl<K: Hash + Eq, V> Path<K, V> {
     pub(super) fn value(&self, index: usize) -> &V {
         &self.entries[index].value
     }
+    pub(super) fn value_mut(&mut self, index: usize) -> &mut V {
+        &mut self.entries[index].value
+    }
     pub(super) fn pop(&mut self) -> Option<(K, V)> {
         let entry = self.entries.pop()?;
         let bucket = entry.hash as usize & (self.buckets.len() - 1);
@@ -191,7 +194,7 @@ mod tests {
     fn collisions_rehash_pop_and_clear_preserve_exact_path_positions() {
         let control = AtomicBool::new(false);
         let mut graph = Graph::new(1 << 20, None, 0, &control);
-        let mut path = Path::default();
+        let mut path = Entries::default();
         for key in 0..80 {
             path.push(Collision(key), key, 1, &mut graph).unwrap();
             for existing in 0..=key {
@@ -240,7 +243,7 @@ mod tests {
             .is_err()
         );
         let mut graph = Graph::new(1 << 20, None, 0, &control);
-        let mut path = Path::default();
+        let mut path = Entries::default();
         for key in 0..20 {
             path.push(Collision(key), (), 1, &mut graph).unwrap();
         }
