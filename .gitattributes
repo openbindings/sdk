@@ -16,3 +16,5 @@
 # The evaluator's fixtures hold results recorded from V8 and generated cases that
 # tests and the TypeScript suite compare exactly, so they keep their bytes too.
 /crates/openbindings-json-schema-evaluator/tests/fixtures/** -text
+# The independently adjudicated evaluator corpus has its own byte-hash gate.
+/crates/openbindings-schema-evaluator-test-support/fixtures/** -text
