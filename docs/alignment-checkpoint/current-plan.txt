@@ -90,7 +90,14 @@ The next bounded increment retains immutable pattern readings and shares Simple
 matchers; independent review and native/MSRV/Node/browser/package checks pass.
 Full VM-once compilation is explicitly still open: the reviewed eager schedule
 would newly exhaust preparation for otherwise admitted unused patterns. Prepared
-operands, compact execution and the remaining final gates remain active. No whole-SDK completion claim is made. Older receipts remain historical.
+operands and remaining final gates remain active. The next compact-execution
+increment is independently reviewed: unused annotation maps and ordinary leaf
+state retention are removed, while non-leaf sharing and recursive proofs remain.
+The exact 20,000-item array, 20,001-item late-invalid array and 50,000-member object
+recover at unchanged defaults; all 1,546 required cases also pass through a direct
+original-Plan-only independent bridge. The foreign-leaf support finding is fixed;
+57 independent controls and 1,206 cancellation checkpoints pass. Current/MSRV and
+actual host lanes pass at this checkpoint. This is not the default-engine switch. No whole-SDK completion claim is made. Older receipts remain historical.
 
 No decision currently requires Matthew. If a real decision arises, record it
 and continue every independent unblocked path before considering a stop.

@@ -11,6 +11,8 @@ pub(super) struct Checked {
     pub formats: HashMap<usize, formats::Format>,
     pub queries: PreparedQueries,
     pub patterns: PreparedPatterns,
+    pub annotations: AnnotationDemand,
+    pub leaves: HashSet<usize>,
 }
 
 /// Syntax admission traverses every declared schema position, including unused
@@ -119,6 +121,8 @@ pub(super) fn check_from(
     let mut custom = Vec::new();
     let mut formats = HashMap::new();
     let mut queries = PreparedQueries::new();
+    let mut annotations = AnnotationDemand::default();
+    let mut leaves = HashSet::new();
     while let Some(node) = queue.pop_front() {
         control.check()?;
         if visited.contains(&node) {
@@ -181,6 +185,11 @@ pub(super) fn check_from(
             value: original.value.view(),
             profile,
         };
+        annotations.properties |= schema.get("unevaluatedProperties").is_some();
+        annotations.items |= schema.get("unevaluatedItems").is_some();
+        let mut leaf = !["$ref", "$dynamicRef", "$recursiveRef"]
+            .iter()
+            .any(|keyword| schema.get(keyword).is_some());
         if profile.asserts_format()
             && let Some(format) = schema.get("format")
         {
@@ -303,6 +312,15 @@ pub(super) fn check_from(
                 let Some(keyword) = field.name.as_str() else {
                     continue;
                 };
+                // Presence disqualifies even empty or malformed applicators.
+                // A permissive custom meta-schema can admit those operands;
+                // finding no child positions does not make their behavior inert.
+                if schema.get(keyword).is_some()
+                    && (child_shape(keyword).is_some()
+                        || matches!(keyword, "dependencies" | "additionalItems"))
+                {
+                    leaf = false;
+                }
                 if schema.get(keyword).is_none()
                     || (child_shape(keyword).is_none()
                         && !matches!(keyword, "dependencies" | "additionalItems"))
@@ -340,6 +358,10 @@ pub(super) fn check_from(
                 }
             }
         }
+        if leaf {
+            control.charge_allocation(128)?;
+            leaves.insert(node);
+        }
     }
     control.charge_allocation(resources.len().saturating_mul(8))?;
     let mut resources: Vec<_> = resources.into_iter().collect();
@@ -350,6 +372,8 @@ pub(super) fn check_from(
         formats,
         queries,
         patterns: readings,
+        annotations,
+        leaves,
     })
 }
 fn limit(resource: &str) -> PreparationFailure {

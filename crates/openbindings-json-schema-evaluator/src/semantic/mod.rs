@@ -48,6 +48,14 @@ type ReferenceQuery = Arc<Result<openbindings_internal_schema::Target, QueryFail
 type PreparedQueries = HashMap<(usize, ReferenceKind), ReferenceQuery>;
 type PreparedPatterns = HashMap<(usize, usize), Arc<crate::pattern::Reading>>;
 
+/// Conservative demand over this Plan's complete activated original graph.
+/// An omitted coordinate is unobserved, not a proof that it was unevaluated.
+#[derive(Clone, Copy, Default)]
+struct AnnotationDemand {
+    properties: bool,
+    items: bool,
+}
+
 #[derive(Clone, Copy)]
 struct Interpreted<'a> {
     value: JsonRef<'a>,
@@ -69,6 +77,8 @@ pub(super) struct Plan {
     formats: HashMap<usize, formats::Format>,
     queries: PreparedQueries,
     patterns: PreparedPatterns,
+    annotations: AnnotationDemand,
+    leaves: HashSet<usize>,
 }
 impl Plan {
     pub(super) fn new(
@@ -102,6 +112,8 @@ impl Plan {
             formats: checked.formats,
             queries: checked.queries,
             patterns: checked.patterns,
+            annotations: checked.annotations,
+            leaves: checked.leaves,
         })
     }
     pub(super) fn evaluate(
@@ -582,7 +594,9 @@ impl Run<'_> {
         // enlargement, so its variables cannot witness an Undefined conclusion.
         // A reference's possible annotations follow its same validity choice.
         // Finite property/index selections are coherent across repeated calls.
-        if let Some(members) = value.members() {
+        if self.plan.annotations.properties
+            && let Some(members) = value.members()
+        {
             for member in members {
                 let name = self.units(member.name)?;
                 self.graph.charge(
@@ -605,7 +619,9 @@ impl Run<'_> {
                 state.properties.insert(name, selected);
             }
         }
-        if let Some(elements) = value.elements() {
+        if self.plan.annotations.items
+            && let Some(elements) = value.elements()
+        {
             for (index, _) in elements.enumerate() {
                 self.graph.charge(keyword.len().saturating_add(256))?;
                 let copied_uri = self.copy_uri(uri.as_deref())?;
@@ -784,6 +800,13 @@ impl Run<'_> {
         if self.depth >= self.maximum_depth {
             return Err(decision::limit("semantic-analysis-depth-limit"));
         }
+        // A preparation-certified leaf cannot recurse or propagate child
+        // annotations. Keep scope and predicate semantics without retaining a
+        // Visit/State for every ordinary array item or object member.
+        if self.plan.leaves.contains(&node) {
+            let context = self.enter(node, context)?;
+            return self.body(node, value, &context);
+        }
         let (node, context, pure_cycle) = self.alias(node, context)?;
         if pure_cycle {
             return self.effect(
@@ -953,6 +976,9 @@ impl Run<'_> {
         {
             let matched = self.pattern(node, "pattern", pattern, value, context)?;
             state.valid = self.graph.and(state.valid, matched)?;
+        }
+        if self.plan.leaves.contains(&node) {
+            return Ok(state);
         }
         for keyword in ["$ref", "$dynamicRef", "$recursiveRef"] {
             if let Some(reference) = schema.get(keyword) {
@@ -1229,7 +1255,11 @@ impl Run<'_> {
         }
         for member in value.members().expect("object") {
             self.graph.tick()?;
-            let name = self.units(member.name)?;
+            let name = if self.plan.annotations.properties {
+                Some(self.units(member.name)?)
+            } else {
+                None
+            };
             let mut selected = FALSE;
             if let Some(properties) = schema.get("properties")
                 && let Some(child) = self.named(properties, member.name)?
@@ -1237,9 +1267,11 @@ impl Run<'_> {
                 let child = self.schema(self.child(node, child)?, member.value, context)?;
                 state.valid = self.graph.and(state.valid, child.valid)?;
                 selected = TRUE;
-                self.graph
-                    .charge(name.len().saturating_mul(2).saturating_add(256))?;
-                state.properties.insert(name.clone(), TRUE);
+                if let Some(name) = &name {
+                    self.graph
+                        .charge(name.len().saturating_mul(2).saturating_add(256))?;
+                    state.properties.insert(name.clone(), TRUE);
+                }
             }
             if let Some(patterns) = schema.get("patternProperties").and_then(|v| v.members()) {
                 for pattern in patterns {
@@ -1253,27 +1285,33 @@ impl Run<'_> {
                     let applies = self.graph.implies(matched, child.valid)?;
                     state.valid = self.graph.and(state.valid, applies)?;
                     selected = self.graph.or(selected, matched)?;
-                    let old = state.properties.get(&name).copied().unwrap_or(FALSE);
-                    self.graph
-                        .charge(name.len().saturating_mul(2).saturating_add(256))?;
-                    state
-                        .properties
-                        .insert(name.clone(), self.graph.or(old, matched)?);
+                    if let Some(name) = &name {
+                        let old = state.properties.get(name).copied().unwrap_or(FALSE);
+                        self.graph
+                            .charge(name.len().saturating_mul(2).saturating_add(256))?;
+                        state
+                            .properties
+                            .insert(name.clone(), self.graph.or(old, matched)?);
+                    }
                 }
             }
             if let Some(child) = schema.get("additionalProperties") {
                 let child = self.schema(self.child(node, child)?, member.value, context)?;
                 let applies = self.graph.or(selected, child.valid)?;
                 state.valid = self.graph.and(state.valid, applies)?;
-                self.graph
-                    .charge(name.len().saturating_mul(2).saturating_add(256))?;
-                state.properties.insert(name.clone(), TRUE);
+                if let Some(name) = &name {
+                    self.graph
+                        .charge(name.len().saturating_mul(2).saturating_add(256))?;
+                    state.properties.insert(name.clone(), TRUE);
+                }
             }
             if let Some(child) = schema.get("propertyNames") {
                 let child = self.schema(self.child(node, child)?, member.name, context)?;
                 state.valid = self.graph.and(state.valid, child.valid)?;
             }
-            self.graph.charge(96 + name.len() * 2)?;
+            if let Some(name) = &name {
+                self.graph.charge(96 + name.len() * 2)?;
+            }
         }
         if let Some(child) = schema.get("unevaluatedProperties") {
             let child = self.child(node, child)?;
@@ -1310,8 +1348,10 @@ impl Run<'_> {
             {
                 let result = self.schema(self.child(node, child)?, item, context)?;
                 state.valid = self.graph.and(state.valid, result.valid)?;
-                self.graph.charge(96)?;
-                state.items.insert(index, TRUE);
+                if self.plan.annotations.items {
+                    self.graph.charge(96)?;
+                    state.items.insert(index, TRUE);
+                }
             }
         }
         if let Some(child) = schema.get("contains") {
@@ -1320,7 +1360,7 @@ impl Run<'_> {
             for (index, item) in value.elements().expect("array").enumerate() {
                 let result = self.schema(child, item, context)?;
                 counts.add(result.valid, &mut self.graph)?;
-                if schema.profile.edition() == Dialect::Draft202012 {
+                if self.plan.annotations.items && schema.profile.edition() == Dialect::Draft202012 {
                     let old = state.items.get(&index).copied().unwrap_or(FALSE);
                     self.graph.charge(96)?;
                     state.items.insert(index, self.graph.or(old, result.valid)?);
@@ -1612,6 +1652,158 @@ mod summary_tests {
             ),
             ValueOutcome::Satisfies
         ));
+    }
+
+    #[test]
+    fn ordinary_large_containers_keep_no_unused_annotation_or_leaf_states() {
+        let control = std::sync::atomic::AtomicBool::new(false);
+        let array = original_plan(
+            r#"{"type":"array","items":{"type":"integer","minimum":0}}"#,
+            &[],
+            Limits::default(),
+        );
+        let valid = serde_json::Value::Array((0..20_000).map(serde_json::Value::from).collect());
+        let value = JsonValue::parse(valid.to_string()).unwrap();
+        let outcome = array.evaluate(&value, Detail::Outcome, &control);
+        assert!(matches!(outcome, ValueOutcome::Satisfies), "{outcome:?}");
+        let mut invalid = valid;
+        invalid[19_999] = serde_json::Value::from(-1);
+        let outcome = array.evaluate(
+            &JsonValue::parse(invalid.to_string()).unwrap(),
+            Detail::Outcome,
+            &control,
+        );
+        assert!(matches!(outcome, ValueOutcome::Fails { .. }), "{outcome:?}");
+
+        let object = original_plan(
+            r#"{"type":"object","additionalProperties":{"type":"integer"}}"#,
+            &[],
+            Limits::default(),
+        );
+        let fields: serde_json::Map<String, serde_json::Value> = (0..50_000)
+            .map(|i| (format!("key{i}"), serde_json::Value::from(i)))
+            .collect();
+        let value = JsonValue::parse(serde_json::Value::Object(fields).to_string()).unwrap();
+        let outcome = object.evaluate(&value, Detail::Outcome, &control);
+        assert!(matches!(outcome, ValueOutcome::Satisfies), "{outcome:?}");
+    }
+
+    #[test]
+    fn annotation_demand_preserves_local_selection_counts_and_consumers() {
+        let control = std::sync::atomic::AtomicBool::new(false);
+        for (schema, value, valid) in [
+            (
+                r#"{"patternProperties":{"^a":{"type":"integer"}},"additionalProperties":false}"#,
+                r#"{"a":1}"#,
+                true,
+            ),
+            (
+                r#"{"patternProperties":{"^a":{"type":"integer"}},"additionalProperties":false}"#,
+                r#"{"b":1}"#,
+                false,
+            ),
+            (
+                r#"{"contains":{"const":1},"minContains":2,"maxContains":2}"#,
+                "[1,2,1]",
+                true,
+            ),
+            (
+                r#"{"contains":{"const":1},"minContains":2,"maxContains":2}"#,
+                "[1,2,2]",
+                false,
+            ),
+            (
+                r#"{"allOf":[{"properties":{"a":true}}],"unevaluatedProperties":false}"#,
+                r#"{"a":1}"#,
+                true,
+            ),
+            (
+                r#"{"allOf":[{"properties":{"a":true}}],"unevaluatedProperties":false}"#,
+                r#"{"a":1,"b":2}"#,
+                false,
+            ),
+            (
+                r#"{"allOf":[{"contains":{"const":1}}],"unevaluatedItems":false}"#,
+                "[1,1]",
+                true,
+            ),
+            (
+                r#"{"allOf":[{"contains":{"const":1}}],"unevaluatedItems":false}"#,
+                "[1,2]",
+                false,
+            ),
+        ] {
+            let plan = original_plan(schema, &[], Limits::default());
+            let outcome =
+                plan.evaluate(&JsonValue::parse(value).unwrap(), Detail::Outcome, &control);
+            assert!(
+                if valid {
+                    matches!(outcome, ValueOutcome::Satisfies)
+                } else {
+                    matches!(outcome, ValueOutcome::Fails { .. })
+                },
+                "{schema} {value}: {outcome:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn empty_custom_applicators_are_not_classified_as_leaves() {
+        let meta = r#"{"$schema":"https://json-schema.org/draft/2020-12/schema","$vocabulary":{"https://json-schema.org/draft/2020-12/vocab/core":true,"https://json-schema.org/draft/2020-12/vocab/applicator":true,"https://json-schema.org/draft/2020-12/vocab/validation":true},"type":"object"}"#;
+        let control = std::sync::atomic::AtomicBool::new(false);
+        for (keyword, valid) in [("anyOf", false), ("oneOf", false), ("allOf", true)] {
+            let consumer =
+                serde_json::json!({"$schema":"https://fixture.test/meta",keyword:[]}).to_string();
+            let plan = original_plan(
+                r#"{"$ref":"https://fixture.test/schema"}"#,
+                &[
+                    ("https://fixture.test/meta", meta),
+                    ("https://fixture.test/schema", &consumer),
+                ],
+                Limits::default(),
+            );
+            for value in ["null", "false", "0", r#""x""#, "[]", "{}"] {
+                let outcome =
+                    plan.evaluate(&JsonValue::parse(value).unwrap(), Detail::Outcome, &control);
+                assert!(
+                    if valid {
+                        matches!(outcome, ValueOutcome::Satisfies)
+                    } else {
+                        matches!(outcome, ValueOutcome::Fails { .. })
+                    },
+                    "{keyword} {value}: {outcome:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn recursive_support_keeps_foreign_leaf_absence_without_leaf_memo() {
+        let control = std::sync::atomic::AtomicBool::new(false);
+        for dialect in [
+            "https://json-schema.org/draft/2019-09/schema",
+            "https://json-schema.org/draft/2020-12/schema",
+        ] {
+            let resource = serde_json::json!({
+                "$id":"https://compact.test/A",
+                "allOf":[{"$ref":"#"},{"$id":"leaf","$schema":dialect,"type":"object"}]
+            })
+            .to_string();
+            let plan = original_plan(
+                r#"{"allOf":[{"$ref":"https://compact.test/A"}],"unevaluatedProperties":false}"#,
+                &[("https://compact.test/A", &resource)],
+                Limits::default(),
+            );
+            let outcome = plan.evaluate(
+                &JsonValue::parse(r#"{"a":1}"#).unwrap(),
+                Detail::Outcome,
+                &control,
+            );
+            assert!(
+                matches!(outcome, ValueOutcome::Fails { .. }),
+                "{dialect}: {outcome:?}"
+            );
+        }
     }
 
     #[test]

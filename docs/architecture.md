@@ -1,116 +1,121 @@
-# Maintainer architecture
+# SDK architecture
 
-Normative semantics live in `openbindings`; companion behavior is imported
-explicitly. Core has no transport, operation invoker, binding adapter or synthesis
-layer. A private schema engine supports normative document-schema checking; the
-optional default operation evaluator implements the public Rust trait boundary.
+The SDK follows the pinned OpenBindings document model and the independently
+published interfaces. Core defines document semantics. Optional companions define
+schema evaluation, discovery, comparison and interface roles. Core depends on none
+of those companions, and no source kind becomes part of core.
 
-`Document` owns an immutable exact JSON arena and lazily indexed names.
-`DocumentValidation` carries evidence for every rule; only a conformant validation
-can yield `ConformantDocument`. `Document` edits return a new immutable snapshot through atomic exact-text batches and
-typed part setters. Editing commits a new arena and fresh caches; clones and proofs
-retain the earlier revision. `ConformantDocument` exposes no mutable access. Source views keep their owner's storage, not borrowed external
-buffers; standalone document views rebase byte locations correctly.
+## Documents and original schemas
 
-A conformant operation hands out its `Schema`s; preparation borrows an
-evaluator and an explicit immutable `ExternalSchemas`. Each preparation compiles
-independently. A caller-retained `PreparedSchema` owns required compiled state
-and survives document, resource and evaluator disposal. Cancellation and transient failures do
-not poison healthy subsequent preparation. Resources with the same URI in distinct
-sets never share an implicit registry. A set indexes its resource identities once
-for the core projection.
-A resolution space is assembled only when an evaluator requests the core
-projection, once per live document revision and resource set: the space without
-supplied resources stays with the revision, and a space with a set stays with
-that set until either the set or the revision is dropped. The default evaluator
-assembles its own space for each preparation and drops it afterwards; the space
-shares the set's identity index and schema positions and the revision's schema
-index instead of building them again, and takes the revision's schemas as
-already checked against the 2020-12 meta-schemas once its validation has checked
-each of them through that index and found none failing.
-Core gives the default evaluator its projection as definitions rather than as
-JSON text to parse again; it writes the text only when the projection could
-reach the text's fixed bounds, which then decide as they do for the text. The
-evaluator reads each `pattern` from the source the definitions borrow rather
-than from a copy: the library meets only its matcher's index. Every space
-places the packaged 2020-12 meta-schemas after the document and supplied resources
-as one immutable layer, built once per process and shared, so assembly does not
-re-add them. The schema-space compiler builds a
-private graph/projection preserving resource boundaries and dynamic scope. Only
-private generated names change; error locations resolve to original sources.
+`Document` owns an immutable exact JSON snapshot, including editor drafts that do
+not conform. `DocumentValidation` reports evidence for each document rule; only
+established conformance produces a `ConformantDocument`. Its canonical `Operation`,
+`Source`, `Binding`, `Dependency` and `Example` entries retain their originating
+revision. Exact JSON preserves absent fields, null, numeric tokens and UTF-16 string
+meaning. Typed domain entries are acquired from a conformant document.
 
-`openbindings-internal-json` contains the flat source arena and exact numeric
-arithmetic. Core's fixed checks and reference inspection and the default
-evaluator all use the unmodified jsonschema library; the SDK carries no fork of
-any dependency. The evaluator bundles each projected value contract into one resource,
-resolves dynamic references itself, reads patterns for the regex crate and
-applies one schema transform that keeps the library's `unevaluatedProperties`
-walk from a known bug; see `DEPENDENCY-MAINTENANCE.md` for the composition, the
-separation and the regression gates. Core and the default evaluator use denying
-or local retrievers even if a consuming Cargo graph enables dependency
-acquisition features.
+Authoring uses explicit `set`, `remove` or atomic `edit` operations to produce a new
+snapshot. Untouched bytes remain exact; edits do not fabricate missing containers.
+Existing entries, proofs and schema owners keep their original revision. There are
+no parallel detached authoring-part types or typed setter families.
+
+An operation's `input()` and `output()` expose contextual `Schema` owners when a
+schema is present. Named schemas come from `ConformantDocument::schema`.
+`EvaluationRequest` borrows the selected original schema and explicit immutable
+`ExternalSchemas`. Its owned `SchemaEnvironment` supplies original locations,
+resource/profile inventories and typed reference queries. It does not fetch
+missing content, rewrite the document or introduce a global resource registry.
+Cached environment construction is scoped to the actual document/resource pair;
+changing either cannot alter an existing prepared owner's meaning.
+
+`SchemaEvaluator` prepares an owned `SchemaValidator`; `PreparedSchema` supplies
+the caller-facing wrapper. Prepared owners survive their input owners. They may
+retain immutable originals or prepared facts needed for evaluation and diagnostics;
+there is no requirement that every implementation release original arenas during
+preparation. Preparation failure is separate from each value's satisfies, fails,
+undefined or no-verdict outcome. `Detail::Explain` requests bounded diagnostics.
+
+`openbindings-internal-json` implements exact storage and numeric operations.
+`openbindings-internal-schema` supports fixed normative document checks and original
+schema interpretation. These private implementation packages do not create new
+public document concepts. Fixed document checks are available without an optional
+value evaluator.
+
+## Default evaluation implementation
+
+The optional `openbindings-json-schema-evaluator` currently combines a compiled
+ordinary path with bounded reasoning over original schema locations. The latter
+keeps exact values, typed reference effects, conditional evaluation annotations
+and supported recursive proofs together. Prepared original queries and pattern
+readings are immutable; mutable matching and proof state belongs to each call.
+No completed artifact retains a caller's preparation control.
+
+The reviewed replacement is one prepared original-node engine. It is still being
+implemented and qualified. The outgoing projection/compiler and its adaptation
+code are private transition machinery, with no compatibility protection. Their
+allocation qualification remains open until replacement or a complete certificate.
+See the [saved checkpoint](alignment-checkpoint.md) for actual completed increments
+and remaining gates. No default limit or performance requirement is waived by the
+architectural change. The SDK uses unmodified dependencies; maintenance details are
+in [DEPENDENCY-MAINTENANCE.md](../DEPENDENCY-MAINTENANCE.md).
+
+## Current interfaces
+
+`openbindings-context` owns opaque context objects and the closed `{message, schema}`
+challenge carrier. It performs no acquisition, schema evaluation, trust decision
+or retry, and adds no OBI document fields.
+
+`openbindings-kind-description` separates listing and description from explicit
+source checking. Support claims are per operation; check descriptions disclose
+whether the implementation executes operations. Checked callers preserve exact
+carriers and distinguish rejection, context challenge and operational failure.
+Describing a kind never triggers a source check.
+
+`openbindings-source-pull` owns exact additions/reports, original-document requests,
+borrowed providers and `PullClient`. A provider projects the selected source
+according to its kind. The client checks mechanical relationships and prospective
+document conformance. The caller chooses and applies changes; proposals remain
+unapplied. Generic checks cannot certify a provider's fidelity or opaque data's
+complete dependencies.
+
+`openbindings-schema-comparison` implements the adopted normalized identity profile
+with an original reference context on each side. Identity is separate from general
+equivalence and directional compatibility. A comparison failure is not a negative
+answer. Existing-binding drift uses the kind's would-write comparison, which may
+include annotations the identity profile ignores.
+
+`openbindings-invocation` provides `BindingInvoker`, `BindingClient` and
+`OperationClient`. Checked invocation retains the original document and selected
+keys. Operation invocation adds selection and per-value schema gates through the
+caller's evaluator and resources. Caller polling drives bounded streaming I/O;
+providers own realization effects. Preflight is separate and advisory. Context
+acquisition, permission and retries remain application decisions.
+
+Async companions share scoped cancellation delivery through
+`openbindings-internal-cancellation`. Finite calls and streaming invocation retain
+their distinct lifecycles. There is no required runtime, blanket Send/Sync provider
+bound, universal supported-kind verdict or detached binding carrier. Obsolete
+inspection/synthesis interfaces are not preserved as compatibility layers.
+
+## Hosts and discovery
 
 `openbindings-http-discovery` separates portable origin/response policy,
 caller-provided transport and immutable publication from its optional native HTTP
-client. The TypeScript companion uses ordinary Fetch callbacks. No acquisition URL
-is injected into document/schema interpretation.
+client. The TypeScript companion uses Fetch callbacks. Acquisition does not inject
+a new base into schema interpretation.
 
-`openbindings-wasm` is a private bridge behind the first-class TypeScript facade,
-separate from the Rust interface companions.
-Rust owns semantic work and exact values. The facade exposes discriminated outcomes,
-checked JS conveniences, immutable resource sets and disposable retained handles.
-Repeated UI metadata reads use cached JS snapshots. It performs no second schema
-implementation. Initialization is explicit and asynchronous; CPU calls are
-synchronous. Workers are the interruptible bulk-work route. workerd initialization
-occurs in an active request so host entropy is available, then is reused.
+`openbindings-wasm` is the private bridge for the TypeScript facade. Rust owns
+semantic work and exact values; TypeScript supplies language-appropriate tagged
+outcomes, checked conveniences and disposable owners. Its implementation modules
+follow JSON, documents, schemas, diagnostics, ownership, runtime and optional HTTP
+discovery. There is no second JavaScript schema engine or compatibility barrel.
 
-The six public Rust workflows and TypeScript tests are architecture witnesses,
-not sample applications to be migrated. Arbitrary
-JavaScript evaluator callbacks, a Node native addon, source retrieval and CLI/Panjir
-migration remain separate design work.
+Initialization is explicit and asynchronous; CPU calls are synchronous. Workers
+provide interruption for bulk work. workerd initialization occurs in an active
+request and can then be reused. Rust interface companions are not exposed as
+TypeScript role callbacks. External source/archive consumers and actual host
+probes qualify their stated scope; fixture bridges are not new public SDK APIs.
 
-`openbindings-context` owns opaque context objects and the current closed
-`{message, schema}` challenge carrier. It depends only on core exact JSON and
-performs no acquisition, schema evaluation, trust decision or retry. Invocation,
-kind checking and pulling consume this shared interface concept; it adds no OBI
-fields. Each role consumes this contract without adding a dependency to core.
-
-`openbindings-kind-description` separates description, check-description and actual
-source checking. Support claims are per operation. Its finite clients retain
-native provider failures, exact carriers and the shared context challenge.
-Queries never trigger a source check or context acquisition.
-
-`openbindings-source-pull` owns pull additions and reports, original-document
-requests, borrowed providers and a checked `PullClient`. Providers project from
-the selected source according to its kind. The client checks report relationships
-and core conformance of the prospective additions; the caller explicitly chooses
-what to adopt. Proposals never edit the original document automatically.
-[Source pulling](../crates/openbindings-source-pull/README.md) documents these
-responsibilities and the limits of mechanical validation.
-
-`openbindings-schema-comparison` supplies normalized schema identity for authoring
-jobs such as operation reuse. Each side retains its original reference context.
-Identity differs from general equivalence or directional compatibility, and a
-comparison failure is not a negative answer. Existing-entry drift uses the kind's
-would-write comparison, which may include annotations that identity ignores.
-
-`openbindings-invocation` supplies `BindingInvoker`, `BindingClient` and
-`OperationClient`. Both clients retain the original conformant document and
-selected authored keys. Operation invocation adds explicit selection and per-value
-checks using the caller's evaluator and external schemas. Bounded streaming I/O
-is driven by caller polling; binding execution and effects belong to the provider.
-Preflight is a separate advisory call. Context acquisition and retries remain
-application decisions. See the [invocation guide](../crates/openbindings-invocation/README.md).
-
-Async companions share the cancellation identity and scoped delivery helper in
-`openbindings-internal-cancellation`. Shared opaque context and challenges belong
-to `openbindings-context`; there is no universal supported-kind verdict or detached
-by-value binding interface. Core depends on none of these role companions. The
-finite clients and streaming invocation driver have distinct lifecycles, and no
-particular runtime or blanket Send/Sync requirement is imposed on providers.
-
-The SDK supplies contracts and checked caller APIs without kind-specific
-instances. Providers own source interpretation, kind soundness and effects.
-[openbindings/openapi](https://github.com/openbindings/openapi) is a separate
-implementation project using an independent client. The SDK workspace, tools and
-examples do not depend on it.
+Kind-specific adapters, protocol clients and applications remain independent.
+They supply source interpretation, kind soundness and effects. SDK qualification
+does not establish their conformance or deployment readiness.

@@ -63,6 +63,13 @@ impl Run<'_> {
             if visited.contains(&key) {
                 continue;
             }
+            // Leaves no longer publish completed memo entries. Their
+            // preparation certificate still proves that they produce no
+            // annotations, including under a foreign or custom profile.
+            // This is structural absence, not an omitted-demand map.
+            if self.plan.leaves.contains(&node) {
+                continue;
+            }
             // A complete State already incorporates conditional selection and
             // failure gating. Its formulas bound possible annotation origins;
             // they never establish that a recursive caller produced one.
@@ -142,7 +149,9 @@ impl Run<'_> {
                     self.support_edge(&mut pending, self.child(node, dependency.value)?, &context)?;
                 }
             }
-            if let Some(properties) = schema.get("properties") {
+            if self.plan.annotations.properties
+                && let Some(properties) = schema.get("properties")
+            {
                 let Some(properties) = properties.members() else {
                     return Ok(None);
                 };
@@ -152,22 +161,26 @@ impl Run<'_> {
                     support.properties.insert(name, TRUE);
                 }
             }
-            support.all_properties |= [
-                "patternProperties",
-                "additionalProperties",
-                "unevaluatedProperties",
-            ]
-            .iter()
-            .any(|keyword| schema.get(keyword).is_some());
-            if let Some(prefix) = schema.get("prefixItems") {
+            support.all_properties |= self.plan.annotations.properties
+                && [
+                    "patternProperties",
+                    "additionalProperties",
+                    "unevaluatedProperties",
+                ]
+                .iter()
+                .any(|keyword| schema.get(keyword).is_some());
+            if self.plan.annotations.items
+                && let Some(prefix) = schema.get("prefixItems")
+            {
                 let Some(prefix) = prefix.elements() else {
                     return Ok(None);
                 };
                 support.prefix_items = support.prefix_items.max(prefix.len());
             }
-            support.all_items |= ["items", "contains", "unevaluatedItems"]
-                .iter()
-                .any(|keyword| schema.get(keyword).is_some());
+            support.all_items |= self.plan.annotations.items
+                && ["items", "contains", "unevaluatedItems"]
+                    .iter()
+                    .any(|keyword| schema.get(keyword).is_some());
             // not and propertyNames discard child evaluation annotations. The
             // instance-consuming schemas above originate only their selected
             // parent name/index; their own descendants are not propagation edges.
@@ -206,7 +219,6 @@ impl Run<'_> {
         key: &Visit,
         value: JsonRef<'_>,
     ) -> Result<State, NoVerdict> {
-        let support = self.annotation_support(key)?;
         let identity = self.values.intern(value, &mut self.graph)?;
         let valid = if let Some(valid) = self.facts.get(key).and_then(|facts| facts.valid) {
             valid
@@ -221,7 +233,15 @@ impl Run<'_> {
             )?
         };
         let mut state = State::truth(valid);
-        if let Some(members) = value.members() {
+        if !((self.plan.annotations.properties && value.kind() == JsonKind::Object)
+            || (self.plan.annotations.items && value.kind() == JsonKind::Array))
+        {
+            return Ok(state);
+        }
+        let support = self.annotation_support(key)?;
+        if self.plan.annotations.properties
+            && let Some(members) = value.members()
+        {
             for member in members {
                 let name = self.units(member.name)?;
                 let bound = support
@@ -260,7 +280,9 @@ impl Run<'_> {
                     .insert(name, self.graph.and(valid, selected)?);
             }
         }
-        if let Some(elements) = value.elements() {
+        if self.plan.annotations.items
+            && let Some(elements) = value.elements()
+        {
             for (index, _) in elements.enumerate() {
                 self.graph.tick()?;
                 let bound = support
@@ -316,7 +338,11 @@ impl Run<'_> {
                 }
             }
         }
-        if let Some(members) = value.members() {
+        // Unobserved coordinates carry no fact. In particular, an omitted map
+        // must never certify FALSE/absence for a later recursive attempt.
+        if self.plan.annotations.properties
+            && let Some(members) = value.members()
+        {
             for member in members {
                 let name = self.units(member.name)?;
                 let formula = state.properties.get(&name).copied().unwrap_or(FALSE);
@@ -337,7 +363,9 @@ impl Run<'_> {
                 }
             }
         }
-        if let Some(elements) = value.elements() {
+        if self.plan.annotations.items
+            && let Some(elements) = value.elements()
+        {
             for (index, _) in elements.enumerate() {
                 self.graph.tick()?;
                 let formula = state.items.get(&index).copied().unwrap_or(FALSE);

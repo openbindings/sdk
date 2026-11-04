@@ -89,10 +89,12 @@ toolchain; the MSRV compatibility receipt explicitly records no matching Clippy 
    Concrete contains counting and immutable reference-query preparation are qualified.
    Immutable pattern readings and shared Simple matchers are also reviewed and
    qualified; VM compilation/search scratch remain per-call pending their audited
-   aggregate schedule. Compact demanded annotations, prepared operands,
-   iterative traversal and bounded original diagnostics follow. The existing Plan
-   cannot replace the compiler unchanged: unchanged large-container, depth,
-   long-reference and Explain workloads must first recover. Do not relax evaluator
+   aggregate schedule. Conservative annotation demand and certified leaves now
+   restore the unchanged large-container jobs, with independent direct-engine
+   corpus/review evidence and the foreign-leaf support correction. Prepared
+   operands, local syntax accounting, iterative traversal and original diagnostics
+   remain. Depth, long-reference and Explain workloads still need restoration
+   before the default-engine switch. Do not relax evaluator
    limits or performance expectations to make that switch.
 3. TypeScript organization is implemented and independently reviewed. Finish
    remaining invocation/discovery composition, full workspace/host/CI/package
