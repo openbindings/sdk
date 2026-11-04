@@ -432,7 +432,7 @@ impl Patterns {
         // Debit the lexical preflight itself before scanning for expansions.
         control.charge_work(source.len().saturating_add(1))?;
         let (work, allocation) = super::super::pattern::preparation_cost(source)
-            .ok_or_else(|| limit("preparation-allocation-bytes"))?;
+            .ok_or_else(|| limit("preparation-sdk-reservation-bytes"))?;
         control.charge_work(work)?;
         control.charge_allocation(allocation)?;
         let reading = super::super::read_pattern(source, limits).map_err(|detail| {
@@ -489,7 +489,7 @@ mod tests {
             Patterns::default().add(r"\p{L}", false, &Limits::default(), a)
         })
         .unwrap_err();
-        assert_eq!(failed.code, "preparation-allocation-bytes");
+        assert_eq!(failed.code, "preparation-sdk-reservation-bytes");
         let (reserved, retained) = Attempt::run(1_000_000, 8 * 1024 * 1024, &|| false, |a| {
             let mut patterns = Patterns::default();
             patterns
@@ -521,7 +521,7 @@ mod tests {
             check(&environment, &Limits::default(), a)
         })
         .unwrap_err();
-        assert_eq!(failed.code, "preparation-allocation-bytes");
+        assert_eq!(failed.code, "preparation-sdk-reservation-bytes");
         assert!(
             Attempt::run(10_000_000, 8 * 1024 * 1024, &|| false, |a| {
                 check(&environment, &Limits::default(), a)
@@ -541,7 +541,7 @@ mod tests {
             Patterns::default().add(&source, false, &Limits::default(), a)
         })
         .unwrap_err();
-        assert_eq!(failed.code, "preparation-allocation-bytes");
+        assert_eq!(failed.code, "preparation-sdk-reservation-bytes");
         let (_, allocation) = super::super::super::pattern::preparation_cost(&source).unwrap();
         assert!(allocation > 16_482_598);
     }

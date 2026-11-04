@@ -107,14 +107,17 @@ fn exact_shared_allowances_and_one_below() {
         let result = Attempt::run(work - 1, allocation, &|| false, |attempt| {
             prepare(form, 32, 32, attempt)
         });
-        assert_eq!(result.unwrap_err().code, "preparation-work-units");
+        assert_eq!(result.unwrap_err().code, "preparation-sdk-work-units");
         assert_eq!(entries(), 1, "{form}");
 
         reset_entries();
         let result = Attempt::run(work, allocation - 1, &|| false, |attempt| {
             prepare(form, 32, 32, attempt)
         });
-        assert_eq!(result.unwrap_err().code, "preparation-allocation-bytes");
+        assert_eq!(
+            result.unwrap_err().code,
+            "preparation-sdk-reservation-bytes"
+        );
         assert_eq!(entries(), 0, "{form}");
     }
 }
@@ -126,7 +129,7 @@ fn refused_precharges_never_enter_the_parser() {
         let result = Attempt::run(limit, usize::MAX, &|| false, |attempt| {
             prepare("a0000|b0000", 32, 32, attempt)
         });
-        assert_eq!(result.unwrap_err().code, "preparation-work-units");
+        assert_eq!(result.unwrap_err().code, "preparation-sdk-work-units");
         assert_eq!(entries(), 0);
     }
     reset_entries();
@@ -134,10 +137,13 @@ fn refused_precharges_never_enter_the_parser() {
         attempt.charge_allocation(1).unwrap_err();
         assert_eq!(
             failure(prepare("a", 32, 32, attempt).unwrap_err()).code,
-            "preparation-allocation-bytes"
+            "preparation-sdk-reservation-bytes"
         );
     });
-    assert_eq!(result.unwrap_err().code, "preparation-allocation-bytes");
+    assert_eq!(
+        result.unwrap_err().code,
+        "preparation-sdk-reservation-bytes"
+    );
     assert_eq!(entries(), 0);
 }
 
@@ -169,17 +175,20 @@ fn schedule_overflow_preserves_and_poisons_the_enclosing_cause() {
     };
     let result = Attempt::run(usize::MAX, usize::MAX, &|| false, |attempt| {
         let error = reservation(usize::MAX, &huge, layout, attempt).unwrap_err();
-        assert_eq!(error.code, "preparation-work-units");
+        assert_eq!(error.code, "preparation-sdk-work-units");
         assert!(attempt.charge_work(0).is_err());
     });
-    assert_eq!(result.unwrap_err().code, "preparation-work-units");
+    assert_eq!(result.unwrap_err().code, "preparation-sdk-work-units");
 
     let result = Attempt::run(usize::MAX, 0, &|| false, |attempt| {
         attempt.charge_allocation(1).unwrap_err();
         let error = reservation(usize::MAX, &huge, layout, attempt).unwrap_err();
-        assert_eq!(error.code, "preparation-allocation-bytes");
+        assert_eq!(error.code, "preparation-sdk-reservation-bytes");
     });
-    assert_eq!(result.unwrap_err().code, "preparation-allocation-bytes");
+    assert_eq!(
+        result.unwrap_err().code,
+        "preparation-sdk-reservation-bytes"
+    );
 
     let result = Attempt::run(100, usize::MAX, &|| false, |attempt| {
         // This count overflows allocation terms while its word-work sum fits.
@@ -190,11 +199,14 @@ fn schedule_overflow_preserves_and_poisons_the_enclosing_cause() {
         };
         assert_eq!(
             reservation(0, &items, layout, attempt).unwrap_err().code,
-            "preparation-allocation-bytes"
+            "preparation-sdk-reservation-bytes"
         );
         assert!(attempt.charge_allocation(0).is_err());
     });
-    assert_eq!(result.unwrap_err().code, "preparation-allocation-bytes");
+    assert_eq!(
+        result.unwrap_err().code,
+        "preparation-sdk-reservation-bytes"
+    );
     assert_eq!(work_overflow(&|| true).reason, FailureReason::Cancelled);
     assert_eq!(
         allocation_overflow(&|| true).reason,

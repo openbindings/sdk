@@ -268,7 +268,7 @@ fn table_backing_and_shared_work_have_exact_sticky_boundaries() {
         if bytes != 0 {
             assert_eq!(
                 run(usize::MAX, bytes - 1).unwrap_err().code,
-                "preparation-allocation-bytes"
+                "preparation-sdk-reservation-bytes"
             );
         }
         let (mut lo, mut hi) = (0, words + 64);
@@ -283,7 +283,7 @@ fn table_backing_and_shared_work_have_exact_sticky_boundaries() {
         run(lo, bytes).unwrap().unwrap();
         assert_eq!(
             run(lo - 1, bytes).unwrap_err().code,
-            "preparation-work-units"
+            "preparation-sdk-work-units"
         );
     }
     for words in [1, usize::MAX] {
@@ -294,7 +294,7 @@ fn table_backing_and_shared_work_have_exact_sticky_boundaries() {
             })
             .unwrap_err()
             .code,
-            "preparation-allocation-bytes"
+            "preparation-sdk-reservation-bytes"
         );
     }
 }

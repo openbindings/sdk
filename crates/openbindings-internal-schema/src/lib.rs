@@ -158,13 +158,15 @@ pub trait Control: Send + Sync {
             Ok(())
         }
     }
-    /// Charge size-proportional construction work. Ordinary controls only
-    /// observe cancellation; a preparation attempt owns the work allowance.
+    /// Charge a cooperative SDK work site. Ordinary controls only observe
+    /// cancellation; a preparation attempt owns the shared SDK allowance.
+    /// Dependency and custom callback execution is not automatically counted.
     fn charge_work(&self, _units: usize) -> Result<(), Failure> {
         self.check()
     }
-    /// Reserve a conservative allocation estimate before allocating. Footprint
-    /// limits remain separate; reservations are never refunds of retained data.
+    /// Reserve a conservative estimate at an explicit SDK storage site before
+    /// allocating. This is not allocator-wide accounting. Footprint limits remain
+    /// separate; reservations are never refunds of retained data.
     fn charge_allocation(&self, _bytes: usize) -> Result<(), Failure> {
         self.check()
     }

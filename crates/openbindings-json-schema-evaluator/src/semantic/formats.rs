@@ -171,7 +171,7 @@ mod tests {
             assert_eq!(
                 prepare(work - 1, false).unwrap_err().kind,
                 PreparationFailureKind::Limit {
-                    resource: "preparation-work-units".into(),
+                    resource: "preparation-sdk-work-units".into(),
                 }
             );
             assert_eq!(

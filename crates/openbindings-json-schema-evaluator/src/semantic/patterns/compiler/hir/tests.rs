@@ -181,11 +181,14 @@ fn exact_and_one_below_cumulative_reservations() {
         assert_eq!(entries(), 1);
         reset();
         let result = Attempt::run(work - 1, allocation, &|| false, |a| prepare(form, a));
-        assert_eq!(result.unwrap_err().code, "preparation-work-units");
+        assert_eq!(result.unwrap_err().code, "preparation-sdk-work-units");
         assert_eq!(entries(), 1);
         reset();
         let result = Attempt::run(work, allocation - 1, &|| false, |a| prepare(form, a));
-        assert_eq!(result.unwrap_err().code, "preparation-allocation-bytes");
+        assert_eq!(
+            result.unwrap_err().code,
+            "preparation-sdk-reservation-bytes"
+        );
         assert_eq!(entries(), 0);
     }
 }
@@ -204,7 +207,7 @@ fn refused_translation_precharges_cannot_enter_backend() {
     let result = Attempt::run(before + hir_work - 1, usize::MAX, &|| false, |a| {
         prepare(form, a)
     });
-    assert_eq!(result.unwrap_err().code, "preparation-work-units");
+    assert_eq!(result.unwrap_err().code, "preparation-sdk-work-units");
     assert_eq!(entries(), 0);
 }
 #[test]
@@ -254,10 +257,16 @@ fn cancellation_and_prior_failure_are_sticky_and_retry_is_fresh() {
     }
     let result = Attempt::run(100, 0, &|| false, |a| {
         a.charge_allocation(1).unwrap_err();
-        assert_eq!(work_overflow(a).code, "preparation-allocation-bytes");
-        assert_eq!(allocation_overflow(a).code, "preparation-allocation-bytes");
+        assert_eq!(work_overflow(a).code, "preparation-sdk-reservation-bytes");
+        assert_eq!(
+            allocation_overflow(a).code,
+            "preparation-sdk-reservation-bytes"
+        );
     });
-    assert_eq!(result.unwrap_err().code, "preparation-allocation-bytes");
+    assert_eq!(
+        result.unwrap_err().code,
+        "preparation-sdk-reservation-bytes"
+    );
     assert_eq!(work_overflow(&|| true).reason, FailureReason::Cancelled);
     assert_eq!(
         allocation_overflow(&|| true).reason,
@@ -282,8 +291,12 @@ fn nested_attempts_share_reservations_and_cannot_hide_a_lower_refusal() {
     });
     result.unwrap();
     for (child_work, child_allocation, code) in [
-        (work - 1, usize::MAX, "preparation-work-units"),
-        (usize::MAX, allocation - 1, "preparation-allocation-bytes"),
+        (work - 1, usize::MAX, "preparation-sdk-work-units"),
+        (
+            usize::MAX,
+            allocation - 1,
+            "preparation-sdk-reservation-bytes",
+        ),
     ] {
         let failed = Attempt::run(usize::MAX, usize::MAX, &|| false, |outer| {
             assert!(

@@ -124,8 +124,9 @@ fn prepare_bounded(schema: &Schema, resources: &ExternalSchemas)
 | `total_pattern_memory` | 64 MiB | Matchers and their engine allowances |
 | `program_bytes` | 48 MiB | SDK program growth and semantic proof storage |
 
-`PreparationLimits` bounds the original schema environment's footprint and the
-whole preparation attempt's work and conservative allocation reservations. A local
+`PreparationLimits` bounds the original schema environment's footprint, cooperative
+SDK work (`max_sdk_work_units`) and explicit SDK storage reservations
+(`max_sdk_reservation_bytes`). A local
 undefined operation cannot bypass construction accounting: the semantic path
 walks known original references and applicators, counts resources and checks
 pattern budgets before becoming ready. Proof work, exact effect keys, annotations
@@ -133,8 +134,11 @@ and decision-graph storage are charged, including custom meta-schema admission
 and retries after discovering a recursive component. Supported pattern matching borrows the input string;
 unknown matches reserve their exact text-key allowance before constructing it.
 
-These limits are not a process RSS guarantee and do not include caller-owned
-inputs or all memory held by the underlying compiled library. Algorithm and
+These counters cover the SDK sites described above, including temporary and failed
+SDK construction; they do not count every dependency operation, allocator request
+or custom callback. Dependency construction has separate structural and retained
+representation limits, with measured resource qualification on supported builds.
+The replacement pattern compiler is not yet active. Algorithm and
 allocation checks live in the evaluator tests and `tools/diagnostic-memory-probe`.
 Final matched-toolchain performance qualification remains part of the migration.
 

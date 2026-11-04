@@ -48,7 +48,7 @@ fn overflow(control: &dyn Control) -> Error {
     }
     Error::Attempt(Failure::new(
         FailureReason::LimitExceeded,
-        "preparation-work-units",
+        "preparation-sdk-work-units",
         "normalized pattern inventory exceeds its work allowance",
     ))
 }

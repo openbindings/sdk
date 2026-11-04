@@ -24,7 +24,7 @@ impl Ledger for Preparation<'_> {
     }
     fn allocation_limit(&mut self) -> Self::Error {
         self.0.allocation_limit_reached();
-        limit("preparation-allocation-bytes")
+        limit("preparation-sdk-reservation-bytes")
     }
 }
 

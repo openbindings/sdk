@@ -125,7 +125,7 @@ fn work_overflow(control: &dyn Control) -> Failure {
     }
     Failure::new(
         FailureReason::LimitExceeded,
-        "preparation-work-units",
+        "preparation-sdk-work-units",
         "pattern AST work reservation exceeds its allowance",
     )
 }
@@ -137,7 +137,7 @@ fn allocation_overflow(control: &dyn Control) -> Failure {
     control.allocation_limit_reached();
     Failure::new(
         FailureReason::LimitExceeded,
-        "preparation-allocation-bytes",
+        "preparation-sdk-reservation-bytes",
         "pattern AST allocation reservation exceeds its allowance",
     )
 }

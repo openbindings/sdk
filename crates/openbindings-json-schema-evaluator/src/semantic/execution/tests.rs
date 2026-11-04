@@ -30,8 +30,8 @@ fn original(row: &Value) -> Plan {
         limits.stack_bytes = bytes as usize;
     }
     openbindings_internal_schema::preparation::Attempt::run(
-        preparation.max_work_units,
-        preparation.max_allocation_bytes,
+        preparation.max_sdk_work_units,
+        preparation.max_sdk_reservation_bytes,
         &control,
         |attempt| Plan::new(environment, limits, preparation, attempt),
     )

@@ -38,17 +38,17 @@ fn neither_compiled_nor_semantic_preparation_can_ignore_an_exhausted_attempt() {
             for (limits, resource) in [
                 (
                     PreparationLimits {
-                        max_work_units: 0,
+                        max_sdk_work_units: 0,
                         ..PreparationLimits::default()
                     },
-                    "preparation-work-units",
+                    "preparation-sdk-work-units",
                 ),
                 (
                     PreparationLimits {
-                        max_allocation_bytes: 0,
+                        max_sdk_reservation_bytes: 0,
                         ..PreparationLimits::default()
                     },
-                    "preparation-allocation-bytes",
+                    "preparation-sdk-reservation-bytes",
                 ),
             ] {
                 let failure = schema
@@ -93,7 +93,7 @@ fn a_cached_inventory_does_not_reset_the_remaining_compiler_work() {
         )
         .unwrap();
     let limits = PreparationLimits {
-        max_work_units: 50,
+        max_sdk_work_units: 50,
         ..PreparationLimits::default()
     };
     let failure = schema
@@ -102,7 +102,7 @@ fn a_cached_inventory_does_not_reset_the_remaining_compiler_work() {
     assert_eq!(
         failure.kind,
         PreparationFailureKind::Limit {
-            resource: "preparation-work-units".into()
+            resource: "preparation-sdk-work-units".into()
         }
     );
     assert!(
@@ -152,17 +152,17 @@ fn original_meta_matching_obeys_each_attempt_and_retries_without_poisoning() {
         for (limits, resource) in [
             (
                 PreparationLimits {
-                    max_work_units: 10_000,
+                    max_sdk_work_units: 10_000,
                     ..PreparationLimits::default()
                 },
-                "preparation-work-units",
+                "preparation-sdk-work-units",
             ),
             (
                 PreparationLimits {
-                    max_allocation_bytes: 128 * 1024,
+                    max_sdk_reservation_bytes: 128 * 1024,
                     ..PreparationLimits::default()
                 },
-                "preparation-allocation-bytes",
+                "preparation-sdk-reservation-bytes",
             ),
         ] {
             let failure = schema

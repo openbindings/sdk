@@ -327,7 +327,7 @@ fn failure(control: &dyn Control) -> Failure {
     }
     Failure::new(
         FailureReason::LimitExceeded,
-        "preparation-work-units",
+        "preparation-sdk-work-units",
         "pattern inventory exceeds its allowance",
     )
 }
@@ -339,7 +339,7 @@ fn allocation_failure(control: &dyn Control) -> Failure {
     control.allocation_limit_reached();
     Failure::new(
         FailureReason::LimitExceeded,
-        "preparation-allocation-bytes",
+        "preparation-sdk-reservation-bytes",
         "pattern inventory allocation schedule exceeds its allowance",
     )
 }

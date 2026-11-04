@@ -1,6 +1,8 @@
 //! One synchronous preparation attempt, never retained by a completed artifact.
-//! Work has one authority: the backend's nested thread-local allowance. Explicit
-//! allocation reservations are monotone and shared through this borrowed control.
+//! Cooperative SDK work has one authority: the nested thread-local allowance.
+//! Explicit SDK storage reservations are monotone and shared through this
+//! borrowed control. Neither counter certifies every dependency operation or
+//! allocator request; dependency construction has a separate supported profile.
 use crate::{Control, Failure, FailureReason};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
@@ -39,7 +41,7 @@ fn exceeded(resource: &'static str) -> Failure {
     Failure::new(
         FailureReason::LimitExceeded,
         resource,
-        "schema preparation exceeded its aggregate allowance",
+        "schema preparation exceeded its shared SDK allowance",
     )
 }
 
@@ -50,17 +52,17 @@ pub(crate) fn identities(bytes: usize, control: &dyn Control) -> Result<(), Fail
     control.check()?;
     let Some(allocation) = bytes.checked_mul(64) else {
         control.allocation_limit_reached();
-        return Err(exceeded("preparation-allocation-bytes"));
+        return Err(exceeded("preparation-sdk-reservation-bytes"));
     };
     let work = bytes
         .checked_mul(8)
-        .ok_or_else(|| exceeded("preparation-work-units"))?;
+        .ok_or_else(|| exceeded("preparation-sdk-work-units"))?;
     control.charge_allocation(allocation)?;
     control.charge_work(work)
 }
 
 impl<'a> Attempt<'a> {
-    /// Nesting cannot grant more backend work than the enclosing attempt has
+    /// Nesting cannot grant more cooperative SDK work than the enclosing attempt has
     /// left. A nested attempt must receive the outer attempt as its control to
     /// retain the aggregate allocation ledger as well.
     pub fn run<T>(
@@ -81,9 +83,9 @@ impl<'a> Attempt<'a> {
         // allowance cannot be hidden by a fallback or ignored inner error.
         control.check()?;
         if attempt.allocation_spent.load(Ordering::Relaxed) {
-            return Err(exceeded("preparation-allocation-bytes"));
+            return Err(exceeded("preparation-sdk-reservation-bytes"));
         }
-        result.map_err(|_| exceeded("preparation-work-units"))
+        result.map_err(|_| exceeded("preparation-sdk-work-units"))
     }
 
     pub fn allocated(&self) -> usize {
@@ -109,10 +111,10 @@ impl Control for Attempt<'_> {
             ));
         }
         if self.allocation_is_exhausted() {
-            return Err(exceeded("preparation-allocation-bytes"));
+            return Err(exceeded("preparation-sdk-reservation-bytes"));
         }
         if !openbindings_internal_json::work::charge(units) {
-            return Err(exceeded("preparation-work-units"));
+            return Err(exceeded("preparation-sdk-work-units"));
         }
         Ok(())
     }
@@ -128,7 +130,7 @@ impl Control for Attempt<'_> {
                 .filter(|total| *total <= self.maximum_allocation)
             else {
                 self.allocation_limit_reached();
-                return Err(exceeded("preparation-allocation-bytes"));
+                return Err(exceeded("preparation-sdk-reservation-bytes"));
             };
             match self.allocated.compare_exchange_weak(
                 used,
@@ -166,7 +168,7 @@ mod tests {
             true
         })
         .unwrap_err();
-        assert_eq!(failure.code, "preparation-work-units");
+        assert_eq!(failure.code, "preparation-sdk-work-units");
         assert!(
             Attempt::run(10, 100, &|| false, |a| {
                 a.charge_work(10).unwrap();
@@ -186,7 +188,7 @@ mod tests {
                 assert!(a.charge_allocation(0).is_err());
             })
             .unwrap_err();
-            assert_eq!(failure.code, "preparation-allocation-bytes");
+            assert_eq!(failure.code, "preparation-sdk-reservation-bytes");
         }
         assert!(
             Attempt::run(100, 10, &|| false, |a| a.charge_allocation(10))
@@ -203,14 +205,14 @@ mod tests {
             assert!(nested.is_err());
         })
         .unwrap_err();
-        assert_eq!(failure.code, "preparation-allocation-bytes");
+        assert_eq!(failure.code, "preparation-sdk-reservation-bytes");
         let failure = Attempt::run(10, 100, &|| false, |outer| {
             outer.charge_work(5).unwrap();
             let nested = Attempt::run(100, 100, outer, |inner| inner.charge_work(10));
             assert!(nested.is_err());
         })
         .unwrap_err();
-        assert_eq!(failure.code, "preparation-work-units");
+        assert_eq!(failure.code, "preparation-sdk-work-units");
     }
 
     #[test]
@@ -222,7 +224,7 @@ mod tests {
             true
         })
         .unwrap_err();
-        assert_eq!(failure.code, "preparation-allocation-bytes");
+        assert_eq!(failure.code, "preparation-sdk-reservation-bytes");
     }
 
     #[test]
@@ -235,7 +237,7 @@ mod tests {
             assert!(child.is_err());
         })
         .unwrap_err();
-        assert_eq!(failure.code, "preparation-allocation-bytes");
+        assert_eq!(failure.code, "preparation-sdk-reservation-bytes");
     }
 
     #[test]
@@ -246,7 +248,7 @@ mod tests {
             true
         })
         .unwrap_err();
-        assert_eq!(failure.code, "preparation-allocation-bytes");
+        assert_eq!(failure.code, "preparation-sdk-reservation-bytes");
     }
 
     #[test]

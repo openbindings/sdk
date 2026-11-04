@@ -1309,8 +1309,8 @@ mod summary_tests {
             .environment(&external, &preparation, &control)
             .unwrap();
         openbindings_internal_schema::preparation::Attempt::run(
-            preparation.max_work_units,
-            preparation.max_allocation_bytes,
+            preparation.max_sdk_work_units,
+            preparation.max_sdk_reservation_bytes,
             &control,
             |attempt| Plan::new(environment, limits, preparation, attempt),
         )

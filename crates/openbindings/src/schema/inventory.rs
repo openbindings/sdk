@@ -80,8 +80,8 @@ impl SchemaEnvironment {
     ) -> Result<Self, PreparationFailure> {
         control.check()?;
         openbindings_internal_schema::preparation::Attempt::run(
-            limits.max_work_units,
-            limits.max_allocation_bytes,
+            limits.max_sdk_work_units,
+            limits.max_sdk_reservation_bytes,
             &|| control.is_cancelled(),
             |attempt| {
                 Self::with_control(

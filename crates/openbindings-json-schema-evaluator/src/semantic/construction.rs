@@ -75,7 +75,7 @@ impl<'a> Construction<'a> {
 fn allocation_limit(control: &dyn Control) -> PreparationFailure {
     control.allocation_limit_reached();
     PreparationFailure::new(PreparationFailureKind::Limit {
-        resource: "preparation-allocation-bytes".into(),
+        resource: "preparation-sdk-reservation-bytes".into(),
     })
 }
 

@@ -37,8 +37,8 @@ fn original(row: &serde_json::Value) -> Plan {
     };
     let preparation = PreparationLimits::default();
     Attempt::run(
-        preparation.max_work_units,
-        preparation.max_allocation_bytes,
+        preparation.max_sdk_work_units,
+        preparation.max_sdk_reservation_bytes,
         &|| false,
         |attempt| {
             let environment = request.environment_with_control(
@@ -172,7 +172,7 @@ fn storage_overflow_and_refused_backing_are_sticky_before_allocation() {
             true
         })
         .unwrap_err();
-        assert_eq!(failure.code, "preparation-allocation-bytes");
+        assert_eq!(failure.code, "preparation-sdk-reservation-bytes");
         assert_eq!(values.capacity(), 0);
     }
 }
@@ -236,7 +236,7 @@ fn hit_growth_and_cap_fallback_observe_exact_budgets_and_cancellation() {
         run(usize::MAX, bytes, &|| false).unwrap().0.unwrap();
         assert_eq!(
             run(usize::MAX, bytes - 1, &|| false).unwrap_err().code,
-            "preparation-allocation-bytes"
+            "preparation-sdk-reservation-bytes"
         );
         let (mut lo, mut hi) = (0, 100_000);
         assert!(run(hi, bytes, &|| false).is_ok());
@@ -251,7 +251,7 @@ fn hit_growth_and_cap_fallback_observe_exact_budgets_and_cancellation() {
         run(lo, bytes, &|| false).unwrap().0.unwrap();
         assert_eq!(
             run(lo - 1, bytes, &|| false).unwrap_err().code,
-            "preparation-work-units"
+            "preparation-sdk-work-units"
         );
     }
 }
@@ -281,5 +281,5 @@ fn repeated_results_keep_original_occurrences_and_full_miss_reservations() {
         Queries::new(environment.space()).query(environment.entry(), &long, a)
     })
     .unwrap_err();
-    assert_eq!(failure.code, "preparation-allocation-bytes");
+    assert_eq!(failure.code, "preparation-sdk-reservation-bytes");
 }

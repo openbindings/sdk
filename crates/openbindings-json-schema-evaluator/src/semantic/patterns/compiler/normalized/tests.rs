@@ -87,7 +87,7 @@ fn exact_shared_work_and_one_below() {
         let result = Attempt::run(required - 1, 0, &|| false, |attempt| {
             inspect(&form, 0, attempt)
         });
-        assert_eq!(result.unwrap_err().code, "preparation-work-units");
+        assert_eq!(result.unwrap_err().code, "preparation-sdk-work-units");
     }
 }
 
@@ -124,30 +124,33 @@ fn arithmetic_refusal_is_sticky_and_preserves_an_existing_cause() {
     );
     let result = Attempt::run(usize::MAX, 0, &|| false, |attempt| {
         let error = failure(reserve_work(usize::MAX, attempt).unwrap_err());
-        assert_eq!(error.code, "preparation-work-units");
+        assert_eq!(error.code, "preparation-sdk-work-units");
         assert!(attempt.charge_work(0).is_err());
     });
-    assert_eq!(result.unwrap_err().code, "preparation-work-units");
+    assert_eq!(result.unwrap_err().code, "preparation-sdk-work-units");
     let result = Attempt::run(usize::MAX, 0, &|| false, |attempt| {
         attempt.charge_allocation(1).unwrap_err();
         assert_eq!(
             failure(reserve_work(usize::MAX, attempt).unwrap_err()).code,
-            "preparation-allocation-bytes"
+            "preparation-sdk-reservation-bytes"
         );
         let mut maximum = usize::MAX;
         assert_eq!(
             failure(add(&mut maximum, 1, attempt).unwrap_err()).code,
-            "preparation-allocation-bytes"
+            "preparation-sdk-reservation-bytes"
         );
     });
-    assert_eq!(result.unwrap_err().code, "preparation-allocation-bytes");
+    assert_eq!(
+        result.unwrap_err().code,
+        "preparation-sdk-reservation-bytes"
+    );
     let result = Attempt::run(usize::MAX, 0, &|| false, |attempt| {
         let mut maximum = usize::MAX;
         assert_eq!(
             failure(add(&mut maximum, 1, attempt).unwrap_err()).code,
-            "preparation-work-units"
+            "preparation-sdk-work-units"
         );
         assert!(attempt.charge_work(0).is_err());
     });
-    assert_eq!(result.unwrap_err().code, "preparation-work-units");
+    assert_eq!(result.unwrap_err().code, "preparation-sdk-work-units");
 }

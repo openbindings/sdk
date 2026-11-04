@@ -102,13 +102,16 @@ fn exact_and_one_below_allowances() {
         let result = Attempt::run(work - 1, allocation, &|| false, |attempt| {
             inspect(ast, attempt)
         });
-        assert_eq!(result.unwrap_err().code, "preparation-work-units");
+        assert_eq!(result.unwrap_err().code, "preparation-sdk-work-units");
         if allocation > 0 {
             let ast = parsed(form);
             let result = Attempt::run(work, allocation - 1, &|| false, |attempt| {
                 inspect(ast, attempt)
             });
-            assert_eq!(result.unwrap_err().code, "preparation-allocation-bytes");
+            assert_eq!(
+                result.unwrap_err().code,
+                "preparation-sdk-reservation-bytes"
+            );
         }
     }
 }
@@ -131,16 +134,19 @@ fn checked_arithmetic_and_prior_causes() {
     assert!(s.work_sites(16).is_none());
     let result = Attempt::run(100, 0, &|| false, |attempt| {
         attempt.charge_allocation(1).unwrap_err();
-        assert_eq!(failure(attempt).code, "preparation-allocation-bytes");
+        assert_eq!(failure(attempt).code, "preparation-sdk-reservation-bytes");
     });
-    assert_eq!(result.unwrap_err().code, "preparation-allocation-bytes");
+    assert_eq!(
+        result.unwrap_err().code,
+        "preparation-sdk-reservation-bytes"
+    );
     let result = Attempt::run(100, usize::MAX, &|| false, |attempt| {
         attempt.charge_work(1).unwrap();
         let failed = failure(attempt);
-        assert_eq!(failed.code, "preparation-work-units");
+        assert_eq!(failed.code, "preparation-sdk-work-units");
         assert!(attempt.check().is_err());
     });
-    assert_eq!(result.unwrap_err().code, "preparation-work-units");
+    assert_eq!(result.unwrap_err().code, "preparation-sdk-work-units");
 }
 #[test]
 fn cancellation_never_publishes_a_partial_certificate() {

@@ -66,6 +66,10 @@ and remaining work. Earlier development APIs have no compatibility guarantee.
 
 ### Changed
 
+- Name preparation's cooperative counters `max_sdk_work_units` and
+  `max_sdk_reservation_bytes`, with matching `preparation-sdk-*` limit codes.
+  Their scope is explicit SDK work/storage sites, not every dependency operation
+  or allocator request. No aliases for the earlier unpublished names remain.
 - Apply specification `c1419c9fc3ae5a00c2b83da710c11bf67dab7934` and current
   interfaces `5815fb106bddd2c85ff4e93e0077570b3f6b9e74`. Source and binding payloads
   use `data`. Current contained-resource reference rules, derived schema and
@@ -87,8 +91,9 @@ and remaining work. Earlier development APIs have no compatibility guarantee.
 
 ### Remaining alignment work
 
-- Complete the pattern compiler's allocation/work certificate and retain full
-  immutable pattern programs during original-schema preparation.
+- Complete the pattern compiler's structural admission, single-build ownership
+  and measured resource qualification; retain full immutable pattern programs
+  during original-schema preparation.
 - Finish physical-stack qualification, force the original engine through all
   gates, switch the default and remove the outgoing projection/compiler path.
   The ordinary evaluator still includes that path at this checkpoint.

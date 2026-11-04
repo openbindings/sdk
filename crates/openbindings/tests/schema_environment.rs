@@ -32,17 +32,17 @@ fn preparation_attempts_bound_work_and_allocations_without_poisoning_caches() {
     for (limits, resource) in [
         (
             PreparationLimits {
-                max_work_units: 0,
+                max_sdk_work_units: 0,
                 ..PreparationLimits::default()
             },
-            "preparation-work-units",
+            "preparation-sdk-work-units",
         ),
         (
             PreparationLimits {
-                max_allocation_bytes: 0,
+                max_sdk_reservation_bytes: 0,
                 ..PreparationLimits::default()
             },
-            "preparation-allocation-bytes",
+            "preparation-sdk-reservation-bytes",
         ),
     ] {
         assert_eq!(
@@ -59,13 +59,13 @@ fn preparation_attempts_bound_work_and_allocations_without_poisoning_caches() {
     // Completed immutable inventory is shared rather than charged again as a
     // new allocation. The returned environment handle still reserves its cost.
     let warm = PreparationLimits {
-        max_work_units: 100,
-        max_allocation_bytes: 256,
+        max_sdk_work_units: 100,
+        max_sdk_reservation_bytes: 256,
         ..PreparationLimits::default()
     };
     assert!(selected.environment(&external, &warm, &control).is_ok());
     let stopped = PreparationLimits {
-        max_work_units: 0,
+        max_sdk_work_units: 0,
         ..warm
     };
     assert_eq!(
@@ -74,7 +74,7 @@ fn preparation_attempts_bound_work_and_allocations_without_poisoning_caches() {
             .unwrap_err()
             .kind,
         PreparationFailureKind::Limit {
-            resource: "preparation-work-units".into()
+            resource: "preparation-sdk-work-units".into()
         }
     );
     let small = PreparationLimits {
@@ -118,7 +118,7 @@ fn a_failed_attempt_does_not_materialize_an_unbounded_origin() {
         .environment(
             &ExternalSchemas::default(),
             &PreparationLimits {
-                max_allocation_bytes: 0,
+                max_sdk_reservation_bytes: 0,
                 ..PreparationLimits::default()
             },
             &AtomicBool::new(false),
@@ -127,7 +127,7 @@ fn a_failed_attempt_does_not_materialize_an_unbounded_origin() {
     assert_eq!(
         failure.kind,
         PreparationFailureKind::Limit {
-            resource: "preparation-allocation-bytes".into()
+            resource: "preparation-sdk-reservation-bytes".into()
         }
     );
     assert!(failure.origin.is_none());

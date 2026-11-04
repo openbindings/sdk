@@ -5,6 +5,18 @@ includes unfinished alignment work. It is not a merge, release, final whole-SDK
 qualification or completed-alignment claim. Continue on `codex/sdk-02-foundation`;
 existing unpublished APIs have no compatibility protection.
 
+The current [compiler resource policy](alignment-checkpoint/compiler-resource-policy.md)
+supersedes the historical full dependency operation/allocation certificate.
+Preparation now names its cooperative counters `max_sdk_work_units` and
+`max_sdk_reservation_bytes`, with matching scoped limit codes. Dependency
+construction requires finite structural admission, retained-size limits and
+measured build qualification. Older source-ledger receipts below remain historical
+evidence; they do not require retaining their counters, arrays or retry loops.
+The single-build NFA owner is under private implementation and review. The
+[ordered Reader name index](alignment-checkpoint/reader-name-index/README.md)
+is independently reviewed and pushed as `f1d5d4d`; its native and actual-host gates
+pass. The preceding `e76ca51` checkpoint passes all hosted CI and performance jobs.
+
 ## Authority and reviewed checkpoints
 
 - Specification: `c1419c9fc3ae5a00c2b83da710c11bf67dab7934`.
@@ -155,12 +167,12 @@ toolchain; the MSRV compatibility receipt explicitly records no matching Clippy 
   roots/bases, opaque unknown keywords, exact values and union multiplicity. It is
   not general schema equivalence. Plain anchors and ambiguous repeated-first-enum
   intersections remain explicit unsupported capabilities.
-- Ordinary compiled schema preparation currently has a confirmed allocation gap.
-  The same attempt must cover projection, transformations, all backend builds/retries
-  and bounded error origins. A source-size multiplier alone is insufficient: repeated
-  unevaluated annotation paths grow nonlinearly. Derive a structural bound or route
-  unsupported shapes to the bounded semantic path before the backend allocates.
-  No existing memory/performance allowance has been waived.
+- The outgoing projected compiler has a preserved construction-memory
+  counterexample. Replace that path with the original-node engine, including
+  structural admission before uncooperative constructors. A source-size multiplier
+  alone is insufficient: repeated unevaluated annotation paths grow nonlinearly.
+  Keep the attack witness and measured memory/performance gates; the current
+  scoped SDK counters do not claim complete dependency allocator accounting.
 
 ## Local recovery evidence and validation
 
@@ -192,7 +204,7 @@ arises. Do not merge to main, publish packages or deploy without separate author
 
 The bounded original-engine [helper stack witnesses](alignment-checkpoint/original-helper-stack.md) now pass current/minimum Rust and Node/Chromium/WebKit. This does not close the whole compiler/physical-stack gate. The latest [Windows receipt](alignment-checkpoint/ci-replay-output.md) preserves a real outgoing walk-stack overflow at `3cf0f6e` and all-host CI/performance success at `67dfdeb`, without claiming the earlier failure is explained.
 
-The private [normalized pattern inventory](alignment-checkpoint/normalized-pattern-inventory.md) is implemented, tested and independently reviewed, but remains inactive until the full prepared-compiler certificate closes.
+The private [normalized pattern inventory](alignment-checkpoint/normalized-pattern-inventory.md) is implemented, tested and independently reviewed, but remains inactive until the complete structural and measured compiler gates close.
 
 The following [guarded AST stage](alignment-checkpoint/guarded-ast-stage.md) is now
 implemented with independent design and implementation/resource approval. It
@@ -202,7 +214,7 @@ is implemented privately with parent native/host qualification and independent
 implementation/resource approval. The [owned HIR translation stage](alignment-checkpoint/owned-hir-stage.md)
 is now implemented with parent native/host gates and independent implementation/
 resource review passing. These stages remain inactive until the full compiler gates close.
-Continue with actual-HIR NFA construction, complete Reader/compiler accounting and
+Continue with actual-HIR NFA construction, structural Reader/compiler admission and
 qualified construction limits; do not infer full compiler approval from these
 bounded stages.
 

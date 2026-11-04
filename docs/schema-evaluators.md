@@ -74,20 +74,22 @@ syntax, calendar dates, offsets and UTC month boundaries for leap-second syntax.
 They do not consult an external table of historical or announced leap seconds.
 
 `PreparationLimits` keeps inventory footprint (`max_schema_nodes`,
-`max_identity_bytes`) separate from an attempt's work and conservative allocation
-reservations (`max_work_units`, `max_allocation_bytes`). A completed cached
+`max_identity_bytes`) separate from cooperative SDK work and explicit storage
+reservations (`max_sdk_work_units`, `max_sdk_reservation_bytes`). A completed cached
 inventory still checks the requested footprint bounds; work and storage already
 shared are not charged again. Nested preparation cannot renew a spent allowance,
 and cancellation retains its distinct cause. A failed limit check can omit origin
 details rather than allocating an unbounded diagnostic path.
 
-The allocation allowance is not a resident-memory measurement. The current
-migration debits original-environment construction, semantic proof graphs and
-custom meta-schema validation against the same attempt. Repeated patterns and
-original reference queries reuse bounded local state. Independent allocation,
-work, cancellation and retry controls cover these paths. Complete allocation
-accounting for the ordinary user-schema backend compiler remains an open
-qualification gate.
+The counters cover cooperative SDK sites in environment inventory, reference
+queries, retained operands, semantic proofs and nested meta-schema validation.
+Storage reservations include temporary and failed SDK construction. They do not
+count every dependency operation, allocator request or custom callback, and are
+not deadlines or process memory ceilings. A custom evaluator must declare its own
+resource scope. Dependency construction requires separate structural admission,
+representation limits and measured build qualification. The migration's single-
+build pattern compiler and full resource qualification remain in progress; older
+exact dependency-accounting receipts do not define the current public contract.
 
 Implement OpenBindings' schema evaluation semantics, including its JSON Schema
 provisions and original-source locations. Declare unsupported capabilities with

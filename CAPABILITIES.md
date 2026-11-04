@@ -39,7 +39,11 @@ A document keeps the limits it was admitted under, and its edits apply them to
 the edited document. Discovery raises only the byte limit, to its configured
 body bound; a body past the default nodes comes back undetermined and is admitted
 by validating it again with `validate_document_with_limits`. Schema preparation
-has separate footprint, work and allocation bounds through `PreparationLimits`,
+has separate footprint, cooperative SDK work and explicit SDK storage reservation
+bounds through `PreparationLimits` (`max_sdk_work_units`,
+`max_sdk_reservation_bytes`). These are not allocator-wide or CPU accounting for
+dependencies and custom callbacks. Dependency construction needs separate
+structural admission and measured resource qualification,
 plus the selected evaluator's capability and execution limits. Every
 admission and edit limit refusal names how to admit more, including the route
 for calls that take no limits.

@@ -118,7 +118,7 @@ fn reserve_bytes(bytes: usize, control: &dyn Control) -> Result<(), Failure> {
         control.allocation_limit_reached();
         return Err(Failure::new(
             FailureReason::LimitExceeded,
-            "preparation-allocation-bytes",
+            "preparation-sdk-reservation-bytes",
             "fixed syntax checking exceeded its allocation allowance",
         ));
     };

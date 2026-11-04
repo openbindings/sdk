@@ -303,7 +303,7 @@ fn enclosing_attempt_exhaustion_is_not_hidden_by_the_established_verdict() {
             true
         })
         .unwrap_err();
-        assert_eq!(refusal.code, "preparation-allocation-bytes");
+        assert_eq!(refusal.code, "preparation-sdk-reservation-bytes");
     }
 
     // Locate the enclosing work boundary itself, including backend work and
@@ -335,7 +335,7 @@ fn enclosing_attempt_exhaustion_is_not_hidden_by_the_established_verdict() {
             assert!(!has_problem(&outcome));
         })
         .unwrap_err();
-        assert_eq!(refusal.code, "preparation-work-units");
+        assert_eq!(refusal.code, "preparation-sdk-work-units");
     }
     assert!(has_problem(
         &run(Detail::Explain, all_work, all_bytes).unwrap().0
