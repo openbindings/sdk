@@ -140,7 +140,10 @@ impl Run<'_> {
             "array" => value.kind() == JsonKind::Array,
             "string" => value.kind() == JsonKind::String,
             "number" => value.kind() == JsonKind::Number,
-            "integer" => value.kind() == JsonKind::Number && self.number(value)?.is_integer(),
+            "integer" => {
+                value.kind() == JsonKind::Number
+                    && value_predicates::integer(value, &mut self.graph)?
+            }
             _ => return Err(shape()),
         })
     }

@@ -1,0 +1,105 @@
+diff --git a/crates/openbindings-json-schema-evaluator/src/semantic/primitive.rs b/crates/openbindings-json-schema-evaluator/src/semantic/primitive.rs
+index 6362e56..7dda654 100644
+--- a/crates/openbindings-json-schema-evaluator/src/semantic/primitive.rs
++++ b/crates/openbindings-json-schema-evaluator/src/semantic/primitive.rs
+@@ -140,7 +140,10 @@ impl Run<'_> {
+             "array" => value.kind() == JsonKind::Array,
+             "string" => value.kind() == JsonKind::String,
+             "number" => value.kind() == JsonKind::Number,
+-            "integer" => value.kind() == JsonKind::Number && self.number(value)?.is_integer(),
++            "integer" => {
++                value.kind() == JsonKind::Number
++                    && value_predicates::integer(value, &mut self.graph)?
++            }
+             _ => return Err(shape()),
+         })
+     }
+diff --git a/crates/openbindings-json-schema-evaluator/src/semantic/value_predicates.rs b/crates/openbindings-json-schema-evaluator/src/semantic/value_predicates.rs
+index fc10556..754a404 100644
+--- a/crates/openbindings-json-schema-evaluator/src/semantic/value_predicates.rs
++++ b/crates/openbindings-json-schema-evaluator/src/semantic/value_predicates.rs
+@@ -18,6 +18,18 @@ pub(super) fn number(value: JsonRef<'_>, graph: &mut Graph<'_>) -> Result<Decima
+     Ok(Decimal::parse(text))
+ }
+ 
++pub(super) fn integer(value: JsonRef<'_>, graph: &mut Graph<'_>) -> Result<bool, NoVerdict> {
++    let text = value.number_text().expect("number");
++    // Keep number()'s ordered admission policy. A successful i64 parse proves
++    // integrality without constructing a Decimal; wider tokens retain it.
++    graph.work(text.len().saturating_mul(8).saturating_add(1))?;
++    if text.parse::<i64>().is_ok() {
++        return Ok(true);
++    }
++    graph.charge(text.len().saturating_mul(16).saturating_add(256))?;
++    Ok(Decimal::parse(text).is_integer())
++}
++
+ fn strings_equal(
+     left: JsonRef<'_>,
+     right: JsonRef<'_>,
+@@ -316,6 +328,65 @@ mod tests {
+     use openbindings::JsonValue;
+     use std::sync::atomic::AtomicBool;
+ 
++    #[test]
++    fn integer_predicate_preserves_numeric_admission_and_exact_answers() {
++        let mut cases: Vec<_> = [
++            ("0", true),
++            ("-0", true),
++            ("-9223372036854775808", true),
++            ("9223372036854775807", true),
++            ("-9223372036854775809", true),
++            ("9223372036854775808", true),
++            ("1.0", true),
++            ("100e-2", true),
++            ("100e-3", false),
++            ("1e99999", true),
++            ("1e-99999", false),
++            ("-0.000e-99999", true),
++            ("9223372036854775807.1", false),
++        ]
++        .into_iter()
++        .map(|(text, expected)| (text.to_owned(), expected))
++        .collect();
++        cases.push(("9".repeat(10_000), true));
++        const BYTES: usize = 1 << 20;
++        const WORK: usize = 1 << 20;
++        for (text, expected) in cases {
++            let value = JsonValue::parse(&text).unwrap();
++            let run = |specialized, bytes, steps, cancelled| {
++                let control = AtomicBool::new(cancelled);
++                let mut graph = Graph::new(bytes, steps, 0, &control);
++                let result = if specialized {
++                    integer(value.view(), &mut graph)
++                } else {
++                    number(value.view(), &mut graph).map(|number| number.is_integer())
++                }
++                .map_err(|detail| (detail.reason, detail.code));
++                (result, graph.remaining().bytes, graph.remaining().work)
++            };
++            let original = run(false, BYTES, Some(WORK), false);
++            assert_eq!(original.0, Ok(expected), "{text}");
++            let bytes = BYTES - original.1;
++            let work = WORK - original.2.unwrap();
++            for (bytes, steps) in [
++                (BYTES, Some(WORK)),
++                (0, None),
++                (BYTES, Some(0)),
++                (bytes, Some(work)),
++                (bytes.saturating_sub(1), Some(work)),
++                (bytes, Some(work.saturating_sub(1))),
++            ] {
++                for cancelled in [false, true] {
++                    assert_eq!(
++                        run(true, bytes, steps, cancelled),
++                        run(false, bytes, steps, cancelled),
++                        "{text}: bytes={bytes}, steps={steps:?}, cancelled={cancelled}"
++                    );
++                }
++            }
++        }
++    }
++
+     #[test]
+     fn exact_values_keep_number_string_order_and_kind_meanings() {
+         let cases = [

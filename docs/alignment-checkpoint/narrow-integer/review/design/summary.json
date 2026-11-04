@@ -1,0 +1,11 @@
+{
+  "status": "Approved for bounded implementation review",
+  "token_controls": 52,
+  "groups": 9,
+  "production_edits": false,
+  "build_test_benchmark_processes_run": false,
+  "work_reservation_control_policy": "identical to old number().is_integer path",
+  "preferred_shape": "small direct predicate; no new cache/record/closure/helper abstraction",
+  "performance_accepted": false,
+  "prior_inline_experiments": "ordinary and always discarded; their evidence remains separate"
+}
