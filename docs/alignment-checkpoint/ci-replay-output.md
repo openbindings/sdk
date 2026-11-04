@@ -27,5 +27,27 @@ Local replay passes. Its parsed output is exactly equal to the full-verifier
 receipt from 5d7e8d4: 486 document admissions, 1,546 observations and zero
 configuration failures. The complete output is 3,214,367 bytes, SHA-256
 `ca338f4a3dcf87cafd7701516a8d3fc14de64396af73867f93e10fc436a68aa4`.
-Formatting and strict example lint pass. Clean-commit portable verification and
-the next hosted Windows run remain necessary before calling this a correction.
+Formatting and strict example lint pass. The complete portable verifier passes
+on clean pushed commit `24ad29467ef1f2bcb4bfab94d43b7bfa22b92128`; its retained
+receipt is exactly equal to the focused local receipt above. See
+the coordinator's `full-verify-24ad294.log` and the log hash in `results.json`.
+The hosted Windows result is recorded below.
+
+## Captured Windows result at 24ad294
+
+The Windows receipt is complete and parsed-identical to the passing local receipt.
+Value execution began at 07:11:08.838 UTC and the complete receipt was checked at
+07:11:12.369 UTC. The job then passed Rust prose/examples, source-pull/invocation,
+resource/diagnostic verifiers and the three outgoing evaluator stack targets. At
+07:24:51 it started compiling the original-frame release test binary; the job-wide
+30-minute cap cancelled that compilation at 07:26:12. This run establishes that
+replay itself and writing the captured receipt complete promptly. It does not
+prove the precise cause of the earlier uninstrumented console-output stalls.
+
+This checkpoint changes only the Windows CI job ceiling from 30 to 45 minutes,
+to allow the complete cold-build verifier to finish. Linux/macOS keep 30 minutes.
+No SDK allowance, assertion, corpus case, matched performance threshold, build mode
+or required check is weakened. The full Windows gate remains pending until a
+completed run; this timeout extension is infrastructure capacity, not a passing
+validation result. Raw log, annotation and full artifact are preserved in the
+coordinator's `receipts/2026-11-02-preparation/ci-replay-output/` directory.
