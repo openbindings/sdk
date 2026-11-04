@@ -50,6 +50,76 @@ fn reference_string(keyword: &str, dialect: Dialect) -> bool {
     }
 }
 
+// Names selected anywhere in the complete fixed localized meta-schema graph.
+// This is deliberately independent of the evaluator's keyword/profile table:
+// deprecated operands still have syntax constraints. Tests bind this set to the
+// complete reviewed resources and selected root for each edition.
+fn constrained(keyword: &str, dialect: Dialect) -> bool {
+    match keyword {
+        "$comment"
+        | "$id"
+        | "$ref"
+        | "$schema"
+        | "additionalProperties"
+        | "allOf"
+        | "anyOf"
+        | "const"
+        | "contains"
+        | "contentEncoding"
+        | "contentMediaType"
+        | "default"
+        | "definitions"
+        | "dependencies"
+        | "description"
+        | "else"
+        | "enum"
+        | "examples"
+        | "exclusiveMaximum"
+        | "exclusiveMinimum"
+        | "format"
+        | "if"
+        | "items"
+        | "maxItems"
+        | "maxLength"
+        | "maxProperties"
+        | "maximum"
+        | "minItems"
+        | "minLength"
+        | "minProperties"
+        | "minimum"
+        | "multipleOf"
+        | "not"
+        | "oneOf"
+        | "pattern"
+        | "patternProperties"
+        | "properties"
+        | "propertyNames"
+        | "readOnly"
+        | "required"
+        | "then"
+        | "title"
+        | "type"
+        | "uniqueItems"
+        | "writeOnly" => true,
+        "additionalItems" => dialect != Dialect::Draft202012,
+        "$anchor"
+        | "$defs"
+        | "$recursiveAnchor"
+        | "$recursiveRef"
+        | "$vocabulary"
+        | "contentSchema"
+        | "dependentRequired"
+        | "dependentSchemas"
+        | "deprecated"
+        | "maxContains"
+        | "minContains"
+        | "unevaluatedItems"
+        | "unevaluatedProperties" => dialect != Dialect::Draft7,
+        "$dynamicAnchor" | "$dynamicRef" | "prefixItems" => dialect == Dialect::Draft202012,
+        _ => false,
+    }
+}
+
 fn invalid_extent() -> Failure {
     Failure::new(
         FailureReason::EvaluatorFailure,
@@ -86,9 +156,16 @@ fn extent(value: JsonRef<'_>, dialect: Dialect, control: &dyn Control) -> Result
             .checked_add(1)
             .ok_or_else(invalid_extent)?;
         control.charge_work(work)?;
-        let Some(keyword) = field.name.as_str() else {
+        let keyword = field.name.as_str();
+        if !keyword.is_some_and(|name| constrained(name, dialect)) {
+            // Fixed metas leave unknown properties unconstrained. Keep the
+            // complete name and one value token, but do not reserve work for an
+            // opaque payload they never inspect. A non-scalar name cannot equal
+            // any of the fixed ASCII names above.
+            bytes = subtract(bytes, field.value.text().len())?;
             continue;
-        };
+        }
+        let keyword = keyword.expect("constrained ASCII name");
         if reference_string(keyword, dialect) && field.value.kind() == JsonKind::String {
             control.charge_work(1)?;
             bytes = subtract(bytes, field.value.text().len())?;

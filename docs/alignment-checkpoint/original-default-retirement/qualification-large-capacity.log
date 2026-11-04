@@ -1,0 +1,11 @@
+   Compiling openbindings-internal-schema v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-internal-schema)
+   Compiling openbindings v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings)
+   Compiling openbindings-json-schema-evaluator v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-json-schema-evaluator)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.15s
+     Running tests/preparation_scaling.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/preparation_scaling-7287bbd3bf22f5cb)
+
+running 1 test
+test admitted_large_documents_and_resources_keep_required_capabilities ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 3.23s
+

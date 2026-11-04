@@ -167,13 +167,13 @@ export function diagnosticDetailsCases(sdk) {
   }
   const released = testing.liveStorageOwners();
   check(released === baseline, "all application owners released");
-  // These compiled fixtures need no original arenas after preparation. This is
-  // fixture-specific: original-schema evaluation may retain immutable sources.
+  // Each original plan retains its document and supplied resource. Explain
+  // adds no source owners; releasing every plan returns to the warm baseline.
   check(
-    defaultArenas === baseline &&
-      preparedArenas === baseline &&
-      explainedArenas === baseline,
-    "these compiled fixtures retain no source arenas",
+    defaultArenas === baseline + 2 &&
+      preparedArenas === baseline + 4 &&
+      explainedArenas === preparedArenas,
+    "original plans retain only their owned source environments",
   );
   const probe = sdk.Document.parse(doc("true"));
   check(probe.status === "parsed", "option probe");
@@ -204,7 +204,7 @@ export function diagnosticDetailsCases(sdk) {
         defaultArenas,
         explainedArenas,
         released,
-        unretainedOriginalSourceBytes: utf8(documentText) + utf8(resourceText),
+        retainedOriginalSourceBytes: utf8(documentText) + utf8(resourceText),
         meaning:
           "logical exact arenas and known original byte extent; not heap, RSS or Wasm capacity",
       },

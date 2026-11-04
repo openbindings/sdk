@@ -16,8 +16,6 @@ workspace = true
 openbindings = { version = "=0.2.0-alpha.1", path = "../openbindings" }
 serde_json.workspace = true
 jsonschema = { workspace = true, features = ["idna"] }
-# The linear-time engine that matches `pattern` values.
-regex = "1.13.1"
 # Extract the already-pinned engine Unicode tables after strict ECMA name validation.
 regex-syntax = "=0.8.11"
 # Prepared programs own immutable NFAs; each value call owns its search cache.
@@ -28,3 +26,7 @@ openbindings-internal-json = { version = "=0.2.0-alpha.1", path = "../openbindin
 serde.workspace = true
 
 openbindings-internal-schema = { version = "=0.2.0-alpha.1", path = "../openbindings-internal-schema" }
+
+[dev-dependencies]
+# Independent matcher used only by Reader equivalence tests.
+regex = "1.13.1"

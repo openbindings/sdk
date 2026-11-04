@@ -320,30 +320,19 @@ export function diagnosticPolicyCases(sdk) {
         ]),
     );
     safe(duplicateResource.message);
-    for (const [schema, instance, expected] of [
-      [{ type: "integer" }, "SECRET-instance", "expected JSON type: integer"],
-      [
-        { type: ["string", "null"] },
-        17,
-        "expected one of JSON types: null, string",
-      ],
-      [
-        { enum: ["SECRET-schema"] },
-        "SECRET-instance",
-        "value is not one of the allowed values; inspect enum at the schema location",
-      ],
-      [
-        { required: ["SECRET-member"] },
-        {},
-        "object is missing a required member; inspect the required keyword at the schema location",
-      ],
+    for (const [schema, instance] of [
+      [{ type: "integer" }, "SECRET-instance"],
+      [{ type: ["string", "null"] }, 17],
+      [{ enum: ["SECRET-schema"] }, "SECRET-instance"],
+      [{ required: ["SECRET-member"] }, {}],
     ]) {
       const state = prepareInput(withSchema(schema), "op");
       check(state.status === "ready", "type/message contract prepared");
       const outcome = own(state.schema).explain(instance);
       check(
-        outcome.status === "fails" && outcome.problems[0].message === expected,
-        "useful expected type or safe generic guidance",
+        outcome.status === "fails" &&
+          outcome.problems[0].message === "value fails this schema assertion",
+        "fixed guidance at the original assertion",
       );
       for (const problem of outcome.problems) safe(problem.message);
     }

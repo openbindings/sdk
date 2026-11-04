@@ -83,7 +83,11 @@ function sourceLocation(location) {
 
 function schemaLocation(location) {
   if (!location) return "schema location unavailable";
-  return `schema ${JSON.stringify(location.pointer)}, resource ${JSON.stringify(location.resource)}`;
+  const source =
+    location.sourceUri === null
+      ? "document"
+      : JSON.stringify(location.sourceUri);
+  return `schema ${JSON.stringify(location.pointer)}, source ${source}`;
 }
 
 function valueLines(result) {

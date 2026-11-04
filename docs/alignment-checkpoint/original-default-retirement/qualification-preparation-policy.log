@@ -1,0 +1,20 @@
+   Compiling openbindings-json-schema-evaluator v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-json-schema-evaluator)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.50s
+     Running tests/preparation_scaling.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/preparation_scaling-7287bbd3bf22f5cb)
+
+running 12 tests
+test dynamic_anchors_resolve_per_scope ... ok
+test layered_models_reuse_original_schemas_across_resources ... ok
+test a_schema_nested_more_than_256_levels_deep_refuses_whatever_the_limits ... ok
+test resource_diamonds_reuse_completed_applications ... ok
+test the_program_storage_boundary_names_the_actual_proof_budget ... ok
+test concrete_alias_chains_decide_without_compiler_stack_bounds ... ok
+test dynamic_scope_is_prepared_once_and_runtime_work_remains_bounded ... ok
+test reference_chains_prepare_and_release_on_a_small_stack ... ok
+test long_required_lists_are_shared_across_resource_paths ... ok
+test generated_annotation_walks_with_dynamic_meta_anchors_preserve_results ... ok
+test former_specialization_budgets_fund_the_actual_dynamic_proof ... ok
+test generated_annotation_walks_preserve_original_results ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 1.07s
+

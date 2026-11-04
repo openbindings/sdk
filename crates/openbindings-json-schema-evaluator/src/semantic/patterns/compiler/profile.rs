@@ -22,6 +22,17 @@ pub(super) const LITERAL_BYTE_REVISITS: usize = 1_048_576;
 pub(super) const CANDIDATE_RANGE_SLOTS: usize = 33_554_432;
 
 pub(super) fn ast_nodes(s: &normalized::Summary) -> Option<usize> {
+    if *s
+        == (normalized::Summary {
+            alternatives: s.alternatives,
+            ..normalized::Summary::default()
+        })
+    {
+        // The closed normalized grammar then contains only `|` separators.
+        // n separators produce one Alternation and n+1 Empty children; empty
+        // source has just one Empty. No concatenation/group overhead is needed.
+        return s.alternatives.checked_add(2);
+    }
     s.literals
         .checked_add(s.assertions)?
         .checked_add(s.classes)?

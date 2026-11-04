@@ -1,0 +1,6 @@
+
+> @openbindings/sdk@0.2.0-alpha.1 format:check
+> prettier --check src/*.ts test/* examples/* scripts/* *.json
+
+Checking formatting...
+All matched files use Prettier code style!

@@ -25,14 +25,17 @@ export function diagnosticBudgetCases(sdk) {
         );
         check(
           !result.problemsComplete,
-          "first error never claims completeness",
+          "one witness never claims completeness",
         );
         check(
           result.problems.length === (call === "explain" ? 1 : 0),
           "call selects detail",
         );
         if (call === "explain")
-          check(result.problems[0].code === "type", "library first error");
+          check(
+            result.problems[0].code === "type",
+            "original assertion witness",
+          );
       }
     } finally {
       setup.schema.dispose();
@@ -70,7 +73,7 @@ export function diagnosticBudgetCases(sdk) {
   return {
     diagnosticBudget: {
       assertions,
-      scope: "cheap check or library-bounded first error",
+      scope: "cheap check or bounded original assertion witness",
     },
   };
 }

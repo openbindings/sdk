@@ -146,7 +146,12 @@ fn only_audited_reference_strings_drop_their_payload_extent() {
                 let value = JsonValue::parse(format!(r#"{{"{keyword}":{text}}}"#)).unwrap();
                 assert_eq!(
                     extent(value.view(), dialect, &unlimited()).unwrap(),
-                    value.text().len() - if audited { text.len() - 1 } else { 0 },
+                    value.text().len()
+                        - if audited || !constrained(keyword, dialect) {
+                            text.len() - 1
+                        } else {
+                            0
+                        },
                     "{dialect:?} {keyword}"
                 );
                 if audited {
@@ -166,6 +171,11 @@ fn only_audited_reference_strings_drop_their_payload_extent() {
                 assert_eq!(
                     extent(value.view(), dialect, &unlimited()).unwrap(),
                     value.text().len()
+                        - if constrained(keyword, dialect) {
+                            0
+                        } else {
+                            wrong_kind.len() - 1
+                        }
                 );
                 if audited {
                     assert!(
@@ -313,7 +323,12 @@ fn each_cut_family_retains_headers_and_only_skips_schema_payloads() {
             let measured = extent(value.view(), dialect, &unlimited()).unwrap();
             assert_eq!(
                 measured,
-                value.text().len() - if active { child.len() - 1 } else { 0 },
+                value.text().len()
+                    - if active {
+                        child.len() - 1
+                    } else {
+                        operand.len() - 1
+                    },
                 "{dialect:?} {keyword}"
             );
             // Child's invalid type is not inspected by this LOCAL check.
@@ -361,7 +376,7 @@ fn arrays_opaque_data_wrong_kinds_and_exact_spelling_remain_charged() {
             let value = JsonValue::parse(text).unwrap();
             assert_eq!(
                 extent(value.view(), dialect, &unlimited()).unwrap(),
-                text.len(),
+                text.len() - value.get("unknown").map_or(0, |v| v.text().len() - 1),
                 "{text}"
             );
         }
@@ -510,5 +525,87 @@ fn depth_and_payload_growth_do_not_repeat_descendant_extent_at_the_parent() {
             );
             assert!(dialect_validity(&value, dialect).unwrap());
         }
+    }
+}
+
+#[test]
+fn constrained_names_match_the_complete_fixed_graph_in_every_edition() {
+    use std::collections::BTreeSet;
+    let graph = actual();
+    let names = |edition: &str| -> BTreeSet<String> {
+        graph[edition]["resources"]
+            .as_object()
+            .unwrap()
+            .values()
+            .flat_map(|resource| resource["properties"].as_object().unwrap().keys().cloned())
+            .collect()
+    };
+    let editions = [
+        (Dialect::Draft7, "draft7", 46),
+        (Dialect::Draft201909, "draft2019", 59),
+        (Dialect::Draft202012, "draft2020", 61),
+    ];
+    let all: BTreeSet<String> = editions
+        .iter()
+        .flat_map(|(_, name, _)| names(name))
+        .collect();
+    for (dialect, edition, count) in editions {
+        let expected = names(edition);
+        assert_eq!(expected.len(), count);
+        for name in &all {
+            assert_eq!(
+                constrained(name, dialect),
+                expected.contains(name),
+                "{dialect:?} {name}"
+            );
+        }
+        for name in ["x-pad", "unknown", "TYPE", "typex", "$ID"] {
+            assert!(!constrained(name, dialect));
+        }
+    }
+}
+
+#[test]
+fn unread_unknown_payloads_keep_their_names_and_preserve_bounded_checks() {
+    for dialect in EDITIONS {
+        for name in [r#""x-pad""#, r#""un\u006bnown""#, r#""\ud800""#] {
+            for payload in [
+                format!(r#""{}""#, "a".repeat(1 << 20)),
+                r#"{"type":0,"properties":{"broken":null}}"#.into(),
+                r#"[null,false,{"required":["same","same"]}]"#.into(),
+            ] {
+                let value = JsonValue::parse(format!("{{{name}:{payload}}}")).unwrap();
+                let bytes = value.text().len() - payload.len() + 1;
+                assert_eq!(extent(value.view(), dialect, &unlimited()).unwrap(), bytes);
+                assert!(dialect_validity(&value, dialect).unwrap());
+                let allocation = 64 * bytes + 4096;
+                assert!(bounded(&value, dialect, 1_000_000, allocation, &unlimited()).unwrap());
+                assert_eq!(
+                    bounded(&value, dialect, 1_000_000, allocation - 1, &unlimited())
+                        .unwrap_err()
+                        .reason,
+                    FailureReason::LimitExceeded
+                );
+                assert_eq!(
+                    bounded(
+                        &value,
+                        dialect,
+                        1_000_000,
+                        allocation,
+                        &ControlProbe::new(0)
+                    )
+                    .unwrap_err()
+                    .reason,
+                    FailureReason::Cancelled
+                );
+            }
+        }
+        // Unknown payloads cannot erase a known malformed sibling or its spelling.
+        let value =
+            JsonValue::parse(r#"{"x-pad":{"type":0},"requ\u0069red":["same","same"]}"#).unwrap();
+        assert!(!dialect_validity(&value, dialect).unwrap());
+        assert!(!bounded(&value, dialect, 1_000_000, 1_000_000, &unlimited()).unwrap());
+        let known = value.get("required").unwrap();
+        assert!(extent(value.view(), dialect, &unlimited()).unwrap() >= known.text().len());
     }
 }

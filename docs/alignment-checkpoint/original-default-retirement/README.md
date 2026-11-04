@@ -44,7 +44,11 @@ earlier failure/cancellation precedence and strict rejection of removed options.
 on each Rust version. Concrete nesting is separate from this logical bound. The private sampled stack
 guard does not promise portable stack capacity.
 
-## Open gates
+The subsequent [capacity and host qualification](capacity-qualification.md) resolves
+the large-payload findings and the remaining preparation policy assertions, with
+fresh Node and browser results. The list below records the earlier recovery point.
+
+## Gates recorded at the earlier recovery point
 
 - Finish preparation-scaling test adjudication. Preserve required large-payload
   positives and investigate actual capacity losses, rather than accepting a new

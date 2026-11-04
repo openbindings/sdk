@@ -249,3 +249,41 @@ fn unchanged_reader_forms_use_the_guarded_stage() {
 fn prepare(form: &str, groups: usize, depth: u32, control: &dyn Control) -> Result<Ast, Error> {
     super::prepare(form, groups, depth, &profile::Budget::default(), control)
 }
+
+#[test]
+fn bare_empty_alternations_use_their_actual_linear_node_bound() {
+    for separators in [0, 1, 2, 10_000, 16_382] {
+        let form = "|".repeat(separators);
+        let summary = normalized::inspect(&form, 32, &|| false).unwrap();
+        assert_eq!(profile::ast_nodes(&summary), Some(separators + 2));
+        let parsed = prepare(&form, 32, 250, &|| false).unwrap();
+        let expected = regex_syntax::ast::parse::Parser::new()
+            .parse(&form)
+            .unwrap();
+        assert_eq!(parsed, expected);
+        match &parsed {
+            Ast::Empty(_) => assert_eq!(separators, 0),
+            Ast::Alternation(node) => {
+                assert_eq!(node.asts.len(), separators + 1);
+                assert!(node.asts.iter().all(|child| matches!(child, Ast::Empty(_))));
+            }
+            other => panic!("unexpected bare-alternation AST: {other:?}"),
+        }
+    }
+    reset_entries();
+    assert!(matches!(
+        prepare(&"|".repeat(16_383), 32, 250, &|| false),
+        Err(Error::Refused(Refusal::ConstructionLimit))
+    ));
+    assert_eq!(entries(), 0);
+    for source in [r"\|", "(|)", "a|", "^|", "[a]|", "a*|"] {
+        let Reading::Linear(linear) = pattern::read(source, 32, 1 << 20).unwrap() else {
+            panic!("supported exclusion control: {source}")
+        };
+        let summary = normalized::inspect(&linear.form, 32, &|| false).unwrap();
+        assert!(
+            profile::ast_nodes(&summary).unwrap() > summary.alternatives + 2,
+            "{source}"
+        );
+    }
+}

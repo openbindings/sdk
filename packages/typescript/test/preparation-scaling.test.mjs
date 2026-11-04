@@ -140,15 +140,20 @@ test("current evaluator policy rejects compiler knobs and keeps deep concrete va
   assert.equal(limits.programBytes, 50331648);
   for (const key of ["evaluationDepth", "stackBytes", "compileJsonDepth"]) {
     assert.equal(key in limits, false);
-    assert.throws(() => preparation(dynamicChoices(1), { [key]: 0 }),
-      (e) => e.code === "invalid-evaluator-limits");
+    assert.throws(
+      () => preparation(dynamicChoices(1), { [key]: 0 }),
+      (e) => e.code === "invalid-evaluator-limits",
+    );
   }
   for (const programBytes of [4 << 20, 8 << 20]) {
     const prepared = preparation(dynamicChoices(8), { programBytes });
     assert.equal(prepared.status, "ready");
     prepared.schema.dispose();
   }
-  const nested = document({}, { type:"array", items:{ $ref:"#/operations/op/input" } });
+  const nested = document(
+    {},
+    { type: "array", items: { $ref: "#/operations/op/input" } },
+  );
   const deep = sdk.parseJson("[".repeat(400) + "]".repeat(400)).value;
   const prepared = preparation(nested);
   try {
