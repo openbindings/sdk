@@ -46,7 +46,14 @@ actually supported custom profile through the public API. The first Node run's
 
 Both release frame checks pass on current and minimum Rust; these remain sampled
 monitoring/small-thread evidence rather than a hard process-stack certificate.
-Independent implementation/resource review is pending at this receipt's initial writing. Results are updated before the checkpoint is
-claimed reviewed. Cross-phase syntax facts, full pattern VM preparation, original
+Independent implementation/resource review passes with no unresolved finding. It
+adds 210 read-shape controls, 744 cached/uncached holder comparisons and 663
+cancellation boundaries across fixed checks, cache and public preparation. The
+1,024-entry backing measurement exactly matches its requested-byte ledger. See
+`../reference-preparation-sharing-review/implementation/review.md` for exact scope. Cross-phase syntax facts, full pattern VM preparation, original
 Explain witnesses, compiler retirement, final matched performance and the actual
 alignment-map audit remain separate open gates. No old API preservation is required.
+
+The complete portable verifier passes on clean pushed `3599f27`. Its log and hash
+are retained; this is the reference-preparation checkpoint, not the later pattern
+program or whole-alignment qualification.

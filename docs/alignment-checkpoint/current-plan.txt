@@ -46,7 +46,8 @@ construction attempt and avoids multiplying type-only reference-string reads in
 fixed syntax checks. [Its design](../design/2026-11-02/reference-preparation-sharing.md)
 has independent approval. The unchanged 1,000/5,000-reference jobs now pass original
 preparation defaults; current/MSRV Rust and fresh Node/browser checks pass. Independent
-implementation/resource review is still running. This does not implement cross-phase
+implementation/resource review passes with no unresolved finding. The complete
+portable verifier passes on pushed `3599f27`. This does not implement cross-phase
 syntax-fact sharing or full pattern VM preparation. Results and source identities
 are in [the progress receipt](../receipts/2026-11-02-preparation/reference-preparation-progress/README.md).
 

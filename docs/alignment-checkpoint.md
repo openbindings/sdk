@@ -96,8 +96,10 @@ toolchain; the MSRV compatibility receipt explicitly records no matching Clippy 
    The pushed frame checkpoint `98ab475` also passes the full portable verifier.
    [Reference-preparation sharing](alignment-checkpoint/reference-preparation-results.md)
    now restores the unchanged 1,000/5,000-reference workloads at default limits;
-   current/MSRV and fresh Node/browser/package checks pass. Its independent design
-   review passes and implementation/resource review is still running.
+   current/MSRV and fresh Node/browser/package checks pass. Its independent
+   [implementation review](alignment-checkpoint/reference-preparation-implementation-review.md)
+   passes with no unresolved finding; the complete portable verifier passes on
+   pushed checkpoint `3599f27`.
    Finish cross-phase syntax-fact sharing, the audited immutable pattern VM schedule,
    original Explain witnesses and physical-stack/host qualification. Then force the
    original engine through all gates, switch the default and retire the outgoing
