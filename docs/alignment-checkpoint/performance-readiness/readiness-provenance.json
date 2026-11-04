@@ -1,0 +1,50 @@
+[
+  {
+    "build": "baseline",
+    "reported": {
+      "instrument": "cc3a3eab0c23aa52",
+      "sdk": "c7b5814a6066582b"
+    },
+    "independently_recomputed": {
+      "instrument": "cc3a3eab0c23aa52",
+      "sdk": "c7b5814a6066582b"
+    },
+    "binary_sha256": "aea5865266b04350064b1f49a651851a934e39fe85fd186ca8c5e89af5097936"
+  },
+  {
+    "build": "baseline-alloc",
+    "reported": {
+      "instrument": "cc3a3eab0c23aa52",
+      "sdk": "c7b5814a6066582b"
+    },
+    "independently_recomputed": {
+      "instrument": "cc3a3eab0c23aa52",
+      "sdk": "c7b5814a6066582b"
+    },
+    "binary_sha256": "440c245460215ec1a957e0af6095810a458300b8db2b44930bb9f2c28a3a7c6c"
+  },
+  {
+    "build": "candidate",
+    "reported": {
+      "instrument": "0464ed6974956429",
+      "sdk": "491b67d6a1f75fc1"
+    },
+    "independently_recomputed": {
+      "instrument": "0464ed6974956429",
+      "sdk": "491b67d6a1f75fc1"
+    },
+    "binary_sha256": "932162ab83f094cdf4ec401bd6a41d72fee4e41331219b32734e02a7c1add244"
+  },
+  {
+    "build": "candidate-alloc",
+    "reported": {
+      "instrument": "0464ed6974956429",
+      "sdk": "491b67d6a1f75fc1"
+    },
+    "independently_recomputed": {
+      "instrument": "0464ed6974956429",
+      "sdk": "491b67d6a1f75fc1"
+    },
+    "binary_sha256": "b92c1e1b6b4c89b0f6f0336fb9b53ebc013d0544b2113d3290434dfc4720c3ac"
+  }
+]

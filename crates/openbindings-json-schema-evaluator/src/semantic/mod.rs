@@ -256,6 +256,7 @@ impl Plan {
             values: values::Values::default(),
             effects: HashMap::new(),
             active: storage::Entries::default(),
+            alias_path: storage::Entries::default(),
             empty_context: Arc::new(Vec::new()),
             opaque_cycles: HashSet::new(),
             pending_cycles: HashSet::new(),
@@ -397,6 +398,7 @@ fn cycle_inability() -> NoVerdict {
 }
 // Effective outermost bindings, not an ever-growing resource-entry history.
 type Context = Arc<Vec<(String, Option<usize>)>>;
+type AliasPath = storage::Entries<(usize, Context), Option<String>>;
 fn context_work(context: &Context) -> usize {
     context.iter().fold(1usize, |work, (name, _)| {
         work.saturating_add(name.len().saturating_mul(16).saturating_add(16))
@@ -496,6 +498,7 @@ struct Run<'a> {
     values: values::Values,
     effects: HashMap<Effect, Formula>,
     active: storage::Entries<Visit>,
+    alias_path: AliasPath,
     empty_context: Context,
     opaque_cycles: HashSet<Visit>,
     pending_cycles: HashSet<Visit>,
@@ -827,12 +830,27 @@ impl Run<'_> {
     }
     fn alias(
         &mut self,
+        node: usize,
+        incoming: &Context,
+    ) -> Result<(usize, Context, bool), NoVerdict> {
+        let mut path = std::mem::take(&mut self.alias_path);
+        debug_assert_eq!(path.len(), 0);
+        // Save every returned result before cleanup: no fallible branch may
+        // leave path membership behind. Reverse pops restore bucket heads
+        // without filling the capacity retained by an earlier long traversal.
+        let result = self.alias_walk(node, incoming, &mut path);
+        while path.pop().is_some() {}
+        self.alias_path = path;
+        result
+    }
+    fn alias_walk(
+        &mut self,
         mut node: usize,
         incoming: &Context,
+        path: &mut AliasPath,
     ) -> Result<(usize, Context, bool), NoVerdict> {
         self.context_copy(incoming)?;
         let mut context = incoming.clone();
-        let mut path = storage::Entries::<(usize, Context), Option<String>>::default();
         loop {
             self.graph.tick()?;
             context = self.enter(node, &context)?;
@@ -949,6 +967,9 @@ impl Run<'_> {
                 };
                 (selected, dynamic)
             };
+            // Prepay cleanup before publication. Even an exhausted/cancelled
+            // traversal must remove its entries without asking for more work.
+            self.graph.tick()?;
             path.push(
                 (node, context.clone()),
                 dynamic,

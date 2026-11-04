@@ -1,0 +1,27 @@
+
+running 12 tests
+test semantic::scratch_review::a1_repeated_shared_alias ... ok
+test semantic::scratch_review::a2_long_then_short_reverse_and_no_allocations ... scratch-alias-warm={"allocations_per_op":0.0,"baseline_live_bytes":1331591,"ending_live_bytes":1331591,"incremental_peak_bytes":0,"peak_live_bytes":1331591,"requested_bytes_per_op":0.0}
+ok
+test semantic::scratch_review::a3_consuming_alias_to_leaf ... ok
+test semantic::scratch_review::a4_cycles_after_other_aliases ... ok
+test semantic::scratch_review::a5_inherited_effective_scope ... ok
+test semantic::scratch_review::a5_recursive_2019_scope ... ok
+test semantic::scratch_review::a6_all_alias_exits_restore_scratch ... alias-checkpoints=283 reservation=8928
+alias-checkpoints=33 reservation=352
+alias-checkpoints=28 reservation=1220
+ok
+test semantic::scratch_review::semantic_exact_v2_v9 ... ok
+test semantic::storage::scratch_review_storage::a7_collision_failed_push_reverse_pop_refill ... storage-failure-checkpoints=110
+ok
+test semantic::values::scratch_review_values::v1_scalar_and_known_hit_need_no_pending_backing ... scalar=null first={"allocations_per_op":2.0,"baseline_live_bytes":4059079,"ending_live_bytes":4059359,"incremental_peak_bytes":280,"peak_live_bytes":4059359,"requested_bytes_per_op":280.0} hit={"allocations_per_op":0.0,"baseline_live_bytes":4060104,"ending_live_bytes":4060104,"incremental_peak_bytes":0,"peak_live_bytes":4060104,"requested_bytes_per_op":0.0}
+scalar=true first={"allocations_per_op":2.0,"baseline_live_bytes":4059079,"ending_live_bytes":4059359,"incremental_peak_bytes":280,"peak_live_bytes":4059359,"requested_bytes_per_op":280.0} hit={"allocations_per_op":0.0,"baseline_live_bytes":4060104,"ending_live_bytes":4060104,"incremental_peak_bytes":0,"peak_live_bytes":4060104,"requested_bytes_per_op":0.0}
+scalar=123 first={"allocations_per_op":2.0,"baseline_live_bytes":4059078,"ending_live_bytes":4059358,"incremental_peak_bytes":280,"peak_live_bytes":4059358,"requested_bytes_per_op":280.0} hit={"allocations_per_op":0.0,"baseline_live_bytes":4060103,"ending_live_bytes":4060103,"incremental_peak_bytes":0,"peak_live_bytes":4060103,"requested_bytes_per_op":0.0}
+ok
+test semantic::values::scratch_review_values::v6_v7_cross_arena_and_postorder ... ok
+test semantic::values::scratch_review_values::v8_partial_failure_then_retry_keeps_parent_unpublished ... intern-exact-work=405
+intern-checkpoints=53 partial=39 reservation=3890
+ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 182 filtered out; finished in 1.82s
+

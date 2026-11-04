@@ -1,7 +1,7 @@
 //! Exact instance-value identities for semantic predicates. Evaluation-cycle
 //! detection still uses occurrence identity: descending to an equal child is
 //! consumption, but equal JSON values give the same predicate the same input.
-use super::{Graph, NoVerdict};
+use super::{Graph, NoVerdict, storage};
 use openbindings::{JsonKind, JsonRef};
 use openbindings_internal_json::{backend, decimal::Decimal};
 use std::collections::HashMap;
@@ -26,27 +26,30 @@ impl Values {
         value: JsonRef<'_>,
         graph: &mut Graph<'_>,
     ) -> Result<usize, NoVerdict> {
-        graph.charge(64)?;
-        let mut pending = vec![(value, false)];
-        while let Some((current, expanded)) = pending.pop() {
+        let mut initial = Some((value, false));
+        let mut pending = Vec::new();
+        while let Some((current, expanded)) = initial.take().or_else(|| pending.pop()) {
             graph.tick()?;
             let occurrence = backend::occurrence(current);
             if self.occurrences.contains_key(&occurrence) {
                 continue;
             }
             if !expanded && matches!(current.kind(), JsonKind::Array | JsonKind::Object) {
-                graph.charge(64)?;
+                let needed = pending.len().saturating_add(1);
+                storage::reserve(&mut pending, needed, graph)?;
                 pending.push((current, true));
                 if let Some(items) = current.elements() {
                     for item in items {
                         graph.tick()?;
-                        graph.charge(64)?;
+                        let needed = pending.len().saturating_add(1);
+                        storage::reserve(&mut pending, needed, graph)?;
                         pending.push((item, false));
                     }
                 } else if let Some(members) = current.members() {
                     for member in members {
                         graph.tick()?;
-                        graph.charge(128)?;
+                        let needed = pending.len().saturating_add(2);
+                        storage::reserve(&mut pending, needed, graph)?;
                         pending.push((member.name, false));
                         pending.push((member.value, false));
                     }
