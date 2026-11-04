@@ -103,7 +103,14 @@ pass; the required reproducibility check preserves exact table bytes on Windows.
 Full reader/compiler resource certification, including duplicate-name width cost,
 remains open. The complete portable verifier passes on pushed `51e1dc7`, before
 the current original Explain changes. The original Explain resource and parent host gates now pass on `5d7e8d4`.
-The compiler construction schedule is the next implementation gate.
+The full compiler construction schedule remains the next activation gate. Its
+private normalized-grammar scanner is now implemented test-only, with bounded
+independent design and implementation/resource approval. It admits every retained
+Linear form, rejects excluded backend syntax, counts actual normalized groups and
+uses checked allocation-free scanning; it invokes no backend parser. Parent current
+unit/strict-lint and minimum-Rust focused checks pass. The next private slice is
+prospective AST parse/visit/drop work and checked metadata, while HIR/NFA work and
+physical compiler stack qualification continue independently.
 
 The latest pushed implementation checkpoint is `67dfdeb`: obsolete regex-format
 identifier warm-up accounting is removed after independent review; 131 focused
