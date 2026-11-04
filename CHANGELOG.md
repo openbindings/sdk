@@ -2,359 +2,97 @@
 
 ## 0.2.0-alpha.1 (working draft)
 
-### Changed
-
-- Rust `NoVerdict` code/message fields accept static or owned text through
-  `Cow<'static, str>`. Fixed SDK limit/cancellation records and their clones avoid
-  heap allocation; dynamic strings move into the record. Serialized fields remain
-  strings.
-
-- The original-schema evaluator explains one concretely proved failure with exact
-  original source and instance locations. Verdict and optional explanation share
-  one cumulative allowance; later diagnostic interruption preserves the verdict.
-  Explanations remain explicitly incomplete.
-
-- Begin the current 0.2 foundation against specification
-  `c1419c9fc3ae5a00c2b83da710c11bf67dab7934`: source/binding `data`,
-  OBI-01–14, pointers into identified schemas, and admission of references into
-  contained schema resources. The schema and 505-case qualification inputs are
-  re-pinned together. Duplicate resource/name targets cannot choose a winner.
-  See [migration status](docs/migration-0.2.md) for the bounded implementation claim.
-
-- Make document edits return new immutable snapshots in Rust and TypeScript;
-  existing owners, views and proofs retain their revision. Replace generic proof
-  wrappers with concrete `ConformantDocument`, separate conformance assessment,
-  and expose owning exact `JsonObject` access without claiming conformance.
+This first release remains unpublished. The SDK and specification versions are
+independent. This entry describes the current feature-branch implementation;
+[the alignment checkpoint](docs/alignment-checkpoint.md) records its validation
+and remaining work. Earlier development APIs have no compatibility guarantee.
 
 ### Added
 
-- The npm package ships compiled JavaScript and declarations without source maps; each build
-  starts from an empty `dist`.
-- Every package stays unpublished until an authorized release: Cargo `publish = false` and npm
-  `"private": true`, checked by `tools/verify-publication-guards.py`.
-- The release candidate's `publicationOrder` puts each crate after every local crate it
-  depends on, development dependencies included, so Cargo can package and publish the
-  crates in that order; the packager refuses an order that breaks the rule.
-- Value contracts come from the operation. A conformant operation's `input()` and
-  `output()` return a `ValueContract`; `prepare(&evaluator)`, `prepare_with(&evaluator,
-  &resources)` and `prepare_with_control` borrow the evaluator and return
-  `Result<PreparedValueContract, NoVerdict>`. `PreparedValueContract::validate_json` checks exact
-  JSON text. TypeScript mirrors this with `ConformantOperationView.input()`/`output()`
-  and `ValueContract.prepare(options)`, whose ready result carries its
-  `PreparedValueContract` as `valueContract`.
-
-- One exact OpenBindings 0.2 `Document` for parsing, inspection and immutable
-  editing: atomic batches of JSON Pointer edits and typed part maps, and typed
-  field and part setters, all keeping untouched bytes exact. Every edit refuses
-  with one `EditError`; a typed part's field collision carries a pointer into
-  that part (TypeScript `EditError.partPointer`), and a typed part that cannot be
-  encoded as supported exact JSON refuses with `EditError::Serialization`
-  (`serialization`). Validation with original source locations, bounded
-  findings and per-rule evidence.
-- The default document byte limit is 32 MiB (33,554,432 bytes), so that
-  validation, whose memory grows with the document, fits a typical container
-  under the protective default, and the admission limits are a setting at the
-  calls that admit documents and values: `JsonLimits` for
-  `validate_document_with_limits`, `Document::parse_with_limits` and
-  `JsonValue::parse_with_limits`, and `limits: { maxBytes, maxNodes, maxDepth }`
-  for TypeScript's `validateDocument`, `Document.parse` and `parseJson`, whose
-  unspecified entries keep the `JsonLimits` defaults (malformed limits throw
-  `invalid-json-limits`). `Document::new`, `Document::from_json`,
-  `JsonValue::parse`, `JsonValue::string`, `Publication::from_bytes` and
-  `validate_json` use the defaults, as do TypeScript's `Document.create()`,
-  `ExactJson.from`, `validateJson` and ordinary-value `validate` and `explain`.
-  A document keeps the limits it was admitted
-  under (`Document::limits`, TypeScript `limits`), and its edits and typed
-  setters apply them to the edited document, the same way in both languages.
-  Value-contract preparation keeps its own fixed bounds. Discovery
-  validates a body with its byte limit raised to the configured body bound and
-  the default 1,000,000 nodes. Every admission and edit limit refusal names how
-  to admit more in both languages, including the route for calls that take no
-  limits; the projection's fixed bounds have no setting.
-- Document validation's memory grows linearly with the document. Compared
-  identifiers share runs of the `$id` texts, so long and nested `$id`s take
-  memory and time linear in the document, as do repeated findings deep in a
-  document, large maps, alias lists and `uniqueItems` arrays, and fixed checks
-  read names holding U+E000 in place. Of the diagnostic memory probe's 34
-  documents at the default limits (32 MiB, 1,000,000 nodes, any nesting), the
-  largest allocates 256.0 MiB beyond the caller's input, counting each
-  reallocation as holding its old and new blocks at once.
-- The text compared identifiers copy out of `$id`s whose dot segments separate
-  their segments is kept in blocks that never move: each new block is as large
-  as the text before it, but no larger than the identifiers still to come can
-  copy. Text once kept is never copied again, and growing it leaves no old
-  buffer behind for WebAssembly's linear memory, which cannot release one, to
-  keep resident.
-- TypeScript's `validateDocument`, `Document.parse`, `parseJson` and
-  `validateJson` encode text input straight into module memory, with no
-  JavaScript copy of its UTF-8, so text crosses into the module once, as bytes
-  do.
-- TypeScript checks text for unpaired UTF-16 with the host's
-  `String.prototype.isWellFormed`, which Node 22, Chromium, WebKit and workerd
-  provide, and scans the text itself only on a host without it; both refuse
-  the same texts.
-- Owned input: `validate_document_owned(Vec<u8>)`,
-  `validate_document_owned_with_limits(Vec<u8>, JsonLimits)`,
-  `Document::parse_owned(Vec<u8>)`, `Document::parse_owned_with_limits(Vec<u8>,
-  JsonLimits)` and `JsonValue::parse_owned_with_limits(Vec<u8>, JsonLimits)`
-  take the caller's buffer as the document's or value's text instead of
-  copying it, with exactly the results, reports, errors, messages and
-  locations of the borrowed forms. The SDK hands over the buffers it builds
-  itself, for document edits, ordinary-value conversion, synthesized
-  interfaces, invocation carriers and inspection models, and TypeScript's
-  `validateDocument`, `Document.parse` and `parseJson` hand over the module's
-  copy of their input. The diagnostic memory probe's largest document allocates 224.3 MiB
-  beyond a handed-over buffer, against 256.0 MiB beyond a borrowed one;
-  through the TypeScript package its validation adds 247.2 MiB to Node's
-  resident memory (351.5 MiB at a 64 MiB limit).
-- Exact-input refusals say what the parser expected or found and the byte where:
-  `InputError`'s `Display` and TypeScript's `InputFailure.message` read, for
-  example, `expected a colon after the member name at byte 5`, beside the
-  refusal's code, kind and byte offset.
-- `ValueConversionError`'s `Display` states why `JsonValue::from_serializable`
-  refused a value, naming the byte, node or depth limit it exceeds, as in
-  `JSON value conversion failed: the value nests containers more than 128 levels
-  deep, the most this conversion admits`; when the value's own serializer
-  failed, it says so and leaves the serializer's text to `message()`.
-- OBI-10 findings name the meta-schema keyword whose value fails and point at
-  that value (`the value of the type keyword does not satisfy the JSON Schema
-  2020-12 meta-schema`), one finding for each failing keyword; a schema that is
-  neither an object nor a boolean is reported at the schema (`a schema must be
-  a JSON object or boolean`).
-- Document validation's fixed checks (OBI-02, OBI-10) and reference inspection use
-  the unmodified jsonschema 0.58.6 library with its default pattern engine, which
-  matches every fixed pattern on a finite automaton, exactly as ECMAScript does.
-  The checks have no work budget; their work is linear in the admitted document,
-  and a 60 MB SemVer near miss reaches its verdict in about 0.6 seconds. The SDK
-  carries no fork of any dependency.
-- `ConformantDocument` (TypeScript `ConformantDocument`), the proven state, with
-  infallible views, operation and alias lookup, exact schema access, reference
-  inspection and opaque kind comparison. It is the only route to value contracts.
-- Explicit immutable resources and reusable input/output value contracts, with
-  preparation refusals separate from satisfies, fails, undefined or no-verdict outcomes.
-  Undefined results carry a code, message and optional original schema location;
-  no-verdict describes inability to answer.
-- An optional JSON Schema 2020-12 evaluator composed over the unmodified
-  jsonschema 0.58.6 library, with exact numeric semantics, ECMAScript `u`-mode
-  patterns on a linear-time engine, dynamic references resolved through each
-  path's dynamic scope, and cooperative cancellation. It bundles each value contract
-  into one resource, so every reached schema compiles once, and reuses a
-  resource set's identity index instead of indexing its resources again. A
-  value contract prepares with a stand-in for what the evaluator cannot
-  evaluate: a resource that was not supplied, a schema that could apply again
-  without consuming the instance, and a pattern it does not match. A value
-  whose verdict depends on how a stand-in comes out gives no verdict naming it,
-  and every other value keeps the verdict that holds however the stand-ins come
-  out. A value contract in which an `unevaluatedProperties` or
-  `unevaluatedItems` keyword's annotation sources reach a stand-in for a
-  missing resource, a cycle or `patternProperties` names, a reference to a
-  fragment of a missing resource, or one that identifies no schema refuses
-  preparation. Patterns, including the word boundary `\b`, are translated for a
-  linear-time engine and match in time linear in the string, so there is no
-  pattern work cap; one that is invalid with Unicode semantics, needs a
-  backtracking engine (lookaround or backreferences), applies a Unicode
-  property escape or holds the non-word boundary `\B` is a stand-in. The evaluator
-  bounds what the SDK itself reads, writes and recurses through, and does not
-  estimate the library's compiled memory. Limits that protect the process have
-  defaults, and those that encode an assumption about the host are expressed as
-  the host's resources: `Limits::stack_bytes` (TypeScript `stackBytes`,
-  256 KiB) is the stack preparation and evaluation may use, from which the
-  evaluator sizes evaluation depth (256 bytes for each nested schema
-  evaluation), bounded from the value contract before a value is evaluated, the stack
-  a pass of a value contract holding an unevaluated keyword may use as it evaluates
-  (half, measured as it goes: a bound on bytes, so the depth it admits varies
-  with the build and the host) and the unevaluated walk limit below, so a host
-  that gives a larger thread admits deeper values and longer walks; each
-  pattern's size, form
-  and nesting, and the forms kept for all of a value contract's patterns together,
-  counted as each is written, with each distinct `pattern` form kept once
-  (`Limits::total_pattern_bytes`, TypeScript `totalPatternBytes`, 4 MiB,
-  `pattern-total-byte-limit`); the memory of all of a value contract's
-  patterns together (`Limits::total_pattern_memory`, TypeScript
-  `totalPatternMemory`, 64 MiB, `pattern-total-memory-limit`, whose message
-  states the arithmetic): its run matchers, which match each distinct
-  `pattern` form that is one anchored sequence of single-character runs
-  without an automaton and hold 104 bytes, 24 for each step, 16 for each
-  character of a short fixed part of ASCII held as a table, 8 for each range
-  of a run's members past ASCII and a byte for each byte of literal text (a
-  10,002-byte literal pattern holds 10,128 bytes), and the regex crate's
-  memory for each other distinct
-  `pattern` form and each `patternProperties` name: a quarter, at most 2 MiB
-  each, for their search caches (`dfa_size_limit`) in equal parts, and the
-  rest for the run matchers and the compiled forms (`size_limit`), each form
-  first within 48 KiB, with the forms that need more sharing what is left, at
-  most 32 MiB each, so small patterns elsewhere change a large one's outcome
-  only through what they hold, no outcome depends on the order strings reach
-  the patterns, a value contract whose run matchers and compiled patterns'
-  first allowances pass the three quarters refuses at the first pattern past
-  them in the order preparation reads them, before compiling any (at the
-  default 1,024 compiled patterns fill them, one fewer for each 48 KiB or part
-  of it the run matchers hold), 40 counted-repetition names refuse in about
-  0.2 s, and
-  a `pattern` value compiled when a string first reaches it stays within what
-  it is given; the memory dynamic specialization adds to a value contract's program,
-  estimated for the SDK's own copies and dynamic contexts
-  (`Limits::program_bytes`, TypeScript `programBytes`, 48 MiB,
-  `program-specialization-limit`); and an unevaluated keyword's annotation
-  walk, which the library compiles by recursion, weighed by the kind of each
-  reference against what `stack_bytes` admits (a fifth left to the caller,
-  99 KiB to the rest of preparation, 1 KiB per unit), so the longest admitted
-  walk of every kind prepares with a fifth of the thread already in use on
-  Linux, macOS and Windows from 192 KiB to 2 MiB (`unevaluated-walk-limit`: at
-  the default 26 `$ref`s, 8 levels of `allOf` inheritance, 7 through `then`,
-  `else` or `dependentSchemas`). Each of these refusals states its arithmetic
-  and names the setting to raise.
-  Preparing a schema from an untrusted party can still take more memory than a
-  host may want, so a host doing so should prepare in an isolated worker or
-  process with an operating-system memory limit. Two limits are the
-  application's to set and are off by default: `Limits::evaluation_steps`,
-  which bounds only time, caps each pass's work, without which time can grow
-  exponentially with some schemas (its marker before every reference nests one
-  more schema evaluation for each reference followed, so within the same
-  `stack_bytes` a capped recursive value contract decides fewer levels, at worst
-  about half as many), and `Limits::schema_resources` (TypeScript
-  `schemaResources`) caps the schema resources one value contract may reach, refusing
-  with `LimitExceeded` and `schema-resource-limit` before the library compiles
-  the value contract, which bounds that compilation's time and memory (a
-  99,990-resource `$id` chain: 8.1 s and 725 MB without a cap, 1.1 s and
-  499 MB refused at 1,000). Whatever `Limits` sets, preparation refuses a
-  reached schema nested more than 256 schemas below the schema position or
-  supplied resource root that holds it (`schema-depth-limit`), and reference
-  inspection skips the references nested past that depth (`schema-depth`).
-  Exact `multipleOf` divides within a fixed
-  arithmetic bound: past 4,096 significant digits or an exponent of ±20,000 in
-  the value or the divisor, a division the answer needs gives no verdict
-  (`numeric-arithmetic-limit`). A keyword that reads as text a string or
-  member name holding an unpaired UTF-16 unit, such as `maxLength`, `pattern`
-  or `propertyNames`, gives no verdict (`lone-surrogate-instance`). A string
-  that reaches a `pattern` the evaluator does not match gives a no-verdict
-  located at that keyword's original schema location. The default
-  evaluator never returns `Undefined`. One schema transform keeps the library's
-  `unevaluatedProperties` walk clear of an upstream bug that drops compiled
-  pattern subschemas.
-- Cheap checks and explanations are chosen per call. `PreparedValueContract::validate`
-  (and `validate_with_control`, `validate_json`) reports a failure without
-  problems; `explain` and `explain_with_control` return the same verdict with the
-  library's first error at its keyword's original location, with a fixed
-  message. TypeScript `PreparedValueContract` gains `explain` beside `validate`.
-  A prepared value contract keeps only the original locations of the schemas it
-  compiled, never their text, its document, supplied resources or a location map.
-- `operation::Invoker::with_validation_detail(Detail::Explain)` asks the invoker to
-  explain a rejected value before withholding it, so `ValidationFailure::outcome()`
-  carries the evaluator's problems; by default it carries the verdict only.
-- An evaluator integration trait, whose `PreparedSchema::validate` receives the
-  call's `Detail` (`Outcome` or `Explain`), and a reusable qualification suite
-  that checks and explains every value, including explanations interrupted by
-  cancellation.
-- HTTP discovery and publication with bounded bodies and explicit host-policy
-  responsibilities. The decoded body limit protects the process and defaults to
-  1 MiB. An attempt has no deadline unless the application sets one, since a
-  deadline only bounds time: Rust `ClientOptions::timeout` takes
-  `Some(duration)` and TypeScript takes `timeoutMs`, and a zero duration is
-  refused with `invalid-timeout`. Publication serves the well-known path
-  when a request spells an unreserved character percent-encoded, as in
-  `/.well-known/%6Fpenbindings` (RFC 3986 section 2.3), and never decodes a
-  reserved escape such as `%2F` into a path separator. A native redirect refusal's
-  message names the rule that refused the hop, as in "error following redirect:
-  HTTPS to HTTP discovery redirect refused": the destination's scheme or host,
-  credentials in its URL, the ten-redirect limit (which also ends a cycle) or
-  credential replay.
-- Current optional Rust role APIs for kind description/checking, source pulling,
-  schema identity, and binding/operation invocation. Shared context challenges and
-  original-document requests replace detached inspection/synthesis models. Source
-  pulling returns additions and a report for explicit caller adoption. Old
-  inspection/synthesis crates and shared legacy records are removed with no
-  compatibility adapters.
-- A TypeScript API with bundled Wasm, exact-value editing, disposable owners and
-  Fetch discovery for qualified browser, Node ESM and Worker hosts, whose
-  declarations import none of the generated Wasm bindings. Its names
-  follow Rust's where the concept is the same: `Document.validate()` returns a
-  `DocumentValidation`, whose conformant branch carries the proof, and
-  `validateDocument` returns the plain `DocumentReport`.
-- TypeScript `initialize()` compiles its input and refuses, before instantiating
-  it, a WebAssembly module whose imports and exports are not this package's
-  (`wasm-initialization`, "the supplied module is not this package's"), so every
-  failed attempt, a wrong module included, leaves initialization retryable. The
-  build records the module's imports and exports in
-  `dist/wasm/openbindings_wasm_signature.js`.
-- The TypeScript package's `engines` admits Node `^22.23.0 || ^24.17.0 || >=26.2.0`,
-  the first releases whose bundled undici rejects a chunked body cut short as its
-  connection closes ([nodejs/undici#5273](https://github.com/nodejs/undici/pull/5273)).
-  Earlier releases, Node 22.19.0 among them, handed `discover` the prefix as a complete
-  body, so a truncated document could be reported found or non-conformant instead of a
-  `body-error`. CI pins Node 22.23.0 and runs the TypeScript tests at 24.17.0 and 26.2.0 too.
-- The documentation names the pattern dialect: ECMA-262 11th edition (ES2020) with
-  Unicode semantics, as JSON Schema 2020-12 cites it, so syntax later editions added,
-  such as ES2025's modifiers `(?i:a)` and duplicate named groups, is invalid
-  (`schema-pattern-compilation`) even where the host's own RegExp accepts it.
-- A bundled Wasm module whose bytes do not depend on where it was built. The
-  build gives the builder's Cargo home, toolchain, target directory and checkout
-  fixed names in the module, and refuses a module that still embeds one; CI
-  rebuilds it from another checkout path and Cargo home and requires identical
-  bytes.
-- Evaluator messages and the documentation use the specification's term *value
-  contract*, never an unqualified *contract*, which the specification reserves for
-  an operation's whole contract: a failure reads "value does not satisfy the value
-  contract", and limit refusals read "this value contract ...".
-- `THIRD-PARTY-NOTICES.txt` and `DEPENDENCIES.json` cover the native dependency
-  closure of Linux (GNU), macOS and Windows (MSVC) on x86_64 and aarch64, which
-  the inventory's `platforms` lists, so the Linux and Windows target-specific
-  dependencies are attributed too.
-- The bundled JSON Schema 2020-12 meta-schemas carry their authors' terms, the
-  BSD 3-Clause License or the Academic Free License 3.0, as
-  `schemas/LICENSE-json-schema-spec` in the internal schema crate and
-  `licenses/JSON-SCHEMA-SPEC-LICENSE` in the npm package, beside the Apache-2.0
-  license of the Go package the copies came from.
-- Runnable first-use and lifecycle examples, legacy Go and TypeScript migration
-  guidance, API reference documentation and reproducible performance measurements.
+- Exact OpenBindings documents with immutable edits, owning domain entries and a
+  separate `ConformantDocument` proof. Edits produce a new revision; existing
+  owners retain their original bytes and evidence. Unknown fields, opaque data,
+  numeric tokens and escaped strings survive inspection and supported edits.
+- Separate input, version and conformance results. OBI-01 through OBI-14 have
+  per-rule evidence and bounded original-location findings. Parsing alone does
+  not establish conformance, and conformance does not prove an author's claims
+  about bindings, examples or availability.
+- Original, proof-owned `Schema` values for declared operation inputs and outputs,
+  with explicit external resources and a generic `SchemaEvaluator` boundary.
+  `PreparedSchema` owns its validator; preparation failure is separate from
+  `Satisfies`, `Fails`, `Undefined` and `NoVerdict` value outcomes. Core performs
+  no acquisition and requires neither a particular evaluator nor `Send`/`Sync`.
+- An optional JSON Schema evaluator with exact numeric predicates, explicit
+  capability limits and cooperative cancellation. Its prepared original-node
+  engine retains schema environments and static reference/pattern readings,
+  tracks evaluated annotations, and uses explicit applicator frames and bounded
+  recursive reasoning. Known undefined effects remain distinct from missing
+  resources, unsupported capabilities and interrupted execution.
+- Original-schema explanations for one concretely proved failure, with exact
+  source and instance locations. Verdict and optional explanation consume one
+  cumulative allowance. Diagnostic interruption preserves an established
+  verdict; explanations remain explicitly incomplete.
+- Optional Rust binding and operation invocation clients over explicit borrowed
+  providers. Binding invocation neither selects a binding nor validates operation
+  values. Operation invocation resolves keys/aliases, applies caller selection
+  and checks each value against its declared schema before forwarding it.
+  Prepared operations support repeated calls without retaining a provider.
+- Separate advisory preflight, opaque context and exact context challenges.
+  Streaming invocation preserves prior output when a later failure occurs;
+  cancellation promises neither rollback nor that external effects have stopped.
+  Applications own provider choice, context acquisition, approval and retry.
+- Optional kind-description and source-checking clients. Capability claims remain
+  per operation, kind identity is exact, and checking requires an explicit call.
+  Kind-owned data and native provider failures retain their separate meanings.
+- Optional source pulling with original-document requests, additions, reports,
+  proposals and explicit caller adoption. Local checks establish mechanically
+  knowable relationships and prospective document conformance; they do not prove
+  kind-owned fidelity, offered-schema identity or opaque dependency closure.
+  Pulling never applies proposals or retries automatically.
+- Optional schema comparison using the pinned profile's identical mode, explicit
+  roots/bases/resources and exact values. Equality means profile identity, not
+  general schema equivalence. Unsupported comparisons return no identity verdict.
+- HTTP discovery and publication as an independent companion, with bounded
+  decoded bodies, explicit optional deadlines, redirects and distinct gated,
+  absent, invalid, inconclusive and transport outcomes. Publication retains a
+  conformant snapshot. Authentication and deployment policy remain with the host.
+- A TypeScript facade over the shared Rust/Wasm engine, organized around exact
+  values, documents, schema preparation/evaluation and Fetch discovery. Disposable
+  owners and derived views preserve their lifetimes. Rust role APIs are not
+  exposed as TypeScript role clients.
+- Source and packaged consumer checks, current Rust API references, required
+  conformance/evaluator corpora, actual browser probes and reproducible Wasm
+  builds. Cargo and npm publication guards remain enabled.
 
 ### Changed
 
-- `InputError` is read through methods, as `EditError` is through `code()`:
-  `kind()`, `byte_offset()` and `code()` return its kind, zero-based byte offset
-  and stable code, and its fields are private. `InputErrorKind` is `Copy`, so
-  `kind()` returns it by value. Equality compares the kind, byte offset and code.
-- Every TypeScript result union discriminates on `status`. Value results
-  (`ValueOutcome`, `ValueCheck` and `JsonCheck`) narrow on `status` to
-  `satisfies`, `fails`, `undefined`, `no-verdict` or `input-error`, and a
-  reference's `resolution` to `located` or `unresolved`, as parse, validation,
-  preparation, selection and discovery results narrow on it.
-- Rust's serialized value and reference results discriminate on `status`: a
-  serialized `ValueOutcome` or `ReferenceResolution` names its variant in
-  `status`, so the JSON a Rust caller writes and the object TypeScript returns
-  carry the same discriminant and values.
-- A problem the default evaluator cannot evaluate costs only the values whose
-  verdict depends on it, and a decided answer wins. A pattern invalid with
-  Unicode semantics and a schema that could apply again without consuming the
-  instance no longer refuse preparation: like a missing resource, each is a
-  stand-in, and a value whose verdict depends on how it comes out gives no
-  verdict (`schema-pattern-compilation` or `in-place-cycle`, at the pattern's
-  keyword or the schema that would apply again). A `patternProperties` name the
-  evaluator does not match (invalid, needing a backtracking engine, holding a
-  property escape or `\B`) is a stand-in too, as a `pattern` value already was,
-  instead of refusing preparation. A pass that reaches a stand-in no longer
-  withholds an answer the stand-in cannot change: a bounds program compiled with
-  the value contract checks the least and the most validity the stand-ins'
-  answers can give it, and the value satisfies or fails when they agree,
-  whatever order the keywords are in: `"a"` fails an `allOf` that names a
-  missing resource before `{"type": "integer"}`, and `1` satisfies an `anyOf`
-  whose first branch names the schema itself. Preparation still refuses where an
-  `unevaluatedProperties` or `unevaluatedItems` keyword's annotation sources
-  reach a stand-in for a missing resource, a cycle or `patternProperties` names.
-  The evaluator test kit's declared limitations for the default evaluator leave
-  out the four cases whose verdicts do not depend on a property escape's match,
-  which it now decides. Deciding costs at most a multiple of checking: a pass
-  over the bounds program does at most eight times the work of the value
-  contract's own pass, which the program measures, and 64 units more, as
-  `evaluation_steps` counts work, and an explanation through it 64 times the
-  work of collecting the value contract's own errors, so nested `oneOf`, `if`
-  and counted `contains` keywords cannot multiply it level by level. An in-place
-  cycle's unfolding enumerates at most 1,024 copies in all, holding at most the
-  larger of 2 MiB and four times the bytes of the cycles' own schemas, and
-  observes cancellation. A failure the first pass decided without reaching a
-  stand-in is explained through the bounds program where the value contract's
-  own explanation reaches one, in a value contract holding a stand-in for an
-  in-place cycle, an invalid pattern or `patternProperties` names.
+- Apply specification `c1419c9fc3ae5a00c2b83da710c11bf67dab7934` and current
+  interfaces `5815fb106bddd2c85ff4e93e0077570b3f6b9e74`. Source and binding payloads
+  use `data`. Current contained-resource reference rules, derived schema and
+  qualification inputs move together with those pins.
+- Align public vocabulary and organization with schemas, document conformance,
+  context, invocation, kind description and source pulling. Replace old value
+  contract and detached inspection/synthesis APIs with those domain boundaries.
+- Rust `NoVerdict` code/message fields use `Cow<'static, str>`. Fixed SDK
+  limit/cancellation text and clones require no heap allocation; dynamic owned
+  strings move into the record. Serialized fields remain strings.
+- TypeScript result unions and corresponding serialized Rust results use explicit
+  status discriminants. Exact admission refuses unsupported ordinary-value
+  conversions instead of silently changing values.
 
-This first release remains unpublished. Package and specification versions are
-independent.
+### Removed
+
+- Obsolete inspection/synthesis companions, shared legacy interface records and
+  their consumers. No compatibility adapters are retained.
+
+### Remaining alignment work
+
+- Complete the pattern compiler's allocation/work certificate and retain full
+  immutable pattern programs during original-schema preparation.
+- Finish physical-stack qualification, force the original engine through all
+  gates, switch the default and remove the outgoing projection/compiler path.
+  The ordinary evaluator still includes that path at this checkpoint.
+- Complete matched performance, clean-package/reference/all-host qualification
+  and the final specification-to-code audit. Bounded passing increments do not
+  establish whole-SDK completion; detailed capability limits remain in
+  [CAPABILITIES.md](CAPABILITIES.md).

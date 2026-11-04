@@ -455,6 +455,71 @@ fn no_data_kind_projects_before_destination_identity_and_does_not_adapt_to_confl
 }
 
 #[test]
+fn two_sources_of_the_same_kind_reuse_one_operation_without_cross_source_suppression() {
+    let client = PullClient::new(Fixed);
+    let original = document(
+        r#"{"openbindings":"0.2.0","operations":{},"sources":{"first":{"kind":"example.fixed@1"},"second":{"kind":"example.fixed@1"}}}"#,
+    );
+    let first_request = PullRequest::new(original.clone(), "first");
+    let first =
+        complete(client.pull_source(first_request.clone(), CancellationToken::new())).unwrap();
+    assert!(!first.report().added().next().unwrap().reused());
+    let first_snapshot = first
+        .validate_for(
+            &first_request,
+            &PullLimits::default(),
+            &AtomicBool::new(false),
+        )
+        .unwrap();
+
+    let second_request = PullRequest::new(first_snapshot.clone(), "second");
+    let second =
+        complete(client.pull_source(second_request.clone(), CancellationToken::new())).unwrap();
+    assert_eq!(second.report().added().len(), 1);
+    assert!(second.report().added().next().unwrap().reused());
+    assert_eq!(second.report().existing().unwrap().count(), 0);
+    assert_eq!(
+        second
+            .additions()
+            .operations()
+            .unwrap()
+            .value()
+            .view()
+            .len(),
+        Some(0)
+    );
+    let both = second
+        .validate_for(
+            &second_request,
+            &PullLimits::default(),
+            &AtomicBool::new(false),
+        )
+        .unwrap();
+    assert_eq!(both.operations().len(), 1);
+    assert_eq!(both.operation("echo").unwrap().bindings().len(), 2);
+    assert_eq!(both.binding("echo.first").unwrap().source_key(), "first");
+    assert_eq!(both.binding("echo.second").unwrap().source_key(), "second");
+    assert!(original.value().get("bindings").is_none());
+    assert!(first_snapshot.binding("echo.second").is_none());
+
+    let repeated =
+        complete(client.pull_source(PullRequest::new(both, "second"), CancellationToken::new()))
+            .unwrap();
+    assert_eq!(repeated.report().added().len(), 0);
+    assert_eq!(repeated.report().existing().unwrap().count(), 1);
+    assert_eq!(
+        repeated
+            .report()
+            .existing()
+            .unwrap()
+            .next()
+            .unwrap()
+            .status(),
+        ExistingStatus::Current
+    );
+}
+
+#[test]
 fn embedded_kind_reports_stale_current_unmatched_and_partial_without_overwriting_authorship() {
     let original = document(
         r#"{"openbindings":"0.2.0","operations":{"a":{"input":{"type":"integer"},"description":"keep"},"b":{"input":true},"c":{}},"sources":{"catalog":{"kind":"example.embedded@1","data":{"partial":true,"items":[{"key":"a","operation":{"input":{"type":"string"}},"data":{"item":"a","revision":"v2"}},{"key":"b","operation":{"input":true},"data":{"item":"b"}}]}}},"bindings":{"a":{"operation":"a","source":"catalog","preference":2,"idempotent":true,"data":{"item":"a","revision":"v1"}},"b":{"operation":"b","source":"catalog","data":{"item":"b"}},"c":{"operation":"c","source":"catalog","data":{"item":"gone"}}}}"#,

@@ -2,7 +2,8 @@
 
 Independent implementation/resource review now PASSES this bounded increment,
 against pinned specification c1419c9 and interfaces 5815fb1. Final broad corrected
-source validation is running. It implements the approved compact-witness design,
+source validation passes, including the full portable verifier on clean pushed
+commit 5d7e8d4. It implements the approved compact-witness design,
 not the default-engine switch or whole-SDK completion. The prepared original-node
 interpreter now records concrete false witnesses only in an optional second pass;
 both passes consume one cumulative allowance. Exact source and instance pointers
@@ -107,8 +108,9 @@ Final corrected-source parent gates pass: 939 minimum-Rust workspace tests
 tests, 186 Node tests, 352 installed-package assertions, and both actual browsers.
 Each browser passes 505 core / 1,546 required values / 42 Explain cases plus prior
 frame/reference/syntax/pattern/pointer groups. Exact final artifacts and hashes
-are in results-final.json. The complete portable verifier on the reviewed commit
-is the next gate. The safety checkpoint d687e50 is committed and pushed.
+are in results-final.json. The complete portable verifier passes on clean pushed commit 5d7e8d4;
+its log and hash are recorded. The earlier safety checkpoint d687e50 preserved
+the open R-EW4 finding before correction.
 Full pattern compiler construction,
 remaining physical-stack qualification, outgoing compiler retirement, matched
 performance and the final alignment audit remain open.

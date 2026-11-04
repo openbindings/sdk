@@ -1,0 +1,1280 @@
+{
+  "format": "openbindings-sdk-witness-audit-partial-v1",
+  "sdk_base_commit": "5d7e8d4c39fd8175029dc14516d3aafa77142b2e",
+  "scope": "Remaining 56 individual witnesses; source/test hashes identify new test-only working changes.",
+  "prior_portable_commit": "5d7e8d4c39fd8175029dc14516d3aafa77142b2e",
+  "prior_portable_log_sha256": "dff1de3faca5c3b968785c4ea2c2e05327cb33537cfa0060ccc5d69e9e6cdcb3",
+  "new_runtime_receipts": {
+    "preflight-live-challenge-final.log": "6227c64cf0605ef4a5fb2e8fcdf63d5bd1bb4d1805e60b0b4795265c8d29d5a6",
+    "pull-two-sources.log": "34a14d820c5e6938a4b86b07ac8b538be5363a4d0915303e1282bbabd491b7b2",
+    "host-number-witness.log": "869b6667926d2381d395842135602f2fdb03c853184973e71e66e0c109a9f2bd",
+    "format.log": "1cfc077f1514d44a2d3e23e8272b6c79111490cf2d0f408d9b4d093a941cc098"
+  },
+  "witnesses": [
+    {
+      "id": "checked-positive",
+      "expectation": "Valid wire shape still lacks proof",
+      "concept_id": "checked",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings-invocation/tests/values.rs",
+          "line": 68,
+          "anchor": "fn requests_reject_closed_shape_violations_and_require_document_conformance(",
+          "sha256": "145bad36902d96e35195542f90a1734516f802783a01f7b3e73edf0d899d476c",
+          "portable_verifier_pass_occurrences": 1
+        },
+        {
+          "file": "crates/openbindings-invocation/src/value.rs",
+          "line": 109,
+          "anchor": "pub(crate) fn interface(",
+          "sha256": "9d45dd6287df6c0a971ace1826987b638cb45500271e81bb0e1ba4134cee3770"
+        },
+        {
+          "file": "crates/openbindings-source-pull/src/request.rs",
+          "line": 45,
+          "anchor": "pub fn from_json(",
+          "sha256": "48fa9e69e5a0691ccc899093b44f5003a7638407fc198b85407f8107e8e39e0d"
+        },
+        {
+          "file": "crates/openbindings-kind-description/src/client.rs",
+          "line": 157,
+          "anchor": "pub struct SourceCheckClient",
+          "sha256": "d78f92482bbf17a9924852b3b0f4d8282bfcba543deef40240916928bc2683ce"
+        }
+      ],
+      "audit": "Role carrier admission and a document conformance proof are separate boundaries; checked role data does not acquire a document proof.",
+      "status": "source/assertion binding audited; final independent review pending"
+    },
+    {
+      "id": "checked-negative",
+      "expectation": "Malformed provider result silently repaired",
+      "concept_id": "checked",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings-kind-description/tests/handoff.rs",
+          "line": 160,
+          "anchor": "fn malformed_provider_outputs_remain_operational_failures_and_never_kind_rejections(",
+          "sha256": "6791c10e8f4f4080a223d0ce3cb3707a084a18f2107b2bf3e78618b5c894ae22",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "Malformed provider handoffs remain operational failures instead of being repaired or converted into kind rejection.",
+      "status": "source/assertion binding audited; final independent review pending"
+    },
+    {
+      "id": "context-positive",
+      "expectation": "Distinct contexts on two attempts",
+      "concept_id": "context",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings-invocation/tests/support/operation_cases.rs",
+          "line": 1238,
+          "anchor": "fn concurrent_prepared_clones_keep_selection_context_cancellation_and_evidence_separate(",
+          "sha256": "8b629aa6fd18c08f2126834188222665726afb7a8edc7862b0d57da1b6504a42",
+          "portable_verifier_pass_occurrences": 2
+        }
+      ],
+      "audit": "Concurrent prepared calls preserve their separate opaque contexts, cancellation and evidence.",
+      "status": "source/assertion binding audited; final independent review pending"
+    },
+    {
+      "id": "context-negative",
+      "expectation": "SDK invents credential member names",
+      "concept_id": "context",
+      "evidence_kind": "bounded runtime assertions plus inspected context ownership boundary",
+      "evidence": [
+        {
+          "file": "crates/openbindings-invocation/tests/values.rs",
+          "line": 49,
+          "anchor": "fn data_and_context_absence_are_distinct_from_null_and_empty_object(",
+          "sha256": "145bad36902d96e35195542f90a1734516f802783a01f7b3e73edf0d899d476c",
+          "portable_verifier_pass_occurrences": 1
+        },
+        {
+          "file": "crates/openbindings-context/src/lib.rs",
+          "line": 17,
+          "anchor": "pub struct Context(",
+          "sha256": "2cafbf40bf56868b41511b96c4eba0fad73994c0c6eba93015584147ecbadee4"
+        },
+        {
+          "file": "crates/openbindings-invocation/src/value.rs",
+          "line": 33,
+          "anchor": "pub fn with_context(",
+          "sha256": "9d45dd6287df6c0a971ace1826987b638cb45500271e81bb0e1ba4134cee3770"
+        }
+      ],
+      "audit": "Context has exact caller-selected members; core supplies no credential-member vocabulary and does not replace absence with an empty object.",
+      "status": "source/assertion binding audited; final independent review pending"
+    },
+    {
+      "id": "challenge-positive",
+      "expectation": "Unknown annotations preserved",
+      "concept_id": "challenge",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings-context/tests/contracts.rs",
+          "line": 67,
+          "anchor": "fn exact_opaque_values_and_schema_owners_survive_the_envelope(",
+          "sha256": "73b41339a7f374e7e7c706adec58fe25e9dca7a6c74c76c84bb659a2f7eaddb9",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "Unknown nested schema annotations survive in the exact owned challenge.",
+      "status": "source/assertion binding audited; final independent review pending"
+    },
+    {
+      "id": "challenge-negative",
+      "expectation": "Old target/requirements envelope accepted",
+      "concept_id": "challenge",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings-invocation/tests/values.rs",
+          "line": 128,
+          "anchor": "fn current_challenges_use_only_message_and_object_schema(",
+          "sha256": "145bad36902d96e35195542f90a1734516f802783a01f7b3e73edf0d899d476c",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "The old target/alternatives/requirements envelope is rejected; a current challenge needs message and object schema.",
+      "status": "source/assertion binding audited; final independent review pending"
+    },
+    {
+      "id": "oauth-positive",
+      "expectation": "Schema retained without interpreting annotation",
+      "concept_id": "oauth",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings-context/tests/contracts.rs",
+          "line": 67,
+          "anchor": "fn exact_opaque_values_and_schema_owners_survive_the_envelope(",
+          "sha256": "73b41339a7f374e7e7c706adec58fe25e9dca7a6c74c76c84bb659a2f7eaddb9",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "An oauth2 annotation is retained as opaque schema content, including exact values.",
+      "status": "source/assertion binding audited; final independent review pending"
+    },
+    {
+      "id": "oauth-negative",
+      "expectation": "Implicit login or secret disclosure",
+      "concept_id": "oauth",
+      "evidence_kind": "inspected capability boundary, not a universal external-effects test",
+      "evidence": [
+        {
+          "file": "crates/openbindings-context/src/lib.rs",
+          "line": 140,
+          "anchor": "pub fn schema(",
+          "sha256": "2cafbf40bf56868b41511b96c4eba0fad73994c0c6eba93015584147ecbadee4"
+        },
+        {
+          "file": "crates/openbindings-context/tests/contracts.rs",
+          "line": 67,
+          "anchor": "fn exact_opaque_values_and_schema_owners_survive_the_envelope(",
+          "sha256": "73b41339a7f374e7e7c706adec58fe25e9dca7a6c74c76c84bb659a2f7eaddb9",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "The shared carrier has no login/acquisition/disclosure operation. Caller and provider behavior outside this carrier is not certified by the SDK.",
+      "status": "source/assertion binding audited; final independent review pending"
+    },
+    {
+      "id": "binding-invoke-positive",
+      "expectation": "Invoke explicit binding with source data null",
+      "concept_id": "binding-invoke",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings-invocation/tests/support/operation_cases.rs",
+          "line": 145,
+          "anchor": "fn binding_is_lazy_owned_exact_and_descriptorless(",
+          "sha256": "8b629aa6fd18c08f2126834188222665726afb7a8edc7862b0d57da1b6504a42",
+          "portable_verifier_pass_occurrences": 2
+        },
+        {
+          "file": "crates/openbindings-invocation/tests/values.rs",
+          "line": 49,
+          "anchor": "fn data_and_context_absence_are_distinct_from_null_and_empty_object(",
+          "sha256": "145bad36902d96e35195542f90a1734516f802783a01f7b3e73edf0d899d476c",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "Explicit binding invocation is lazy, descriptor-independent and preserves exact request data; null source data remains present.",
+      "status": "source/assertion binding audited; final independent review pending"
+    },
+    {
+      "id": "binding-invoke-negative",
+      "expectation": "Independent carrier loses document references",
+      "concept_id": "binding-invoke",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings-invocation/tests/values.rs",
+          "line": 15,
+          "anchor": "fn owned_document_request_preserves_exact_payloads_and_owners(",
+          "sha256": "145bad36902d96e35195542f90a1734516f802783a01f7b3e73edf0d899d476c",
+          "portable_verifier_pass_occurrences": 1
+        },
+        {
+          "file": "crates/openbindings-invocation/tests/values.rs",
+          "line": 68,
+          "anchor": "fn requests_reject_closed_shape_violations_and_require_document_conformance(",
+          "sha256": "145bad36902d96e35195542f90a1734516f802783a01f7b3e73edf0d899d476c",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "Requests retain the original interface and reject detached source fields instead of dropping document reference context.",
+      "status": "source/assertion binding audited; final independent review pending"
+    },
+    {
+      "id": "preflight-positive",
+      "expectation": "Null followed by live challenge; ERR_REFUSED retains its prediction",
+      "concept_id": "preflight",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings-invocation/tests/support/lifecycle_cases.rs",
+          "line": 595,
+          "anchor": "fn no_preflight_prediction_does_not_suppress_a_live_context_challenge(",
+          "sha256": "94f98088c0795b7a21bcd5012720749303382914bf2dc2033e5a58c88b53bb02",
+          "portable_verifier_pass_occurrences": 0
+        },
+        {
+          "file": "crates/openbindings-invocation/tests/support/lifecycle_cases.rs",
+          "line": 567,
+          "anchor": "fn advisory_preflight_can_challenge_or_fail_without_becoming_an_invocation_gate(",
+          "sha256": "94f98088c0795b7a21bcd5012720749303382914bf2dc2033e5a58c88b53bb02",
+          "portable_verifier_pass_occurrences": 2
+        }
+      ],
+      "audit": "NoPrediction can precede a live ContextRequired terminal with exact details and no replay. ERR_REFUSED remains distinct from ordinary execution failure.",
+      "status": "source/assertion binding audited; final independent review pending"
+    },
+    {
+      "id": "preflight-negative",
+      "expectation": "Preflight result treated as reservation or ordinary failure as refusal prediction",
+      "concept_id": "preflight",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings-invocation/tests/support/lifecycle_cases.rs",
+          "line": 567,
+          "anchor": "fn advisory_preflight_can_challenge_or_fail_without_becoming_an_invocation_gate(",
+          "sha256": "94f98088c0795b7a21bcd5012720749303382914bf2dc2033e5a58c88b53bb02",
+          "portable_verifier_pass_occurrences": 2
+        },
+        {
+          "file": "crates/openbindings-invocation/tests/support/operation_cases.rs",
+          "line": 430,
+          "anchor": "fn preflight_is_send_with_a_non_send_evaluator_and_never_prepares(",
+          "sha256": "8b629aa6fd18c08f2126834188222665726afb7a8edc7862b0d57da1b6504a42",
+          "portable_verifier_pass_occurrences": 2
+        }
+      ],
+      "audit": "Advisory work creates no invocation or value validation, and a later invocation is a separate attempt. The SDK does not turn an ordinary error into the stronger refusal prediction.",
+      "status": "source/assertion binding audited; final independent review pending"
+    },
+    {
+      "id": "operation-invoke-positive",
+      "expectation": "Alias plus ordered selection",
+      "concept_id": "operation-invoke",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings-invocation/tests/support/operation_cases.rs",
+          "line": 231,
+          "anchor": "fn aliases_ordered_selection_and_ambiguity_follow_caller_policy(",
+          "sha256": "8b629aa6fd18c08f2126834188222665726afb7a8edc7862b0d57da1b6504a42",
+          "portable_verifier_pass_occurrences": 2
+        }
+      ],
+      "audit": "An alias plus caller order selects the first supported listed binding.",
+      "status": "source/assertion binding audited; final independent review pending"
+    },
+    {
+      "id": "operation-invoke-negative",
+      "expectation": "Automatic ranking resolves multiplicity",
+      "concept_id": "operation-invoke",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings-invocation/tests/support/operation_cases.rs",
+          "line": 231,
+          "anchor": "fn aliases_ordered_selection_and_ambiguity_follow_caller_policy(",
+          "sha256": "8b629aa6fd18c08f2126834188222665726afb7a8edc7862b0d57da1b6504a42",
+          "portable_verifier_pass_occurrences": 2
+        }
+      ],
+      "audit": "Multiple supported candidates without an explicit choice remain ERR_BINDING_SELECTION_REQUIRED; author hints and registration order do not decide.",
+      "status": "source/assertion binding audited; final independent review pending"
+    },
+    {
+      "id": "selection-positive",
+      "expectation": "First supported listed key",
+      "concept_id": "selection",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings-invocation/tests/support/operation_cases.rs",
+          "line": 231,
+          "anchor": "fn aliases_ordered_selection_and_ambiguity_follow_caller_policy(",
+          "sha256": "8b629aa6fd18c08f2126834188222665726afb7a8edc7862b0d57da1b6504a42",
+          "portable_verifier_pass_occurrences": 2
+        }
+      ],
+      "audit": "Selection uses the caller list and actual exact-kind support.",
+      "status": "source/assertion binding audited; final independent review pending"
+    },
+    {
+      "id": "selection-negative",
+      "expectation": "Unknown key ignored or fallback outside selection",
+      "concept_id": "selection",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings-invocation/tests/support/operation_cases.rs",
+          "line": 214,
+          "anchor": "fn all_selection_keys_are_checked_before_any_support_query(",
+          "sha256": "8b629aa6fd18c08f2126834188222665726afb7a8edc7862b0d57da1b6504a42",
+          "portable_verifier_pass_occurrences": 2
+        },
+        {
+          "file": "crates/openbindings-invocation/tests/interface_regressions.rs",
+          "line": 173,
+          "anchor": "fn unsupported_ordered_selection_is_not_found_but_explicit_binding_is_attempted(",
+          "sha256": "c529aa486c4bc079c973270c5083d460076391e87fdb4e9ce81f596ef9fd386f",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "Unknown/wrong-operation entries are admitted before any prefix choice; an exhausted explicit selection does not fall back outside the list.",
+      "status": "source/assertion binding audited; final independent review pending"
+    },
+    {
+      "id": "frames-positive",
+      "expectation": "Output followed by error",
+      "concept_id": "frames",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings-invocation/src/channel/tests.rs",
+          "line": 19,
+          "anchor": "fn only_output_drives_and_committed_values_precede_the_terminal(",
+          "sha256": "066563f3a230f2d6802f600eb227ae728000250b67face779181851b6f0b57e5",
+          "portable_verifier_pass_occurrences": 1
+        },
+        {
+          "file": "crates/openbindings-invocation/tests/frame_correspondence.rs",
+          "line": 755,
+          "anchor": "fn operation_interface_reuses_the_same_closed_frame_protocol(",
+          "sha256": "7521335a73cc6443ee9362730609a098f4266623d143f1818d3e2c7ee9a9ecd5",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "Committed values precede the terminal, including an error terminal; operation framing uses the same closed protocol.",
+      "status": "source/assertion binding audited; final independent review pending"
+    },
+    {
+      "id": "frames-negative",
+      "expectation": "First output treated as success",
+      "concept_id": "frames",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings-invocation/src/channel/tests.rs",
+          "line": 19,
+          "anchor": "fn only_output_drives_and_committed_values_precede_the_terminal(",
+          "sha256": "066563f3a230f2d6802f600eb227ae728000250b67face779181851b6f0b57e5",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "An output alone is not successful completion. The output-driving channel retains the later terminal and forbids extra post-terminal events.",
+      "status": "source/assertion binding audited; final independent review pending"
+    },
+    {
+      "id": "portable-error-positive",
+      "expectation": "Present null error data",
+      "concept_id": "portable-error",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings-invocation/tests/values.rs",
+          "line": 149,
+          "anchor": "fn portable_errors_preserve_unknown_codes_and_absent_null_exact_data(",
+          "sha256": "145bad36902d96e35195542f90a1734516f802783a01f7b3e73edf0d899d476c",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "Present null error data stays present and distinct from absence.",
+      "status": "source/assertion binding audited; final independent review pending"
+    },
+    {
+      "id": "portable-error-negative",
+      "expectation": "Stack/HTTP evidence placed in portable error fields",
+      "concept_id": "portable-error",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings-invocation/tests/values.rs",
+          "line": 149,
+          "anchor": "fn portable_errors_preserve_unknown_codes_and_absent_null_exact_data(",
+          "sha256": "145bad36902d96e35195542f90a1734516f802783a01f7b3e73edf0d899d476c",
+          "portable_verifier_pass_occurrences": 1
+        },
+        {
+          "file": "crates/openbindings-invocation/tests/interface_regressions.rs",
+          "line": 210,
+          "anchor": "fn only_current_operation_owned_codes_are_reserved_at_provider_boundary(",
+          "sha256": "c529aa486c4bc079c973270c5083d460076391e87fdb4e9ce81f596ef9fd386f",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "The closed portable envelope rejects a native message field and malformed members; local boundary findings stay separate from provider error data.",
+      "status": "source/assertion binding audited; final independent review pending"
+    },
+    {
+      "id": "support-positive",
+      "expectation": "Invoker without descriptor usable",
+      "concept_id": "support",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings-invocation/tests/support/operation_cases.rs",
+          "line": 145,
+          "anchor": "fn binding_is_lazy_owned_exact_and_descriptorless(",
+          "sha256": "8b629aa6fd18c08f2126834188222665726afb7a8edc7862b0d57da1b6504a42",
+          "portable_verifier_pass_occurrences": 2
+        }
+      ],
+      "audit": "An explicit binding provider works without a descriptor.",
+      "status": "source/assertion binding audited; final independent review pending"
+    },
+    {
+      "id": "support-negative",
+      "expectation": "Absent descriptor interpreted as unsupported",
+      "concept_id": "support",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings-invocation/tests/support/operation_cases.rs",
+          "line": 198,
+          "anchor": "fn explicit_operation_binding_bypasses_selection_support(",
+          "sha256": "8b629aa6fd18c08f2126834188222665726afb7a8edc7862b0d57da1b6504a42",
+          "portable_verifier_pass_occurrences": 2
+        }
+      ],
+      "audit": "Explicit binding invocation bypasses optional support selection; no absent-descriptor signal is invented.",
+      "status": "source/assertion binding audited; final independent review pending"
+    },
+    {
+      "id": "channel-positive",
+      "expectation": "Concurrent sending and receiving",
+      "concept_id": "channel",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings-invocation/tests/support/operation_cases.rs",
+          "line": 497,
+          "anchor": "fn thread_safe_composition_yields_send_driver_and_provider_handles(",
+          "sha256": "8b629aa6fd18c08f2126834188222665726afb7a8edc7862b0d57da1b6504a42",
+          "portable_verifier_pass_occurrences": 2
+        },
+        {
+          "file": "crates/openbindings-invocation/src/channel/tests.rs",
+          "line": 178,
+          "anchor": "fn blocked_polls_do_not_spend_credits_or_create_a_busy_wake_loop(",
+          "sha256": "066563f3a230f2d6802f600eb227ae728000250b67face779181851b6f0b57e5",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "Separate input/output/provider handles support concurrent activity with bounded backpressure and no busy wake loop.",
+      "status": "source/assertion binding audited; final independent review pending"
+    },
+    {
+      "id": "channel-negative",
+      "expectation": "Two mutable borrows prevent bidirectional use",
+      "concept_id": "channel",
+      "evidence_kind": "runtime concurrency assertions plus compile-time ownership bounds",
+      "evidence": [
+        {
+          "file": "crates/openbindings-invocation/tests/interface_regressions.rs",
+          "line": 108,
+          "anchor": "fn borrowed_generic_provider_futures_are_send_without_static_configuration(",
+          "sha256": "c529aa486c4bc079c973270c5083d460076391e87fdb4e9ce81f596ef9fd386f",
+          "portable_verifier_pass_occurrences": 1
+        },
+        {
+          "file": "crates/openbindings-invocation/src/channel/mod.rs",
+          "line": 620,
+          "anchor": "pub struct ProviderIo",
+          "sha256": "60f735adcf48afc892a9b6563ef981cfcb45dd6e21e1067ada22806deec1704a"
+        },
+        {
+          "file": "crates/openbindings-invocation/src/channel/mod.rs",
+          "line": 32,
+          "anchor": "pub struct InvocationLimits",
+          "sha256": "60f735adcf48afc892a9b6563ef981cfcb45dd6e21e1067ada22806deec1704a"
+        },
+        {
+          "file": "crates/openbindings-invocation/src/binding.rs",
+          "line": 26,
+          "anchor": "type Invoke<",
+          "sha256": "3868d02b294b9a3035640525a4a530ddd8c84e29f309b729e2d75c4bca49393f"
+        }
+      ],
+      "audit": "Split ownership avoids a single mutable borrow across both directions. Borrowed generic Send futures do not require static provider configuration.",
+      "status": "source/assertion binding audited; final independent review pending"
+    },
+    {
+      "id": "kind-describe-positive",
+      "expectation": "Invoke-only or catalog-only entry",
+      "concept_id": "kind-describe",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings-kind-description/tests/carriers.rs",
+          "line": 114,
+          "anchor": "fn support_is_per_operation_and_repeated_decoded_keys_are_rejected(",
+          "sha256": "07e35b1466e6edf51b03cee9c5dece1956d6275c6d3093deff5a2cd50796b4e4",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "Capabilities are operation-key claims, allowing different kinds to expose different operations.",
+      "status": "source/assertion binding audited; final independent review pending"
+    },
+    {
+      "id": "kind-describe-negative",
+      "expectation": "Universal kind-support flag",
+      "concept_id": "kind-describe",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings-kind-description/tests/carriers.rs",
+          "line": 114,
+          "anchor": "fn support_is_per_operation_and_repeated_decoded_keys_are_rejected(",
+          "sha256": "07e35b1466e6edf51b03cee9c5dece1956d6275c6d3093deff5a2cd50796b4e4",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "There is no universal kind-support flag replacing operation-specific claims; duplicate decoded keys are rejected.",
+      "status": "source/assertion binding audited; final independent review pending"
+    },
+    {
+      "id": "source-check-positive",
+      "expectation": "Absent data and executing-check disclosure",
+      "concept_id": "source-check",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings-kind-description/tests/clients.rs",
+          "line": 94,
+          "anchor": "fn two_kinds_keep_queries_checks_context_and_authored_data_separate(",
+          "sha256": "676d92311206c3ad7b45547a7437d2e463eb4eeeab91fc7c3993b40059620e60",
+          "portable_verifier_pass_occurrences": 1
+        },
+        {
+          "file": "crates/openbindings-kind-description/tests/carriers.rs",
+          "line": 156,
+          "anchor": "fn check_disclosure_is_owned_and_is_not_permission(",
+          "sha256": "07e35b1466e6edf51b03cee9c5dece1956d6275c6d3093deff5a2cd50796b4e4",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "Absent data remains absent; owned executing-check disclosure survives its description owner and is not permission.",
+      "status": "source/assertion binding audited; final independent review pending"
+    },
+    {
+      "id": "source-check-negative",
+      "expectation": "Changing kind or auto-applying output",
+      "concept_id": "source-check",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings-kind-description/tests/clients.rs",
+          "line": 142,
+          "anchor": "fn clients_enforce_exact_request_response_kind_identity(",
+          "sha256": "676d92311206c3ad7b45547a7437d2e463eb4eeeab91fc7c3993b40059620e60",
+          "portable_verifier_pass_occurrences": 1
+        },
+        {
+          "file": "crates/openbindings-kind-description/tests/clients.rs",
+          "line": 94,
+          "anchor": "fn two_kinds_keep_queries_checks_context_and_authored_data_separate(",
+          "sha256": "676d92311206c3ad7b45547a7437d2e463eb4eeeab91fc7c3993b40059620e60",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "Returned kind mismatch fails. The client returns a source proposal separately, does not mutate a document and does not collect context or retry.",
+      "status": "source/assertion binding audited; final independent review pending"
+    },
+    {
+      "id": "pull-positive",
+      "expectation": "Read and discard pull as inspection",
+      "concept_id": "pull",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings-source-pull/tests/kinds.rs",
+          "line": 600,
+          "anchor": "fn a_caller_can_discard_or_explicitly_adopt_one_dependency_closed_subset(",
+          "sha256": "9d6bf2ce58890d2ccbfacdbd97bb9942d77ea1850c4ad0a34002e4bcbf89bd6b",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "The caller may inspect/discard a pull or explicitly adopt a selected closed subset.",
+      "status": "source/assertion binding audited; final independent review pending"
+    },
+    {
+      "id": "pull-negative",
+      "expectation": "Mutate document during pull",
+      "concept_id": "pull",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings-source-pull/tests/relationships.rs",
+          "line": 86,
+          "anchor": "fn prospective_snapshot_adds_only_declared_maps_and_never_applies_proposals(",
+          "sha256": "0c066860e91d4431baa1f717410b74050586a102e25b861a3c2f2d746bb1630e",
+          "portable_verifier_pass_occurrences": 1
+        },
+        {
+          "file": "crates/openbindings-source-pull/tests/clients.rs",
+          "line": 116,
+          "anchor": "fn original_owner_context_and_native_local_errors_are_preserved_without_retry(",
+          "sha256": "fb539f987f0608e5f26be4cdfae8646acbe46a0ee1ec6b1a7e37152fa21a0f08",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "Checking an all-additions prospective snapshot does not change the original document or apply proposals.",
+      "status": "source/assertion binding audited; final independent review pending"
+    },
+    {
+      "id": "additions-positive",
+      "expectation": "New binding reuses equal existing operation",
+      "concept_id": "additions",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings-source-pull/tests/kinds.rs",
+          "line": 361,
+          "anchor": "fn no_data_kind_projects_before_destination_identity_and_does_not_adapt_to_conflicts(",
+          "sha256": "9d6bf2ce58890d2ccbfacdbd97bb9942d77ea1850c4ad0a34002e4bcbf89bd6b",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "The illustrative kind compares offered schemas using profile identity and reuses an equal existing operation.",
+      "status": "source/assertion binding audited; final independent review pending"
+    },
+    {
+      "id": "additions-negative",
+      "expectation": "Overwrite existing operation",
+      "concept_id": "additions",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings-source-pull/tests/kinds.rs",
+          "line": 361,
+          "anchor": "fn no_data_kind_projects_before_destination_identity_and_does_not_adapt_to_conflicts(",
+          "sha256": "9d6bf2ce58890d2ccbfacdbd97bb9942d77ea1850c4ad0a34002e4bcbf89bd6b",
+          "portable_verifier_pass_occurrences": 1
+        },
+        {
+          "file": "crates/openbindings-source-pull/tests/relationships.rs",
+          "line": 18,
+          "anchor": "fn independent_74_design_controls_keep_their_original_classifications(",
+          "sha256": "0c066860e91d4431baa1f717410b74050586a102e25b861a3c2f2d746bb1630e",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "Conflicting existing operations produce omissions, while relationship checks reject overwriting additions. The kind does not adapt its offer to force reuse.",
+      "status": "source/assertion binding audited; final independent review pending"
+    },
+    {
+      "id": "pull-report-positive",
+      "expectation": "Incomplete report with limitation",
+      "concept_id": "pull-report",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings-source-pull/tests/carriers.rs",
+          "line": 11,
+          "anchor": "fn all_21_pinned_pull_report_cases_keep_shape_and_complete_answers(",
+          "sha256": "df55b1c6c59143b52ae65035e8f272c0f04b5ed55bcc53c6c9df8ab7dd5101b6",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "Pinned cases distinguish incomplete reports with limitation evidence from complete reports.",
+      "status": "source/assertion binding audited; final independent review pending"
+    },
+    {
+      "id": "pull-report-negative",
+      "expectation": "Exhaustiveness certified by generic checker",
+      "concept_id": "pull-report",
+      "evidence_kind": "bounded carrier/relationship controls plus explicit provider responsibility",
+      "evidence": [
+        {
+          "file": "crates/openbindings-source-pull/tests/relationships.rs",
+          "line": 18,
+          "anchor": "fn independent_74_design_controls_keep_their_original_classifications(",
+          "sha256": "0c066860e91d4431baa1f717410b74050586a102e25b861a3c2f2d746bb1630e",
+          "portable_verifier_pass_occurrences": 1
+        },
+        {
+          "file": "crates/openbindings-source-pull/src/model.rs",
+          "line": 447,
+          "anchor": "impl PullReport {",
+          "sha256": "8c87fbae42cddbea008b7372eccba1b4fd19211d3981303836f7befeb9c22bf9"
+        },
+        {
+          "file": "crates/openbindings-source-pull/src/relationships.rs",
+          "line": 141,
+          "anchor": "pub(crate) fn check(",
+          "sha256": "23b82621c0ae9bc3fdf72bc9712030b81066bf2e56dd13a1156458f21dfe7b6d"
+        }
+      ],
+      "audit": "Generic checks enforce report shape/relationships, not whether the provider really read the whole source. Exhaustive remains a producer claim.",
+      "status": "source/assertion binding audited; final independent review pending"
+    },
+    {
+      "id": "uses-positive",
+      "expectation": "Selective apply includes transitive schema additions",
+      "concept_id": "uses",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings-source-pull/tests/kinds.rs",
+          "line": 600,
+          "anchor": "fn a_caller_can_discard_or_explicitly_adopt_one_dependency_closed_subset(",
+          "sha256": "9d6bf2ce58890d2ccbfacdbd97bb9942d77ea1850c4ad0a34002e4bcbf89bd6b",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "Selective adoption follows disclosed dependency labels, including transitive additions, and preserves the unadopted original.",
+      "status": "source/assertion binding audited; final independent review pending"
+    },
+    {
+      "id": "uses-negative",
+      "expectation": "Scan unknown data to infer complete dependencies",
+      "concept_id": "uses",
+      "evidence_kind": "bounded carrier assertions plus explicit opaque-data boundary",
+      "evidence": [
+        {
+          "file": "crates/openbindings-source-pull/tests/carriers.rs",
+          "line": 201,
+          "anchor": "fn duplicate_members_and_uses_are_rejected_without_rewriting_nested_opaque_data(",
+          "sha256": "df55b1c6c59143b52ae65035e8f272c0f04b5ed55bcc53c6c9df8ab7dd5101b6",
+          "portable_verifier_pass_occurrences": 1
+        },
+        {
+          "file": "crates/openbindings-source-pull/src/model.rs",
+          "line": 79,
+          "anchor": "macro_rules! uses_accessor",
+          "sha256": "8c87fbae42cddbea008b7372eccba1b4fd19211d3981303836f7befeb9c22bf9"
+        },
+        {
+          "file": "crates/openbindings-source-pull/src/relationships.rs",
+          "line": 107,
+          "anchor": "fn closure(",
+          "sha256": "23b82621c0ae9bc3fdf72bc9712030b81066bf2e56dd13a1156458f21dfe7b6d",
+          "portable_verifier_pass_occurrences": 7
+        }
+      ],
+      "audit": "Known label existence/closure is checked. Opaque data is not scanned to invent proof of every kind-owned dependency.",
+      "status": "source/assertion binding audited; final independent review pending"
+    },
+    {
+      "id": "proposal-positive",
+      "expectation": "Stale binding proposal leaves idempotence",
+      "concept_id": "proposal",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings-source-pull/tests/carriers.rs",
+          "line": 101,
+          "anchor": "fn proposal_authority_is_role_local_and_unknown_metadata_never_gains_edit_power(",
+          "sha256": "df55b1c6c59143b52ae65035e8f272c0f04b5ed55bcc53c6c9df8ab7dd5101b6",
+          "portable_verifier_pass_occurrences": 1
+        },
+        {
+          "file": "crates/openbindings-source-pull/tests/kinds.rs",
+          "line": 523,
+          "anchor": "fn embedded_kind_reports_stale_current_unmatched_and_partial_without_overwriting_authorship(",
+          "sha256": "9d6bf2ce58890d2ccbfacdbd97bb9942d77ea1850c4ad0a34002e4bcbf89bd6b",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "Stale proposals carry only kind-owned data/schema changes; idempotence and other author-owned wrapper fields are protected by role-local rules.",
+      "status": "source/assertion binding audited; final independent review pending"
+    },
+    {
+      "id": "proposal-negative",
+      "expectation": "Automatic overwrite of shared operation schema",
+      "concept_id": "proposal",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings-source-pull/tests/relationships.rs",
+          "line": 86,
+          "anchor": "fn prospective_snapshot_adds_only_declared_maps_and_never_applies_proposals(",
+          "sha256": "0c066860e91d4431baa1f717410b74050586a102e25b861a3c2f2d746bb1630e",
+          "portable_verifier_pass_occurrences": 1
+        },
+        {
+          "file": "crates/openbindings-source-pull/tests/carriers.rs",
+          "line": 147,
+          "anchor": "fn absence_null_and_removal_only_drift_are_not_interchangeable(",
+          "sha256": "df55b1c6c59143b52ae65035e8f272c0f04b5ed55bcc53c6c9df8ab7dd5101b6",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "Prospective validation never applies proposals or overwrites a shared operation. Omission, null and an unrepresentable removal remain distinct.",
+      "status": "source/assertion binding audited; final independent review pending"
+    },
+    {
+      "id": "omitted-positive",
+      "expectation": "Kind exclusion distinguished from implementation gap",
+      "concept_id": "omitted",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings-source-pull/tests/carriers.rs",
+          "line": 175,
+          "anchor": "fn complete_pull_checks_only_exhaustive_and_implementation_unsupported(",
+          "sha256": "df55b1c6c59143b52ae65035e8f272c0f04b5ed55bcc53c6c9df8ab7dd5101b6",
+          "portable_verifier_pass_occurrences": 1
+        },
+        {
+          "file": "crates/openbindings-source-pull/tests/carriers.rs",
+          "line": 11,
+          "anchor": "fn all_21_pinned_pull_report_cases_keep_shape_and_complete_answers(",
+          "sha256": "df55b1c6c59143b52ae65035e8f272c0f04b5ed55bcc53c6c9df8ab7dd5101b6",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "Kind exclusion and implementation-unsupported omission have distinct statuses and completeness effects.",
+      "status": "source/assertion binding audited; final independent review pending"
+    },
+    {
+      "id": "omitted-negative",
+      "expectation": "Unsupported relabeled as excluded",
+      "concept_id": "omitted",
+      "evidence_kind": "bounded status assertions plus explicit producer-truth boundary",
+      "evidence": [
+        {
+          "file": "crates/openbindings-source-pull/tests/carriers.rs",
+          "line": 175,
+          "anchor": "fn complete_pull_checks_only_exhaustive_and_implementation_unsupported(",
+          "sha256": "df55b1c6c59143b52ae65035e8f272c0f04b5ed55bcc53c6c9df8ab7dd5101b6",
+          "portable_verifier_pass_occurrences": 1
+        },
+        {
+          "file": "crates/openbindings-source-pull/src/model.rs",
+          "line": 49,
+          "anchor": "finite!(OmittedStatus",
+          "sha256": "8c87fbae42cddbea008b7372eccba1b4fd19211d3981303836f7befeb9c22bf9"
+        },
+        {
+          "file": "crates/openbindings-source-pull/src/model.rs",
+          "line": 403,
+          "anchor": "impl OmittedEntry {",
+          "sha256": "8c87fbae42cddbea008b7372eccba1b4fd19211d3981303836f7befeb9c22bf9"
+        }
+      ],
+      "audit": "The SDK retains the supplied category and never rewrites unsupported as excluded. It cannot prove a provider chose a truthful category.",
+      "status": "source/assertion binding audited; final independent review pending"
+    },
+    {
+      "id": "complete-positive",
+      "expectation": "Loss or conflict may coexist with completeness",
+      "concept_id": "complete",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings-source-pull/tests/carriers.rs",
+          "line": 175,
+          "anchor": "fn complete_pull_checks_only_exhaustive_and_implementation_unsupported(",
+          "sha256": "df55b1c6c59143b52ae65035e8f272c0f04b5ed55bcc53c6c9df8ab7dd5101b6",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "Lossy additions, conflicts, invalid entries and kind exclusions can coexist with complete when exhaustive is true.",
+      "status": "source/assertion binding audited; final independent review pending"
+    },
+    {
+      "id": "complete-negative",
+      "expectation": "Stricter caller acceptance redefines complete",
+      "concept_id": "complete",
+      "evidence_kind": "bounded status truth table plus inspected predicate",
+      "evidence": [
+        {
+          "file": "crates/openbindings-source-pull/tests/carriers.rs",
+          "line": 175,
+          "anchor": "fn complete_pull_checks_only_exhaustive_and_implementation_unsupported(",
+          "sha256": "df55b1c6c59143b52ae65035e8f272c0f04b5ed55bcc53c6c9df8ab7dd5101b6",
+          "portable_verifier_pass_occurrences": 1
+        },
+        {
+          "file": "crates/openbindings-source-pull/src/model.rs",
+          "line": 524,
+          "anchor": "pub fn is_complete(",
+          "sha256": "8c87fbae42cddbea008b7372eccba1b4fd19211d3981303836f7befeb9c22bf9"
+        }
+      ],
+      "audit": "is_complete uses exactly exhaustive and absence of implementation-unsupported omissions. A stricter caller acceptance policy cannot redefine that predicate.",
+      "status": "source/assertion binding audited; final independent review pending"
+    },
+    {
+      "id": "projection-positive",
+      "expectation": "Two same-kind sources reuse operation",
+      "concept_id": "projection",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings-source-pull/tests/kinds.rs",
+          "line": 458,
+          "anchor": "fn two_sources_of_the_same_kind_reuse_one_operation_without_cross_source_suppression(",
+          "sha256": "9d6bf2ce58890d2ccbfacdbd97bb9942d77ea1850c4ad0a34002e4bcbf89bd6b",
+          "portable_verifier_pass_occurrences": 0
+        }
+      ],
+      "audit": "Pulling two sources of the same kind adds two source-specific bindings for one profile-identical operation, preserving prior snapshots and source-local repeat accounting.",
+      "status": "source/assertion binding audited; final independent review pending"
+    },
+    {
+      "id": "projection-negative",
+      "expectation": "Universal target-address framework required",
+      "concept_id": "projection",
+      "evidence_kind": "illustrative provider assertions plus inspected optional role boundary",
+      "evidence": [
+        {
+          "file": "crates/openbindings-source-pull/tests/kinds.rs",
+          "line": 361,
+          "anchor": "fn no_data_kind_projects_before_destination_identity_and_does_not_adapt_to_conflicts(",
+          "sha256": "9d6bf2ce58890d2ccbfacdbd97bb9942d77ea1850c4ad0a34002e4bcbf89bd6b",
+          "portable_verifier_pass_occurrences": 1
+        },
+        {
+          "file": "crates/openbindings-source-pull/src/client.rs",
+          "line": 27,
+          "anchor": "pub trait SourcePuller",
+          "sha256": "bbb561b9d02192bcb12b641b854fed826f417aeac582e0bf8cf8306c0a2e48bd"
+        },
+        {
+          "file": "crates/openbindings-source-pull/tests/kinds.rs",
+          "line": 156,
+          "anchor": "fn reconcile(",
+          "sha256": "9d6bf2ce58890d2ccbfacdbd97bb9942d77ea1850c4ad0a34002e4bcbf89bd6b",
+          "portable_verifier_pass_occurrences": 0
+        },
+        {
+          "file": "crates/openbindings-schema-comparison/src/lib.rs",
+          "line": 27,
+          "anchor": "pub fn identical(",
+          "sha256": "b326028dcce7428647f36543171196694d3694377d876e4777a5b91ccd6a9fe6"
+        }
+      ],
+      "audit": "Kind-owned observation and projection use their own source model; no universal target-address model is needed or supplied.",
+      "status": "source/assertion binding audited; final independent review pending"
+    },
+    {
+      "id": "identity-positive",
+      "expectation": "Union multiplicity and exact decimal identity",
+      "concept_id": "identity",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings-schema-comparison/tests/profile.rs",
+          "line": 47,
+          "anchor": "fn all_14_original_identity_groups_preserve_the_published_verdicts(",
+          "sha256": "704a3e7bca9af250e6c543a0b0480b64abe33885383a70c9a772e748700c0b6c",
+          "portable_verifier_pass_occurrences": 1
+        },
+        {
+          "file": "crates/openbindings-schema-comparison/tests/profile.rs",
+          "line": 79,
+          "anchor": "fn all_10_exact_value_identity_groups_preserve_the_published_verdicts(",
+          "sha256": "704a3e7bca9af250e6c543a0b0480b64abe33885383a70c9a772e748700c0b6c",
+          "portable_verifier_pass_occurrences": 1
+        },
+        {
+          "file": "crates/openbindings-schema-comparison/tests/independent.rs",
+          "line": 32,
+          "anchor": "fn independently_authored_design_controls_keep_their_expected_classifications(",
+          "sha256": "26b4c1dc38abaab3d907239ccc3d55ddb472ec5f31f8e0b9e2442570a5f636c4",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "Pinned ordinary/exact groups and independent controls preserve union multiplicity and exact numeric identity.",
+      "status": "source/assertion binding audited; final independent review pending"
+    },
+    {
+      "id": "identity-negative",
+      "expectation": "Byte equality or indeterminate identity",
+      "concept_id": "identity",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings-schema-comparison/tests/independent.rs",
+          "line": 32,
+          "anchor": "fn independently_authored_design_controls_keep_their_expected_classifications(",
+          "sha256": "26b4c1dc38abaab3d907239ccc3d55ddb472ec5f31f8e0b9e2442570a5f636c4",
+          "portable_verifier_pass_occurrences": 1
+        },
+        {
+          "file": "crates/openbindings-schema-comparison/tests/independent.rs",
+          "line": 220,
+          "anchor": "fn unresolved_enum_intersection_multiplicity_is_a_failure_while_standalone_values_stay_ordered(",
+          "sha256": "26b4c1dc38abaab3d907239ccc3d55ddb472ec5f31f8e0b9e2442570a5f636c4",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "Profile normalization can establish Equal for different spellings; unresolved cases are failures, never an indeterminate or assumed-unequal identity verdict.",
+      "status": "source/assertion binding audited; final independent review pending"
+    },
+    {
+      "id": "normalization-positive",
+      "expectation": "Annotations stripped at schema positions only",
+      "concept_id": "normalization",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings-schema-comparison/tests/profile.rs",
+          "line": 47,
+          "anchor": "fn all_14_original_identity_groups_preserve_the_published_verdicts(",
+          "sha256": "704a3e7bca9af250e6c543a0b0480b64abe33885383a70c9a772e748700c0b6c",
+          "portable_verifier_pass_occurrences": 1
+        },
+        {
+          "file": "crates/openbindings-schema-comparison/tests/independent.rs",
+          "line": 32,
+          "anchor": "fn independently_authored_design_controls_keep_their_expected_classifications(",
+          "sha256": "26b4c1dc38abaab3d907239ccc3d55ddb472ec5f31f8e0b9e2442570a5f636c4",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "The annotation-stripping fixture exercises normalization at profile-defined schema positions.",
+      "status": "source/assertion binding audited; final independent review pending"
+    },
+    {
+      "id": "normalization-negative",
+      "expectation": "Drop const-data fields or change evaluation semantics",
+      "concept_id": "normalization",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings-schema-comparison/tests/independent.rs",
+          "line": 32,
+          "anchor": "fn independently_authored_design_controls_keep_their_expected_classifications(",
+          "sha256": "26b4c1dc38abaab3d907239ccc3d55ddb472ec5f31f8e0b9e2442570a5f636c4",
+          "portable_verifier_pass_occurrences": 1
+        },
+        {
+          "file": "crates/openbindings-schema-comparison/tests/independent.rs",
+          "line": 196,
+          "anchor": "fn merge_uses_the_published_keyword_table_without_an_invented_satisfiability_solver(",
+          "sha256": "26b4c1dc38abaab3d907239ccc3d55ddb472ec5f31f8e0b9e2442570a5f636c4",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "Independent opaque-const-reference preserves title and $ref inside instance data. Normalization follows the profile table, not an invented satisfiability solver.",
+      "status": "source/assertion binding audited; final independent review pending"
+    },
+    {
+      "id": "comparison-limits-positive",
+      "expectation": "Normalization failure stops necessary reuse decision",
+      "concept_id": "comparison-limits",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings-source-pull/tests/kinds.rs",
+          "line": 671,
+          "anchor": "fn comparison_failure_and_removal_only_drift_are_operational_inability(",
+          "sha256": "9d6bf2ce58890d2ccbfacdbd97bb9942d77ea1850c4ad0a34002e4bcbf89bd6b",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "A necessary reuse comparison failure prevents a fabricated pull reuse/conflict decision.",
+      "status": "source/assertion binding audited; final independent review pending"
+    },
+    {
+      "id": "comparison-limits-negative",
+      "expectation": "Failure reported as unequal",
+      "concept_id": "comparison-limits",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings-schema-comparison/tests/independent.rs",
+          "line": 117,
+          "anchor": "fn exact_and_one_below_resource_allowances_bound_both_sides_together(",
+          "sha256": "26b4c1dc38abaab3d907239ccc3d55ddb472ec5f31f8e0b9e2442570a5f636c4",
+          "portable_verifier_pass_occurrences": 1
+        },
+        {
+          "file": "crates/openbindings-schema-comparison/tests/independent.rs",
+          "line": 74,
+          "anchor": "fn every_observed_public_checkpoint_cancels_and_a_fresh_attempt_is_unchanged(",
+          "sha256": "26b4c1dc38abaab3d907239ccc3d55ddb472ec5f31f8e0b9e2442570a5f636c4",
+          "portable_verifier_pass_occurrences": 1
+        },
+        {
+          "file": "crates/openbindings-schema-comparison/tests/independent.rs",
+          "line": 220,
+          "anchor": "fn unresolved_enum_intersection_multiplicity_is_a_failure_while_standalone_values_stay_ordered(",
+          "sha256": "26b4c1dc38abaab3d907239ccc3d55ddb472ec5f31f8e0b9e2442570a5f636c4",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "Budget exhaustion, cancellation and ambiguous enum intersections produce failure rather than Different; a fresh attempt is unchanged.",
+      "status": "source/assertion binding audited; final independent review pending"
+    },
+    {
+      "id": "http-positive",
+      "expectation": "Same document acquired through redirects",
+      "concept_id": "http",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings-http-discovery/tests/native.rs",
+          "line": 326,
+          "anchor": "fn redirects_all_five_statuses_honor_policy_and_strip_cross_origin_credentials(",
+          "sha256": "317091369a131007cee6470e55e4beb793ad7ea59d108dec133d7fbec7d327ae",
+          "portable_verifier_pass_occurrences": 1
+        },
+        {
+          "file": "crates/openbindings-http-discovery/tests/native.rs",
+          "line": 247,
+          "anchor": "fn real_http_media_types_statuses_compression_and_location_independence(",
+          "sha256": "317091369a131007cee6470e55e4beb793ad7ea59d108dec133d7fbec7d327ae",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "All five redirect statuses acquire the same exact document under host policy.",
+      "status": "source/assertion binding audited; final independent review pending"
+    },
+    {
+      "id": "http-negative",
+      "expectation": "Discovery satisfies dependencies or supplies schema base",
+      "concept_id": "http",
+      "evidence_kind": "bounded redirect/reference assertions plus inspected companion boundary",
+      "evidence": [
+        {
+          "file": "crates/openbindings-http-discovery/tests/native.rs",
+          "line": 247,
+          "anchor": "fn real_http_media_types_statuses_compression_and_location_independence(",
+          "sha256": "317091369a131007cee6470e55e4beb793ad7ea59d108dec133d7fbec7d327ae",
+          "portable_verifier_pass_occurrences": 1
+        },
+        {
+          "file": "crates/openbindings-http-discovery/src/client.rs",
+          "line": 216,
+          "anchor": "pub async fn discover<",
+          "sha256": "c76f8536f509d6d834468861609dd80dce88eb55eea18e568be87f38f3f26987"
+        },
+        {
+          "file": "crates/openbindings-http-discovery/src/client.rs",
+          "line": 574,
+          "anchor": "pub enum DiscoveryOutcome",
+          "sha256": "c76f8536f509d6d834468861609dd80dce88eb55eea18e568be87f38f3f26987"
+        },
+        {
+          "file": "crates/openbindings-http-discovery/src/publication.rs",
+          "line": 70,
+          "anchor": "pub struct Publication {",
+          "sha256": "5b8936e527e9da316614f3966c0f16b4aeaca705fad5d90abcd9217cb637d5f5"
+        }
+      ],
+      "audit": "Reference locations remain document-defined despite acquisition URL. Discovery exposes no dependency-satisfaction operation.",
+      "status": "source/assertion binding audited; final independent review pending"
+    },
+    {
+      "id": "host-positive",
+      "expectation": "Child view survives parent disposal",
+      "concept_id": "host",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "packages/typescript/test/schema-ownership.test.mjs",
+          "line": 11,
+          "anchor": "named and operation schemas retain the original document after disposal and edits",
+          "sha256": "1e78b0d94db11aed5260cdd42446bdc79edae0059bb3071c29c891c71a076f33"
+        },
+        {
+          "file": "packages/typescript/test/bridge-cleanup.test.mjs",
+          "line": 15,
+          "anchor": "owned preparation wrappers release untaken children on decode/take failure",
+          "sha256": "33fd381b01b2b528ec11a8c532cbe4c8443fb51f1d7b0e4264ab3da1373be837"
+        }
+      ],
+      "audit": "A retained schema/child owner survives disposal and edits of its parent; failed bridge transfers release untaken children.",
+      "status": "source/assertion binding audited; final independent review pending"
+    },
+    {
+      "id": "host-negative",
+      "expectation": "Unsafe JS number silently accepted as exact input",
+      "concept_id": "host",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "packages/typescript/test/sdk.test.mjs",
+          "line": 129,
+          "anchor": "test(\"ordinary number serialization stays distinct from exact JSON conversion\"",
+          "sha256": "45aff5a2129214a6f5d75625ea1ab332b14ec9339b84cbe7b4523cf8a35762f8"
+        }
+      ],
+      "audit": "Adjudicated: exact JSON cannot silently round on conversion; ordinary finite Number ingress records its host JSON serialization. Exact 2^53 converts, its adjacent integer and the specification rounding example do not. See host-number-adjudication.md.",
+      "status": "source/assertion binding audited; final independent review pending",
+      "adjudication": {
+        "file": "host-number-adjudication.md",
+        "review": "independent bounded adjudication approved 2026-11-04",
+        "effective_expectation": "No silent loss in exact-JSON conversion; ordinary Number ingress is its actual JSON serialization, not recovery of earlier precision."
+      }
+    },
+    {
+      "id": "qualification-positive",
+      "expectation": "Deliberately corrupted observer rejected",
+      "concept_id": "qualification",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings-schema-evaluator-test-support/tests/default.rs",
+          "line": 223,
+          "anchor": "fn real_runner_rejects_malformed_outcomes_fabricated_sources_and_broad_refusals(",
+          "sha256": "dfb4a389c7eab460c56b6aa792b75fbb3bb546b21fa1c151de9975448f66d71f",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "Deliberately malformed outcomes, fabricated locations and broad refusals are rejected by the real runner.",
+      "status": "source/assertion binding audited; final independent review pending"
+    },
+    {
+      "id": "qualification-negative",
+      "expectation": "Parity alone treated as proof",
+      "concept_id": "qualification",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings-schema-evaluator-test-support/tests/admission.rs",
+          "line": 13,
+          "anchor": "fn every_moved_value_case_keeps_its_exact_negative_admission_witness(",
+          "sha256": "274b1732dbf2e4ad8d2f264768224bcc967cacae13a7f73dcbdb43bd7fc79ceb",
+          "portable_verifier_pass_occurrences": 1
+        },
+        {
+          "file": "crates/openbindings-schema-evaluator-test-support/tests/default.rs",
+          "line": 298,
+          "anchor": "fn capability_refusals_are_gaps_for_every_finite_semantic_case(",
+          "sha256": "dfb4a389c7eab460c56b6aa792b75fbb3bb546b21fa1c151de9975448f66d71f",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "Published obligations govern expected answers. Moved admission negatives keep their exact witnesses, and finite semantic refusals remain gaps rather than parity passes.",
+      "status": "source/assertion binding audited; final independent review pending"
+    }
+  ],
+  "remaining_individual_bindings": 0,
+  "final_independent_audit": "pending"
+}

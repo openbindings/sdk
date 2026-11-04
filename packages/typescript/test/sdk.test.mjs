@@ -126,6 +126,43 @@ test("ordinary conversion rejects lossy/side-effecting values and exact handles 
   });
   ordinary.dispose();
 });
+test("ordinary number serialization stays distinct from exact JSON conversion", () => {
+  for (const [text, status] of [
+    ["9007199254740993", "inexact"],
+    ["9007199254740992", "converted"],
+    ["1000000000000000128", "inexact"],
+  ]) {
+    const value = exact(text);
+    try {
+      const result = value.toValue();
+      assert.equal(result.status, status, text);
+      if (result.status === "converted")
+        assert.equal(result.value, 9007199254740992);
+      assert.equal(value.text, text);
+    } finally {
+      value.dispose();
+    }
+  }
+  const ordinary = sdk.ExactJson.from(1000000000000000128);
+  try {
+    assert.equal(ordinary.text, "1000000000000000100");
+  } finally {
+    ordinary.dispose();
+  }
+  const document = parsed(
+    '{"openbindings":"0.2.0","operations":{"run":{"input":{"const":9007199254740993}}}}',
+  );
+  const schema = ready(prepareInput(document, "run"));
+  const exactInput = exact("9007199254740993");
+  try {
+    assert.equal(schema.evaluate(9007199254740992).status, "fails");
+    assert.equal(schema.evaluate(exactInput).status, "satisfies");
+  } finally {
+    exactInput.dispose();
+    schema.dispose();
+    document.dispose();
+  }
+});
 test("retained contracts and metadata support repeated native-feeling caller use", () => {
   const warmDocument = parsed(text);
   ready(prepareInput(warmDocument, "run")).dispose();

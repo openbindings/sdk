@@ -6,8 +6,22 @@ boundaries (ten Rust products plus TypeScript, with three necessary private Rust
 packages). Exact hashes belong to the source identity in each record. These are
 partial source/semantic audits, not final independent qualification.
 
-The 83 obligation and 108 individual witness bindings remain open, as do the
-final independent review and the evolving evaluator's actual architecture.
+All 83 obligations now have actual bindings: 14 document rules (350 pinned cases
+reconciled with final Chromium/WebKit evidence at 5d7e8d4), 54 semantic obligations,
+and eight interface operations plus seven HTTP companion rules. All 108 initial
+individual witnesses now have inspected assertion/source bindings. The records
+separate finite runtime observations, compile-time boundaries and provider or
+deployment responsibilities; they do not claim universal external behavior.
+The source audit added direct tests for no-prediction preflight followed by a live
+context challenge and for two sources of one kind reusing an operation independently.
+It also corrected the initial JavaScript-number assumption after independent
+adjudication; see host-number-adjudication.md and its direct public host controls.
+
+The final independent semantic/API audit and the evolving evaluator's final source
+identity remain open. binding-summary.json checks exact 83/108 inventory coverage;
+counts alone do not prove alignment. The reproducible binding scripts live in the
+coordinator receipt directory and use its pinned-input/runtime-evidence layout.
+Recovery copies in the SDK preserve evidence, not a second executable coordinator.
 Initial sketch names are not compatibility requirements. Intentional actual names
 include VersionRefusal/DocumentValidation, Evidence, WorkControl, InvocationError,
 ProviderIo, AddedEntry/ExistingEntry/OmittedEntry and HTTP discovery's Client.

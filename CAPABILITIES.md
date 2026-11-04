@@ -139,9 +139,10 @@ The saved migration checkpoint passes all 505 required core cases and 1,546
 required evaluator cases on the qualified native and browser runs, including
 custom vocabulary and format cases. Independent recursive controls and the finite
 describe/check/pull/adopt/invoke journey also pass. This is bounded evidence:
-the original-engine replacement, complete allocation accounting, iterative depth,
-diagnostic witnesses, final API/map audit and matched-toolchain performance
-qualification remain open. See the [current checkpoint](docs/alignment-checkpoint.md)
+the original-engine replacement, full pattern compiler accounting, remaining
+physical-stack qualification, final API/map audit and matched-toolchain performance
+qualification remain open. Original Explain witnesses now pass their independent
+semantic and allocation review, with cumulative verdict/diagnostic allowances. See the [current checkpoint](docs/alignment-checkpoint.md)
 for receipts and the remaining sequence. Earlier measurements in
 [performance boundaries](docs/performance-boundaries.md) remain historical evidence.
 

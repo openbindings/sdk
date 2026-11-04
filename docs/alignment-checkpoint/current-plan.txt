@@ -64,7 +64,11 @@ complete child/custom dependency traversal remains. Parent current/MSRV/host che
 and the full portable verifier pass on pushed `57cdc22`. The [current map audit](../receipts/2026-11-02-preparation/current-map-audit/README.md)
 has source/semantic bindings for all 54 concepts, 32 document fields and 19
 relations, plus the actual 13 Rust packages across 11 logical product boundaries.
-The complete obligation/witness audit and independent final review remain open.
+All 83 obligations and 108 individual witnesses now have inspected source/test
+bindings, with provider/deployment responsibilities distinguished. Three direct
+regression controls fill witness gaps; the initial host-number sketch is corrected
+after independent adjudication. Final independent audit and the evaluator
+architecture/source refresh remain open.
 The HTTP companion's stale applied-revision declaration is corrected in `fc1ade8`;
 a new mutation-tested gate checks all seven current authority declarations. The
 companion text delta changes terminology/cross-references, not HTTP behavior;
@@ -78,7 +82,7 @@ with cumulative budget, cancellation, enclosing-attempt and concurrency controls
 Independent implementation/resource review now passes. Findings in failure-message,
 inline pattern-table and discarded-refusal allocation accounting are corrected;
 minimum-Rust workspace and final Node/package/browser validation pass. The complete
-portable verifier on the reviewed commit is next. Fixed inability text now uses
+portable verifier passes on clean pushed commit `5d7e8d4`. Fixed inability text now uses
 static/owned Rust strings, with allocation-free SDK limit/cancellation conversion.
 The recursive
 post-verdict cancellation and fixed diagnostic wording adjudications preserve all
@@ -98,11 +102,10 @@ Parent native/MSRV/actual-host gates and independent implementation/resource rev
 pass; the required reproducibility check preserves exact table bytes on Windows.
 Full reader/compiler resource certification, including duplicate-name width cost,
 remains open. The complete portable verifier passes on pushed `51e1dc7`, before
-the current original Explain changes. Final Explain resource/host qualification
-and the compiler construction schedule are the next completion gates.
+the current original Explain changes. The original Explain resource and parent host gates now pass on `5d7e8d4`.
+The compiler construction schedule is the next implementation gate.
 
-Finish the pattern-program schedule,
-original Explain witnesses, remaining native/Wasm stack qualification, and forced
+Finish the pattern-program schedule, remaining native/Wasm stack qualification, and forced
 original-engine validation. Then switch the default and retire the outgoing
 projection/compiler paths; run the final matched performance and clean-package/
 reference/all-host gates; complete the actual spec-to-code audit across the 54

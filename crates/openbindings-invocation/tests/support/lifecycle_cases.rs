@@ -592,6 +592,35 @@ async fn advisory_preflight_can_challenge_or_fail_without_becoming_an_invocation
     }
 }
 #[tokio::test]
+async fn no_preflight_prediction_does_not_suppress_a_live_context_challenge() {
+    let challenge = challenge();
+    let provider = Prediction {
+        answer: Ok(PreflightOutcome::NoPrediction),
+        terminal: Err(InvocationError::challenge(challenge.clone())),
+        calls: AtomicUsize::new(0),
+    };
+    let client = BindingClient::new(&provider);
+    assert!(matches!(
+        client.preflight(request(), cancel()).unwrap().await,
+        Ok(PreflightOutcome::NoPrediction)
+    ));
+    assert_eq!(provider.calls.load(Ordering::SeqCst), 0);
+    let (_, mut output) = client.invoke(request(), cancel()).unwrap().split();
+    let Some(OutputEvent::Error(error)) = output.next().await else {
+        panic!("live context challenge must remain an unsuccessful terminal");
+    };
+    assert_eq!(
+        error.context_required().unwrap().value().value().text(),
+        challenge.value().value().text()
+    );
+    assert!(output.next().await.is_none());
+    assert_eq!(
+        provider.calls.load(Ordering::SeqCst),
+        1,
+        "no automatic retry"
+    );
+}
+#[tokio::test]
 async fn oversized_terminal_and_preflight_answers_fall_back_without_data_or_retry_claim() {
     let huge = JsonValue::string(&"x".repeat(600)).unwrap();
     let error = InvocationError::new("example.application", Some(huge.clone())).unwrap();

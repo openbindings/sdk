@@ -1,5 +1,5 @@
 {
-  "status": "bounded implementation/resource review and final parent gates pass; clean-commit full verifier next",
+  "status": "bounded implementation/resource review, final parent gates and clean-commit portable verifier pass",
   "prior_safety_commit": "d687e50",
   "open_increment_findings": 0,
   "independent": {
@@ -77,5 +77,14 @@
     "Full VM construction certificate and once-prepared VM publication",
     "Remaining physical stack qualification and default switch/outgoing compiler retirement",
     "Final matched performance, clean source/archive/reference/all-host CI and actual spec-to-code audit"
-  ]
+  ],
+  "saved_commit": "5d7e8d4",
+  "pushed": true,
+  "full_portable_verifier": {
+    "status": "pass",
+    "commit": "5d7e8d4",
+    "log": "full-verify-5d7e8d4.log",
+    "exit_code": 0,
+    "sha256": "dff1de3faca5c3b968785c4ea2c2e05327cb33537cfa0060ccc5d69e9e6cdcb3"
+  }
 }

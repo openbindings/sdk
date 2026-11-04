@@ -119,7 +119,7 @@ toolchain; the MSRV compatibility receipt explicitly records no matching Clippy 
    now passes after correcting failure-message, pattern-table and discarded-refusal
    allocation accounting. Fixed inability text uses static/owned Rust strings;
    minimum-Rust workspace and final Node/package/browser checks pass. The complete
-   portable verifier on the reviewed commit is next. Finish remaining
+   portable verifier passes on clean pushed commit `5d7e8d4`. Finish remaining
    physical-stack/host qualification. Then force the
    original engine through all gates, switch the default and retire the outgoing
    projection/compiler code. No existing public API or internal architecture needs
