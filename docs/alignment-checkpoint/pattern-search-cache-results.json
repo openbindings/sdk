@@ -1,5 +1,5 @@
 {
-  "status": "parent gates pass; independent implementation/resource review pending",
+  "status": "parent and independent implementation/resource gates pass",
   "sdk_base": "fc1ade8d953014e674d3dc46df2849f98a78df66",
   "scope": "call-local PikeVM search cache only; full pattern compiler construction remains under separate review",
   "native": {
@@ -46,7 +46,6 @@
     }
   },
   "open": [
-    "Independent cache implementation/resource review",
     "Prepared pattern program compiler certificate",
     "Original Explain implementation and physical-stack/default-switch gates",
     "Final matched performance/clean package/reference/map audit"
@@ -70,5 +69,16 @@
     "wasm-build.log": "6a4bb424fc9bf6bb8e882db14f34a636262672d081703f773ee3adb4db966e3b",
     "webkit-judge.log": "daf3b54a131340ee014d49e865fa5b56c04333a58a37539fc8f525ae57c34faa",
     "webkit.log": "2df836eb9542ad4b1cd367699de811106051dfbae1e22940060cfc1518000435"
+  },
+  "saved_commit": "421706c",
+  "pushed": true,
+  "independent_review": {
+    "status": "pass",
+    "report": "../pattern-search-cache-review/review.md",
+    "required": 1546,
+    "inherited_controls_both_modes": 62,
+    "allocation_probes": 10,
+    "private_tests": 23,
+    "unresolved_findings": 0
   }
 }

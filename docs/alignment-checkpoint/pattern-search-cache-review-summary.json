@@ -1,0 +1,11 @@
+{
+  "status": "PASS bounded call-local cache reservation correction",
+  "forced_original_required_cases": 1546,
+  "required_failures": [],
+  "inherited_controls_both_modes": 62,
+  "private_tests": 23,
+  "allocation_matrix_cases": 10,
+  "all_cache_requested_within_reservation": true,
+  "all_cache_owners_released": true,
+  "full_VM_construction_certificate": "OPEN; not qualified by this review"
+}

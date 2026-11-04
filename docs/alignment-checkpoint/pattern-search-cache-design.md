@@ -1,8 +1,8 @@
 # Original pattern search cache reservation
 
 Independent design review approved the existing call-local PikeVM correction,
-including explicit per-vector layout limits. Implementation qualification is in
-progress. Full immutable program preparation remains under separate review. This correction does not move compiler
+including explicit per-vector layout limits. Parent and independent implementation/
+resource qualification pass on pushed `421706c`. Full immutable program preparation remains under separate review. This correction does not move compiler
 construction, change the supported pattern language, or preserve an obsolete API.
 
 The locked regex-automata 0.4.18 PikeVM stores pending epsilon branches separately

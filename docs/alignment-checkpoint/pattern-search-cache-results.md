@@ -12,8 +12,10 @@ checks pass: five resource/matching groups, 926 current Rust checks (six ignored
 320 minimum-version library checks (two ignored), strict lint, 184 Node tests,
 types/format and 352 installed-package assertions. Chromium and WebKit each pass
 505 core and 1,546 required evaluator cases, five cache regressions and the prior
-syntax/frame/reference host groups. Independent implementation/resource review is
-pending. No whole-SDK completion or default-switch claim is made.
+syntax/frame/reference host groups. Independent implementation/resource review passes with no unresolved finding:
+1,546 required cases, 62 inherited controls in both modes, ten actual-Graph
+allocation probes and 23 private checks. The production checkpoint is pushed as
+`421706c`. No whole-SDK completion or default-switch claim is made.
 
 Ten native allocation probes import the actual production cache module with a
 recording-only ledger; the unit tests exercise the actual Graph's limits and
