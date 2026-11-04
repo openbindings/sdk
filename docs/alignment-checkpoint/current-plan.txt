@@ -112,7 +112,8 @@ fallback for oversized/excess operands. Independent implementation review passes
 at its four recorded source identities, including all 1,546 required values through
 the original engine, unchanged design controls, frozen large-container jobs,
 allocation boundaries, cancellation and concurrent reuse. Current/MSRV tests,
-actual Wasm/Node/package and both browser gates pass. See
+actual Wasm/Node/package and both browser gates pass. This checkpoint is committed
+and pushed as `b380d61`. See
 [prepared operand evidence](../receipts/2026-11-02-preparation/prepared-numeric-operands/README.md).
 This does not preserve old APIs or exact incidental admission cutoffs. Current CI
 repairs separately correct digest-ledger parsing, missing package attribution and
@@ -410,8 +411,13 @@ Stages 0 and 1 are complete for the recorded native preparation scope. The
 core and 1,566 evaluator dispositions, the 77-module subsystem audit, native performance
 baselines, and passing independent design and adjudication reviews. No unresolved semantic
 choice blocks implementation. Host portability and candidate performance remain runtime gates.
-Stage 2 has started on `codex/sdk-02-foundation`; stages 3–6 have not started.
-Signature/shape checks do not close runtime gates.
+Stage 2 remains active on `codex/sdk-02-foundation` for the original-engine
+replacement and its final runtime gates. Stages 3 and 4 are implemented with the
+bounded capabilities and independent reviews recorded above. Stage 5 is active:
+current consumers and host checks have checkpoint evidence, while final candidate
+packaging and all-host qualification remain. Stage 6 is pending the engine,
+matched-performance and final alignment-map gates. Signature/shape checks do not
+close runtime gates.
 
 Use an isolated integration checkout based on the actual SDK `main`, following current project
 repository policy. Keep the user's old checkouts intact. Use reviewable checkpoints and an

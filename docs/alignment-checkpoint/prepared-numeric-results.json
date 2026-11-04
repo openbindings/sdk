@@ -13,12 +13,6 @@
     "required_values": 1546,
     "failures": 0
   },
-  "msrv_1_88": {
-    "tests": 270,
-    "existing_ignored": 3,
-    "required_values": 1546,
-    "failures": 0
-  },
   "node_tests": 180,
   "typescript_types": "pass",
   "npm_archive": "pass",
@@ -42,5 +36,12 @@
     "default original-engine switch and outgoing compiler removal",
     "final matched performance and full-host qualification",
     "final alignment-map audit"
-  ]
+  ],
+  "minimum_rust": {
+    "version": "1.88.0",
+    "tests": 270,
+    "existing_ignored": 3,
+    "required_values": 1546,
+    "failures": 0
+  }
 }

@@ -169,11 +169,11 @@ fn provenance_reports_the_embedded_source_digests() {
 
 #[test]
 fn preparation_refusal_is_counted_without_an_instance_verdict() {
-    let output = run(json!({"schema":r##"{"$ref":"#/$defs/absent"}"##,
-    "value":"1", "iterations":2,
+    let output = run(json!({"schema":"true",
+    "value":"1", "iterations":2, "limits":{"schema_resources":0},
     "expected":{"status":"preparation-refused", "failure":{
-        "kind":"resolution", "details":{"cause":{"kind":"undefined","details":"missing-target"}},
-        "origin":{"source_uri":"https://benchmark.invalid/root","pointer":""}
+        "kind":"limit", "details":{"resource":"schema-resource-limit"},
+        "origin":null
     }}}));
     assert!(
         output.status.success(),
@@ -183,4 +183,19 @@ fn preparation_refusal_is_counted_without_an_instance_verdict() {
     let observed: Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(observed["outcomes"]["preparation-refused"], 2);
     assert!(observed["outcomes"].get("no-verdict").is_none());
+}
+
+#[test]
+fn missing_local_target_is_a_value_outcome_not_preparation_refusal() {
+    let output = run(json!({"schema":r##"{"$ref":"#/$defs/absent"}"##,
+        "value":"1", "iterations":2,
+        "expected":{"status":"undefined", "code":"semantic-dependence"}}));
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let observed: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(observed["outcomes"]["undefined"], 2);
+    assert!(observed["outcomes"].get("preparation-refused").is_none());
 }
