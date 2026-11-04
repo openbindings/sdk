@@ -1,0 +1,10 @@
+{
+  "inventory.rs": "f51b7889e23a80065651b5a1845945d4f16558f4f3358f026218550a43427ad6",
+  "inventory/arithmetic.rs": "e2aafd25f1ed68efadf5b46d2c7af1e628cfd100fd072ac08662abb90908234f",
+  "inventory/fold.rs": "e9861024aab61a9061ff6c20e9f6e733a2108b6756308992bc5cbbd9d03a5388",
+  "inventory/tests.rs": "2c3a797eab4bfc32df1c00dd8e775afd78ee1dd52d11d41c1e9dbe80bce233fe",
+  "inventory/tests/independent.json": "a974d222e88f8f068b9ec43ab224bb95f1e32c602fccfedc55d91b550f15bba1",
+  "ast.rs": "445f87353c1cb8d7622ca76ffa234e0fe34a955d48c5b1f2c817f0ce09735b8c",
+  "normalized.rs": "94cec09ab3d96bebeee55d8ad8d8a6de39ec5ab1ff98fadb8ce2faf44d55b8ca",
+  "../compiler.rs": "85a3f4a5d0ed26d518d1eb6bd4244a7b15f784cf626a5ffcbb955df6354d1010"
+}

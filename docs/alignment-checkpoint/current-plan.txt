@@ -114,9 +114,24 @@ with independent design and implementation/resource approval. It precharges
 checked parse/visit/drop work and allocation, parses once, and refuses publication
 after cancellation. Parent 4,335-row current/minimum/actual-Wasm controls and
 independent 151-row controls on each Rust version pass. It remains inactive.
-The next slice is [checked iterative HIR inventory](../design/2026-11-02/pattern-hir-inventory.md),
-followed by translation and NFA stages. Phase-specific construction-stack admission
-and the complete aggregate/default-workload qualification remain open.
+The [checked iterative HIR inventory](../design/2026-11-02/pattern-hir-inventory.md)
+is implemented privately with independent implementation/resource approval and
+remains inactive until full compiler qualification. One
+walk-owned collector records additive sites once; ancestor frames retain only
+shape and the descendant facts used by parent formulas. Parent current/minimum
+Rust comparisons match all 18 independent, 1,142 retained and 10,065 generated
+summary/site expectations. Raw non-ASCII generated spellings remain recorded as
+guard refusals; a separately identified scalar-escape spelling lane preserves the
+same inventory expectations. Actual 32-bit work overflow is a refusal, not a
+successful summary. Parent actual Node/Chromium/WebKit checks and independent current/minimum resource
+controls pass. Continue with translation and NFA stages. Phase-specific construction-stack admission and the complete
+aggregate/default-workload qualification remain open.
+
+A bounded direct iterative AST-to-NFA alternative was independently reviewed and
+prototyped. It is [rejected on measured representation/search costs](../receipts/2026-11-02-preparation/pattern-iterative-nfa/decision.md),
+including substantial Unicode and shared-prefix regressions. This selects the
+lower remaining implementation burden; it does not preserve any old public API
+or require the outgoing evaluator architecture to survive.
 
 The reviewed warm-up checkpoint is `67dfdeb`: obsolete regex-format
 identifier warm-up accounting is removed after independent review; 131 focused

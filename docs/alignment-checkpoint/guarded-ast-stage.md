@@ -47,8 +47,9 @@ coordinator's `receipts/2026-11-02-preparation/pattern-ast-work/` and
 `pattern-ast-stage/` directories. `ast-stage-qualification.json` preserves the
 bounded results and identities in this branch.
 
-Next: checked iterative AST metadata for HIR reservations and prospective
-translation depth; actual HIR/NFA phase admission and target qualification;
+The subsequent [checked iterative metadata](checked-pattern-inventory.md) is now
+implemented privately with bounded independent implementation/resource approval. Next: actual HIR/NFA
+phase admission and target qualification;
 once-prepared immutable programs; complete aggregate/default-workload replay.
 The ordinary evaluator still includes the outgoing compiler. Old APIs have no
 compatibility protection, and full compiler/default-switch approval remains open.

@@ -1,0 +1,8 @@
+{
+  "source_sha256": "2143722f5660dc73ccd81f6d8d8b3d60ea594a25feb4cfeb13e0d4d0d0146636",
+  "output_sha256": "8854b3f4b5b787ab00f72037ea348ce0406fa4a1c8ef955fbf5f25c5ca3fc362",
+  "rows": 10065,
+  "changed_spelling": 8253,
+  "transformation": "Raw non-ASCII Unicode scalar in form becomes uppercase \\x{HEX}; no other edits. Original oracle values remain unchanged; spans and literal-spelling kind are not inventoried.",
+  "scope": "Adapts review-tool raw scalar spellings to the already closed normalized ASCII grammar; original refusal observations preserved."
+}

@@ -91,3 +91,12 @@ passes every job in hosted CI run 41801999907, including Windows and the aggrega
 check. Its performance run 41802000018 also passes. The full CI receipt is retained
 as `ci-4e0c62f.json` in the coordinator. This qualifies that pushed checkpoint;
 the subsequent AST stage and final default switch have their own validation gates.
+
+## Guarded AST checkpoint
+
+Pushed `5e00eb7e98dcbdf0a696cbbc691b26a3e4e738ee` passes all hosted
+[CI jobs](https://github.com/openbindings/sdk/actions/runs/41809362321), including
+Windows, and the [performance comparison](https://github.com/openbindings/sdk/actions/runs/41809362664).
+The full head-identified receipts are retained in the coordinator. These successful
+runs do not identify the cause of the earlier outgoing walk-stack overflow and do
+not establish final replacement-compiler qualification.

@@ -197,6 +197,12 @@ The private [normalized pattern inventory](alignment-checkpoint/normalized-patte
 The following [guarded AST stage](alignment-checkpoint/guarded-ast-stage.md) is now
 implemented with independent design and implementation/resource approval. It
 precharges parsing and cleanup, owns one AST, and preserves attempt failure through
-completion. It also remains inactive. Continue with checked iterative HIR inventory,
+completion. It also remains inactive. The following [checked HIR inventory](alignment-checkpoint/checked-pattern-inventory.md)
+is implemented privately with parent native/host qualification and independent
+implementation/resource approval. It remains inactive until the full compiler gates close. Continue with checked HIR translation,
 translation, NFA construction and the explicit qualified construction profile;
 do not infer full compiler approval from these bounded stages.
+
+Hosted CI and performance are fully green at the pushed guarded-AST checkpoint
+`5e00eb7`, including Windows. This receipt does not qualify the later inventory
+changes or explain the earlier outgoing walk-stack failure.
