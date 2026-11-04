@@ -1,4 +1,4 @@
-//! Primitive assertions read their original operands. No synthetic document,
+//! Primitive assertions use prepared readings or their exact original operands. No synthetic document,
 //! URI context, string conversion or secondary compiler participates here.
 use super::*;
 use openbindings_internal_json::numeric;
@@ -19,6 +19,111 @@ impl Run<'_> {
         self.graph
             .charge(text.len().saturating_mul(16).saturating_add(256))?;
         Ok(Decimal::parse(text))
+    }
+    fn numeric_operand(
+        &mut self,
+        schema: &Interpreted<'_>,
+        keyword: &str,
+        prepared: Option<&operands::Number>,
+        value: JsonRef<'_>,
+    ) -> Result<bool, NoVerdict> {
+        use operands::Reading;
+        if matches!(prepared.map(|p| &p.reading), Some(Reading::Invalid)) {
+            return Err(shape());
+        }
+        let original = if matches!(prepared.map(|p| &p.reading), Some(Reading::Parsed(_))) {
+            None
+        } else {
+            Some(
+                schema
+                    .get(keyword)
+                    .and_then(|v| v.number_text())
+                    .ok_or_else(shape)?,
+            )
+        };
+        let bytes = prepared.map_or_else(|| original.expect("original operand").len(), |p| p.bytes);
+        // A cached decimal still performs bound-dependent magnitude work and
+        // may allocate from a large exponent. Retain the schema-side allowance.
+        self.graph.work(bytes.saturating_mul(8).saturating_add(1))?;
+        self.graph
+            .charge(bytes.saturating_mul(16).saturating_add(256))?;
+        let parsed;
+        let bound = if let Some(Reading::Parsed(bound)) = prepared.map(|p| &p.reading) {
+            bound
+        } else {
+            parsed = numeric::Bound::parse(keyword, original.expect("original operand"))
+                .map_err(|_| shape())?;
+            &parsed
+        };
+        let Some(number) = value.number_text() else {
+            return Ok(true);
+        };
+        self.graph
+            .work(number.len().saturating_mul(8).saturating_add(1))?;
+        self.graph
+            .charge(number.len().saturating_mul(16).saturating_add(256))?;
+        if keyword == "multipleOf" && (bytes > 20 || number.len() > 20) {
+            // The exact arithmetic admits at most 4096 coefficient digits and
+            // a 40000-place exponent difference. Reserve its modular scratch.
+            let digits = bytes.saturating_add(number.len()).min(8192);
+            self.graph
+                .charge(digits.saturating_mul(256).saturating_add(65536))?;
+            self.graph
+                .work(digits.saturating_mul(digits).saturating_mul(16))?;
+        }
+        bound
+            .admits(number)
+            .ok_or_else(|| decision::limit("multiple-of-arithmetic-limit"))
+    }
+    pub(super) fn count_operand(
+        &mut self,
+        schema: &Interpreted<'_>,
+        keyword: &str,
+        reading: Option<&operands::Reading<Option<u64>>>,
+    ) -> Result<Option<u64>, NoVerdict> {
+        match reading {
+            Some(operands::Reading::Parsed(count)) => Ok(*count),
+            Some(operands::Reading::Invalid) => Err(shape()),
+            Some(operands::Reading::Original) | None => Ok(self
+                .number(schema.get(keyword).ok_or_else(shape)?)?
+                .nonnegative_integer_u64_saturating()),
+        }
+    }
+    fn size_bound(
+        &mut self,
+        bound: u64,
+        kind: JsonKind,
+        minimum: bool,
+        value: JsonRef<'_>,
+        string_length: &mut Option<u64>,
+    ) -> Result<bool, NoVerdict> {
+        if value.kind() != kind {
+            return Ok(true);
+        }
+        let length = if kind == JsonKind::String {
+            if let Some(length) = *string_length {
+                length
+            } else {
+                let mut length = 0u64;
+                let mut high = false;
+                for unit in value.as_string().expect("string").utf16_units() {
+                    self.graph.tick()?;
+                    if !(high && (0xdc00..=0xdfff).contains(&unit)) {
+                        length += 1;
+                    }
+                    high = (0xd800..=0xdbff).contains(&unit);
+                }
+                *string_length = Some(length);
+                length
+            }
+        } else {
+            value.len().expect("container") as u64
+        };
+        Ok(if minimum {
+            length >= bound
+        } else {
+            length <= bound
+        })
     }
     fn typed(&mut self, name: JsonRef<'_>, value: JsonRef<'_>) -> Result<bool, NoVerdict> {
         Ok(match name.as_str().ok_or_else(shape)? {
@@ -47,6 +152,7 @@ impl Run<'_> {
     }
     pub(super) fn primitives(
         &mut self,
+        node: usize,
         schema: &Interpreted<'_>,
         value: JsonRef<'_>,
     ) -> Result<bool, NoVerdict> {
@@ -76,78 +182,44 @@ impl Run<'_> {
             }
             valid &= any;
         }
-        for keyword in numeric::KEYWORDS {
-            let Some(operand) = schema.get(keyword) else {
-                continue;
-            };
-            let source = operand.number_text().ok_or_else(shape)?;
-            self.graph
-                .work(source.len().saturating_mul(8).saturating_add(1))?;
-            self.graph
-                .charge(source.len().saturating_mul(16).saturating_add(256))?;
-            let bound = numeric::Bound::parse(keyword, source).map_err(|_| shape())?;
-            if let Some(number) = value.number_text() {
-                self.graph
-                    .work(number.len().saturating_mul(8).saturating_add(1))?;
-                self.graph
-                    .charge(number.len().saturating_mul(16).saturating_add(256))?;
-                if keyword == "multipleOf" && (source.len() > 20 || number.len() > 20) {
-                    // The shared exact arithmetic admits at most 4096 digits
-                    // per coefficient and a 40000-place exponent difference.
-                    // Reserve bounded big-integer scratch before its modular
-                    // exponentiation, independently of retained decimal text.
-                    let digits = source.len().saturating_add(number.len()).min(8192);
-                    self.graph
-                        .charge(digits.saturating_mul(256).saturating_add(65536))?;
-                    self.graph
-                        .work(digits.saturating_mul(digits).saturating_mul(16))?;
+        let prepared = self.plan.operands.get(&node);
+        if let Some(prepared) = prepared {
+            for number in &prepared.numbers {
+                valid &= self.numeric_operand(schema, number.keyword, Some(number), value)?;
+            }
+        } else {
+            // A missing record is deferred preparation, never absent predicates.
+            for keyword in numeric::KEYWORDS {
+                if schema.get(keyword).is_some() {
+                    valid &= self.numeric_operand(schema, keyword, None, value)?;
                 }
-                valid &= bound
-                    .admits(number)
-                    .ok_or_else(|| decision::limit("multiple-of-arithmetic-limit"))?;
             }
         }
         let mut string_length = None;
-        for (minimum, maximum, kind) in [
-            ("minLength", "maxLength", JsonKind::String),
-            ("minItems", "maxItems", JsonKind::Array),
-            ("minProperties", "maxProperties", JsonKind::Object),
-        ] {
-            for keyword in [minimum, maximum] {
-                let Some(operand) = schema.get(keyword) else {
-                    continue;
-                };
+        if let Some(prepared) = prepared {
+            for size in &prepared.sizes {
                 let bound = self
-                    .number(operand)?
-                    .nonnegative_integer_u64_saturating()
+                    .count_operand(schema, size.keyword, Some(&size.reading))?
                     .ok_or_else(shape)?;
-                if value.kind() != kind {
-                    continue;
-                }
-                let length = if kind == JsonKind::String {
-                    if let Some(length) = string_length {
-                        length
-                    } else {
-                        let mut length = 0u64;
-                        let mut high = false;
-                        for unit in value.as_string().expect("string").utf16_units() {
-                            self.graph.tick()?;
-                            if !(high && (0xdc00..=0xdfff).contains(&unit)) {
-                                length += 1;
-                            }
-                            high = (0xd800..=0xdbff).contains(&unit);
-                        }
-                        string_length = Some(length);
-                        length
+                valid &=
+                    self.size_bound(bound, size.kind, size.minimum, value, &mut string_length)?;
+            }
+        } else {
+            for (minimum, maximum, kind) in operands::SIZES {
+                for keyword in [minimum, maximum] {
+                    if schema.get(keyword).is_some() {
+                        let bound = self
+                            .count_operand(schema, keyword, None)?
+                            .ok_or_else(shape)?;
+                        valid &= self.size_bound(
+                            bound,
+                            kind,
+                            keyword == minimum,
+                            value,
+                            &mut string_length,
+                        )?;
                     }
-                } else {
-                    value.len().expect("container") as u64
-                };
-                valid &= if keyword == minimum {
-                    length >= bound
-                } else {
-                    length <= bound
-                };
+                }
             }
         }
         if let Some(unique) = schema.get("uniqueItems") {

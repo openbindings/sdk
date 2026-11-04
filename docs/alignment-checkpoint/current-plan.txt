@@ -107,9 +107,17 @@ and redaction/arithmetic controls now name schemas. Native/reference/snippet,
 actual Wasm/Node/package and both browser checks pass. Independent documentation
 review corrects required-meta admission and historical stack scope. The numeric
 design review rejects eager-all parsing and uncharged retained-bound comparisons;
-the accepted next increment is a bounded per-node cache with charged original
-fallback for oversized/excess operands. This does not preserve old APIs or exact
-incidental admission cutoffs. Final map, engine, performance and host gates remain.
+the accepted bounded per-node cache is now implemented with charged original
+fallback for oversized/excess operands. Independent implementation review passes
+at its four recorded source identities, including all 1,546 required values through
+the original engine, unchanged design controls, frozen large-container jobs,
+allocation boundaries, cancellation and concurrent reuse. Current/MSRV tests,
+actual Wasm/Node/package and both browser gates pass. See
+[prepared operand evidence](../receipts/2026-11-02-preparation/prepared-numeric-operands/README.md).
+This does not preserve old APIs or exact incidental admission cutoffs. Current CI
+repairs separately correct digest-ledger parsing, missing package attribution and
+a stale benchmark lock; their review and clean-archive gate remain in progress.
+Final map, engine, performance and host gates remain.
 
 No decision currently requires Matthew. If a real decision arises, record it
 and continue every independent unblocked path before considering a stop.

@@ -7,6 +7,7 @@ mod cycles;
 mod decision;
 mod formats;
 mod meta;
+mod operands;
 mod patterns;
 mod preparation;
 mod primitive;
@@ -77,6 +78,7 @@ pub(super) struct Plan {
     formats: HashMap<usize, formats::Format>,
     queries: PreparedQueries,
     patterns: PreparedPatterns,
+    operands: HashMap<usize, operands::Prepared>,
     annotations: AnnotationDemand,
     leaves: HashSet<usize>,
 }
@@ -112,6 +114,7 @@ impl Plan {
             formats: checked.formats,
             queries: checked.queries,
             patterns: checked.patterns,
+            operands: checked.operands,
             annotations: checked.annotations,
             leaves: checked.leaves,
         })
@@ -933,7 +936,7 @@ impl Run<'_> {
         // assertion about this instance. A malformed identifier matters when
         // a reference actually depends on that context; reference() retains
         // the original query failure instead of inventing a validity atom.
-        match self.primitives(&schema, value) {
+        match self.primitives(node, &schema, value) {
             Ok(true) => {}
             Ok(false) => state.valid = FALSE,
             Err(detail)
@@ -1366,22 +1369,22 @@ impl Run<'_> {
                     state.items.insert(index, self.graph.or(old, result.valid)?);
                 }
             }
-            let mut count = |key: &str, default: u64| -> Result<u64, NoVerdict> {
-                let Some(value) = schema.get(key) else {
+            let prepared = self.plan.operands.get(&node);
+            let mut count = |slot: usize, key: &str, default: u64| -> Result<u64, NoVerdict> {
+                let reading = prepared.and_then(|record| record.contains[slot].as_ref());
+                if reading.is_none() && schema.get(key).is_none() {
                     return Ok(default);
-                };
-                self.number(value)?
-                    .nonnegative_integer_u64_saturating()
-                    .ok_or_else(|| {
-                        no_verdict(
-                            NoVerdictReason::UnsupportedCapability,
-                            "contains-count-shape",
-                            "a contains bound must be a nonnegative integer",
-                        )
-                    })
+                }
+                self.count_operand(schema, key, reading)?.ok_or_else(|| {
+                    no_verdict(
+                        NoVerdictReason::UnsupportedCapability,
+                        "contains-count-shape",
+                        "a contains bound must be a nonnegative integer",
+                    )
+                })
             };
-            let minimum = count("minContains", 1)?;
-            let maximum = count("maxContains", u64::MAX)?;
+            let minimum = count(0, "minContains", 1)?;
+            let maximum = count(1, "maxContains", u64::MAX)?;
             let valid = counts.within(minimum, maximum, &mut self.graph)?;
             state.valid = self.graph.and(state.valid, valid)?;
         }
@@ -1651,6 +1654,144 @@ mod summary_tests {
                 &control
             ),
             ValueOutcome::Satisfies
+        ));
+    }
+
+    #[test]
+    fn prepared_counts_remove_schema_parsing_from_repeated_calls() {
+        // Each exact count token costs over 2,000 work units to parse under the
+        // original schedule. The prepared calls below have only 128 units.
+        let hundred = format!("1e{}2", "0".repeat(253));
+        let zero = format!("0.{}", "0".repeat(254));
+        let control = std::sync::atomic::AtomicBool::new(false);
+        for (schema, value) in [
+            (format!(r#"{{"maxLength":{hundred}}}"#), r#""x""#),
+            (format!(r#"{{"maxItems":{hundred}}}"#), "[1]"),
+            (format!(r#"{{"maxProperties":{hundred}}}"#), r#"{"x":1}"#),
+            (
+                format!(r#"{{"contains":false,"minContains":{zero},"maxContains":{zero}}}"#),
+                "[]",
+            ),
+        ] {
+            let plan = original_plan(
+                &schema,
+                &[],
+                Limits {
+                    evaluation_steps: Some(128),
+                    ..Limits::default()
+                },
+            );
+            let value = JsonValue::parse(value).unwrap();
+            std::thread::scope(|threads| {
+                for _ in 0..3 {
+                    threads.spawn(|| {
+                        assert!(matches!(
+                            plan.evaluate(&value, Detail::Outcome, &control),
+                            ValueOutcome::Satisfies
+                        ));
+                    });
+                }
+            });
+            let stopped = std::sync::atomic::AtomicBool::new(true);
+            assert!(
+                matches!(plan.evaluate(&value, Detail::Outcome, &stopped), ValueOutcome::NoVerdict { detail } if detail.reason == NoVerdictReason::Cancelled)
+            );
+            assert!(matches!(
+                plan.evaluate(&value, Detail::Explain, &control),
+                ValueOutcome::Satisfies
+            ));
+        }
+    }
+
+    #[test]
+    fn prepared_operand_fallback_preserves_large_unused_and_reached_counts() {
+        let control = std::sync::atomic::AtomicBool::new(false);
+        let giant = "1".repeat(3_000_000);
+        for keyword in ["minimum", "maxLength"] {
+            let schema = format!(r#"{{"properties":{{"unused":{{"{keyword}":{giant}}}}}}}"#);
+            let plan = original_plan(&schema, &[], Limits::default());
+            assert!(matches!(
+                plan.evaluate(&JsonValue::parse("{}").unwrap(), Detail::Outcome, &control),
+                ValueOutcome::Satisfies
+            ));
+        }
+        let schema = format!(r#"{{"minContains":{giant}}}"#);
+        let plan = original_plan(&schema, &[], Limits::default());
+        assert!(plan.operands.is_empty());
+        assert!(matches!(
+            plan.evaluate(&JsonValue::parse("[]").unwrap(), Detail::Outcome, &control),
+            ValueOutcome::Satisfies
+        ));
+
+        // One byte over the eager-token policy remains a real assertion.
+        let bound = format!("1e{}0", "0".repeat(254));
+        let plan = original_plan(
+            &format!(r#"{{"maxItems":{bound}}}"#),
+            &[],
+            Limits::default(),
+        );
+        let outcome = plan.evaluate(
+            &JsonValue::parse("[1,2]").unwrap(),
+            Detail::Outcome,
+            &control,
+        );
+        assert!(matches!(outcome, ValueOutcome::Fails { .. }), "{outcome:?}");
+
+        // Exhausting the node-record policy must not drop the later predicate.
+        let children = std::iter::repeat_n(r#"{"maxItems":3}"#, 1_024)
+            .chain(std::iter::once(r#"{"maxItems":0}"#))
+            .collect::<Vec<_>>()
+            .join(",");
+        let plan = original_plan(
+            &format!(r#"{{"allOf":[{children}]}}"#),
+            &[],
+            Limits::default(),
+        );
+        assert_eq!(plan.operands.len(), 1_024);
+        let outcome = plan.evaluate(&JsonValue::parse("[1]").unwrap(), Detail::Outcome, &control);
+        assert!(matches!(outcome, ValueOutcome::Fails { .. }), "{outcome:?}");
+    }
+
+    #[test]
+    fn prepared_operand_aggregate_fallback_and_comparison_costs_remain_real() {
+        let hundred = format!("1e{}2", "0".repeat(253));
+        let zero = format!("0.{}", "0".repeat(254));
+        let children = std::iter::repeat_n(format!(r#"{{"maxItems":{hundred}}}"#), 256)
+            .chain(std::iter::once(format!(r#"{{"maxItems":{zero}}}"#)))
+            .collect::<Vec<_>>()
+            .join(",");
+        let plan = original_plan(
+            &format!(r#"{{"allOf":[{children}]}}"#),
+            &[],
+            Limits::default(),
+        );
+        let control = std::sync::atomic::AtomicBool::new(false);
+        let outcome = plan.evaluate(&JsonValue::parse("[1]").unwrap(), Detail::Outcome, &control);
+        assert!(matches!(outcome, ValueOutcome::Fails { .. }), "{outcome:?}");
+
+        // This token is cached, but comparing its exponent still needs the
+        // schema-dependent magnitude allowance. A tiny work cap cannot fund it.
+        let source = format!(r#"{{"minimum":1e{}}}"#, "9".repeat(200));
+        let value = JsonValue::parse("1").unwrap();
+        let plan = original_plan(
+            &source,
+            &[],
+            Limits {
+                evaluation_steps: Some(128),
+                ..Limits::default()
+            },
+        );
+        assert!(matches!(
+            plan.operands.get(&plan.entry).unwrap().numbers[0].reading,
+            operands::Reading::Parsed(_)
+        ));
+        assert!(
+            matches!(plan.evaluate(&value, Detail::Outcome, &control), ValueOutcome::NoVerdict { detail } if detail.reason == NoVerdictReason::LimitExceeded)
+        );
+        let funded = original_plan(&source, &[], Limits::default());
+        assert!(matches!(
+            funded.evaluate(&value, Detail::Outcome, &control),
+            ValueOutcome::Fails { .. }
         ));
     }
 

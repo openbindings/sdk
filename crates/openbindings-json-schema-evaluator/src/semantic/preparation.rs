@@ -11,6 +11,7 @@ pub(super) struct Checked {
     pub formats: HashMap<usize, formats::Format>,
     pub queries: PreparedQueries,
     pub patterns: PreparedPatterns,
+    pub operands: HashMap<usize, operands::Prepared>,
     pub annotations: AnnotationDemand,
     pub leaves: HashSet<usize>,
 }
@@ -118,6 +119,7 @@ pub(super) fn check_from(
     let mut used = BTreeSet::<String>::new();
     let mut patterns = Patterns::default();
     let mut readings = PreparedPatterns::new();
+    let mut operands = operands::Preparation::default();
     let mut custom = Vec::new();
     let mut formats = HashMap::new();
     let mut queries = PreparedQueries::new();
@@ -185,6 +187,7 @@ pub(super) fn check_from(
             value: original.value.view(),
             profile,
         };
+        operands.add(node, schema, control)?;
         annotations.properties |= schema.get("unevaluatedProperties").is_some();
         annotations.items |= schema.get("unevaluatedItems").is_some();
         let mut leaf = !["$ref", "$dynamicRef", "$recursiveRef"]
@@ -372,6 +375,7 @@ pub(super) fn check_from(
         formats,
         queries,
         patterns: readings,
+        operands: operands.records,
         annotations,
         leaves,
     })
