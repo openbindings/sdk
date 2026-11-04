@@ -4,6 +4,11 @@ Discover an OpenBindings interface document at an origin, or publish a conforman
 document's immutable bytes through your HTTP server. Core document semantics remain
 independent of acquisition metadata.
 
+The applied HTTP discovery companion is version 0.1.0 at specification revision
+[`c1419c9`](https://github.com/openbindings/spec/blob/c1419c9fc3ae5a00c2b83da710c11bf67dab7934/http-discovery.md).
+Its version and conformance classes remain separate from OpenBindings document
+conformance and the SDK package version.
+
 Publish a document without choosing a server framework:
 
 ```rust

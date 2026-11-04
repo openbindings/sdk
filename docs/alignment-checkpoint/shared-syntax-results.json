@@ -1,5 +1,5 @@
 {
-  "status": "parent gates pass; independent implementation/resource review pending",
+  "status": "parent and independent bounded implementation/resource gates pass; full portable verifier passes saved57cdc22",
   "sdk_base": "aecf09e3d45cdc4e193bb37e15f904886146677f",
   "native": {
     "rust-final": {
@@ -63,5 +63,25 @@
     "Original pattern program construction certificate",
     "Original Explain and stack/default-switch qualification",
     "Final performance/package/map audit"
-  ]
+  ],
+  "saved_commit": "57cdc22",
+  "pushed": true,
+  "full_portable_verifier": {
+    "status": "pass",
+    "commit": "57cdc22",
+    "log": "full-verify-57cdc22.log",
+    "sha256": "9cd6723970073fe44703933baf206a3aebfb75f27d53bee5161f2d724c914404"
+  },
+  "independent_review": {
+    "status": "pass",
+    "source": "../shared-fixed-syntax-facts-review/implementation/review.md",
+    "required": 1546,
+    "inherited_controls": 62,
+    "public_rows": 34,
+    "private_groups": 16,
+    "public_preparation_cancellations": 448,
+    "fixed_check_cancellations": 390,
+    "fixed_read_shape_controls": 210,
+    "unresolved_production_findings": 0
+  }
 }

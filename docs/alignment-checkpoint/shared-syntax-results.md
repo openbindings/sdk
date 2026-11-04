@@ -38,8 +38,12 @@ Final rebuilding after the equivalent arithmetic spelling and an unrelated
 invocation documentation correction produced byte-identical Wasm/JS/signature
 artifacts. Exact source/artifact identities and logs are in results.json.
 
-Independent implementation/resource qualification is in progress. Its first replay
-passes all 1546 forced-original cases and 62 inherited controls; storage, actual
-checker counts, publication boundaries and cleanup still require its final report.
+Independent implementation/resource qualification passes with no unresolved
+production finding. It covers 1546 forced-original cases, 62 inherited controls,
+34 public rows, 16 private groups, 448 public preparation cancellation checkpoints
+and 390 fixed-checker checkpoints. Actual miss-site instrumentation proves one
+helper check across two meta Plans. Requested table backing equals its reservation
+and is released on success/cancellation/drop. The full portable verifier passes
+on saved pushed `57cdc22`.
 No whole-SDK, pattern-compiler, original Explain, final default-switch or final
 performance claim follows from this checkpoint.

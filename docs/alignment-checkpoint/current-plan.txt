@@ -56,10 +56,11 @@ The next [pattern-program schedule](../design/2026-11-02/prepared-pattern-progra
 is under independent design review. Source/allocator probes have rejected a naive
 reservation reduction: fixed Unicode helper storage and nested AST/HIR construction
 need explicit bounds. No production change uses that rejected formula. A separate
-[fixed-syntax fact design](../design/2026-11-02/shared-fixed-syntax-facts.md) has independent design approval and is implemented for qualification. It shares
+[fixed-syntax fact design](../design/2026-11-02/shared-fixed-syntax-facts.md) is implemented with independent design and implementation/resource approval. It shares
 only completed local standard syntax facts in one owned immutable environment;
-complete child/custom dependency traversal remains. The [current map audit](../receipts/2026-11-02-preparation/current-map-audit/README.md)
-has partial source/semantic bindings for 37 of 54 concepts and all 32 document fields; the complete audit
+complete child/custom dependency traversal remains. Parent current/MSRV/host checks
+and the full portable verifier pass on pushed `57cdc22`. The [current map audit](../receipts/2026-11-02-preparation/current-map-audit/README.md)
+has partial source/semantic bindings for all 54 concepts and 32 document fields; the complete audit
 is still open.
 
 Finish the preparation sharing and pattern-program schedule,
