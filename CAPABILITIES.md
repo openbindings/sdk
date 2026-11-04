@@ -147,8 +147,9 @@ The saved migration checkpoint passes all 505 required core cases and 1,546
 required evaluator cases on the qualified native and browser runs, including
 custom vocabulary and format cases. Independent recursive controls and the finite
 describe/check/pull/adopt/invoke journey also pass. This is bounded evidence:
-the final portable replay, API/map audit and matched-toolchain performance
-qualification remain open. The original-engine replacement is implemented;
+matched-toolchain performance and final hosted-platform qualification remain open.
+The portable replay, bounded actual API/map audit and local host gates pass their
+recorded scopes. The original-engine replacement is implemented;
 native stack controls and independent construction, capacity and Explain reviews
 have passed their recorded scopes. The selected resource contract uses structural
 limits and cooperative SDK budgets, not a full dependency-allocation ledger.

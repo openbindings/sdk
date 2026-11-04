@@ -19,11 +19,19 @@ struct Form {
     text: String,
     program: Arc<Program>,
 }
+// Authored source plus the Reader policy. Normalized programs can be shared by
+// distinct source spellings, but a source hit must retain its admission policy.
+type SourceKey = (usize, u64, usize, usize);
+type NormalizedKey = (usize, u64);
+// The optional key identifies a new publication that the caller must roll back
+// if committing its authored-source index subsequently fails.
+type Completed = (Arc<Program>, Option<NormalizedKey>);
 #[derive(Default)]
 pub(in super::super) struct Programs {
     // Fixed-size ordered keys keep unrelated long forms out of each other's
     // comparison budgets. Hash collisions always compare exact normalized text.
-    forms: RefCell<BTreeMap<(usize, u64), Vec<Form>>>,
+    forms: RefCell<BTreeMap<NormalizedKey, Vec<Form>>>,
+    sources: RefCell<BTreeMap<SourceKey, Vec<Form>>>,
     #[cfg(test)]
     forced_hash: Cell<Option<u64>>,
     form_bytes: Cell<usize>,
@@ -75,8 +83,134 @@ impl Programs {
     ) -> Result<Arc<Program>, PreparationFailure> {
         self.check(control)?;
         budget.check(control)?;
+        // Do not copy an oversized source merely to remember its local refusal.
         if source.len() > limits.pattern_bytes {
             return self.retain(Program::Limited("pattern-byte-limit"), limits, control);
+        }
+        control.charge_work(source.len().saturating_add(1))?;
+        // The direct literal Reader already avoids expansion/parser scratch.
+        // Its normalized index is sufficient; retaining another complete text
+        // copy would add transient memory without skipping expensive work.
+        if pattern::anchored_literal(source).is_some() {
+            return self
+                .add_normalized(source, limits, budget, control)
+                .map(|(p, _)| p);
+        }
+        control.charge_work(source.len().saturating_add(1))?;
+        let mut hasher = DefaultHasher::new();
+        hasher.write(source.as_bytes());
+        let hash = hasher.finish();
+        #[cfg(test)]
+        let hash = self.forced_hash.get().unwrap_or(hash);
+        let key = (
+            source.len(),
+            hash,
+            limits.pattern_bytes,
+            limits.pattern_depth,
+        );
+        let height = self.sources.borrow().len().saturating_add(1).ilog2() as usize + 2;
+        control.charge_work(height.saturating_mul(12))?;
+        let candidates = self.sources.borrow().get(&key).map_or(0, Vec::len);
+        for index in 0..candidates {
+            control.charge_work(height.saturating_mul(12))?;
+            control.charge_work(source.len().saturating_add(1))?;
+            let found = {
+                let sources = self.sources.borrow();
+                let candidate = &sources[&key][index];
+                (candidate.text == source).then(|| candidate.program.clone())
+            };
+            if let Some(known) = found {
+                self.check(control)?;
+                budget.check(control)?;
+                return Ok(known);
+            }
+        }
+        // Reserve source ownership and index growth before doing any work that
+        // might publish a normalized program. No callbacks run under a borrow.
+        control.charge_work(height.saturating_mul(24).saturating_add(candidates + 1))?;
+        control.charge_allocation(source.len())?;
+        control.charge_allocation(height.saturating_mul(1024))?;
+        let (length, capacity) = self
+            .sources
+            .borrow()
+            .get(&key)
+            .map_or((0, 0), |b| (b.len(), b.capacity()));
+        let requested = if length == capacity {
+            let bytes = capacity
+                .checked_mul(2)
+                .and_then(|n| n.max(4).checked_mul(size_of::<Form>()))
+                .ok_or_else(|| self.refuse("pattern-index-memory-limit"))?;
+            control.charge_allocation(bytes)?;
+            Some(bytes / size_of::<Form>())
+        } else {
+            None
+        };
+        control.charge_work(source.len())?;
+        let text = source.to_owned();
+        let (program, published) = self.add_normalized(source, limits, budget, control)?;
+        let completed = (|| {
+            {
+                let mut sources = self.sources.borrow_mut();
+                let bucket = sources.entry(key).or_default();
+                if let Some(capacity) = requested
+                    && bucket.try_reserve_exact(capacity - bucket.len()).is_err()
+                {
+                    if bucket.is_empty() {
+                        sources.remove(&key);
+                    }
+                    return Err(self.refuse("pattern-index-memory-limit"));
+                }
+                bucket.push(Form {
+                    text,
+                    program: program.clone(),
+                });
+            }
+            self.check(control)?;
+            budget.check(control)?;
+            Ok(())
+        })();
+        if let Err(failure) = completed {
+            {
+                let mut sources = self.sources.borrow_mut();
+                if let Some(bucket) = sources.get_mut(&key) {
+                    // This append's exact slot identifies the publication;
+                    // different source spellings may share the same Arc. The
+                    // reservation may have failed before the append occurred.
+                    if bucket.len() > candidates {
+                        let removed = bucket.remove(candidates);
+                        debug_assert_eq!(removed.text, source);
+                    }
+                    if bucket.is_empty() {
+                        sources.remove(&key);
+                    }
+                }
+            }
+            if let Some(key) = published {
+                let mut forms = self.forms.borrow_mut();
+                if let Some(bucket) = forms.get_mut(&key) {
+                    bucket.retain(|entry| !Arc::ptr_eq(&entry.program, &program));
+                    if bucket.is_empty() {
+                        forms.remove(&key);
+                    }
+                }
+            }
+            return Err(failure);
+        }
+        Ok(program)
+    }
+    fn add_normalized(
+        &self,
+        source: &str,
+        limits: &Limits,
+        budget: &compiler::profile::Budget,
+        control: &dyn Control,
+    ) -> Result<Completed, PreparationFailure> {
+        self.check(control)?;
+        budget.check(control)?;
+        if source.len() > limits.pattern_bytes {
+            return self
+                .retain(Program::Limited("pattern-byte-limit"), limits, control)
+                .map(|p| (p, None));
         }
         // Expansion and repeated class union precede rendered-form limits.
         control.charge_work(source.len().saturating_add(1))?;
@@ -88,16 +222,24 @@ impl Programs {
         control.check()?;
         let linear = match reading {
             Err(pattern::Refusal::Depth) => {
-                return self.retain(Program::Limited("pattern-depth-limit"), limits, control);
+                return self
+                    .retain(Program::Limited("pattern-depth-limit"), limits, control)
+                    .map(|p| (p, None));
             }
             Err(pattern::Refusal::Invalid) => {
-                return self.retain(Program::Undefined, limits, control);
+                return self
+                    .retain(Program::Undefined, limits, control)
+                    .map(|p| (p, None));
             }
             Ok(Reading::Unsupported(Unsupported::Size)) => {
-                return self.retain(Program::Limited("pattern-size-limit"), limits, control);
+                return self
+                    .retain(Program::Limited("pattern-size-limit"), limits, control)
+                    .map(|p| (p, None));
             }
             Ok(Reading::Unsupported(why)) => {
-                return self.retain(Program::Unsupported(why), limits, control);
+                return self
+                    .retain(Program::Unsupported(why), limits, control)
+                    .map(|p| (p, None));
             }
             Ok(Reading::Linear(linear)) => linear,
         };
@@ -122,7 +264,7 @@ impl Programs {
                 (candidate.text == linear.form).then(|| candidate.program.clone())
             };
             if let Some(known) = found {
-                return Ok(known);
+                return Ok((known, None));
             }
         }
         let form_bytes = self
@@ -225,7 +367,7 @@ impl Programs {
             }
             return Err(failure);
         }
-        Ok(program)
+        Ok((program, Some(key)))
     }
 }
 

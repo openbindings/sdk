@@ -6,7 +6,7 @@
 use crate::{Control, Failure, FailureReason};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
-pub const DEFAULT_WORK_UNITS: usize = 20_000_000;
+pub const DEFAULT_WORK_UNITS: usize = 100_000_000;
 pub const DEFAULT_ALLOCATION_BYTES: usize = 512 * 1024 * 1024;
 
 /// Version-locked bridge to the core's original environment. The companion

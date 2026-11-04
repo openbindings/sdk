@@ -58,11 +58,9 @@ pub(super) fn run() {
                 added_peak < 128 * 1024,
                 "{mode}/{size}: {added_peak} temporary bytes"
             );
-            if mode == "pattern-limited" {
-                assert!(
-                    matches!(result, ValueOutcome::NoVerdict { detail } if detail.reason == NoVerdictReason::LimitExceeded)
-                );
-            } else if mode == "pattern" {
+            // Prepared matching borrows text, so both unchanged workloads now
+            // fit even the 64KiB scratch policy. Preserve the physical peak gate.
+            if mode.starts_with("pattern") {
                 assert!(matches!(result, ValueOutcome::Satisfies));
             } else {
                 assert!(

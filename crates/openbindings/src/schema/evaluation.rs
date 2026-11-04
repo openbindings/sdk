@@ -16,7 +16,7 @@ pub struct PreparationLimits {
     pub max_identity_bytes: usize,
     /// Shared budget at cooperative SDK work sites, including environment
     /// inventory, reference queries, semantic proofs and nested meta-validation.
-    /// A cache hit charges its checks rather than replaying completed work.
+    /// Default 100 million. A cache hit charges its checks rather than replaying completed work.
     /// This is neither an instruction count nor a deadline for dependency calls.
     pub max_sdk_work_units: usize,
     /// Monotone reservations at explicit SDK storage sites, including temporary

@@ -64,6 +64,21 @@ fn form_bytes(pattern: &str) -> usize {
     let proof = conformant(&properties(std::iter::once(pattern.to_owned())));
     let (mut refused, mut admitted) = (0, Limits::default().total_pattern_bytes);
     assert!(prepare(&proof, Limits::default()).is_ok());
+    let limited = proof
+        .resolve_operation("op")
+        .unwrap()
+        .input()
+        .unwrap()
+        .prepare(
+            &DefaultEvaluator::default(),
+            &openbindings::ExternalSchemas::default(),
+            &openbindings::PreparationLimits {
+                max_sdk_work_units: 20_000_000,
+                ..Default::default()
+            },
+        )
+        .unwrap_err();
+    assert_eq!(refusal_resource(limited), "preparation-sdk-work-units");
     while admitted - refused > 1 {
         let total = (refused + admitted) / 2;
         let limits = Limits {
@@ -126,7 +141,7 @@ pub fn run() {
             properties((0..380).map(|_| spelled(0))),
             "satisfies",
         ),
-        // The bundle keeps each name's form, so every name counts.
+        // Distinct names each retain one normalized form.
         (
             "names-past-total",
             names(within + 1),
@@ -234,17 +249,10 @@ fn run_matchers() {
     }
 }
 
-// A contract's compiled patterns share its pattern memory
-// (`Limits::total_pattern_memory`). Counted repetitions of a large set as
-// `patternProperties` names, `^.{1,10000}N$` (about 13.2 MiB compiled each),
-// once each compiled within the per-pattern size: 40 of them, under 1 KB of
-// text, peaked at 1.1 GB, and 300 took over 10 s. Each needs more than its
-// equal part of what the memory leaves, so preparation refuses after trying
-// each within its part, one at a time, holding at most three times the memory
-// divided among them (the part being compiled and its compilation's own
-// working memory) beyond the same document with the names as property names.
-// Four such names fit their parts: preparing them keeps no more than the
-// pattern memory, and peaks within twice it.
+// Preserve the counted-name workloads under the current shared structural
+// profile. Four names still prepare and match. 40/300 refuse at the aggregate
+// helper-payload ceiling. Physical peaks are measured independently of the
+// retained footprint; the retired equal-slot division no longer applies.
 fn compiled() {
     let memory = Limits::default().total_pattern_memory;
     let names = |count: usize| {
@@ -258,8 +266,16 @@ fn compiled() {
     };
     let value = JsonValue::parse(r#"{"a0":1}"#).unwrap();
     for (case, count, expected) in [
-        ("counted-names-40", 40, "pattern-total-memory-limit"),
-        ("counted-names-300", 300, "pattern-total-memory-limit"),
+        (
+            "counted-names-40",
+            40,
+            "pattern-construction-helper-payload",
+        ),
+        (
+            "counted-names-300",
+            300,
+            "pattern-construction-helper-payload",
+        ),
         ("counted-names-4", 4, "satisfies"),
     ] {
         let input = names(count);
@@ -304,7 +320,11 @@ fn compiled() {
                     nanos < 2_000_000_000,
                     "compiled patterns: {case}: {nanos} ns"
                 );
-                control_bytes + 3 * (memory / count)
+                // Workload-specific measured ceiling: the structural profile
+                // stops while retained programs and one build peak below64MiB.
+                // This replaces the retired3*(memory/count) slot formula; it
+                // is not a dependency-wide or process-memory certificate.
+                control_bytes + memory
             };
             assert!(
                 bytes <= ceiling,
@@ -315,12 +335,9 @@ fn compiled() {
     search_caches(memory);
 }
 
-// A search keeps its lazy DFA's cache within its pattern's equal part of the
-// quarter of the pattern memory the caches have. Each of 100 small names whose
-// automaton has a state for every recent run of 21 bits, `[01]*1[01]{20}zN`,
-// kept about 3.3 MB of cache after searching a 64 KiB key of random bits,
-// 400 MB in all; now checking that value holds no more than the pattern memory
-// beyond the same document with the names as property names.
+// Preserve the ambiguous-search cache-growth workload. Search scratch is now
+// call-owned NFA state. Preparation and evaluation of 100 names on a 64KiB random
+// bit key must stay within the measured 64MiB incremental allowance.
 fn search_caches(memory: usize) {
     let names: Vec<String> = (0..100)
         .map(|i| format!(r#""[01]*1[01]{{20}}z{i}":true"#))

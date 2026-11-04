@@ -98,7 +98,7 @@ pub(crate) fn read(pattern: &str, max_depth: usize, max_form: usize) -> Result<R
 
 // This subset has no expansion, groups, character sets or per-character
 // temporary ranges. Every byte already has the general Reader's spelling.
-fn anchored_literal(source: &str) -> Option<(&str, bool)> {
+pub(crate) fn anchored_literal(source: &str) -> Option<(&str, bool)> {
     let body = source.strip_prefix('^')?;
     let end = body.ends_with('$');
     let body = if end { &body[..body.len() - 1] } else { body };

@@ -1,0 +1,29 @@
+{
+  "status": "bounded conceptual/API/module audit complete; current documentation/map refresh and default capacity/performance remain open",
+  "counts": {
+    "concepts": 54,
+    "obligations": 83,
+    "witnesses": 108,
+    "fields": 32,
+    "relations": 19,
+    "rust_packages": 13,
+    "logical_products": 11,
+    "source_anchor_records": 888,
+    "missing_files": 0,
+    "missing_anchors": 0,
+    "changed_record_hashes": 98,
+    "authority_file_text_records": 137,
+    "missing_authority_files_or_text": 0
+  },
+  "new_semantic_verdict_defect_established": false,
+  "findings": [
+    "R-ALIGN-DOC: public two-engine/fallback ownership descriptions stale",
+    "R-ALIGN-MAP: old source hashes/module inventories require current overlay",
+    "R-CAP-PATTERN: retained default single/within4/repeated380 expanded-pattern positives not completed"
+  ],
+  "separate_open_gate": "Matched performance pilot reports resource regressions; no residual acceptance or performance PASS",
+  "SDK_edits_by_reviewer": false,
+  "runtime_test_scope": "This bounded map pass reused prior independently reviewed behavioral controls; it did not rerun every witness.",
+  "followup_design": "source-cache-policy-design.md",
+  "parent_reported_after_review": "Public stale architecture prose corrected; source-cache plus100M candidate approved for implementation only. Final implementation review remains separate."
+}

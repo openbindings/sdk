@@ -248,3 +248,144 @@ fn hash_collisions_preserve_exact_forms_sharing_and_interrupted_siblings() {
         ));
     }
 }
+
+#[test]
+fn authored_hits_skip_reader_reservations_but_keep_reader_policy() {
+    let programs = Programs::default();
+    let budget = compiler::profile::Budget::default();
+    let limits = Limits::default();
+    let first = programs.add(r"\S", &limits, &budget, &|| false).unwrap();
+    let before = compiler::build_count();
+    let repeated = Attempt::run(1000, 0, &|| false, |a| {
+        programs.add(r"\S", &limits, &budget, a).unwrap()
+    })
+    .unwrap();
+    assert!(Arc::ptr_eq(&first, &repeated));
+    assert_eq!(compiler::build_count(), before);
+    let limited = programs
+        .add(
+            r"\S",
+            &Limits {
+                pattern_bytes: 16,
+                ..limits.clone()
+            },
+            &budget,
+            &|| false,
+        )
+        .unwrap();
+    assert!(matches!(
+        limited.as_ref(),
+        Program::Limited("pattern-size-limit")
+    ));
+    let first = programs.add("(a)", &limits, &budget, &|| false).unwrap();
+    let limited = programs
+        .add(
+            "(a)",
+            &Limits {
+                pattern_depth: 0,
+                ..limits
+            },
+            &budget,
+            &|| false,
+        )
+        .unwrap();
+    assert!(!Arc::ptr_eq(&first, &limited));
+    assert!(matches!(
+        limited.as_ref(),
+        Program::Limited("pattern-depth-limit")
+    ));
+}
+
+#[test]
+fn interrupted_source_alias_preserves_healthy_normalized_owner_and_collision() {
+    use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
+    let seed = || {
+        let programs = Programs::default();
+        programs.forced_hash.set(Some(0));
+        let budget = compiler::profile::Budget::default();
+        let first = programs
+            .add("[ab]", &Limits::default(), &budget, &|| false)
+            .unwrap();
+        let other = programs
+            .add("[cd]", &Limits::default(), &budget, &|| false)
+            .unwrap();
+        (programs, budget, first, other)
+    };
+    let (programs, budget, first, _) = seed();
+    let calls = AtomicUsize::new(0);
+    let alias = programs
+        .add("[ba]", &Limits::default(), &budget, &|| {
+            calls.fetch_add(1, Relaxed);
+            false
+        })
+        .unwrap();
+    assert!(Arc::ptr_eq(&first, &alias));
+    let total = calls.load(Relaxed);
+    for at in 0..total {
+        let (programs, budget, first, other) = seed();
+        calls.store(0, Relaxed);
+        assert!(
+            matches!(
+                programs.add("[ba]", &Limits::default(), &budget, &|| calls
+                    .fetch_add(1, Relaxed)
+                    >= at),
+                Err(PreparationFailure {
+                    kind: PreparationFailureKind::Cancelled,
+                    ..
+                })
+            ),
+            "{at}"
+        );
+        assert_eq!(
+            programs
+                .sources
+                .borrow()
+                .values()
+                .map(Vec::len)
+                .sum::<usize>(),
+            2,
+            "{at}"
+        );
+        for (source, owner) in [("[ab]", &first), ("[cd]", &other)] {
+            let hit = programs
+                .add(source, &Limits::default(), &budget, &|| false)
+                .unwrap();
+            assert!(Arc::ptr_eq(owner, &hit), "{at}/{source}");
+        }
+    }
+}
+
+#[test]
+fn authored_cache_miss_and_hit_keep_exact_attempt_boundaries() {
+    for allocation in [false, true] {
+        let run = |bound| {
+            let programs = Programs::default();
+            let budget = compiler::profile::Budget::default();
+            Attempt::run(
+                if allocation { 1_000_000 } else { bound },
+                if allocation { bound } else { 1_000_000 },
+                &|| false,
+                |a| {
+                    let first = programs.add("a|b", &Limits::default(), &budget, a)?;
+                    let next = programs.add("a|b", &Limits::default(), &budget, a)?;
+                    assert!(Arc::ptr_eq(&first, &next));
+                    Ok::<_, PreparationFailure>(())
+                },
+            )
+            .is_ok_and(|r| r.is_ok())
+        };
+        let (mut low, mut high) = (0, 1_000_000);
+        assert!(run(high));
+        while low < high {
+            let middle = low + (high - low) / 2;
+            if run(middle) {
+                high = middle;
+            } else {
+                low = middle + 1;
+            }
+        }
+        assert!(low > 0);
+        assert!(run(low));
+        assert!(!run(low - 1));
+    }
+}

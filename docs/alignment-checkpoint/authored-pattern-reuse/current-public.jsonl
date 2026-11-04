@@ -1,0 +1,4 @@
+{"checks":16,"group":"6000-sibling-reasons"}
+{"allocation":false,"exact":3737,"group":"public-exact-budget","one_below":"refusal","retry":"S"}
+{"allocation":true,"exact":19896,"group":"public-exact-budget","one_below":"refusal","retry":"S"}
+{"checks":170,"group":"public-every-check-cancel-retry"}

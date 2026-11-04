@@ -1,0 +1,9 @@
+{
+  "crates/openbindings-internal-schema/src/preparation.rs": "d2f25f744ac0e60238b3c0575e174609fd67b1dfcdb4bff9e8c0c8081d3d7365",
+  "crates/openbindings/src/schema/evaluation.rs": "5b571262e990c61fa8802eda131ed01c3aade565a2e650e6867b14e8e57f0134",
+  "crates/openbindings-json-schema-evaluator/src/pattern.rs": "8e8389174e4a6fc8617c03a7325e906a30f55adc7305823555d36a46766ffc43",
+  "crates/openbindings-json-schema-evaluator/src/semantic/patterns/preparation.rs": "8fa16940d6a7f1cc55a3a1a7beb7e7ec705e759cebf8198dbef0668caa9fdf98",
+  "crates/openbindings-json-schema-evaluator/src/semantic/patterns/preparation/tests.rs": "1789d4b8986d4a4b945c3492f6ce44eb88245790b61d986a6a0895e802457b29",
+  "tools/diagnostic-memory-probe/src/patterns.rs": "b06622e441bf822ba33c9858b6dcb1a48ef51d58236151f14753db908c9c23b4",
+  "tools/diagnostic-memory-probe/src/semantic.rs": "dc75ea8fb3b510941bc3447aad8f1fafa056adbf42820af258039e50d295d630"
+}

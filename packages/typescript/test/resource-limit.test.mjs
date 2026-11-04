@@ -275,9 +275,8 @@ test("pattern preparation bounds construction and unique program storage", () =>
 });
 
 test("large resource requests remain bounded before registration", () => {
-  // The TypeScript facade uses the fixed preparation defaults. At 8,000
-  // resources their shared work allowance can refuse before the resource cap.
-  // Keep both original workloads and distinguish these actual failure causes.
+  // Both unchanged workloads reach the requested resource cap within the
+  // current default preparation allowance.
   const fastest = (count) => {
     const { text, resources } = supplied(count);
     try {
@@ -285,15 +284,7 @@ test("large resource requests remain bounded before registration", () => {
       for (let run = 0; run < 3; run++) {
         const start = performance.now();
         const state = preparation(text, resources, count);
-        if (count === 2000) assertRefused(state);
-        else {
-          assert.equal(state.status, "refused");
-          assert.equal(state.failure.kind, "limit");
-          assert.equal(
-            state.failure.details.resource,
-            "preparation-sdk-work-units",
-          );
-        }
+        assertRefused(state);
         best = Math.min(best, performance.now() - start);
       }
       return best;
@@ -304,4 +295,38 @@ test("large resource requests remain bounded before registration", () => {
   const small = fastest(2000);
   const large = fastest(8000);
   assert.ok(large / small < 8, `${small} ms -> ${large} ms`);
+});
+
+test("expanded pattern preparation preserves default capacity and exact sharing", () => {
+  const pattern = (i) => "\\S".repeat(5000) + `z${i}`;
+  const input = (count, repeated = false) => ({
+    properties: Object.fromEntries(
+      Array.from({ length: count }, (_, i) => [
+        `p${i}`,
+        { pattern: pattern(repeated ? 0 : i) },
+      ]),
+    ),
+  });
+  for (const [count, repeated] of [
+    [1, false],
+    [4, false],
+    [380, true],
+  ]) {
+    const result = preparation(
+      document({}, input(count, repeated)),
+      undefined,
+      null,
+    );
+    assert.equal(result.status, "ready");
+    const prepared = result.schema;
+    try {
+      assert.equal(prepared.evaluate({}).status, "satisfies");
+    } finally {
+      prepared.dispose();
+    }
+  }
+  const fifth = preparation(document({}, input(5)), undefined, null);
+  assert.equal(fifth.status, "refused");
+  assert.equal(fifth.failure.kind, "limit");
+  assert.equal(fifth.failure.details.resource, "pattern-total-byte-limit");
 });

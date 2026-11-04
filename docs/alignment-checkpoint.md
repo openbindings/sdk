@@ -5,6 +5,14 @@ includes unfinished alignment work. It is not a merge, release, final whole-SDK
 qualification or completed-alignment claim. Continue on `codex/sdk-02-foundation`;
 existing unpublished APIs have no compatibility protection.
 
+The latest [authored-pattern reuse checkpoint](alignment-checkpoint/authored-pattern-reuse/README.md)
+restores the preserved default expanded-pattern workloads. Independent current/minimum
+Rust review, the complete portable verifier, fresh Node/browser and installed-package
+checks pass their recorded scopes. The [actual alignment map](alignment-checkpoint/actual-map/README.md)
+now names implemented APIs and current source bindings; the initial proposal remains
+historical. [Matched performance findings](alignment-checkpoint/performance-readiness/README.md)
+remain open, including large literal/uniqueness and repeated-reference allocation costs.
+
 The current [compiler resource policy](alignment-checkpoint/compiler-resource-policy.md)
 supersedes the historical full dependency operation/allocation certificate.
 Preparation now names its cooperative counters `max_sdk_work_units` and
