@@ -43,6 +43,13 @@ jobs:
           toolchain: ${{ steps.rust-version.outputs.version }}
           components: rustfmt, clippy
       - run: python tools/verify.py
+      - name: Preserve evaluator replay receipt
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: evaluator-replay-${{ matrix.os }}
+          path: target/qualification/evaluator-replay.json
+          if-no-files-found: warn
       - name: Verify discovery downstream features and decoded bodies
         if: matrix.os == 'ubuntu-latest'
         run: |

@@ -29,7 +29,12 @@ impl SchemaEvaluator for OriginalContext {
 }
 
 fn main() {
+    eprintln!("Evaluator replay: executing all value cases");
     let report = run(&OriginalContext);
+    eprintln!(
+        "Evaluator replay: {} value observations; collecting document admission evidence",
+        report.observations.len()
+    );
     // The receipt is written as JSON text: a report can carry an exact pointer
     // through a member name with an unpaired unit, which no `Value` holds.
     #[derive(serde::Serialize)]
@@ -61,6 +66,13 @@ fn main() {
         admission,
         report: &report,
     };
-    println!("{}", serde_json::to_string(&receipt).unwrap());
+    eprintln!("Evaluator replay: serializing the complete receipt");
+    let serialized = serde_json::to_string(&receipt).unwrap();
+    eprintln!(
+        "Evaluator replay: writing {} receipt bytes",
+        serialized.len()
+    );
+    println!("{serialized}");
+    eprintln!("Evaluator replay: receipt written; checking success");
     assert!(report.is_success(), "{:?}", report.configuration_failures);
 }
