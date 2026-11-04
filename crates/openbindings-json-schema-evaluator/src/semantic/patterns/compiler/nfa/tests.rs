@@ -1,0 +1,223 @@
+use super::*;
+use openbindings_internal_schema::{FailureReason, preparation::Attempt};
+use regex_syntax::hir::{Capture, Repetition};
+use std::{
+    cell::Cell,
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering::Relaxed},
+    },
+};
+
+thread_local! {
+    static BUILDS: Cell<usize> = const { Cell::new(0) };
+    static WRAPS: Cell<usize> = const { Cell::new(0) };
+}
+pub(super) fn entered_backend() {
+    BUILDS.with(|n| n.set(n.get() + 1));
+}
+pub(super) fn entered_wrapper() {
+    WRAPS.with(|n| n.set(n.get() + 1));
+}
+fn reset() {
+    BUILDS.with(|n| n.set(0));
+    WRAPS.with(|n| n.set(0));
+}
+fn counts() -> (usize, usize) {
+    (BUILDS.with(Cell::get), WRAPS.with(Cell::get))
+}
+fn parse(form: &str) -> Hir {
+    regex_syntax::Parser::new().parse(form).unwrap()
+}
+fn failure(error: Error) -> Failure {
+    match error {
+        Error::Attempt(failure) => failure,
+        other => panic!("{other:?}"),
+    }
+}
+
+#[test]
+fn independent_named_compiler_paths() {
+    let controls: serde_json::Value =
+        serde_json::from_str(include_str!("path-controls.json")).unwrap();
+    for row in controls["cases"].as_array().unwrap() {
+        let hir = parse(row["form"].as_str().unwrap());
+        assert_eq!(
+            compiler_path(&hir, &|| false).unwrap(),
+            row["expected_path"].as_u64().unwrap() as usize,
+            "{}",
+            row["id"]
+        );
+    }
+}
+
+#[test]
+fn synthetic_logical_boundaries_do_not_claim_source_or_physical_stack_support() {
+    for (captures, optional, expected) in [(255, false, 511), (254, true, 512), (256, false, 513)] {
+        let mut hir = Hir::literal(b"a".to_vec());
+        if optional {
+            hir = Hir::repetition(Repetition {
+                min: 0,
+                max: Some(1),
+                greedy: true,
+                sub: Box::new(hir),
+            });
+        }
+        for index in 1..=captures {
+            hir = Hir::capture(Capture {
+                index,
+                name: None,
+                sub: Box::new(hir),
+            });
+        }
+        reset();
+        if expected <= MAXIMUM_PATH {
+            assert_eq!(compiler_path(&hir, &|| false).unwrap(), expected);
+        } else {
+            assert!(matches!(
+                prepare(&hir, 1 << 20, &|| false),
+                Err(Error::ConstructionLimit)
+            ));
+        }
+        assert_eq!(counts(), (0, 0));
+    }
+}
+
+#[test]
+fn one_forward_capture_free_program_has_independent_search_caches() {
+    let control = Arc::new(AtomicUsize::new(0));
+    let weak = Arc::downgrade(&control);
+    let hir = parse(r"^(ab|é😀){1,2}$");
+    reset();
+    let vm = prepare(&hir, 1 << 20, &|| {
+        control.fetch_add(1, Relaxed);
+        false
+    })
+    .unwrap();
+    assert_eq!(counts(), (1, 1));
+    assert!(vm.get_nfa().is_utf8());
+    assert!(!vm.get_nfa().is_reverse());
+    assert_eq!(vm.get_nfa().group_info().slot_len(), 0);
+    drop(hir);
+    drop(control);
+    assert!(weak.upgrade().is_none());
+    std::thread::scope(|scope| {
+        for (text, expected) in [
+            ("ab", true),
+            ("é😀ab", true),
+            ("xab", false),
+            ("ab\n", false),
+            ("", false),
+        ] {
+            let vm = &vm;
+            scope.spawn(move || {
+                let mut cache = vm.create_cache();
+                assert_eq!(vm.is_match(&mut cache, text), expected);
+            });
+        }
+    });
+}
+
+#[test]
+fn limits_are_local_and_never_retry_the_backend() {
+    let hir = parse("[a-z]{64}");
+    reset();
+    assert!(matches!(prepare(&hir, 0, &|| false), Err(Error::Size)));
+    assert_eq!(counts(), (0, 0));
+    reset();
+    let result = Attempt::run(usize::MAX, usize::MAX, &|| false, |attempt| {
+        let refused = prepare(&hir, 1, attempt);
+        assert!(matches!(refused, Err(Error::Size)));
+        attempt.check().unwrap();
+        refused
+    });
+    assert!(matches!(result.unwrap(), Err(Error::Size)));
+    assert_eq!(counts(), (1, 0));
+    reset();
+    let vm = prepare(&hir, 1 << 20, &|| false).unwrap();
+    assert_eq!(counts(), (1, 1));
+    assert!(vm.is_match(&mut vm.create_cache(), &"a".repeat(64)));
+}
+
+#[test]
+fn final_representation_check_is_separate_from_approximate_builder_limit() {
+    let hir = parse("a");
+    let vm = prepare(&hir, 1 << 20, &|| false).unwrap();
+    let retained = vm.get_nfa().memory_usage();
+    reset();
+    drop(prepare(&hir, retained, &|| false).unwrap());
+    assert_eq!(counts(), (1, 1));
+    // Prove this control reaches the final-size check: the raw builder accepts
+    // the lower allowance, but the representation it returns exceeds it.
+    let raw = thompson::NFA::compiler()
+        .configure(
+            thompson::Config::new()
+                .which_captures(thompson::WhichCaptures::None)
+                .nfa_size_limit(Some(retained - 1)),
+        )
+        .build_from_hir(&hir)
+        .unwrap();
+    assert_eq!(raw.memory_usage(), retained);
+    reset();
+    assert!(matches!(
+        prepare(&hir, retained - 1, &|| false),
+        Err(Error::Size)
+    ));
+    assert_eq!(counts(), (1, 0));
+}
+
+#[test]
+fn cancellation_at_each_boundary_prevents_publication_and_retry_is_fresh() {
+    let hir = parse("ab|cd");
+    let observations = AtomicUsize::new(0);
+    let count = || {
+        observations.fetch_add(1, Relaxed);
+        false
+    };
+    prepare(&hir, 1 << 20, &count).unwrap();
+    let checkpoints = observations.load(Relaxed);
+    for stop in 0..checkpoints {
+        observations.store(0, Relaxed);
+        reset();
+        let cancel = || observations.fetch_add(1, Relaxed) >= stop;
+        assert_eq!(
+            failure(prepare(&hir, 1 << 20, &cancel).unwrap_err()).reason,
+            FailureReason::Cancelled
+        );
+        reset();
+        prepare(&hir, 1 << 20, &|| false).unwrap();
+        assert_eq!(counts(), (1, 1));
+    }
+    reset();
+    assert_eq!(
+        failure(prepare(&hir, 1, &|| counts().0 > 0).unwrap_err()).reason,
+        FailureReason::Cancelled
+    );
+    assert_eq!(counts(), (1, 0));
+}
+
+#[test]
+fn prior_shared_failure_wins_over_local_limit_and_cannot_be_hidden() {
+    let hir = parse("ab|cd");
+    reset();
+    let result = Attempt::run(100, 0, &|| false, |attempt| {
+        attempt.charge_allocation(1).unwrap_err();
+        assert_eq!(
+            failure(prepare(&hir, 0, attempt).unwrap_err()).code,
+            "preparation-sdk-reservation-bytes"
+        );
+    });
+    assert_eq!(
+        result.unwrap_err().code,
+        "preparation-sdk-reservation-bytes"
+    );
+    assert_eq!(counts(), (0, 0));
+    let result = Attempt::run(0, usize::MAX, &|| false, |attempt| {
+        assert!(matches!(
+            prepare(&hir, 1 << 20, attempt),
+            Err(Error::Attempt(_))
+        ));
+    });
+    assert_eq!(result.unwrap_err().code, "preparation-sdk-work-units");
+    assert_eq!(counts(), (0, 0));
+}

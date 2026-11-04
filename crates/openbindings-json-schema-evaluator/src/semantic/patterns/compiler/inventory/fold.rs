@@ -1,4 +1,4 @@
-use super::arithmetic::{Amount, add, checked, growth, sort};
+use super::arithmetic::{Amount, add, checked};
 use super::{Ast, InternalError, Result, Root, Shape, Subtree, Summary, unary};
 
 pub(super) struct Frame<'a> {
@@ -13,7 +13,6 @@ enum Fold {
     Alternate(Alternate),
 }
 struct Concat {
-    input: usize,
     nonempty: usize,
     all_literals: bool,
     literal_bytes: usize,
@@ -31,18 +30,10 @@ struct Alternate {
 }
 
 impl<'a> Frame<'a> {
-    pub(super) fn finish_work(&self) -> usize {
-        match self.fold {
-            Fold::Unary => 32,
-            Fold::Concat(_) => 128,
-            Fold::Alternate(_) => 512,
-        }
-    }
     pub(super) fn new(tree: &'a Ast) -> Option<Self> {
         let fold = match tree {
             Ast::Group(_) | Ast::Repetition(_) => Fold::Unary,
             Ast::Concat(_) => Fold::Concat(Concat {
-                input: 0,
                 nonempty: 0,
                 all_literals: true,
                 literal_bytes: 0,
@@ -89,9 +80,9 @@ impl<'a> Frame<'a> {
         }
         child
     }
-    pub(super) fn accept(&mut self, child: Subtree, totals: &mut Summary) -> Result<()> {
+    pub(super) fn accept(&mut self, child: Subtree) -> Result<()> {
         if matches!(self.fold, Fold::Unary) {
-            self.summary = unary(self.tree, child, totals)?;
+            self.summary = unary(self.tree, child)?;
             return Ok(());
         }
         let s = &mut self.summary;
@@ -117,7 +108,6 @@ impl<'a> Frame<'a> {
                     add(&mut f.literal_bytes, c.literal_bytes)?;
                 }
                 if !collapsed {
-                    add(&mut f.input, 1)?;
                     add(&mut s.shape.first_branch_weight, c.first_branch_weight)?;
                     add(&mut s.shape.retained_nodes, c.retained_nodes)?;
                     add(&mut s.shape.frontier, 1)?;
@@ -176,21 +166,11 @@ impl<'a> Frame<'a> {
             Fold::Unary => {}
             Fold::Concat(f) => {
                 let s = &mut self.summary;
-                let input = f.input;
                 let visited = s.shape.frontier;
                 s.shape.first_branch_weight = s.shape.first_branch_weight.max(1);
                 s.shape.height = checked(Amount::from(s.shape.height) + 1)?;
-                add(&mut totals.work.concat_input, input)?;
-                add(&mut totals.work.concat_visit, visited)?;
-                add(&mut totals.work.concat_bytes, s.literal_bytes)?;
-                let cost = checked(
-                    growth(48, Amount::from(input), 4)
-                        + growth(48, Amount::from(visited), 4)
-                        + (Amount::from(visited) * 2 + 1) * 80
-                        + Amount::from(s.literal_bytes) * 9,
-                )?;
-                add(&mut totals.smart_allocation, cost)?;
-                add(&mut totals.concat_allocation, cost)?;
+                add(&mut totals.pressure.reconstruction_entries, visited)?;
+                add(&mut totals.pressure.literal_byte_revisits, s.literal_bytes)?;
                 if f.nonempty == 0 {
                     s.shape.root = Root::Empty;
                     s.shape.height = 1;
@@ -258,63 +238,39 @@ impl<'a> Frame<'a> {
                 };
                 let front = Amount::from(frontier);
                 let range = Amount::from(ranges);
-                let flatten = growth(48, front, 4) + front * 80 + 80;
-                let terminal = growth(4, front, 4)
-                    + growth(1, front, 8)
-                    + front * 40
-                    + if ranges == 0 {
-                        Amount::from(0)
-                    } else {
-                        front * range * 10 + range * 90 + 160
-                    };
-                let rebuild = if f.prefix {
-                    let twice = nodes * 2;
-                    add(&mut totals.prefix_calls, calls)?;
-                    twice * 48
-                        + growth(48, front, 4)
-                        + (growth(48, twice, 4) + (twice * 2 + 1) * 80 + bytes * 9) * 2
-                        + growth(48, twice, 4)
-                        + front * 80
-                } else {
-                    Amount::from(0)
-                };
+                // These are conservative structural pressure scores. Equality
+                // may be attempted before a later non-concat prevents prefix
+                // reconstruction, so its node/byte pressure is unconditional.
                 add(
-                    &mut totals.work.alternate_input,
-                    checked(Amount::from(self.index) + front * calls)?,
+                    &mut totals.pressure.reconstruction_entries,
+                    checked(front * calls + nodes * 2 * calls)?,
                 )?;
-                add(&mut totals.work.alternate_frontier, checked(front * calls)?)?;
-                // Equality can be attempted before a later non-concat stops
-                // reconstruction. These charges do not depend on f.prefix.
-                add(&mut totals.work.prefix_nodes, checked(nodes * 2 * calls)?)?;
-                add(&mut totals.work.prefix_bytes, checked(bytes * calls)?)?;
                 add(
-                    &mut totals.work.prefix_ranges,
-                    checked((Amount::from(s.ranges) + bytes) * calls)?,
+                    &mut totals.pressure.literal_byte_revisits,
+                    checked(bytes * calls)?,
                 )?;
                 if f.prefix {
-                    add(&mut totals.work.prefix_split, checked(nodes * 2 * calls)?)?;
-                    add(&mut totals.work.concat_input, checked(nodes * 4 * calls)?)?;
-                    add(&mut totals.work.concat_visit, checked(nodes * 4 * calls)?)?;
-                    add(&mut totals.work.concat_bytes, checked(bytes * 2 * calls)?)?;
+                    add(
+                        &mut totals.pressure.reconstruction_entries,
+                        checked(nodes * 6 * calls)?,
+                    )?;
+                    add(
+                        &mut totals.pressure.literal_byte_revisits,
+                        checked(bytes * 2 * calls)?,
+                    )?;
                 }
                 if f.prefix || f.maybe_singleton {
-                    add(&mut totals.work.sort_pairs, checked(sort(frontier))?)?;
-                    add(&mut totals.work.range_slots, checked(front * 32)?)?;
+                    add(
+                        &mut totals.pressure.candidate_range_slots,
+                        checked(front * 32)?,
+                    )?;
                 }
                 if ranges > 0 {
                     add(
-                        &mut totals.work.sort_pairs,
-                        checked(front * 2 * sort(ranges))?,
+                        &mut totals.pressure.candidate_range_slots,
+                        checked(front * 64 * range)?,
                     )?;
-                    add(&mut totals.work.range_slots, checked(front * 64 * range)?)?;
                 }
-                let cost = checked(
-                    growth(48, Amount::from(self.index), 4)
-                        + (flatten + rebuild) * calls
-                        + terminal,
-                )?;
-                add(&mut totals.smart_allocation, cost)?;
-                add(&mut totals.alternate_allocation, cost)?;
                 if !f.prefix && f.definite_other {
                     s.shape.root = Root::Alternate;
                     s.shape.frontier = f.frontier;

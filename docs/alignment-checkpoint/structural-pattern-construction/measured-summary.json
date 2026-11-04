@@ -1,0 +1,20 @@
+{
+  "current": {
+    "requested": 1957422,
+    "peak": 1072746,
+    "retained_hir": 258344,
+    "after_drop": 0,
+    "reserved": 46368,
+    "work": 321947
+  },
+  "msrv": {
+    "requested": 1957422,
+    "peak": 1072746,
+    "retained_hir": 258344,
+    "after_drop": 0,
+    "reserved": 46368,
+    "work": 321947
+  },
+  "native_observations_identical": true,
+  "scope": "Recorded HIR-only construction measurements, not a whole-profile transient ceiling or NFA/program qualification."
+}

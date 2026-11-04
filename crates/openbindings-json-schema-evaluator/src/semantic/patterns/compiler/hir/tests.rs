@@ -1,6 +1,6 @@
 use super::*;
 use crate::pattern::{self, Reading};
-use openbindings_internal_schema::preparation::Attempt;
+use openbindings_internal_schema::{FailureReason, preparation::Attempt};
 use regex_automata::nfa::thompson::{self, pikevm::PikeVM};
 use std::{
     cell::Cell,
@@ -76,6 +76,29 @@ fn independently_fixed_logical_profile_boundaries() {
         } else {
             drop(result.unwrap());
             assert_eq!(entries(), 1, "{}", row["id"]);
+        }
+    }
+}
+
+#[test]
+fn independent_reconstruction_boundary_refuses_before_translation() {
+    // Frozen policy controls CRP-06: these remain below the AST-node ceiling.
+    for (width, admitted) in [(3195, true), (3196, false), (4000, false)] {
+        let prefix = "a?".repeat(width);
+        let form = format!("{prefix}b|{prefix}c");
+        reset();
+        let result = Attempt::run(usize::MAX, usize::MAX, &|| false, |attempt| {
+            let result = prepare(&form, attempt);
+            attempt.check().unwrap(); // A per-program profile refusal is local.
+            result
+        })
+        .unwrap();
+        if admitted {
+            result.unwrap();
+            assert_eq!(entries(), 1);
+        } else {
+            assert!(matches!(result, Err(Error::ConstructionLimit)));
+            assert_eq!(entries(), 0);
         }
     }
 }
@@ -183,32 +206,16 @@ fn exact_and_one_below_cumulative_reservations() {
         let result = Attempt::run(work - 1, allocation, &|| false, |a| prepare(form, a));
         assert_eq!(result.unwrap_err().code, "preparation-sdk-work-units");
         assert_eq!(entries(), 1);
-        reset();
-        let result = Attempt::run(work, allocation - 1, &|| false, |a| prepare(form, a));
-        assert_eq!(
-            result.unwrap_err().code,
-            "preparation-sdk-reservation-bytes"
-        );
-        assert_eq!(entries(), 0);
+        if allocation > 0 {
+            reset();
+            let result = Attempt::run(work, allocation - 1, &|| false, |a| prepare(form, a));
+            assert_eq!(
+                result.unwrap_err().code,
+                "preparation-sdk-reservation-bytes"
+            );
+            assert_eq!(entries(), 0);
+        }
     }
-}
-#[test]
-fn refused_translation_precharges_cannot_enter_backend() {
-    let form = "a0000|b0000";
-    let recorder = Recorder::default();
-    recorder.charge_work(entry_work().unwrap()).unwrap();
-    recorder.check().unwrap();
-    let parsed = ast::prepare(form, 33, AST_REPRESENTATION_DEPTH, &recorder).unwrap();
-    let owned = inventory::inspect(parsed, &recorder).unwrap();
-    let before = recorder.work.load(Relaxed);
-    let hir_work = owned.work + form.len();
-    drop(owned);
-    reset();
-    let result = Attempt::run(before + hir_work - 1, usize::MAX, &|| false, |a| {
-        prepare(form, a)
-    });
-    assert_eq!(result.unwrap_err().code, "preparation-sdk-work-units");
-    assert_eq!(entries(), 0);
 }
 #[test]
 fn cancellation_and_prior_failure_are_sticky_and_retry_is_fresh() {
@@ -257,20 +264,14 @@ fn cancellation_and_prior_failure_are_sticky_and_retry_is_fresh() {
     }
     let result = Attempt::run(100, 0, &|| false, |a| {
         a.charge_allocation(1).unwrap_err();
-        assert_eq!(work_overflow(a).code, "preparation-sdk-reservation-bytes");
         assert_eq!(
-            allocation_overflow(a).code,
+            failure(prepare(form, a).unwrap_err()).code,
             "preparation-sdk-reservation-bytes"
         );
     });
     assert_eq!(
         result.unwrap_err().code,
         "preparation-sdk-reservation-bytes"
-    );
-    assert_eq!(work_overflow(&|| true).reason, FailureReason::Cancelled);
-    assert_eq!(
-        allocation_overflow(&|| true).reason,
-        FailureReason::Cancelled
     );
 }
 
@@ -394,11 +395,19 @@ fn retained_forms_translate_once_with_matching_hir() {
             continue;
         };
         reset();
+        if matches!(row["id"].as_u64(), Some(1184 | 1185)) {
+            assert!(matches!(
+                prepare(&reading.form, &|| false),
+                Err(Error::ConstructionLimit)
+            ));
+            assert_eq!(entries(), 0);
+            continue;
+        }
         let hir = prepare(&reading.form, &|| false).unwrap();
         assert_eq!(entries(), 1, "{}", row["id"]);
         let baseline = regex_syntax::Parser::new().parse(&reading.form).unwrap();
         assert_eq!(hir, baseline, "{}", row["id"]);
         count += 1;
     }
-    assert_eq!(count, 1142);
+    assert_eq!(count, 1140);
 }

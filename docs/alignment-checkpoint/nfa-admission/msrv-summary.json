@@ -1,0 +1,11 @@
+{
+  "rows": 11274,
+  "failures": [],
+  "maxima": {
+    "requested": 2216,
+    "reserved": 2720,
+    "peak": 1736,
+    "work": 50167
+  },
+  "scope": "Isolated structural inventory and its SDK scratch owners; no backend construction or universal compiler resource claim"
+}

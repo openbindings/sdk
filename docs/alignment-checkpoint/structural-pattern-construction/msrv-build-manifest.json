@@ -1,0 +1,41 @@
+{
+  "sources": {
+    "probe.rs": "6994f8466153b82bb3f34697a611d19dcefc586dccb7cbda6fb7d20a9feebd45",
+    "ast.rs": "b329ff6097952edd233f75559aad90d8e6235025b0f22edb2a3659d8fc0456a9",
+    "normalized.rs": "d2818d5786965349fd0f2c0cf4815d440405bbcbfb92272440ffcc502c76c0cf",
+    "inventory.rs": "98e3a1c0fe3746bf0b927bdaef8f2cf18d8d6af6740ccea13d8d7df0071e4c23",
+    "inventory/arithmetic.rs": "78e6ce18ff5e51df37432c397d54fff6f855c021b939453a7fcc530bbe5a03f6",
+    "inventory/fold.rs": "a1da6b7b5fd2e014c22b0094d0a8c7833a581bdc3b4675b73682c14b4c8d06ac",
+    "hir.rs": "8743a2e97f9c05d749daa46f6349d1557b1e5e08ca5bbf9618606a4f57266019",
+    "profile.rs": "ecdf02e42ee192df72781de01415a391c23a1571d38bfdaa242938587350af59",
+    "pattern.rs": "2655aa2c2e47870995809cd395b19ac4802c4676ad297de0eabc1e639692b632",
+    "es2020_properties.rs": "27eddd4be6f9036d7169f610282a8b0a93b6fcc6767fa3f3bfe88fae947e6c01",
+    "pattern/identifier/ranges.rs": "75449a76dd96fd8e7842b2f73f3fee5a39537147e35990af10392a7400813110",
+    "pattern/identifier.rs": "f1eda88a91d5c933e1db9974f3d4d1d55c6f6e352fe699de9c0b261398c24cec"
+  },
+  "command": [
+    "/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/target/toolchains/1.88.0/bin/rustc",
+    "--edition=2024",
+    "-C",
+    "opt-level=3",
+    "-C",
+    "lto=thin",
+    "/Users/matt/Code/ob-pj/openbindings/sdk-migration/receipts/2026-11-02-preparation/pattern-structural-stage/probe.rs",
+    "-L",
+    "dependency=/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/msrv-1.88/release/deps",
+    "--extern",
+    "regex=/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/msrv-1.88/release/deps/libregex-ef17371a6620e65c.rlib",
+    "--extern",
+    "regex_syntax=/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/msrv-1.88/release/deps/libregex_syntax-886e5ec969946e46.rlib",
+    "--extern",
+    "regex_automata=/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/msrv-1.88/release/deps/libregex_automata-017c7ae6218c40da.rlib",
+    "--extern",
+    "serde_json=/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/msrv-1.88/release/deps/libserde_json-44dc6d4cc8b085ec.rlib",
+    "--extern",
+    "openbindings_internal_schema=/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/msrv-1.88/release/deps/libopenbindings_internal_schema-174a73efb7778a4e.rlib",
+    "-o",
+    "/Users/matt/Code/ob-pj/openbindings/sdk-migration/receipts/2026-11-02-preparation/pattern-structural-stage/probe-msrv"
+  ],
+  "compiler": "rustc 1.88.0 (6b00bc388 2025-06-23)\nbinary: rustc\ncommit-hash: 6b00bc3880198600130e1cf62b8f8a93494488cc\ncommit-date: 2025-06-23\nhost: aarch64-apple-darwin\nrelease: 1.88.0\nLLVM version: 20.1.5\n",
+  "binary_sha256": "f2c4ea06b7d37a6d60a65afe5732bf74c26e85b64cdec88825c5a309154066eb"
+}

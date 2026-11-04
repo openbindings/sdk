@@ -39,17 +39,3 @@ pub(super) fn add(value: &mut usize, other: usize) -> Result<()> {
     *value = value.checked_add(other).ok_or(InternalError::Overflow)?;
     Ok(())
 }
-pub(super) fn growth(width: usize, count: Amount, minimum: usize) -> Amount {
-    match count.0 {
-        Some(0) => Amount::from(0),
-        Some(n) => Amount::from(n.max(minimum)) * width * 4,
-        None => Amount(None),
-    }
-}
-pub(super) fn sort(count: usize) -> Amount {
-    if count < 2 {
-        Amount::from(0)
-    } else {
-        Amount::from(count) * count * 32 + Amount::from(count) * 512
-    }
-}

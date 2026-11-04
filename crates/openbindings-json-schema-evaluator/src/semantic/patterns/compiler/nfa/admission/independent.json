@@ -1,0 +1,337 @@
+[
+  {
+    "id": "empty",
+    "form": "",
+    "expected": {
+      "dispatch": 2,
+      "helper": 1,
+      "tail_pressure": 4
+    }
+  },
+  {
+    "id": "literal",
+    "form": "a",
+    "expected": {
+      "dispatch": 2,
+      "helper": 2,
+      "tail_pressure": 2
+    }
+  },
+  {
+    "id": "string",
+    "form": "abc",
+    "expected": {
+      "dispatch": 2,
+      "helper": 4,
+      "tail_pressure": 2
+    }
+  },
+  {
+    "id": "ascii-class",
+    "form": "[a-cx-z]",
+    "expected": {
+      "dispatch": 2,
+      "helper": 3,
+      "tail_pressure": 2
+    }
+  },
+  {
+    "id": "unicode-class",
+    "form": "[\u00e9-\u00ea]",
+    "expected": {
+      "dispatch": 2,
+      "helper": 5,
+      "tail_pressure": 2
+    }
+  },
+  {
+    "id": "word",
+    "form": "(?-u:\\b)",
+    "expected": {
+      "dispatch": 2,
+      "helper": 257,
+      "tail_pressure": 2
+    }
+  },
+  {
+    "id": "anchor",
+    "form": "^",
+    "expected": {
+      "dispatch": 2,
+      "helper": 1,
+      "tail_pressure": 2
+    }
+  },
+  {
+    "id": "capture",
+    "form": "(a)",
+    "expected": {
+      "dispatch": 3,
+      "helper": 2,
+      "tail_pressure": 2
+    }
+  },
+  {
+    "id": "optional",
+    "form": "a?",
+    "expected": {
+      "dispatch": 3,
+      "helper": 2,
+      "tail_pressure": 4
+    }
+  },
+  {
+    "id": "star",
+    "form": "a*",
+    "expected": {
+      "dispatch": 3,
+      "helper": 2,
+      "tail_pressure": 4
+    }
+  },
+  {
+    "id": "nullable-star",
+    "form": "(?:a?)*",
+    "expected": {
+      "dispatch": 4,
+      "helper": 2,
+      "tail_pressure": 8
+    }
+  },
+  {
+    "id": "plus",
+    "form": "a+",
+    "expected": {
+      "dispatch": 3,
+      "helper": 2,
+      "tail_pressure": 4
+    }
+  },
+  {
+    "id": "exact",
+    "form": "a{2}",
+    "expected": {
+      "dispatch": 4,
+      "helper": 3,
+      "tail_pressure": 2
+    }
+  },
+  {
+    "id": "bounded-zero",
+    "form": "a{0,2}",
+    "expected": {
+      "dispatch": 4,
+      "helper": 3,
+      "tail_pressure": 12
+    }
+  },
+  {
+    "id": "bounded-one",
+    "form": "a{1,2}",
+    "expected": {
+      "dispatch": 4,
+      "helper": 3,
+      "tail_pressure": 4
+    }
+  },
+  {
+    "id": "bounded-two",
+    "form": "a{2,3}",
+    "expected": {
+      "dispatch": 5,
+      "helper": 4,
+      "tail_pressure": 4
+    }
+  },
+  {
+    "id": "unbounded-two",
+    "form": "a{2,}",
+    "expected": {
+      "dispatch": 4,
+      "helper": 3,
+      "tail_pressure": 4
+    }
+  },
+  {
+    "id": "concat",
+    "form": "a?b?",
+    "expected": {
+      "dispatch": 6,
+      "helper": 5,
+      "tail_pressure": 6
+    }
+  },
+  {
+    "id": "alternate",
+    "form": "a?|b?",
+    "expected": {
+      "dispatch": 6,
+      "helper": 5,
+      "tail_pressure": 16
+    }
+  },
+  {
+    "id": "trie",
+    "form": "ab|cd",
+    "expected": {
+      "dispatch": 2,
+      "helper": 7,
+      "tail_pressure": 20
+    }
+  },
+  {
+    "id": "collapsed-alt",
+    "form": "a|b",
+    "expected": {
+      "dispatch": 2,
+      "helper": 2,
+      "tail_pressure": 2
+    }
+  },
+  {
+    "id": "repeat-trie",
+    "form": "(ab|cd){2}",
+    "expected": {
+      "dispatch": 6,
+      "helper": 13,
+      "tail_pressure": 36
+    }
+  },
+  {
+    "id": "unicode-2byte",
+    "form": "[\\x{80}-\\x{7FF}]",
+    "expected": {
+      "dispatch": 2,
+      "helper": 5,
+      "tail_pressure": 2
+    }
+  },
+  {
+    "id": "unicode-3byte",
+    "form": "[\\x{800}-\\x{FFFF}]",
+    "expected": {
+      "dispatch": 2,
+      "helper": 18,
+      "tail_pressure": 2
+    }
+  },
+  {
+    "id": "unicode-4byte",
+    "form": "[\\x{10000}-\\x{10FFFF}]",
+    "expected": {
+      "dispatch": 2,
+      "helper": 17,
+      "tail_pressure": 2
+    }
+  },
+  {
+    "id": "unicode-full",
+    "form": "[\\x{0}-\\x{10FFFF}]",
+    "expected": {
+      "dispatch": 2,
+      "helper": 38,
+      "tail_pressure": 2
+    }
+  },
+  {
+    "id": "one-literal-alt",
+    "form": "a|b?",
+    "expected": {
+      "dispatch": 5,
+      "helper": 5,
+      "tail_pressure": 12
+    }
+  },
+  {
+    "id": "nullable-alt",
+    "form": "(?:|a)",
+    "expected": {
+      "dispatch": 4,
+      "helper": 4,
+      "tail_pressure": 8
+    }
+  },
+  {
+    "id": "nullable-alt-star",
+    "form": "(?:|a)*",
+    "expected": {
+      "dispatch": 5,
+      "helper": 4,
+      "tail_pressure": 16
+    }
+  },
+  {
+    "id": "dispatch-at",
+    "form": "a{65534}",
+    "expected": {
+      "dispatch": 65536,
+      "helper": 65535,
+      "tail_pressure": 2
+    }
+  },
+  {
+    "id": "dispatch-over",
+    "form": "a{65535}",
+    "expected": {
+      "dispatch": 65537,
+      "helper": 65536,
+      "tail_pressure": 2
+    }
+  },
+  {
+    "id": "tail-at",
+    "form": "(?:a?){524287}",
+    "expected": {
+      "dispatch": 1048576,
+      "helper": 524288,
+      "tail_pressure": 1048576
+    }
+  },
+  {
+    "id": "tail-over",
+    "form": "(?:a?){524288}",
+    "expected": {
+      "dispatch": 1048577,
+      "helper": 524289,
+      "tail_pressure": 1048577
+    }
+  },
+  {
+    "id": "large-count",
+    "form": "a{4294967295}",
+    "expected": {
+      "dispatch": 1048577,
+      "helper": 1048577,
+      "tail_pressure": 2
+    }
+  },
+  {
+    "id": "huge-zero",
+    "form": "(?:a{4294967295}){0}",
+    "expected": {
+      "dispatch": 2,
+      "helper": 1,
+      "tail_pressure": 4
+    }
+  },
+  {
+    "id": "helper-at",
+    "literal_len": 1048575,
+    "expected": {
+      "dispatch": 2,
+      "helper": 1048576,
+      "tail_pressure": 2
+    },
+    "scope": "synthetic isolated HIR fold; not public source admission"
+  },
+  {
+    "id": "helper-over",
+    "literal_len": 1048576,
+    "expected": {
+      "dispatch": 2,
+      "helper": 1048577,
+      "tail_pressure": 2
+    },
+    "scope": "synthetic isolated HIR fold; not public source admission"
+  }
+]

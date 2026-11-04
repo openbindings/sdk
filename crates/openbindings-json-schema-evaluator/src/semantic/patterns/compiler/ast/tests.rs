@@ -1,6 +1,6 @@
 use super::*;
 use crate::pattern::{self, Reading};
-use openbindings_internal_schema::preparation::Attempt;
+use openbindings_internal_schema::{FailureReason, preparation::Attempt};
 use std::cell::Cell;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -110,21 +110,16 @@ fn exact_shared_allowances_and_one_below() {
         assert_eq!(result.unwrap_err().code, "preparation-sdk-work-units");
         assert_eq!(entries(), 1, "{form}");
 
-        reset_entries();
-        let result = Attempt::run(work, allocation - 1, &|| false, |attempt| {
-            prepare(form, 32, 32, attempt)
-        });
         assert_eq!(
-            result.unwrap_err().code,
-            "preparation-sdk-reservation-bytes"
+            allocation, 0,
+            "dependency construction is not an SDK storage reservation"
         );
-        assert_eq!(entries(), 0, "{form}");
     }
 }
 
 #[test]
 fn refused_precharges_never_enter_the_parser() {
-    for limit in [0, 1, 100, SCHEDULE_WORK, SCHEDULE_WORK + 100] {
+    for limit in [0, 1, 40, 80] {
         reset_entries();
         let result = Attempt::run(limit, usize::MAX, &|| false, |attempt| {
             prepare("a0000|b0000", 32, 32, attempt)
@@ -167,64 +162,45 @@ fn cancellation_before_and_after_parsing_cannot_publish_ownership() {
 }
 
 #[test]
-fn schedule_overflow_preserves_and_poisons_the_enclosing_cause() {
-    let layout = Layout::current().unwrap();
+fn structural_boundaries_refuse_before_parser_entry() {
+    for (limit, class) in [(profile::AST_NODES, false), (profile::CLASS_ITEMS, true)] {
+        for delta in [-1isize, 0, 1] {
+            let n = limit.checked_add_signed(delta).unwrap();
+            let form = if class {
+                let items: String = (0..n)
+                    .map(|i| {
+                        let value = i * 2;
+                        let scalar = if value >= 0xD800 {
+                            value + 0x800
+                        } else {
+                            value
+                        };
+                        format!("\\x{{{scalar:X}}}")
+                    })
+                    .collect();
+                format!("[{items}]")
+            } else {
+                "a".repeat(n - 2)
+            };
+            reset_entries();
+            let result = prepare(&form, usize::MAX, u32::MAX, &|| false);
+            if delta <= 0 {
+                result.unwrap();
+                assert_eq!(entries(), 1);
+            } else {
+                assert!(matches!(
+                    result,
+                    Err(Error::Refused(Refusal::ConstructionLimit))
+                ));
+                assert_eq!(entries(), 0);
+            }
+        }
+    }
     let huge = Summary {
         literals: usize::MAX,
         ..Summary::default()
     };
-    let result = Attempt::run(usize::MAX, usize::MAX, &|| false, |attempt| {
-        let error = reservation(usize::MAX, &huge, layout, attempt).unwrap_err();
-        assert_eq!(error.code, "preparation-sdk-work-units");
-        assert!(attempt.charge_work(0).is_err());
-    });
-    assert_eq!(result.unwrap_err().code, "preparation-sdk-work-units");
-
-    let result = Attempt::run(usize::MAX, 0, &|| false, |attempt| {
-        attempt.charge_allocation(1).unwrap_err();
-        let error = reservation(usize::MAX, &huge, layout, attempt).unwrap_err();
-        assert_eq!(error.code, "preparation-sdk-reservation-bytes");
-    });
-    assert_eq!(
-        result.unwrap_err().code,
-        "preparation-sdk-reservation-bytes"
-    );
-
-    let result = Attempt::run(100, usize::MAX, &|| false, |attempt| {
-        // This count overflows allocation terms while its word-work sum fits.
-        // It challenges arithmetic directly without manufacturing a giant input.
-        let items = Summary {
-            class_items: usize::MAX / 1024,
-            ..Summary::default()
-        };
-        assert_eq!(
-            reservation(0, &items, layout, attempt).unwrap_err().code,
-            "preparation-sdk-reservation-bytes"
-        );
-        assert!(attempt.charge_allocation(0).is_err());
-    });
-    assert_eq!(
-        result.unwrap_err().code,
-        "preparation-sdk-reservation-bytes"
-    );
-    assert_eq!(work_overflow(&|| true).reason, FailureReason::Cancelled);
-    assert_eq!(
-        allocation_overflow(&|| true).reason,
-        FailureReason::Cancelled
-    );
-}
-
-#[test]
-fn target_schedules_match_the_reviewed_tiny_program() {
-    let inventory = normalized::inspect("a0000|b0000", 32, &|| false).unwrap();
-    for (word, expected) in [(8, 5147), (4, 5207)] {
-        let layout = Layout::pinned(word).unwrap();
-        let cost = reservation(11, &inventory, layout, &|| false).unwrap();
-        assert_eq!(cost.work, expected);
-    }
-    assert!(Layout::current().is_some());
-    assert!(Layout::pinned(2).is_none());
-    assert!(Layout::pinned(16).is_none());
+    assert!(!profile::admits_normalized(&huge));
 }
 
 #[test]
@@ -238,8 +214,20 @@ fn unchanged_reader_forms_use_the_guarded_stage() {
         };
         reset_entries();
         let result = prepare(&reading.form, 32, 250, &|| false);
-        assert_eq!(entries(), 1, "{}: {result:?}", row["id"]);
-        assert!(!matches!(result, Err(Error::Attempt(_))), "{}", row["id"]);
+        if matches!(row["id"].as_u64(), Some(1184 | 1185)) {
+            assert!(matches!(
+                result,
+                Err(Error::Refused(Refusal::ConstructionLimit))
+            ));
+            assert_eq!(
+                entries(),
+                0,
+                "preserved construction attack must not reach parser"
+            );
+        } else {
+            assert_eq!(entries(), 1, "{}: {result:?}", row["id"]);
+            result.unwrap();
+        }
         linear += 1;
     }
     assert_eq!(linear, 1142);
