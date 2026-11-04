@@ -43,20 +43,20 @@ value evaluator.
 
 ## Default evaluation implementation
 
-The optional `openbindings-json-schema-evaluator` currently combines a compiled
-ordinary path with bounded reasoning over original schema locations. The latter
+The optional `openbindings-json-schema-evaluator` uses one prepared semantic plan
+over original schema locations. It
 keeps exact values, typed reference effects, conditional evaluation annotations
 and supported recursive proofs together. Prepared original queries and pattern
 readings are immutable; mutable matching and proof state belongs to each call.
 No completed artifact retains a caller's preparation control.
 
-The reviewed replacement is one prepared original-node engine. It is still being
-implemented and qualified. The outgoing projection/compiler and its adaptation
-code are private transition machinery, with no compatibility protection. Their
-allocation qualification remains open until replacement or a complete certificate.
+The outgoing projection compiler and its adaptation code have been removed.
+Pattern construction uses checked structural admission, a defined retained
+footprint and cooperative SDK work/storage budgets. These policies do not promise
+full accounting of dependency allocations or total process memory.
 See the [saved checkpoint](alignment-checkpoint.md) for actual completed increments
-and remaining gates. No default limit or performance requirement is waived by the
-architectural change. The SDK uses unmodified dependencies; maintenance details are
+and remaining gates. Default workload and performance qualification remain required.
+The SDK uses unmodified dependencies; maintenance details are
 in [DEPENDENCY-MAINTENANCE.md](../DEPENDENCY-MAINTENANCE.md).
 
 ## Current interfaces

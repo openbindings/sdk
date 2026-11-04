@@ -172,7 +172,7 @@ unknown required attributes refuse preparation. Its `regex` attribute checks
 ECMA-262 11th-edition no-flags syntax with Annex B, without executing a pattern.
 An external resource's declared dialect is never silently read as 2020-12.
 See [evaluator profiles and preparation](../../docs/schema-evaluators.md) for
-custom meta-schema admission and the remaining backend allocation gate.
+custom meta-schema admission and the structural and cooperative resource limits.
 
 `evaluate` is the cheap check: failure has no problems and marks diagnostics
 incomplete. `explain` preserves the same result and reports available bounded
@@ -182,8 +182,8 @@ detail work never retracts an established result. Oversized origins are omitted
 before copying them, pattern diagnostics do not echo authored regex text, and an
 unavailable resource has no invented source coordinate.
 
-Complete compiled validators retain their compiled state and original locations.
-Validators needing semantic fallback additionally retain the immutable original
-schema environment and successful primitive preparations. No caller borrow is
-retained. See [custom evaluators](../../docs/schema-evaluators.md),
+Prepared validators retain one immutable original schema environment, prepared
+primitive operands and shared pattern programs. Each call owns its mutable proof
+state and search caches. No caller borrow is retained.
+See [custom evaluators](../../docs/schema-evaluators.md),
 [first use](examples/first_use.rs), and [replacement](examples/replacement.rs).

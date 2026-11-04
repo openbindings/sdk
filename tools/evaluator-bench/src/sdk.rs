@@ -139,12 +139,11 @@ impl Context {
     }
 }
 impl Prepared {
-    // Preparation finished: with a prepared contract, or with a refusal, which
-    // judges no value and which the outcome check before timing compared with
-    // the fixture.
+    // Timed preparation must produce a usable contract. Refusals are observed
+    // separately and must never be counted as successful preparation.
     #[inline(always)]
     pub fn is_ready(&self) -> bool {
-        !matches!(&self.0, Err(detail) if detail.kind == PreparationFailureKind::Cancelled)
+        self.0.is_ok()
     }
     // This SDK chooses detail per call.
     #[inline(always)]

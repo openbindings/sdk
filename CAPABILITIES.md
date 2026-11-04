@@ -95,8 +95,8 @@ acquisition. Core alone supplies no value verdict, even for a Boolean schema.
 See the [evaluator integration guide](docs/schema-evaluators.md).
 
 The optional [default evaluator](crates/openbindings-json-schema-evaluator/README.md)
-combines its exact primitive/compiled engine with a bounded semantic interpreter
-over original schema locations. It distinguishes `Satisfies`, `Fails`, `Undefined`
+uses one bounded semantic plan over original schema locations, with exact
+primitive comparisons. It distinguishes `Satisfies`, `Fails`, `Undefined`
 and `NoVerdict`. A known invalid Unicode pattern or a supported non-consuming
 alias cycle may establish Undefined when the value's validity depends on it.
 Missing content, an unsupported predicate, cancellation and an exhausted limit
@@ -111,12 +111,15 @@ summaries are reusable only when validity and every evaluated annotation are
 independent of provisional cuts; unresolved components remain conservative.
 Finite successful tests are not a claim of unrestricted recursive completeness.
 
-The compiled path uses jsonschema 0.58.6 with exact decimal comparisons and the
-SDK's ECMA-262 11th-edition Unicode-pattern handling. Unsupported valid pattern
+The evaluator uses exact decimal comparisons and the SDK's ECMA-262 11th-edition
+Unicode-pattern handling. Admitted patterns use immutable literal matchers or
+capture-free forward NFAs, with a separate search cache for each value call.
+The jsonschema dependency remains part of the fixed document and meta-schema
+checks, not a second value-evaluation path. Unsupported valid pattern
 features yield NoVerdict where required; invalid patterns participate in semantic
 dependence analysis. Optional `format` assertion remains disabled. External
 draft-07 and 2019-09 resources now use their own inventory, assertions and
-annotations in the semantic path. Draft-07 reference siblings are ignored;
+annotations. Draft-07 reference siblings are ignored;
 2019-09 recursive references and contains annotations retain their dialect's
 behavior. Unsupported identifier forms retain explicit capability refusals,
 including external identity selection when a stopped inventory could hide names.
@@ -125,28 +128,31 @@ original meta-schema and vocabulary declarations; unknown required vocabularies
 and format attributes have explicit preparation refusals.
 
 Construction and evaluation honor explicit resource/work limits and cooperative
-cancellation. The semantic path charges its decision graph, annotations, value
+cancellation. The plan charges its decision graph, annotations, value
 identity and proof work, including retries. Original diagnostics are bounded
 before copying long paths; supported pattern matching borrows input text.
-`program_bytes` does not promise a total process-RSS cap or account for every
-allocation in the underlying compiler. Exact `multipleOf` retains its arithmetic
+Pattern construction has checked structural admission and representation limits;
+SDK reservations do not count every dependency allocation or promise a process-RSS
+cap. Exact `multipleOf` retains its arithmetic
 bound; some Unicode-text operations cannot interpret unpaired UTF-16 units.
 See the evaluator guide's limit table for the individual policies.
 
 Preparation failure is separate from a per-value outcome. A failed or cancelled
-attempt does not poison cached preparation. Complete compiled validators release
-unnecessary original sources; a semantic validator retains the original schema
-environment it needs. `evaluate` requests an outcome; `explain` may provide bounded
+attempt does not poison cached preparation. A prepared validator retains the
+immutable original schema environment needed for evaluation and source evidence.
+`evaluate` requests an outcome; `explain` may provide bounded
 original-location evidence. Missing diagnostic detail never changes the verdict.
 
 The saved migration checkpoint passes all 505 required core cases and 1,546
 required evaluator cases on the qualified native and browser runs, including
 custom vocabulary and format cases. Independent recursive controls and the finite
 describe/check/pull/adopt/invoke journey also pass. This is bounded evidence:
-the original-engine replacement, full pattern compiler accounting, remaining
-physical-stack qualification, final API/map audit and matched-toolchain performance
-qualification remain open. Original Explain witnesses now pass their independent
-semantic and allocation review, with cumulative verdict/diagnostic allowances. See the [current checkpoint](docs/alignment-checkpoint.md)
+the final portable replay, API/map audit and matched-toolchain performance
+qualification remain open. The original-engine replacement is implemented;
+native stack controls and independent construction, capacity and Explain reviews
+have passed their recorded scopes. The selected resource contract uses structural
+limits and cooperative SDK budgets, not a full dependency-allocation ledger.
+See the [current checkpoint](docs/alignment-checkpoint.md)
 for receipts and the remaining sequence. Earlier measurements in
 [performance boundaries](docs/performance-boundaries.md) remain historical evidence.
 
