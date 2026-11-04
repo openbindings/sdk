@@ -83,3 +83,11 @@ This is a passing hosted checkpoint. It does not prove the cause of the precedin
 3cf0f6e walk overflow or close the independent replacement-compiler certificate.
 The prior failure remains evidence; no case, assertion or resource limit was
 removed. Final default-switch and whole-alignment qualification remain separate.
+
+## Completed all-host result at 4e0c62f
+
+The normalized-scanner checkpoint `4e0c62f9100bd8196b6d4ccd3897109436c15a36`
+passes every job in hosted CI run 41801999907, including Windows and the aggregate
+check. Its performance run 41802000018 also passes. The full CI receipt is retained
+as `ci-4e0c62f.json` in the coordinator. This qualifies that pushed checkpoint;
+the subsequent AST stage and final default switch have their own validation gates.

@@ -108,11 +108,17 @@ private normalized-grammar scanner is now implemented test-only, with bounded
 independent design and implementation/resource approval. It admits every retained
 Linear form, rejects excluded backend syntax, counts actual normalized groups and
 uses checked allocation-free scanning; it invokes no backend parser. Parent current
-unit/strict-lint and minimum-Rust focused checks pass. The next private slice is
-prospective AST parse/visit/drop work and checked metadata, while HIR/NFA work and
-physical compiler stack qualification continue independently.
+unit/strict-lint and minimum-Rust focused checks pass. The subsequent private
+[guarded AST stage](../design/2026-11-02/pattern-ast-stage.md) is now implemented
+with independent design and implementation/resource approval. It precharges
+checked parse/visit/drop work and allocation, parses once, and refuses publication
+after cancellation. Parent 4,335-row current/minimum/actual-Wasm controls and
+independent 151-row controls on each Rust version pass. It remains inactive.
+The next slice is [checked iterative HIR inventory](../design/2026-11-02/pattern-hir-inventory.md),
+followed by translation and NFA stages. Phase-specific construction-stack admission
+and the complete aggregate/default-workload qualification remain open.
 
-The latest pushed implementation checkpoint is `67dfdeb`: obsolete regex-format
+The reviewed warm-up checkpoint is `67dfdeb`: obsolete regex-format
 identifier warm-up accounting is removed after independent review; 131 focused
 Rust tests pass on each toolchain and the fresh Wasm package passes 187 Node tests.
 The complete portable verifier last passed at `24ad294`. Its Windows replay receipt

@@ -1,0 +1,79 @@
+{
+  "scope": "private test-only guarded AST stage; inactive",
+  "base_commit": "4e0c62f9100bd8196b6d4ccd3897109436c15a36",
+  "current_library": {
+    "passed": 129,
+    "ignored_release_only": 2
+  },
+  "stage_groups_per_rust_version": 8,
+  "strict_all_target_clippy": "pass",
+  "parent_native": {
+    "rows": 4335,
+    "failures": [],
+    "source_sha256": "445f87353c1cb8d7622ca76ffa234e0fe34a955d48c5b1f2c817f0ce09735b8c",
+    "binary_sha256": "216818606dc4922e4e680c3206b76ed0635905ec370a0851263a0f06c3ef5e72",
+    "inputs_sha256": "e8450f1e21215af44dddb1a00c5fb6d3720429cf5fcbe0ba8c6f0ba0ed6ee3d3"
+  },
+  "parent_msrv": {
+    "rows": 4335,
+    "current_rows": 4335,
+    "differences": []
+  },
+  "wasm": [
+    {
+      "host": "node",
+      "version": "v22.23.0",
+      "rows": 4379,
+      "observed": 4335,
+      "failures": [],
+      "linear_stack_bytes": 131072,
+      "wasm_sha256": "6f3060f89ebe682d246adde3dfeeb9f5f7b5f314a4a415d101990ae9ce0dccf4",
+      "inputs_sha256": "e8450f1e21215af44dddb1a00c5fb6d3720429cf5fcbe0ba8c6f0ba0ed6ee3d3"
+    },
+    {
+      "host": "chromium",
+      "version": "156.0.8078.4",
+      "rows": 4379,
+      "observed": 4335,
+      "failures": [],
+      "linear_stack_bytes": 131072,
+      "wasm_sha256": "6f3060f89ebe682d246adde3dfeeb9f5f7b5f314a4a415d101990ae9ce0dccf4",
+      "inputs_sha256": "e8450f1e21215af44dddb1a00c5fb6d3720429cf5fcbe0ba8c6f0ba0ed6ee3d3"
+    },
+    {
+      "host": "webkit",
+      "version": "27.2",
+      "rows": 4379,
+      "observed": 4335,
+      "failures": [],
+      "linear_stack_bytes": 131072,
+      "wasm_sha256": "6f3060f89ebe682d246adde3dfeeb9f5f7b5f314a4a415d101990ae9ce0dccf4",
+      "inputs_sha256": "e8450f1e21215af44dddb1a00c5fb6d3720429cf5fcbe0ba8c6f0ba0ed6ee3d3"
+    }
+  ],
+  "independent_current": {
+    "exit_code": 0,
+    "rows": 151,
+    "undercharge_or_retention": [],
+    "parsed": 18,
+    "refused": 133
+  },
+  "independent_minimum": {
+    "exit_code": 0,
+    "rows": 151,
+    "undercharge_or_retention": [],
+    "identical_current_observations": true
+  },
+  "production_source_hashes": {
+    "crates/openbindings-json-schema-evaluator/src/semantic/patterns/compiler.rs": "62910d2c12575dd14cec6ff0dbcc4f92ee80d9eefc605d3a59f6e4d2b81b82f7",
+    "crates/openbindings-json-schema-evaluator/src/semantic/patterns/compiler/ast.rs": "445f87353c1cb8d7622ca76ffa234e0fe34a955d48c5b1f2c817f0ce09735b8c",
+    "crates/openbindings-json-schema-evaluator/src/semantic/patterns/compiler/ast/tests.rs": "b199c7ca39f7873d44b8000793bcd099cc5c8fc427dfb674eb775d4d5ddb26c6",
+    "crates/openbindings-json-schema-evaluator/src/semantic/patterns/compiler/normalized.rs": "94cec09ab3d96bebeee55d8ad8d8a6de39ec5ab1ff98fadb8ce2faf44d55b8ca"
+  },
+  "logs": {
+    "current-lib-tests.log": "e67dbc57ea54a6c7c7086b55cddb38206408b1ac8f4146dc5de7f1f22af54daa",
+    "current-focused-final.log": "1ca5c61a881dead64f9686af103f527e3ab3e81b43f075075fd0fbb28da83d35",
+    "msrv-focused-final.log": "970dc05e92644cde28ed2a89e89a35a91d705798290c9ff6fcc1923bb6492cd8",
+    "clippy.log": "1b3f29c7565b5bc2231c4be8203f1a88169dde8e3a22467253b1bfa45bc75a56"
+  }
+}

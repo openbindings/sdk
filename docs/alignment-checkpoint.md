@@ -193,3 +193,10 @@ arises. Do not merge to main, publish packages or deploy without separate author
 The bounded original-engine [helper stack witnesses](alignment-checkpoint/original-helper-stack.md) now pass current/minimum Rust and Node/Chromium/WebKit. This does not close the whole compiler/physical-stack gate. The latest [Windows receipt](alignment-checkpoint/ci-replay-output.md) preserves a real outgoing walk-stack overflow at `3cf0f6e` and all-host CI/performance success at `67dfdeb`, without claiming the earlier failure is explained.
 
 The private [normalized pattern inventory](alignment-checkpoint/normalized-pattern-inventory.md) is implemented, tested and independently reviewed, but remains inactive until the full prepared-compiler certificate closes.
+
+The following [guarded AST stage](alignment-checkpoint/guarded-ast-stage.md) is now
+implemented with independent design and implementation/resource approval. It
+precharges parsing and cleanup, owns one AST, and preserves attempt failure through
+completion. It also remains inactive. Continue with checked iterative HIR inventory,
+translation, NFA construction and the explicit qualified construction profile;
+do not infer full compiler approval from these bounded stages.
