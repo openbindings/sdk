@@ -28,7 +28,6 @@ const NAMES: [&str; 19] = [
     "regex",
 ];
 static COMPILED: [OnceLock<jsonschema::Validator<FlatJson>>; 19] = [const { OnceLock::new() }; 19];
-static IDENTIFIERS: OnceLock<()> = OnceLock::new();
 
 #[derive(Clone, Copy)]
 pub(super) struct Format(usize);
@@ -52,14 +51,6 @@ impl Format {
                 })
             })?;
         let format = Self(index);
-        if index == 18 && IDENTIFIERS.get().is_none() {
-            attempt.charge_allocation(2 * 1024 * 1024)?;
-            attempt.charge_work(10000)?;
-            crate::pattern::identifier::start('é');
-            crate::pattern::identifier::part('é');
-            attempt.check()?;
-            let _ = IDENTIFIERS.set(());
-        }
         if (3..16).contains(&index) && COMPILED[index].get().is_none() {
             // Compilation input is one fixed keyword and one fixed attribute,
             // with no caller-supplied schema content or reference resolver.
@@ -155,4 +146,38 @@ fn relative_pointer(units: impl Iterator<Item = u16>) -> bool {
         return units.next().is_none();
     }
     pointer(units)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use openbindings_internal_schema::preparation::Attempt;
+
+    #[test]
+    fn regex_format_preparation_needs_no_identifier_initialization() {
+        for source in [r#""regex""#, r#""r\u0065gex""#] {
+            let value = JsonValue::parse(source).unwrap();
+            let prepare = |work, cancelled| {
+                Attempt::run(work, 0, &|| cancelled, |attempt| {
+                    Format::prepare(value.view(), attempt).map(|format| format.0)
+                })
+                .map_err(PreparationFailure::from)
+                .and_then(|result| result)
+            };
+            let work = value.text().len() + 1;
+            for _ in 0..2 {
+                assert_eq!(prepare(work, false).map_err(|error| error.kind), Ok(18));
+            }
+            assert_eq!(
+                prepare(work - 1, false).unwrap_err().kind,
+                PreparationFailureKind::Limit {
+                    resource: "preparation-work-units".into(),
+                }
+            );
+            assert_eq!(
+                prepare(work, true).unwrap_err().kind,
+                PreparationFailureKind::Cancelled
+            );
+        }
+    }
 }
