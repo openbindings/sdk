@@ -1,174 +1,67 @@
 # Aligning the SDK with OpenBindings 0.2
 
-Current implementation continues on `codex/sdk-02-foundation`; no release or merge
-is authorized. The normative pins and implementation sequence below remain in force.
-The source architecture is still malleable, and no compatibility work is required.
+Work continues on `codex/sdk-02-foundation`. Matthew has authorized implementation,
+validation and feature-branch commits/pushes, without release, deployment or merge.
+The pinned specification and adopted current interfaces determine the architecture.
+No old API, type, crate, wire carrier, diagnostic spelling or implementation layout
+has compatibility protection. The unpublished code can be renamed, reorganized,
+removed or replaced wherever that improves conceptual and terminological alignment.
 
-The generic evaluator, original schema environment, current context/invocation
-carriers, standard external dialects and custom vocabulary interpretation are
-implemented. Custom consumers are admitted against their selected original
-meta-schema, under the same bounded preparation attempt. Required formats cover
-all 19 standard attributes. Independent review has corrected namespace selection,
-meta admission, native predicate, date/time and allocation findings. Current
-qualification and exact review boundaries are retained in
-[custom-profile progress](../receipts/2026-11-02-preparation/external-schema-dialects/custom-progress/README.md).
+This is the single current plan. It replaces the October 28 plan and October 30
+amendment. [Earlier checkpoint descriptions](history/2026-11-03-progress-checkpoints.md)
+and [the earlier amendment](history/2026-10-30-amendment.md) are historical evidence,
+not additional design constraints. Counts in separate receipts overlap; each claim
+belongs to its recorded source identity.
 
-The current native document/evaluator controls pass 505 production cases,
-1,546 required values, and 502 package checks on both Rust 1.99 and Rust 1.88.
-The 2,348 auxiliary reference inputs use the existing independently adjudicated
-current ledger; the old inability diagnostics are historical evidence. Rust 1.88
-also builds the WebAssembly bridge. Current host and packaging results are in the
-progress receipt; these overlapping inventories are not additive coverage.
+## Current position
 
-The [custom-meta budget review](../receipts/2026-11-02-preparation/external-schema-dialects/custom-meta-budget-review/review.md)
-closes its 66 cumulative allocation/work controls with no allowance waiver.
-The [compact profile layout review](../receipts/2026-11-02-preparation/external-schema-dialects/profile-layout-review/review.md)
-verifies fixed contained interpretation and exact external inheritance. Removing
-redundant contained profile storage restores the existing Wasm memory caps.
-Ordinary user-schema backend allocation qualification remains separate and open.
+The document/schema foundation, canonical owned domain entries, original resource
+environment, generic evaluator boundary, current context/invocation roles,
+kind-description companion, schema-identity comparison and source-pull workflow are
+implemented and independently reviewed within their recorded capability boundaries.
+Current source-pull and kind clients support borrowed providers; obsolete
+inspection/synthesis/internal-interface crates and consumers are removed. The Rust
+and TypeScript organization follows these domain boundaries. Public guidance uses
+schema/prepared-schema terminology and the actual ownership/editing model.
 
-The canonical document/domain model now uses owned `Operation`, `Source`, `Binding`,
-`Dependency` and `Example` entries from `ConformantDocument` in Rust and TypeScript.
-Detached authoring parts, raw typed views, redundant proof-view names and typed
-setters are removed. [Canonical checkpoint evidence](../receipts/2026-11-02-preparation/canonical-domain-progress/README.md)
-records independent Rust/host reviews, all 32-field coverage, 659 tests on each Rust
-toolchain, 178 Node tests, 505-case exact parity and a tightened memory bound. Test
-inventories overlap and are not additive; source identities delimit every receipt.
+The remaining central implementation is replacement of the ordinary projected
+compiler with one prepared original-node evaluator. Completed, reviewed increments
+include exact predicates and prepared numeric operands, static query retention,
+shared immutable pattern readings/Simple matchers, scalar counting, compact concrete
+execution, local standard-syntax accounting, bounded recursive certificates, and
+explicit applicator frames with shared effective scopes. The original engine is
+not yet the ordinary default; the outgoing compiler still exists. See the
+[implementation sequence](../design/2026-11-02/original-evaluator-implementation.md)
+and [frame checkpoint evidence](../receipts/2026-11-02-preparation/iterative-execution-progress/README.md).
 
-The bounded recursive extension is implemented and independently reviewed.
-[Recursive checkpoint evidence](../receipts/2026-11-02-preparation/recursive-extension-progress/README.md)
-records the original 33 controls, 71 coordinate/identifier controls, full Rust/host
-qualification and the corrected identifier-dependence adjudication. The existing
-2,348-case auxiliary ledger remains unchanged. Complete producer formulas and
-between-attempt coordinate certificates preserve annotation meaning; narrow
-original-graph certificates settle the supported direct cycles. General recursive
-capability remains explicitly bounded. Ordinary compiled-backend allocation remains open; independent review reproduced
-an accounting gap. The reviewed replacement is one prepared original-node engine,
-with concrete execution and bounded semantic reasoning. Its implementation sequence
-and unchanged restoration gates are in [the refined design](../design/2026-11-02/original-evaluator-implementation.md).
-The kind-description companion is implemented and independently reviewed.
-[Kind-description evidence](../receipts/2026-11-02-preparation/kind-description-progress/README.md)
-records exact carriers, distinct provider failures, cancellation handoff and both
-Rust/native/WebAssembly checks. The independently reviewed schema-identity companion
-passes all 24 applicable published groups and 64 additional controls, with exact
-reference contexts and shared resource limits; directional comparison is not claimed.
-[Comparison checkpoint evidence](../receipts/2026-11-02-preparation/comparison-progress/README.md)
-records its scope and explicit capability refusals. Source-pull carriers, request/client
-APIs, document relationships and prospective conformance are now implemented. The
-21 pinned cases, five published examples, 74 independent controls and illustrative
-kind/consumer witnesses pass. Independent implementation review closes its
-annotation-drift finding; 500 closure controls and 48 allocation lanes pass. The obsolete inspection/synthesis/internal-interface crates, consumers and tools
-are removed; current role inventories drive CI and package checks. The external source-pull consumer
-passes against extracted packages and both Rust/Wasm hosts. Its non-static borrowed
-provider test exposed a finite-client Send constraint; the reviewed concrete-future
-boundary fixes it for pulling and all three kind operations without global bounds.
-[Current consumer retirement evidence](../receipts/2026-11-02-preparation/legacy-retirement/README.md)
-records the external invocation workflow and resolved verifier findings, 873 current
-workspace tests/doctests (four existing release-only controls ignored), strict lint,
-15 feature graphs, and all 20 current invocation resource jobs. This checkpoint is
-pushed as `41874e2`. The TypeScript implementation is now split into document,
-schema, JSON, ownership, diagnostics, runtime and optional discovery modules, with
-no internal compatibility barrel. Node/type/reference/npm archive, Chromium/WebKit
-and workerd correctness checks pass; [module evidence](../receipts/2026-11-02-preparation/typescript-modules/README.md)
-records the exact scope; independent organizational and verifier reviews pass. The default 10,000-item source-pull workflow now completes
-with audited B-tree search accounting and an explicit 64-million work-unit policy;
-the earlier 20-million refusal is preserved. The independent catalog-budget review passes; [scale evidence](../receipts/2026-11-02-preparation/source-pull-scale/README.md)
-retains the initial refusal, corrected accounting and current/native/MSRV/Wasm results. Remaining end-to-end jobs, all-host packaging,
-ordinary backend replacement and matched-toolchain performance qualification remain
-active. The first original-engine increment replaces quadratic concrete contains
-counting with a scalar count and formula promotion only for uncertain matches.
-Native evaluator/required-value, MSRV targeted, Node/package and both browser
-semantic checks pass; independent counting review passes. Checkpoint `da39d8b`
-is committed and pushed. Checkpoint `511a1bf` retains original static query results
-during preparation, keeping per-evaluation dynamic scope selection; native/MSRV,
-required-value and browser gates pass. Independent review passes, including 194
-cancellation boundaries and clean retries. The finite G7 consumer journey now
-passes independent review and current/MSRV source/archive qualification. Its
-complete workflow is native-only; Wasm evidence is explicitly partial. See
-[workflow results](../receipts/2026-11-02-preparation/end-to-end-consumer/README.md).
-The next bounded increment retains immutable pattern readings and shares Simple
-matchers; independent review and native/MSRV/Node/browser/package checks pass.
-Full VM-once compilation is explicitly still open: the reviewed eager schedule
-would newly exhaust preparation for otherwise admitted unused patterns. Prepared
-operands and remaining final gates remain active. The next compact-execution
-increment is independently reviewed: unused annotation maps and ordinary leaf
-state retention are removed, while non-leaf sharing and recursive proofs remain.
-The exact 20,000-item array, 20,001-item late-invalid array and 50,000-member object
-recover at unchanged defaults; all 1,546 required cases also pass through a direct
-original-Plan-only independent bridge. The foreign-leaf support finding is fixed;
-57 independent controls and 1,206 cancellation checkpoints pass. Current/MSRV and
-actual host lanes pass at this checkpoint. This is not the default-engine switch. No whole-SDK completion claim is made. Older receipts remain historical.
+The frame checkpoint is pushed as `98ab475`; its full portable verifier passes.
+Hosted Linux/macOS, MSRV, package, browser, Node-version, advisory and reproducible
+Wasm checks pass; Windows remains in progress at the latest observation. Hosted
+performance checks pass, but do not replace the final matched-performance gate.
+The [acquisition/reference repairs](../receipts/2026-11-02-preparation/ci-reference-acquisition/README.md)
+also have independent review and a clean reference-candidate pass.
 
-Current public terminology and API guidance are corrected: schema/prepared-schema
-names, immutable edits, actual retained original sources and current Rust role
-boundaries replace stale recipes. The removed-diagnostics special option branch
-is deleted; generic unknown-option rejection remains. Public diagnostic wording
-and redaction/arithmetic controls now name schemas. Native/reference/snippet,
-actual Wasm/Node/package and both browser checks pass. Independent documentation
-review corrects required-meta admission and historical stack scope. The numeric
-design review rejects eager-all parsing and uncharged retained-bound comparisons;
-the accepted bounded per-node cache is now implemented with charged original
-fallback for oversized/excess operands. Independent implementation review passes
-at its four recorded source identities, including all 1,546 required values through
-the original engine, unchanged design controls, frozen large-container jobs,
-allocation boundaries, cancellation and concurrent reuse. Current/MSRV tests,
-actual Wasm/Node/package and both browser gates pass. This checkpoint is committed
-and pushed as `b380d61`. See
-[prepared operand evidence](../receipts/2026-11-02-preparation/prepared-numeric-operands/README.md).
-This does not preserve old APIs or exact incidental admission cutoffs. Current CI
-repairs separately correct digest-ledger parsing, missing package attribution and
-a stale benchmark lock; their independent review and clean-archive gate pass at
-`6988e6d`. Full local verification passes, including 888 workspace tests/doctests
-and all release stack checks. A Windows checkout-byte correction has a passing
-Git filter reproduction; actual hosted requalification remains open. See
-[CI repair evidence](../receipts/2026-11-02-preparation/ci-repairs/README.md).
-Final map, engine, performance and host gates remain.
+The active bounded increment shares identical static reference queries during one
+construction attempt and avoids multiplying type-only reference-string reads in
+fixed syntax checks. [Its design](../design/2026-11-02/reference-preparation-sharing.md)
+has independent approval. The unchanged 1,000/5,000-reference jobs now pass original
+preparation defaults; current/MSRV Rust and fresh Node/browser checks pass. Independent
+implementation/resource review is still running. This does not implement cross-phase
+syntax-fact sharing or full pattern VM preparation. Results and source identities
+are in [the progress receipt](../receipts/2026-11-02-preparation/reference-preparation-progress/README.md).
 
+After this increment, finish the preparation sharing and pattern-program schedule,
+original Explain witnesses, remaining native/Wasm stack qualification, and forced
+original-engine validation. Then switch the default and retire the outgoing
+projection/compiler paths; run the final matched performance and clean-package/
+reference/all-host gates; complete the actual spec-to-code audit across the 54
+concept, 83 obligation, 32 field, 108 witness and 11 package inventories. These are
+current requirement inventories, not lists of old APIs to preserve. Initial design
+names/statuses in the alignment map must be replaced with audited actual code.
 
-Local standard syntax accounting now uses a guarded per-position read extent,
-while complete original-position admission and actual custom-meta checks remain.
-Independent implementation review passes after the selected-root snapshot guard
-was corrected. Native current/minimum-toolchain, required-value, exact resource,
-actual Wasm/Node/browser/package and focused guard checks pass at their recorded
-identities. See [local syntax evidence](../receipts/2026-11-02-preparation/local-syntax-admission/README.md).
-No syntax-fact cache or default-engine switch is included. The explicit-frame
-execution design is approved and its complete implementation now passes the 36
-independent design controls, including depth restoration. Original-node execution
-uses applicator continuations, shared immutable effective scopes and explicitly
-sized active/alias paths; scalar alias targets retain no per-item frame or memo.
-Final native tests pass 533 checks; minimum Rust semantic and release stack lanes,
-181 Node tests, installed-package checks and actual Chromium/WebKit pass. Eight
-new host cases exercise deep and large values through a supported custom profile.
-The saved pre-frame package fails their depth control. Independent bounded implementation review
-passes, with 4,830 cancellation boundaries and concurrent reuse in [frame evidence](../receipts/2026-11-02-preparation/iterative-execution-progress/README.md).
-Sampled stack refusal is additional monitoring; complete physical-stack/host
-qualification remains open. The unchanged long-reference preparation jobs also
-remain open, with [a separate proposed read/query-sharing design](../design/2026-11-02/reference-preparation-sharing.md).
-Pattern VM preparation, original witnesses, final performance/host and alignment-map
-gates remain open.
-
-Additional hosted checks exposed a stale acquisition-probe lock and generated
-Rust reference source links. Bounded repairs pass the locked build, strict probe
-lint, HTTP/FIFO positive/negative retrieval controls and reference preview checks.
-The old unknown-dialect assertion is adjudicated against the current conservative
-namespace policy; actual known custom-meta admission has a separate missing-bytes
-control. [Repair evidence](../receipts/2026-11-02-preparation/ci-reference-acquisition/README.md)
-records the original failure and current results. Independent six-file review and
-the clean reference candidate at `4618695` pass, including 804 artifact hashes and
-8,531 local link targets. The minor source citation finding is corrected.
-
-No decision currently requires Matthew. If a real decision arises, record it
-and continue every independent unblocked path before considering a stop.
-
-Matthew's direction is to treat the unpublished SDK as greenfield: no old API, type, crate,
-wire carrier, or implementation arrangement needs compatibility protection. The objective is
-high terminological, semantic, conceptual, and organizational alignment with the current
-specification and adopted interfaces. Reuse code where it serves that objective; replace it
-where it does not. A rewrite is available, not a goal in itself.
-
-This file is the single current plan. It replaces the October 28 plan and the October 30
-amendment. The latter is preserved in [history](history/2026-10-30-amendment.md). Old review
-reports and inventories are evidence of earlier designs, not current architectural decisions.
+No decision currently requires Matthew. Record a genuine decision when it arises,
+and continue every independent unblocked path. Do not stop at a partial milestone
+or describe a bounded review as whole-SDK completion.
 
 ## 1. Exact target and authority
 

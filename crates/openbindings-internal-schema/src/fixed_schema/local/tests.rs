@@ -78,6 +78,107 @@ fn complete_localized_graph_is_the_reviewed_read_shape() {
 }
 
 #[test]
+fn reference_operand_audit_and_nonasserting_format_policy_are_fixed() {
+    let graph = actual();
+    let seven =
+        &graph["draft7"]["resources"]["https://openbindings.invalid/foreign-meta/draft-07/schema#"];
+    let nineteen = &graph["draft2019"]["resources"]["https://openbindings.invalid/foreign-meta/draft/2019-09/meta/core"];
+    let twenty =
+        &graph["draft2020"]["resources"]["https://openbindings.invalid/internal-meta/meta/core"];
+    for operand in [
+        &seven["properties"]["$ref"],
+        &nineteen["properties"]["$ref"],
+        &nineteen["properties"]["$recursiveRef"],
+        &twenty["$defs"]["uriReferenceString"],
+    ] {
+        assert_eq!(*operand, json!({"type":"string","format":"uri-reference"}));
+    }
+    for keyword in ["$ref", "$dynamicRef"] {
+        assert_eq!(
+            twenty["properties"][keyword],
+            json!({"$ref":"#/$defs/uriReferenceString"})
+        );
+    }
+    let deprecated = &graph["draft2020"]["resources"]["https://openbindings.invalid/internal-meta/schema"]
+        ["properties"]["$recursiveRef"];
+    assert_eq!(
+        deprecated,
+        &json!({
+            "$comment":"\"$recursiveRef\" has been replaced by \"$dynamicRef\".",
+            "$ref":"meta/core#/$defs/uriReferenceString", "deprecated":true
+        })
+    );
+    // The production options, not a test-only copy, must leave URI formats
+    // nonasserting. Otherwise these operands read text and cannot be cut.
+    let validator = super::super::options(Default::default())
+        .build(&json!({"type":"string", "format":"uri-reference"}))
+        .unwrap();
+    assert!(super::super::valid(
+        &validator,
+        JsonValue::parse(r#""%""#).unwrap().view()
+    ));
+    let mut text_sensitive = actual();
+    text_sensitive["draft2020"]["resources"]["https://openbindings.invalid/internal-meta/meta/core"]
+        ["$defs"]["uriReferenceString"]["maxLength"] = json!(1);
+    assert_ne!(text_sensitive, snapshot());
+}
+
+#[test]
+fn only_audited_reference_strings_drop_their_payload_extent() {
+    for dialect in EDITIONS {
+        for keyword in [
+            "$ref",
+            "$dynamicRef",
+            "$recursiveRef",
+            "$id",
+            "$anchor",
+            "pattern",
+            "unknown",
+        ] {
+            let audited = keyword == "$ref"
+                || (keyword == "$recursiveRef" && dialect != Dialect::Draft7)
+                || (keyword == "$dynamicRef" && dialect == Dialect::Draft202012);
+            for text in [
+                r#""%""#.to_owned(),
+                r#""\ud800""#.to_owned(),
+                format!("\"{}\"", "x".repeat(10_000)),
+            ] {
+                let value = JsonValue::parse(format!(r#"{{"{keyword}":{text}}}"#)).unwrap();
+                assert_eq!(
+                    extent(value.view(), dialect, &unlimited()).unwrap(),
+                    value.text().len() - if audited { text.len() - 1 } else { 0 },
+                    "{dialect:?} {keyword}"
+                );
+                if audited {
+                    assert_eq!(
+                        dialect_validity(&value, dialect).unwrap(),
+                        !(dialect == Dialect::Draft7 && text == r#""\ud800""#)
+                    );
+                }
+            }
+            for wrong_kind in [
+                "null".to_owned(),
+                "true".to_owned(),
+                "123".to_owned(),
+                format!(r#"["{}"]"#, "x".repeat(1000)),
+            ] {
+                let value = JsonValue::parse(format!(r#"{{"{keyword}":{wrong_kind}}}"#)).unwrap();
+                assert_eq!(
+                    extent(value.view(), dialect, &unlimited()).unwrap(),
+                    value.text().len()
+                );
+                if audited {
+                    assert!(
+                        !dialect_validity(&value, dialect).unwrap(),
+                        "{dialect:?} {keyword}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn graph_guard_rejects_child_inspecting_and_nonrecursive_changes() {
     let expected = snapshot();
     let root = "https://openbindings.invalid/internal-meta/schema";

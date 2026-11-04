@@ -70,5 +70,13 @@
   "native_frame_bytes": 224,
   "native_phase_bytes": 128,
   "initial_frame_backing_bytes": 896,
-  "ci_stack_gate": "Two original-engine release checks added to tools/verify.py on every native CI host"
+  "ci_stack_gate": "Two original-engine release checks added to tools/verify.py on every native CI host",
+  "saved_commit": "98ab475",
+  "pushed": true,
+  "clean_full_portable_verification": {
+    "commit": "98ab4753f7f78ae1d5f381717477d2b6dd83d26d",
+    "command": "python3 tools/verify.py",
+    "exit_code": 0,
+    "log_sha256": "af9107852b61a975c19de1de3525b5076244143dc9c3c3267df0a79a63640a63"
+  }
 }

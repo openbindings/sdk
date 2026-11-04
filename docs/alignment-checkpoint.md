@@ -89,20 +89,20 @@ toolchain; the MSRV compatibility receipt explicitly records no matching Clippy 
 2. Replace the ordinary compiler with the reviewed prepared original-node engine.
    The [architecture review](alignment-checkpoint/original-evaluator-architecture-review.md)
    and [implementation sequence](alignment-checkpoint/original-evaluator-implementation.md)
-   supersede pursuing the old compiler allocation schedule as the preferred path.
-   Concrete contains counting and immutable reference-query preparation are qualified.
-   Immutable pattern readings and shared Simple matchers are also reviewed and
-   qualified; VM compilation/search scratch remain per-call pending their audited
-   aggregate schedule. Conservative annotation demand and certified leaves now
-   restore the unchanged large-container jobs, with independent direct-engine
-   corpus/review evidence and the foreign-leaf support correction. Prepared
-   operands, local syntax accounting, iterative traversal and original diagnostics
-   remain. The [numeric design review](alignment-checkpoint/prepared-numeric-design-review.md)
-   requires bounded optional readings with original fallback selected before
-   charges; cached Bound comparisons still need schema-dependent scratch allowances.
-   Depth, long-reference and Explain workloads still need restoration
-   before the default-engine switch. Do not relax evaluator
-   limits or performance expectations to make that switch.
+   supersede retaining the outgoing compiler. Concrete counting, retained static
+   queries, bounded numeric readings, shared Simple pattern matchers, local syntax
+   accounting, compact concrete states and explicit applicator frames are implemented
+   and independently reviewed. Unchanged large-container and depth workloads pass.
+   The pushed frame checkpoint `98ab475` also passes the full portable verifier.
+   [Reference-preparation sharing](alignment-checkpoint/reference-preparation-results.md)
+   now restores the unchanged 1,000/5,000-reference workloads at default limits;
+   current/MSRV and fresh Node/browser/package checks pass. Its independent design
+   review passes and implementation/resource review is still running.
+   Finish cross-phase syntax-fact sharing, the audited immutable pattern VM schedule,
+   original Explain witnesses and physical-stack/host qualification. Then force the
+   original engine through all gates, switch the default and retire the outgoing
+   projection/compiler code. No existing public API or internal architecture needs
+   preservation; no evaluator allowance or performance expectation is waived.
 3. TypeScript organization is implemented and independently reviewed. Finish
    remaining invocation/discovery composition, full workspace/host/CI/package
    checks, matched performance measurements and the complete specification-to-code
@@ -150,11 +150,11 @@ The SDK checkout is that coordinator's `sdk` directory. `/tmp/ob-sdk-env.sh` sel
 the qualified local Rust 1.99 toolchain, offline dependency cache and target directory;
 Rust 1.88 is under the SDK's ignored `target/toolchains/1.88.0`. Incremental compilation
 is disabled for the local Rust 1.99 compiler. Use repository checks and preserve the
-exact pinned dependency versions. Relevant immediate checks are:
+exact pinned dependency versions. Use the focused checks for the active increment and the full portable verifier:
 
 ```sh
-cargo test --locked --offline -p openbindings-source-pull
-cargo clippy --locked --offline -p openbindings-source-pull --all-targets -- -D warnings
+cargo test --locked --offline -p openbindings-internal-schema -p openbindings-json-schema-evaluator
+python3 tools/verify.py
 ```
 
 No decision currently requires Matthew. Continue independent unblocked work if one

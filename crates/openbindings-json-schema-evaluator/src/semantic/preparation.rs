@@ -1,6 +1,7 @@
 //! Construction limits apply before either evaluator path is selected. A local
 //! undefined operation cannot skip the accounting that a successful projection
 //! would have performed. Inventory traversal stays on original known locations.
+mod queries;
 use super::*;
 use openbindings_internal_schema::{child_shape, schema_index::SchemaSelector};
 use std::collections::{BTreeSet, VecDeque};
@@ -123,6 +124,7 @@ pub(super) fn check_from(
     let mut custom = Vec::new();
     let mut formats = HashMap::new();
     let mut queries = PreparedQueries::new();
+    let mut shared_queries = queries::Queries::new(space);
     let mut annotations = AnnotationDemand::default();
     let mut leaves = HashSet::new();
     while let Some(node) = queue.pop_front() {
@@ -230,24 +232,10 @@ pub(super) fn check_from(
         }
         for keyword in ["$ref", "$dynamicRef", "$recursiveRef"] {
             if let Some(reference) = schema.get(keyword).and_then(|v| v.as_str()) {
-                // Ordinary lookup resolves/normalizes URI spellings and may
-                // retain a missing name or decoded dynamic anchor. Reserve
-                // their source-size bound before any query allocation.
-                let base = space
-                    .resource(original.resource)
-                    .base
-                    .as_ref()
-                    .map_or(0, String::len);
-                let bytes = base
-                    .checked_add(reference.len())
-                    .ok_or_else(|| limit("preparation-allocation-bytes"))?;
-                control.charge_work(bytes.saturating_mul(16).saturating_add(1))?;
-                control.charge_allocation(bytes.saturating_mul(16).saturating_add(512))?;
-                // Retain the result already needed for graph admission. The
-                // insertion-only map and Arc are construction-owned; evaluation
-                // shares them without reparsing URI text or copying outcomes.
+                // Each original occurrence retains its own keyword/effect
+                // identity even when immutable static query results are shared.
                 control.charge_allocation(1024)?;
-                let query = Arc::new(space.query(node, reference));
+                let query = shared_queries.query(node, reference, control)?;
                 queries.insert((node, ReferenceKind::for_keyword(keyword)), query.clone());
                 match query.as_ref() {
                     Ok(target) => {
@@ -262,26 +250,25 @@ pub(super) fn check_from(
                                 .get("$recursiveAnchor")
                                 .and_then(|v| v.as_bool())
                                 == Some(true)
-                            && used.insert(RECURSIVE_SCOPE.into())
+                            && use_name(&mut used, RECURSIVE_SCOPE, control)?
                         {
-                            let count = dynamic.get(RECURSIVE_SCOPE).map_or(0, BTreeSet::len);
-                            control.charge_work(count)?;
-                            control.charge_allocation(count.saturating_mul(16))?;
-                            queue.extend(
-                                dynamic.get(RECURSIVE_SCOPE).into_iter().flatten().copied(),
-                            );
+                            enqueue_dynamic(&mut queue, &dynamic, RECURSIVE_SCOPE, control)?;
                         }
                         if keyword == "$dynamicRef"
                             && let Some(name) = &target.dynamic_name
-                            && used.insert(name.clone())
+                            && use_name(&mut used, name, control)?
                         {
-                            let count = dynamic.get(name).map_or(0, BTreeSet::len);
-                            control.charge_work(count)?;
-                            control.charge_allocation(count.saturating_mul(16))?;
-                            queue.extend(dynamic.get(name).into_iter().flatten().copied());
+                            enqueue_dynamic(&mut queue, &dynamic, name, control)?;
                         }
                     }
                     Err(QueryFailure::ResourceUnavailable(uri)) => {
+                        // A cache hit still clones/hashes the missing name and
+                        // compares against this preparation's resource set.
+                        control.charge_work(
+                            uri.len()
+                                .saturating_mul(missing.len().saturating_add(2))
+                                .saturating_add(1),
+                        )?;
                         control.charge_allocation(uri.len().saturating_add(32))?;
                         missing.insert(uri.clone());
                         count_resources(resources.len(), missing.len(), limits)?;
@@ -384,6 +371,37 @@ fn limit(resource: &str) -> PreparationFailure {
     PreparationFailure::new(PreparationFailureKind::Limit {
         resource: resource.into(),
     })
+}
+fn enqueue_dynamic(
+    queue: &mut VecDeque<usize>,
+    dynamic: &BTreeMap<String, BTreeSet<usize>>,
+    name: &str,
+    control: &dyn openbindings_internal_schema::Control,
+) -> Result<(), PreparationFailure> {
+    // Bound every possible key comparison before looking up candidates. This
+    // work is separate from the used-name set and the static query cache.
+    control.charge_work(name.len().saturating_mul(dynamic.len().saturating_add(1)))?;
+    let candidates = dynamic.get(name);
+    let count = candidates.map_or(0, BTreeSet::len);
+    control.charge_work(count)?;
+    control.charge_allocation(count.saturating_mul(16))?;
+    queue.extend(candidates.into_iter().flatten().copied());
+    Ok(())
+}
+// Reserve owned names and an upper bound on set comparisons on every use,
+// including query-cache hits. Duplicate names still perform the lookup.
+fn use_name(
+    used: &mut BTreeSet<String>,
+    name: &str,
+    control: &dyn openbindings_internal_schema::Control,
+) -> Result<bool, PreparationFailure> {
+    control.charge_work(
+        name.len()
+            .saturating_mul(used.len().saturating_add(2))
+            .saturating_add(1),
+    )?;
+    control.charge_allocation(name.len().saturating_add(256))?;
+    Ok(used.insert(name.into()))
 }
 fn count_resources(
     known: usize,

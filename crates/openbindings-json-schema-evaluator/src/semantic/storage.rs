@@ -1,31 +1,56 @@
 //! Call-local backing allocations with an explicit requested-size ledger.
-//! The ordered hash path supports only append/pop, matching execution nesting.
+//! The ordered hash path supports append/pop and construction-local lookup.
 use super::{Graph, NoVerdict, decision::limit};
 use std::hash::{DefaultHasher, Hash, Hasher};
 
-pub(super) fn reserve<T>(
+/// Borrowed per-operation accounting; the storage never retains a control or
+/// prescribes whether an exhaustion belongs to preparation or evaluation.
+pub(super) trait Ledger {
+    type Error;
+    fn work(&mut self, units: usize) -> Result<(), Self::Error>;
+    fn allocation(&mut self, bytes: usize) -> Result<(), Self::Error>;
+    fn allocation_limit(&mut self) -> Self::Error;
+}
+impl Ledger for Graph<'_> {
+    type Error = NoVerdict;
+    fn work(&mut self, units: usize) -> Result<(), Self::Error> {
+        Graph::work(self, units)
+    }
+    fn allocation(&mut self, bytes: usize) -> Result<(), Self::Error> {
+        self.charge(bytes)
+    }
+    fn allocation_limit(&mut self) -> Self::Error {
+        limit("semantic-analysis-memory-limit")
+    }
+}
+
+pub(super) fn reserve<T, L: Ledger>(
     values: &mut Vec<T>,
     needed: usize,
-    graph: &mut Graph<'_>,
-) -> Result<(), NoVerdict> {
+    ledger: &mut L,
+) -> Result<(), L::Error> {
     if needed <= values.capacity() {
         return Ok(());
     }
     let capacity = needed
-        .max(values.capacity().checked_mul(2).ok_or_else(memory)?)
+        .max(
+            values
+                .capacity()
+                .checked_mul(2)
+                .ok_or_else(|| ledger.allocation_limit())?,
+        )
         .max(4);
-    let bytes = capacity.checked_mul(size_of::<T>()).ok_or_else(memory)?;
-    graph.tick()?;
+    let bytes = capacity
+        .checked_mul(size_of::<T>())
+        .ok_or_else(|| ledger.allocation_limit())?;
+    ledger.work(1)?;
     // Charge the entire requested replacement allocation, including relocation
     // overlap with the previously charged backing store. Allocator bookkeeping
     // is outside this SDK requested-allocation policy.
-    graph.charge(bytes)?;
+    ledger.allocation(bytes)?;
     values
         .try_reserve_exact(capacity - values.len())
-        .map_err(|_| memory())
-}
-fn memory() -> NoVerdict {
-    limit("semantic-analysis-memory-limit")
+        .map_err(|_| ledger.allocation_limit())
 }
 const NONE: usize = usize::MAX;
 struct Entry<K, V> {
@@ -47,26 +72,26 @@ impl<K, V> Default for Path<K, V> {
     }
 }
 impl<K: Hash + Eq, V> Path<K, V> {
-    fn hash(key: &K, work: usize, graph: &mut Graph<'_>) -> Result<u64, NoVerdict> {
-        graph.work(work)?;
+    fn hash<L: Ledger>(key: &K, work: usize, ledger: &mut L) -> Result<u64, L::Error> {
+        ledger.work(work)?;
         let mut hasher = DefaultHasher::new();
         key.hash(&mut hasher);
         Ok(hasher.finish())
     }
-    pub(super) fn find(
+    pub(super) fn find<L: Ledger>(
         &self,
         key: &K,
         work: usize,
-        graph: &mut Graph<'_>,
-    ) -> Result<Option<usize>, NoVerdict> {
-        let hash = Self::hash(key, work, graph)?;
+        ledger: &mut L,
+    ) -> Result<Option<usize>, L::Error> {
+        let hash = Self::hash(key, work, ledger)?;
         if self.buckets.is_empty() {
             return Ok(None);
         }
         let mut index = self.buckets[hash as usize & (self.buckets.len() - 1)];
         while index != NONE {
             let entry = &self.entries[index];
-            graph.work(work)?;
+            ledger.work(work)?;
             if entry.hash == hash && entry.key == *key {
                 return Ok(Some(index));
             }
@@ -74,20 +99,36 @@ impl<K: Hash + Eq, V> Path<K, V> {
         }
         Ok(None)
     }
-    pub(super) fn push(
+    pub(super) fn push<L: Ledger>(
         &mut self,
         key: K,
         value: V,
         work: usize,
-        graph: &mut Graph<'_>,
-    ) -> Result<(), NoVerdict> {
-        let hash = Self::hash(&key, work, graph)?;
-        let needed = self.entries.len().checked_add(1).ok_or_else(memory)?;
-        reserve(&mut self.entries, needed, graph)?;
-        if needed.checked_mul(2).ok_or_else(memory)? > self.buckets.len() {
-            let count = self.buckets.len().checked_mul(2).ok_or_else(memory)?.max(8);
-            reserve(&mut self.buckets, count, graph)?;
-            graph.work(count.checked_add(self.entries.len()).ok_or_else(memory)?)?;
+        ledger: &mut L,
+    ) -> Result<(), L::Error> {
+        let hash = Self::hash(&key, work, ledger)?;
+        let needed = self
+            .entries
+            .len()
+            .checked_add(1)
+            .ok_or_else(|| ledger.allocation_limit())?;
+        reserve(&mut self.entries, needed, ledger)?;
+        if needed
+            .checked_mul(2)
+            .ok_or_else(|| ledger.allocation_limit())?
+            > self.buckets.len()
+        {
+            let count = self
+                .buckets
+                .len()
+                .checked_mul(2)
+                .ok_or_else(|| ledger.allocation_limit())?
+                .max(8);
+            reserve(&mut self.buckets, count, ledger)?;
+            let work = count
+                .checked_add(self.entries.len())
+                .ok_or_else(|| ledger.allocation_limit())?;
+            ledger.work(work)?;
             self.buckets.resize(count, NONE);
             self.buckets.fill(NONE);
             for (index, entry) in self.entries.iter_mut().enumerate() {
@@ -106,6 +147,12 @@ impl<K: Hash + Eq, V> Path<K, V> {
             prior,
         });
         Ok(())
+    }
+    pub(super) fn len(&self) -> usize {
+        self.entries.len()
+    }
+    pub(super) fn value(&self, index: usize) -> &V {
+        &self.entries[index].value
     }
     pub(super) fn pop(&mut self) -> Option<(K, V)> {
         let entry = self.entries.pop()?;

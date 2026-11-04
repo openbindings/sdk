@@ -1,5 +1,6 @@
 //! Charged read extent of the fixed, localized standard meta-schema checks.
-//! Only their immediate object/Boolean schema children have type-only checks.
+//! Their immediate object/Boolean schema children and the explicitly audited
+//! reference-string operands have type-only checks.
 //! The complete localized-resource snapshot and read-shape controls bind this
 //! table to those validators. This table does not apply to actual custom metas.
 use crate::{Control, Failure, FailureReason, JsonKind, JsonRef, dialect::Dialect};
@@ -35,6 +36,18 @@ fn children(keyword: &str, value: JsonRef<'_>, dialect: Dialect) -> Option<Child
         }
         _ => return None,
     })
+}
+
+// The complete fixed graph and non-asserting format policy are guarded in
+// tests. 2020-12 also constrains the deprecated $recursiveRef string. Draft 7's
+// reference-object shortcut reads as_str metadata (and rejects lone surrogates).
+fn reference_string(keyword: &str, dialect: Dialect) -> bool {
+    match keyword {
+        "$ref" => true,
+        "$recursiveRef" => dialect != Dialect::Draft7,
+        "$dynamicRef" => dialect == Dialect::Draft202012,
+        _ => false,
+    }
 }
 
 fn invalid_extent() -> Failure {
@@ -76,6 +89,11 @@ fn extent(value: JsonRef<'_>, dialect: Dialect, control: &dyn Control) -> Result
         let Some(keyword) = field.name.as_str() else {
             continue;
         };
+        if reference_string(keyword, dialect) && field.value.kind() == JsonKind::String {
+            control.charge_work(1)?;
+            bytes = subtract(bytes, field.value.text().len())?;
+            continue;
+        }
         match children(keyword, field.value, dialect) {
             Some(Children::Direct) => cut(&mut bytes, field.value, control)?,
             Some(Children::Map) => {
