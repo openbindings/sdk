@@ -51,3 +51,21 @@ or required check is weakened. The full Windows gate remains pending until a
 completed run; this timeout extension is infrastructure capacity, not a passing
 validation result. Raw log, annotation and full artifact are preserved in the
 coordinator's `receipts/2026-11-02-preparation/ci-replay-output/` directory.
+
+## Windows follow-up at 3cf0f6e
+
+The 45-minute ceiling exposed a real test failure rather than another timeout.
+The outgoing `walk_stack` release subprocess aborted with `0xc00000fd`
+(`STATUS_STACK_OVERFLOW`) at 08:01:20 UTC on November 4. The preceding pattern and
+evaluation stack tests passed. This test did pass at 24ad294; 3cf0f6e changes only
+CI capacity and its receipt, so these observations do not establish a production
+source regression or a precise root cause. The test does not emit individual
+walk/depth progress. The complete raw log is retained as `windows-3cf0f6e.log`.
+
+The whole Windows gate is failed and remains open. No admitted-depth expectation,
+SDK resource allowance or assertion is waived. The replacement original-node
+engine is still being qualified independently; retirement of the outgoing compiler
+must be followed by the final default-engine checks on Windows. The next pushed
+checkpoint, `67dfdeb`, removes obsolete regex-format identifier initialization
+accounting and has its own bounded reviewed receipt; it does not claim to fix this
+walk overflow.

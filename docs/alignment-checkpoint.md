@@ -189,3 +189,5 @@ python3 tools/verify.py
 
 No decision currently requires Matthew. Continue independent unblocked work if one
 arises. Do not merge to main, publish packages or deploy without separate authority.
+
+The bounded original-engine [helper stack witnesses](alignment-checkpoint/original-helper-stack.md) now pass current/minimum Rust and Node/Chromium/WebKit. This does not close the whole compiler/physical-stack gate. The latest [Windows receipt](alignment-checkpoint/ci-replay-output.md) records a real outgoing walk-stack overflow.
