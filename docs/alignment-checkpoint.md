@@ -104,8 +104,13 @@ toolchain; the MSRV compatibility receipt explicitly records no matching Clippy 
    are now implemented after independent design approval; current/MSRV Rust, fresh
    Node/browser/package checks pass. Independent implementation/resource review
    passes with no unresolved finding, and the full portable verifier passes on
-   pushed `57cdc22`. Finish the audited immutable pattern VM schedule,
-   original Explain witnesses and physical-stack/host qualification. Then force the
+   pushed `57cdc22`. The [pattern search-cache correction](alignment-checkpoint/pattern-search-cache-design.md)
+   now replaces the state-only estimate with an audited epsilon-breadth/storage
+   bound. Parent native/MSRV/Node/browser/package checks pass; independent
+   implementation review remains pending in the saved receipt. Full immutable VM
+   construction is still separate. The [original Explain design](alignment-checkpoint/original-explain-design.md)
+   has independent approval for compact seeds and bounded root-only materialization;
+   its implementation remains pending. Finish that work and physical-stack/host qualification. Then force the
    original engine through all gates, switch the default and retire the outgoing
    projection/compiler code. No existing public API or internal architecture needs
    preservation; no evaluator allowance or performance expectation is waived.

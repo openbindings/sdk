@@ -1,7 +1,10 @@
 # Sharing completed fixed syntax facts during original preparation
 
-Independent design review passed; implementation and host/resource qualification
-are in progress. See `../../receipts/2026-11-02-preparation/shared-fixed-syntax-facts-review/design/review.md`. This is narrower than schema admission: it shares only successful local fixed-standard syntax checks within one
+Implemented in `57cdc22`, with independent design and implementation/resource
+review approval. Current/minimum Rust, actual host checks and the complete portable
+verifier pass; review receipts are preserved in `fc1ade8`. See
+`../../receipts/2026-11-02-preparation/shared-fixed-syntax-facts-review/implementation/review.md`.
+This is narrower than schema admission: it shares only successful local fixed-standard syntax checks within one
 completed immutable SchemaSpace. It does not share custom-meta verdicts, reference
 eligibility, resource closure, dynamic scope, or arbitrary validator outcomes.
 
@@ -20,7 +23,7 @@ Do not introduce a new proof/cache API into that obsolete path merely to preserv
 its architecture. Existing conformant-document admission remains authoritative for
 contained 2020-12 schemas where the current engine already consumes that fact.
 
-## Proposed ownership and identity
+## Implemented ownership and identity
 
 Create one private construction object in `Plan::new`. It owns a clone of that call's
 immutable environment and borrows its shared attempt and shares a fixed-syntax fact table across root `check_from`,

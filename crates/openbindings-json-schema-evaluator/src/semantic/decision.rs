@@ -116,7 +116,10 @@ impl<'a> Graph<'a> {
                 .charge_allocation(bytes)
                 .map_err(super::preparation_control_inability)?;
         }
-        self.bytes = self.bytes.saturating_add(bytes);
+        self.bytes = self
+            .bytes
+            .checked_add(bytes)
+            .ok_or_else(|| limit("semantic-analysis-memory-limit"))?;
         if self.bytes > self.maximum_bytes {
             return Err(limit("semantic-analysis-memory-limit"));
         }

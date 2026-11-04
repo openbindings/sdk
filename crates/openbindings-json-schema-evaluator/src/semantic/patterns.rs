@@ -1,6 +1,7 @@
 //! Original pattern readings belong to the immutable Plan. Simple matchers are
 //! shared directly; VM compilation and mutable search state remain local to a
 //! value call until their aggregate prepared-program bounds are qualified.
+mod cache;
 use super::*;
 use crate::pattern::{Reading, Unsupported};
 use regex_automata::nfa::thompson::{
@@ -97,18 +98,9 @@ impl Pattern {
                         }
                     }
                 };
-                // Two sparse active sets, their slot tables, and the iterative
-                // epsilon stack are bounded by the exact completed state count.
-                graph.charge(
-                    engine
-                        .get_nfa()
-                        .states()
-                        .len()
-                        .saturating_mul(256)
-                        .saturating_add(4096),
-                )?;
                 // A sparse byte state scans its ranges; a union visits every
                 // outgoing epsilon edge. Count those as well as state visits.
+                graph.work(engine.get_nfa().states().len())?;
                 let work = engine
                     .get_nfa()
                     .states()
@@ -124,7 +116,7 @@ impl Pattern {
                         };
                         total.saturating_add(edges.saturating_add(1).saturating_mul(4))
                     });
-                let cache = engine.create_cache();
+                let cache = cache::create(&engine, graph)?;
                 Ok(Self::Vm {
                     engine,
                     cache,

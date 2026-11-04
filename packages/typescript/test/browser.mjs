@@ -90,6 +90,10 @@ files.set(
   await fs.readFile(path.join(packageRoot, "test/syntax-facts.mjs")),
 );
 files.set(
+  "/pattern-cache.mjs",
+  await fs.readFile(path.join(packageRoot, "test/pattern-cache.mjs")),
+);
+files.set(
   "/syntax-facts-input.json",
   await fs.readFile(
     path.join(
@@ -172,6 +176,9 @@ try {
         executionFrames: executionFrameCases(sdk),
         referencePreparation: referencePreparationCases(sdk),
         syntaxFacts: syntaxFactCases(sdk, syntaxInput),
+        patternCaches: (await import("/pattern-cache.mjs")).patternCacheCases(
+          sdk,
+        ),
         fixedDiagnostics: fixedDiagnosticCases(sdk),
         ...diagnosticBudgetCases(sdk),
       };
@@ -245,6 +252,10 @@ try {
   await fs.writeFile(
     path.join(output, "syntax-facts.json"),
     JSON.stringify(result.syntaxFacts, null, 2),
+  );
+  await fs.writeFile(
+    path.join(output, "pattern-cache.json"),
+    JSON.stringify(result.patternCaches, null, 2),
   );
   await fs.writeFile(
     path.join(output, "host.json"),

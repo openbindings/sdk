@@ -1,0 +1,562 @@
+{
+  "format": "openbindings-sdk-concept-audit-partial-v1",
+  "sdk_commit": "aecf09e3d45cdc4e193bb37e15f904886146677f",
+  "authority_pin": "c1419c9fc3ae5a00c2b83da710c11bf67dab7934",
+  "scope": "11 document concepts; not the complete54/83/32/108/11 audit or a declaration-only triage",
+  "qualification_receipt": "../reference-preparation-progress/full-verify-3599f27.log",
+  "source_changed_since_that_gate": false,
+  "concepts": [
+    {
+      "id": "document",
+      "authority": [
+        {
+          "file": "spec/openbindings.md",
+          "line": 296,
+          "text_match": "## 5. Document model"
+        }
+      ],
+      "concept": "OBI document",
+      "owner": "core.document",
+      "actual_api": [
+        "Document",
+        "ConformantDocument"
+      ],
+      "source": [
+        {
+          "file": "crates/openbindings/src/document.rs",
+          "line": 20,
+          "anchor": "pub struct Document {",
+          "sha256": "e9fabe4c5ce2a496410d3d5f225359051ee05db96431cdf7c8ac8792d7d61d5b"
+        },
+        {
+          "file": "crates/openbindings/src/document.rs",
+          "line": 105,
+          "anchor": "pub struct ConformantDocument {",
+          "sha256": "e9fabe4c5ce2a496410d3d5f225359051ee05db96431cdf7c8ac8792d7d61d5b"
+        },
+        {
+          "file": "crates/openbindings/src/document.rs",
+          "line": 117,
+          "anchor": "pub fn parse(",
+          "sha256": "e9fabe4c5ce2a496410d3d5f225359051ee05db96431cdf7c8ac8792d7d61d5b"
+        }
+      ],
+      "existing_validation": [
+        {
+          "file": "crates/openbindings/tests/domain.rs",
+          "line": 92,
+          "anchor": "fn absent_empty_false_and_null_remain_distinct(",
+          "sha256": "6f05a958a5afcd545b901d44ef04f7a082aae3fa483ee04e92ecb76ec113af7a"
+        },
+        {
+          "file": "crates/openbindings/tests/draft_domain_boundary.rs",
+          "line": 40,
+          "anchor": "fn malformed_namespaces_and_declared_fields_remain_conformance_negatives(",
+          "sha256": "c6b1d3d187c2290856b869caaf7ebacd28b4f498081f710907d39efb56d1f156"
+        }
+      ],
+      "audit": "Document carries exact original JSON without proof; ConformantDocument is created only by completed normative assessment. Labels are optional field reads and are not injected into schema identities.",
+      "conceptual_status": "source reviewed against pinned authority; existing tests passed in clean3599f27 full verifier",
+      "final_independent_audit": "pending"
+    },
+    {
+      "id": "operation",
+      "authority": [
+        {
+          "file": "spec/openbindings.md",
+          "line": 331,
+          "text_match": "### 5.1. Operations"
+        }
+      ],
+      "concept": "Operation",
+      "owner": "core.document",
+      "actual_api": [
+        "Operation"
+      ],
+      "source": [
+        {
+          "file": "crates/openbindings/src/document/model.rs",
+          "line": 73,
+          "anchor": "    Operation,",
+          "sha256": "6cb83f0bba47f0649a56587a73fd86cb73d3d4370eeef1569198c97cc6755e2f"
+        }
+      ],
+      "existing_validation": [
+        {
+          "file": "crates/openbindings/tests/domain.rs",
+          "line": 156,
+          "anchor": "fn exact_keys_aliases_kinds_and_unranked_relations(",
+          "sha256": "6f05a958a5afcd545b901d44ef04f7a082aae3fa483ee04e92ecb76ec113af7a"
+        },
+        {
+          "file": "crates/openbindings/tests/document_boundary.rs",
+          "line": 141,
+          "anchor": "fn indexed_reference_checks_keep_primary_key_and_diagnostic_semantics(",
+          "sha256": "a341ac11c10effe1d7f027440cf76b14afd4495afda42ff05f805a5858a5b23d"
+        }
+      ],
+      "audit": "Owned operation retains its proof and original declaration. Exact primary-key selection and explicit alias resolution are distinct; input/output are optional contextual schemas. Invocation lives in a separate companion.",
+      "conceptual_status": "source reviewed against pinned authority; existing tests passed in clean3599f27 full verifier",
+      "final_independent_audit": "pending"
+    },
+    {
+      "id": "source",
+      "authority": [
+        {
+          "file": "spec/openbindings.md",
+          "line": 378,
+          "text_match": "### 5.2. Sources"
+        }
+      ],
+      "concept": "Source",
+      "owner": "core.document",
+      "actual_api": [
+        "Source"
+      ],
+      "source": [
+        {
+          "file": "crates/openbindings/src/document/model.rs",
+          "line": 77,
+          "anchor": "    Source,",
+          "sha256": "6cb83f0bba47f0649a56587a73fd86cb73d3d4370eeef1569198c97cc6755e2f"
+        },
+        {
+          "file": "crates/openbindings/src/document/model.rs",
+          "line": 326,
+          "anchor": "impl Source {",
+          "sha256": "6cb83f0bba47f0649a56587a73fd86cb73d3d4370eeef1569198c97cc6755e2f"
+        }
+      ],
+      "existing_validation": [
+        {
+          "file": "crates/openbindings/tests/foundation_02.rs",
+          "line": 4,
+          "anchor": "fn kind_data_is_exact_opaque_and_presence_sensitive(",
+          "sha256": "545f6848eb8ffbba52044cfc764c668c9765d56218348580e175e5144c57851c"
+        },
+        {
+          "file": "crates/openbindings/tests/document_boundary.rs",
+          "line": 89,
+          "anchor": "fn opaque_data_is_not_a_schema_but_document_pointers_cross_resource_boundaries(",
+          "sha256": "a341ac11c10effe1d7f027440cf76b14afd4495afda42ff05f805a5858a5b23d"
+        }
+      ],
+      "audit": "Source is the named entry. kind returns exact decoded text; data preserves optional opaque JSON. Core does not interpret artifact, protocol or runtime endpoint meaning.",
+      "conceptual_status": "source reviewed against pinned authority; existing tests passed in clean3599f27 full verifier",
+      "final_independent_audit": "pending"
+    },
+    {
+      "id": "binding",
+      "authority": [
+        {
+          "file": "spec/openbindings.md",
+          "line": 396,
+          "text_match": "### 5.3. Bindings"
+        }
+      ],
+      "concept": "Binding",
+      "owner": "core.document",
+      "actual_api": [
+        "Binding"
+      ],
+      "source": [
+        {
+          "file": "crates/openbindings/src/document/model.rs",
+          "line": 81,
+          "anchor": "    Binding,",
+          "sha256": "6cb83f0bba47f0649a56587a73fd86cb73d3d4370eeef1569198c97cc6755e2f"
+        },
+        {
+          "file": "crates/openbindings/src/document/model.rs",
+          "line": 280,
+          "anchor": "impl Binding {",
+          "sha256": "6cb83f0bba47f0649a56587a73fd86cb73d3d4370eeef1569198c97cc6755e2f"
+        }
+      ],
+      "existing_validation": [
+        {
+          "file": "crates/openbindings/tests/domain.rs",
+          "line": 156,
+          "anchor": "fn exact_keys_aliases_kinds_and_unranked_relations(",
+          "sha256": "6f05a958a5afcd545b901d44ef04f7a082aae3fa483ee04e92ecb76ec113af7a"
+        },
+        {
+          "file": "crates/openbindings/tests/domain.rs",
+          "line": 183,
+          "anchor": "fn owners_keep_original_entries_and_relations_across_drop_and_edits(",
+          "sha256": "6f05a958a5afcd545b901d44ef04f7a082aae3fa483ee04e92ecb76ec113af7a"
+        }
+      ],
+      "audit": "Binding holds the same conformant snapshot as its source and operation. operation_key/source_key preserve declared keys and typed relation methods resolve within that snapshot; enumeration does not select a binding.",
+      "conceptual_status": "source reviewed against pinned authority; existing tests passed in clean3599f27 full verifier",
+      "final_independent_audit": "pending"
+    },
+    {
+      "id": "dependency",
+      "authority": [
+        {
+          "file": "spec/openbindings.md",
+          "line": 425,
+          "text_match": "### 5.4. Dependencies"
+        }
+      ],
+      "concept": "Dependency",
+      "owner": "core.document",
+      "actual_api": [
+        "Dependency"
+      ],
+      "source": [
+        {
+          "file": "crates/openbindings/src/document/model.rs",
+          "line": 85,
+          "anchor": "    Dependency,",
+          "sha256": "6cb83f0bba47f0649a56587a73fd86cb73d3d4370eeef1569198c97cc6755e2f"
+        },
+        {
+          "file": "crates/openbindings/src/document/model.rs",
+          "line": 336,
+          "anchor": "impl Dependency {",
+          "sha256": "6cb83f0bba47f0649a56587a73fd86cb73d3d4370eeef1569198c97cc6755e2f"
+        }
+      ],
+      "existing_validation": [
+        {
+          "file": "crates/openbindings/tests/domain.rs",
+          "line": 92,
+          "anchor": "fn absent_empty_false_and_null_remain_distinct(",
+          "sha256": "6f05a958a5afcd545b901d44ef04f7a082aae3fa483ee04e92ecb76ec113af7a"
+        },
+        {
+          "file": "crates/openbindings/tests/domain.rs",
+          "line": 156,
+          "anchor": "fn exact_keys_aliases_kinds_and_unranked_relations(",
+          "sha256": "6f05a958a5afcd545b901d44ef04f7a082aae3fa483ee04e92ecb76ec113af7a"
+        }
+      ],
+      "audit": "Dependency is a consumption point with an operation relation and optional exact any-of kind constraint. It has no realization or source selector. Absence of kinds accepts every kind.",
+      "conceptual_status": "source reviewed against pinned authority; existing tests passed in clean3599f27 full verifier",
+      "final_independent_audit": "pending"
+    },
+    {
+      "id": "example",
+      "authority": [
+        {
+          "file": "spec/openbindings.md",
+          "line": 368,
+          "text_match": "**Examples.**"
+        }
+      ],
+      "concept": "Example",
+      "owner": "core.document",
+      "actual_api": [
+        "Example",
+        "Operation::examples",
+        "Operation::example"
+      ],
+      "source": [
+        {
+          "file": "crates/openbindings/src/document/model.rs",
+          "line": 89,
+          "anchor": "    Example,",
+          "sha256": "6cb83f0bba47f0649a56587a73fd86cb73d3d4370eeef1569198c97cc6755e2f"
+        },
+        {
+          "file": "crates/openbindings/src/document/model.rs",
+          "line": 261,
+          "anchor": "pub fn examples(",
+          "sha256": "6cb83f0bba47f0649a56587a73fd86cb73d3d4370eeef1569198c97cc6755e2f"
+        },
+        {
+          "file": "crates/openbindings/src/document/model.rs",
+          "line": 357,
+          "anchor": "impl Example {",
+          "sha256": "6cb83f0bba47f0649a56587a73fd86cb73d3d4370eeef1569198c97cc6755e2f"
+        }
+      ],
+      "existing_validation": [
+        {
+          "file": "crates/openbindings/tests/domain.rs",
+          "line": 23,
+          "anchor": "fn all_32_declared_fields_have_canonical_access(",
+          "sha256": "6f05a958a5afcd545b901d44ef04f7a082aae3fa483ee04e92ecb76ec113af7a"
+        },
+        {
+          "file": "crates/openbindings/tests/domain.rs",
+          "line": 183,
+          "anchor": "fn owners_keep_original_entries_and_relations_across_drop_and_edits(",
+          "sha256": "6f05a958a5afcd545b901d44ef04f7a082aae3fa483ee04e92ecb76ec113af7a"
+        }
+      ],
+      "audit": "Examples are named original values within each operation. The canonical fixture remains conformant with samples beside an output:false schema, demonstrating that conformance does not validate their truth. Exact input/output values are not promoted into schemas.",
+      "conceptual_status": "source reviewed against pinned authority; existing tests passed in clean3599f27 full verifier",
+      "final_independent_audit": "pending"
+    },
+    {
+      "id": "kind",
+      "authority": [
+        {
+          "file": "spec/openbindings.md",
+          "line": 486,
+          "text_match": "## 6. Kinds"
+        }
+      ],
+      "concept": "Kind",
+      "owner": "core.document",
+      "actual_api": [
+        "Source::kind",
+        "Dependency::accepts_kind"
+      ],
+      "source": [
+        {
+          "file": "crates/openbindings/src/document/model.rs",
+          "line": 328,
+          "anchor": "pub fn kind(",
+          "sha256": "6cb83f0bba47f0649a56587a73fd86cb73d3d4370eeef1569198c97cc6755e2f"
+        },
+        {
+          "file": "crates/openbindings/src/document/model.rs",
+          "line": 352,
+          "anchor": "pub fn accepts_kind(",
+          "sha256": "6cb83f0bba47f0649a56587a73fd86cb73d3d4370eeef1569198c97cc6755e2f"
+        }
+      ],
+      "existing_validation": [
+        {
+          "file": "crates/openbindings/tests/domain.rs",
+          "line": 156,
+          "anchor": "fn exact_keys_aliases_kinds_and_unranked_relations(",
+          "sha256": "6f05a958a5afcd545b901d44ef04f7a082aae3fa483ee04e92ecb76ec113af7a"
+        },
+        {
+          "file": "crates/openbindings/tests/validated_access.rs",
+          "line": 281,
+          "anchor": "fn conformant_kind_filters_compare_text_independent_of_escape_spelling(",
+          "sha256": "a54c0f420e653080518be7ee9c29485d369973452d52dbe7c1cda7613560df05"
+        }
+      ],
+      "audit": "Kind comparison is decoded scalar equality, preserving case and opaque punctuation; no compatibility inference, normalization, acquisition or protocol selection is performed.",
+      "conceptual_status": "source reviewed against pinned authority; existing tests passed in clean3599f27 full verifier",
+      "final_independent_audit": "pending"
+    },
+    {
+      "id": "presence",
+      "authority": [
+        {
+          "file": "spec/openbindings.md",
+          "line": 320,
+          "text_match": "**Presence.**"
+        }
+      ],
+      "concept": "Presence",
+      "owner": "core.document / exact JSON representation",
+      "actual_api": [
+        "Option<JsonValue>",
+        "Option<bool>",
+        "Option<Vec<T>>"
+      ],
+      "source": [
+        {
+          "file": "crates/openbindings/src/document/model.rs",
+          "line": 322,
+          "anchor": "pub fn data(",
+          "sha256": "6cb83f0bba47f0649a56587a73fd86cb73d3d4370eeef1569198c97cc6755e2f"
+        },
+        {
+          "file": "crates/openbindings/src/document/model.rs",
+          "line": 35,
+          "anchor": "fn flag(",
+          "sha256": "6cb83f0bba47f0649a56587a73fd86cb73d3d4370eeef1569198c97cc6755e2f"
+        },
+        {
+          "file": "crates/openbindings/src/document/model.rs",
+          "line": 185,
+          "anchor": "macro_rules! namespace_access",
+          "sha256": "6cb83f0bba47f0649a56587a73fd86cb73d3d4370eeef1569198c97cc6755e2f"
+        }
+      ],
+      "existing_validation": [
+        {
+          "file": "crates/openbindings/tests/domain.rs",
+          "line": 92,
+          "anchor": "fn absent_empty_false_and_null_remain_distinct(",
+          "sha256": "6f05a958a5afcd545b901d44ef04f7a082aae3fa483ee04e92ecb76ec113af7a"
+        },
+        {
+          "file": "crates/openbindings/tests/foundation_02.rs",
+          "line": 4,
+          "anchor": "fn kind_data_is_exact_opaque_and_presence_sensitive(",
+          "sha256": "545f6848eb8ffbba52044cfc764c668c9765d56218348580e175e5144c57851c"
+        }
+      ],
+      "audit": "Canonical reads distinguish absent fields, explicit null, empty arrays/maps and false. Rust Option adds the necessary representation of presence without redefining null or an empty namespace.",
+      "conceptual_status": "source reviewed against pinned authority; existing tests passed in clean3599f27 full verifier",
+      "final_independent_audit": "pending"
+    },
+    {
+      "id": "names",
+      "authority": [
+        {
+          "file": "spec/openbindings.md",
+          "line": 360,
+          "text_match": "**Aliases.**"
+        }
+      ],
+      "concept": "Names and identifiers",
+      "owner": "core.document",
+      "actual_api": [
+        "ConformantDocument::operation",
+        "ConformantDocument::resolve_operation"
+      ],
+      "source": [
+        {
+          "file": "crates/openbindings/src/document/model.rs",
+          "line": 154,
+          "anchor": "pub fn operation(&self, key:",
+          "sha256": "6cb83f0bba47f0649a56587a73fd86cb73d3d4370eeef1569198c97cc6755e2f"
+        },
+        {
+          "file": "crates/openbindings/src/document/model.rs",
+          "line": 163,
+          "anchor": "pub fn resolve_operation(",
+          "sha256": "6cb83f0bba47f0649a56587a73fd86cb73d3d4370eeef1569198c97cc6755e2f"
+        }
+      ],
+      "existing_validation": [
+        {
+          "file": "crates/openbindings/tests/domain.rs",
+          "line": 156,
+          "anchor": "fn exact_keys_aliases_kinds_and_unranked_relations(",
+          "sha256": "6f05a958a5afcd545b901d44ef04f7a082aae3fa483ee04e92ecb76ec113af7a"
+        },
+        {
+          "file": "crates/openbindings/tests/document_boundary.rs",
+          "line": 141,
+          "anchor": "fn indexed_reference_checks_keep_primary_key_and_diagnostic_semantics(",
+          "sha256": "a341ac11c10effe1d7f027440cf76b14afd4495afda42ff05f805a5858a5b23d"
+        }
+      ],
+      "audit": "One shared exact operation-key/alias index is used only by resolve_operation. Binding/dependency declarations and operation() select primary keys. Other namespaces have independent maps.",
+      "conceptual_status": "source reviewed against pinned authority; existing tests passed in clean3599f27 full verifier",
+      "final_independent_audit": "pending"
+    },
+    {
+      "id": "claims",
+      "authority": [
+        {
+          "file": "spec/openbindings.md",
+          "line": 322,
+          "text_match": "**Author claims.**"
+        }
+      ],
+      "concept": "Author claims",
+      "owner": "core.document",
+      "actual_api": [
+        "Operation",
+        "Binding",
+        "Dependency",
+        "Example"
+      ],
+      "source": [
+        {
+          "file": "crates/openbindings/src/document.rs",
+          "line": 105,
+          "anchor": "pub struct ConformantDocument {",
+          "sha256": "e9fabe4c5ce2a496410d3d5f225359051ee05db96431cdf7c8ac8792d7d61d5b"
+        },
+        {
+          "file": "crates/openbindings/src/document/model.rs",
+          "line": 314,
+          "anchor": "pub fn idempotent(",
+          "sha256": "6cb83f0bba47f0649a56587a73fd86cb73d3d4370eeef1569198c97cc6755e2f"
+        },
+        {
+          "file": "crates/openbindings/src/document/model.rs",
+          "line": 357,
+          "anchor": "impl Example {",
+          "sha256": "6cb83f0bba47f0649a56587a73fd86cb73d3d4370eeef1569198c97cc6755e2f"
+        }
+      ],
+      "existing_validation": [
+        {
+          "file": "crates/openbindings/tests/domain.rs",
+          "line": 23,
+          "anchor": "fn all_32_declared_fields_have_canonical_access(",
+          "sha256": "6f05a958a5afcd545b901d44ef04f7a082aae3fa483ee04e92ecb76ec113af7a"
+        },
+        {
+          "file": "crates/openbindings/tests/domain.rs",
+          "line": 156,
+          "anchor": "fn exact_keys_aliases_kinds_and_unranked_relations(",
+          "sha256": "6f05a958a5afcd545b901d44ef04f7a082aae3fa483ee04e92ecb76ec113af7a"
+        }
+      ],
+      "audit": "Conformance proves structural/normative document rules, not truth of examples, realization fidelity or idempotence. Domain reads expose author claims; they mint no verified-runtime or trusted-provider object.",
+      "conceptual_status": "source reviewed against pinned authority; existing tests passed in clean3599f27 full verifier",
+      "final_independent_audit": "pending"
+    },
+    {
+      "id": "preference",
+      "authority": [
+        {
+          "file": "spec/openbindings.md",
+          "line": 423,
+          "text_match": "**Preference signals.**"
+        }
+      ],
+      "concept": "Preference and idempotence",
+      "owner": "core.document",
+      "actual_api": [
+        "Binding::preference",
+        "Binding::idempotent",
+        "Operation::bindings"
+      ],
+      "source": [
+        {
+          "file": "crates/openbindings/src/document/model.rs",
+          "line": 302,
+          "anchor": "pub fn preference(",
+          "sha256": "6cb83f0bba47f0649a56587a73fd86cb73d3d4370eeef1569198c97cc6755e2f"
+        },
+        {
+          "file": "crates/openbindings/src/document/model.rs",
+          "line": 314,
+          "anchor": "pub fn idempotent(",
+          "sha256": "6cb83f0bba47f0649a56587a73fd86cb73d3d4370eeef1569198c97cc6755e2f"
+        },
+        {
+          "file": "crates/openbindings/src/document/model.rs",
+          "line": 236,
+          "anchor": "pub fn bindings(&self) -> Vec<Binding>",
+          "sha256": "6cb83f0bba47f0649a56587a73fd86cb73d3d4370eeef1569198c97cc6755e2f"
+        }
+      ],
+      "existing_validation": [
+        {
+          "file": "crates/openbindings/tests/domain.rs",
+          "line": 243,
+          "anchor": "fn preference_reads_proved_mathematical_integers_not_token_syntax(",
+          "sha256": "6f05a958a5afcd545b901d44ef04f7a082aae3fa483ee04e92ecb76ec113af7a"
+        },
+        {
+          "file": "crates/openbindings/tests/domain.rs",
+          "line": 156,
+          "anchor": "fn exact_keys_aliases_kinds_and_unranked_relations(",
+          "sha256": "6f05a958a5afcd545b901d44ef04f7a082aae3fa483ee04e92ecb76ec113af7a"
+        }
+      ],
+      "audit": "Preference reads the mathematically integral interoperable value proved by conformance; absent preference gives no default rank. Idempotence preserves None/false/true. Lexical binding enumeration is presentation policy and does not grant selection or retry authority.",
+      "conceptual_status": "source reviewed against pinned authority; existing tests passed in clean3599f27 full verifier",
+      "final_independent_audit": "pending"
+    }
+  ],
+  "necessary_private_mechanisms": [
+    "Entry retains immutable conformance proof, key and exact original value; it is not a second public domain model.",
+    "Operations/Bindings/Namespace indexes implement exact lookup and same-snapshot relations without adding spec semantics.",
+    "Macros generate repeated owned entry/namespace operations; macro names are implementation organization, not public concepts."
+  ],
+  "open": [
+    "Bind individual proposed witness IDs and83 obligations explicitly to source/assertions.",
+    "Audit remaining43 concepts,19 relations,package/module dependency boundaries and all32 fields.",
+    "Complete independent final audit after evaluator architecture is final."
+  ]
+}

@@ -1,0 +1,586 @@
+{
+  "format": "openbindings-sdk-concept-audit-partial-v1",
+  "sdk_base": "aecf09e3d45cdc4e193bb37e15f904886146677f",
+  "scope": "11 context/invocation concepts; source and existing assertion audit, not whole-goal completion",
+  "native_gate": "reference-preparation-progress/full-verify-3599f27.log; role semantics unchanged since that full gate",
+  "working_delta": "Two preflight documentation locations corrected for the ERR_REFUSED exception; no role behavior/API change. Evaluator syntax-fact implementation is being qualified separately.",
+  "concepts": [
+    {
+      "id": "context",
+      "authority": [
+        {
+          "file": "interfaces/context/README.md",
+          "line": 25,
+          "text_match": "## The context object"
+        }
+      ],
+      "owner": "context",
+      "actual_api": [
+        "Context",
+        "BindingRequest::with_context",
+        "OperationRequest"
+      ],
+      "source": [
+        {
+          "file": "crates/openbindings-context/src/lib.rs",
+          "line": 17,
+          "anchor": "pub struct Context(",
+          "sha256": "2cafbf40bf56868b41511b96c4eba0fad73994c0c6eba93015584147ecbadee4"
+        },
+        {
+          "file": "crates/openbindings-invocation/src/value.rs",
+          "line": 33,
+          "anchor": "pub fn with_context(",
+          "sha256": "9d45dd6287df6c0a971ace1826987b638cb45500271e81bb0e1ba4134cee3770"
+        }
+      ],
+      "existing_validation": [
+        {
+          "file": "crates/openbindings-invocation/tests/values.rs",
+          "line": 49,
+          "anchor": "fn data_and_context_absence_are_distinct_from_null_and_empty_object(",
+          "sha256": "145bad36902d96e35195542f90a1734516f802783a01f7b3e73edf0d899d476c"
+        },
+        {
+          "file": "crates/openbindings-invocation/tests/support/operation_cases.rs",
+          "line": 1238,
+          "anchor": "fn concurrent_prepared_clones_keep_selection_context_cancellation_and_evidence_separate(",
+          "sha256": "8b629aa6fd18c08f2126834188222665726afb7a8edc7862b0d57da1b6504a42"
+        }
+      ],
+      "audit": "Context carries one exact opaque object per attempt. Neither core OBI fields nor binding selection derive from its members. Acquiring or combining values is host policy; clones retain the immutable owner.",
+      "final_independent_audit": "pending"
+    },
+    {
+      "id": "challenge",
+      "authority": [
+        {
+          "file": "interfaces/context/README.md",
+          "line": 41,
+          "text_match": "## The challenge"
+        }
+      ],
+      "owner": "context",
+      "actual_api": [
+        "ContextChallenge",
+        "ChallengeShapeError"
+      ],
+      "source": [
+        {
+          "file": "crates/openbindings-context/src/lib.rs",
+          "line": 90,
+          "anchor": "pub struct ContextChallenge(",
+          "sha256": "2cafbf40bf56868b41511b96c4eba0fad73994c0c6eba93015584147ecbadee4"
+        },
+        {
+          "file": "crates/openbindings-context/src/lib.rs",
+          "line": 97,
+          "anchor": "pub fn from_json(",
+          "sha256": "2cafbf40bf56868b41511b96c4eba0fad73994c0c6eba93015584147ecbadee4"
+        }
+      ],
+      "existing_validation": [
+        {
+          "file": "crates/openbindings-context/tests/contracts.rs",
+          "line": 9,
+          "anchor": "fn every_pinned_context_challenge_case_has_its_original_shape_answer(",
+          "sha256": "73b41339a7f374e7e7c706adec58fe25e9dca7a6c74c76c84bb659a2f7eaddb9"
+        },
+        {
+          "file": "crates/openbindings-context/tests/contracts.rs",
+          "line": 31,
+          "anchor": "fn checked_fields_use_decoded_names_and_reject_ambiguous_carriers(",
+          "sha256": "73b41339a7f374e7e7c706adec58fe25e9dca7a6c74c76c84bb659a2f7eaddb9"
+        }
+      ],
+      "audit": "Closed message/schema carrier shape is admitted separately from JSON Schema validity or trust. The exact object-form schema and annotations are retained; old target/requirements envelopes are not an accepted alternate API.",
+      "final_independent_audit": "pending"
+    },
+    {
+      "id": "oauth",
+      "authority": [
+        {
+          "file": "interfaces/context/README.md",
+          "line": 110,
+          "text_match": "## The oauth2 annotation"
+        }
+      ],
+      "owner": "context",
+      "actual_api": [
+        "ContextChallenge::schema"
+      ],
+      "source": [
+        {
+          "file": "crates/openbindings-context/src/lib.rs",
+          "line": 140,
+          "anchor": "pub fn schema(",
+          "sha256": "2cafbf40bf56868b41511b96c4eba0fad73994c0c6eba93015584147ecbadee4"
+        }
+      ],
+      "existing_validation": [
+        {
+          "file": "crates/openbindings-context/tests/contracts.rs",
+          "line": 67,
+          "anchor": "fn exact_opaque_values_and_schema_owners_survive_the_envelope(",
+          "sha256": "73b41339a7f374e7e7c706adec58fe25e9dca7a6c74c76c84bb659a2f7eaddb9"
+        }
+      ],
+      "audit": "The oauth2 annotation remains exact schema data. Context has no acquisition engine, implicit URL opening, secret source or retry policy. The annotation is useful to an application without becoming a core requirement.",
+      "final_independent_audit": "pending"
+    },
+    {
+      "id": "binding-invoke",
+      "authority": [
+        {
+          "file": "interfaces/binding-invoker/README.md",
+          "line": 22,
+          "text_match": "## Why it's called"
+        }
+      ],
+      "owner": "invocation.binding",
+      "actual_api": [
+        "BindingRequest",
+        "BindingInvoker",
+        "BindingClient"
+      ],
+      "source": [
+        {
+          "file": "crates/openbindings-invocation/src/value.rs",
+          "line": 14,
+          "anchor": "pub struct BindingRequest {",
+          "sha256": "9d45dd6287df6c0a971ace1826987b638cb45500271e81bb0e1ba4134cee3770"
+        },
+        {
+          "file": "crates/openbindings-invocation/src/binding.rs",
+          "line": 24,
+          "anchor": "pub trait BindingInvoker",
+          "sha256": "3868d02b294b9a3035640525a4a530ddd8c84e29f309b729e2d75c4bca49393f"
+        },
+        {
+          "file": "crates/openbindings-invocation/src/binding.rs",
+          "line": 72,
+          "anchor": "pub struct BindingClient",
+          "sha256": "3868d02b294b9a3035640525a4a530ddd8c84e29f309b729e2d75c4bca49393f"
+        }
+      ],
+      "existing_validation": [
+        {
+          "file": "crates/openbindings-invocation/tests/values.rs",
+          "line": 15,
+          "anchor": "fn owned_document_request_preserves_exact_payloads_and_owners(",
+          "sha256": "145bad36902d96e35195542f90a1734516f802783a01f7b3e73edf0d899d476c"
+        },
+        {
+          "file": "crates/openbindings-invocation/tests/support/operation_cases.rs",
+          "line": 145,
+          "anchor": "fn binding_is_lazy_owned_exact_and_descriptorless(",
+          "sha256": "8b629aa6fd18c08f2126834188222665726afb7a8edc7862b0d57da1b6504a42"
+        },
+        {
+          "file": "crates/openbindings-invocation/tests/support/operation_cases.rs",
+          "line": 180,
+          "anchor": "fn missing_binding_is_terminal_but_empty_key_is_local(",
+          "sha256": "8b629aa6fd18c08f2126834188222665726afb7a8edc7862b0d57da1b6504a42"
+        }
+      ],
+      "audit": "An explicit binding key and retained conformant document preserve kind-defined references and absent/null source and binding data. Binding invocation performs no operation selection or per-value schema validation. SDK strict document admission is implementation policy, not a replacement wire contract.",
+      "final_independent_audit": "pending"
+    },
+    {
+      "id": "preflight",
+      "authority": [
+        {
+          "file": "interfaces/binding-invoker/README.md",
+          "line": 128,
+          "text_match": "### preflightBinding"
+        }
+      ],
+      "owner": "invocation.binding",
+      "actual_api": [
+        "BindingInvoker::preflight",
+        "BindingClient::preflight",
+        "OperationClient::preflight",
+        "PreflightOutcome"
+      ],
+      "source": [
+        {
+          "file": "crates/openbindings-invocation/src/binding.rs",
+          "line": 15,
+          "anchor": "pub enum PreflightOutcome",
+          "sha256": "3868d02b294b9a3035640525a4a530ddd8c84e29f309b729e2d75c4bca49393f"
+        },
+        {
+          "file": "crates/openbindings-invocation/src/binding.rs",
+          "line": 44,
+          "anchor": "fn preflight<",
+          "sha256": "3868d02b294b9a3035640525a4a530ddd8c84e29f309b729e2d75c4bca49393f"
+        },
+        {
+          "file": "crates/openbindings-invocation/src/operation.rs",
+          "line": 182,
+          "anchor": "pub fn preflight<",
+          "sha256": "4330033b75b90c09554c374847330b81673f490ba0ab54ab80ce3d111ab6a269"
+        }
+      ],
+      "existing_validation": [
+        {
+          "file": "crates/openbindings-invocation/tests/support/operation_cases.rs",
+          "line": 430,
+          "anchor": "fn preflight_is_send_with_a_non_send_evaluator_and_never_prepares(",
+          "sha256": "8b629aa6fd18c08f2126834188222665726afb7a8edc7862b0d57da1b6504a42"
+        },
+        {
+          "file": "crates/openbindings-invocation/tests/interface_regressions.rs",
+          "line": 158,
+          "anchor": "fn pointer_forwarding_preserves_separate_preflight_hooks(",
+          "sha256": "c529aa486c4bc079c973270c5083d460076391e87fdb4e9ce81f596ef9fd386f"
+        }
+      ],
+      "audit": "The separately associated future carries NoPrediction or a challenge without input/output channels or operation dispatch. Ordinary errors carry no prediction; ERR_REFUSED predicts refusal of the same input. Documentation was corrected during this audit to retain that interface exception. Invocation still performs its own selection and live negotiation.",
+      "final_independent_audit": "pending"
+    },
+    {
+      "id": "operation-invoke",
+      "authority": [
+        {
+          "file": "interfaces/operation-invoker/README.md",
+          "line": 35,
+          "text_match": "## What an operation invoker does"
+        }
+      ],
+      "owner": "invocation.operation",
+      "actual_api": [
+        "OperationClient",
+        "OperationRequest",
+        "PreparedOperation",
+        "ValidationEvidence"
+      ],
+      "source": [
+        {
+          "file": "crates/openbindings-invocation/src/operation.rs",
+          "line": 82,
+          "anchor": "pub struct OperationClient",
+          "sha256": "4330033b75b90c09554c374847330b81673f490ba0ab54ab80ce3d111ab6a269"
+        },
+        {
+          "file": "crates/openbindings-invocation/src/operation.rs",
+          "line": 297,
+          "anchor": "fn evaluate<",
+          "sha256": "4330033b75b90c09554c374847330b81673f490ba0ab54ab80ce3d111ab6a269"
+        },
+        {
+          "file": "crates/openbindings-invocation/src/operation/prepared.rs",
+          "line": 51,
+          "anchor": "pub struct PreparedOperation",
+          "sha256": "33ce6460fd4508f3d45768f06f381240b60b3f81946479c2d04190df9b74002d"
+        }
+      ],
+      "existing_validation": [
+        {
+          "file": "crates/openbindings-invocation/tests/support/operation_cases.rs",
+          "line": 279,
+          "anchor": "fn input_is_checked_before_delivery_and_rejection_is_not_eof(",
+          "sha256": "8b629aa6fd18c08f2126834188222665726afb7a8edc7862b0d57da1b6504a42"
+        },
+        {
+          "file": "crates/openbindings-invocation/tests/support/operation_cases.rs",
+          "line": 307,
+          "anchor": "fn valid_output_precedes_rejected_output_terminal(",
+          "sha256": "8b629aa6fd18c08f2126834188222665726afb7a8edc7862b0d57da1b6504a42"
+        },
+        {
+          "file": "crates/openbindings-invocation/tests/support/operation_cases.rs",
+          "line": 924,
+          "anchor": "fn undefined_and_no_verdict_withhold_both_directions_and_keep_exact_evidence(",
+          "sha256": "8b629aa6fd18c08f2126834188222665726afb7a8edc7862b0d57da1b6504a42"
+        }
+      ],
+      "audit": "Resolve an operation, select a binding and gate each supplied value in a declared direction. Only Satisfies permits forwarding; failures/undefined/inability remain distinct local evidence. Explicit owned PreparedOperation reuses validators as an SDK mechanism, retaining neither provider nor evaluator.",
+      "final_independent_audit": "pending"
+    },
+    {
+      "id": "selection",
+      "authority": [
+        {
+          "file": "interfaces/operation-invoker/README.md",
+          "line": 41,
+          "text_match": "2. **Resolves a binding**"
+        }
+      ],
+      "owner": "invocation.operation",
+      "actual_api": [
+        "OperationAddress",
+        "BindingChoice",
+        "OperationClient"
+      ],
+      "source": [
+        {
+          "file": "crates/openbindings-invocation/src/operation/request.rs",
+          "line": 13,
+          "anchor": "pub enum OperationAddress",
+          "sha256": "e2417a148401c8412ef3e500e20ffcb4455994111748e79ba73ab0a2cb90d7a7"
+        },
+        {
+          "file": "crates/openbindings-invocation/src/operation.rs",
+          "line": 200,
+          "anchor": "fn resolve<",
+          "sha256": "4330033b75b90c09554c374847330b81673f490ba0ab54ab80ce3d111ab6a269"
+        },
+        {
+          "file": "crates/openbindings-invocation/src/operation/prepared.rs",
+          "line": 7,
+          "anchor": "pub enum BindingChoice",
+          "sha256": "33ce6460fd4508f3d45768f06f381240b60b3f81946479c2d04190df9b74002d"
+        }
+      ],
+      "existing_validation": [
+        {
+          "file": "crates/openbindings-invocation/tests/support/operation_cases.rs",
+          "line": 214,
+          "anchor": "fn all_selection_keys_are_checked_before_any_support_query(",
+          "sha256": "8b629aa6fd18c08f2126834188222665726afb7a8edc7862b0d57da1b6504a42"
+        },
+        {
+          "file": "crates/openbindings-invocation/tests/support/operation_cases.rs",
+          "line": 231,
+          "anchor": "fn aliases_ordered_selection_and_ambiguity_follow_caller_policy(",
+          "sha256": "8b629aa6fd18c08f2126834188222665726afb7a8edc7862b0d57da1b6504a42"
+        },
+        {
+          "file": "crates/openbindings-invocation/tests/interface_regressions.rs",
+          "line": 173,
+          "anchor": "fn unsupported_ordered_selection_is_not_found_but_explicit_binding_is_attempted(",
+          "sha256": "c529aa486c4bc079c973270c5083d460076391e87fdb4e9ce81f596ef9fd386f"
+        }
+      ],
+      "audit": "Every ordered key is checked before support lookup; the first invocable key wins only inside the supplied list. Unselected multiplicity requires an explicit choice. Explicit binding addressing bypasses routing support; no automatic ranking or outside-list fallback is invented.",
+      "final_independent_audit": "pending"
+    },
+    {
+      "id": "frames",
+      "authority": [
+        {
+          "file": "interfaces/binding-invoker/README.md",
+          "line": 204,
+          "text_match": "## Frame exchange"
+        }
+      ],
+      "owner": "invocation.channel",
+      "actual_api": [
+        "Invocation",
+        "InvocationInput",
+        "InvocationOutput",
+        "OutputEvent"
+      ],
+      "source": [
+        {
+          "file": "crates/openbindings-invocation/src/channel/mod.rs",
+          "line": 96,
+          "anchor": "pub enum OutputEvent",
+          "sha256": "60f735adcf48afc892a9b6563ef981cfcb45dd6e21e1067ada22806deec1704a"
+        },
+        {
+          "file": "crates/openbindings-invocation/src/channel/mod.rs",
+          "line": 214,
+          "anchor": "fn finish_locked(",
+          "sha256": "60f735adcf48afc892a9b6563ef981cfcb45dd6e21e1067ada22806deec1704a"
+        },
+        {
+          "file": "crates/openbindings-invocation/src/channel/mod.rs",
+          "line": 381,
+          "anchor": "pub struct Invocation<",
+          "sha256": "60f735adcf48afc892a9b6563ef981cfcb45dd6e21e1067ada22806deec1704a"
+        }
+      ],
+      "existing_validation": [
+        {
+          "file": "crates/openbindings-invocation/src/channel/tests.rs",
+          "line": 19,
+          "anchor": "fn only_output_drives_and_committed_values_precede_the_terminal(",
+          "sha256": "066563f3a230f2d6802f600eb227ae728000250b67face779181851b6f0b57e5"
+        },
+        {
+          "file": "crates/openbindings-invocation/src/channel/tests.rs",
+          "line": 46,
+          "anchor": "fn caller_close_drains_but_provider_close_discards_and_notifies_once(",
+          "sha256": "066563f3a230f2d6802f600eb227ae728000250b67face779181851b6f0b57e5"
+        },
+        {
+          "file": "crates/openbindings-invocation/tests/frame_correspondence.rs",
+          "line": 755,
+          "anchor": "fn operation_interface_reuses_the_same_closed_frame_protocol(",
+          "sha256": "7521335a73cc6443ee9362730609a098f4266623d143f1818d3e2c7ee9a9ecd5"
+        }
+      ],
+      "audit": "Caller/provider half-closes, committed values and exactly one terminal retain the published frame lifecycle. Earlier output is not a success verdict and remains before later failure. Native handles model the same lifecycle without requiring a transport framing API in core.",
+      "final_independent_audit": "pending"
+    },
+    {
+      "id": "portable-error",
+      "authority": [
+        {
+          "file": "interfaces/binding-invoker/README.md",
+          "line": 132,
+          "text_match": "## Unsuccessful completion"
+        }
+      ],
+      "owner": "invocation.wire",
+      "actual_api": [
+        "InvocationError",
+        "BoundaryFailure",
+        "ValidationFailure"
+      ],
+      "source": [
+        {
+          "file": "crates/openbindings-invocation/src/error.rs",
+          "line": 21,
+          "anchor": "pub struct InvocationError",
+          "sha256": "8647542c874fe720efa8a87d77b53cf3d9a5aea1ff7378baede8757bb8acd889"
+        },
+        {
+          "file": "crates/openbindings-invocation/src/boundary.rs",
+          "line": 9,
+          "anchor": "pub struct BoundaryFailure",
+          "sha256": "307ab3f21dedca28fd44a374a2531f215535083c2eada028426d4662ea2c420d"
+        },
+        {
+          "file": "crates/openbindings-invocation/src/operation.rs",
+          "line": 51,
+          "anchor": "pub struct ValidationFailure",
+          "sha256": "4330033b75b90c09554c374847330b81673f490ba0ab54ab80ce3d111ab6a269"
+        }
+      ],
+      "existing_validation": [
+        {
+          "file": "crates/openbindings-invocation/tests/values.rs",
+          "line": 149,
+          "anchor": "fn portable_errors_preserve_unknown_codes_and_absent_null_exact_data(",
+          "sha256": "145bad36902d96e35195542f90a1734516f802783a01f7b3e73edf0d899d476c"
+        },
+        {
+          "file": "crates/openbindings-invocation/tests/interface_regressions.rs",
+          "line": 210,
+          "anchor": "fn only_current_operation_owned_codes_are_reserved_at_provider_boundary(",
+          "sha256": "c529aa486c4bc079c973270c5083d460076391e87fdb4e9ce81f596ef9fd386f"
+        }
+      ],
+      "audit": "InvocationError intentionally replaces the initial InvocationFailure sketch spelling and follows the adopted interface. Portable code/optional data preserve unknown codes and presence; boundary/validation evidence is local and cannot become an ungoverned diagnostic field in the portable record.",
+      "final_independent_audit": "pending"
+    },
+    {
+      "id": "support",
+      "authority": [
+        {
+          "file": "interfaces/operation-invoker/README.md",
+          "line": 41,
+          "text_match": "2. **Resolves a binding**"
+        }
+      ],
+      "owner": "invocation.operation",
+      "actual_api": [
+        "InvocationSupport"
+      ],
+      "source": [
+        {
+          "file": "crates/openbindings-invocation/src/binding.rs",
+          "line": 52,
+          "anchor": "pub trait InvocationSupport",
+          "sha256": "3868d02b294b9a3035640525a4a530ddd8c84e29f309b729e2d75c4bca49393f"
+        },
+        {
+          "file": "crates/openbindings-invocation/src/operation.rs",
+          "line": 267,
+          "anchor": "fn supported<",
+          "sha256": "4330033b75b90c09554c374847330b81673f490ba0ab54ab80ce3d111ab6a269"
+        }
+      ],
+      "existing_validation": [
+        {
+          "file": "crates/openbindings-invocation/tests/support/operation_cases.rs",
+          "line": 198,
+          "anchor": "fn explicit_operation_binding_bypasses_selection_support(",
+          "sha256": "8b629aa6fd18c08f2126834188222665726afb7a8edc7862b0d57da1b6504a42"
+        },
+        {
+          "file": "crates/openbindings-invocation/tests/support/operation_cases.rs",
+          "line": 145,
+          "anchor": "fn binding_is_lazy_owned_exact_and_descriptorless(",
+          "sha256": "8b629aa6fd18c08f2126834188222665726afb7a8edc7862b0d57da1b6504a42"
+        }
+      ],
+      "audit": "The provider supplies invocation routing knowledge independently of kind description. This SDK trait enables selection; it is not a new portable support query and an absent descriptor does not imply unsupported invocation.",
+      "final_independent_audit": "pending"
+    },
+    {
+      "id": "channel",
+      "authority": [
+        {
+          "file": "interfaces/binding-invoker/README.md",
+          "line": 210,
+          "text_match": "The operation exchanges frames"
+        }
+      ],
+      "owner": "invocation.channel",
+      "actual_api": [
+        "ProviderIo",
+        "ProviderInput",
+        "ProviderOutput",
+        "InvocationInput",
+        "InvocationOutput",
+        "InvocationLimits"
+      ],
+      "source": [
+        {
+          "file": "crates/openbindings-invocation/src/channel/mod.rs",
+          "line": 620,
+          "anchor": "pub struct ProviderIo",
+          "sha256": "60f735adcf48afc892a9b6563ef981cfcb45dd6e21e1067ada22806deec1704a"
+        },
+        {
+          "file": "crates/openbindings-invocation/src/channel/mod.rs",
+          "line": 32,
+          "anchor": "pub struct InvocationLimits",
+          "sha256": "60f735adcf48afc892a9b6563ef981cfcb45dd6e21e1067ada22806deec1704a"
+        },
+        {
+          "file": "crates/openbindings-invocation/src/binding.rs",
+          "line": 26,
+          "anchor": "type Invoke<",
+          "sha256": "3868d02b294b9a3035640525a4a530ddd8c84e29f309b729e2d75c4bca49393f"
+        }
+      ],
+      "existing_validation": [
+        {
+          "file": "crates/openbindings-invocation/src/channel/tests.rs",
+          "line": 178,
+          "anchor": "fn blocked_polls_do_not_spend_credits_or_create_a_busy_wake_loop(",
+          "sha256": "066563f3a230f2d6802f600eb227ae728000250b67face779181851b6f0b57e5"
+        },
+        {
+          "file": "crates/openbindings-invocation/tests/interface_regressions.rs",
+          "line": 108,
+          "anchor": "fn borrowed_generic_provider_futures_are_send_without_static_configuration(",
+          "sha256": "c529aa486c4bc079c973270c5083d460076391e87fdb4e9ce81f596ef9fd386f"
+        },
+        {
+          "file": "crates/openbindings-invocation/tests/support/operation_cases.rs",
+          "line": 497,
+          "anchor": "fn thread_safe_composition_yields_send_driver_and_provider_handles(",
+          "sha256": "8b629aa6fd18c08f2126834188222665726afb7a8edc7862b0d57da1b6504a42"
+        }
+      ],
+      "audit": "ProviderIo replaces the initial BindingIo sketch. Split handles support bounded bidirectional handoffs; provider GAT futures may borrow configuration without global Send/Sync or runtime requirements. Private queue, epoch, waker and cancellation mechanisms implement lifecycle/resource policy without adding interface fields.",
+      "final_independent_audit": "pending"
+    }
+  ],
+  "known_sketch_reconciliations": {
+    "InvocationFailure": "InvocationError",
+    "BindingIo": "ProviderIo"
+  },
+  "open": [
+    "Bind all witness IDs and obligations to exact independent assertions.",
+    "Audit cross-role strict admission with source-pull/kind roles.",
+    "Finish remaining17 concepts and19 relations/package boundaries.",
+    "Final independent semantic and architecture audit."
+  ]
+}

@@ -36,20 +36,20 @@ and [frame checkpoint evidence](../receipts/2026-11-02-preparation/iterative-exe
 
 The frame checkpoint is pushed as `98ab475`; its full portable verifier passes.
 All hosted CI jobs for that frame checkpoint, including Windows, have passed.
-For the later receipt checkpoint `aecf09e`, all jobs except the still-running
-Windows job pass at the latest observation. Hosted
-performance checks pass, but do not replace the final matched-performance gate.
+Later CI runs at `aecf09e` and `57cdc22` were superseded and cancelled by newer
+pushes. The latest `fc1ade8` run is in progress; its hosted performance check
+passes. These checks do not replace the final matched-performance gate.
 The [acquisition/reference repairs](../receipts/2026-11-02-preparation/ci-reference-acquisition/README.md)
 also have independent review and a clean reference-candidate pass.
 
-The active bounded increment shares identical static reference queries during one
+The completed reference increment shares identical static reference queries during one
 construction attempt and avoids multiplying type-only reference-string reads in
 fixed syntax checks. [Its design](../design/2026-11-02/reference-preparation-sharing.md)
 has independent approval. The unchanged 1,000/5,000-reference jobs now pass original
 preparation defaults; current/MSRV Rust and fresh Node/browser checks pass. Independent
 implementation/resource review passes with no unresolved finding. The complete
-portable verifier passes on pushed `3599f27`. This does not implement cross-phase
-syntax-fact sharing or full pattern VM preparation. Results and source identities
+portable verifier passes on pushed `3599f27`. That checkpoint predates cross-phase
+syntax-fact sharing and does not implement full pattern VM preparation. Results and source identities
 are in [the progress receipt](../receipts/2026-11-02-preparation/reference-preparation-progress/README.md).
 
 The next [pattern-program schedule](../design/2026-11-02/prepared-pattern-program-schedule.md)
@@ -60,10 +60,24 @@ need explicit bounds. No production change uses that rejected formula. A separat
 only completed local standard syntax facts in one owned immutable environment;
 complete child/custom dependency traversal remains. Parent current/MSRV/host checks
 and the full portable verifier pass on pushed `57cdc22`. The [current map audit](../receipts/2026-11-02-preparation/current-map-audit/README.md)
-has partial source/semantic bindings for all 54 concepts and 32 document fields; the complete audit
-is still open.
+has source/semantic bindings for all 54 concepts, 32 document fields and 19
+relations, plus the actual 13 Rust packages across 11 logical product boundaries.
+The complete obligation/witness audit and independent final review remain open.
+The HTTP companion's stale applied-revision declaration is corrected in `fc1ade8`;
+a new mutation-tested gate checks all seven current authority declarations. The
+companion text delta changes terminology/cross-references, not HTTP behavior;
+52 native HTTP/TLS checks pass.
 
-Finish the preparation sharing and pattern-program schedule,
+The [original Explain witness design](../design/2026-11-02/original-explain-witnesses.md)
+has independent bounded design approval. It uses compact seeds and separately
+audited root-only pointer materialization; implementation remains pending. A
+separate [pattern cache reservation correction](../design/2026-11-02/pattern-search-cache.md)
+is implemented after design approval and addresses a concrete epsilon-branch
+breadth defect in the existing call-local matcher, independently of full compiler
+preparation. Parent native/MSRV/Node/browser/package gates pass; independent
+implementation/resource review remains pending.
+
+Finish the pattern-program schedule and search-cache correction,
 original Explain witnesses, remaining native/Wasm stack qualification, and forced
 original-engine validation. Then switch the default and retire the outgoing
 projection/compiler paths; run the final matched performance and clean-package/
@@ -86,8 +100,8 @@ checked on 2026-11-02; local checkout names are not evidence of currency.
 | [SDK `main`](https://github.com/openbindings/sdk/tree/18a66957d038431a5caf0db340d96f60bc1decdf) | `18a66957d038431a5caf0db340d96f60bc1decdf` | Starting code and measurement baseline |
 | [Specification `release/0.2`](https://github.com/openbindings/spec/tree/c1419c9fc3ae5a00c2b83da710c11bf67dab7934) | `c1419c9fc3ae5a00c2b83da710c11bf67dab7934` | Target document model, derived schema, corpus, and HTTP discovery companion |
 | [Interfaces `main`](https://github.com/openbindings/interfaces/tree/5815fb106bddd2c85ff4e93e0077570b3f6b9e74) | `5815fb106bddd2c85ff4e93e0077570b3f6b9e74` | Target invocation, source-puller, kind-descriptor, context, and comparison publications |
-| Specification currently applied by SDK | `30416ef1ca626e58eb8c383a0c71422a68f9243f` | Historical comparison only |
-| Interfaces currently applied by SDK role crates | `f158f4f345301668ccb8fd555586b04ca823e732` | Historical comparison only |
+| Specification applied by the starting SDK baseline | `30416ef1ca626e58eb8c383a0c71422a68f9243f` | Historical comparison only |
+| Interfaces applied by the starting SDK role crates | `f158f4f345301668ccb8fd555586b04ca823e732` | Historical comparison only |
 
 The SDK checkout at `openbindings/sdk` is behind `main`. Do not restart this work from its
 `78724ae` commit or downgrade the applied spec to `2f7d754`. The retained checkout at

@@ -1,0 +1,891 @@
+{
+  "format": "openbindings-sdk-concept-audit-partial-v1",
+  "sdk_base": "57cdc226034df802f991db16ded98b4c8155edae",
+  "scope": "17 companion/host/qualification concepts; all54 now have partial source/behavior bindings, NOT a completed independent alignment audit",
+  "native_gate": "reference-preparation-progress/full-verify-3599f27.log; unchanged companion logic. Full57cdc22 verifier passes; subsequent HTTP pin-only delta passes focused gates.",
+  "concepts": [
+    {
+      "id": "checked",
+      "authority": [
+        {
+          "file": "interfaces/operation-invoker/README.md",
+          "line": 27,
+          "text_match": "## Publication boundary"
+        }
+      ],
+      "owner": "roles.checking",
+      "actual_api": [
+        "BindingRequest",
+        "OperationRequest",
+        "PullRequest",
+        "BoundaryFailure",
+        "ClientError"
+      ],
+      "source": [
+        {
+          "file": "crates/openbindings-invocation/src/value.rs",
+          "line": 109,
+          "anchor": "pub(crate) fn interface(",
+          "sha256": "9d45dd6287df6c0a971ace1826987b638cb45500271e81bb0e1ba4134cee3770"
+        },
+        {
+          "file": "crates/openbindings-source-pull/src/request.rs",
+          "line": 45,
+          "anchor": "pub fn from_json(",
+          "sha256": "48fa9e69e5a0691ccc899093b44f5003a7638407fc198b85407f8107e8e39e0d"
+        },
+        {
+          "file": "crates/openbindings-kind-description/src/client.rs",
+          "line": 157,
+          "anchor": "pub struct SourceCheckClient",
+          "sha256": "d78f92482bbf17a9924852b3b0f4d8282bfcba543deef40240916928bc2683ce"
+        }
+      ],
+      "existing_validation": [
+        {
+          "file": "crates/openbindings-invocation/tests/values.rs",
+          "line": 68,
+          "anchor": "fn requests_reject_closed_shape_violations_and_require_document_conformance(",
+          "sha256": "145bad36902d96e35195542f90a1734516f802783a01f7b3e73edf0d899d476c"
+        },
+        {
+          "file": "crates/openbindings-source-pull/tests/relationships.rs",
+          "line": 116,
+          "anchor": "fn request_and_response_boundaries_refuse_before_prospective_work(",
+          "sha256": "0c066860e91d4431baa1f717410b74050586a102e25b861a3c2f2d746bb1630e"
+        },
+        {
+          "file": "crates/openbindings-kind-description/tests/handoff.rs",
+          "line": 160,
+          "anchor": "fn malformed_provider_outputs_remain_operational_failures_and_never_kind_rejections(",
+          "sha256": "6791c10e8f4f4080a223d0ce3cb3707a084a18f2107b2bf3e78618b5c894ae22"
+        }
+      ],
+      "audit": "Checked request roles require a conformant document where their request carries an OBI, and establish role-local shape/identity/handoff conditions. This policy does not narrow portable open carriers or turn a standalone CheckedSource into OBI conformance. Kind-description/check requests do not carry an OBI and require no invented document proof.",
+      "final_independent_audit": "pending"
+    },
+    {
+      "id": "kind-describe",
+      "authority": [
+        {
+          "file": "interfaces/kind-descriptor/README.md",
+          "line": 27,
+          "text_match": "## Operations"
+        }
+      ],
+      "owner": "kind-description",
+      "actual_api": [
+        "KindDescriptor",
+        "KindClient",
+        "KindDescription",
+        "KindSummary",
+        "CheckDescription"
+      ],
+      "source": [
+        {
+          "file": "crates/openbindings-kind-description/src/client.rs",
+          "line": 9,
+          "anchor": "pub trait KindDescriptor",
+          "sha256": "d78f92482bbf17a9924852b3b0f4d8282bfcba543deef40240916928bc2683ce"
+        },
+        {
+          "file": "crates/openbindings-kind-description/src/model.rs",
+          "line": 234,
+          "anchor": "impl KindDescription {",
+          "sha256": "93eb24742c5c6922dd5a1459b45b8cd9e1b32a8641920ff7c180b69c0c086990"
+        }
+      ],
+      "existing_validation": [
+        {
+          "file": "crates/openbindings-kind-description/tests/carriers.rs",
+          "line": 13,
+          "anchor": "fn all_pinned_carrier_cases_keep_their_published_answers(",
+          "sha256": "07e35b1466e6edf51b03cee9c5dece1956d6275c6d3093deff5a2cd50796b4e4"
+        },
+        {
+          "file": "crates/openbindings-kind-description/tests/carriers.rs",
+          "line": 114,
+          "anchor": "fn support_is_per_operation_and_repeated_decoded_keys_are_rejected(",
+          "sha256": "07e35b1466e6edf51b03cee9c5dece1956d6275c6d3093deff5a2cd50796b4e4"
+        },
+        {
+          "file": "crates/openbindings-kind-description/tests/clients.rs",
+          "line": 142,
+          "anchor": "fn clients_enforce_exact_request_response_kind_identity(",
+          "sha256": "676d92311206c3ad7b45547a7437d2e463eb4eeeab91fc7c3993b40059620e60"
+        }
+      ],
+      "audit": "Listings/descriptions preserve per-operation support claims and optional data schemas. KindClient checks exact kind identity and finite handoff. Description is a separate optional capability, not a mandatory dependency of invocation or pulling.",
+      "final_independent_audit": "pending"
+    },
+    {
+      "id": "source-check",
+      "authority": [
+        {
+          "file": "interfaces/kind-descriptor/README.md",
+          "line": 89,
+          "text_match": "## checkSource"
+        }
+      ],
+      "owner": "kind-description",
+      "actual_api": [
+        "SourceChecker",
+        "SourceCheckClient",
+        "CheckSourceRequest",
+        "CheckedSource",
+        "CheckFailure"
+      ],
+      "source": [
+        {
+          "file": "crates/openbindings-kind-description/src/client.rs",
+          "line": 30,
+          "anchor": "pub trait SourceChecker",
+          "sha256": "d78f92482bbf17a9924852b3b0f4d8282bfcba543deef40240916928bc2683ce"
+        },
+        {
+          "file": "crates/openbindings-kind-description/src/model.rs",
+          "line": 335,
+          "anchor": "impl CheckedSource {",
+          "sha256": "93eb24742c5c6922dd5a1459b45b8cd9e1b32a8641920ff7c180b69c0c086990"
+        }
+      ],
+      "existing_validation": [
+        {
+          "file": "crates/openbindings-kind-description/tests/clients.rs",
+          "line": 94,
+          "anchor": "fn two_kinds_keep_queries_checks_context_and_authored_data_separate(",
+          "sha256": "676d92311206c3ad7b45547a7437d2e463eb4eeeab91fc7c3993b40059620e60"
+        },
+        {
+          "file": "crates/openbindings-kind-description/tests/carriers.rs",
+          "line": 156,
+          "anchor": "fn check_disclosure_is_owned_and_is_not_permission(",
+          "sha256": "07e35b1466e6edf51b03cee9c5dece1956d6275c6d3093deff5a2cd50796b4e4"
+        },
+        {
+          "file": "crates/openbindings-kind-description/tests/handoff.rs",
+          "line": 160,
+          "anchor": "fn malformed_provider_outputs_remain_operational_failures_and_never_kind_rejections(",
+          "sha256": "6791c10e8f4f4080a223d0ce3cb3707a084a18f2107b2bf3e78618b5c894ae22"
+        }
+      ],
+      "audit": "The same kind returns checked source data without document mutation or source-operation dispatch. Runtime context remains separate. Execution disclosure belongs to the kind description and is not permission; operational failures remain distinct from kind rejection.",
+      "final_independent_audit": "pending"
+    },
+    {
+      "id": "pull",
+      "authority": [
+        {
+          "file": "interfaces/source-puller/README.md",
+          "line": 20,
+          "text_match": "## Request"
+        }
+      ],
+      "owner": "source-pull",
+      "actual_api": [
+        "PullRequest",
+        "SourcePuller",
+        "PullClient",
+        "PullResult"
+      ],
+      "source": [
+        {
+          "file": "crates/openbindings-source-pull/src/request.rs",
+          "line": 8,
+          "anchor": "pub struct PullRequest",
+          "sha256": "48fa9e69e5a0691ccc899093b44f5003a7638407fc198b85407f8107e8e39e0d"
+        },
+        {
+          "file": "crates/openbindings-source-pull/src/client.rs",
+          "line": 27,
+          "anchor": "pub trait SourcePuller",
+          "sha256": "bbb561b9d02192bcb12b641b854fed826f417aeac582e0bf8cf8306c0a2e48bd"
+        }
+      ],
+      "existing_validation": [
+        {
+          "file": "crates/openbindings-source-pull/tests/clients.rs",
+          "line": 82,
+          "anchor": "fn dispatch_is_lazy_and_preconditions_do_not_construct_provider_work(",
+          "sha256": "fb539f987f0608e5f26be4cdfae8646acbe46a0ee1ec6b1a7e37152fa21a0f08"
+        },
+        {
+          "file": "crates/openbindings-source-pull/tests/clients.rs",
+          "line": 116,
+          "anchor": "fn original_owner_context_and_native_local_errors_are_preserved_without_retry(",
+          "sha256": "fb539f987f0608e5f26be4cdfae8646acbe46a0ee1ec6b1a7e37152fa21a0f08"
+        },
+        {
+          "file": "crates/openbindings-source-pull/tests/clients.rs",
+          "line": 256,
+          "anchor": "fn send_futures_can_borrow_non_static_providers_in_each_ownership_form(",
+          "sha256": "fb539f987f0608e5f26be4cdfae8646acbe46a0ee1ec6b1a7e37152fa21a0f08"
+        }
+      ],
+      "audit": "One retained conformant original document, source key and optional opaque context form an attempt. Explicit providers return additions/report; acquisition, kind logic and retry remain outside the generic client. Borrowing GAT futures preserve conditional Send without a static provider requirement.",
+      "final_independent_audit": "pending"
+    },
+    {
+      "id": "additions",
+      "authority": [
+        {
+          "file": "interfaces/source-puller/README.md",
+          "line": 57,
+          "text_match": "## Additions"
+        }
+      ],
+      "owner": "source-pull.result",
+      "actual_api": [
+        "PullAdditions",
+        "PullResult::additions",
+        "PullResult::validate_for"
+      ],
+      "source": [
+        {
+          "file": "crates/openbindings-source-pull/src/model.rs",
+          "line": 535,
+          "anchor": "impl PullAdditions {",
+          "sha256": "8c87fbae42cddbea008b7372eccba1b4fd19211d3981303836f7befeb9c22bf9"
+        },
+        {
+          "file": "crates/openbindings-source-pull/src/relationships.rs",
+          "line": 141,
+          "anchor": "pub(crate) fn check(",
+          "sha256": "23b82621c0ae9bc3fdf72bc9712030b81066bf2e56dd13a1156458f21dfe7b6d"
+        },
+        {
+          "file": "crates/openbindings-source-pull/src/validation.rs",
+          "line": 16,
+          "anchor": "pub fn validate_for(",
+          "sha256": "5a2a224aa84d1ba9704cd68341704826037913906efe629c79bd905dcbceaccb"
+        }
+      ],
+      "existing_validation": [
+        {
+          "file": "crates/openbindings-source-pull/tests/relationships.rs",
+          "line": 18,
+          "anchor": "fn independent_74_design_controls_keep_their_original_classifications(",
+          "sha256": "0c066860e91d4431baa1f717410b74050586a102e25b861a3c2f2d746bb1630e"
+        },
+        {
+          "file": "crates/openbindings-source-pull/tests/relationships.rs",
+          "line": 86,
+          "anchor": "fn prospective_snapshot_adds_only_declared_maps_and_never_applies_proposals(",
+          "sha256": "0c066860e91d4431baa1f717410b74050586a102e25b861a3c2f2d746bb1630e"
+        }
+      ],
+      "audit": "Only new operation/schema/binding map keys enter a prospective snapshot. Existing aliases reserve operation names; added binding/source attribution and core conformance are checked. Reuse identity and fidelity remain producer obligations rather than generic inferred claims.",
+      "final_independent_audit": "pending"
+    },
+    {
+      "id": "pull-report",
+      "authority": [
+        {
+          "file": "interfaces/source-puller/README.md",
+          "line": 100,
+          "text_match": "## Report"
+        }
+      ],
+      "owner": "source-pull.result",
+      "actual_api": [
+        "PullReport",
+        "AddedEntry",
+        "ExistingEntry",
+        "OmittedEntry"
+      ],
+      "source": [
+        {
+          "file": "crates/openbindings-source-pull/src/model.rs",
+          "line": 447,
+          "anchor": "impl PullReport {",
+          "sha256": "8c87fbae42cddbea008b7372eccba1b4fd19211d3981303836f7befeb9c22bf9"
+        },
+        {
+          "file": "crates/openbindings-source-pull/src/relationships.rs",
+          "line": 141,
+          "anchor": "pub(crate) fn check(",
+          "sha256": "23b82621c0ae9bc3fdf72bc9712030b81066bf2e56dd13a1156458f21dfe7b6d"
+        }
+      ],
+      "existing_validation": [
+        {
+          "file": "crates/openbindings-source-pull/tests/carriers.rs",
+          "line": 11,
+          "anchor": "fn all_21_pinned_pull_report_cases_keep_shape_and_complete_answers(",
+          "sha256": "df55b1c6c59143b52ae65035e8f272c0f04b5ed55bcc53c6c9df8ab7dd5101b6"
+        },
+        {
+          "file": "crates/openbindings-source-pull/tests/relationships.rs",
+          "line": 18,
+          "anchor": "fn independent_74_design_controls_keep_their_original_classifications(",
+          "sha256": "0c066860e91d4431baa1f717410b74050586a102e25b861a3c2f2d746bb1630e"
+        }
+      ],
+      "audit": "Added/existing/omitted report entries retain producer evidence and exact permitted metadata. Generic relationships check binding coverage and correspondence, not the truth of the report. Actual Entry suffixes distinguish records clearly; initial Added/Existing/Omitted sketch names have no compatibility status.",
+      "final_independent_audit": "pending"
+    },
+    {
+      "id": "uses",
+      "authority": [
+        {
+          "file": "interfaces/source-puller/README.md",
+          "line": 109,
+          "text_match": "### Added"
+        }
+      ],
+      "owner": "source-pull.checking",
+      "actual_api": [
+        "AddedEntry::uses",
+        "BindingProposal::uses"
+      ],
+      "source": [
+        {
+          "file": "crates/openbindings-source-pull/src/model.rs",
+          "line": 79,
+          "anchor": "macro_rules! uses_accessor",
+          "sha256": "8c87fbae42cddbea008b7372eccba1b4fd19211d3981303836f7befeb9c22bf9"
+        },
+        {
+          "file": "crates/openbindings-source-pull/src/relationships.rs",
+          "line": 107,
+          "anchor": "fn closure(",
+          "sha256": "23b82621c0ae9bc3fdf72bc9712030b81066bf2e56dd13a1156458f21dfe7b6d"
+        }
+      ],
+      "existing_validation": [
+        {
+          "file": "crates/openbindings-source-pull/tests/carriers.rs",
+          "line": 201,
+          "anchor": "fn duplicate_members_and_uses_are_rejected_without_rewriting_nested_opaque_data(",
+          "sha256": "df55b1c6c59143b52ae65035e8f272c0f04b5ed55bcc53c6c9df8ab7dd5101b6"
+        },
+        {
+          "file": "crates/openbindings-source-pull/tests/kinds.rs",
+          "line": 535,
+          "anchor": "fn a_caller_can_discard_or_explicitly_adopt_one_dependency_closed_subset(",
+          "sha256": "3daa1598478b2970e0f15f0a7f1aaf4871bef39c26d512f66a3f3df6ab5a0140"
+        }
+      ],
+      "audit": "Uses labels name available additions. Generic validation checks explicit and implicit known closure; it does not scan opaque kind data to fabricate dependency knowledge. Exact retained labels do not authorize edits of existing entries.",
+      "final_independent_audit": "pending"
+    },
+    {
+      "id": "proposal",
+      "authority": [
+        {
+          "file": "interfaces/source-puller/README.md",
+          "line": 133,
+          "text_match": "### Existing"
+        }
+      ],
+      "owner": "source-pull.result",
+      "actual_api": [
+        "Proposal",
+        "BindingProposal",
+        "SourceProposal",
+        "ExistingStatus",
+        "Change"
+      ],
+      "source": [
+        {
+          "file": "crates/openbindings-source-pull/src/model.rs",
+          "line": 224,
+          "anchor": "pub enum Proposal",
+          "sha256": "8c87fbae42cddbea008b7372eccba1b4fd19211d3981303836f7befeb9c22bf9"
+        },
+        {
+          "file": "crates/openbindings-source-pull/src/model.rs",
+          "line": 147,
+          "anchor": "impl BindingProposal {",
+          "sha256": "8c87fbae42cddbea008b7372eccba1b4fd19211d3981303836f7befeb9c22bf9"
+        },
+        {
+          "file": "crates/openbindings-source-pull/src/model.rs",
+          "line": 203,
+          "anchor": "impl SourceProposal {",
+          "sha256": "8c87fbae42cddbea008b7372eccba1b4fd19211d3981303836f7befeb9c22bf9"
+        }
+      ],
+      "existing_validation": [
+        {
+          "file": "crates/openbindings-source-pull/tests/carriers.rs",
+          "line": 101,
+          "anchor": "fn proposal_authority_is_role_local_and_unknown_metadata_never_gains_edit_power(",
+          "sha256": "df55b1c6c59143b52ae65035e8f272c0f04b5ed55bcc53c6c9df8ab7dd5101b6"
+        },
+        {
+          "file": "crates/openbindings-source-pull/tests/carriers.rs",
+          "line": 147,
+          "anchor": "fn absence_null_and_removal_only_drift_are_not_interchangeable(",
+          "sha256": "df55b1c6c59143b52ae65035e8f272c0f04b5ed55bcc53c6c9df8ab7dd5101b6"
+        },
+        {
+          "file": "crates/openbindings-source-pull/tests/kinds.rs",
+          "line": 458,
+          "anchor": "fn embedded_kind_reports_stale_current_unmatched_and_partial_without_overwriting_authorship(",
+          "sha256": "3daa1598478b2970e0f15f0a7f1aaf4871bef39c26d512f66a3f3df6ab5a0140"
+        }
+      ],
+      "audit": "Current/stale/unmatched and change are producer observations. Role-specific proposals retain only their published edit authority; known author fields are refused and unknown metadata gains none. Proposals are never automatically applied. Absence does not encode deletion, and data:null remains a set operation.",
+      "final_independent_audit": "pending"
+    },
+    {
+      "id": "omitted",
+      "authority": [
+        {
+          "file": "interfaces/source-puller/README.md",
+          "line": 170,
+          "text_match": "### Omitted"
+        }
+      ],
+      "owner": "source-pull.result",
+      "actual_api": [
+        "OmittedEntry",
+        "OmittedStatus"
+      ],
+      "source": [
+        {
+          "file": "crates/openbindings-source-pull/src/model.rs",
+          "line": 49,
+          "anchor": "finite!(OmittedStatus",
+          "sha256": "8c87fbae42cddbea008b7372eccba1b4fd19211d3981303836f7befeb9c22bf9"
+        },
+        {
+          "file": "crates/openbindings-source-pull/src/model.rs",
+          "line": 403,
+          "anchor": "impl OmittedEntry {",
+          "sha256": "8c87fbae42cddbea008b7372eccba1b4fd19211d3981303836f7befeb9c22bf9"
+        }
+      ],
+      "existing_validation": [
+        {
+          "file": "crates/openbindings-source-pull/tests/carriers.rs",
+          "line": 11,
+          "anchor": "fn all_21_pinned_pull_report_cases_keep_shape_and_complete_answers(",
+          "sha256": "df55b1c6c59143b52ae65035e8f272c0f04b5ed55bcc53c6c9df8ab7dd5101b6"
+        }
+      ],
+      "audit": "Excluded, invalid, implementation-unsupported and conflict remain distinct producer-reported reasons. The SDK preserves status and evidence without converting every omission into an implementation capability failure.",
+      "final_independent_audit": "pending"
+    },
+    {
+      "id": "complete",
+      "authority": [
+        {
+          "file": "interfaces/source-puller/README.md",
+          "line": 191,
+          "text_match": "## Complete pull"
+        }
+      ],
+      "owner": "source-pull.result",
+      "actual_api": [
+        "PullReport::is_complete"
+      ],
+      "source": [
+        {
+          "file": "crates/openbindings-source-pull/src/model.rs",
+          "line": 524,
+          "anchor": "pub fn is_complete(",
+          "sha256": "8c87fbae42cddbea008b7372eccba1b4fd19211d3981303836f7befeb9c22bf9"
+        }
+      ],
+      "existing_validation": [
+        {
+          "file": "crates/openbindings-source-pull/tests/carriers.rs",
+          "line": 175,
+          "anchor": "fn complete_pull_checks_only_exhaustive_and_implementation_unsupported(",
+          "sha256": "df55b1c6c59143b52ae65035e8f272c0f04b5ed55bcc53c6c9df8ab7dd5101b6"
+        }
+      ],
+      "audit": "Complete means the report says exhaustive and contains no implementation-unsupported omission. Loss, exclusion, invalidity and conflict do not independently negate completeness. This computes a report condition, not a certificate about the source inventory.",
+      "final_independent_audit": "pending"
+    },
+    {
+      "id": "projection",
+      "authority": [
+        {
+          "file": "interfaces/source-puller/README.md",
+          "line": 78,
+          "text_match": "The comparison is the"
+        }
+      ],
+      "owner": "source-pull.checking",
+      "actual_api": [
+        "SourcePuller",
+        "SchemaInput",
+        "identical"
+      ],
+      "source": [
+        {
+          "file": "crates/openbindings-source-pull/src/client.rs",
+          "line": 27,
+          "anchor": "pub trait SourcePuller",
+          "sha256": "bbb561b9d02192bcb12b641b854fed826f417aeac582e0bf8cf8306c0a2e48bd"
+        },
+        {
+          "file": "crates/openbindings-source-pull/tests/kinds.rs",
+          "line": 156,
+          "anchor": "fn reconcile(",
+          "sha256": "3daa1598478b2970e0f15f0a7f1aaf4871bef39c26d512f66a3f3df6ab5a0140"
+        },
+        {
+          "file": "crates/openbindings-schema-comparison/src/lib.rs",
+          "line": 27,
+          "anchor": "pub fn identical(",
+          "sha256": "b326028dcce7428647f36543171196694d3694377d876e4777a5b91ccd6a9fe6"
+        }
+      ],
+      "existing_validation": [
+        {
+          "file": "crates/openbindings-source-pull/tests/kinds.rs",
+          "line": 361,
+          "anchor": "fn no_data_kind_projects_before_destination_identity_and_does_not_adapt_to_conflicts(",
+          "sha256": "3daa1598478b2970e0f15f0a7f1aaf4871bef39c26d512f66a3f3df6ab5a0140"
+        },
+        {
+          "file": "crates/openbindings-source-pull/tests/kinds.rs",
+          "line": 286,
+          "anchor": "fn stale_schema_annotations_are_not_erased_by_the_operation_reuse_profile(",
+          "sha256": "3daa1598478b2970e0f15f0a7f1aaf4871bef39c26d512f66a3f3df6ab5a0140"
+        },
+        {
+          "file": "crates/openbindings-source-pull/tests/kinds.rs",
+          "line": 606,
+          "anchor": "fn comparison_failure_and_removal_only_drift_are_operational_inability(",
+          "sha256": "3daa1598478b2970e0f15f0a7f1aaf4871bef39c26d512f66a3f3df6ab5a0140"
+        }
+      ],
+      "audit": "Source-only kind projection is a provider contract. Two illustrative providers witness projection before destination inspection, then profile-based operation reuse and exact kind-owned drift checks. This is not a universal generic schema synthesis engine, and comparison inability must not fabricate a report status.",
+      "final_independent_audit": "pending"
+    },
+    {
+      "id": "identity",
+      "authority": [
+        {
+          "file": "interfaces/schema-comparison/README.md",
+          "line": 181,
+          "text_match": "**Identical mode.**"
+        }
+      ],
+      "owner": "comparison.identity",
+      "actual_api": [
+        "SchemaInput",
+        "Identity",
+        "identical",
+        "identical_with_control"
+      ],
+      "source": [
+        {
+          "file": "crates/openbindings-schema-comparison/src/lib.rs",
+          "line": 19,
+          "anchor": "pub enum Identity",
+          "sha256": "b326028dcce7428647f36543171196694d3694377d876e4777a5b91ccd6a9fe6"
+        },
+        {
+          "file": "crates/openbindings-schema-comparison/src/lib.rs",
+          "line": 40,
+          "anchor": "pub fn identical_with_control(",
+          "sha256": "b326028dcce7428647f36543171196694d3694377d876e4777a5b91ccd6a9fe6"
+        }
+      ],
+      "existing_validation": [
+        {
+          "file": "crates/openbindings-schema-comparison/tests/profile.rs",
+          "line": 47,
+          "anchor": "fn all_14_original_identity_groups_preserve_the_published_verdicts(",
+          "sha256": "704a3e7bca9af250e6c543a0b0480b64abe33885383a70c9a772e748700c0b6c"
+        },
+        {
+          "file": "crates/openbindings-schema-comparison/tests/profile.rs",
+          "line": 79,
+          "anchor": "fn all_10_exact_value_identity_groups_preserve_the_published_verdicts(",
+          "sha256": "704a3e7bca9af250e6c543a0b0480b64abe33885383a70c9a772e748700c0b6c"
+        }
+      ],
+      "audit": "The companion implements profile identity, Equal/Different after its published normalization. Each present side is normalized even opposite an absent slot; inability is a failure, not a verdict. It does not claim directional comparison or general schema equivalence.",
+      "final_independent_audit": "pending"
+    },
+    {
+      "id": "normalization",
+      "authority": [
+        {
+          "file": "interfaces/schema-comparison/README.md",
+          "line": 64,
+          "text_match": "## Normalization"
+        }
+      ],
+      "owner": "comparison.normalization",
+      "actual_api": [
+        "SchemaInput::new",
+        "SchemaInput::standalone",
+        "SchemaInput::with_base",
+        "SchemaInput::with_resource"
+      ],
+      "source": [
+        {
+          "file": "crates/openbindings-schema-comparison/src/input.rs",
+          "line": 8,
+          "anchor": "pub struct SchemaInput",
+          "sha256": "9dedc9081a77cca747438b824a18e9ab4be673602851b2b74f85f92cb8a62a96"
+        },
+        {
+          "file": "crates/openbindings-schema-comparison/src/normalize.rs",
+          "line": 89,
+          "anchor": "pub(crate) fn normalize(",
+          "sha256": "17d7d13bcdf8e3c96e0bb1ebec18d0d2f8010e33ca0dc3d82ec26d45d498c6af"
+        },
+        {
+          "file": "crates/openbindings-schema-comparison/src/reference.rs",
+          "line": 11,
+          "anchor": "pub(crate) struct Resources",
+          "sha256": "c001a0e6c4c8f8f064c47351969048757d3709c8c68af789789be8a424834b24"
+        }
+      ],
+      "existing_validation": [
+        {
+          "file": "crates/openbindings-schema-comparison/tests/independent.rs",
+          "line": 167,
+          "anchor": "fn source_projection_and_owned_core_schema_consumers_keep_their_own_roots(",
+          "sha256": "26b4c1dc38abaab3d907239ccc3d55ddb472ec5f31f8e0b9e2442570a5f636c4"
+        },
+        {
+          "file": "crates/openbindings-schema-comparison/tests/independent.rs",
+          "line": 196,
+          "anchor": "fn merge_uses_the_published_keyword_table_without_an_invented_satisfiability_solver(",
+          "sha256": "26b4c1dc38abaab3d907239ccc3d55ddb472ec5f31f8e0b9e2442570a5f636c4"
+        }
+      ],
+      "audit": "Normalization is separate from JSON Schema evaluation. Explicit per-side document roots/bases and supplied resources govern reference replacement; $id never invents a new acquisition base. Unknown keywords remain exact/opaque where the profile requires that, and no general satisfiability solver is implied.",
+      "final_independent_audit": "pending"
+    },
+    {
+      "id": "comparison-limits",
+      "authority": [
+        {
+          "file": "interfaces/schema-comparison/README.md",
+          "line": 86,
+          "text_match": "A processor unable to retain"
+        }
+      ],
+      "owner": "comparison",
+      "actual_api": [
+        "ComparisonLimits",
+        "ComparisonFailure"
+      ],
+      "source": [
+        {
+          "file": "crates/openbindings-schema-comparison/src/budget.rs",
+          "line": 6,
+          "anchor": "pub struct ComparisonLimits",
+          "sha256": "9cb3757798009968058c1c9184411a7389a6e7c6bf395eec693358055d7e77a1"
+        },
+        {
+          "file": "crates/openbindings-schema-comparison/src/error.rs",
+          "line": 6,
+          "anchor": "pub enum ComparisonFailure",
+          "sha256": "2316266be758407d717331e0be08d2a433433617f05dd09db0030dc0b2633c1c"
+        }
+      ],
+      "existing_validation": [
+        {
+          "file": "crates/openbindings-schema-comparison/tests/independent.rs",
+          "line": 117,
+          "anchor": "fn exact_and_one_below_resource_allowances_bound_both_sides_together(",
+          "sha256": "26b4c1dc38abaab3d907239ccc3d55ddb472ec5f31f8e0b9e2442570a5f636c4"
+        },
+        {
+          "file": "crates/openbindings-schema-comparison/tests/independent.rs",
+          "line": 74,
+          "anchor": "fn every_observed_public_checkpoint_cancels_and_a_fresh_attempt_is_unchanged(",
+          "sha256": "26b4c1dc38abaab3d907239ccc3d55ddb472ec5f31f8e0b9e2442570a5f636c4"
+        },
+        {
+          "file": "crates/openbindings-schema-comparison/tests/independent.rs",
+          "line": 220,
+          "anchor": "fn unresolved_enum_intersection_multiplicity_is_a_failure_while_standalone_values_stay_ordered(",
+          "sha256": "26b4c1dc38abaab3d907239ccc3d55ddb472ec5f31f8e0b9e2442570a5f636c4"
+        }
+      ],
+      "audit": "Both sides share a monotone work/allocation attempt. Missing/cyclic references, unsupported normalization and exhausted capability stay explicit failures; fresh retries do not inherit state. Plain anchor references and ambiguous enum-intersection multiplicity remain disclosed capabilities, not guessed answers.",
+      "final_independent_audit": "pending"
+    },
+    {
+      "id": "http",
+      "authority": [
+        {
+          "file": "spec/http-discovery.md",
+          "line": 19,
+          "text_match": "## 1. Scope"
+        }
+      ],
+      "owner": "http-discovery",
+      "actual_api": [
+        "discover",
+        "native::Client",
+        "DiscoveryOutcome",
+        "Publication"
+      ],
+      "source": [
+        {
+          "file": "crates/openbindings-http-discovery/src/client.rs",
+          "line": 216,
+          "anchor": "pub async fn discover<",
+          "sha256": "c76f8536f509d6d834468861609dd80dce88eb55eea18e568be87f38f3f26987"
+        },
+        {
+          "file": "crates/openbindings-http-discovery/src/client.rs",
+          "line": 574,
+          "anchor": "pub enum DiscoveryOutcome",
+          "sha256": "c76f8536f509d6d834468861609dd80dce88eb55eea18e568be87f38f3f26987"
+        },
+        {
+          "file": "crates/openbindings-http-discovery/src/publication.rs",
+          "line": 70,
+          "anchor": "pub struct Publication {",
+          "sha256": "5b8936e527e9da316614f3966c0f16b4aeaca705fad5d90abcd9217cb637d5f5"
+        }
+      ],
+      "existing_validation": [
+        {
+          "file": "crates/openbindings-http-discovery/tests/native.rs",
+          "line": 247,
+          "anchor": "fn real_http_media_types_statuses_compression_and_location_independence(",
+          "sha256": "317091369a131007cee6470e55e4beb793ad7ea59d108dec133d7fbec7d327ae"
+        },
+        {
+          "file": "crates/openbindings-http-discovery/tests/portable.rs",
+          "line": 598,
+          "anchor": "fn publication_refuses_every_unestablished_conformance_state(",
+          "sha256": "42703f57c283e7b3230912267e2d50d0f1c70666c43603d42234ca299012621e"
+        },
+        {
+          "file": "crates/openbindings-http-discovery/tests/portable.rs",
+          "line": 241,
+          "anchor": "fn status_is_never_collapsed_into_absence_and_every_body_is_released(",
+          "sha256": "42703f57c283e7b3230912267e2d50d0f1c70666c43603d42234ca299012621e"
+        }
+      ],
+      "audit": "Discovery/publication is an independent optional companion. Origin normalization and HTTP policy never assign document identity or change reference bases. The initial DiscoveryClient sketch becomes portable discover and native::Client. Audit corrected the stale APPLIED_COMPANION_REVISION to the current pinned specification. The companion delta is terminology/cross-reference wording; 52 native HTTP checks pass and a verifier binds seven public authority declarations to the qualification pins, rejecting 21 stale/missing/duplicate mutations.",
+      "final_independent_audit": "pending"
+    },
+    {
+      "id": "host",
+      "authority": [
+        {
+          "file": "spec/openbindings.md",
+          "line": 314,
+          "text_match": "**Strings and numbers.**"
+        }
+      ],
+      "owner": "wasm; typescript",
+      "actual_api": [
+        "Document",
+        "ConformantDocument",
+        "Schema",
+        "PreparedSchema",
+        "ExactJson",
+        "Managed"
+      ],
+      "source": [
+        {
+          "file": "packages/typescript/src/document.ts",
+          "line": 283,
+          "anchor": "export class Document extends",
+          "sha256": "c9679072a77ada5cb8a022e2968eab7c04b65d1405536b8e5f39292b31a4d7c2"
+        },
+        {
+          "file": "packages/typescript/src/schema.ts",
+          "line": 609,
+          "anchor": "export class PreparedSchema extends",
+          "sha256": "794e77023f9c2e3e8a20b5d03971bce9f507eea7c67ad441ceed01bc96c0d581"
+        },
+        {
+          "file": "packages/typescript/src/ownership.ts",
+          "line": 29,
+          "anchor": "export abstract class Managed",
+          "sha256": "257f1b727130b514234ae935b9089763ef582c0a50b96f5784cb31f4364f6bfd"
+        }
+      ],
+      "existing_validation": [
+        {
+          "file": "packages/typescript/test/schema-ownership.test.mjs",
+          "line": 11,
+          "anchor": "named and operation schemas retain the original document after disposal and edits",
+          "sha256": "1e78b0d94db11aed5260cdd42446bdc79edae0059bb3071c29c891c71a076f33"
+        },
+        {
+          "file": "packages/typescript/test/bridge-cleanup.test.mjs",
+          "line": 15,
+          "anchor": "owned preparation wrappers release untaken children on decode/take failure",
+          "sha256": "33fd381b01b2b528ec11a8c532cbe4c8443fb51f1d7b0e4264ab3da1373be837"
+        },
+        {
+          "file": "packages/typescript/test/exact_boundaries.test.mjs",
+          "line": 588,
+          "anchor": "text and its UTF-8 bytes are admitted alike by every exact entry point",
+          "sha256": "db4bffdce43baf76580b541fcf5d6cbfa977922c4ad3e5d593f4240817e4d6b3"
+        }
+      ],
+      "audit": "The Rust-backed facade follows document/schema/JSON domain boundaries and owns exact handles with explicit idempotent disposal. Independent children survive parent disposal; text ingress avoids host numeric conversion. Public TypeScript role adapters are not claimed: Node/Wasm role consumer probes qualify a partial workflow separately.",
+      "final_independent_audit": "pending"
+    },
+    {
+      "id": "qualification",
+      "authority": [
+        {
+          "file": "spec/conformance/README.md",
+          "line": 5,
+          "text_match": "The corpus is reference material"
+        }
+      ],
+      "owner": "test-support",
+      "actual_api": [
+        "Suite",
+        "Observation",
+        "Report"
+      ],
+      "source": [
+        {
+          "file": "crates/openbindings-schema-evaluator-test-support/src/lib.rs",
+          "line": 79,
+          "anchor": "pub struct Suite",
+          "sha256": "f4b86272915a85c92518aa08a786f264cfa7d64f22e0c5b7415fecf112c8ea88"
+        },
+        {
+          "file": "crates/openbindings-schema-evaluator-test-support/src/lib.rs",
+          "line": 108,
+          "anchor": "pub struct Observation",
+          "sha256": "f4b86272915a85c92518aa08a786f264cfa7d64f22e0c5b7415fecf112c8ea88"
+        }
+      ],
+      "existing_validation": [
+        {
+          "file": "crates/openbindings-schema-evaluator-test-support/tests/admission.rs",
+          "line": 13,
+          "anchor": "fn every_moved_value_case_keeps_its_exact_negative_admission_witness(",
+          "sha256": "274b1732dbf2e4ad8d2f264768224bcc967cacae13a7f73dcbdb43bd7fc79ceb"
+        },
+        {
+          "file": "crates/openbindings-schema-evaluator-test-support/tests/default.rs",
+          "line": 223,
+          "anchor": "fn real_runner_rejects_malformed_outcomes_fabricated_sources_and_broad_refusals(",
+          "sha256": "dfb4a389c7eab460c56b6aa792b75fbb3bb546b21fa1c151de9975448f66d71f"
+        },
+        {
+          "file": "crates/openbindings-schema-evaluator-test-support/tests/default.rs",
+          "line": 298,
+          "anchor": "fn capability_refusals_are_gaps_for_every_finite_semantic_case(",
+          "sha256": "dfb4a389c7eab460c56b6aa792b75fbb3bb546b21fa1c151de9975448f66d71f"
+        }
+      ],
+      "audit": "Adjudicated immutable inputs and negative admission witnesses carry exact provenance. The real runner distinguishes verdicts, refusal and invalid diagnostics and mutation controls reject bogus adapters. Finite witnesses are evidence, not a replacement specification or complete JSON Schema claim.",
+      "final_independent_audit": "pending"
+    }
+  ],
+  "open": [
+    "HTTP companion declaration correction is verified; retain its exact pin gate.",
+    "Bind83 obligations,108 individual witnesses,19 relations and11 package boundaries.",
+    "Rebind evolving evaluator source/evidence and refresh earlier audit hashes.",
+    "Final independent semantic and architecture audit."
+  ]
+}

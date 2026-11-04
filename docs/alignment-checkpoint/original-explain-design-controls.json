@@ -1,0 +1,817 @@
+{
+  "status": "independently derived design controls; implementation not yet present",
+  "conventions": {
+    "schema_pointer": "relative to original selected schema source; an OBI harness must prepend the real input location, never overwrite it",
+    "keyword": "logical failure keyword, not a demanded historical code spelling; $false denotes original Boolean false",
+    "funded": "both passes and report materialization have adequate cumulative allowance",
+    "no_problem": "S/U/N never carry ValueProblem; F with no local concrete proof may be empty and incomplete",
+    "text": "schema_text/value_text override JSON fields and must be parsed exactly; escaped lone units are intentional"
+  },
+  "cases": [
+    {
+      "id": "EW01-boolean",
+      "schema": false,
+      "value": null,
+      "required_outcome": "fails",
+      "must_report_problem_when_funded": true,
+      "forbidden_keywords": [],
+      "keyword": "$false",
+      "instance_pointer": "",
+      "schema_pointer": ""
+    },
+    {
+      "id": "EW02-type",
+      "schema": {
+        "type": "integer"
+      },
+      "value": "x",
+      "required_outcome": "fails",
+      "must_report_problem_when_funded": true,
+      "forbidden_keywords": [],
+      "keyword": "type",
+      "instance_pointer": "",
+      "schema_pointer": "/type"
+    },
+    {
+      "id": "EW03-required",
+      "schema": {
+        "required": [
+          "a"
+        ]
+      },
+      "value": {},
+      "required_outcome": "fails",
+      "must_report_problem_when_funded": true,
+      "forbidden_keywords": [],
+      "keyword": "required",
+      "instance_pointer": "",
+      "schema_pointer": "/required"
+    },
+    {
+      "id": "EW04-number",
+      "schema": {
+        "minimum": 2
+      },
+      "value": 1,
+      "required_outcome": "fails",
+      "must_report_problem_when_funded": true,
+      "forbidden_keywords": [],
+      "keyword": "minimum",
+      "instance_pointer": "",
+      "schema_pointer": "/minimum"
+    },
+    {
+      "id": "EW05-array-child",
+      "schema": {
+        "prefixItems": [
+          true,
+          {
+            "type": "integer"
+          }
+        ]
+      },
+      "value": [
+        0,
+        "x"
+      ],
+      "required_outcome": "fails",
+      "must_report_problem_when_funded": true,
+      "forbidden_keywords": [],
+      "keyword": "type",
+      "instance_pointer": "/1",
+      "schema_pointer": "/prefixItems/1/type"
+    },
+    {
+      "id": "EW06-property-child",
+      "schema": {
+        "properties": {
+          "a": {
+            "type": "integer"
+          }
+        }
+      },
+      "value": {
+        "a": "x"
+      },
+      "required_outcome": "fails",
+      "must_report_problem_when_funded": true,
+      "forbidden_keywords": [],
+      "keyword": "type",
+      "instance_pointer": "/a",
+      "schema_pointer": "/properties/a/type"
+    },
+    {
+      "id": "EW07-allof",
+      "schema": {
+        "allOf": [
+          true,
+          {
+            "maxLength": 1
+          }
+        ]
+      },
+      "value": "xx",
+      "required_outcome": "fails",
+      "must_report_problem_when_funded": true,
+      "forbidden_keywords": [],
+      "keyword": "maxLength",
+      "instance_pointer": "",
+      "schema_pointer": "/allOf/1/maxLength"
+    },
+    {
+      "id": "EW08-anyof-all-false",
+      "schema": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "boolean"
+          }
+        ]
+      },
+      "value": "x",
+      "required_outcome": "fails",
+      "must_report_problem_when_funded": true,
+      "forbidden_keywords": [
+        "type"
+      ],
+      "keyword": "anyOf",
+      "instance_pointer": "",
+      "schema_pointer": "/anyOf"
+    },
+    {
+      "id": "EW09-oneof-zero",
+      "schema": {
+        "oneOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "boolean"
+          }
+        ]
+      },
+      "value": "x",
+      "required_outcome": "fails",
+      "must_report_problem_when_funded": true,
+      "forbidden_keywords": [
+        "type"
+      ],
+      "keyword": "oneOf",
+      "instance_pointer": "",
+      "schema_pointer": "/oneOf"
+    },
+    {
+      "id": "EW10-oneof-two",
+      "schema": {
+        "oneOf": [
+          true,
+          true
+        ]
+      },
+      "value": null,
+      "required_outcome": "fails",
+      "must_report_problem_when_funded": true,
+      "forbidden_keywords": [],
+      "keyword": "oneOf",
+      "instance_pointer": "",
+      "schema_pointer": "/oneOf"
+    },
+    {
+      "id": "EW11-not",
+      "schema": {
+        "not": true
+      },
+      "value": null,
+      "required_outcome": "fails",
+      "must_report_problem_when_funded": true,
+      "forbidden_keywords": [],
+      "keyword": "not",
+      "instance_pointer": "",
+      "schema_pointer": "/not"
+    },
+    {
+      "id": "EW12-anyof-masked",
+      "schema": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          true
+        ],
+        "required": [
+          "a"
+        ]
+      },
+      "value": {},
+      "required_outcome": "fails",
+      "must_report_problem_when_funded": true,
+      "forbidden_keywords": [
+        "type",
+        "anyOf"
+      ],
+      "keyword": "required",
+      "instance_pointer": "",
+      "schema_pointer": "/required"
+    },
+    {
+      "id": "EW13-not-masked",
+      "schema": {
+        "not": false,
+        "required": [
+          "a"
+        ]
+      },
+      "value": {},
+      "required_outcome": "fails",
+      "must_report_problem_when_funded": true,
+      "forbidden_keywords": [
+        "not",
+        "$false"
+      ],
+      "keyword": "required",
+      "instance_pointer": "",
+      "schema_pointer": "/required"
+    },
+    {
+      "id": "EW14-if-selected-then",
+      "schema": {
+        "if": true,
+        "then": {
+          "type": "integer"
+        },
+        "else": false
+      },
+      "value": "x",
+      "required_outcome": "fails",
+      "must_report_problem_when_funded": true,
+      "forbidden_keywords": [
+        "if",
+        "$false"
+      ],
+      "keyword": "type",
+      "instance_pointer": "",
+      "schema_pointer": "/then/type"
+    },
+    {
+      "id": "EW15-if-selected-else",
+      "schema": {
+        "if": false,
+        "then": false,
+        "else": {
+          "type": "integer"
+        }
+      },
+      "value": "x",
+      "required_outcome": "fails",
+      "must_report_problem_when_funded": true,
+      "forbidden_keywords": [
+        "if",
+        "$false"
+      ],
+      "keyword": "type",
+      "instance_pointer": "",
+      "schema_pointer": "/else/type"
+    },
+    {
+      "id": "EW16-if-failure-not-assertion",
+      "schema": {
+        "if": {
+          "type": "integer"
+        },
+        "then": false,
+        "else": true,
+        "required": [
+          "a"
+        ]
+      },
+      "value": {},
+      "required_outcome": "fails",
+      "must_report_problem_when_funded": true,
+      "forbidden_keywords": [
+        "if",
+        "type",
+        "$false"
+      ],
+      "keyword": "required",
+      "instance_pointer": "",
+      "schema_pointer": "/required"
+    },
+    {
+      "id": "EW17-propertynames",
+      "schema": {
+        "propertyNames": {
+          "const": "a"
+        }
+      },
+      "value": {
+        "b": 1
+      },
+      "required_outcome": "fails",
+      "must_report_problem_when_funded": true,
+      "forbidden_keywords": [
+        "const"
+      ],
+      "keyword": "propertyNames",
+      "instance_pointer": "",
+      "schema_pointer": "/propertyNames",
+      "reason": "The property name token has no value pointer; report its parent object."
+    },
+    {
+      "id": "EW18-contains-too-few",
+      "schema": {
+        "contains": {
+          "type": "integer"
+        },
+        "minContains": 2
+      },
+      "value": [
+        1,
+        "x"
+      ],
+      "required_outcome": "fails",
+      "must_report_problem_when_funded": true,
+      "forbidden_keywords": [
+        "type"
+      ],
+      "keyword": "contains",
+      "instance_pointer": "",
+      "schema_pointer": "/contains"
+    },
+    {
+      "id": "EW19-contains-too-many",
+      "schema": {
+        "contains": {
+          "type": "integer"
+        },
+        "maxContains": 0
+      },
+      "value": [
+        1
+      ],
+      "required_outcome": "fails",
+      "must_report_problem_when_funded": true,
+      "forbidden_keywords": [],
+      "keyword": "contains",
+      "instance_pointer": "",
+      "schema_pointer": "/contains"
+    },
+    {
+      "id": "EW20-contains-zero",
+      "schema": {
+        "contains": false,
+        "minContains": 0
+      },
+      "value": [],
+      "required_outcome": "satisfies",
+      "must_report_problem_when_funded": false,
+      "forbidden_keywords": []
+    },
+    {
+      "id": "EW21-additional-masked",
+      "schema": {
+        "properties": {
+          "a": true
+        },
+        "additionalProperties": false,
+        "required": [
+          "b"
+        ]
+      },
+      "value": {
+        "a": 1
+      },
+      "required_outcome": "fails",
+      "must_report_problem_when_funded": true,
+      "forbidden_keywords": [
+        "additionalProperties",
+        "$false"
+      ],
+      "keyword": "required",
+      "instance_pointer": "",
+      "schema_pointer": "/required"
+    },
+    {
+      "id": "EW22-additional-active",
+      "schema": {
+        "additionalProperties": {
+          "type": "integer"
+        }
+      },
+      "value": {
+        "a": "x"
+      },
+      "required_outcome": "fails",
+      "must_report_problem_when_funded": true,
+      "forbidden_keywords": [],
+      "keyword": "type",
+      "instance_pointer": "/a",
+      "schema_pointer": "/additionalProperties/type"
+    },
+    {
+      "id": "EW23-pattern-masked",
+      "schema": {
+        "patternProperties": {
+          "^a$": false
+        },
+        "required": [
+          "b"
+        ]
+      },
+      "value": {
+        "z": 1
+      },
+      "required_outcome": "fails",
+      "must_report_problem_when_funded": true,
+      "forbidden_keywords": [
+        "patternProperties",
+        "$false"
+      ],
+      "keyword": "required",
+      "instance_pointer": "",
+      "schema_pointer": "/required"
+    },
+    {
+      "id": "EW24-pattern-active",
+      "schema": {
+        "patternProperties": {
+          "^a$": {
+            "type": "integer"
+          }
+        }
+      },
+      "value": {
+        "a": "x"
+      },
+      "required_outcome": "fails",
+      "must_report_problem_when_funded": true,
+      "forbidden_keywords": [],
+      "keyword": "type",
+      "instance_pointer": "/a",
+      "schema_pointer": "/patternProperties/^a$/type"
+    },
+    {
+      "id": "EW25-uneval-masked",
+      "schema": {
+        "properties": {
+          "a": true
+        },
+        "unevaluatedProperties": false,
+        "required": [
+          "b"
+        ]
+      },
+      "value": {
+        "a": 1
+      },
+      "required_outcome": "fails",
+      "must_report_problem_when_funded": true,
+      "forbidden_keywords": [
+        "unevaluatedProperties",
+        "$false"
+      ],
+      "keyword": "required",
+      "instance_pointer": "",
+      "schema_pointer": "/required"
+    },
+    {
+      "id": "EW26-uneval-active",
+      "schema": {
+        "unevaluatedProperties": {
+          "type": "integer"
+        }
+      },
+      "value": {
+        "a": "x"
+      },
+      "required_outcome": "fails",
+      "must_report_problem_when_funded": true,
+      "forbidden_keywords": [],
+      "keyword": "type",
+      "instance_pointer": "/a",
+      "schema_pointer": "/unevaluatedProperties/type"
+    },
+    {
+      "id": "EW27-items-masked",
+      "schema": {
+        "prefixItems": [
+          true
+        ],
+        "unevaluatedItems": false,
+        "maxItems": 0
+      },
+      "value": [
+        1
+      ],
+      "required_outcome": "fails",
+      "must_report_problem_when_funded": true,
+      "forbidden_keywords": [
+        "unevaluatedItems",
+        "$false"
+      ],
+      "keyword": "maxItems",
+      "instance_pointer": "",
+      "schema_pointer": "/maxItems"
+    },
+    {
+      "id": "EW28-dependent",
+      "schema": {
+        "dependentSchemas": {
+          "a": {
+            "required": [
+              "b"
+            ]
+          }
+        }
+      },
+      "value": {
+        "a": 1
+      },
+      "required_outcome": "fails",
+      "must_report_problem_when_funded": true,
+      "forbidden_keywords": [],
+      "keyword": "required",
+      "instance_pointer": "",
+      "schema_pointer": "/dependentSchemas/a/required"
+    },
+    {
+      "id": "EW29-escaped-name",
+      "schema": {
+        "properties": {
+          "~a/b": {
+            "type": "integer"
+          }
+        }
+      },
+      "value": {
+        "~a/b": "x"
+      },
+      "required_outcome": "fails",
+      "must_report_problem_when_funded": true,
+      "forbidden_keywords": [],
+      "keyword": "type",
+      "instance_pointer": "/~0a~1b",
+      "schema_pointer": "/properties/~0a~1b/type"
+    },
+    {
+      "id": "EW30-reference",
+      "schema": {
+        "$id": "https://explain.invalid/root",
+        "$defs": {
+          "T": {
+            "type": "integer"
+          }
+        },
+        "properties": {
+          "a": {
+            "$ref": "#/$defs/T"
+          }
+        }
+      },
+      "value": {
+        "a": "x"
+      },
+      "required_outcome": "fails",
+      "must_report_problem_when_funded": true,
+      "forbidden_keywords": [],
+      "keyword": "type",
+      "instance_pointer": "/a",
+      "schema_pointer": "/$defs/T/type"
+    },
+    {
+      "id": "EW31-equal-value-occurrences",
+      "schema": {
+        "$id": "https://explain.invalid/root",
+        "$defs": {
+          "T": {
+            "type": "integer"
+          }
+        },
+        "properties": {
+          "a": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/T"
+              },
+              true
+            ]
+          },
+          "b": {
+            "$ref": "#/$defs/T"
+          }
+        }
+      },
+      "value": {
+        "a": "x",
+        "b": "x"
+      },
+      "required_outcome": "fails",
+      "must_report_problem_when_funded": true,
+      "forbidden_keywords": [],
+      "keyword": "type",
+      "instance_pointer": "/b",
+      "schema_pointer": "/$defs/T/type",
+      "reason": "Equal-value effect interning must not reuse /a diagnostic identity for /b."
+    },
+    {
+      "id": "EW32-symbolic-contradiction",
+      "schema": {
+        "$id": "https://explain.invalid/root",
+        "$defs": {
+          "P": {
+            "pattern": "(?i)x"
+          }
+        },
+        "allOf": [
+          {
+            "$ref": "#/$defs/P"
+          },
+          {
+            "not": {
+              "$ref": "#/$defs/P"
+            }
+          }
+        ]
+      },
+      "value": "x",
+      "required_outcome": "fails",
+      "must_report_problem_when_funded": false,
+      "forbidden_keywords": [],
+      "reason": "Known D and its complement establish F; no concrete predicate failed. An empty incomplete explanation is permitted."
+    },
+    {
+      "id": "EW33-uncertain-guard",
+      "schema": {
+        "patternProperties": {
+          "(?i)x": false
+        },
+        "required": [
+          "missing"
+        ]
+      },
+      "value": {
+        "a": 1
+      },
+      "required_outcome": "fails",
+      "must_report_problem_when_funded": true,
+      "forbidden_keywords": [
+        "patternProperties",
+        "$false"
+      ],
+      "keyword": "required",
+      "instance_pointer": "",
+      "schema_pointer": "/required"
+    },
+    {
+      "id": "EW34-recursion-decisive",
+      "schema": {
+        "$id": "https://explain.invalid/root",
+        "$defs": {
+          "A": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/A"
+              },
+              {
+                "required": [
+                  "missing"
+                ]
+              }
+            ]
+          }
+        },
+        "$ref": "#/$defs/A"
+      },
+      "value": {},
+      "required_outcome": "fails",
+      "must_report_problem_when_funded": true,
+      "forbidden_keywords": [],
+      "keyword": "required",
+      "instance_pointer": "",
+      "schema_pointer": "/$defs/A/allOf/1/required"
+    },
+    {
+      "id": "EW35-dynamic",
+      "schema": {
+        "$id": "https://explain.invalid/root",
+        "$defs": {
+          "T": {
+            "$dynamicAnchor": "x",
+            "type": "integer"
+          }
+        },
+        "properties": {
+          "a": {
+            "$dynamicRef": "#x"
+          }
+        }
+      },
+      "value": {
+        "a": "x"
+      },
+      "required_outcome": "fails",
+      "must_report_problem_when_funded": true,
+      "forbidden_keywords": [],
+      "keyword": "type",
+      "instance_pointer": "/a",
+      "schema_pointer": "/$defs/T/type"
+    },
+    {
+      "id": "EW36-undefined-no-problem",
+      "schema": {
+        "pattern": "(?i)x"
+      },
+      "value": "x",
+      "required_outcome": "undefined",
+      "must_report_problem_when_funded": false,
+      "forbidden_keywords": []
+    },
+    {
+      "id": "EW37-missing-no-problem",
+      "schema": {
+        "$ref": "https://explain.invalid/missing"
+      },
+      "value": null,
+      "required_outcome": "no-verdict",
+      "must_report_problem_when_funded": false,
+      "forbidden_keywords": []
+    },
+    {
+      "id": "EW38-exact-decimal",
+      "required_outcome": "fails",
+      "must_report_problem_when_funded": true,
+      "forbidden_keywords": [],
+      "keyword": "minimum",
+      "instance_pointer": "",
+      "schema_pointer": "/minimum",
+      "schema_text": "{\"minimum\":1e1000}",
+      "value_text": "1e999"
+    },
+    {
+      "id": "EW39-lone-name",
+      "required_outcome": "fails",
+      "must_report_problem_when_funded": true,
+      "forbidden_keywords": [],
+      "keyword": "type",
+      "instance_pointer": "/\ud800",
+      "schema_pointer": "/properties/\ud800/type",
+      "schema_text": "{\"properties\":{\"\\ud800\":{\"type\":\"integer\"}}}",
+      "value_text": "{\"\\ud800\":\"x\"}"
+    },
+    {
+      "id": "EW40-subtree",
+      "schema": {
+        "properties": {
+          "~a/b": {
+            "type": "integer"
+          }
+        }
+      },
+      "value": {
+        "outside": 0,
+        "payload": {
+          "~a/b": "x"
+        }
+      },
+      "required_outcome": "fails",
+      "must_report_problem_when_funded": true,
+      "forbidden_keywords": [],
+      "keyword": "type",
+      "instance_pointer": "/~0a~1b",
+      "schema_pointer": "/properties/~0a~1b/type",
+      "evaluate_subtree": "/payload"
+    },
+    {
+      "id": "EW41-external",
+      "schema": {
+        "$ref": "https://explain.invalid/external"
+      },
+      "value": "x",
+      "required_outcome": "fails",
+      "must_report_problem_when_funded": true,
+      "forbidden_keywords": [],
+      "keyword": "type",
+      "instance_pointer": "",
+      "schema_pointer": "/type",
+      "resources": {
+        "https://explain.invalid/external": {
+          "$id": "https://explain.invalid/external",
+          "type": "integer"
+        }
+      },
+      "schema_source_uri": "https://explain.invalid/external"
+    },
+    {
+      "id": "EW42-recursive-undefined",
+      "schema": {
+        "$id": "https://explain.invalid/root",
+        "$ref": "#"
+      },
+      "value": null,
+      "required_outcome": "undefined",
+      "must_report_problem_when_funded": false,
+      "forbidden_keywords": []
+    }
+  ]
+}
