@@ -199,10 +199,16 @@ implemented with independent design and implementation/resource approval. It
 precharges parsing and cleanup, owns one AST, and preserves attempt failure through
 completion. It also remains inactive. The following [checked HIR inventory](alignment-checkpoint/checked-pattern-inventory.md)
 is implemented privately with parent native/host qualification and independent
-implementation/resource approval. It remains inactive until the full compiler gates close. Continue with checked HIR translation,
-translation, NFA construction and the explicit qualified construction profile;
-do not infer full compiler approval from these bounded stages.
+implementation/resource approval. The [owned HIR translation stage](alignment-checkpoint/owned-hir-stage.md)
+is now implemented with parent native/host gates and independent implementation/
+resource review passing. These stages remain inactive until the full compiler gates close.
+Continue with actual-HIR NFA construction, complete Reader/compiler accounting and
+qualified construction limits; do not infer full compiler approval from these
+bounded stages.
 
 Hosted CI and performance are fully green at the pushed guarded-AST checkpoint
 `5e00eb7`, including Windows. This receipt does not qualify the later inventory
 changes or explain the earlier outgoing walk-stack failure.
+
+Hosted CI and performance also pass on pushed inventory checkpoint `1d59cd5`,
+including Windows. Those runs precede the owned HIR stage.

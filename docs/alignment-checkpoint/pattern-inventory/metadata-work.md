@@ -1,6 +1,8 @@
 # Metadata work and storage schedule
 
-Status: source-derived proposal for independent review, inactive implementation.
+Status: independently approved source-derived schedule for the inactive inventory.
+The bounded implementation review and exact source identities are in the accompanying
+global-collector review; this does not approve full compiler activation.
 These units bound the named source operations and word transfers; they are not
 CPU instruction, wall-time or machine-stack measurements. No default-budget pass
 is claimed by this local schedule.

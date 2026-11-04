@@ -100,3 +100,11 @@ Windows, and the [performance comparison](https://github.com/openbindings/sdk/ac
 The full head-identified receipts are retained in the coordinator. These successful
 runs do not identify the cause of the earlier outgoing walk-stack overflow and do
 not establish final replacement-compiler qualification.
+
+## Checked inventory checkpoint
+
+Pushed `1d59cd5f52e5dd07991d600f6ad55d608897c309` passes every job in
+[CI run 41816025108](https://github.com/openbindings/sdk/actions/runs/41816025108),
+including Windows, and the separate [performance run 41816025217](https://github.com/openbindings/sdk/actions/runs/41816025217).
+The full head-identified receipts are saved in the coordinator. These results
+precede the owned HIR stage and final replacement/default qualification.

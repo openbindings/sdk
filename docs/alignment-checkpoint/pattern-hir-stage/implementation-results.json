@@ -1,0 +1,21 @@
+{
+  "status": "bounded PASS inactive owned-HIR stage",
+  "source_unchanged": true,
+  "per_native_toolchain": {
+    "corpus_rows": 11261,
+    "successful_hir": 11253,
+    "profile_refusals": 2,
+    "grammar_refusals": 6,
+    "boundary_rows": 3217,
+    "targeted_precharge_rows": 12,
+    "sdk_unit_groups": 11,
+    "allocation_undercharges": 0,
+    "retained_bytes": 0
+  },
+  "cross_toolchain_observations_identical": true,
+  "requested_total_bytes": 758136681,
+  "reserved_total_bytes": 14793231892,
+  "entry_work_native": 488,
+  "parent_wasm_evidence_inspected_not_rerun": true,
+  "full_compiler_activation": false
+}

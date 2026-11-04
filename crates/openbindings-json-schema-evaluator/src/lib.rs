@@ -46,7 +46,8 @@ pub struct Limits {
     pub compile_json_depth: usize,
     /// Maximum UTF-8 bytes in one pattern and its expanded form; default 1 MiB.
     pub pattern_bytes: usize,
-    /// Maximum pattern group nesting; default 32.
+    /// Caller-selected authored pattern group ceiling; default 32. The supported
+    /// maximum remains 32 even when a larger value is requested.
     pub pattern_depth: usize,
     /// Aggregate retained pattern-form bytes; default 4 MiB. Each distinct
     /// normalized form of a pattern value and each `patternProperties` name contributes. Expanded
@@ -71,7 +72,7 @@ impl Default for Limits {
             stack_bytes: 256 * 1024,
             compile_json_depth: 512,
             pattern_bytes: 1024 * 1024,
-            pattern_depth: 32,
+            pattern_depth: pattern::MAX_GROUP_DEPTH,
             total_pattern_bytes: 4 * 1024 * 1024,
             total_pattern_memory: 64 * 1024 * 1024,
             program_bytes: 48 * 1024 * 1024,

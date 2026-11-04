@@ -353,10 +353,15 @@ fn least(form: &str, fits: Allowance, keep: bool) -> (usize, Option<regex::Regex
     (size, regex)
 }
 
-/// Read one pattern, refusing groups nested more than `max_depth` deep. A
+/// Supported authored-group recursion ceiling, independent of caller budgets.
+pub(crate) const MAX_GROUP_DEPTH: usize = 32;
+
+/// Read one pattern, refusing groups deeper than the lower of `max_depth` and
+/// the supported authored-group ceiling. A
 /// valid pattern whose form would be longer than `max_form` bytes is read as
 /// [`Unsupported::Size`], and its form is not written out.
 pub(crate) fn read(pattern: &str, max_depth: usize, max_form: usize) -> Result<Reading, Refusal> {
+    let max_depth = max_depth.min(MAX_GROUP_DEPTH);
     let chars: Vec<char> = pattern.chars().collect();
     let groups = Groups::scan(&chars)?;
     let mut parser = Parser {
@@ -1964,6 +1969,16 @@ mod tests {
         let nested = |n: usize| format!("{}a{}", "(".repeat(n), ")".repeat(n));
         assert!(read(&nested(32), 32, 1 << 20).is_ok());
         assert_eq!(read(&nested(33), 32, 1 << 20), Err(Refusal::Depth));
+        assert_eq!(read(&nested(32), 31, 1 << 20), Err(Refusal::Depth));
+        assert!(read(&nested(31), 31, 1 << 20).is_ok());
+        assert!(read(&nested(32), usize::MAX, 1 << 20).is_ok());
+        assert_eq!(read(&nested(33), usize::MAX, 1 << 20), Err(Refusal::Depth));
+        assert_eq!(
+            read(&nested(10_000), usize::MAX, 1 << 20),
+            Err(Refusal::Depth)
+        );
+        assert!(read(r"\b", 0, 1 << 20).is_ok());
+        assert_eq!(read("(a)", 0, 1 << 20), Err(Refusal::Depth));
     }
     #[test]
     fn a_form_past_its_limit_is_not_written() {

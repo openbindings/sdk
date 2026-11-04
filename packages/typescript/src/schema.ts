@@ -350,7 +350,7 @@ export interface EvaluatorLimits {
   compileJsonDepth: number;
   /** Maximum UTF-8 bytes in one schema pattern and its expanded form; default 1,048,576. */
   patternBytes: number;
-  /** Maximum pattern group nesting; default 32. */
+  /** Caller-selected authored pattern group ceiling; default 32. The supported maximum remains 32 even when a larger value is requested. */
   patternDepth: number;
   /** Aggregate retained pattern-form bytes; default 4,194,304. Each distinct normalized form of a pattern value and each patternProperties name contributes. Expanded forms can be larger than their authored patterns. */
   totalPatternBytes: number;

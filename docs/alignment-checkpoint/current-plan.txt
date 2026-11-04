@@ -124,8 +124,16 @@ summary/site expectations. Raw non-ASCII generated spellings remain recorded as
 guard refusals; a separately identified scalar-escape spelling lane preserves the
 same inventory expectations. Actual 32-bit work overflow is a refusal, not a
 successful summary. Parent actual Node/Chromium/WebKit checks and independent current/minimum resource
-controls pass. Continue with translation and NFA stages. Phase-specific construction-stack admission and the complete
-aggregate/default-workload qualification remain open.
+controls pass. The [owned HIR translation stage](../design/2026-11-02/pattern-hir-stage.md)
+is now implemented privately. Parent 11,305-row current/minimum Rust and actual
+Node/Chromium/WebKit replays pass with all expected refusals retained. Independent implementation/
+resource review now passes on both Rust versions with no open finding. Reader now enforces its lowerable authored
+ceiling of 32 before recursion; normalized depth separately permits one atom-local
+group. No old public depth/stack convention constrains the architecture.
+The [logical construction policy](../design/2026-11-02/construction-limits.md)
+separates checked source-level limits from concrete build/artifact physical-stack
+evidence. Continue with [actual-HIR NFA construction](../design/2026-11-02/pattern-nfa-stage.md),
+complete Reader/compiler accounting and aggregate/default-workload qualification.
 
 A bounded direct iterative AST-to-NFA alternative was independently reviewed and
 prototyped. It is [rejected on measured representation/search costs](../receipts/2026-11-02-preparation/pattern-iterative-nfa/decision.md),
