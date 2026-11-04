@@ -366,3 +366,51 @@ fn integer_fast_path_edges_preserve_exact_bounds_and_equality() {
         }
     }
 }
+
+#[test]
+fn repeated_uniqueness_checks_keep_the_same_control_allowance() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    struct Count {
+        seen: AtomicUsize,
+        allowed: usize,
+    }
+    impl WorkControl for Count {
+        fn is_cancelled(&self) -> bool {
+            self.seen.fetch_add(1, Ordering::Relaxed) >= self.allowed
+        }
+    }
+    let checked = prepare(
+        r#"{"uniqueItems":true}"#,
+        Detail::Explain,
+        ExternalSchemas::default(),
+    );
+    // Different duplicate groups need different exact comparison work. Their
+    // keyed ordering must stay stable for this same prepared contract.
+    let value =
+        JsonValue::parse(r#"[0,1,2,0,2,3,4,5,6,3,[1,2],[1,2],{"x":[1,2]},{"x":[1,2]}]"#).unwrap();
+    for detail in [Detail::Outcome, Detail::Explain] {
+        let evaluate = |control: &Count| match detail {
+            Detail::Outcome => checked.contract.evaluate_with_control(&value, control),
+            _ => checked.contract.explain_with_control(&value, control),
+        };
+        let initial = Count {
+            seen: AtomicUsize::new(0),
+            allowed: usize::MAX,
+        };
+        let expected = serde_json::to_value(evaluate(&initial)).unwrap();
+        let total = initial.seen.load(Ordering::Relaxed);
+        for _ in 0..24 {
+            let control = Count {
+                seen: AtomicUsize::new(0),
+                allowed: usize::MAX,
+            };
+            assert_eq!(serde_json::to_value(evaluate(&control)).unwrap(), expected);
+            assert_eq!(control.seen.load(Ordering::Relaxed), total);
+            let exact = Count {
+                seen: AtomicUsize::new(0),
+                allowed: total,
+            };
+            assert_eq!(serde_json::to_value(evaluate(&exact)).unwrap(), expected);
+        }
+    }
+}

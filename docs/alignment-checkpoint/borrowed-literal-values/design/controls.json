@@ -1,0 +1,160 @@
+{
+  "scope": "Independent preimplementation borrowed-value controls",
+  "groups": [
+    {
+      "id": "E01",
+      "case": "All six kinds, equal and mixed kinds; null versus false versus 0 versus empty string versus [] versus {}",
+      "required": "Equal only within matching kind and exact value"
+    },
+    {
+      "id": "E02",
+      "case": "0/-0/0.0/0e999; 1/1.0/10e-1; adjacent 9007199254740992/9007199254740993",
+      "required": "Canonical equal pairs true; adjacent wide values false"
+    },
+    {
+      "id": "E03",
+      "case": "1e400/10e399; 1e999999999999999999999/10e999999999999999999998; coefficient inline/wide boundaries",
+      "required": "Exact decimal equality and hash agreement; no float or exponent expansion"
+    },
+    {
+      "id": "E04",
+      "case": "Escaped a versus literal a; astral character versus surrogate pair; lone high/low units; literal backslash-u text",
+      "required": "Exact decoded UTF-16 equality; distinct unit sequences false"
+    },
+    {
+      "id": "E05",
+      "case": "Equal and late-mismatching strings/names at decoded lengths 1023/1024/1025 and multi-megabyte escaped prefixes",
+      "required": "Chunk-independent equality/hash; cancellation observed between bounded chunks"
+    },
+    {
+      "id": "E06",
+      "case": "Arrays nested/empty/reversed/different lengths; matching 20,000-number const; final item mismatch",
+      "required": "Ordered exact equality; ancestor-only scratch independent of width"
+    },
+    {
+      "id": "E07",
+      "case": "Objects reordered, escaped-equivalent names, numeric spelling changes, missing/extra/swapped values",
+      "required": "Unordered members, exact name/value pairing"
+    },
+    {
+      "id": "E08",
+      "case": "Same local node numbers in different schema/instance arenas; equal and unequal contents",
+      "required": "No arena-independent occurrence shortcut"
+    },
+    {
+      "id": "E09",
+      "case": "Deep alternating containers and wide shallow objects on existing small-stack controls",
+      "required": "No recursive descent or recursive scratch destruction; exact S/F"
+    },
+    {
+      "id": "E10",
+      "case": "First enum candidate equal followed by other valid choices; first mismatch followed by equal composite; none equal; empty enum under allowed profile",
+      "required": "Existing schema admission and exact any-choice semantics; no new unconditional early admission"
+    },
+    {
+      "id": "D01",
+      "case": "Duplicate const/enum objects, escaped duplicate names, nested duplicate literals supplied through ExternalSchemas",
+      "required": "Preserve registration refusal, never newly classify public value F/S"
+    },
+    {
+      "id": "D02",
+      "case": "Private admitted-left unique object versus same-count duplicate-name literal; nested arrays/objects",
+      "required": "False before first-member lookup can conceal duplicates"
+    },
+    {
+      "id": "D03",
+      "case": "Literal subtree is duplicate-free but unrelated sibling elsewhere in owner has duplicate names",
+      "required": "Private subtree comparison unaffected; public whole-resource admission still applies"
+    },
+    {
+      "id": "D04",
+      "case": "Duplicate instance at root or deep descendant, with const/enum/uniqueItems",
+      "required": "Existing duplicate-instance NoVerdict before comparison"
+    },
+    {
+      "id": "L01",
+      "case": "15/16/17 object members, reverse order, zero/missing/existing candidates",
+      "required": "Same exact lookup across small-object/index threshold"
+    },
+    {
+      "id": "L02",
+      "case": "Indexed keys with escaped, astral and lone-surrogate names; raw-byte-different equivalent spellings",
+      "required": "Candidate hash identical to parser KeyHasher decoded write_u16 stream"
+    },
+    {
+      "id": "L03",
+      "case": "Forced identical name hashes, absent name, first/middle/last true candidate",
+      "required": "All returned candidates verified exactly; no wrong-value selection"
+    },
+    {
+      "id": "L04",
+      "case": "Cancellation/low work during index binary search, long-key hashing and candidate equality",
+      "required": "Typed first cause; no iterator/callback retained; clean retry"
+    },
+    {
+      "id": "H01",
+      "case": "For every independently equal E02-E08 pair, repeated seeds within one uniqueness run",
+      "required": "equal => identical fingerprint; different calls need no hash stability"
+    },
+    {
+      "id": "H02",
+      "case": "Object permutations and name/value swaps; arrays permutations; empty all-kind values",
+      "required": "Equal object permutation hashes; ordered array structure retained; collisions permitted only with exact verification"
+    },
+    {
+      "id": "H03",
+      "case": "Forced one fingerprint for distinct [0,1,2], duplicate nonadjacent [0,1,0], and nested unequal objects",
+      "required": "S for all-distinct, F for nonadjacent duplicate, S for all-unequal nested objects; complete prior-candidate verification, never adjacency alone"
+    },
+    {
+      "id": "H04",
+      "case": "All equal values in a large array",
+      "required": "Whole-array hashing then first exact duplicate ends verification; no quadratic equal-pair walk"
+    },
+    {
+      "id": "H05",
+      "case": "Hash function creates collisions among unequal values until configured work exhaustion",
+      "required": "Typed Limit, never invented duplicate or Undefined; retry exact"
+    },
+    {
+      "id": "H06",
+      "case": "Long/deep first element then many scalar/short elements, and reverse order",
+      "required": "Reusable fingerprint scratch emptied on every return; scalar roots no frame allocation"
+    },
+    {
+      "id": "H07",
+      "case": "Lengths 0/1/2, exact vector allocation and one-below; checked extent overflow",
+      "required": "Vacuous uniqueness sound; no allocation after refusal; overflow typed"
+    },
+    {
+      "id": "S01",
+      "case": "Sorting empty/singleton/sorted/reverse/equal-fingerprint/alternating adversarial records",
+      "required": "Total order by fingerprint then original index; no allocation/fallible callback inside std comparator"
+    },
+    {
+      "id": "S02",
+      "case": "Work cancellation immediately before and after sort, exact/one-below sort policy charge",
+      "required": "No accepted answer after observed interruption; no portability claim about exact dependency CPU operations"
+    },
+    {
+      "id": "C01",
+      "case": "Every observed check in equality/hash/lookup/sort/collision verification and forced storage refusal",
+      "required": "Typed failure, all borrowed scratch released, retry clean"
+    },
+    {
+      "id": "C02",
+      "case": "Pure const/enum/unique workload plus equal-subject/complementary undefined effects and recursive equal-child consumption",
+      "required": "Pure paths do not populate Values; effect interning/occurrence semantics unchanged"
+    },
+    {
+      "id": "C03",
+      "case": "Concurrent repeated calls on one PreparedSchema and selected custom-meta literal predicates",
+      "required": "No mutable Plan cache, retained control or cross-call random/hash state; same semantic outcomes"
+    },
+    {
+      "id": "P01",
+      "case": "Frozen large-literal, unique-array, unique-objects, late-duplicate, mixed-equality, equal-decimals requests",
+      "required": "Unchanged full observations; actual source/driver pinned; no G6 waiver"
+    }
+  ]
+}

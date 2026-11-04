@@ -63,6 +63,13 @@ jobs:
         run: |
           cargo build --locked --manifest-path tools/no-io/Cargo.toml
           python tools/verify-no-io.py --binary target/debug/sdk-no-io --output target/no-io-receipt
+      - name: Preserve core acquisition boundary receipt
+        if: always() && matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: no-io-receipt-${{ matrix.os }}
+          path: target/no-io-receipt
+          if-no-files-found: warn
   package:
     env:
       CARGO_TARGET_DIR: ${{ github.workspace }}/target

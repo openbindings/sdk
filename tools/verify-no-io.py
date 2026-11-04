@@ -76,7 +76,8 @@ def main():
                 (output / f'{kind}-{mode}.stderr').write_text(result.stderr)
                 observed = hits[before:]
                 records.append({'kind': kind, 'mode': mode, 'command': command,
-                                'exit': result.returncode, 'hits': observed})
+                                'exit': result.returncode, 'hits': observed,
+                                'stdout': result.stdout, 'stderr': result.stderr})
                 if result.returncode or bool(observed) != (mode == 'positive') or reader_errors:
                     raise RuntimeError(f'{kind}/{mode} control failed; inspect receipt')
     except Exception as error:
@@ -99,8 +100,12 @@ def main():
         'buildIdentity': 'Caller must bind binary to final source through its recorded build command/metadata.',
     }
     (output / 'REPORT.json').write_text(json.dumps(report, indent=2) + '\n')
-    print(json.dumps({'report': str(output / 'REPORT.json'), 'status': report['status']}))
+    print(json.dumps({'report': str(output / 'REPORT.json'), 'status': report['status'],
+                      'failure': failure}))
     if failure:
+        # CI must expose the failed observation even if artifact upload itself
+        # is unavailable. The inputs are this fixture's local trap URIs only.
+        print(json.dumps(records, indent=2))
         raise SystemExit(1)
 
 

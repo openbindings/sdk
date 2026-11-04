@@ -1,0 +1,65 @@
+{
+  "status": "bounded PASS after Plan-owned seed correction",
+  "base": "45447851d7cd7f93b4a6bf8d55a18b919df61070",
+  "source_manifest": "final-source-hashes.json",
+  "design_control_groups": 31,
+  "results": {
+    "current": {
+      "final-controls": 14,
+      "final-custom-profiles": 16,
+      "final-storage": 2,
+      "inherited-json": 2,
+      "json-controls": 1,
+      "stable_counts": [
+        [
+          "Outcome",
+          "515"
+        ],
+        [
+          "Explain",
+          "1034"
+        ]
+      ]
+    },
+    "minimum": {
+      "final-controls": 14,
+      "final-custom-profiles": 16,
+      "final-storage": 2,
+      "inherited-json": 2,
+      "json-controls": 1,
+      "stable_counts": [
+        [
+          "Outcome",
+          "506"
+        ],
+        [
+          "Explain",
+          "1016"
+        ]
+      ]
+    }
+  },
+  "open_findings": [],
+  "closed_findings": [
+    {
+      "id": "R-BV-SEED",
+      "origin": "Parent full-kit run; independently reproduced",
+      "before": "12 Outcome and 27-28 Explain checkpoint totals across64 repeated calls on one Plan; same semantic F",
+      "correction": "Immutable Plan RandomState shared by every uniqueness call",
+      "after": "Single total per detail mode, identical complete observations; exact stop accepted; all earlier checks preserve pre/post verdict cancellation contract"
+    }
+  ],
+  "allocation_scope": "Six unchanged matched requests pass the final Plan-seed release artifact 77540fd3e68b818a039a45cbdd39ff126f0c0c517248208a77b58f9654f5ee83; complete observations and allocation requests/bytes/peak unchanged from preserved pre-seed artifact, all returned to baseline.",
+  "not_claimed": [
+    "G6 timing/performance acceptance",
+    "general arbitrary-build physical-stack guarantee",
+    "universal dependency-operation certificate",
+    "actual-Wasm re-execution by this reviewer"
+  ],
+  "harness_corrections": [
+    "Initial empty-string Rust raw-literal typo; preserved initial-current/minimum-controls.log",
+    "Supplement scalar JsonValue temporary lifetime compile error; preserved supplement-temporary-lifetime-build.log",
+    "Old binary accidentally invoked after that failed build; preserved stale-binary-supplement-attempt.log and excluded from supplemental evidence"
+  ],
+  "sdk_edits_by_reviewer": false
+}

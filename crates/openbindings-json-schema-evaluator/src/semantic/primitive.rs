@@ -12,72 +12,11 @@ fn shape() -> NoVerdict {
 }
 
 impl Run<'_> {
-    // Literal predicates need equality, not a retained identity for each scalar.
-    // Composite identities still share the established exact representation;
-    // `actual_identity` avoids interning the same subject for every enum choice.
-    fn literal_equal(
-        &mut self,
-        value: JsonRef<'_>,
-        literal: JsonRef<'_>,
-        actual_identity: &mut Option<usize>,
-    ) -> Result<bool, NoVerdict> {
-        self.graph.tick()?;
-        if value.kind() != literal.kind() {
-            return Ok(false);
-        }
-        match value.kind() {
-            JsonKind::Null => Ok(true),
-            JsonKind::Boolean => Ok(value.as_bool() == literal.as_bool()),
-            JsonKind::Number => Ok(self.number(value)? == self.number(literal)?),
-            JsonKind::String => {
-                self.graph.work(
-                    value
-                        .text()
-                        .len()
-                        .saturating_add(literal.text().len())
-                        .saturating_mul(16)
-                        .saturating_add(1),
-                )?;
-                let mut left = value.as_string().expect("string").utf16_units();
-                let mut right = literal.as_string().expect("string").utf16_units();
-                loop {
-                    self.graph.tick()?;
-                    // No decoded copy. Observe cancellation between bounded
-                    // chunks, including for a long equal string prefix.
-                    for _ in 0..1024 {
-                        match (left.next(), right.next()) {
-                            (None, None) => return Ok(true),
-                            (Some(a), Some(b)) if a == b => {}
-                            _ => return Ok(false),
-                        }
-                    }
-                }
-            }
-            JsonKind::Array | JsonKind::Object => {
-                let actual = match *actual_identity {
-                    Some(actual) => actual,
-                    None => {
-                        let actual = self.values.intern(value, &mut self.graph)?;
-                        *actual_identity = Some(actual);
-                        actual
-                    }
-                };
-                Ok(actual == self.values.intern(literal, &mut self.graph)?)
-            }
-        }
-    }
     pub(super) fn number(&mut self, value: JsonRef<'_>) -> Result<Decimal, NoVerdict> {
-        let text = value.number_text().ok_or_else(shape)?;
-        self.graph
-            .work(text.len().saturating_mul(8).saturating_add(1))?;
-        // A validated i64 token has at most 19 coefficient digits and no
-        // written exponent. Decimal keeps this representation inline.
-        if text.parse::<i64>().is_ok() {
-            return Ok(Decimal::parse(text));
+        if value.number_text().is_none() {
+            return Err(shape());
         }
-        self.graph
-            .charge(text.len().saturating_mul(16).saturating_add(256))?;
-        Ok(Decimal::parse(text))
+        value_predicates::number(value, &mut self.graph)
     }
     fn numeric_operand(
         &mut self,
@@ -242,10 +181,9 @@ impl Run<'_> {
                 record(self.typed(types, value)?, "type");
             }
         }
-        let mut actual_identity = None;
         if let Some(constant) = schema.get("const") {
             record(
-                self.literal_equal(value, constant, &mut actual_identity)?,
+                value_predicates::literal_equal(value, constant, &mut self.graph)?,
                 "const",
             );
         }
@@ -253,7 +191,7 @@ impl Run<'_> {
             let mut any = false;
             for choice in choices.elements().ok_or_else(shape)? {
                 self.graph.tick()?;
-                any |= self.literal_equal(value, choice, &mut actual_identity)?;
+                any |= value_predicates::literal_equal(value, choice, &mut self.graph)?;
             }
             record(any, "enum");
         }
@@ -307,14 +245,11 @@ impl Run<'_> {
         }
         if let Some(unique) = schema.get("uniqueItems") {
             let unique = unique.as_bool().ok_or_else(shape)?;
-            if unique && let Some(items) = value.elements() {
-                let mut seen = HashSet::new();
-                for item in items {
-                    self.graph.tick()?;
-                    let identity = self.values.intern(item, &mut self.graph)?;
-                    self.graph.charge(64)?;
-                    record(seen.insert(identity), "uniqueItems");
-                }
+            if unique && value.kind() == JsonKind::Array {
+                record(
+                    value_predicates::unique(value, &self.plan.value_hash, &mut self.graph)?,
+                    "uniqueItems",
+                );
             }
         }
         if let Some(names) = schema.get("required") {

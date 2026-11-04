@@ -37,6 +37,23 @@ struct MemberIndex {
     slots: HashMap<u64, KeyBucket>,
     collisions: Vec<Vec<u32>>,
 }
+pub(crate) struct MemberCandidates<'a> {
+    names: &'a [u32],
+    remaining: &'a [u32],
+    indexed: bool,
+}
+impl Iterator for MemberCandidates<'_> {
+    type Item = Id;
+    fn next(&mut self) -> Option<Id> {
+        let (&slot, rest) = self.remaining.split_first()?;
+        self.remaining = rest;
+        Some(if self.indexed {
+            self.names[slot as usize] as usize
+        } else {
+            slot as usize
+        })
+    }
+}
 impl MemberIndex {
     fn with_capacity(capacity: usize) -> Self {
         Self {
@@ -510,6 +527,50 @@ impl Arena {
             .binary_search_by_key(&object, |&(id, _)| id)
             .ok()?;
         Some(&self.member_indexes[at].1)
+    }
+    pub(crate) fn member_candidates<E>(
+        &self,
+        id: Id,
+        mut units: impl Iterator<Item = u16>,
+        token_bytes: usize,
+        work: &mut impl FnMut(usize) -> Result<(), E>,
+    ) -> Result<MemberCandidates<'_>, E> {
+        // Prepay decoding/hash work and the binary search for the existing
+        // immutable index. Candidates are only a filter, never an equality.
+        let search = self.member_indexes.len().checked_ilog2().unwrap_or(0) as usize + 1;
+        work(token_bytes.saturating_mul(16).saturating_add(search))?;
+        let names = self.member_names(id).unwrap_or(&[]);
+        let Some(index) = self.member_index(id) else {
+            return Ok(MemberCandidates {
+                names,
+                remaining: names,
+                indexed: false,
+            });
+        };
+        let mut remaining = 0;
+        let mut failure = None;
+        // Keep exactly the parser's hash convention, including injected test
+        // collisions. A cancelled iterator's partial hash is never consumed.
+        let hash = self.key_hasher.hash(std::iter::from_fn(|| {
+            if remaining == 0 {
+                if let Err(error) = work(1) {
+                    failure = Some(error);
+                    return None;
+                }
+                remaining = 1024;
+            }
+            remaining -= 1;
+            units.next()
+        }));
+        if let Some(error) = failure {
+            return Err(error);
+        }
+        work(1)?;
+        Ok(MemberCandidates {
+            names,
+            remaining: index.members(hash),
+            indexed: true,
+        })
     }
     pub(crate) fn get_with_probe(
         &self,
@@ -1305,6 +1366,72 @@ mod tests {
         units.iter().fold(0_u64, |n, &u| {
             n.wrapping_mul(257).wrapping_add(u64::from(u))
         })
+    }
+
+    #[test]
+    fn borrowed_name_candidates_keep_threshold_collisions_and_exact_units() {
+        for count in [15, 16, 33] {
+            let mut fields = vec![r#""\ud800":0"#.to_owned(), r#""\ud83d\ude00":1"#.to_owned()];
+            fields.extend((2..count).map(|i| format!(r#""k{i}":{i}"#)));
+            let text = format!("{{{}}}", fields.join(","));
+            for forced in [false, true] {
+                let object = if forced {
+                    with_hash(&text, |_| 0)
+                } else {
+                    crate::JsonValue::parse(&text).unwrap()
+                };
+                for member in object.view().members().unwrap() {
+                    let candidates: Vec<_> =
+                        crate::backend::member_candidates(object.view(), member.name, |_| {
+                            Ok::<_, ()>(())
+                        })
+                        .unwrap()
+                        .collect();
+                    let matches: Vec<_> = candidates
+                        .iter()
+                        .filter(|candidate| candidate.name.as_string() == member.name.as_string())
+                        .collect();
+                    assert_eq!(matches.len(), 1);
+                    assert_eq!(matches[0].value.text(), member.value.text());
+                    if forced || count == 15 {
+                        assert_eq!(candidates.len(), count);
+                    }
+                }
+                // A differently escaped token uses the same arena hash units.
+                let escaped = crate::JsonValue::parse(r#""k\u0032""#).unwrap();
+                assert!(
+                    crate::backend::member_candidates(
+                        object.view(),
+                        escaped.view(),
+                        |_| Ok::<_, ()>(())
+                    )
+                    .unwrap()
+                    .any(|m| m.value.text() == "2")
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn borrowed_name_hash_cancellation_never_uses_a_partial_hash() {
+        let name = "x".repeat(8192);
+        let mut fields: Vec<_> = (0..15).map(|i| format!(r#""k{i}":{i}"#)).collect();
+        fields.push(format!(r#""{name}":99"#));
+        let object = crate::JsonValue::parse(format!("{{{}}}", fields.join(","))).unwrap();
+        let name = crate::JsonValue::parse(format!(r#""{name}""#)).unwrap();
+        let mut calls = 0;
+        let result = crate::backend::member_candidates(object.view(), name.view(), |_| {
+            calls += 1;
+            if calls == 4 { Err("cancelled") } else { Ok(()) }
+        });
+        assert_eq!(result.unwrap_err(), "cancelled");
+        assert_eq!(calls, 4);
+        let found: Vec<_> =
+            crate::backend::member_candidates(object.view(), name.view(), |_| Ok::<_, ()>(()))
+                .unwrap()
+                .collect();
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].value.text(), "99");
     }
 
     #[test]

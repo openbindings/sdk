@@ -63,17 +63,14 @@ fn main() {
         .unwrap();
         let result = evaluate(&document, resources);
         if key == "$schema" {
-            // Without a supplied custom meta-schema, its namespace rules are
-            // unknown. Refuse external selection; never retrieve the dialect.
+            // The original-node plan retains an unknown custom profile as an
+            // unsupported capability. Value evaluation cannot decide it and
+            // never retrieves a dialect to fill that gap.
             assert!(
                 matches!(
                     &result,
-                    Err(PreparationFailure {
-                        kind: PreparationFailureKind::Resolution {
-                            cause: ResolutionFailureKind::UnsupportedCapability { capability }
-                        },
-                        ..
-                    }) if capability == "custom-profile-namespace"
+                    Ok(ValueOutcome::NoVerdict { detail })
+                        if detail.reason == NoVerdictReason::UnsupportedCapability
                 ),
                 "{}",
                 serde_json::to_string(&result).unwrap()

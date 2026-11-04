@@ -17,6 +17,7 @@ mod refinement;
 mod regex_format;
 mod stack;
 mod storage;
+mod value_predicates;
 mod values;
 use self::construction::Construction;
 use self::decision::{Class, FALSE, Formula, Graph, TRUE};
@@ -99,6 +100,8 @@ pub(super) struct Plan {
     operands: HashMap<usize, operands::Prepared>,
     annotations: AnnotationDemand,
     leaves: HashSet<usize>,
+    // Keep candidate ordering stable for repeated attempts on this contract.
+    value_hash: std::collections::hash_map::RandomState,
 }
 impl Plan {
     pub(super) fn new(
@@ -138,6 +141,7 @@ impl Plan {
             operands: checked.operands,
             annotations: checked.annotations,
             leaves: checked.leaves,
+            value_hash: std::collections::hash_map::RandomState::new(),
         })
     }
     pub(super) fn evaluate(

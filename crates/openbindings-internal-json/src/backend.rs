@@ -59,6 +59,50 @@ pub fn member_at(value: crate::JsonRef<'_>, index: usize) -> Option<crate::JsonM
     })
 }
 
+/// Borrow candidate members from the arena's existing name index. Hashes only
+/// select candidates: the caller must compare each name exactly. Work is charged
+/// before lookup and between bounded UTF-16 hashing chunks; no key is copied.
+pub fn member_candidates<'a, E>(
+    object: crate::JsonRef<'a>,
+    name: crate::JsonRef<'_>,
+    mut work: impl FnMut(usize) -> Result<(), E>,
+) -> Result<MemberCandidates<'a>, E> {
+    let members = object.owner.member_candidates(
+        object.id,
+        name.as_string().expect("member name").utf16_units(),
+        name.text().len(),
+        &mut work,
+    )?;
+    Ok(MemberCandidates { object, members })
+}
+
+/// A borrowed candidate sequence; it owns neither an arena nor a name.
+pub struct MemberCandidates<'a> {
+    object: crate::JsonRef<'a>,
+    members: crate::raw::MemberCandidates<'a>,
+}
+impl std::fmt::Debug for MemberCandidates<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("MemberCandidates { .. }")
+    }
+}
+impl<'a> Iterator for MemberCandidates<'a> {
+    type Item = crate::JsonMember<'a>;
+    fn next(&mut self) -> Option<Self::Item> {
+        let name = self.members.next()?;
+        Some(crate::JsonMember {
+            name: crate::JsonRef {
+                owner: self.object.owner,
+                id: name,
+            },
+            value: crate::JsonRef {
+                owner: self.object.owner,
+                id: name + 1,
+            },
+        })
+    }
+}
+
 // Fixed schemas only test ASCII patterns, ASCII constants and nonempty strings.
 // Escape the marker itself and encode unpaired units, retaining every UTF-16 unit.
 // This presentation is injective; it is not a Unicode replacement operation.
