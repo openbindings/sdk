@@ -78,6 +78,10 @@ files.set(
   ),
 );
 files.set(
+  "/execution-frames.mjs",
+  await fs.readFile(path.join(packageRoot, "test/execution-frames.mjs")),
+);
+files.set(
   "/diagnostic-budget-worker.mjs",
   Buffer.from(`
 import * as sdk from "/dist/index.js";
@@ -128,6 +132,7 @@ try {
         { diagnosticBudgetCases } = await import(
           "/diagnostic-budget-cases.mjs"
         );
+      const { executionFrameCases } = await import("/execution-frames.mjs");
       await sdk.initialize();
       const run = (list) =>
         list.map((request) => {
@@ -140,6 +145,7 @@ try {
       return {
         core: run(requests.core),
         suite: run(requests.suite),
+        executionFrames: executionFrameCases(sdk),
         fixedDiagnostics: fixedDiagnosticCases(sdk),
         ...diagnosticBudgetCases(sdk),
       };
@@ -201,6 +207,10 @@ try {
   await fs.writeFile(
     path.join(output, "evaluator.json"),
     JSON.stringify(result.suite, null, 2),
+  );
+  await fs.writeFile(
+    path.join(output, "execution-frames.json"),
+    JSON.stringify(result.executionFrames, null, 2),
   );
   await fs.writeFile(
     path.join(output, "host.json"),

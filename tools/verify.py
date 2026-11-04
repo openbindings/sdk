@@ -44,6 +44,10 @@ run(['cargo', 'build', '--locked', '--release', '--workspace'])
 run(['cargo', 'test', '--locked', '--release', '-p', 'openbindings-json-schema-evaluator', '--test', 'pattern_stack'])
 run(['cargo', 'test', '--locked', '--release', '-p', 'openbindings-json-schema-evaluator', '--test', 'evaluation_stack'])
 run(['cargo', 'test', '--locked', '--release', '-p', 'openbindings-json-schema-evaluator', '--test', 'walk_stack'])
+# Original-node frames have separate native stack witnesses; they are not covered
+# by the outgoing compiler's three integration-test targets above.
+run(['cargo', 'test', '--locked', '--release', '-p', 'openbindings-json-schema-evaluator', '--lib',
+     'semantic::execution::tests::original_frame', '--', '--ignored', '--nocapture'])
 run(['cargo', 'build', '--locked', '--manifest-path', 'tools/conformance-observer/Cargo.toml'])
 run([sys.executable, 'tools/qualification/replay/corpus.py'])
 run([sys.executable, 'tools/qualification/replay/production-corpus.py', '--binary', Path(env['CARGO_TARGET_DIR']) / 'debug' / ('sdk-production-observer.exe' if os.name == 'nt' else 'sdk-production-observer')])

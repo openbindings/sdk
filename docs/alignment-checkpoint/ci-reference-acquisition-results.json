@@ -78,7 +78,14 @@
   "locked_build": "pass",
   "no_io_strict_lint": "pass",
   "example_check": "pass",
-  "clean_reference_candidate": "pending",
+  "clean_reference_candidate": {
+    "status": "pass",
+    "commit": "46186957c2a4494405b92d6e1c5efdd8245347ea",
+    "files": 804,
+    "checked_local_links": 8531
+  },
   "hosted_ci": "pending",
-  "whole_alignment": "open"
+  "whole_alignment": "open",
+  "independent_review": "pass",
+  "post_review_delta": "Only no-I/O test comment citation corrected from \u00a75.2 to pinned \u00a75.5."
 }

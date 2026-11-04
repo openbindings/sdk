@@ -232,12 +232,9 @@ impl Run<'_> {
         value: JsonRef<'_>,
         unavailable: &mut Option<String>,
     ) -> Result<Option<usize>, NoVerdict> {
-        let Some(root) = self.static_cycle_entry(
-            self.plan.entry,
-            backend::ref_id(value),
-            &Vec::new(),
-            unavailable,
-        )?
+        let empty = self.empty_context.clone();
+        let Some(root) =
+            self.static_cycle_entry(self.plan.entry, backend::ref_id(value), &empty, unavailable)?
         else {
             return Ok(None);
         };

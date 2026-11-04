@@ -41,6 +41,7 @@ pub(super) struct Graph<'a> {
     maximum_variables: usize,
     control: &'a dyn WorkControl,
     preparation: Option<&'a dyn openbindings_internal_schema::Control>,
+    stack: Option<super::stack::Observation>,
 }
 pub(super) fn limit(resource: &'static str) -> NoVerdict {
     NoVerdict::new(
@@ -78,13 +79,20 @@ impl<'a> Graph<'a> {
             maximum_variables: variables,
             control,
             preparation,
+            stack: None,
         }
+    }
+    pub(super) fn observe_stack(&mut self, stack: super::stack::Observation) {
+        self.stack = Some(stack);
     }
     pub(super) fn tick(&mut self) -> Result<(), NoVerdict> {
         self.work(1)
     }
     pub(super) fn work(&mut self, units: usize) -> Result<(), NoVerdict> {
         self.control.check().map_err(NoVerdict::from)?;
+        if let Some(stack) = &mut self.stack {
+            stack.check()?;
+        }
         if let Some(attempt) = self.preparation {
             attempt
                 .charge_work(units)

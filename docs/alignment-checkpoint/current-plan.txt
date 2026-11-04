@@ -131,9 +131,21 @@ Independent implementation review passes after the selected-root snapshot guard
 was corrected. Native current/minimum-toolchain, required-value, exact resource,
 actual Wasm/Node/browser/package and focused guard checks pass at their recorded
 identities. See [local syntax evidence](../receipts/2026-11-02-preparation/local-syntax-admission/README.md).
-No syntax-fact cache or default-engine switch is included. The next explicit-frame
-execution design is under independent review; pattern VM preparation, original
-witnesses, final performance/host and alignment-map gates remain open.
+No syntax-fact cache or default-engine switch is included. The explicit-frame
+execution design is approved and its complete implementation now passes the 36
+independent design controls, including depth restoration. Original-node execution
+uses applicator continuations, shared immutable effective scopes and explicitly
+sized active/alias paths; scalar alias targets retain no per-item frame or memo.
+Final native tests pass 533 checks; minimum Rust semantic and release stack lanes,
+181 Node tests, installed-package checks and actual Chromium/WebKit pass. Eight
+new host cases exercise deep and large values through a supported custom profile.
+The saved pre-frame package fails their depth control. Independent bounded implementation review
+passes, with 4,830 cancellation boundaries and concurrent reuse in [frame evidence](../receipts/2026-11-02-preparation/iterative-execution-progress/README.md).
+Sampled stack refusal is additional monitoring; complete physical-stack/host
+qualification remains open. The unchanged long-reference preparation jobs also
+remain open, with [a separate proposed read/query-sharing design](../design/2026-11-02/reference-preparation-sharing.md).
+Pattern VM preparation, original witnesses, final performance/host and alignment-map
+gates remain open.
 
 Additional hosted checks exposed a stale acquisition-probe lock and generated
 Rust reference source links. Bounded repairs pass the locked build, strict probe
@@ -141,8 +153,9 @@ lint, HTTP/FIFO positive/negative retrieval controls and reference preview check
 The old unknown-dialect assertion is adjudicated against the current conservative
 namespace policy; actual known custom-meta admission has a separate missing-bytes
 control. [Repair evidence](../receipts/2026-11-02-preparation/ci-reference-acquisition/README.md)
-records the original failure and current results. Independent review and clean
-reference-candidate qualification are pending.
+records the original failure and current results. Independent six-file review and
+the clean reference candidate at `4618695` pass, including 804 artifact hashes and
+8,531 local link targets. The minor source citation finding is corrected.
 
 No decision currently requires Matthew. If a real decision arises, record it
 and continue every independent unblocked path before considering a stop.

@@ -5,6 +5,7 @@
 mod counts;
 mod cycles;
 mod decision;
+mod execution;
 mod formats;
 mod meta;
 mod operands;
@@ -13,6 +14,8 @@ mod preparation;
 mod primitive;
 mod refinement;
 mod regex_format;
+mod stack;
+mod storage;
 mod values;
 use self::decision::{Class, FALSE, Formula, Graph, TRUE};
 use super::{Limits, no_verdict};
@@ -136,12 +139,34 @@ impl Plan {
     ) -> ValueOutcome {
         self.evaluate_recording(value, control, attempt, &mut None)
     }
+    #[inline(never)]
     fn evaluate_recording(
         &self,
         value: &JsonValue,
         control: &dyn WorkControl,
         attempt: Option<&dyn openbindings_internal_schema::Control>,
         unavailable: &mut Option<String>,
+    ) -> ValueOutcome {
+        let marker = 0u8;
+        let origin = std::hint::black_box(std::ptr::addr_of!(marker)) as usize;
+        let outcome = self.evaluate_bounded(
+            value,
+            control,
+            attempt,
+            unavailable,
+            stack::Observation::new(origin, self.limits.stack_bytes),
+        );
+        std::hint::black_box(&marker);
+        outcome
+    }
+    #[inline(never)]
+    fn evaluate_bounded(
+        &self,
+        value: &JsonValue,
+        control: &dyn WorkControl,
+        attempt: Option<&dyn openbindings_internal_schema::Control>,
+        unavailable: &mut Option<String>,
+        stack: stack::Observation,
     ) -> ValueOutcome {
         if let Err(cancelled) = control.check() {
             return ValueOutcome::NoVerdict {
@@ -158,37 +183,39 @@ impl Plan {
             };
         }
         let depth = (self.limits.stack_bytes / 4096).max(1);
+        let mut graph = Graph::with_preparation(
+            self.limits.program_bytes,
+            self.limits.evaluation_steps,
+            depth,
+            control,
+            attempt,
+        );
+        graph.observe_stack(stack);
+        if let Err(detail) = graph.tick().and_then(|()| graph.charge(64)) {
+            return ValueOutcome::NoVerdict { detail };
+        }
         let mut run = Run {
             plan: self,
-            graph: Graph::with_preparation(
-                self.limits.program_bytes,
-                self.limits.evaluation_steps,
-                depth,
-                control,
-                attempt,
-            ),
+            graph,
             atoms: Vec::new(),
             values: values::Values::default(),
             effects: HashMap::new(),
-            active: Vec::new(),
+            active: storage::Path::default(),
+            empty_context: Arc::new(Vec::new()),
             opaque_cycles: HashSet::new(),
             pending_cycles: HashSet::new(),
             cuts: HashSet::new(),
             provisional: HashSet::new(),
-            retry: false,
             memo: HashMap::new(),
             facts: HashMap::new(),
             pending_facts: HashMap::new(),
             supports: HashMap::new(),
             support_memo_count: 0,
             patterns: HashMap::new(),
-            depth: 0,
-            maximum_depth: depth,
         };
         loop {
-            let result = run.schema(self.entry, value.view(), &Vec::new());
-            if run.retry {
-                run.retry = false;
+            let result = run.execute(self.entry, value.view());
+            if matches!(&result, Ok(execution::Attempt::Abort)) {
                 match run.finish_attempt() {
                     Ok(true) => continue,
                     Ok(false) => {
@@ -203,7 +230,10 @@ impl Plan {
                     Err(detail) => return ValueOutcome::NoVerdict { detail },
                 }
             }
-            let result = result.and_then(|state| {
+            let result = result.and_then(|attempt| {
+                let execution::Attempt::Complete(state) = attempt else {
+                    unreachable!("handled abort")
+                };
                 if run.pending_cycles.is_empty()
                     || independent(state.valid, &mut run.graph, &run.cuts)?
                 {
@@ -263,14 +293,16 @@ fn cycle_inability() -> NoVerdict {
     )
 }
 // Effective outermost bindings, not an ever-growing resource-entry history.
-type Context = Vec<(String, Option<usize>)>;
+type Context = Arc<Vec<(String, Option<usize>)>>;
+fn context_work(context: &Context) -> usize {
+    context.iter().fold(1usize, |work, (name, _)| {
+        work.saturating_add(name.len().saturating_mul(16).saturating_add(16))
+    })
+}
+// Shared scopes do not copy their owned names. Their semantic hash/equality
+// still reads those names, so every key operation retains a work charge.
 fn reserve_context(graph: &mut Graph<'_>, context: &Context) -> Result<(), NoVerdict> {
-    let mut bytes = 256usize;
-    for (name, _) in context {
-        graph.work(name.len().saturating_mul(16).saturating_add(1))?;
-        bytes = bytes.saturating_add(name.len().saturating_mul(2).saturating_add(256));
-    }
-    graph.charge(bytes)
+    graph.work(context_work(context))
 }
 #[derive(Clone, PartialEq, Eq, Hash)]
 struct Visit {
@@ -356,20 +388,18 @@ struct Run<'a> {
     atoms: Vec<Atom>,
     values: values::Values,
     effects: HashMap<Effect, Formula>,
-    active: Vec<Visit>,
+    active: storage::Path<Visit>,
+    empty_context: Context,
     opaque_cycles: HashSet<Visit>,
     pending_cycles: HashSet<Visit>,
     cuts: HashSet<u32>,
     provisional: HashSet<Visit>,
-    retry: bool,
     memo: HashMap<Visit, State>,
     facts: HashMap<Visit, refinement::Facts>,
     pending_facts: HashMap<Visit, refinement::Facts>,
     supports: HashMap<Visit, Arc<Option<refinement::Support>>>,
     support_memo_count: usize,
     patterns: HashMap<(usize, usize), patterns::Pattern>,
-    depth: usize,
-    maximum_depth: usize,
 }
 impl Run<'_> {
     fn units(&mut self, value: JsonRef<'_>) -> Result<Vec<u16>, NoVerdict> {
@@ -451,39 +481,59 @@ impl Run<'_> {
     fn enter(&mut self, node: usize, context: &Context) -> Result<Context, NoVerdict> {
         self.context_copy(context)?;
         let space = self.plan.environment.space();
-        let resource = space.resource(space.node(node).resource);
-        let mut out: BTreeMap<_, _> = context.iter().cloned().collect();
-        for (name, anchors) in &resource.anchors {
-            self.graph
-                .work(name.len().saturating_mul(16).saturating_add(anchors.len()))?;
-            if anchors.iter().any(|(_, dynamic)| *dynamic) {
-                if out.contains_key(name) {
-                    continue;
-                }
-                self.graph
-                    .charge(name.len().saturating_mul(2).saturating_add(256))?;
-                out.entry(name.clone()).or_insert_with(|| {
-                    if anchors.len() == 1 {
-                        Some(anchors[0].0)
-                    } else {
-                        None
-                    }
-                });
-            }
-        }
         let original = space.node(node);
-        if original.profile == Some(Profile::standard(Dialect::Draft201909))
+        let resource = space.resource(original.resource);
+        let recursive = original.profile == Some(Profile::standard(Dialect::Draft201909))
             && original
                 .value
                 .get("$recursiveAnchor")
                 .and_then(|v| v.as_bool())
-                == Some(true)
-        {
-            self.graph.charge(256)?;
-            out.entry(RECURSIVE_SCOPE.into()).or_insert(resource.root);
+                == Some(true);
+        let absent = |name: &str| {
+            context
+                .binary_search_by(|(key, _)| key.as_str().cmp(name))
+                .is_err()
+        };
+        let mut extends = recursive && absent(RECURSIVE_SCOPE);
+        for (name, anchors) in &resource.anchors {
+            self.graph
+                .work(name.len().saturating_mul(16).saturating_add(anchors.len()))?;
+            extends |= anchors.iter().any(|(_, dynamic)| *dynamic) && absent(name);
         }
-        self.graph.charge(out.len().saturating_mul(64))?;
-        Ok(out.into_iter().collect())
+        if !extends {
+            return Ok(context.clone());
+        }
+        // A changed effective map owns a new sorted vector and copied names.
+        // Reserve its temporary ordered map and final shared vector before use.
+        let mut bytes = 256usize;
+        for (name, _) in context.iter() {
+            bytes = bytes.saturating_add(name.len().saturating_mul(2).saturating_add(256));
+        }
+        self.graph.charge(bytes)?;
+        let mut out: BTreeMap<_, _> = context.iter().cloned().collect();
+        for (name, anchors) in &resource.anchors {
+            self.graph
+                .work(name.len().saturating_mul(16).saturating_add(anchors.len()))?;
+            if anchors.iter().any(|(_, dynamic)| *dynamic) && !out.contains_key(name) {
+                self.graph
+                    .charge(name.len().saturating_mul(2).saturating_add(256))?;
+                out.insert(
+                    name.clone(),
+                    if anchors.len() == 1 {
+                        Some(anchors[0].0)
+                    } else {
+                        None
+                    },
+                );
+            }
+        }
+        if recursive && !out.contains_key(RECURSIVE_SCOPE) {
+            self.graph.charge(256)?;
+            out.insert(RECURSIVE_SCOPE.into(), resource.root);
+        }
+        self.graph
+            .charge(out.len().saturating_mul(64).saturating_add(64))?;
+        Ok(Arc::new(out.into_iter().collect()))
     }
     fn atom(
         &mut self,
@@ -674,31 +724,34 @@ impl Run<'_> {
     ) -> Result<(usize, Context, bool), NoVerdict> {
         self.context_copy(incoming)?;
         let mut context = incoming.clone();
-        let mut path = Vec::<(usize, Context, Option<String>)>::new();
+        let mut path = storage::Path::<(usize, Context), Option<String>>::default();
         loop {
             self.graph.tick()?;
             context = self.enter(node, &context)?;
-            if let Some(start) = path
-                .iter()
-                .position(|(prior, scope, _)| *prior == node && *scope == context)
-            {
-                let members = &path[start..];
-                let canonical = members
-                    .iter()
-                    .map(|(node, _, _)| *node)
+            let key = (node, context.clone());
+            if let Some(start) = path.find(&key, context_work(&context), &mut self.graph)? {
+                let canonical = path
+                    .suffix(start)
+                    .map(|((node, _), _)| *node)
                     .min()
                     .expect("nonempty cycle");
                 self.context_copy(&context)?;
-                let relevant: Context = context
-                    .iter()
-                    .filter(|(name, _)| {
-                        members
-                            .iter()
-                            .any(|(_, _, used)| used.as_ref() == Some(name))
-                    })
-                    .cloned()
-                    .collect();
-                return Ok((canonical, relevant, true));
+                let mut relevant = Vec::new();
+                for (name, binding) in context.iter() {
+                    let mut used_here = false;
+                    for (_, used) in path.suffix(start) {
+                        self.graph.work(name.len().saturating_add(1))?;
+                        used_here |= used.as_ref() == Some(name);
+                    }
+                    if used_here {
+                        let needed = relevant.len().saturating_add(1);
+                        storage::reserve(&mut relevant, needed, &mut self.graph)?;
+                        self.graph.charge(name.len())?;
+                        relevant.push((name.clone(), *binding));
+                    }
+                }
+                self.graph.charge(64)?;
+                return Ok((canonical, Arc::new(relevant), true));
             }
             let original = self.space().node(node);
             let schema = original.value.clone();
@@ -769,6 +822,8 @@ impl Run<'_> {
                     self.graph.charge(name.len().saturating_add(64))?;
                 }
                 let dynamic = if keyword == "$recursiveRef" && self.recursive_target(target.node) {
+                    self.graph.work(RECURSIVE_SCOPE.len().saturating_add(1))?;
+                    self.graph.charge(RECURSIVE_SCOPE.len())?;
                     Some(RECURSIVE_SCOPE.into())
                 } else {
                     (keyword == "$dynamicRef")
@@ -786,268 +841,14 @@ impl Run<'_> {
                 };
                 (selected, dynamic)
             };
-            self.graph
-                .charge(256 + context.iter().map(|(s, _)| s.len() + 32).sum::<usize>())?;
-            path.push((node, context, dynamic));
-            context = path.last().expect("pushed alias").1.clone();
+            path.push(
+                (node, context.clone()),
+                dynamic,
+                context_work(&context),
+                &mut self.graph,
+            )?;
             node = selected;
         }
-    }
-    fn schema(
-        &mut self,
-        node: usize,
-        value: JsonRef<'_>,
-        context: &Context,
-    ) -> Result<State, NoVerdict> {
-        self.graph.tick()?;
-        if self.depth >= self.maximum_depth {
-            return Err(decision::limit("semantic-analysis-depth-limit"));
-        }
-        // A preparation-certified leaf cannot recurse or propagate child
-        // annotations. Keep scope and predicate semantics without retaining a
-        // Visit/State for every ordinary array item or object member.
-        if self.plan.leaves.contains(&node) {
-            let context = self.enter(node, context)?;
-            return self.body(node, value, &context);
-        }
-        let (node, context, pure_cycle) = self.alias(node, context)?;
-        if pure_cycle {
-            return self.effect(
-                Class::Undefined,
-                node,
-                "$alias-cycle",
-                value,
-                &context,
-                None,
-            );
-        }
-        self.context_copy(&context)?;
-        let key = Visit {
-            schema: node,
-            instance: backend::ref_id(value),
-            context: context.clone(),
-        };
-        if let Some(known) = self.memo.get(&key) {
-            return known.copied(&mut self.graph);
-        }
-        if self.opaque_cycles.contains(&key) {
-            return self.unknown_schema(
-                Class::Inability,
-                node,
-                "$cycle-summary",
-                value,
-                &context,
-                None,
-            );
-        }
-        if let Some(start) = self.active.iter().position(|visit| visit == &key) {
-            for visit in &self.active[start..] {
-                reserve_context(&mut self.graph, &visit.context)?;
-                self.graph.charge(256)?;
-                self.pending_cycles.insert(visit.clone());
-            }
-            // A cut is provisional, never the meaning of a recursive body. Its
-            // namespace differs from the persistent opaque fallback summary.
-            // Parent frames may eliminate every cut before certification.
-            let first = self.atoms.len();
-            let result = self.recursive_cut(&key, value)?;
-            for id in first..self.atoms.len() {
-                self.graph.charge(32)?;
-                self.cuts.insert(id as u32);
-            }
-            return Ok(result);
-        }
-        if self.provisional.contains(&key) {
-            // A second unfolding may use a different cut context. Reusing its
-            // partial State is unsound, while enumerating paths can explode.
-            // Leave this speculative attempt before repeating provisional work.
-            self.retry = true;
-            return Err(cycle_inability());
-        }
-        self.context_copy(&context)?;
-        self.graph
-            .charge(256 + context.iter().map(|(s, _)| s.len() + 32).sum::<usize>())?;
-        self.active.push(key.clone());
-        self.depth += 1;
-        let result = self.body(node, value, &context);
-        self.depth -= 1;
-        self.active.pop();
-        let mut result = result?;
-        // Failed schemas produce no usable evaluation annotations.
-        for annotation in result
-            .properties
-            .values_mut()
-            .chain(result.items.values_mut())
-        {
-            *annotation = self.graph.and(result.valid, *annotation)?;
-        }
-        let complete = result.independent(&mut self.graph, &self.cuts)?;
-        if !complete || self.facts.contains_key(&key) {
-            self.certify_coordinates(&key, value, &result)?;
-        }
-        if complete {
-            let copied = result.copied(&mut self.graph)?;
-            self.graph.charge(256)?;
-            self.memo.insert(key, copied);
-        } else {
-            self.graph.charge(256)?;
-            self.provisional.insert(key);
-        }
-        Ok(result)
-    }
-    fn body(
-        &mut self,
-        node: usize,
-        value: JsonRef<'_>,
-        context: &Context,
-    ) -> Result<State, NoVerdict> {
-        let schema = self.space().node(node).value.clone();
-        if let Some(boolean) = schema.view().as_bool() {
-            return Ok(State::truth(if boolean { TRUE } else { FALSE }));
-        }
-        if !self.space().eligible(self.space().node(node).resource) {
-            return self.unknown_schema(Class::Inability, node, "$identity", value, context, None);
-        }
-        if self
-            .space()
-            .query_inventory(self.space().node(node).resource)
-            .is_err()
-        {
-            return self.unknown_schema(Class::Inability, node, "$dialect", value, context, None);
-        }
-        let Some(profile) = self.space().node(node).profile else {
-            return self.unknown_schema(Class::Inability, node, "$dialect", value, context, None);
-        };
-        let schema = Interpreted {
-            value: schema.view(),
-            profile,
-        };
-        if profile.reference_object(schema.value) {
-            return self.reference(
-                node,
-                "$ref",
-                schema.get("$ref").expect("reference object"),
-                value,
-                context,
-            );
-        }
-        let mut state = State::truth(TRUE);
-        // Identifier declarations establish resource/base context, not an
-        // assertion about this instance. A malformed identifier matters when
-        // a reference actually depends on that context; reference() retains
-        // the original query failure instead of inventing a validity atom.
-        match self.primitives(node, &schema, value) {
-            Ok(true) => {}
-            Ok(false) => state.valid = FALSE,
-            Err(detail)
-                if matches!(
-                    detail.reason,
-                    NoVerdictReason::LimitExceeded | NoVerdictReason::Cancelled
-                ) =>
-            {
-                return Err(detail);
-            }
-            Err(detail) => {
-                let unknown =
-                    self.effect(Class::Inability, node, "$predicate", value, context, None)?;
-                self.cause(unknown.valid, detail)?;
-                self.conjunction(&mut state, &unknown)?;
-            }
-        }
-        if let Some(format) = self.plan.formats.get(&node) {
-            match format.evaluate(value, &mut self.graph) {
-                Ok(true) => {}
-                Ok(false) => state.valid = FALSE,
-                Err(detail)
-                    if matches!(
-                        detail.reason,
-                        NoVerdictReason::LimitExceeded | NoVerdictReason::Cancelled
-                    ) =>
-                {
-                    return Err(detail);
-                }
-                Err(detail) => {
-                    let unknown =
-                        self.effect(Class::Inability, node, "format", value, context, None)?;
-                    self.cause(unknown.valid, detail)?;
-                    self.conjunction(&mut state, &unknown)?;
-                }
-            }
-        }
-        if let Some(pattern) = schema.get("pattern")
-            && value.kind() == JsonKind::String
-        {
-            let matched = self.pattern(node, "pattern", pattern, value, context)?;
-            state.valid = self.graph.and(state.valid, matched)?;
-        }
-        if self.plan.leaves.contains(&node) {
-            return Ok(state);
-        }
-        for keyword in ["$ref", "$dynamicRef", "$recursiveRef"] {
-            if let Some(reference) = schema.get(keyword) {
-                let other = self.reference(node, keyword, reference, value, context)?;
-                self.conjunction(&mut state, &other)?;
-            }
-        }
-        for keyword in ["allOf", "anyOf", "oneOf"] {
-            if let Some(branches) = schema.get(keyword).and_then(|v| v.elements()) {
-                let mut combined = State::truth(if keyword == "allOf" { TRUE } else { FALSE });
-                let mut one = FALSE;
-                let mut zero = TRUE;
-                for branch in branches {
-                    let child = self.child(node, branch)?;
-                    let result = self.schema(child, value, context)?;
-                    combined.valid = if keyword == "allOf" {
-                        self.graph.and(combined.valid, result.valid)?
-                    } else {
-                        self.graph.or(combined.valid, result.valid)?
-                    };
-                    if keyword == "oneOf" {
-                        let chosen = self.graph.and(zero, result.valid)?;
-                        let no = self.graph.not(result.valid)?;
-                        let prior = self.graph.and(one, no)?;
-                        one = self.graph.or(chosen, prior)?;
-                        zero = self.graph.and(zero, no)?;
-                    }
-                    self.annotations(&mut combined, &result, TRUE)?;
-                }
-                if keyword == "oneOf" {
-                    combined.valid = one;
-                }
-                self.conjunction(&mut state, &combined)?;
-            }
-        }
-        if let Some(child) = schema.get("not") {
-            let result = self.schema(self.child(node, child)?, value, context)?;
-            let not = self.graph.not(result.valid)?;
-            state.valid = self.graph.and(state.valid, not)?;
-        }
-        if let Some(child) = schema.get("if") {
-            let condition = self.schema(self.child(node, child)?, value, context)?;
-            let yes = if let Some(child) = schema.get("then") {
-                self.schema(self.child(node, child)?, value, context)?
-            } else {
-                State::truth(TRUE)
-            };
-            let no = if let Some(child) = schema.get("else") {
-                self.schema(self.child(node, child)?, value, context)?
-            } else {
-                State::truth(TRUE)
-            };
-            let selected = self.graph.choose(condition.valid, yes.valid, no.valid)?;
-            state.valid = self.graph.and(state.valid, selected)?;
-            self.annotations(&mut state, &condition, TRUE)?;
-            self.annotations(&mut state, &yes, condition.valid)?;
-            let otherwise = self.graph.not(condition.valid)?;
-            self.annotations(&mut state, &no, otherwise)?;
-        }
-        if value.kind() == JsonKind::Object {
-            self.object(node, &schema, value, context, &mut state)?;
-        }
-        if value.kind() == JsonKind::Array {
-            self.array(node, &schema, value, context, &mut state)?;
-        }
-        Ok(state)
     }
     fn recursive_target(&self, node: usize) -> bool {
         let target = self.space().node(node);
@@ -1065,7 +866,7 @@ impl Run<'_> {
         reference: JsonRef<'_>,
         value: JsonRef<'_>,
         context: &Context,
-    ) -> Result<State, NoVerdict> {
+    ) -> Result<execution::Reference, NoVerdict> {
         let Some(reference) = reference.as_str() else {
             // A JSON string containing an unpaired unit cannot be a URI
             // reference. Keep that local undefined fact visible to masking
@@ -1075,10 +876,14 @@ impl Run<'_> {
             } else {
                 Class::Inability
             };
-            return self.effect(class, node, keyword, value, context, None);
+            return self
+                .effect(class, node, keyword, value, context, None)
+                .map(execution::Reference::Ready);
         };
         if keyword == "$recursiveRef" && reference != "#" {
-            return self.effect(Class::Inability, node, keyword, value, context, None);
+            return self
+                .effect(Class::Inability, node, keyword, value, context, None)
+                .map(execution::Reference::Ready);
         }
         let query = self.query(node, keyword)?;
         match query.as_ref() {
@@ -1093,14 +898,9 @@ impl Run<'_> {
                         match context.iter().find(|(binding, _)| binding == name) {
                             Some((_, Some(target))) => *target,
                             Some((_, None)) => {
-                                return self.effect(
-                                    Class::Undefined,
-                                    node,
-                                    keyword,
-                                    value,
-                                    context,
-                                    None,
-                                );
+                                return self
+                                    .effect(Class::Undefined, node, keyword, value, context, None)
+                                    .map(execution::Reference::Ready);
                             }
                             None => target.node,
                         }
@@ -1110,7 +910,7 @@ impl Run<'_> {
                 } else {
                     target.node
                 };
-                self.schema(selected, value, context)
+                Ok(execution::Reference::Target(selected))
             }
             Err(QueryFailure::ResourceUnavailable(uri)) => {
                 // The resource identity and original fragment identify one
@@ -1133,14 +933,21 @@ impl Run<'_> {
                     context,
                     Some(uri.clone()),
                 )
+                .map(execution::Reference::Ready)
             }
             Err(
                 QueryFailure::IdentityConflict
                 | QueryFailure::UnsupportedDialect(_)
                 | QueryFailure::UnsupportedCapability(_)
                 | QueryFailure::InvalidExternalSchema,
-            ) => self.unknown_schema(Class::Inability, node, keyword, value, context, None),
-            Err(_) => self.effect(Class::Undefined, node, keyword, value, &Vec::new(), None),
+            ) => self
+                .unknown_schema(Class::Inability, node, keyword, value, context, None)
+                .map(execution::Reference::Ready),
+            Err(_) => {
+                let empty = self.empty_context.clone();
+                self.effect(Class::Undefined, node, keyword, value, &empty, None)
+                    .map(execution::Reference::Ready)
+            }
         }
     }
     fn pattern_atom(
@@ -1153,12 +960,13 @@ impl Run<'_> {
         // Linear matching borrows UTF-8 directly. Only an unknown match needs an
         // exact text key; reserve its allowance before decoding or retaining it.
         let units = self.units(value)?;
+        let empty = self.empty_context.clone();
         self.atom(
             class,
             node,
             keyword.into(),
             Subject::Text(units),
-            &Vec::new(),
+            &empty,
             None,
         )
     }
@@ -1231,175 +1039,6 @@ impl Run<'_> {
             }
         }
         Ok(None)
-    }
-    fn object(
-        &mut self,
-        node: usize,
-        schema: &Interpreted<'_>,
-        value: JsonRef<'_>,
-        context: &Context,
-        state: &mut State,
-    ) -> Result<(), NoVerdict> {
-        if let Some(dependencies) = schema
-            .get("dependentSchemas")
-            .or_else(|| schema.get("dependencies"))
-            .and_then(|v| v.members())
-        {
-            for dependency in dependencies {
-                if dependency.value.kind() == JsonKind::Array {
-                    continue;
-                }
-                if self.named(value, dependency.name)?.is_some() {
-                    let applied =
-                        self.schema(self.child(node, dependency.value)?, value, context)?;
-                    self.conjunction(state, &applied)?;
-                }
-            }
-        }
-        for member in value.members().expect("object") {
-            self.graph.tick()?;
-            let name = if self.plan.annotations.properties {
-                Some(self.units(member.name)?)
-            } else {
-                None
-            };
-            let mut selected = FALSE;
-            if let Some(properties) = schema.get("properties")
-                && let Some(child) = self.named(properties, member.name)?
-            {
-                let child = self.schema(self.child(node, child)?, member.value, context)?;
-                state.valid = self.graph.and(state.valid, child.valid)?;
-                selected = TRUE;
-                if let Some(name) = &name {
-                    self.graph
-                        .charge(name.len().saturating_mul(2).saturating_add(256))?;
-                    state.properties.insert(name.clone(), TRUE);
-                }
-            }
-            if let Some(patterns) = schema.get("patternProperties").and_then(|v| v.members()) {
-                for pattern in patterns {
-                    self.graph
-                        .charge(pattern.name.text().len().saturating_add(32))?;
-                    let keyword = format!("patternProperties/{}", pattern.name.text());
-                    let matched =
-                        self.pattern(node, &keyword, pattern.name, member.name, context)?;
-                    let child =
-                        self.schema(self.child(node, pattern.value)?, member.value, context)?;
-                    let applies = self.graph.implies(matched, child.valid)?;
-                    state.valid = self.graph.and(state.valid, applies)?;
-                    selected = self.graph.or(selected, matched)?;
-                    if let Some(name) = &name {
-                        let old = state.properties.get(name).copied().unwrap_or(FALSE);
-                        self.graph
-                            .charge(name.len().saturating_mul(2).saturating_add(256))?;
-                        state
-                            .properties
-                            .insert(name.clone(), self.graph.or(old, matched)?);
-                    }
-                }
-            }
-            if let Some(child) = schema.get("additionalProperties") {
-                let child = self.schema(self.child(node, child)?, member.value, context)?;
-                let applies = self.graph.or(selected, child.valid)?;
-                state.valid = self.graph.and(state.valid, applies)?;
-                if let Some(name) = &name {
-                    self.graph
-                        .charge(name.len().saturating_mul(2).saturating_add(256))?;
-                    state.properties.insert(name.clone(), TRUE);
-                }
-            }
-            if let Some(child) = schema.get("propertyNames") {
-                let child = self.schema(self.child(node, child)?, member.name, context)?;
-                state.valid = self.graph.and(state.valid, child.valid)?;
-            }
-            if let Some(name) = &name {
-                self.graph.charge(96 + name.len() * 2)?;
-            }
-        }
-        if let Some(child) = schema.get("unevaluatedProperties") {
-            let child = self.child(node, child)?;
-            for member in value.members().expect("object") {
-                let name = self.units(member.name)?;
-                let evaluated = state.properties.get(&name).copied().unwrap_or(FALSE);
-                let result = self.schema(child, member.value, context)?;
-                let valid = self.graph.or(evaluated, result.valid)?;
-                state.valid = self.graph.and(state.valid, valid)?;
-                state.properties.insert(name, TRUE);
-                self.graph.charge(96)?;
-            }
-        }
-        Ok(())
-    }
-    fn array(
-        &mut self,
-        node: usize,
-        schema: &Interpreted<'_>,
-        value: JsonRef<'_>,
-        context: &Context,
-        state: &mut State,
-    ) -> Result<(), NoVerdict> {
-        let tuple = schema.profile.edition() != Dialect::Draft202012
-            && schema
-                .get("items")
-                .is_some_and(|v| v.kind() == JsonKind::Array);
-        let prefix = schema.get(if tuple { "items" } else { "prefixItems" });
-        for (index, item) in value.elements().expect("array").enumerate() {
-            self.graph.tick()?;
-            if let Some(child) = prefix
-                .and_then(|prefix| prefix.element(index))
-                .or_else(|| schema.get(if tuple { "additionalItems" } else { "items" }))
-            {
-                let result = self.schema(self.child(node, child)?, item, context)?;
-                state.valid = self.graph.and(state.valid, result.valid)?;
-                if self.plan.annotations.items {
-                    self.graph.charge(96)?;
-                    state.items.insert(index, TRUE);
-                }
-            }
-        }
-        if let Some(child) = schema.get("contains") {
-            let child = self.child(node, child)?;
-            let mut counts = counts::Matches::default();
-            for (index, item) in value.elements().expect("array").enumerate() {
-                let result = self.schema(child, item, context)?;
-                counts.add(result.valid, &mut self.graph)?;
-                if self.plan.annotations.items && schema.profile.edition() == Dialect::Draft202012 {
-                    let old = state.items.get(&index).copied().unwrap_or(FALSE);
-                    self.graph.charge(96)?;
-                    state.items.insert(index, self.graph.or(old, result.valid)?);
-                }
-            }
-            let prepared = self.plan.operands.get(&node);
-            let mut count = |slot: usize, key: &str, default: u64| -> Result<u64, NoVerdict> {
-                let reading = prepared.and_then(|record| record.contains[slot].as_ref());
-                if reading.is_none() && schema.get(key).is_none() {
-                    return Ok(default);
-                }
-                self.count_operand(schema, key, reading)?.ok_or_else(|| {
-                    no_verdict(
-                        NoVerdictReason::UnsupportedCapability,
-                        "contains-count-shape",
-                        "a contains bound must be a nonnegative integer",
-                    )
-                })
-            };
-            let minimum = count(0, "minContains", 1)?;
-            let maximum = count(1, "maxContains", u64::MAX)?;
-            let valid = counts.within(minimum, maximum, &mut self.graph)?;
-            state.valid = self.graph.and(state.valid, valid)?;
-        }
-        if let Some(child) = schema.get("unevaluatedItems") {
-            let child = self.child(node, child)?;
-            for (index, item) in value.elements().expect("array").enumerate() {
-                let evaluated = state.items.get(&index).copied().unwrap_or(FALSE);
-                let result = self.schema(child, item, context)?;
-                let valid = self.graph.or(evaluated, result.valid)?;
-                state.valid = self.graph.and(state.valid, valid)?;
-                self.graph.charge(96)?;
-                state.items.insert(index, TRUE);
-            }
-        }
-        Ok(())
     }
     fn origin(
         plan: &Plan,

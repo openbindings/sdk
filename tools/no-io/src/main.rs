@@ -42,7 +42,7 @@ fn main() {
     assert_eq!(mode, "sdk");
     let mut observations = Vec::new();
     for key in ["$ref", "$schema"] {
-        // A foreign dialect belongs in an explicitly supplied resource (§5.2),
+        // A foreign dialect belongs in an explicitly supplied resource (§5.5),
         // while the OpenBindings document itself must pass proof admission.
         let schema = json!({"$id":"urn:no-io:boundary",key:uri});
         let (input, resources) = if key == "$schema" {

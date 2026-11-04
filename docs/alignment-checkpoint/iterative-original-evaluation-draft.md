@@ -127,3 +127,52 @@ private object cursor API; scope-copy/share policy; active-path and alias indexe
 fixed stack floor and separation from symbolic reasoning depth. These are SDK
 engineering choices, not decisions requiring Matthew or reasons to preserve old
 APIs. Pattern VM preparation and cross-phase syntax facts remain separate work.
+
+## Concrete continuation proposal
+
+Use one private `execution` module with applicator-specific `logical`, `object`
+and `array` children. It owns `Frame { visit, value, state, phase }`, where `value`
+borrows the call's exact JSON occurrence, `visit` contains the original schema
+index and effective scope, and `phase` identifies the next operation and any
+partial fold. Read each schema from the Plan rather than retaining a duplicate
+schema representation in a frame. Object stages use the existing constant-time
+`backend::member_at`; array and branch stages use indexed elements. A frame never
+owns all instance members or a queue of all children.
+
+The scheduler first enters one request. A certified leaf completes immediately;
+otherwise an entered frame advances until it requests a child or completes.
+Suspended parents stay in one vector. A single return slot transfers ownership of
+the child's State to its parent's applicator continuation. No closure, future,
+boxed continuation or recursive schema fallback is needed. References resolve to
+a prepared target request or a completed local effect. Draft-07 reference objects
+complete with that reference result without applying ignored sibling keywords.
+
+Logical continuations retain a branch cursor and their conjunction/disjunction/
+exactly-one fold, or the condition and selected-arm formulas needed by `if`.
+Object continuations retain one member cursor, an optional demanded name, its
+selection formula and one pattern cursor. Array continuations retain one item
+cursor and, only during `contains`, its existing scalar/formula count state.
+Unevaluated stages read the enclosing accumulated annotations. Each family's
+return handler explicitly guards or discards child annotations as its meaning
+requires; a generic merge-all helper is not its interpretation.
+
+Proposed scope storage is a shared immutable sorted effective binding vector.
+Equality and hashing inspect its content, never its allocation address. `enter`
+can share its incoming scope when no new outermost binding is visible; a changed
+map allocates under the same ledger. This proposal avoids requiring a second
+interning authority. Hash/content scans are charged separately from allocation,
+and keys preserve ambiguous binding values. A scope interner is an alternative
+only if the independent ownership review shows a need for it.
+
+The ordered active path is paired with a content-keyed position index. Alias
+traversal uses the same kind of membership index rather than scanning every prior
+entry. The active path is removed on completion and cleared on `AbortAttempt` or
+terminal error. Only the already-reviewed between-attempt certificates survive a
+retry; ordinary terminal limits and cancellation are never retry signals.
+
+Reserve frame-vector growth before allocation, accounting for the requested new
+capacity (not only live frame count), checked size arithmetic and allocation
+failure. Reuse that capacity when children return. Heap growth is charged to the
+program ledger; machine-stack accounting remains a distinct fixed scheduler/
+predicate floor plus the bounded symbolic Graph depth. Its exact floor still
+requires measured native/Wasm evidence before claiming the execution gate closed.

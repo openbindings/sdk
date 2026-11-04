@@ -36,6 +36,8 @@ and source-pull companions. Four focused tests pass, including negative controls
 An 804-file preview bundle passes the complete local link check. The first-use
 example's remaining per-value contract wording now says schema; its build passes.
 
-Independent review and the clean committed reference candidate are pending.
+Independent six-file review passes; the clean reference candidate at `4618695`
+passes all 804 file hashes and 8,531 local targets. The review's stale section
+citation note is corrected to pinned §5.5 in the test comment.
 The complete SDK alignment, final matched performance, engine replacement and
 all-host qualification remain open. No package was published or deployed.
