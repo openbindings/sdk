@@ -130,7 +130,7 @@ fn probe_finding(
     finding.message = SECRET.into();
     finding
 }
-/// Accepts every value, so a prepared value contract exists to inspect.
+/// Accepts every value, so a prepared schema exists to inspect.
 struct Accept;
 impl SchemaEvaluator for Accept {
     type Validator = Accept;

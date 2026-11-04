@@ -86,6 +86,19 @@ files.set(
   await fs.readFile(path.join(packageRoot, "test/reference-preparation.mjs")),
 );
 files.set(
+  "/syntax-facts.mjs",
+  await fs.readFile(path.join(packageRoot, "test/syntax-facts.mjs")),
+);
+files.set(
+  "/syntax-facts-input.json",
+  await fs.readFile(
+    path.join(
+      root,
+      "crates/openbindings-json-schema-evaluator/src/semantic/construction/shared-meta-input.json",
+    ),
+  ),
+);
+files.set(
   "/diagnostic-budget-worker.mjs",
   Buffer.from(`
 import * as sdk from "/dist/index.js";
@@ -140,6 +153,10 @@ try {
       const { referencePreparationCases } = await import(
         "/reference-preparation.mjs"
       );
+      const { syntaxFactCases } = await import("/syntax-facts.mjs");
+      const syntaxInput = await (
+        await fetch("/syntax-facts-input.json")
+      ).json();
       await sdk.initialize();
       const run = (list) =>
         list.map((request) => {
@@ -154,6 +171,7 @@ try {
         suite: run(requests.suite),
         executionFrames: executionFrameCases(sdk),
         referencePreparation: referencePreparationCases(sdk),
+        syntaxFacts: syntaxFactCases(sdk, syntaxInput),
         fixedDiagnostics: fixedDiagnosticCases(sdk),
         ...diagnosticBudgetCases(sdk),
       };
@@ -223,6 +241,10 @@ try {
   await fs.writeFile(
     path.join(output, "reference-preparation.json"),
     JSON.stringify(result.referencePreparation, null, 2),
+  );
+  await fs.writeFile(
+    path.join(output, "syntax-facts.json"),
+    JSON.stringify(result.syntaxFacts, null, 2),
   );
   await fs.writeFile(
     path.join(output, "host.json"),

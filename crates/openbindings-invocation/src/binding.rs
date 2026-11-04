@@ -39,7 +39,8 @@ pub trait BindingInvoker {
         control: CancellationToken,
     ) -> Self::Invoke<'a>;
     /// Report a prediction without consuming input, emitting output, dispatching
-    /// the requested operation or spending its approval. Errors carry no prediction.
+    /// the requested operation or spending its approval. Ordinary errors carry
+    /// no prediction; `ERR_REFUSED` predicts refusal of the same input.
     fn preflight<'a>(
         &'a self,
         request: BindingRequest,

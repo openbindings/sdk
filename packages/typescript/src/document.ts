@@ -289,7 +289,7 @@ export class Document extends DocumentSnapshot {
   static {
     adoptDocument = (raw) => new Document(raw, documentToken);
   }
-  /** Admit exact JSON, including broken documents, without conformance proof, under admission limits: by default 32 MiB UTF-8, 1,000,000 nodes and 10,000 container levels, and `limits` overrides them, unspecified entries keeping those defaults, as Rust's `Document::parse_with_limits` does. The document keeps its limits (`limits`): its edits apply them to what they write, as Rust's do. Value-contract preparation keeps its own fixed bounds. Expected input refusal uses input-error; initialization and API misuse throw. */
+  /** Admit exact JSON, including broken documents, without conformance proof, under admission limits: by default 32 MiB UTF-8, 1,000,000 nodes and 10,000 container levels, and `limits` overrides them, unspecified entries keeping those defaults, as Rust's `Document::parse_with_limits` does. The document keeps its limits (`limits`): its edits apply them to what they write, as Rust's do. Schema preparation keeps its own fixed bounds. Expected input refusal uses input-error; initialization and API misuse throw. */
   static parse(
     input: ExactInput,
     options: {

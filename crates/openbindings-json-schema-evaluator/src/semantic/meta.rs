@@ -36,7 +36,11 @@ fn unsupported(capability: &str) -> PreparationFailure {
     })
 }
 
-pub(super) fn validate(root: &Plan, attempt: &dyn Control) -> Result<(), PreparationFailure> {
+pub(super) fn validate(
+    root: &Plan,
+    construction: &Construction<'_>,
+) -> Result<(), PreparationFailure> {
+    let attempt = construction.control();
     if root.custom.is_empty() {
         return Ok(());
     }
@@ -74,13 +78,8 @@ pub(super) fn validate(root: &Plan, attempt: &dyn Control) -> Result<(), Prepara
                     .map_err(query_failure)?;
                 if let std::collections::hash_map::Entry::Vacant(entry) = plans.entry(meta) {
                     attempt.charge_allocation(512)?;
-                    let mut plan = Plan::at(
-                        root.environment.clone(),
-                        meta,
-                        root.limits.clone(),
-                        root.preparation,
-                        attempt,
-                    )?;
+                    let mut plan =
+                        Plan::at(construction, meta, root.limits.clone(), root.preparation)?;
                     // Every supplied resource used by the meta evaluator has
                     // its own complete syntax obligation, including referenced
                     // helpers whose unused definitions evaluation never enters.
@@ -91,8 +90,7 @@ pub(super) fn validate(root: &Plan, attempt: &dyn Control) -> Result<(), Prepara
                             continue;
                         }
                         if let Some(entry) = original.root {
-                            let syntax =
-                                preparation::meta_syntax(&root.environment, entry, attempt)?;
+                            let syntax = preparation::meta_syntax(construction, entry)?;
                             attempt.charge_allocation(syntax.len().saturating_mul(8))?;
                             plan.custom.extend(syntax);
                         }

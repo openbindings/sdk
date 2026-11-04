@@ -2,6 +2,7 @@
 //! The ordinary compiled engine remains the fast path. This layer represents
 //! local effects and applicator annotations together when that path cannot
 //! establish a value's result. It does not infer Undefined from failed bounds.
+mod construction;
 mod counts;
 mod cycles;
 mod decision;
@@ -17,6 +18,7 @@ mod regex_format;
 mod stack;
 mod storage;
 mod values;
+use self::construction::Construction;
 use self::decision::{Class, FALSE, Formula, Graph, TRUE};
 use super::{Limits, no_verdict};
 use openbindings::*;
@@ -93,22 +95,22 @@ impl Plan {
         control: &dyn openbindings_internal_schema::Control,
     ) -> Result<Self, PreparationFailure> {
         let entry = environment.entry();
-        let plan = Self::at(environment, entry, limits, preparation, control)?;
-        meta::validate(&plan, control)?;
+        let construction = Construction::new(environment, control)?;
+        let plan = Self::at(&construction, entry, limits, preparation)?;
+        meta::validate(&plan, &construction)?;
         Ok(plan)
     }
     /// Evaluate an original schema position without constructing a replacement
     /// document or changing its resource base and dynamic scope.
-    pub(super) fn at(
-        environment: SchemaEnvironment,
+    fn at(
+        construction: &Construction<'_>,
         entry: usize,
         limits: Limits,
         preparation: PreparationLimits,
-        control: &dyn openbindings_internal_schema::Control,
     ) -> Result<Self, PreparationFailure> {
-        let checked = preparation::check_from(&environment, entry, &limits, control)?;
+        let checked = preparation::check_from(construction, entry, &limits)?;
         Ok(Self {
-            environment,
+            environment: construction.environment().clone(),
             entry,
             limits,
             preparation,

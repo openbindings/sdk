@@ -35,8 +35,9 @@ not yet the ordinary default; the outgoing compiler still exists. See the
 and [frame checkpoint evidence](../receipts/2026-11-02-preparation/iterative-execution-progress/README.md).
 
 The frame checkpoint is pushed as `98ab475`; its full portable verifier passes.
-Hosted Linux/macOS, MSRV, package, browser, Node-version, advisory and reproducible
-Wasm checks pass; Windows remains in progress at the latest observation. Hosted
+All hosted CI jobs for that frame checkpoint, including Windows, have passed.
+For the later receipt checkpoint `aecf09e`, all jobs except the still-running
+Windows job pass at the latest observation. Hosted
 performance checks pass, but do not replace the final matched-performance gate.
 The [acquisition/reference repairs](../receipts/2026-11-02-preparation/ci-reference-acquisition/README.md)
 also have independent review and a clean reference-candidate pass.
@@ -51,7 +52,17 @@ portable verifier passes on pushed `3599f27`. This does not implement cross-phas
 syntax-fact sharing or full pattern VM preparation. Results and source identities
 are in [the progress receipt](../receipts/2026-11-02-preparation/reference-preparation-progress/README.md).
 
-After this increment, finish the preparation sharing and pattern-program schedule,
+The next [pattern-program schedule](../design/2026-11-02/prepared-pattern-program-schedule.md)
+is under independent design review. Source/allocator probes have rejected a naive
+reservation reduction: fixed Unicode helper storage and nested AST/HIR construction
+need explicit bounds. No production change uses that rejected formula. A separate
+[fixed-syntax fact design](../design/2026-11-02/shared-fixed-syntax-facts.md) has independent design approval and is implemented for qualification. It shares
+only completed local standard syntax facts in one owned immutable environment;
+complete child/custom dependency traversal remains. The [current map audit](../receipts/2026-11-02-preparation/current-map-audit/README.md)
+has partial source/semantic bindings for 37 of 54 concepts and all 32 document fields; the complete audit
+is still open.
+
+Finish the preparation sharing and pattern-program schedule,
 original Explain witnesses, remaining native/Wasm stack qualification, and forced
 original-engine validation. Then switch the default and retire the outgoing
 projection/compiler paths; run the final matched performance and clean-package/

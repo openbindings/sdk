@@ -19,7 +19,7 @@ impl Deref for SchemaSpace {
     }
 }
 impl SchemaSpace {
-    /// Layer supplied resources over the document. Value-contract callers keep
+    /// Layer supplied resources over the document. Schema callers keep
     /// the result per live revision and set; validation keeps its own index.
     pub(crate) fn new_bounded(
         document: &Document,

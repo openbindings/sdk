@@ -109,9 +109,9 @@ portable validation errors have code only.
 
 Preflight has its own associated future and returns `NoPrediction` or the shared
 `{message, schema}` challenge as a successful result. It selects as invocation does,
-but never validates values or dispatches the operation. An error carries no
-prediction. A later invocation selects independently and may discover additional
-requirements. Context acquisition, approvals and retry policy belong to the host.
+but never validates values or dispatches the operation. Ordinary errors carry no
+prediction; `ERR_REFUSED` predicts refusal of the same input. A later invocation
+selects independently and may discover additional requirements. Context acquisition, approvals and retry policy belong to the host.
 
 `InvocationLimits` bounds queue capacity and value/error encoding. Token-byte
 limits do not bound retained parent JSON arenas. Provider code/data errors remain

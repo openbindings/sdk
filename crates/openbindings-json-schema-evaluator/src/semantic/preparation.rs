@@ -21,11 +21,11 @@ pub(super) struct Checked {
 /// definitions, content schemas and orphan conditionals. Evaluation reachability
 /// below deliberately omits those positions, so it cannot certify this fact.
 pub(super) fn meta_syntax(
-    environment: &SchemaEnvironment,
+    construction: &Construction<'_>,
     entry: usize,
-    control: &dyn openbindings_internal_schema::Control,
 ) -> Result<Vec<usize>, PreparationFailure> {
-    let space = environment.space();
+    let space = construction.environment().space();
+    let control = construction.control();
     control.charge_allocation(512)?;
     let mut queue = vec![entry];
     let mut custom = BTreeSet::new();
@@ -47,11 +47,7 @@ pub(super) fn meta_syntax(
             ))
         })?;
         if !profile.is_custom() {
-            let valid = openbindings_internal_schema::fixed_schema::dialect_validity_bounded(
-                &original.value,
-                profile.edition(),
-                control,
-            )?;
+            let valid = construction.check_standard(node)?;
             if !valid {
                 return Err(PreparationFailure::new(
                     PreparationFailureKind::InvalidExternalSchema,
@@ -101,16 +97,17 @@ pub(super) fn check(
     limits: &Limits,
     control: &dyn openbindings_internal_schema::Control,
 ) -> Result<(), PreparationFailure> {
-    check_from(environment, environment.entry(), limits, control).map(|_| ())
+    let construction = Construction::new(environment.clone(), control)?;
+    check_from(&construction, environment.entry(), limits).map(|_| ())
 }
 
 pub(super) fn check_from(
-    environment: &SchemaEnvironment,
+    construction: &Construction<'_>,
     entry: usize,
     limits: &Limits,
-    control: &dyn openbindings_internal_schema::Control,
 ) -> Result<Checked, PreparationFailure> {
-    let space = environment.space();
+    let space = construction.environment().space();
+    let control = construction.control();
     control.charge_allocation(512)?;
     let mut queue = VecDeque::from([entry]);
     let mut visited = HashSet::new();
@@ -174,11 +171,7 @@ pub(super) fn check_from(
                 || space.resource(original.resource).origin
                     == openbindings_internal_schema::ResourceOrigin::Supplied)
         {
-            let valid = openbindings_internal_schema::fixed_schema::dialect_validity_bounded(
-                &original.value,
-                profile.edition(),
-                control,
-            )?;
+            let valid = construction.check_standard(node)?;
             if !valid {
                 return Err(PreparationFailure::new(
                     PreparationFailureKind::InvalidExternalSchema,

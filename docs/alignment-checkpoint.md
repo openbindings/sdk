@@ -100,7 +100,10 @@ toolchain; the MSRV compatibility receipt explicitly records no matching Clippy 
    [implementation review](alignment-checkpoint/reference-preparation-implementation-review.md)
    passes with no unresolved finding; the complete portable verifier passes on
    pushed checkpoint `3599f27`.
-   Finish cross-phase syntax-fact sharing, the audited immutable pattern VM schedule,
+   [Shared completed syntax facts](alignment-checkpoint/shared-syntax-results.md)
+   are now implemented after independent design approval; current/MSRV Rust, fresh
+   Node/browser/package checks pass. Independent implementation/resource review is
+   still in progress. Finish its qualification, the audited immutable pattern VM schedule,
    original Explain witnesses and physical-stack/host qualification. Then force the
    original engine through all gates, switch the default and retire the outgoing
    projection/compiler code. No existing public API or internal architecture needs
