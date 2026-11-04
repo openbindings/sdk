@@ -105,6 +105,21 @@ remains open. The complete portable verifier passes on pushed `51e1dc7`, before
 the current original Explain changes. The original Explain resource and parent host gates now pass on `5d7e8d4`.
 The compiler construction schedule is the next implementation gate.
 
+The latest pushed implementation checkpoint is `67dfdeb`: obsolete regex-format
+identifier warm-up accounting is removed after independent review; 131 focused
+Rust tests pass on each toolchain and the fresh Wasm package passes 187 Node tests.
+The complete portable verifier last passed at `24ad294`. Its Windows replay receipt
+matches local results exactly. After extending only the Windows cold-build job cap,
+`3cf0f6e` reached a real outgoing `walk_stack` overflow, rather than a timeout.
+That test passed on `24ad294`; the capacity-only change does not establish a source
+regression. The later pushed `67dfdeb` passes all hosted CI jobs, including Windows, and the
+separate performance run. This does not establish the cause of the preceding
+walk overflow; preserve it for final replacement/default qualification. No limits
+or cases are waived.
+The independent original-engine helper/stack lane is recorded in
+[its receipt](../receipts/2026-11-02-preparation/original-stack-qualification/README.md).
+
+
 Finish the pattern-program schedule, remaining native/Wasm stack qualification, and forced
 original-engine validation. Then switch the default and retire the outgoing
 projection/compiler paths; run the final matched performance and clean-package/
