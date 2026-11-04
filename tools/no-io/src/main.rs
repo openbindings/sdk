@@ -13,12 +13,12 @@ fn evaluate(
         .expect("conformant document");
     let operation = proof.resolve_operation("op").expect("declared operation");
     let input = operation.input().expect("declared input");
-    let contract = input.prepare(
+    let schema = input.prepare(
         &DefaultEvaluator::new(),
         &resources,
         &PreparationLimits::default(),
     )?;
-    Ok(contract.evaluate(&JsonValue::integer(7)))
+    Ok(schema.evaluate(&JsonValue::integer(7)))
 }
 
 fn main() {
@@ -63,22 +63,75 @@ fn main() {
         .unwrap();
         let result = evaluate(&document, resources);
         if key == "$schema" {
-            assert!(matches!(
-                &result,
-                Err(PreparationFailure {
-                    kind: PreparationFailureKind::Resolution {
-                        cause: ResolutionFailureKind::UnsupportedDialect { .. }
-                    },
-                    ..
-                })
-            ));
+            // Without a supplied custom meta-schema, its namespace rules are
+            // unknown. Refuse external selection; never retrieve the dialect.
+            assert!(
+                matches!(
+                    &result,
+                    Err(PreparationFailure {
+                        kind: PreparationFailureKind::Resolution {
+                            cause: ResolutionFailureKind::UnsupportedCapability { capability }
+                        },
+                        ..
+                    }) if capability == "custom-profile-namespace"
+                ),
+                "{}",
+                serde_json::to_string(&result).unwrap()
+            );
         } else {
             assert!(
-                matches!(&result, Ok(ValueOutcome::NoVerdict { detail }) if detail.reason == NoVerdictReason::ResourceUnavailable)
+                matches!(&result, Ok(ValueOutcome::NoVerdict { detail }) if detail.reason == NoVerdictReason::ResourceUnavailable),
+                "{}",
+                serde_json::to_string(&result).unwrap()
             );
         }
         observations.push(json!({"name":key,"outcome":result}));
     }
+    // Once the custom profile is known from supplied bytes, a missing resource
+    // demanded by its meta-schema remains unavailable. Meta admission must not
+    // activate dependency retrieval either.
+    let document = Document::parse(
+        json!({"openbindings":"0.2.0","operations":{"op":{"input":{"$ref":"urn:no-io:consumer"}}}})
+            .to_string(),
+    )
+    .unwrap();
+    let resources = ExternalSchemas::new([
+        ExternalSchema {
+            uri: "urn:no-io:consumer".into(),
+            document: JsonValue::parse(
+                json!({"$schema":"urn:no-io:meta","type":"integer"}).to_string(),
+            )
+            .unwrap(),
+        },
+        ExternalSchema {
+            uri: "urn:no-io:meta".into(),
+            document: JsonValue::parse(
+                json!({
+                    "$schema":"https://json-schema.org/draft/2020-12/schema",
+                    "$vocabulary": {
+                        "https://json-schema.org/draft/2020-12/vocab/core":true,
+                        "https://json-schema.org/draft/2020-12/vocab/applicator":true,
+                        "https://json-schema.org/draft/2020-12/vocab/validation":true
+                    },
+                    "$ref":uri
+                })
+                .to_string(),
+            )
+            .unwrap(),
+        },
+    ])
+    .unwrap();
+    let result = evaluate(&document, resources);
+    assert!(
+        matches!(&result, Err(PreparationFailure {
+        kind: PreparationFailureKind::Resolution {
+            cause: ResolutionFailureKind::ResourceUnavailable { uri: missing }
+        }, ..
+    }) if missing == uri),
+        "{}",
+        serde_json::to_string(&result).unwrap()
+    );
+    observations.push(json!({"name":"known meta dependency unavailable","outcome":result}));
     let document = Document::parse(
         json!({"openbindings":"0.2.0","operations":{"op":{"input":true}},"sources":{"source":{"kind":uri,"data":{"$ref":uri,"$schema":uri}}},"bindings":{"binding":{"source":"source","operation":"op"}}}).to_string(),
     ).unwrap();

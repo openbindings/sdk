@@ -1,0 +1,8 @@
+{
+  "crates/openbindings-json-schema-evaluator/examples/first_use.rs": "cd70b8033b319b8713bec619ed76a5e7861016c0dce65b0fe1843f082577955d",
+  "tools/build-reference.py": "f66b8bc0ae1a0eca10a5d92f772ad6232944904a22b6e12df0fe372a3a3adbbb",
+  "tools/no-io/Cargo.lock": "aa76859d449eb0a786ac4fcf19146b49da475c0b28683d208f889d17301fb18d",
+  "tools/no-io/src/main.rs": "53d263656f91596455487e4ca3422fbc06ac9ca048f6447af5c0c8dc7c5dc90d",
+  "tools/test-reference.py": "cd3b04054f71bbc2b235eb8a2c7cdbd6351adebf2626af42cb16a6253c0a2ab8",
+  "tools/verify-no-io.py": "214316ba7af7f8a747ba6afa8b90527d608ec3e0b5763d5e99c9d24ed4bff77a"
+}

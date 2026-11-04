@@ -62,16 +62,16 @@ fn main() -> Result<(), Box<dyn Error>> {
         .resolve_operation("find")
         .ok_or("operation is missing")?;
     println!("{:?}: {:?}", operation.key(), operation.description());
-    let contract = operation.input().ok_or("operation has no input contract")?;
+    let input_schema = operation.input().ok_or("operation has no input schema")?;
     // ConformantDocument reads preserve presence; schema preparation remains separate.
-    let schema = contract.json().location();
+    let schema_location = input_schema.json().location();
     println!(
         "input schema at {:?}, line {}",
-        schema.pointer.as_ref().map(ToString::to_string),
-        schema.line
+        schema_location.pointer.as_ref().map(ToString::to_string),
+        schema_location.line
     );
     // Default budgets and no supplied resources.
-    let input = contract.prepare(
+    let input = input_schema.prepare(
         &DefaultEvaluator::new(),
         &openbindings::ExternalSchemas::default(),
         &openbindings::PreparationLimits::default(),
@@ -88,7 +88,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             outcome => outcome,
         };
         match outcome {
-            ValueOutcome::Satisfies => println!("input satisfies the input contract"),
+            ValueOutcome::Satisfies => println!("input satisfies the input schema"),
             ValueOutcome::Fails {
                 problems,
                 problems_complete,

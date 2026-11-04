@@ -95,7 +95,7 @@ def main():
         'status': 'failed' if failure else 'passed', 'failure': failure, 'records': records,
         'readerErrors': reader_errors,
         'features': ['resolve-http', 'resolve-file', 'tls-ring'],
-        'scope': 'SDK core assessment, external reference/dialect, kind/content, supplied resource; an explicit raw positive control for the schema library',
+        'scope': 'SDK core assessment, external reference/dialect, custom meta admission, kind/data, supplied resource; an explicit raw positive control for the schema library',
         'buildIdentity': 'Caller must bind binary to final source through its recorded build command/metadata.',
     }
     (output / 'REPORT.json').write_text(json.dumps(report, indent=2) + '\n')

@@ -135,6 +135,15 @@ No syntax-fact cache or default-engine switch is included. The next explicit-fra
 execution design is under independent review; pattern VM preparation, original
 witnesses, final performance/host and alignment-map gates remain open.
 
+Additional hosted checks exposed a stale acquisition-probe lock and generated
+Rust reference source links. Bounded repairs pass the locked build, strict probe
+lint, HTTP/FIFO positive/negative retrieval controls and reference preview checks.
+The old unknown-dialect assertion is adjudicated against the current conservative
+namespace policy; actual known custom-meta admission has a separate missing-bytes
+control. [Repair evidence](../receipts/2026-11-02-preparation/ci-reference-acquisition/README.md)
+records the original failure and current results. Independent review and clean
+reference-candidate qualification are pending.
+
 No decision currently requires Matthew. If a real decision arises, record it
 and continue every independent unblocked path before considering a stop.
 

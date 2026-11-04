@@ -67,6 +67,37 @@ def clear_rust_docs():
     subprocess.run(["cargo", "clean", "--doc"], cwd=ROOT, check=True)
 
 
+def resolve_source_links(output, commit):
+    """Bind README source links to this candidate's exact repository revision.
+
+    These relative links are correct beside the crate README but have a different
+    base in rustdoc's generated index. Only the identified source links move;
+    unknown or genuinely broken generated links still fail the ordinary check.
+    """
+    page = output / "rust/openbindings_json_schema_evaluator/index.html"
+    links = {
+        "../../docs/schema-evaluators.md": "docs/schema-evaluators.md",
+        "examples/first_use.rs": "crates/openbindings-json-schema-evaluator/examples/first_use.rs",
+        "examples/replacement.rs": "crates/openbindings-json-schema-evaluator/examples/replacement.rs",
+    }
+    original = current = page.read_text()
+    resolutions = []
+    for href, source in links.items():
+        needle = f'href="{href}"'
+        count = current.count(needle)
+        if not count:
+            continue
+        if not (ROOT / source).is_file():
+            raise SystemExit(f"Missing reference source: {source}")
+        target = f"https://github.com/openbindings/sdk/blob/{commit}/{source}"
+        current = current.replace(needle, f'href="{target}"')
+        resolutions.append({"page": page.relative_to(output).as_posix(),
+                            "from": href, "to": target, "source": source, "count": count})
+    if current != original:
+        page.write_text(current)
+    return resolutions
+
+
 def verify_local_links(output):
     """Check HTML anchor destinations, excluding external URLs and fragments."""
     class Links(HTMLParser):
@@ -152,6 +183,11 @@ def main():
     links = [
         ("Rust SDK", "rust/openbindings/index.html"),
         ("Default schema evaluator", "rust/openbindings_json_schema_evaluator/index.html"),
+        ("Schema identity", "rust/openbindings_schema_comparison/index.html"),
+        ("Context challenges", "rust/openbindings_context/index.html"),
+        ("Kind description and checking", "rust/openbindings_kind_description/index.html"),
+        ("Binding and operation invocation", "rust/openbindings_invocation/index.html"),
+        ("Source pulling", "rust/openbindings_source_pull/index.html"),
         ("HTTP discovery", "rust/openbindings_http_discovery/index.html"),
         ("Custom evaluator qualification", "rust/openbindings_schema_evaluator_test_support/index.html"),
         ("TypeScript", "typescript/typescript-reference.html"),
@@ -184,6 +220,7 @@ def main():
         f'<ul>{rust_entries}</ul><p><a href="../index.html">SDK reference home</a>.</p>'
     )
     repairs = repair_inherited_links(output)
+    source_links = resolve_source_links(output, commit)
     link_check = verify_local_links(output)
     files = {p.relative_to(output).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
              for p in sorted(output.rglob("*")) if p.is_file()}
@@ -194,7 +231,8 @@ def main():
     (output / "REFERENCE.json").write_text(json.dumps({
         "commit": commit, "version": version, "files": files,
         "treeClean": tree_clean, "sourceFiles": sources,
-        "inheritedLinkRepairs": repairs, "localLinkCheck": link_check,
+        "inheritedLinkRepairs": repairs, "sourceLinkResolutions": source_links,
+        "localLinkCheck": link_check,
         "status": "local preview; not a release candidate" if args.preview else "local reference bundle; not deployed",
     }, indent=2) + "\n")
     print(f"Local reference: {output / 'index.html'}")
