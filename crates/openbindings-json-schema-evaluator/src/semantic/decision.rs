@@ -176,10 +176,38 @@ impl<'a> Graph<'a> {
         Ok((variable, self.make(variable, FALSE, TRUE)?))
     }
     pub(super) fn and(&mut self, a: Formula, b: Formula) -> Result<Formula, NoVerdict> {
+        if a == FALSE || b == FALSE {
+            return self.immediate(FALSE);
+        }
+        if a == TRUE {
+            return self.immediate(b);
+        }
+        if b == TRUE || a == b {
+            return self.immediate(a);
+        }
         self.apply(Op::And, a, b)
     }
     pub(super) fn or(&mut self, a: Formula, b: Formula) -> Result<Formula, NoVerdict> {
+        if a == TRUE || b == TRUE {
+            return self.immediate(TRUE);
+        }
+        if a == FALSE {
+            return self.immediate(b);
+        }
+        if b == FALSE || a == b {
+            return self.immediate(a);
+        }
         self.apply(Op::Or, a, b)
+    }
+    fn immediate(&self, result: Formula) -> Result<Formula, NoVerdict> {
+        // Trivial algebra needs no symbolic traversal. Growing caller loops
+        // own their progress checks; an enclosing shared attempt stays sticky.
+        if let Some(attempt) = self.preparation {
+            attempt
+                .charge_work(0)
+                .map_err(super::preparation_control_inability)?;
+        }
+        Ok(result)
     }
     pub(super) fn not(&mut self, a: Formula) -> Result<Formula, NoVerdict> {
         self.apply(Op::Xor, a, TRUE)
@@ -329,7 +357,72 @@ impl<'a> Graph<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::atomic::AtomicBool;
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+
+    #[test]
+    fn trivial_composition_is_not_a_symbolic_work_boundary() {
+        struct CancelledCalls(AtomicUsize);
+        impl WorkControl for CancelledCalls {
+            fn is_cancelled(&self) -> bool {
+                self.0.fetch_add(1, Ordering::Relaxed);
+                true
+            }
+        }
+        let control = CancelledCalls(AtomicUsize::new(0));
+        let mut graph = Graph::new(0, Some(0), 0, &control);
+        for (a, b, conjunction, disjunction) in [
+            (FALSE, FALSE, FALSE, FALSE),
+            (FALSE, TRUE, FALSE, TRUE),
+            (TRUE, FALSE, FALSE, TRUE),
+            (TRUE, TRUE, TRUE, TRUE),
+        ] {
+            assert_eq!(graph.and(a, b).unwrap(), conjunction);
+            assert_eq!(graph.or(a, b).unwrap(), disjunction);
+        }
+        assert_eq!(control.0.load(Ordering::Relaxed), 0);
+        assert_eq!(graph.remaining().work, Some(0));
+        assert_eq!(graph.remaining().bytes, 0);
+        // Public entry/progress and actual symbolic work still observe the
+        // caller; only this private constant-time operation is pure.
+        assert_eq!(
+            graph.variable(Class::Undefined).unwrap_err().reason,
+            NoVerdictReason::Cancelled
+        );
+        assert_eq!(control.0.load(Ordering::Relaxed), 1);
+    }
+
+    #[test]
+    fn trivial_composition_preserves_shared_attempt_exhaustion() {
+        use openbindings_internal_schema::{Control as _, preparation::Attempt};
+        let control = AtomicBool::new(false);
+        Attempt::run(0, 0, &control, |attempt| {
+            let mut graph = Graph::with_preparation(0, Some(0), 0, &control, Some(attempt));
+            assert_eq!(graph.and(TRUE, FALSE).unwrap(), FALSE);
+            assert_eq!(graph.or(FALSE, TRUE).unwrap(), TRUE);
+        })
+        .unwrap();
+        for allocation in [false, true] {
+            let work = if allocation { 8 } else { 0 };
+            let expected = if allocation {
+                "preparation-sdk-reservation-bytes"
+            } else {
+                "preparation-sdk-work-units"
+            };
+            let result = Attempt::run(work, 0, &control, |attempt| {
+                let failure = if allocation {
+                    attempt.charge_allocation(1).unwrap_err()
+                } else {
+                    attempt.charge_work(1).unwrap_err()
+                };
+                assert_eq!(failure.code, expected);
+                let mut graph = Graph::with_preparation(0, Some(0), 0, &control, Some(attempt));
+                assert_eq!(graph.and(TRUE, FALSE).unwrap_err().code, failure.code);
+                assert_eq!(graph.or(FALSE, TRUE).unwrap_err().code, failure.code);
+            });
+            assert_eq!(result.unwrap_err().code, expected);
+        }
+    }
+
     #[test]
     fn coherent_repetition_and_quantifier_order_match_concrete_completions() {
         let control = AtomicBool::new(false);

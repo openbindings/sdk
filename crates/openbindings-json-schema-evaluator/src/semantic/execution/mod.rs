@@ -355,6 +355,7 @@ impl Run<'_> {
             .values_mut()
             .chain(result.items.values_mut())
         {
+            self.graph.tick()?;
             *annotation = self.graph.and(result.valid, *annotation)?;
         }
         let complete = result.independent(&mut self.graph, &self.cuts)?;

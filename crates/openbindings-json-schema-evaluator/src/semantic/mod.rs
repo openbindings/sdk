@@ -825,6 +825,7 @@ impl Run<'_> {
         guard: Formula,
     ) -> Result<(), NoVerdict> {
         for (name, &formula) in &source.properties {
+            self.graph.tick()?;
             let guarded = self.graph.and(formula, guard)?;
             let old = target.properties.get(name).copied().unwrap_or(FALSE);
             let combined = self.graph.or(old, guarded)?;
@@ -832,6 +833,7 @@ impl Run<'_> {
             target.properties.insert(name.clone(), combined);
         }
         for (&index, &formula) in &source.items {
+            self.graph.tick()?;
             let guarded = self.graph.and(formula, guard)?;
             let old = target.items.get(&index).copied().unwrap_or(FALSE);
             target.items.insert(index, self.graph.or(old, guarded)?);

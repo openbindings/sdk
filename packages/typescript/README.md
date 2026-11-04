@@ -240,6 +240,9 @@ for supported semantics and remaining limitations.
 The original schema environment also has preparation footprint, work and
 allocation bounds, using Rust's default `PreparationLimits` in this facade.
 Those preparation settings are not currently exposed as TypeScript options.
+Evaluation work covers traversal, predicate work and nontrivial logical reasoning;
+simple Boolean identities add no proof-work unit. Growing loops retain cooperative
+checks, and fast results do not reset shared preparation budgets.
 Budgets are not deadlines or process-memory measurements. The evaluator uses
 original schema locations and explicit evaluation frames, with a fixed supported
 maximum of 64 distinct symbolic effects per proof. The retired `stackBytes` and

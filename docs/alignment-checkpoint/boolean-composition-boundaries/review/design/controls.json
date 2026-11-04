@@ -1,0 +1,145 @@
+{
+  "status": "independently specified future controls; not executed",
+  "sdk_commit": "0142eaa56ca2c8fd50716e943aeef05931bee19b",
+  "groups": [
+    {
+      "id": "BC-01",
+      "group": "Terminal algebra",
+      "inputs": [
+        "FALSE",
+        "TRUE",
+        "d",
+        "not(d)",
+        "e",
+        "equal reused formula"
+      ],
+      "required": "Both operand orders: exact same formula for annihilator, identity and idempotence rules. No node/cache/storage mutation. Distinct variables must not be treated as equal."
+    },
+    {
+      "id": "BC-02",
+      "group": "Explicit new boundary policy",
+      "required": "Without preparation, direct terminal and/or makes zero ordinary control calls and spends zero graph units, including exact zero remaining. This is a private pure operation, not a new public cancellation entry. Nontrivial and/or, cached nontrivial calls, recursive apply terminal visits, not and Xor retain existing checks/charges."
+    },
+    {
+      "id": "BC-03",
+      "group": "Shared attempt on fast returns",
+      "required": "For every terminal rule, actual nested Attempt with prior work failure, prior reservation failure, overflow and ignored child refusal must refuse via charge_work(0). Exactly zero remaining but not spent is distinct and succeeds. Cancellation and combined causes follow existing Attempt precedence. Healthy retry is independent; no allocation or nonzero work debit for the hook."
+    },
+    {
+      "id": "BC-04",
+      "group": "Completion annotations",
+      "inputs": {
+        "properties": [
+          "TRUE",
+          "FALSE",
+          "d"
+        ],
+        "items": [
+          "TRUE",
+          "FALSE",
+          "d"
+        ],
+        "widths": [
+          0,
+          1,
+          4096
+        ]
+      },
+      "required": "Explicit tick before each complete_application annotation gate. Cancel at each observed iteration boundary; work at exact/one-below threshold; no partial completed memo/certificate publication; clean same-Plan retry."
+    },
+    {
+      "id": "BC-05",
+      "group": "Annotation merge properties",
+      "inputs": {
+        "guards": [
+          "TRUE",
+          "FALSE",
+          "d"
+        ],
+        "old": [
+          "missing",
+          "TRUE",
+          "FALSE",
+          "same d",
+          "e"
+        ],
+        "widths": [
+          0,
+          1,
+          4096
+        ]
+      },
+      "required": "Explicit per-property tick even when both and/or are terminal. Preserve exact UTF-16 names, valid gating and correlation. Stop/retry and exact/one-below work/storage checks; no leaked retained attempt state."
+    },
+    {
+      "id": "BC-06",
+      "group": "Annotation merge items",
+      "inputs": {
+        "guards": [
+          "TRUE",
+          "FALSE",
+          "d"
+        ],
+        "old": [
+          "missing",
+          "TRUE",
+          "FALSE",
+          "same d",
+          "e"
+        ],
+        "widths": [
+          0,
+          1,
+          4096
+        ]
+      },
+      "required": "Explicit per-item tick even when both and/or are terminal. Same semantic, interruption, cumulative budget and cleanup requirements as properties."
+    },
+    {
+      "id": "BC-07",
+      "group": "Uncertain contains distribution",
+      "inputs": [
+        "repeated same effect",
+        "complementary effects",
+        "independent effects",
+        "concrete offset plus uncertainty"
+      ],
+      "required": "Explicit tick per distribution slot; exact count truth table, not independent per-item uncertainty. Empty/concrete fast cases unchanged. All observed stop boundaries, budgets and clean retries; next distribution not published on error."
+    },
+    {
+      "id": "BC-08",
+      "group": "Other retained progress owners",
+      "inputs": [
+        "wide allOf",
+        "wide anyOf",
+        "wide oneOf",
+        "object properties/pattern/additional/unevaluated",
+        "array items/contains/unevaluated",
+        "reference and dynamic scope",
+        "unknown-schema and recursive-cut annotation producers"
+      ],
+      "required": "No change to frame/child/entry/per-element/atom checks. Finite low work still refuses growing traversals. Exact complete observations at funded budgets; no callback stride or eager child suppression."
+    },
+    {
+      "id": "BC-09",
+      "group": "Existing demanded local limits",
+      "fixture": "crates/openbindings-json-schema-evaluator/src/semantic/execution/tests/controls.json",
+      "required": "Replay all existing eager contexts including local-limited a{65535} companion rows with their frozen answers. A direct Boolean annihilator or identity cannot suppress an already requested child or its terminal Limit."
+    },
+    {
+      "id": "BC-10",
+      "group": "Recursive/correlated semantics and witnesses",
+      "required": "Existing effect classes, implication/choose, recursive coordinate/cycle controls, foreign leaf absence, exact operands and original Explain witnesses retain all funded observations. No new effect identities, map omissions, diagnostic locations or witness propagation rules."
+    },
+    {
+      "id": "BC-11",
+      "group": "Public cancellation and verdict-first Explain",
+      "required": "Pre-aborted public evaluation remains Cancelled. Recompute actual checkpoints and distinguish before-verdict cancellation from post-verdict incomplete diagnostics. Both detail modes; selected custom meta/secondary Plan shares existing Attempt. No error swallowing or post-verdict reversal."
+    },
+    {
+      "id": "BC-12",
+      "group": "Qualification and selection",
+      "required": "Current/minimum Rust and existing host/required-value lanes as appropriate, unchanged default positive jobs and numeric caps. Compare same-owner complete observations, not old callback counts. Uninstrumented selected compile/eval measurements plus annotation/uncertainty lanes decide retention; no G6 acceptance or baseline-recovery claim."
+    }
+  ]
+}

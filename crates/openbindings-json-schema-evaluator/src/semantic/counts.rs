@@ -31,6 +31,7 @@ impl Matches {
         graph.charge(self.uncertain.len().saturating_add(1).saturating_mul(8))?;
         let mut next = vec![FALSE; self.uncertain.len() + 1];
         for (count, &formula) in self.uncertain.iter().enumerate() {
+            graph.tick()?;
             let same = graph.and(formula, not)?;
             next[count] = graph.or(next[count], same)?;
             let more = graph.and(formula, result)?;

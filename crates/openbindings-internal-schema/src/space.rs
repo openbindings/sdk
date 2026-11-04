@@ -178,9 +178,9 @@ pub enum ChildShape {
     /// One subschema.
     Single,
 }
-/// The child shape of a 2020-12 applicator keyword, or `None` for keywords whose
-/// values a projection copies unchanged. `then` and `else` are projected only
-/// beside `if`.
+/// Schema-child shape for a 2020-12 value applicator. Declaration and content
+/// positions are inventoried separately. Callers decide applicability, including
+/// whether `if` activates `then` and `else`.
 pub fn child_shape(keyword: &str) -> Option<ChildShape> {
     Some(match keyword {
         "properties" | "patternProperties" | "dependentSchemas" => ChildShape::Map,

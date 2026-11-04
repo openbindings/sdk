@@ -1,6 +1,6 @@
-//! Construction limits apply before either evaluator path is selected. A local
-//! undefined operation cannot skip the accounting that a successful projection
-//! would have performed. Inventory traversal stays on original known locations.
+//! Prepare activated original schema locations under one shared allowance.
+//! A local undefined predicate does not bypass admission of other activated
+//! branches. Syntax admission separately covers declared schema positions.
 mod queries;
 use super::*;
 use openbindings_internal_schema::{child_shape, schema_index::SchemaSelector};

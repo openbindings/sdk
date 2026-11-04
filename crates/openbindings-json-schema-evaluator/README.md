@@ -131,6 +131,11 @@ and decision-graph storage are charged, including custom meta-schema admission
 and retries after discovering a recursive component. Supported pattern matching borrows the input string;
 unknown matches reserve their exact text-key allowance before constructing it.
 
+Evaluation work covers traversal, predicate work and nontrivial logical reasoning.
+Simple Boolean identities reuse an existing result without another proof-work
+unit. Growing annotation and match-count loops keep explicit cooperative checks;
+a fast result never clears an exhausted shared preparation attempt.
+
 These counters cover the SDK sites described above, including temporary and failed
 SDK construction; they do not count every dependency operation, allocator request
 or custom callback. Dependency construction has separate structural and retained

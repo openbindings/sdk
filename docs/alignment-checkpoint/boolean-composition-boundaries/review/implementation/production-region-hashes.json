@@ -1,0 +1,9 @@
+{
+  "scope": "decision.rs excludes final inline test module; other files whole source",
+  "files": {
+    "semantic/decision.rs": "aef1c7a1ee0ecfb5489ed69d509c82e8c413e6125b76d9af9961a3cb904b0586",
+    "semantic/counts.rs": "b66ce576c2e58c40b380d537f2336290d8d107e5f3cc7a855e4a7ae8d98ba310",
+    "semantic/mod.rs": "6727673af1213a08f0f0fe2687e7e5fadf282bdb9a68b89394c78b4f119189fb",
+    "semantic/execution/mod.rs": "5cf3383fb9971b7d9189a59b49874e4fa7de855149fa287ef9d39eb7d889c159"
+  }
+}

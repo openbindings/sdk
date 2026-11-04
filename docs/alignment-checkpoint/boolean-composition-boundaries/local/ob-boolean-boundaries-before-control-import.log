@@ -1,0 +1,28 @@
+   Compiling openbindings-json-schema-evaluator v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-json-schema-evaluator)
+error[E0599]: no method named `charge_allocation` found for reference `&openbindings_internal_schema::preparation::Attempt<'_>` in the current scope
+   --> crates/openbindings-json-schema-evaluator/src/semantic/decision.rs:407:29
+    |
+407 |                     attempt.charge_allocation(1).unwrap_err()
+    |                             ^^^^^^^^^^^^^^^^^ method not found in `&openbindings_internal_schema::preparation::Attempt<'_>`
+    |
+    = help: items from traits can only be used if the trait is in scope
+help: trait `Control` which provides `charge_allocation` is implemented but not in scope; perhaps you want to import it
+    |
+359 +     use openbindings_internal_schema::Control;
+    |
+
+error[E0599]: no method named `charge_work` found for reference `&openbindings_internal_schema::preparation::Attempt<'_>` in the current scope
+   --> crates/openbindings-json-schema-evaluator/src/semantic/decision.rs:409:29
+    |
+409 |                     attempt.charge_work(1).unwrap_err()
+    |                             ^^^^^^^^^^^ method not found in `&openbindings_internal_schema::preparation::Attempt<'_>`
+    |
+    = help: items from traits can only be used if the trait is in scope
+help: trait `Control` which provides `charge_work` is implemented but not in scope; perhaps you want to import it
+    |
+359 +     use openbindings_internal_schema::Control;
+    |
+
+For more information about this error, try `rustc --explain E0599`.
+error: could not compile `openbindings-json-schema-evaluator` (lib test) due to 2 previous errors
+warning: build failed, waiting for other jobs to finish...
