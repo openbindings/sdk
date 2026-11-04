@@ -24,7 +24,7 @@
 //! string with an unpaired surrogate is refused before any pattern reads it. A
 //! pattern can still name a lone surrogate with an escape; such an atom matches
 //! nothing those strings hold, and a class gains nothing from it.
-use std::fmt::Write;
+use std::{collections::BTreeSet, fmt::Write};
 
 /// What the evaluator can do with a valid pattern.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -497,13 +497,13 @@ const DOT: &[(u32, u32)] = &[(0x0A, 0x0A), (0x0D, 0x0D), (0x2028, 0x2029)];
 // before or after itself.
 struct Groups {
     count: usize,
-    names: Vec<String>,
+    names: BTreeSet<String>,
 }
 impl Groups {
     fn scan(chars: &[char]) -> Result<Self, Refusal> {
         let mut groups = Groups {
             count: 0,
-            names: Vec::new(),
+            names: BTreeSet::new(),
         };
         let mut at = 0;
         let mut class = false;
@@ -521,11 +521,10 @@ impl Groups {
                         groups.count += 1;
                         let mut end = at + 3;
                         // Only a well-formed name counts; the parser refuses the rest.
-                        if let Ok(name) = group_name(chars, &mut end) {
-                            if groups.names.contains(&name) {
-                                return Err(Refusal::Invalid);
-                            }
-                            groups.names.push(name);
+                        if let Ok(name) = group_name(chars, &mut end)
+                            && !groups.names.insert(name)
+                        {
+                            return Err(Refusal::Invalid);
                         }
                     }
                 }
@@ -1835,6 +1834,9 @@ mod tests {
             r"[\B]",
             r"[\1]",
             "(?<a>x)(?<a>y)",
+            r"(?<\u0061>x)(?<a>y)",
+            r"\B(?<a>x)(?<\u0061>y)",
+            r"(?<a>x)\k<missing>",
             "(?i:a)",
             "(?<1a>x)",
             r"\p",
@@ -1855,6 +1857,9 @@ mod tests {
             (r"(a)\1", Unsupported::Backtracking),
             (r"\1(a)", Unsupported::Backtracking),
             (r"(?<x>a)\k<x>", Unsupported::Backtracking),
+            (r"\k<x>(?<x>a)", Unsupported::Backtracking),
+            (r"(?<z>x)(?<a>y)\2", Unsupported::Backtracking),
+            ("(?<é>x)\\k<é>", Unsupported::Backtracking),
             (r"\p{L}(?=a)b", Unsupported::Backtracking),
             (r"\Bx", Unsupported::NonWordBoundary),
             (r"^.*$|\B", Unsupported::NonWordBoundary),
@@ -1866,6 +1871,22 @@ mod tests {
                 "{pattern}"
             );
         }
+    }
+    #[test]
+    fn many_names_preserve_source_order_and_reference_identity() {
+        let prefix = "q".repeat(128);
+        let mut source = String::new();
+        for index in (0..1024).rev() {
+            write!(&mut source, "(?<{prefix}{index:04x}>a)").unwrap();
+        }
+        assert_eq!(linear(&source), "(a)".repeat(1024));
+        write!(&mut source, r"\k<{prefix}0000>").unwrap();
+        assert_eq!(
+            read(&source, 32, 1 << 20),
+            Ok(Reading::Unsupported(Unsupported::Backtracking))
+        );
+        write!(&mut source, "(?<{prefix}03ff>b)").unwrap();
+        assert_eq!(read(&source, 32, 1 << 20), Err(Refusal::Invalid));
     }
     #[test]
     fn the_pattern_memory_is_divided_between_caches_and_forms() {
