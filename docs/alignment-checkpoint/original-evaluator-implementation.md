@@ -63,3 +63,48 @@ same spelling in distinct bases, retained calls after dropping the original publ
 owners, cancellation and low preparation budgets. Record the actual hot-call work
 removed; this increment does not claim to fix repeated syntax accounting or the
 long-reference preparation gate.
+
+## Second prepared artifact: pattern programs
+
+Separate immutable pattern interpretation/programs from per-call mutable search
+scratch. Preparation inventories activated original `pattern` operands and
+`patternProperties` names under their actual profiles, retains their readings and
+programs by original operand occurrence, and shares equivalent compiled forms
+where that removes duplicate construction. Effect identities still use original
+schema locations; program reuse never identifies two undefined effects.
+
+Parse/compile only under the cumulative preparation attempt. No borrowed control
+or instance survives in the artifact. Keep a simple matcher or immutable PikeVM;
+create its bounded cache lazily for a value evaluation under that call's ledger.
+Concurrent callers have separate caches, and cancellation cannot poison later
+calls. Count emitted forms and admitted pattern memory explicitly; do not enlarge
+default allowances or give compiler retries fresh budgets.
+
+Invalid/unsupported readings stay typed local outcomes. A VM representation/size
+refusal that does not exhaust construction must remain a dedicated local terminal
+Limit, returned only if the pattern is reached. Non-string values do not demand it.
+Current eager applicator traversal may still reach it beside a decisive branch;
+masking that terminal requires later demanded-state execution and is not claimed
+by this preparation increment. It must not become an uncertainty atom.
+Actual cumulative preparation exhaustion is sticky and aborts preparation. Missing
+inventory entries are evaluator defects, not permission to compile through a new
+interpretation during a value call. Existing pattern semantics and corpus
+adjudication remain the authority; old cache APIs/ownership arrangements do not.
+
+Review compilation reservation adequacy before moving it into the artifact.
+Controls cover retained simple and VM calls without reparsing, patternProperties,
+original/profile/snapshot identity, typed invalid/unsupported/masked outcomes,
+Unicode exactness, construction/search limits and cancellation, concurrency and
+owner cleanup. Force the original engine in targeted controls; ordinary public
+engine tests alone can still exercise the outgoing vendor path.
+
+
+### Implemented bounded pattern increment
+
+Retained readings and shared Simple matchers pass independent review. VM engines
+and caches remain call-local for now. The design review demonstrates an eager
+construction hazard: 400 minimal first-build reservations exceed the unchanged
+512 MiB default before form costs, while 1,024 unused patterns are currently
+admitted. Full VM-once compilation therefore requires a different audited aggregate
+schedule; it is not completed by retaining readings. See
+`receipts/2026-11-02-preparation/original-engine-pattern-review/`.

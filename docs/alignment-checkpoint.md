@@ -87,7 +87,9 @@ toolchain; the MSRV compatibility receipt explicitly records no matching Clippy 
    and [implementation sequence](alignment-checkpoint/original-evaluator-implementation.md)
    supersede pursuing the old compiler allocation schedule as the preferred path.
    Concrete contains counting and immutable reference-query preparation are qualified.
-   Compact demanded annotations, prepared operands/patterns,
+   Immutable pattern readings and shared Simple matchers are also reviewed and
+   qualified; VM compilation/search scratch remain per-call pending their audited
+   aggregate schedule. Compact demanded annotations, prepared operands,
    iterative traversal and bounded original diagnostics follow. The existing Plan
    cannot replace the compiler unchanged: unchanged large-container, depth,
    long-reference and Explain workloads must first recover. Do not relax evaluator

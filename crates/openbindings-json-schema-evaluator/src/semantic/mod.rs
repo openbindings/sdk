@@ -46,6 +46,7 @@ impl ReferenceKind {
 }
 type ReferenceQuery = Arc<Result<openbindings_internal_schema::Target, QueryFailure>>;
 type PreparedQueries = HashMap<(usize, ReferenceKind), ReferenceQuery>;
+type PreparedPatterns = HashMap<(usize, usize), Arc<crate::pattern::Reading>>;
 
 #[derive(Clone, Copy)]
 struct Interpreted<'a> {
@@ -67,6 +68,7 @@ pub(super) struct Plan {
     resources: Vec<usize>,
     formats: HashMap<usize, formats::Format>,
     queries: PreparedQueries,
+    patterns: PreparedPatterns,
 }
 impl Plan {
     pub(super) fn new(
@@ -99,6 +101,7 @@ impl Plan {
             resources: checked.resources,
             formats: checked.formats,
             queries: checked.queries,
+            patterns: checked.patterns,
         })
     }
     pub(super) fn evaluate(
@@ -1138,16 +1141,20 @@ impl Run<'_> {
         value: JsonRef<'_>,
         _context: &Context,
     ) -> Result<Formula, NoVerdict> {
-        let Some(source) = pattern.as_str() else {
+        if pattern.as_str().is_none() {
             return self.pattern_atom(Class::Inability, node, keyword, value);
-        };
-        if source.len() > self.plan.limits.pattern_bytes {
-            return Err(decision::limit("pattern-byte-limit"));
         }
         let key = backend::occurrence(pattern);
         if !self.patterns.contains_key(&key) {
+            let reading = self.plan.patterns.get(&key).ok_or_else(|| {
+                no_verdict(
+                    NoVerdictReason::EvaluatorFailure,
+                    "unprepared-pattern-reading",
+                    "the original pattern operand has no prepared interpretation",
+                )
+            })?;
             self.graph.charge(512)?;
-            let compiled = patterns::Pattern::prepare(source, &self.plan.limits, &mut self.graph)?;
+            let compiled = patterns::Pattern::prepare(reading, &self.plan.limits, &mut self.graph)?;
             self.patterns.insert(key, compiled);
         }
         match self
@@ -1564,6 +1571,112 @@ mod summary_tests {
             plan.evaluate(&value, Detail::Outcome, &control),
             ValueOutcome::Satisfies
         ));
+    }
+
+    #[test]
+    fn prepared_simple_patterns_do_not_repeat_parser_work() {
+        let plan = original_plan(
+            r#"{"pattern":"^a+$"}"#,
+            &[],
+            Limits {
+                // Reading this source alone costs over 1,000 work units. A
+                // retained call needs only the original predicate and match.
+                evaluation_steps: Some(128),
+                ..Limits::default()
+            },
+        );
+        assert_eq!(plan.patterns.len(), 1);
+        let control = std::sync::atomic::AtomicBool::new(false);
+        for _ in 0..3 {
+            for (text, valid) in [(r#""aa""#, true), (r#""b""#, false), ("null", true)] {
+                let outcome =
+                    plan.evaluate(&JsonValue::parse(text).unwrap(), Detail::Outcome, &control);
+                assert!(
+                    if valid {
+                        matches!(outcome, ValueOutcome::Satisfies)
+                    } else {
+                        matches!(outcome, ValueOutcome::Fails { .. })
+                    },
+                    "{outcome:?}"
+                );
+            }
+        }
+        assert!(
+            matches!(plan.evaluate(&JsonValue::parse(r#""a""#).unwrap(), Detail::Outcome, &std::sync::atomic::AtomicBool::new(true)), ValueOutcome::NoVerdict { detail } if detail.reason == NoVerdictReason::Cancelled)
+        );
+        assert!(matches!(
+            plan.evaluate(
+                &JsonValue::parse(r#""a""#).unwrap(),
+                Detail::Outcome,
+                &control
+            ),
+            ValueOutcome::Satisfies
+        ));
+    }
+
+    #[test]
+    fn prepared_pattern_readings_keep_local_outcomes_and_call_owned_vm_state() {
+        let plan = original_plan(
+            r#"{"patternProperties":{"^(a|b)+$":{"type":"integer"}},"additionalProperties":false}"#,
+            &[],
+            Limits::default(),
+        );
+        std::thread::scope(|scope| {
+            for (text, valid) in [
+                (r#"{"ab":1}"#, true),
+                (r#"{"ab":false}"#, false),
+                (r#"{"c":1}"#, false),
+            ] {
+                let plan = &plan;
+                scope.spawn(move || {
+                    let value = JsonValue::parse(text).unwrap();
+                    let control = std::sync::atomic::AtomicBool::new(false);
+                    for _ in 0..3 {
+                        let outcome = plan.evaluate(&value, Detail::Outcome, &control);
+                        assert!(
+                            if valid {
+                                matches!(outcome, ValueOutcome::Satisfies)
+                            } else {
+                                matches!(outcome, ValueOutcome::Fails { .. })
+                            },
+                            "{outcome:?}"
+                        );
+                    }
+                });
+            }
+        });
+        for (pattern, undefined) in [("[", true), (r"(a)\1", false)] {
+            let schema = serde_json::json!({"pattern":pattern}).to_string();
+            let plan = original_plan(&schema, &[], Limits::default());
+            let control = std::sync::atomic::AtomicBool::new(false);
+            let outcome = plan.evaluate(
+                &JsonValue::parse(r#""aa""#).unwrap(),
+                Detail::Outcome,
+                &control,
+            );
+            assert!(if undefined {
+                matches!(outcome, ValueOutcome::Undefined { .. })
+            } else {
+                matches!(outcome, ValueOutcome::NoVerdict { detail } if detail.reason == NoVerdictReason::UnsupportedCapability)
+            });
+            assert!(matches!(
+                plan.evaluate(&JsonValue::parse("1").unwrap(), Detail::Outcome, &control),
+                ValueOutcome::Satisfies
+            ));
+            let plan = original_plan(
+                &serde_json::json!({"anyOf":[{"pattern":pattern},true]}).to_string(),
+                &[],
+                Limits::default(),
+            );
+            assert!(matches!(
+                plan.evaluate(
+                    &JsonValue::parse(r#""aa""#).unwrap(),
+                    Detail::Outcome,
+                    &control
+                ),
+                ValueOutcome::Satisfies
+            ));
+        }
     }
 
     #[test]

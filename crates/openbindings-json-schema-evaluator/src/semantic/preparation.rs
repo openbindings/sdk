@@ -10,6 +10,7 @@ pub(super) struct Checked {
     pub resources: Vec<usize>,
     pub formats: HashMap<usize, formats::Format>,
     pub queries: PreparedQueries,
+    pub patterns: PreparedPatterns,
 }
 
 /// Syntax admission traverses every declared schema position, including unused
@@ -114,6 +115,7 @@ pub(super) fn check_from(
     let mut dynamic = BTreeMap::<String, BTreeSet<usize>>::new();
     let mut used = BTreeSet::<String>::new();
     let mut patterns = Patterns::default();
+    let mut readings = PreparedPatterns::new();
     let mut custom = Vec::new();
     let mut formats = HashMap::new();
     let mut queries = PreparedQueries::new();
@@ -186,14 +188,20 @@ pub(super) fn check_from(
             control.charge_allocation(128)?;
             formats.insert(node, format);
         }
-        if let Some(pattern) = schema.get("pattern").and_then(|v| v.as_str()) {
-            patterns.add(pattern, false, limits, control)?;
+        if let Some(pattern) = schema.get("pattern")
+            && let Some(source) = pattern.as_str()
+        {
+            let reading = patterns.add(source, false, limits, control)?;
+            control.charge_allocation(512)?;
+            readings.insert(backend::occurrence(pattern), reading);
         }
         if let Some(entries) = schema.get("patternProperties").and_then(|v| v.members()) {
             for entry in entries {
                 control.check()?;
                 if let Some(pattern) = entry.name.as_str() {
-                    patterns.add(pattern, true, limits, control)?;
+                    let reading = patterns.add(pattern, true, limits, control)?;
+                    control.charge_allocation(512)?;
+                    readings.insert(backend::occurrence(entry.name), reading);
                 }
             }
         }
@@ -341,6 +349,7 @@ pub(super) fn check_from(
         resources,
         formats,
         queries,
+        patterns: readings,
     })
 }
 fn limit(resource: &str) -> PreparationFailure {
@@ -364,7 +373,7 @@ fn count_resources(
 }
 #[derive(Default)]
 struct Patterns {
-    forms: HashSet<String>,
+    forms: HashMap<String, Arc<crate::pattern::Reading>>,
     bytes: usize,
     matched: usize,
     compiled: usize,
@@ -376,7 +385,7 @@ impl Patterns {
         name: bool,
         limits: &Limits,
         control: &dyn openbindings_internal_schema::Control,
-    ) -> Result<(), PreparationFailure> {
+    ) -> Result<Arc<crate::pattern::Reading>, PreparationFailure> {
         control.check()?;
         if source.len() > limits.pattern_bytes {
             return Err(limit("pattern-byte-limit"));
@@ -392,20 +401,23 @@ impl Patterns {
                 resource: detail.code,
             })
         })?;
-        let super::super::pattern::Reading::Linear(linear) = reading else {
-            return Ok(());
+        let super::super::pattern::Reading::Linear(linear) = &reading else {
+            // Arc stores the full enum layout even for a small Unsupported
+            // payload; include its header/alignment before allocating it.
+            control.charge_allocation(std::mem::size_of::<crate::pattern::Reading>() + 64)?;
+            return Ok(Arc::new(reading));
         };
-        if !name && !self.forms.insert(linear.form.clone()) {
-            return Ok(());
+        if !name && let Some(known) = self.forms.get(&linear.form) {
+            return Ok(known.clone());
         }
         self.bytes = self.bytes.saturating_add(linear.form.len());
         if self.bytes > limits.total_pattern_bytes {
             return Err(limit("pattern-total-byte-limit"));
         }
-        if let Some(simple) = linear.simple {
+        if let Some(simple) = &linear.simple {
             self.matched = self
                 .matched
-                .saturating_add(std::mem::size_of_val(&simple))
+                .saturating_add(std::mem::size_of_val(simple))
                 .saturating_add(simple.heap_bytes());
         } else {
             self.compiled = self.compiled.saturating_add(1);
@@ -415,7 +427,16 @@ impl Patterns {
         {
             return Err(limit("pattern-total-memory-limit"));
         }
-        Ok(())
+        // The reader's reservation covers the retained form clone. Reserve
+        // the Arc and growing form index before constructing either. Pattern
+        // values with the same normalized form share the reading counted by
+        // the total-pattern policy; name operands are counted individually.
+        control.charge_allocation(512)?;
+        let reading = Arc::new(reading);
+        if !name && let crate::pattern::Reading::Linear(linear) = reading.as_ref() {
+            self.forms.insert(linear.form.clone(), reading.clone());
+        }
+        Ok(reading)
     }
 }
 
@@ -437,7 +458,7 @@ mod tests {
                 .unwrap();
             (
                 a.allocated(),
-                patterns.forms.iter().map(String::len).sum::<usize>(),
+                patterns.forms.keys().map(String::len).sum::<usize>(),
             )
         })
         .unwrap();

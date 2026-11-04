@@ -1,8 +1,8 @@
-//! One parsed pattern and bounded matcher per original operand per analysis.
-//! VM state is local to this run; repeated instance occurrences reuse it without
-//! another parse/compile or an unbounded per-thread search-cache allocation.
+//! Original pattern readings belong to the immutable Plan. Simple matchers are
+//! shared directly; VM compilation and mutable search state remain local to a
+//! value call until their aggregate prepared-program bounds are qualified.
 use super::*;
-use crate::pattern::{Reading, Refusal, Simple, Unsupported};
+use crate::pattern::{Reading, Unsupported};
 use regex_automata::nfa::thompson::{
     self,
     pikevm::{Cache, PikeVM},
@@ -12,7 +12,7 @@ pub(super) enum Pattern {
     Undefined,
     Unsupported(Unsupported),
     Simple {
-        matcher: Simple,
+        reading: Arc<Reading>,
         work: usize,
     },
     Vm {
@@ -30,28 +30,21 @@ pub(super) enum ResultKind {
 
 impl Pattern {
     pub(super) fn prepare(
-        source: &str,
+        reading: &Arc<Reading>,
         limits: &Limits,
         graph: &mut Graph<'_>,
     ) -> Result<Self, NoVerdict> {
-        graph.work(source.len().saturating_add(1))?;
-        let (work, allocation) = crate::pattern::preparation_cost(source)
-            .ok_or_else(|| decision::limit("preparation-allocation-bytes"))?;
-        graph.work(work)?;
-        graph.charge(allocation)?;
-        match crate::pattern::read(source, limits.pattern_depth, limits.pattern_bytes) {
-            Err(Refusal::Invalid) | Ok(Reading::Unsupported(Unsupported::Invalid)) => {
-                Ok(Self::Undefined)
-            }
-            Err(Refusal::Depth) => Err(decision::limit("pattern-depth-limit")),
-            Ok(Reading::Unsupported(Unsupported::Size | Unsupported::Memory(_))) => {
+        graph.tick()?;
+        match reading.as_ref() {
+            Reading::Unsupported(Unsupported::Invalid) => Ok(Self::Undefined),
+            Reading::Unsupported(Unsupported::Size | Unsupported::Memory(_)) => {
                 Err(decision::limit("pattern-size-limit"))
             }
-            Ok(Reading::Unsupported(why)) => Ok(Self::Unsupported(why)),
-            Ok(Reading::Linear(linear)) => {
-                if let Some(matcher) = linear.simple {
+            Reading::Unsupported(why) => Ok(Self::Unsupported(*why)),
+            Reading::Linear(linear) => {
+                if linear.simple.is_some() {
                     return Ok(Self::Simple {
-                        matcher,
+                        reading: reading.clone(),
                         work: linear.form.len().saturating_add(1),
                     });
                 }
@@ -148,12 +141,19 @@ impl Pattern {
         let matched = match self {
             Self::Undefined => return Ok(ResultKind::Undefined),
             Self::Unsupported(why) => return Ok(ResultKind::Unsupported(*why)),
-            Self::Simple { matcher, work } => {
+            Self::Simple { reading, work } => {
                 let Some(text) = text else {
                     return Ok(ResultKind::Unpaired);
                 };
                 graph.work(text.len().saturating_add(1).saturating_mul(*work))?;
-                matcher.is_match(text)
+                let Reading::Linear(linear) = reading.as_ref() else {
+                    unreachable!("prepared simple pattern")
+                };
+                linear
+                    .simple
+                    .as_ref()
+                    .expect("prepared simple matcher")
+                    .is_match(text)
             }
             Self::Vm {
                 engine,

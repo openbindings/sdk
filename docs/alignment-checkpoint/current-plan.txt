@@ -79,10 +79,18 @@ active. The first original-engine increment replaces quadratic concrete contains
 counting with a scalar count and formula promotion only for uncertain matches.
 Native evaluator/required-value, MSRV targeted, Node/package and both browser
 semantic checks pass; independent counting review passes. Checkpoint `da39d8b`
-is committed and pushed. The next increment retains original static query results
+is committed and pushed. Checkpoint `511a1bf` retains original static query results
 during preparation, keeping per-evaluation dynamic scope selection; native/MSRV,
-required-value and browser gates pass, with independent review in progress. No whole-SDK completion
-claim is made. Older receipts remain historical.
+required-value and browser gates pass. Independent review passes, including 194
+cancellation boundaries and clean retries. The finite G7 consumer journey now
+passes independent review and current/MSRV source/archive qualification. Its
+complete workflow is native-only; Wasm evidence is explicitly partial. See
+[workflow results](../receipts/2026-11-02-preparation/end-to-end-consumer/README.md).
+The next bounded increment retains immutable pattern readings and shares Simple
+matchers; independent review and native/MSRV/Node/browser/package checks pass.
+Full VM-once compilation is explicitly still open: the reviewed eager schedule
+would newly exhaust preparation for otherwise admitted unused patterns. Prepared
+operands, compact execution and the remaining final gates remain active. No whole-SDK completion claim is made. Older receipts remain historical.
 
 No decision currently requires Matthew. If a real decision arises, record it
 and continue every independent unblocked path before considering a stop.
