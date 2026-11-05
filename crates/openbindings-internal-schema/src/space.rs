@@ -76,9 +76,11 @@ const PROGRAM_NAMESPACE: &str = "https://sdk-program.openbindings.invalid/";
 // and wrappers. It keeps fixed bounds, independent of any admission limits: its
 // text stops at 64 MiB, and each resource it writes is parsed within 64 MiB,
 // 1,000,000 nodes and 10,000 levels.
+/// Fixed text ceiling for generated SDK programs and their bounded planning.
+pub const PROGRAM_TEXT_LIMIT: usize = 64 * 1024 * 1024;
 const PROJECTION_LIMITS: openbindings_internal_json::JsonLimits =
     openbindings_internal_json::JsonLimits {
-        max_bytes: 64 * 1024 * 1024,
+        max_bytes: PROGRAM_TEXT_LIMIT,
         max_depth: 10_000,
         max_nodes: 1_000_000,
     };

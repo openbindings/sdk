@@ -19,6 +19,28 @@ use std::cell::Cell;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Spent;
 
+/// An already observed stop in an enclosing synchronous work scope.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Stop {
+    /// A charge exhausted the inherited work allowance.
+    Work,
+    /// A child traversal exceeded the inherited stack guard.
+    Stack,
+}
+
+/// Inspect the inherited stop without charging, granting, or resetting work.
+pub fn stopped() -> Option<Stop> {
+    STATE.with(|state| {
+        if state.allowance.get().spent {
+            Some(Stop::Work)
+        } else if state.deep.get() {
+            Some(Stop::Stack)
+        } else {
+            None
+        }
+    })
+}
+
 #[derive(Clone, Copy)]
 struct Allowance {
     active: bool,
@@ -197,6 +219,26 @@ fn engaged(state: &State, units: usize) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn observed_stops_are_inherited_without_granting_or_resetting_work() {
+        assert_eq!(stopped(), None);
+        assert_eq!(
+            scope(0, || {
+                assert!(!charge(1));
+                assert_eq!(stopped(), Some(Stop::Work));
+                assert_eq!(scope(usize::MAX, stopped), Err(Spent));
+                assert_eq!(stopped(), Some(Stop::Work));
+            }),
+            Err(Spent)
+        );
+        assert_eq!(stopped(), None);
+        let (_, deep) = guard(0, || {
+            assert!(!charge(1));
+            assert_eq!(stopped(), Some(Stop::Stack));
+        });
+        assert!(deep);
+        assert_eq!(stopped(), None);
+    }
     #[test]
     fn an_allowance_is_spent_by_its_charges_and_restored_after() {
         assert!(charge(usize::MAX));

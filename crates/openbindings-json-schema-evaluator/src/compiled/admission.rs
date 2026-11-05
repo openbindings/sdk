@@ -8,6 +8,7 @@ use openbindings_internal_schema::{
 #[derive(Clone, Default)]
 pub(super) struct Features {
     pub scratch: bool,
+    pub integer: bool,
     pub literals: bool,
     pub noninteger_bound: bool,
     pub literal_bytes: usize,
@@ -82,8 +83,7 @@ pub(super) fn select(
     let mut matched_bytes = 0usize;
     let mut features = Features::default();
     let mut source_bytes = 0usize;
-    let mut advance = None;
-    let mut multiple_advances = false;
+    let mut recursive_exact_safe = true;
     for &node in &nodes {
         attempt.check().map_err(PreparationFailure::from)?;
         let original = space.node(node);
@@ -119,10 +119,12 @@ pub(super) fn select(
                     .elements()
                     .is_some_and(|mut names| names.any(|n| n.as_str() == Some("integer")));
             features.scratch |= integer;
+            features.integer |= integer;
             weight += usize::from(integer);
         }
         for keyword in openbindings_internal_json::numeric::KEYWORDS {
             if let Some(bound) = profile.get(value, keyword).and_then(|v| v.number_text()) {
+                recursive_exact_safe = false;
                 features.scratch = true;
                 features.literal_bytes = features.literal_bytes.saturating_add(bound.len());
                 features.literal_nodes = features.literal_nodes.saturating_add(1);
@@ -137,6 +139,10 @@ pub(super) fn select(
             }
         }
         if let Some(literal) = profile.get(value, "const") {
+            recursive_exact_safe &= matches!(
+                literal.kind(),
+                JsonKind::Null | JsonKind::Boolean | JsonKind::String
+            );
             features.scratch = true;
             features.literals = true;
             features.literal_bytes = features.literal_bytes.saturating_add(literal.text().len());
@@ -149,6 +155,10 @@ pub(super) fn select(
             features.scratch = true;
             features.literals = true;
             for literal in choices {
+                recursive_exact_safe &= matches!(
+                    literal.kind(),
+                    JsonKind::Null | JsonKind::Boolean | JsonKind::String
+                );
                 attempt.check().map_err(PreparationFailure::from)?;
                 features.literal_bytes =
                     features.literal_bytes.saturating_add(literal.text().len());
@@ -159,6 +169,7 @@ pub(super) fn select(
             }
         }
         if profile.get(value, "uniqueItems").and_then(|v| v.as_bool()) == Some(true) {
+            recursive_exact_safe = false;
             features.unique = true;
             features.scratch = true;
             features.literals = true;
@@ -220,7 +231,6 @@ pub(super) fn select(
                         reach.edges.entry(node).or_default().push(target);
                     } else {
                         features.advancing = true;
-                        multiple_advances |= advance.replace((node, target)).is_some();
                     }
                     edges.entry(node).or_default().push(target);
                 }
@@ -332,19 +342,14 @@ pub(super) fn select(
         }
     }
     if recursive {
-        // Exclude allocating exact predicates anywhere in the reached closure:
-        // even an acyclic side exit can execute at every recursive level.
-        if features.literals || features.literal_nodes != 0 {
+        // The proof covers every reached predicate, including acyclic exits
+        // executed at each level. Only nonnumeric scalar literals are newly
+        // admitted: kind mismatch and scalar equality reserve no pair stack.
+        if !recursive_exact_safe {
             return Ok(Err("recursive-exact-scratch-profile"));
         }
-        let Some((source, target)) = advance.filter(|_| !multiple_advances) else {
-            return Ok(Err("recursive-child-route-profile"));
-        };
-        // One advancing edge globally excludes nested productive components.
-        // Its same-instance return must be unique: a reconverging diamond or
-        // parallel edge would otherwise multiply recursive visits per level.
-        if !single_return(&nodes, &reach.edges, source, target, attempt)? {
-            return Ok(Err("recursive-return-route-profile"));
+        if !recursion::qualifies(space, environment.entry(), &nodes, &reach, attempt)? {
+            return Ok(Err("recursive-child-partition-profile"));
         }
         features.recursive = true;
     }
@@ -363,63 +368,6 @@ pub(super) fn select(
         .map_err(PreparationFailure::from)?;
     attempt.check().map_err(PreparationFailure::from)?;
     Ok(Ok(Admitted { features, reach }))
-}
-
-fn single_return(
-    nodes: &[usize],
-    edges: &HashMap<usize, Vec<usize>>,
-    source: usize,
-    target: usize,
-    attempt: &dyn Control,
-) -> Result<bool, PreparationFailure> {
-    let edge_count = edges
-        .values()
-        .fold(0usize, |n, e| n.saturating_add(e.len()));
-    attempt
-        .charge_allocation(nodes.len().saturating_mul(160).saturating_add(512))
-        .map_err(PreparationFailure::from)?;
-    attempt
-        .charge_work(nodes.len().saturating_add(edge_count).saturating_add(1))
-        .map_err(PreparationFailure::from)?;
-    let mut pending: HashMap<_, usize> = nodes.iter().map(|&node| (node, 0)).collect();
-    for children in edges.values() {
-        for child in children {
-            attempt.check().map_err(PreparationFailure::from)?;
-            *pending.get_mut(child).expect("completed child membership") += 1;
-        }
-    }
-    let mut ready: Vec<_> = nodes
-        .iter()
-        .copied()
-        .filter(|node| pending[node] == 0)
-        .collect();
-    let mut order = Vec::with_capacity(nodes.len());
-    while let Some(node) = ready.pop() {
-        attempt.check().map_err(PreparationFailure::from)?;
-        order.push(node);
-        for child in edges.get(&node).into_iter().flatten() {
-            attempt.check().map_err(PreparationFailure::from)?;
-            let remaining = pending.get_mut(child).expect("completed child membership");
-            *remaining -= 1;
-            if *remaining == 0 {
-                ready.push(*child);
-            }
-        }
-    }
-    if order.len() != nodes.len() {
-        return Ok(false); // A same-instance cycle, before projection or backend.
-    }
-    // Reuse the temporary count map. Two means more than one route; exact
-    // larger path counts are unnecessary, including on wide shared DAGs.
-    for node in order.into_iter().rev() {
-        let mut paths = usize::from(node == source);
-        for child in edges.get(&node).into_iter().flatten() {
-            attempt.check().map_err(PreparationFailure::from)?;
-            paths = paths.saturating_add(pending[child]).min(2);
-        }
-        pending.insert(node, paths);
-    }
-    Ok(pending[&target] == 1)
 }
 
 fn read_pattern(

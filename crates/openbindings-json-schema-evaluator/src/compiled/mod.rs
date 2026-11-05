@@ -6,6 +6,8 @@ mod depth;
 mod operands;
 mod pass;
 mod pattern;
+mod recursion;
+pub(super) const MAXIMUM_NODES: usize = 100_000;
 #[cfg(test)]
 pub(super) mod entries {
     use std::cell::Cell;
@@ -80,6 +82,22 @@ impl jsonschema::Retrieve for NoRetrieval {
 }
 fn no_verdict(reason: NoVerdictReason, code: &str, message: impl Into<String>) -> NoVerdict {
     NoVerdict::new(reason, code.to_owned(), message.into())
+}
+
+fn inherited_stop() -> Option<NoVerdict> {
+    use openbindings_internal_json::work::{Stop, stopped};
+    stopped().map(|stop| match stop {
+        Stop::Work => no_verdict(
+            NoVerdictReason::LimitExceeded,
+            "evaluation-sdk-work-units",
+            "value evaluation exhausted its enclosing SDK work allowance",
+        ),
+        Stop::Stack => no_verdict(
+            NoVerdictReason::LimitExceeded,
+            "evaluation-depth-limit",
+            "value evaluation reached its enclosing stack guard",
+        ),
+    })
 }
 
 fn preparation_detail(detail: NoVerdict) -> PreparationFailure {
@@ -192,6 +210,9 @@ impl Lane {
                 detail: detail.into(),
             });
         }
+        if let Some(detail) = inherited_stop() {
+            return Some(ValueOutcome::NoVerdict { detail });
+        }
         if backend::has_unpaired(value)
             || value.has_duplicate_names()
             || !prepared.inner.nests_within(value, prepared.inner.deepest)
@@ -199,8 +220,8 @@ impl Lane {
             return None;
         }
         let features = &prepared.features;
-        if features.recursive && features.scratch {
-            // This recursive profile has only type:integer exact predicates.
+        if features.recursive && features.integer {
+            // Integer typing is separate from allocation-free scalar literals.
             // Plain integer tokens use the backend's allocation-free lexical
             // test, including arbitrarily long integers and -0. Decimal and
             // exponent interpretation remains on Plan before backend entry.
@@ -793,7 +814,14 @@ impl Compiled {
         }
     }
     fn pass<T>(&self, evaluate: impl FnOnce() -> T) -> Result<T, NoVerdict> {
-        let (result, stop) = backend::string_scope(|| pass::scope(evaluate)).map_err(|_| {
+        let result = backend::string_scope(|| pass::scope(evaluate));
+        // An exact predicate may return provisional false after a shared JSON
+        // work charge stops. Preserve that observed cause before a Boolean or
+        // a less specific private predicate stop can leave this boundary.
+        if let Some(detail) = inherited_stop() {
+            return Err(detail);
+        }
+        let (result, stop) = result.map_err(|_| {
             no_verdict(
                 NoVerdictReason::UnsupportedCapability,
                 "lone-surrogate-instance",

@@ -958,3 +958,309 @@ fn recursive_compiled_boundary_runs_on_qualified_native_threads() {
         &json!({"native_thread_bytes":[256*1024,1024*1024],"compiled_exact_boundary":true,"original_beyond_boundary":true,"satisfying_and_failing":true}),
     );
 }
+
+#[test]
+fn compiled_scalar_equality_preserves_an_enclosing_preparation_work_stop() {
+    let (selected, original) = owners(
+        r#"{"const":"node"}"#,
+        &ExternalSchemas::default(),
+        Limits::default(),
+        PreparationLimits::default(),
+    );
+    let value = JsonValue::parse(r#""node""#).unwrap();
+    assert_eq!(compare(&selected, &original, &value).0, "compiled");
+    for poisoned in [false, true] {
+        let mut observed = None;
+        compiled::entries::take();
+        let outer = Attempt::run(0, usize::MAX, &|| false, |attempt| {
+            if poisoned {
+                let _ = openbindings_internal_schema::Control::charge_work(attempt, 1);
+            }
+            observed = Some(selected.evaluate(&value, Detail::Outcome, &HEALTHY));
+        });
+        assert_eq!(outer.unwrap_err().code, "preparation-sdk-work-units");
+        assert!(
+            matches!(observed, Some(ValueOutcome::NoVerdict { detail }) if detail.reason == NoVerdictReason::LimitExceeded && detail.code == "evaluation-sdk-work-units"),
+            "a stopped exact predicate cannot publish a provisional Boolean"
+        );
+        assert_eq!(compiled::entries::take(), [0, 0, usize::from(!poisoned)]);
+        assert_eq!(compare(&selected, &original, &value).0, "compiled");
+    }
+}
+
+#[test]
+#[cfg_attr(
+    debug_assertions,
+    ignore = "release-only ordinary recursion stack qualification"
+)]
+fn ordinary_recursive_boundaries_run_on_qualified_native_threads() {
+    let schemas = [
+        (
+            "named",
+            r##"{"type":"object","properties":{"name":{"type":"string"},"children":{"type":"array","items":{"$ref":"#"}}},"required":["name","children"],"additionalProperties":false}"##,
+        ),
+        (
+            "enum",
+            r##"{"type":"object","properties":{"name":{"type":"string"},"kind":{"enum":["branch","leaf"]},"children":{"type":"array","items":{"$ref":"#"}}},"required":["name","kind","children"],"additionalProperties":false}"##,
+        ),
+        (
+            "binary",
+            r##"{"type":["object","null"],"properties":{"left":{"$ref":"#"},"right":{"$ref":"#"}},"required":["left","right"],"additionalProperties":false}"##,
+        ),
+    ];
+    let mut rows = Vec::new();
+    for (name, schema) in schemas {
+        for stack in [256 * 1024, 1024 * 1024] {
+            let (selected, original) = owners(
+                schema,
+                &ExternalSchemas::default(),
+                Limits::default(),
+                PreparationLimits::default(),
+            );
+            let limit = selected.compiled.qualified_depth().unwrap();
+            // Linear chains reach the value-depth boundary without constructing
+            // an exponentially large balanced tree. Parse before the small thread.
+            let steps = if name == "binary" {
+                limit
+            } else {
+                (limit - 1) / 2
+            };
+            let mut values = Vec::new();
+            for beyond in [false, true] {
+                for failing in [false, true] {
+                    let mut text = if name == "binary" {
+                        if failing { "42" } else { "null" }.to_owned()
+                    } else {
+                        format!(
+                            r#"{{"name":{},"kind":{},"children":[]}}"#,
+                            if failing && name == "named" {
+                                "42"
+                            } else {
+                                "\"node\""
+                            },
+                            if failing && name == "enum" {
+                                "42"
+                            } else {
+                                "\"leaf\""
+                            }
+                        )
+                    };
+                    if name == "named" {
+                        text = text.replace(r#","kind":"leaf""#, "");
+                    }
+                    for _ in 0..steps + usize::from(beyond) {
+                        text = if name == "binary" {
+                            format!(r#"{{"left":{text},"right":null}}"#)
+                        } else if name == "enum" {
+                            format!(r#"{{"name":"node","kind":"branch","children":[{text}]}}"#)
+                        } else {
+                            format!(r#"{{"name":"node","children":[{text}]}}"#)
+                        };
+                    }
+                    values.push((beyond, failing, JsonValue::parse(&text).unwrap()));
+                }
+            }
+            std::thread::Builder::new()
+                .stack_size(stack)
+                .spawn(move || {
+                    for (beyond, failing, value) in values {
+                        assert_eq!(
+                            matches!(
+                                selected.evaluate(&value, Detail::Outcome, &HEALTHY),
+                                ValueOutcome::Satisfies
+                            ),
+                            !failing
+                        );
+                        assert_eq!(
+                            compare(&selected, &original, &value).0,
+                            if beyond { "original" } else { "compiled" }
+                        );
+                    }
+                })
+                .unwrap()
+                .join()
+                .expect("ordinary recursive boundary stack");
+            rows.push(
+                json!({"schema":name,"native_thread_bytes":stack,"qualified_value_depth":limit}),
+            );
+        }
+    }
+    write(
+        "ordinary-recursive-stack.json",
+        &json!({"rows":rows,"satisfying_and_failing":true,"original_beyond_boundary":true}),
+    );
+}
+
+#[test]
+fn ordinary_recursive_children_trees_and_scalar_enums_use_compiled() {
+    fn named(depth: usize, with_enum: bool) -> serde_json::Value {
+        let children = if depth == 0 {
+            vec![]
+        } else {
+            vec![named(depth - 1, with_enum), named(depth - 1, with_enum)]
+        };
+        let mut node = json!({"name":"node","children":children});
+        if with_enum {
+            node["kind"] = json!(if depth == 0 { "leaf" } else { "branch" });
+        }
+        node
+    }
+    fn binary(depth: usize) -> serde_json::Value {
+        if depth == 0 {
+            serde_json::Value::Null
+        } else {
+            json!({"left":binary(depth-1),"right":binary(depth-1)})
+        }
+    }
+    let base = json!({"type":"object","properties":{"name":{"type":"string"},"children":{"type":"array","items":{"$ref":"#"}}},"required":["name","children"],"additionalProperties":false});
+    let mut with_enum = base.clone();
+    with_enum["properties"]["kind"] = json!({"enum":["branch","leaf"]});
+    with_enum["required"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!("kind"));
+    let tree = json!({"type":["object","null"],"properties":{"left":{"$ref":"#"},"right":{"$ref":"#"}},"required":["left","right"],"additionalProperties":false});
+    let mut rows = Vec::new();
+    for (name, schema, value, pointer) in [
+        (
+            "named",
+            base,
+            named(4, false),
+            "/children/1/children/1/children/1/children/1/name",
+        ),
+        (
+            "enum",
+            with_enum,
+            named(4, true),
+            "/children/1/children/1/children/1/children/1/kind",
+        ),
+        ("binary", tree, binary(5), "/right/right/right/right/right"),
+    ] {
+        let (selected, original) = owners(
+            &schema.to_string(),
+            &ExternalSchemas::default(),
+            Limits::default(),
+            PreparationLimits::default(),
+        );
+        let positive = JsonValue::parse(value.to_string()).unwrap();
+        assert!(matches!(
+            selected.evaluate(&positive, Detail::Outcome, &HEALTHY),
+            ValueOutcome::Satisfies
+        ));
+        assert_eq!(compare(&selected, &original, &positive).0, "compiled");
+        let mut invalid = value.clone();
+        *invalid.pointer_mut(pointer).unwrap() = json!(42);
+        let negative = JsonValue::parse(invalid.to_string()).unwrap();
+        assert!(matches!(
+            selected.evaluate(&negative, Detail::Outcome, &HEALTHY),
+            ValueOutcome::Fails { .. }
+        ));
+        assert_eq!(compare(&selected, &original, &negative).0, "compiled");
+        rows.push(json!({"shape":name,"positive":"compiled-S","late_error":"compiled-F"}));
+    }
+    // Literal-only exact work does not need integer preflight for other fields.
+    for literal in [
+        json!({"enum":["α",""]}),
+        json!({"const":true}),
+        json!({"const":null}),
+    ] {
+        let schema = json!({"properties":{"kind":literal,"children":{"items":{"$ref":"#"}}},"additionalProperties":true});
+        let (selected, original) = owners(
+            &schema.to_string(),
+            &ExternalSchemas::default(),
+            Limits::default(),
+            PreparationLimits::default(),
+        );
+        for text in [
+            r#"{"children":[],"extra":1.5}"#,
+            r#"{"children":[{"kind":"α","extra":1e400}]}"#,
+            r#"{"kind":"e\u0301"}"#,
+        ] {
+            assert_eq!(
+                compare(&selected, &original, &JsonValue::parse(text).unwrap()).0,
+                "compiled"
+            );
+        }
+    }
+    write(
+        "ordinary-recursive-values.json",
+        &json!({"complete_observations_equal":true,"rows":rows,"scalar_literal_kinds":["string","boolean","null"],"unrelated_decimal_fields":"compiled"}),
+    );
+}
+
+#[test]
+fn recursive_child_partitions_keep_overlaps_and_alias_multiplicity_on_plan() {
+    let cases = [
+        (
+            r##"{"properties":{"a":{"$ref":"#"},"ab":{"$ref":"#"}}}"##,
+            r#"{"a":{},"ab":{}}"#,
+            true,
+        ),
+        (
+            r##"{"properties":{"α":{"$ref":"#"},"αβ":{"$ref":"#"}}}"##,
+            r#"{"α":{},"αβ":{}}"#,
+            true,
+        ),
+        (
+            r##"{"properties":{"a":{"$ref":"#"}},"patternProperties":{"^b":{"$ref":"#"}}}"##,
+            r#"{"a":{},"b1":{}}"#,
+            true,
+        ),
+        (
+            r##"{"properties":{"a":{"$ref":"#"}},"patternProperties":{"^a":{"$ref":"#"}}}"##,
+            r#"{"a":{}}"#,
+            false,
+        ),
+        (
+            r##"{"patternProperties":{"^a":{"$ref":"#"},"^ab":{"$ref":"#"}}}"##,
+            r#"{"ab":{}}"#,
+            false,
+        ),
+        (
+            r##"{"patternProperties":{"^a":{"$ref":"#"},"^b":{"$ref":"#"}}}"##,
+            r#"{"a":{},"b":{}}"#,
+            true,
+        ),
+        (
+            r##"{"patternProperties":{"^a+$":{"$ref":"#"}}}"##,
+            r#"{"aaa":{}}"#,
+            true,
+        ),
+        (
+            r##"{"prefixItems":[{"$ref":"#"},{"$ref":"#"}],"items":{"$ref":"#"}}"##,
+            "[[],[],[]]",
+            true,
+        ),
+        (
+            r##"{"items":{"$ref":"#"},"contains":{"$ref":"#"},"minContains":0}"##,
+            "[[]]",
+            false,
+        ),
+        (
+            r##"{"allOf":[{"properties":{"a":{"$ref":"#"}}},{"properties":{"a":{"$ref":"#"}}}]}"##,
+            r#"{"a":{}}"#,
+            false,
+        ),
+    ];
+    let mut rows = Vec::new();
+    for (schema, text, compiled_lane) in cases {
+        compiled::entries::take();
+        let (selected, original) = owners(
+            schema,
+            &ExternalSchemas::default(),
+            Limits::default(),
+            PreparationLimits::default(),
+        );
+        let built = compiled::entries::take();
+        if !compiled_lane {
+            assert_eq!(built, [0, 0, 0], "{schema}");
+        }
+        let lane = compare(&selected, &original, &JsonValue::parse(text).unwrap()).0;
+        assert_eq!(lane == "compiled", compiled_lane, "{schema}");
+        rows.push(json!({"schema":schema,"lane":lane}));
+    }
+    write(
+        "recursive-child-partitions.json",
+        &json!({"all_equal":true,"rows":rows}),
+    );
+}

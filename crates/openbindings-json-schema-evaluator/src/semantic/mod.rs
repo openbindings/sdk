@@ -119,7 +119,7 @@ impl Plan {
     ) -> Result<Option<openbindings_internal_schema::Reach>, PreparationFailure> {
         control.check()?;
         if !self.complete_scans
-            || self.fields.len() > 100_000
+            || self.fields.len() > crate::compiled::MAXIMUM_NODES
             || !self.compiled_static_queries()
             || !self.fields.contains_key(&self.entry)
         {
