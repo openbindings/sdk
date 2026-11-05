@@ -683,7 +683,6 @@ mod tests {
         )
         .unwrap();
         let resources = crate::space::embedded_resources()
-            .iter()
             .map(|r| (r.document.clone(), r.uri.clone()))
             .chain([(nested, "https://supplied.test/r".to_owned())]);
         for (value, uri) in resources {

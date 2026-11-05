@@ -63,24 +63,6 @@ pub(crate) fn resolve_identifier(parent: Option<&str>, reference: &str) -> Optio
         .map(|uri| uri.as_str().trim_end_matches('#').to_owned())
 }
 
-fn standards() -> &'static jsonschema::Registry<'static> {
-    static REGISTRY: OnceLock<jsonschema::Registry<'static>> = OnceLock::new();
-    REGISTRY.get_or_init(|| {
-        let mut builder = jsonschema::Registry::new()
-            .draft(jsonschema::Draft::Draft202012)
-            .retriever(NoRetrieval);
-        for resource in crate::space::embedded_resources() {
-            let value: serde_json::Value =
-                serde_json::from_str(resource.document.text()).expect("packaged JSON");
-            builder = builder
-                .add(&resource.uri, value)
-                .expect("packaged identity");
-        }
-        builder
-            .prepare()
-            .expect("packaged resources form a closed registry")
-    })
-}
 impl Supplied {
     pub fn iter(&self) -> impl Iterator<Item = &ProjectedResource> {
         self.resources.iter()
@@ -220,7 +202,7 @@ impl Supplied {
             )?;
             let mut add = |name: &str, node: usize| {
                 if let Some(name) = canonical_uri(name) {
-                    if standards().contains_resource(&name) {
+                    if crate::space::standard_identifier(&name) {
                         policy.protected.insert(name.clone());
                     }
                     let holders = policy.names.entry(name).or_default();

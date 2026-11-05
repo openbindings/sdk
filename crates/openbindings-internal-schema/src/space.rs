@@ -1,4 +1,5 @@
 //! Original-context resource graph. No URI here acquires bytes.
+mod catalog;
 mod custom;
 mod original;
 mod potential;
@@ -205,11 +206,11 @@ pub struct SchemaSpace {
     pub document: RawDocument,
     pub supplied: Supplied,
     // The document and the supplied resources, in that order. The packaged
-    // meta-schemas follow them as one immutable layer that every space in the
-    // process shares.
+    // meta-schemas follow them in a shared immutable catalog. Supplemental
+    // bodies and indexes initialize only when accessed.
     local: Layer,
     identity_bytes: usize,
-    packaged: &'static Layer,
+    packaged: &'static catalog::Packaged,
     custom: custom::Custom,
 }
 // The packaged layer numbers its nodes, resources and sources from here, so
@@ -560,31 +561,16 @@ impl Layer {
         }
     }
 }
-// The packaged meta-schemas as one layer, built once per process from their
-// pinned, immutable documents and URIs. It holds no caller URI or result.
-// Resource eligibility here is among the packaged resources alone; a space
-// withdraws it from a packaged resource whose identifier a local one claims.
-fn packaged() -> &'static Layer {
-    static LAYER: std::sync::OnceLock<Layer> = std::sync::OnceLock::new();
-    LAYER.get_or_init(|| {
-        let mut layer = Layer {
-            base: PACKAGED,
-            ..Layer::default()
-        };
-        let unprotected = HashSet::new();
-        for resource in embedded_resources() {
-            let index = SchemaIndex::supplied_nodes(&resource.document);
-            layer.add_source(
-                Some(resource.uri.clone()),
-                resource.document.clone(),
-                &index,
-                ResourceOrigin::Standard,
-                &unprotected,
-            );
-        }
-        layer.finalize(|names, name| names.get(name).copied());
-        layer
-    })
+// The shared catalog holds no caller URI or result. Its normative core initializes
+// once; supplemental bodies/indexes initialize on access. Constant inventory
+// extents preserve numbering and admission independently of initialization.
+fn packaged() -> &'static catalog::Packaged {
+    static LAYER: std::sync::OnceLock<catalog::Packaged> = std::sync::OnceLock::new();
+    LAYER.get_or_init(catalog::Packaged::new)
+}
+// Identity policy needs only the pinned names, never parsed catalog bodies.
+pub(crate) fn standard_identifier(name: &str) -> bool {
+    catalog::contains(name)
 }
 // A name's selection in a space. The packaged names count as added after
 // every local name, under `Layer::add_name`'s rules: a local contained
@@ -592,10 +578,10 @@ fn packaged() -> &'static Layer {
 // without a single carrier.
 fn select(
     local: &BTreeMap<String, NameSelection>,
-    packaged: &Layer,
+    packaged: &catalog::Packaged,
     name: &str,
 ) -> Option<NameSelection> {
-    match (local.get(name), packaged.names.get(name)) {
+    match (local.get(name), packaged.name(name)) {
         (Some(selected), Some(_)) if selected.origin == ResourceOrigin::Supplied => {
             Some(NameSelection {
                 origin: ResourceOrigin::Supplied,
@@ -604,7 +590,7 @@ fn select(
             })
         }
         (Some(selected), _) => Some(*selected),
-        (None, packaged) => packaged.copied(),
+        (None, packaged) => packaged,
     }
 }
 
@@ -637,7 +623,7 @@ impl SchemaSpace {
         control.check()?;
         let packaged = packaged();
         let remaining = maximum
-            .checked_sub(packaged.nodes.len())
+            .checked_sub(packaged.node_count())
             .and_then(|count| count.checked_sub(document.schema_index().nodes.len()))
             .ok_or_else(|| {
                 Failure::new(
@@ -656,11 +642,7 @@ impl SchemaSpace {
         // Per-node layer/index/maps overhead, including temporary base-length
         // analysis. Shared packaged/source bytes are not newly allocated here.
         control.charge_allocation(local_nodes.saturating_add(1).saturating_mul(2048))?;
-        let packaged_bytes: usize = packaged
-            .resources
-            .iter()
-            .map(|resource| resource.base.as_ref().map_or(0, String::len))
-            .sum();
+        let packaged_bytes = packaged.identity_bytes();
         let reserved = supplied
             .policy
             .identity_bytes
@@ -721,7 +703,7 @@ impl SchemaSpace {
     }
     /// Completed inventory footprint, available without walking a cache hit.
     pub fn node_count(&self) -> usize {
-        self.local.nodes.len() + self.packaged.nodes.len()
+        self.local.nodes.len() + self.packaged.node_count()
     }
     // Local identifiers index the local layer directly; any other identifier
     // is the packaged layer's.
@@ -730,7 +712,7 @@ impl SchemaSpace {
     pub fn node(&self, id: usize) -> &SpaceNode {
         match self.local.nodes.get(id) {
             Some(node) => node,
-            None => &self.packaged.nodes[id - PACKAGED],
+            None => self.packaged.node(id),
         }
     }
     /// The resource with this identifier.
@@ -738,7 +720,7 @@ impl SchemaSpace {
     pub fn resource(&self, id: usize) -> &Resource {
         match self.local.resources.get(id) {
             Some(resource) => resource,
-            None => &self.packaged.resources[id - PACKAGED],
+            None => self.packaged.resource(id),
         }
     }
     /// The source with this identifier.
@@ -746,7 +728,7 @@ impl SchemaSpace {
     pub fn source(&self, id: usize) -> &Source {
         match self.local.sources.get(id) {
             Some(source) => source,
-            None => &self.packaged.sources[id - PACKAGED],
+            None => self.packaged.source(id),
         }
     }
     /// Every schema node with its identifier: the document's, each supplied
@@ -1845,25 +1827,8 @@ impl std::fmt::Debug for Reach {
 }
 
 /// Borrow pinned original meta-schema snapshots for source-location lookup.
-pub fn embedded_resources() -> &'static [ProjectedResource] {
-    static RESOURCES: std::sync::OnceLock<Vec<ProjectedResource>> = std::sync::OnceLock::new();
-    RESOURCES.get_or_init(|| {
-        crate::fixed_schema::META_FILES
-            .into_iter()
-            .chain(crate::fixed_schema::DRAFT7_FILES)
-            .chain(crate::fixed_schema::DRAFT2019_FILES)
-            .chain(crate::fixed_schema::FORMAT_ASSERTION_FILES)
-            .map(|text| {
-                let document = JsonValue::parse(text).expect("pinned meta-schema is JSON");
-                let uri = document
-                    .get("$id")
-                    .and_then(|v| v.as_str())
-                    .expect("pinned meta-schema identifier")
-                    .into();
-                ProjectedResource { uri, document }
-            })
-            .collect()
-    })
+pub fn embedded_resources() -> impl ExactSizeIterator<Item = &'static ProjectedResource> {
+    catalog::resources()
 }
 
 #[cfg(test)]
@@ -2024,11 +1989,8 @@ mod projection_tests {
         // meta-schemas added to every space as sources after the supplied
         // resources' names, with eligibility finalized over all of them.
         fn flat(document: RawDocument, supplied: Supplied) -> Self {
-            static NONE: std::sync::OnceLock<Layer> = std::sync::OnceLock::new();
-            let packaged = NONE.get_or_init(|| Layer {
-                base: PACKAGED,
-                ..Layer::default()
-            });
+            static NONE: std::sync::OnceLock<catalog::Packaged> = std::sync::OnceLock::new();
+            let packaged = NONE.get_or_init(catalog::Packaged::empty);
             let mut local = Layer::default();
             let protected = &supplied.policy.protected;
             local.add_source(
@@ -2247,9 +2209,15 @@ mod projection_tests {
                 .local
                 .names
                 .keys()
-                .chain(layered.packaged.names.keys())
+                .map(String::as_str)
+                .chain(layered.packaged.names())
                 .collect();
-            assert!(names.iter().copied().eq(flat.local.names.keys()));
+            assert!(
+                names
+                    .iter()
+                    .copied()
+                    .eq(flat.local.names.keys().map(String::as_str))
+            );
             for name in flat.local.names.keys() {
                 let (selected, original) = (layered.name(name).unwrap(), flat.name(name).unwrap());
                 assert_eq!(selected.origin, original.origin, "{name}");
