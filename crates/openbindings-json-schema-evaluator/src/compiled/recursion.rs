@@ -1,8 +1,44 @@
-//! Pre-entry proof that each immediate child has at most one nontrivial
+//! Pre-entry proof that each immediate child has at most one productive
 //! continuation, including all same-instance reference/applicator paths.
 use super::*;
 use openbindings_internal_schema::{Control, Reach, SchemaSpace};
 use std::collections::HashSet;
+
+mod graph;
+#[derive(Clone, Copy)]
+pub(super) struct Edge {
+    pub to: usize,
+    pub advances: bool,
+}
+pub(super) struct Proof {
+    pub exact: usize,
+}
+
+pub(super) fn qualifies(
+    space: &SchemaSpace,
+    entry: usize,
+    nodes: &[usize],
+    reach: &Reach,
+    applications: &HashMap<usize, Vec<Edge>>,
+    own: &HashMap<usize, usize>,
+    control: &dyn Control,
+) -> Result<Result<Proof, &'static str>, PreparationFailure> {
+    // Cycle reachability, reverse edges, finite folds and entry sets are
+    // preparation owners only. The existing selector scan prepays its own data.
+    control
+        .charge_allocation(nodes.len().saturating_mul(768).saturating_add(512))
+        .map_err(PreparationFailure::from)?;
+    let Some(productive) = graph::productive(nodes, applications, control)? else {
+        return Ok(Err("recursive-application-graph"));
+    };
+    let Some(entries) = partition(space, entry, nodes, reach, &productive, control)? else {
+        return Ok(Err("recursive-child-partition-profile"));
+    };
+    let Some(proof) = graph::fold(nodes, applications, &productive, own, &entries, control)? else {
+        return Ok(Err("recursive-finite-expansion-profile"));
+    };
+    Ok(Ok(proof))
+}
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Kind {
@@ -62,13 +98,14 @@ fn sort_objects(objects: &mut [&Site], control: &dyn Control) -> Result<(), Prep
     Ok(())
 }
 
-pub(super) fn qualifies(
+fn partition(
     space: &SchemaSpace,
     entry: usize,
     nodes: &[usize],
     reach: &Reach,
+    productive: &HashSet<usize>,
     control: &dyn Control,
-) -> Result<bool, PreparationFailure> {
+) -> Result<Option<Vec<usize>>, PreparationFailure> {
     control
         .charge_allocation(nodes.len().saturating_mul(512).saturating_add(512))
         .map_err(PreparationFailure::from)?;
@@ -95,6 +132,11 @@ pub(super) fn qualifies(
             if !reach.nodes.contains(&target) {
                 return Ok(false);
             }
+            // Terminal constraints remain in lowering and the finite fold;
+            // only routes that can reach recursion need a child partition.
+            if !productive.contains(&target) {
+                return Ok(true);
+            }
             text_bytes = text_bytes.saturating_add(text.len());
             if text_bytes > openbindings_internal_schema::PROGRAM_TEXT_LIMIT {
                 return Ok(false);
@@ -117,7 +159,7 @@ pub(super) fn qualifies(
                 for member in members {
                     control.check().map_err(PreparationFailure::from)?;
                     let Some(name) = member.name.as_str() else {
-                        return Ok(false);
+                        return Ok(None);
                     };
                     let (kind, text) = if keyword == "properties" {
                         (Kind::Exact, name)
@@ -133,7 +175,7 @@ pub(super) fn qualifies(
                         (Kind::ObjectValues, "")
                     };
                     if !add(member.value, kind, text)? {
-                        return Ok(false);
+                        return Ok(None);
                     }
                 }
             }
@@ -151,7 +193,7 @@ pub(super) fn qualifies(
                     },
                     "",
                 )? {
-                    return Ok(false);
+                    return Ok(None);
                 }
             }
         }
@@ -177,7 +219,7 @@ pub(super) fn qualifies(
                 continue;
             };
             if !add(child, kind, "")? {
-                return Ok(false);
+                return Ok(None);
             }
         }
     }
@@ -205,7 +247,7 @@ pub(super) fn qualifies(
         }
     }
     if order.len() != nodes.len() {
-        return Ok(false);
+        return Ok(None);
     }
     // Reuse the count map for whether a closure contains a child site.
     for node in order.into_iter().rev() {
@@ -225,7 +267,7 @@ pub(super) fn qualifies(
     let mut objects = Vec::new();
     let mut arrays = Vec::new();
     let mut occurrences = 0usize;
-    for entry in entries {
+    for &entry in &entries {
         if pending[&entry] == 0 {
             continue;
         }
@@ -240,12 +282,12 @@ pub(super) fn qualifies(
             control.check().map_err(PreparationFailure::from)?;
             occurrences = occurrences.saturating_add(1);
             if occurrences > super::MAXIMUM_NODES || !seen.insert(node) {
-                return Ok(false);
+                return Ok(None);
             }
             if let Some(local) = sites.get(&node) {
                 occurrences = occurrences.saturating_add(local.len());
                 if occurrences > super::MAXIMUM_NODES {
-                    return Ok(false);
+                    return Ok(None);
                 }
                 control
                     .charge_work(local.len())
@@ -267,7 +309,7 @@ pub(super) fn qualifies(
             }
         }
         if object_names > 1 || all_objects > 1 || (all_objects == 1 && !objects.is_empty()) {
-            return Ok(false);
+            return Ok(None);
         }
         sort_objects(&mut objects, control)?;
         for pair in objects.windows(2) {
@@ -285,16 +327,16 @@ pub(super) fn qualifies(
                 || (pair[0].kind == Kind::Prefix && pair[1].text.starts_with(&pair[0].text));
             control.check().map_err(PreparationFailure::from)?;
             if overlaps {
-                return Ok(false);
+                return Ok(None);
             }
         }
         arrays.sort_unstable();
         if arrays.windows(2).any(|p| p[1].0 < p[0].1) {
-            return Ok(false);
+            return Ok(None);
         }
         control.check().map_err(PreparationFailure::from)?;
     }
-    Ok(true)
+    Ok(Some(entries))
 }
 
 #[cfg(test)]

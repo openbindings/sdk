@@ -826,7 +826,7 @@ fn recursive_values_keep_exact_numbers_and_depth_selection() {
 }
 
 #[test]
-fn recursive_duplicate_routes_and_allocating_exits_stay_before_projection() {
+fn recursive_duplicate_routes_and_container_or_unique_exits_stay_before_projection() {
     let mut schemas = vec![
         r##"{"$ref":"#"}"##.to_owned(),
         r##"{"$defs":{"n":{"allOf":[{"$ref":"#/$defs/step"},{"$ref":"#/$defs/step"}]},"step":{"type":"array","items":{"$ref":"#/$defs/n"}}},"$ref":"#/$defs/n"}"##.to_owned(),
@@ -835,13 +835,12 @@ fn recursive_duplicate_routes_and_allocating_exits_stay_before_projection() {
         r##"{"$defs":{"n":{"anyOf":[{"type":"integer"},{"items":{"$ref":"#/$defs/n"}}],"allOf":[{"$ref":"#/$defs/m"}]},"m":{"anyOf":[{"type":"integer"},{"items":{"$ref":"#/$defs/m"}}]}},"$ref":"#/$defs/n"}"##.to_owned(),
     ];
     for predicate in [
-        json!({"const":0}),
-        json!({"enum":[0,1]}),
-        json!({"minimum":0}),
+        json!({"const":[]}),
+        json!({"enum":[{},[]]}),
         json!({"uniqueItems":true}),
     ] {
-        // These side leaves are not in the cyclic component, but the cycle
-        // enters them at every value level. The whole-closure rule covers them.
+        // Container equality and uniqueness have internal traversals that the
+        // scalar path proof does not cover, even on terminal side branches.
         let mut schema: serde_json::Value = serde_json::from_str(RECURSIVE_INTEGER_ARRAY).unwrap();
         schema["$defs"]["node"]["allOf"] = json!([predicate]);
         schemas.push(schema.to_string());
@@ -1262,5 +1261,556 @@ fn recursive_child_partitions_keep_overlaps_and_alias_multiplicity_on_plan() {
     write(
         "recursive-child-partitions.json",
         &json!({"all_equal":true,"rows":rows}),
+    );
+}
+
+#[test]
+fn productive_only_routes_admit_the_requested_families_and_keep_terminal_failures() {
+    let cases = [
+        (
+            "oneof-kind-union",
+            json!({"oneOf":[{"type":"object","properties":{"kind":{"const":"leaf"},"value":{"type":"integer"}},"required":["kind","value"],"additionalProperties":false},{"type":"object","properties":{"kind":{"const":"branch"},"children":{"type":"array","items":{"$ref":"#"}}},"required":["kind","children"],"additionalProperties":false}]}),
+            json!({"kind":"branch","children":[{"kind":"leaf","value":1},{"kind":"leaf","value":2}]}),
+        ),
+        (
+            "named-additional-schema",
+            json!({"type":"object","properties":{"name":{"type":"string"}},"required":["name"],"additionalProperties":{"$ref":"#"}}),
+            json!({"name":"root","left":{"name":"left"},"right":{"name":"right"}}),
+        ),
+        (
+            "named-terminal-additional",
+            json!({"type":"object","properties":{"name":{"type":"string"},"children":{"type":"array","items":{"$ref":"#"}}},"required":["name","children"],"additionalProperties":{"type":"string"}}),
+            json!({"name":"root","note":"extra","children":[{"name":"left","note":"extra","children":[]},{"name":"right","note":"extra","children":[]}]}),
+        ),
+        (
+            "tree-minimum",
+            json!({"type":["object","null"],"properties":{"left":{"$ref":"#"},"right":{"$ref":"#"},"value":{"type":"integer","minimum":0}},"required":["left","right","value"],"additionalProperties":false}),
+            json!({"value":0,"left":null,"right":{"value":1,"left":null,"right":null}}),
+        ),
+    ];
+    let mut rows = Vec::new();
+    for (name, schema, value) in cases {
+        let (selected, original) = owners(
+            &schema.to_string(),
+            &ExternalSchemas::default(),
+            Limits::default(),
+            PreparationLimits::default(),
+        );
+        let value = JsonValue::parse(value.to_string()).unwrap();
+        assert!(matches!(
+            selected.evaluate(&value, Detail::Outcome, &HEALTHY),
+            ValueOutcome::Satisfies
+        ));
+        assert_eq!(
+            compare(&selected, &original, &value).0,
+            "compiled",
+            "{name}"
+        );
+        let mut bad: serde_json::Value = serde_json::from_str(value.text()).unwrap();
+        match name {
+            "oneof-kind-union" => bad["children"][1]["kind"] = json!("wrong"),
+            "named-additional-schema" => bad["right"]["name"] = json!(42),
+            "named-terminal-additional" => bad["children"][1]["note"] = json!(42),
+            "tree-minimum" => bad["right"]["value"] = json!(-1),
+            _ => unreachable!(),
+        }
+        let bad = JsonValue::parse(bad.to_string()).unwrap();
+        assert!(matches!(
+            selected.evaluate(&bad, Detail::Outcome, &HEALTHY),
+            ValueOutcome::Fails { .. }
+        ));
+        assert_eq!(compare(&selected, &original, &bad).0, "compiled");
+        let weight = selected.compiled.recursive_exact_weight().unwrap();
+        if name == "tree-minimum" {
+            assert_eq!(weight, 6);
+        }
+        rows.push(json!({"workload":name,"lane":"compiled","exact_weight":weight,"satisfying_and_late_failing_equal":true}));
+    }
+    write(
+        "productive-recursive-families.json",
+        &json!({"rows":rows,"full_observations_equal":true}),
+    );
+}
+
+#[test]
+fn alternating_recursive_entries_sum_terminal_numeric_paths() {
+    let schema = r##"{"$defs":{"B":{"properties":{"v":{"minimum":0},"next":{"$ref":"#"}}}},"properties":{"next":{"$ref":"#/$defs/B"}},"allOf":[{"properties":{"next":{"properties":{"v":{"minimum":0}}}}}]}"##;
+    let (selected, original) = owners(
+        schema,
+        &ExternalSchemas::default(),
+        Limits::default(),
+        PreparationLimits::default(),
+    );
+    assert_eq!(selected.compiled.recursive_exact_weight(), Some(3));
+    for text in [
+        r#"{"next":{"v":1}}"#,
+        r#"{"next":{"v":-1}}"#,
+        r#"{"next":{"v":0.5,"next":{"next":{"v":2.5}}}}"#,
+    ] {
+        assert_eq!(
+            compare(&selected, &original, &JsonValue::parse(text).unwrap()).0,
+            "compiled"
+        );
+    }
+    let huge = "1".repeat(4096);
+    assert_eq!(
+        compare(
+            &selected,
+            &original,
+            &JsonValue::parse(format!(r#"{{"next":{{"v":{huge}}}}}"#)).unwrap()
+        )
+        .0,
+        "compiled"
+    );
+    write(
+        "alternating-entry-scratch.json",
+        &json!({"summed_exact_weight":3,"max_weight_one_rejected_in_design":true,"full_observations_equal":true}),
+    );
+}
+
+#[test]
+fn discriminators_do_not_waive_overlapping_productive_routes() {
+    let schema = r##"{"oneOf":[{"properties":{"kind":{"const":"a"},"next":{"$ref":"#"}},"required":["kind"]},{"properties":{"kind":{"const":"b"},"next":{"$ref":"#"}},"required":["kind"]}]}"##;
+    compiled::entries::take();
+    let (selected, original) = owners(
+        schema,
+        &ExternalSchemas::default(),
+        Limits::default(),
+        PreparationLimits::default(),
+    );
+    assert_eq!(compiled::entries::take(), [0, 0, 0]);
+    assert!(matches!(
+        selected.compiled,
+        compiled::Lane::Original("recursive-child-partition-profile")
+    ));
+    for text in [
+        r#"{"kind":"a"}"#,
+        r#"{"kind":"b","next":{"kind":"a"}}"#,
+        r#"{"kind":"wrong"}"#,
+    ] {
+        assert_eq!(
+            compare(&selected, &original, &JsonValue::parse(text).unwrap()).0,
+            "original"
+        );
+    }
+}
+
+#[test]
+fn terminal_diamonds_retain_a_finite_expansion_guard_without_scratch() {
+    let schema = |depth: usize| {
+        let mut defs = serde_json::Map::new();
+        for i in 0..depth {
+            let reference = json!({"$ref":format!("#/$defs/d{}",i+1)});
+            defs.insert(
+                format!("d{i}"),
+                json!({"allOf":[reference.clone(),reference]}),
+            );
+        }
+        defs.insert(
+            format!("d{depth}"),
+            json!({"properties":{"v":{"type":"integer"}}}),
+        );
+        json!({"properties":{"next":{"$ref":"#"}},"allOf":[{"$ref":"#/$defs/d0"}],"$defs":defs})
+    };
+    let mut rows = Vec::new();
+    for depth in [8, 16] {
+        compiled::entries::take();
+        let (selected, original) = owners(
+            &schema(depth).to_string(),
+            &ExternalSchemas::default(),
+            Limits::default(),
+            PreparationLimits::default(),
+        );
+        let construction = compiled::entries::take();
+        let expected = if depth == 8 { "compiled" } else { "original" };
+        assert_eq!(construction, if depth == 8 { [1, 1, 0] } else { [0, 0, 0] });
+        if depth == 16 {
+            assert!(matches!(
+                selected.compiled,
+                compiled::Lane::Original("recursive-finite-expansion-profile")
+            ));
+        }
+        assert_eq!(
+            compare(
+                &selected,
+                &original,
+                &JsonValue::parse(r#"{"v":0,"next":{}}"#).unwrap()
+            )
+            .0,
+            expected
+        );
+        rows.push(json!({"diamond_depth":depth,"lane":expected,"construction":construction}));
+    }
+    write(
+        "productive-terminal-diamonds.json",
+        &json!({"rows":rows,"unit_guard_applies_to_allocation_free_integer":true}),
+    );
+}
+
+#[test]
+fn recursive_scalar_exact_exits_use_funded_finite_paths() {
+    let mut rows = Vec::new();
+    for predicate in [
+        json!({"const":0}),
+        json!({"enum":[0,1]}),
+        json!({"minimum":0}),
+        json!({"maximum":18446744073709551615u64}),
+        json!({"multipleOf":2}),
+    ] {
+        let mut schema: serde_json::Value = serde_json::from_str(RECURSIVE_INTEGER_ARRAY).unwrap();
+        schema["$defs"]["node"]["allOf"] = json!([predicate]);
+        let (selected, original) = owners(
+            &schema.to_string(),
+            &ExternalSchemas::default(),
+            Limits::default(),
+            PreparationLimits::default(),
+        );
+        for text in ["0", "1", "[]", "[[]]", "[0]", "[[2]]", "[-1]"] {
+            assert_eq!(
+                compare(&selected, &original, &JsonValue::parse(text).unwrap()).0,
+                "compiled"
+            );
+        }
+        // The existing recursive integer-domain guard still selects before entry.
+        for text in ["1.0", "1e0", "[1e400]"] {
+            assert_eq!(
+                compare(&selected, &original, &JsonValue::parse(text).unwrap()).0,
+                "original"
+            );
+        }
+        rows.push(json!({"predicate":predicate,"exact_weight":selected.compiled.recursive_exact_weight(),"all_equal":true}));
+    }
+    write(
+        "recursive-scalar-exits.json",
+        &json!({"rows":rows,"container_unique_exclusions_unchanged":true}),
+    );
+}
+
+#[test]
+fn recursive_scalar_reservation_boundary_selects_before_backend_entry() {
+    let schema = r##"{"type":["object","null"],"properties":{"n":{"type":"integer","minimum":0},"padding":{"type":"string"},"next":{"$ref":"#"}},"additionalProperties":false}"##;
+    let (selected, original) = owners(
+        schema,
+        &ExternalSchemas::default(),
+        Limits::default(),
+        PreparationLimits::default(),
+    );
+    assert_eq!(selected.compiled.recursive_exact_weight(), Some(4));
+    // Seven subject nodes, one one-byte schema operand, K4. The existing
+    //16/256 schedule yields64*raw_bytes+15296, including its512-byte tail.
+    const RAW_AT_LIMIT: usize = (48 * 1024 * 1024 - 15296) / 64;
+    let template = r#"{"n":0,"padding":"","next":null}"#;
+    for extra in [0, 1] {
+        let text = format!(
+            r#"{{"n":0,"padding":"{}","next":null}}"#,
+            "a".repeat(RAW_AT_LIMIT - template.len() + extra)
+        );
+        assert_eq!(text.len(), RAW_AT_LIMIT + extra);
+        let value = JsonValue::parse(text).unwrap();
+        assert_eq!(
+            openbindings_internal_json::backend::node_count(value.view()),
+            7
+        );
+        assert_eq!(
+            compare(&selected, &original, &value).0,
+            if extra == 0 { "compiled" } else { "original" }
+        );
+    }
+    write(
+        "recursive-reservation-boundary.json",
+        &json!({"default_bytes":48*1024*1024,"exact_bound_compiled":true,"one_raw_byte_above_original_before_entry":true,"raw_bytes_at_bound":RAW_AT_LIMIT}),
+    );
+}
+
+#[test]
+#[cfg_attr(
+    debug_assertions,
+    ignore = "release-only productive scalar recursion stack qualification"
+)]
+fn productive_scalar_recursive_boundaries_fit_qualified_threads() {
+    let minimum = r##"{"type":["object","null"],"properties":{"value":{"type":"integer","minimum":0},"left":{"$ref":"#"},"right":{"$ref":"#"}},"required":["value","left","right"],"additionalProperties":false}"##;
+    let additional = r##"{"type":"object","properties":{"name":{"type":"string"}},"required":["name"],"additionalProperties":{"$ref":"#"}}"##;
+    let union = r##"{"oneOf":[{"type":"object","properties":{"kind":{"const":"leaf"},"value":{"type":"integer"}},"required":["kind","value"],"additionalProperties":false},{"type":"object","properties":{"kind":{"const":"branch"},"children":{"type":"array","items":{"$ref":"#"}}},"required":["kind","children"],"additionalProperties":false}]}"##;
+    let mut rows = Vec::new();
+    for (name, schema) in [
+        ("minimum", minimum),
+        ("additional", additional),
+        ("union", union),
+    ] {
+        for stack in [256 * 1024, 1024 * 1024] {
+            for failing in [false, true] {
+                let (selected, original) = owners(
+                    schema,
+                    &ExternalSchemas::default(),
+                    Limits::default(),
+                    PreparationLimits::default(),
+                );
+                let limit = selected.compiled.qualified_depth().unwrap();
+                let mut values = Vec::new();
+                let levels = match name {
+                    "minimum" => limit,
+                    "additional" => limit - 1,
+                    _ => (limit - 1) / 2,
+                };
+                for beyond in [false, true] {
+                    let mut text = match name {
+                        "minimum" => "null".to_owned(),
+                        "additional" => if failing {
+                            r#"{"name":42}"#
+                        } else {
+                            r#"{"name":"leaf"}"#
+                        }
+                        .to_owned(),
+                        _ => format!(
+                            r#"{{"kind":"leaf","value":{}}}"#,
+                            if failing { "false" } else { "0" }
+                        ),
+                    };
+                    for i in 0..levels + usize::from(beyond) {
+                        text = match name {
+                            "minimum" => format!(
+                                r#"{{"value":{},"left":{text},"right":null}}"#,
+                                if i == 0 && failing { -1 } else { 0 }
+                            ),
+                            "additional" => format!(r#"{{"name":"node","next":{text}}}"#),
+                            _ => format!(r#"{{"kind":"branch","children":[{text}]}}"#),
+                        };
+                    }
+                    values.push((beyond, JsonValue::parse(text).unwrap()));
+                }
+                std::thread::Builder::new()
+                    .stack_size(stack)
+                    .spawn(move || {
+                        for (beyond, value) in values {
+                            assert_eq!(
+                                matches!(
+                                    selected.evaluate(&value, Detail::Outcome, &HEALTHY),
+                                    ValueOutcome::Satisfies
+                                ),
+                                !failing
+                            );
+                            assert_eq!(
+                                compare(&selected, &original, &value).0,
+                                if beyond { "original" } else { "compiled" }
+                            );
+                        }
+                    })
+                    .unwrap()
+                    .join()
+                    .expect("qualified productive scalar recursion stack");
+                rows.push(json!({"schema":name,"native_thread_bytes":stack,"failing":failing,"qualified_depth":limit}));
+            }
+        }
+    }
+    write(
+        "productive-recursive-stack.json",
+        &json!({"rows":rows,"satisfying_and_failing_equal":true,"first_beyond_original":true}),
+    );
+}
+
+#[test]
+fn productive_name_subjects_and_mixed_application_edges_preserve_constraints() {
+    let name_schema = r##"{"type":["object","string","integer"],"propertyNames":{"$ref":"#"},"properties":{"next":{"$ref":"#"}},"not":{"const":"bad"}}"##;
+    let (selected, original) = owners(
+        name_schema,
+        &ExternalSchemas::default(),
+        Limits::default(),
+        PreparationLimits::default(),
+    );
+    for (text, satisfies) in [
+        (r#"{"next":{"same":1},"same":1}"#, true),
+        (r#"{"next":{"bad":1}}"#, false),
+        (r#"{"bad":1}"#, false),
+    ] {
+        let value = JsonValue::parse(text).unwrap();
+        assert_eq!(
+            matches!(
+                selected.evaluate(&value, Detail::Outcome, &HEALTHY),
+                ValueOutcome::Satisfies
+            ),
+            satisfies
+        );
+        assert_eq!(compare(&selected, &original, &value).0, "compiled");
+    }
+    assert_eq!(
+        compare(
+            &selected,
+            &original,
+            &JsonValue::parse(r#"{"\ud800":1}"#).unwrap()
+        )
+        .0,
+        "original"
+    );
+    // Root→child occurs once via same-instance $ref and once via properties.
+    let mixed = r##"{"$ref":"#/properties/child","properties":{"child":{"properties":{"score":{"minimum":0},"next":{"$ref":"#"}}}}}"##;
+    let (selected, original) = owners(
+        mixed,
+        &ExternalSchemas::default(),
+        Limits::default(),
+        PreparationLimits::default(),
+    );
+    for (text, satisfies) in [
+        (
+            r#"{"score":0,"child":{"score":1,"next":{"score":2}}}"#,
+            true,
+        ),
+        (r#"{"score":-1}"#, false),
+        (r#"{"child":{"score":-1}}"#, false),
+    ] {
+        let value = JsonValue::parse(text).unwrap();
+        assert_eq!(
+            matches!(
+                selected.evaluate(&value, Detail::Outcome, &HEALTHY),
+                ValueOutcome::Satisfies
+            ),
+            satisfies
+        );
+        assert_eq!(compare(&selected, &original, &value).0, "compiled");
+    }
+    write(
+        "productive-names-and-edge-kinds.json",
+        &json!({"same_name_occurrences_distinct":true,"names_and_value_subjects":true,"unpaired_name_original":true,"mixed_same_target_edges_equal":true}),
+    );
+}
+
+#[test]
+fn several_recursive_entries_preserve_converging_terminal_paths() {
+    let mut defs = serde_json::Map::new();
+    for i in 0..3 {
+        defs.insert(
+            format!("d{i}"),
+            json!({
+                "properties":{"v":{"minimum":0},"next":{"$ref":format!("#/$defs/d{}",(i+1)%3)}},
+                "allOf":[{"properties":{"next":{"properties":{"v":{"minimum":0}}}}}]
+            }),
+        );
+    }
+    let schema = json!({"$ref":"#/$defs/d0","$defs":defs});
+    let (selected, original) = owners(
+        &schema.to_string(),
+        &ExternalSchemas::default(),
+        Limits::default(),
+        PreparationLimits::default(),
+    );
+    assert_eq!(selected.compiled.recursive_exact_weight(), Some(8));
+    for token in ["0".to_owned(), "-1".to_owned(), "1".repeat(4096)] {
+        let text = format!(r#"{{"v":0,"next":{{"v":0,"next":{{"v":0,"next":{{"v":{token}}}}}}}}}"#);
+        assert_eq!(
+            compare(&selected, &original, &JsonValue::parse(text).unwrap()).0,
+            "compiled"
+        );
+    }
+    // A finite container comparison can descend internally to the same numeric
+    // subject from several ancestors. Scalar-only admission must keep it out.
+    for depth in [1, 2, 4] {
+        let mut literal = json!(0);
+        for _ in 0..depth {
+            literal = json!({"next":literal});
+        }
+        let schema = json!({"properties":{"next":{"$ref":"#"}},"not":{"const":literal}});
+        compiled::entries::take();
+        let (selected, original) = owners(
+            &schema.to_string(),
+            &ExternalSchemas::default(),
+            Limits::default(),
+            PreparationLimits::default(),
+        );
+        assert_eq!(compiled::entries::take(), [0, 0, 0]);
+        let mut text = "1".repeat(4096);
+        for _ in 0..depth + 2 {
+            text = format!(r#"{{"next":{text}}}"#);
+        }
+        assert_eq!(
+            compare(&selected, &original, &JsonValue::parse(text).unwrap()).0,
+            "original"
+        );
+    }
+    write(
+        "several-recursive-entry-paths.json",
+        &json!({"summed_exact_weight":8,"entry_types":3,"huge_numeric_subject_equal":true,"container_internal_paths_remain_original":true}),
+    );
+}
+
+#[test]
+fn recursive_wide_schema_exponents_fund_each_subject_before_entry() {
+    // A nonzero wide exponent keeps a heap-backed schema power through exact
+    // comparisons; leading zero text alone would normalize to inline400.
+    let wide = format!("1e+{}", "1".repeat(4096));
+    let wide_schema =
+        format!(r##"{{"properties":{{"n":{{"maximum":{wide}}},"next":{{"$ref":"#"}}}}}}"##);
+    let (wide_selected, wide_original) = owners(
+        &wide_schema,
+        &ExternalSchemas::default(),
+        Limits::default(),
+        PreparationLimits::default(),
+    );
+    for (token, satisfies) in [
+        ("1".to_owned(), true),
+        (format!("1e+{}", "2".repeat(4096)), false),
+    ] {
+        let text = format!(r#"{{"n":1,"next":{{"n":1,"next":{{"n":{token}}}}}}}"#);
+        let subject = JsonValue::parse(text).unwrap();
+        assert_eq!(
+            matches!(
+                wide_selected.evaluate(&subject, Detail::Outcome, &HEALTHY),
+                ValueOutcome::Satisfies
+            ),
+            satisfies
+        );
+        assert_eq!(
+            compare(&wide_selected, &wide_original, &subject).0,
+            "compiled"
+        );
+    }
+
+    let value_text = r#"{"n":0,"next":{"n":0,"next":null}}"#;
+    let value = JsonValue::parse(value_text).unwrap();
+    let count = openbindings_internal_json::backend::node_count(value.view());
+    assert_eq!(count, 9);
+    let reservation =
+        |bytes: usize| (16 * (value_text.len() + bytes * count) + 256 * (2 * count)) * 2 + 512;
+    let limit = 48 * 1024 * 1024;
+    let largest = ((limit - 512) / 2 - 16 * value_text.len() - 512 * count) / (16 * count);
+    assert!(reservation(largest) <= limit);
+    assert!(reservation(largest + 1) > limit);
+    let mut rows = Vec::new();
+    for length in [128, largest, largest + 1] {
+        let token = format!("1e+{}400", "0".repeat(length - 6));
+        assert_eq!(token.len(), length);
+        let schema = format!(
+            r##"{{"type":["object","null"],"properties":{{"n":{{"maximum":{token}}},"next":{{"$ref":"#"}}}}}}"##
+        );
+        let (selected, original) = owners(
+            &schema,
+            &ExternalSchemas::default(),
+            Limits::default(),
+            PreparationLimits::default(),
+        );
+        assert_eq!(selected.compiled.recursive_exact_weight(), Some(2));
+        assert!(matches!(
+            selected.evaluate(&value, Detail::Outcome, &HEALTHY),
+            ValueOutcome::Satisfies
+        ));
+        assert_eq!(
+            compare(&selected, &original, &value).0,
+            if length <= largest {
+                "compiled"
+            } else {
+                "original"
+            }
+        );
+        if length == 128 {
+            let bad = JsonValue::parse(r#"{"n":0,"next":{"n":1e401,"next":null}}"#).unwrap();
+            assert!(matches!(
+                selected.evaluate(&bad, Detail::Outcome, &HEALTHY),
+                ValueOutcome::Fails { .. }
+            ));
+            assert_eq!(compare(&selected, &original, &bad).0, "compiled");
+        }
+        rows.push(json!({"schema_operand_bytes":length,"subject_nodes":count,"reserved_bytes":reservation(length),"lane":if length<=largest {"compiled"} else {"original"}}));
+    }
+    write(
+        "recursive-schema-exponent-boundary.json",
+        &json!({"rows":rows,"default_reservation_bytes":limit,"full_observations_equal":true,"largest_operand_funded_and_next_byte_original_before_entry":true}),
     );
 }

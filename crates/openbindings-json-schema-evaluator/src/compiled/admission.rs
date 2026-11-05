@@ -18,6 +18,7 @@ pub(super) struct Features {
     pub unique: bool,
     pub advancing: bool,
     pub recursive: bool,
+    pub recursive_allocation_free: bool,
     pub readings: HashMap<String, pattern::Reading>,
 }
 
@@ -75,7 +76,22 @@ pub(super) fn select(
     let mut nodes: Vec<_> = reach.nodes.iter().copied().collect();
     nodes.sort_unstable();
     let mut own = HashMap::new();
-    let mut edges = reach.edges.clone();
+    let mut edges: HashMap<_, Vec<_>> = reach
+        .edges
+        .iter()
+        .map(|(&from, children)| {
+            (
+                from,
+                children
+                    .iter()
+                    .map(|&to| recursion::Edge {
+                        to,
+                        advances: false,
+                    })
+                    .collect(),
+            )
+        })
+        .collect();
     let mut forms = std::collections::HashSet::new();
     let mut accounted_sources = std::collections::HashSet::new();
     let mut pattern_bytes = 0usize;
@@ -83,7 +99,8 @@ pub(super) fn select(
     let mut matched_bytes = 0usize;
     let mut features = Features::default();
     let mut source_bytes = 0usize;
-    let mut recursive_exact_safe = true;
+    let mut recursive_scalar_only = true;
+    let mut recursive_allocation_free = true;
     for &node in &nodes {
         attempt.check().map_err(PreparationFailure::from)?;
         let original = space.node(node);
@@ -124,7 +141,7 @@ pub(super) fn select(
         }
         for keyword in openbindings_internal_json::numeric::KEYWORDS {
             if let Some(bound) = profile.get(value, keyword).and_then(|v| v.number_text()) {
-                recursive_exact_safe = false;
+                recursive_allocation_free = false;
                 features.scratch = true;
                 features.literal_bytes = features.literal_bytes.saturating_add(bound.len());
                 features.literal_nodes = features.literal_nodes.saturating_add(1);
@@ -139,7 +156,8 @@ pub(super) fn select(
             }
         }
         if let Some(literal) = profile.get(value, "const") {
-            recursive_exact_safe &= matches!(
+            recursive_scalar_only &= !matches!(literal.kind(), JsonKind::Array | JsonKind::Object);
+            recursive_allocation_free &= matches!(
                 literal.kind(),
                 JsonKind::Null | JsonKind::Boolean | JsonKind::String
             );
@@ -155,7 +173,9 @@ pub(super) fn select(
             features.scratch = true;
             features.literals = true;
             for literal in choices {
-                recursive_exact_safe &= matches!(
+                recursive_scalar_only &=
+                    !matches!(literal.kind(), JsonKind::Array | JsonKind::Object);
+                recursive_allocation_free &= matches!(
                     literal.kind(),
                     JsonKind::Null | JsonKind::Boolean | JsonKind::String
                 );
@@ -169,7 +189,8 @@ pub(super) fn select(
             }
         }
         if profile.get(value, "uniqueItems").and_then(|v| v.as_bool()) == Some(true) {
-            recursive_exact_safe = false;
+            recursive_scalar_only = false;
+            recursive_allocation_free = false;
             features.unique = true;
             features.scratch = true;
             features.literals = true;
@@ -232,7 +253,10 @@ pub(super) fn select(
                     } else {
                         features.advancing = true;
                     }
-                    edges.entry(node).or_default().push(target);
+                    edges.entry(node).or_default().push(recursion::Edge {
+                        to: target,
+                        advances: !in_place,
+                    });
                 }
             }
         }
@@ -323,7 +347,7 @@ pub(super) fn select(
                 let sum = edges
                     .iter()
                     .fold(*own.get(&node).unwrap_or(&0), |total, child| {
-                        total.saturating_add(*weights.get(child).unwrap_or(&0))
+                        total.saturating_add(*weights.get(&child.to).unwrap_or(&0))
                     });
                 weights.insert(node, sum);
                 features.multiplier = features.multiplier.max(sum);
@@ -333,25 +357,37 @@ pub(super) fn select(
                     break 'weights;
                 }
                 pending.push((node, true));
-                for &child in edges {
-                    if !weights.contains_key(&child) {
-                        pending.push((child, false));
+                for child in edges {
+                    if !weights.contains_key(&child.to) {
+                        pending.push((child.to, false));
                     }
                 }
             }
         }
     }
     if recursive {
-        // The proof covers every reached predicate, including acyclic exits
-        // executed at each level. Only nonnumeric scalar literals are newly
-        // admitted: kind mismatch and scalar equality reserve no pair stack.
-        if !recursive_exact_safe {
+        // Scalar exact predicates have one subject. Container equality and
+        // uniqueness add internal value traversals outside this graph proof.
+        if !recursive_scalar_only {
             return Ok(Err("recursive-exact-scratch-profile"));
         }
-        if !recursion::qualifies(space, environment.entry(), &nodes, &reach, attempt)? {
-            return Ok(Err("recursive-child-partition-profile"));
-        }
+        let proof = match recursion::qualifies(
+            space,
+            environment.entry(),
+            &nodes,
+            &reach,
+            &edges,
+            &own,
+            attempt,
+        )? {
+            Ok(proof) => proof,
+            Err(reason) => return Ok(Err(reason)),
+        };
         features.recursive = true;
+        features.recursive_allocation_free = recursive_allocation_free;
+        // Discard the partial acyclic fold; only the complete cut-DAG proof
+        // supplies this multiplier, summed across distinct productive entries.
+        features.multiplier = proof.exact;
     }
     features.multiplier = features.multiplier.max(1);
     // SDK conversion/index owners have their own coarse reservation. Opaque

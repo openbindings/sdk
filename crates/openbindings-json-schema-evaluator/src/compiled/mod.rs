@@ -148,6 +148,17 @@ impl Lane {
             Self::Compiled(prepared) => prepared.inner.deepest,
         }
     }
+    #[cfg(test)]
+    pub(super) fn recursive_exact_weight(&self) -> Option<usize> {
+        match self {
+            Self::Compiled(p) if p.features.recursive => Some(if p.features.scratch {
+                p.features.multiplier
+            } else {
+                0
+            }),
+            _ => None,
+        }
+    }
     pub(super) fn prepare(
         plan: &crate::semantic::Plan,
         limits: &crate::Limits,
@@ -278,7 +289,7 @@ impl Lane {
                 return None;
             }
         }
-        if features.scratch && !features.recursive {
+        if features.scratch && (!features.recursive || !features.recursive_allocation_free) {
             // Type-only integral tokens and i64 comparisons allocate no exact
             // decimal scratch. Other SDK-owned equality/uniqueness/numeric work
             // receives a conservative subtree-and-visit reservation before entry.
