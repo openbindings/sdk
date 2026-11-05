@@ -110,6 +110,47 @@ pub(super) struct Plan {
     value_hash: std::collections::hash_map::RandomState,
 }
 impl Plan {
+    pub(super) fn with_compiled(
+        environment: SchemaEnvironment,
+        limits: Limits,
+        preparation: PreparationLimits,
+        control: &dyn openbindings_internal_schema::Control,
+        caller: &dyn WorkControl,
+    ) -> Result<(Self, crate::compiled::Lane), PreparationFailure> {
+        let entry = environment.entry();
+        let construction = Construction::new(environment, limits.clone(), control)?;
+        let result = (|| {
+            let plan = Self::at(&construction, entry, preparation)?;
+            meta::validate(&plan, &construction)?;
+            let lane = crate::compiled::Lane::prepare(
+                &plan,
+                &limits,
+                &preparation,
+                caller,
+                control,
+                &|source| construction.compiled_reading(source),
+            )?;
+            Ok((plan, lane))
+        })();
+        construction.finish()?;
+        result
+    }
+    pub(super) fn compiled_environment(&self) -> &SchemaEnvironment {
+        &self.environment
+    }
+    pub(super) fn compiled_known_patterns(&self) -> bool {
+        self.patterns.values().all(|program| {
+            matches!(
+                program.as_ref(),
+                patterns::Program::Simple { .. } | patterns::Program::Vm { .. }
+            )
+        })
+    }
+    pub(super) fn compiled_static_queries(&self) -> bool {
+        self.queries
+            .iter()
+            .all(|((_, kind), query)| *kind == ReferenceKind::Static && query.is_ok())
+    }
     pub(super) fn new(
         environment: SchemaEnvironment,
         limits: Limits,

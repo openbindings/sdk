@@ -986,6 +986,7 @@ dependencies = [
  "openbindings",
  "openbindings-internal-json",
  "openbindings-internal-schema",
+ "openbindings-schema-evaluator-test-support",
  "regex",
  "regex-automata",
  "regex-syntax",

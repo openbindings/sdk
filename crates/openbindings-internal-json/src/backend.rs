@@ -1487,6 +1487,14 @@ pub fn node_count(value: crate::JsonRef<'_>) -> usize {
     nodes.partition_point(|node| node.span.start < end)
 }
 
+/// Visit every subtree node, borrowing its number token when it is numeric.
+/// Callers can observe control even across long nonnumeric spans.
+pub fn number_nodes(value: &crate::JsonValue) -> impl Iterator<Item = Option<&str>> {
+    let count = node_count(value.view());
+    (value.id..value.id + count)
+        .map(|id| matches!(value.owner.nodes[id].kind, Kind::Number).then(|| value.owner.raw(id)))
+}
+
 /// Whether [`depth`] is at most `limit`, without allocating for a value that
 /// nests at most 32 levels, and without reading past the first container
 /// deeper than `limit`.

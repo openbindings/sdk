@@ -5,6 +5,9 @@
 #![warn(missing_docs)]
 #[cfg(test)]
 extern crate self as openbindings_json_schema_evaluator;
+mod compiled;
+#[cfg(test)]
+mod compiled_qualification;
 mod es2020_properties;
 mod pattern;
 mod semantic;
@@ -125,6 +128,7 @@ fn no_verdict(
 #[derive(Clone)]
 pub struct DefaultValidator {
     plan: Arc<semantic::Plan>,
+    compiled: compiled::Lane,
 }
 impl std::fmt::Debug for DefaultValidator {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -138,6 +142,11 @@ impl SchemaValidator for DefaultValidator {
         detail: Detail,
         control: &dyn WorkControl,
     ) -> ValueOutcome {
+        if detail == Detail::Outcome
+            && let Some(outcome) = self.compiled.outcome(value, control)
+        {
+            return outcome;
+        }
         self.plan.evaluate(value, detail, control)
     }
 }
@@ -173,10 +182,17 @@ impl DefaultEvaluator {
             limits.max_identity_bytes,
             attempt,
         )?;
-        let plan = semantic::Plan::new(environment, self.limits.clone(), *limits, attempt)?;
+        let (plan, compiled) = semantic::Plan::with_compiled(
+            environment,
+            self.limits.clone(),
+            *limits,
+            attempt,
+            control,
+        )?;
         control.check()?;
         Ok(DefaultValidator {
             plan: Arc::new(plan),
+            compiled,
         })
     }
 }

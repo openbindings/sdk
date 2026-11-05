@@ -16,6 +16,13 @@ pub(super) struct Construction<'a> {
 }
 
 impl<'a> Construction<'a> {
+    pub(super) fn compiled_reading(
+        &self,
+        source: &str,
+    ) -> Result<Option<crate::pattern::Linear>, PreparationFailure> {
+        self.programs
+            .compiled_reading(source, &self.limits, self.control)
+    }
     pub(super) fn new(
         environment: SchemaEnvironment,
         limits: Limits,

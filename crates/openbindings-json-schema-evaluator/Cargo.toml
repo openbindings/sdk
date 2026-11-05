@@ -18,6 +18,8 @@ serde_json.workspace = true
 jsonschema = { workspace = true, features = ["idna"] }
 # Extract the already-pinned engine Unicode tables after strict ECMA name validation.
 regex-syntax = "=0.8.11"
+# Restored private baseline compiler; no public selection API.
+regex = "1.13.1"
 # Prepared programs own immutable NFAs; each value call owns its search cache.
 # Matching work is charged from states and outgoing edges.
 regex-automata = { version = "=0.4.18", default-features = false, features = ["std", "syntax", "nfa-pikevm", "unicode"] }
@@ -28,5 +30,10 @@ serde.workspace = true
 openbindings-internal-schema = { version = "=0.2.0-alpha.1", path = "../openbindings-internal-schema" }
 
 [dev-dependencies]
+openbindings-schema-evaluator-test-support = { version = "=0.2.0-alpha.1", path = "../openbindings-schema-evaluator-test-support" }
 # Independent matcher used only by Reader equivalence tests.
 regex = "1.13.1"
+
+[features]
+# Internal compiler-conversion qualification, not a public evaluator mode.
+conversion-check = []

@@ -126,20 +126,40 @@ fn interrupted_explanation_cannot_weaken_an_established_failure() {
         healthy: usize::MAX,
     };
     assert!(matches!(
-        contract.evaluate_with_control(&JsonValue::null(), &baseline),
+        contract.explain_with_control(&JsonValue::null(), &baseline),
         ValueOutcome::Fails { .. }
     ));
-    // The completed Outcome pass defines the verdict boundary. A fixed old
-    // callback ordinal can instead cancel before the new engine decides.
-    let result = contract.explain_with_control(
-        &JsonValue::null(),
-        &CancelAfterVerdict {
-            calls: AtomicUsize::new(0),
-            healthy: baseline.calls.load(Ordering::Relaxed),
-        },
-    );
+    // Outcome and Explain may use different qualified execution lanes. Exhaust
+    // Explain's own boundaries; once F is established, diagnostics cannot erase it.
+    let completed = baseline.calls.load(Ordering::Relaxed);
+    let mut established = false;
+    for healthy in 0..completed {
+        let result = contract.explain_with_control(
+            &JsonValue::null(),
+            &CancelAfterVerdict {
+                calls: AtomicUsize::new(0),
+                healthy,
+            },
+        );
+        match result {
+            ValueOutcome::NoVerdict { detail } => {
+                assert!(!established);
+                assert_eq!(detail.reason, NoVerdictReason::Cancelled);
+            }
+            ValueOutcome::Fails {
+                problems,
+                problems_complete: false,
+                ..
+            } => {
+                assert!(problems.is_empty());
+                established = true;
+            }
+            other => panic!("unexpected interrupted explanation: {other:?}"),
+        }
+    }
     assert!(
-        matches!(result, ValueOutcome::Fails { problems, problems_complete:false, .. } if problems.is_empty())
+        established,
+        "exercise interruption after F and before diagnostic completion"
     );
     assert!(
         matches!(contract.explain(&JsonValue::null()), ValueOutcome::Fails { problems, .. } if !problems.is_empty())

@@ -109,12 +109,21 @@ fn assert_interrupted_failure(schema: Value, instance: &str) {
             matches!(evaluate(Detail::Explain, &explain_checks), ValueOutcome::Fails { problems, .. } if !problems.is_empty())
         );
         let completed_explanation = explain_checks.calls.load(Ordering::Relaxed);
-        assert!(completed_explanation > verdict_boundary);
-        // Measure the same-input ordinary pass instead of assuming a callback
-        // ordinal from an outgoing engine. Exhaust every observed boundary.
+        // Explain and Outcome use independently selected lanes. Establish the
+        // Explain verdict boundary from its own first completed F, then check
+        // every interruption on either side without equating callback counts.
+        let explain_verdict_boundary = (0..=completed_explanation)
+            .find(|&healthy| {
+                matches!(
+                    evaluate(Detail::Explain, &CancelAfterChecks::new(healthy)),
+                    ValueOutcome::Fails { .. }
+                )
+            })
+            .expect("healthy Explain establishes F");
+        assert!(completed_explanation > explain_verdict_boundary);
         for healthy in 0..=completed_explanation {
             let result = evaluate(Detail::Explain, &CancelAfterChecks::new(healthy));
-            if healthy < verdict_boundary {
+            if healthy < explain_verdict_boundary {
                 assert!(matches!(result, ValueOutcome::NoVerdict { detail }
                     if detail.reason == NoVerdictReason::Cancelled));
             } else if healthy < completed_explanation {
@@ -195,13 +204,13 @@ fn established_satisfaction_survives_cancellation_after_verdict() {
                     prepared.evaluate(&value, detail, control)
                 }
             };
-            let baseline = CancelAfterChecks::new(usize::MAX);
-            assert!(matches!(
-                evaluate(Detail::Outcome, &baseline),
-                ValueOutcome::Satisfies
-            ));
-            let verdict_boundary = baseline.calls.load(Ordering::Relaxed);
             for detail in [Detail::Outcome, Detail::Explain] {
+                let baseline = CancelAfterChecks::new(usize::MAX);
+                assert!(matches!(
+                    evaluate(detail, &baseline),
+                    ValueOutcome::Satisfies
+                ));
+                let verdict_boundary = baseline.calls.load(Ordering::Relaxed);
                 for healthy in 0..verdict_boundary {
                     assert!(matches!(evaluate(detail, &CancelAfterChecks::new(healthy)),
                         ValueOutcome::NoVerdict { detail } if detail.reason == NoVerdictReason::Cancelled));

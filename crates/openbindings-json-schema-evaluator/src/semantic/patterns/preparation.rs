@@ -44,6 +44,88 @@ fn limit(resource: &'static str) -> PreparationFailure {
     })
 }
 impl Programs {
+    /// Temporary handoff of the completed current interpretation. It is not a
+    /// second Reader/engine admission and does not outlive Construction.
+    pub(in super::super) fn compiled_reading(
+        &self,
+        source: &str,
+        limits: &Limits,
+        control: &dyn Control,
+    ) -> Result<Option<pattern::Linear>, PreparationFailure> {
+        self.check(control)?;
+        control.charge_work(source.len().saturating_add(1))?;
+        if pattern::anchored_literal(source).is_some() {
+            let Some((work, allocation)) = pattern::preparation_cost(source) else {
+                return Ok(None);
+            };
+            control.charge_work(work)?;
+            control.charge_allocation(allocation)?;
+            return Ok(
+                match pattern::read(source, limits.pattern_depth, limits.pattern_bytes) {
+                    Ok(Reading::Linear(linear)) => Some(linear),
+                    _ => None,
+                },
+            );
+        }
+        let mut hasher = DefaultHasher::new();
+        hasher.write(source.as_bytes());
+        let key = (
+            source.len(),
+            hasher.finish(),
+            limits.pattern_bytes,
+            limits.pattern_depth,
+        );
+        let height = self.sources.borrow().len().saturating_add(1).ilog2() as usize + 2;
+        control.charge_work(height.saturating_mul(12))?;
+        let candidates = self.sources.borrow().get(&key).map_or(0, Vec::len);
+        let mut program = None;
+        for index in 0..candidates {
+            control.charge_work(source.len().saturating_add(1))?;
+            let sources = self.sources.borrow();
+            if sources[&key][index].text == source {
+                program = Some(sources[&key][index].program.clone());
+                break;
+            }
+        }
+        let Some(program) = program else {
+            return Ok(None);
+        };
+        let count = self.forms.borrow().values().map(Vec::len).sum::<usize>();
+        control.charge_work(count.saturating_mul(2).saturating_add(1))?;
+        let extent = self
+            .forms
+            .borrow()
+            .values()
+            .flatten()
+            .find(|form| Arc::ptr_eq(&form.program, &program))
+            .map(|form| form.text.len());
+        let Some(extent) = extent else {
+            return Ok(None);
+        };
+        let simple = match program.as_ref() {
+            Program::Simple { matcher, .. } => Some(matcher),
+            Program::Vm { .. } => None,
+            _ => return Ok(None),
+        };
+        control.charge_work(extent.saturating_add(1))?;
+        control.charge_allocation(
+            extent
+                .saturating_add(simple.map_or(0, |m| m.heap_bytes()))
+                .saturating_add(256),
+        )?;
+        let form = self
+            .forms
+            .borrow()
+            .values()
+            .flatten()
+            .find(|form| Arc::ptr_eq(&form.program, &program))
+            .expect("completed form remains owned")
+            .text
+            .clone();
+        let simple = simple.cloned();
+        self.check(control)?;
+        Ok(Some(pattern::Linear { form, simple }))
+    }
     pub(in super::super) fn check(&self, control: &dyn Control) -> Result<(), PreparationFailure> {
         if let Some(resource) = self.failure.get() {
             return Err(limit(resource));
