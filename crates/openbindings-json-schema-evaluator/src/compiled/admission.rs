@@ -16,6 +16,7 @@ pub(super) struct Features {
     pub multiplier: usize,
     pub unique: bool,
     pub advancing: bool,
+    pub recursive: bool,
     pub readings: HashMap<String, pattern::Reading>,
 }
 
@@ -81,6 +82,8 @@ pub(super) fn select(
     let mut matched_bytes = 0usize;
     let mut features = Features::default();
     let mut source_bytes = 0usize;
+    let mut advance = None;
+    let mut multiple_advances = false;
     for &node in &nodes {
         attempt.check().map_err(PreparationFailure::from)?;
         let original = space.node(node);
@@ -217,6 +220,7 @@ pub(super) fn select(
                         reach.edges.entry(node).or_default().push(target);
                     } else {
                         features.advancing = true;
+                        multiple_advances |= advance.replace((node, target)).is_some();
                     }
                     edges.entry(node).or_default().push(target);
                 }
@@ -290,11 +294,13 @@ pub(super) fn select(
             return Ok(Err("restored-private-pattern-profile"));
         }
     }
-    // The full application graph includes advancing children. Closed acyclic
-    // paths bound cumulative predicate visits; cycles still choose Plan here.
+    // Acyclic paths retain their cumulative exact-scratch bound. Productive
+    // recursion has a separate pre-entry qualification, never a constant
+    // substituted for that cumulative bound.
     let mut weights = HashMap::<usize, usize>::new();
     let mut visiting = std::collections::HashSet::new();
-    for &root in &nodes {
+    let mut recursive = false;
+    'weights: for &root in &nodes {
         let mut pending = vec![(root, false)];
         while let Some((node, leaving)) = pending.pop() {
             attempt.check().map_err(PreparationFailure::from)?;
@@ -313,7 +319,8 @@ pub(super) fn select(
                 features.multiplier = features.multiplier.max(sum);
             } else {
                 if !visiting.insert(node) {
-                    return Ok(Err("productive-recursive-application-profile"));
+                    recursive = true;
+                    break 'weights;
                 }
                 pending.push((node, true));
                 for &child in edges {
@@ -323,6 +330,23 @@ pub(super) fn select(
                 }
             }
         }
+    }
+    if recursive {
+        // Exclude allocating exact predicates anywhere in the reached closure:
+        // even an acyclic side exit can execute at every recursive level.
+        if features.literals || features.literal_nodes != 0 {
+            return Ok(Err("recursive-exact-scratch-profile"));
+        }
+        let Some((source, target)) = advance.filter(|_| !multiple_advances) else {
+            return Ok(Err("recursive-child-route-profile"));
+        };
+        // One advancing edge globally excludes nested productive components.
+        // Its same-instance return must be unique: a reconverging diamond or
+        // parallel edge would otherwise multiply recursive visits per level.
+        if !single_return(&nodes, &reach.edges, source, target, attempt)? {
+            return Ok(Err("recursive-return-route-profile"));
+        }
+        features.recursive = true;
     }
     features.multiplier = features.multiplier.max(1);
     // SDK conversion/index owners have their own coarse reservation. Opaque
@@ -339,6 +363,63 @@ pub(super) fn select(
         .map_err(PreparationFailure::from)?;
     attempt.check().map_err(PreparationFailure::from)?;
     Ok(Ok(Admitted { features, reach }))
+}
+
+fn single_return(
+    nodes: &[usize],
+    edges: &HashMap<usize, Vec<usize>>,
+    source: usize,
+    target: usize,
+    attempt: &dyn Control,
+) -> Result<bool, PreparationFailure> {
+    let edge_count = edges
+        .values()
+        .fold(0usize, |n, e| n.saturating_add(e.len()));
+    attempt
+        .charge_allocation(nodes.len().saturating_mul(160).saturating_add(512))
+        .map_err(PreparationFailure::from)?;
+    attempt
+        .charge_work(nodes.len().saturating_add(edge_count).saturating_add(1))
+        .map_err(PreparationFailure::from)?;
+    let mut pending: HashMap<_, usize> = nodes.iter().map(|&node| (node, 0)).collect();
+    for children in edges.values() {
+        for child in children {
+            attempt.check().map_err(PreparationFailure::from)?;
+            *pending.get_mut(child).expect("completed child membership") += 1;
+        }
+    }
+    let mut ready: Vec<_> = nodes
+        .iter()
+        .copied()
+        .filter(|node| pending[node] == 0)
+        .collect();
+    let mut order = Vec::with_capacity(nodes.len());
+    while let Some(node) = ready.pop() {
+        attempt.check().map_err(PreparationFailure::from)?;
+        order.push(node);
+        for child in edges.get(&node).into_iter().flatten() {
+            attempt.check().map_err(PreparationFailure::from)?;
+            let remaining = pending.get_mut(child).expect("completed child membership");
+            *remaining -= 1;
+            if *remaining == 0 {
+                ready.push(*child);
+            }
+        }
+    }
+    if order.len() != nodes.len() {
+        return Ok(false); // A same-instance cycle, before projection or backend.
+    }
+    // Reuse the temporary count map. Two means more than one route; exact
+    // larger path counts are unnecessary, including on wide shared DAGs.
+    for node in order.into_iter().rev() {
+        let mut paths = usize::from(node == source);
+        for child in edges.get(&node).into_iter().flatten() {
+            attempt.check().map_err(PreparationFailure::from)?;
+            paths = paths.saturating_add(pending[child]).min(2);
+        }
+        pending.insert(node, paths);
+    }
+    Ok(pending[&target] == 1)
 }
 
 fn read_pattern(

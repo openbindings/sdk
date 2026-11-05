@@ -69,7 +69,7 @@ fn rewrite(
     let Value::Object(schema) = value else {
         return Ok(());
     };
-    // Dynamic/recursive and annotation consumers are selected out before this
+    // Dynamic reference scope and annotation consumers are selected out before this
     // lowering. Never replace their semantics with a stand-in or approximation.
     if schema.contains_key("$dynamicRef")
         || schema.contains_key("$recursiveRef")

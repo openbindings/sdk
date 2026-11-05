@@ -265,7 +265,7 @@ fn compiled_decision_exact_numbers_text_and_references() {
         (
             r##"{"$defs":{"n":{"anyOf":[{"type":"integer"},{"type":"array","items":{"$ref":"#/$defs/n"}}]}},"$ref":"#/$defs/n"}"##,
             "[[42]]",
-            false,
+            true, // Step2a qualifies this productive, allocation-free return.
         ),
         (r##"{"$ref":"https://absent.invalid/schema"}"##, "42", false),
         (r##"{"$ref":"#/$defs/missing"}"##, "42", false),
@@ -725,4 +725,236 @@ fn a_skipped_active_carrier_cannot_disappear_from_shared_compiler_facts() {
             );
         }
     }
+}
+
+const RECURSIVE_INTEGER_ARRAY: &str = r##"{"$defs":{"node":{"anyOf":[{"type":"integer"},{"type":"array","items":{"$ref":"#/$defs/node"}}]},"unused":{"const":false}},"$ref":"#/$defs/node"}"##;
+fn nested(leaf: &str, depth: usize) -> JsonValue {
+    JsonValue::parse(format!("{}{leaf}{}", "[".repeat(depth), "]".repeat(depth))).unwrap()
+}
+
+#[test]
+fn recursive_values_keep_exact_numbers_and_depth_selection() {
+    let (selected, original) = owners(
+        RECURSIVE_INTEGER_ARRAY,
+        &ExternalSchemas::default(),
+        Limits::default(),
+        PreparationLimits::default(),
+    );
+    let limit = selected
+        .compiled
+        .qualified_depth()
+        .expect("compiled recursion");
+    assert!((64..1024).contains(&limit));
+    let mut rows = Vec::new();
+    for depth in [0, 1, 32, 64, limit, limit + 1] {
+        for leaf in ["0", "false", "[]", "[0,-1,[],[2]]"] {
+            let lane = compare(&selected, &original, &nested(leaf, depth)).0;
+            // The container leaves add their own depth; scalar leaves expose
+            // the qualified boundary without depending on that extra nesting.
+            if matches!(leaf, "0" | "false") {
+                assert_eq!(
+                    lane,
+                    if depth <= limit {
+                        "compiled"
+                    } else {
+                        "original"
+                    }
+                );
+            }
+            rows.push(json!({"depth":depth,"leaf":leaf,"lane":lane}));
+        }
+    }
+    let huge = "9".repeat(3000);
+    for token in ["-0", "9223372036854775808", "-9223372036854775809", &huge] {
+        assert_eq!(
+            compare(&selected, &original, &nested(token, 32)).0,
+            "compiled"
+        );
+    }
+    for token in ["1.0", "1e0", "1.2", "1e1000000", "-0.00"] {
+        assert_eq!(
+            compare(&selected, &original, &nested(token, 32)).0,
+            "original"
+        );
+    }
+    for text in [r#"["\ud800"]"#, r#"{"x":1,"x":2}"#] {
+        assert_eq!(
+            compare(&selected, &original, &JsonValue::parse(text).unwrap()).0,
+            "original"
+        );
+    }
+    for schema in [
+        r##"{"type":["integer","null","array"],"items":{"$ref":"#"}}"##,
+        r##"{"$defs":{"alias":{"$ref":"#/$defs/node"},"node":{"anyOf":[{"type":"integer"},{"type":"array","items":{"$ref":"#/$defs/alias"}}]}},"$ref":"#/$defs/alias"}"##,
+    ] {
+        let (selected, original) = owners(
+            schema,
+            &ExternalSchemas::default(),
+            Limits::default(),
+            PreparationLimits::default(),
+        );
+        for text in ["0", "[]", "[0,-1,[],[2]]", "[false]"] {
+            assert_eq!(
+                compare(&selected, &original, &JsonValue::parse(text).unwrap()).0,
+                "compiled"
+            );
+        }
+        assert_eq!(
+            compare(&selected, &original, &nested("1.0", 32)).0,
+            "original"
+        );
+    }
+    compiled::entries::take();
+    let (limited, limited_original) = owners(
+        RECURSIVE_INTEGER_ARRAY,
+        &ExternalSchemas::default(),
+        Limits {
+            evaluation_sdk_work_units: Some(1),
+            ..Limits::default()
+        },
+        PreparationLimits::default(),
+    );
+    assert_eq!(compiled::entries::take(), [0, 0, 0]);
+    assert_eq!(
+        compare(&limited, &limited_original, &nested("0", 32)).0,
+        "original"
+    );
+    write(
+        "recursive-values.json",
+        &json!({"all_equal":true,"qualified_depth":limit,"rows":rows,"plain_integer_tokens":"compiled including overflow and3000digits","decimal_exponent_tokens":"original-before-entry","unpaired_and_duplicates":"original-before-entry"}),
+    );
+}
+
+#[test]
+fn recursive_duplicate_routes_and_allocating_exits_stay_before_projection() {
+    let mut schemas = vec![
+        r##"{"$ref":"#"}"##.to_owned(),
+        r##"{"$defs":{"n":{"allOf":[{"$ref":"#/$defs/step"},{"$ref":"#/$defs/step"}]},"step":{"type":"array","items":{"$ref":"#/$defs/n"}}},"$ref":"#/$defs/n"}"##.to_owned(),
+        r##"{"$defs":{"n":{"allOf":[{"$ref":"#/$defs/a"},{"$ref":"#/$defs/b"}]},"a":{"$ref":"#/$defs/step"},"b":{"$ref":"#/$defs/step"},"step":{"type":"array","items":{"$ref":"#/$defs/n"}}},"$ref":"#/$defs/n"}"##.to_owned(),
+        r##"{"$defs":{"n":{"allOf":[{"items":{"$ref":"#/$defs/n"}},{"items":{"$ref":"#/$defs/n"}}]}},"$ref":"#/$defs/n"}"##.to_owned(),
+        r##"{"$defs":{"n":{"anyOf":[{"type":"integer"},{"items":{"$ref":"#/$defs/n"}}],"allOf":[{"$ref":"#/$defs/m"}]},"m":{"anyOf":[{"type":"integer"},{"items":{"$ref":"#/$defs/m"}}]}},"$ref":"#/$defs/n"}"##.to_owned(),
+    ];
+    for predicate in [
+        json!({"const":0}),
+        json!({"enum":[0,1]}),
+        json!({"minimum":0}),
+        json!({"uniqueItems":true}),
+    ] {
+        // These side leaves are not in the cyclic component, but the cycle
+        // enters them at every value level. The whole-closure rule covers them.
+        let mut schema: serde_json::Value = serde_json::from_str(RECURSIVE_INTEGER_ARRAY).unwrap();
+        schema["$defs"]["node"]["allOf"] = json!([predicate]);
+        schemas.push(schema.to_string());
+    }
+    let mut rows = Vec::new();
+    for schema in schemas {
+        compiled::entries::take();
+        let (selected, original) = owners(
+            &schema,
+            &ExternalSchemas::default(),
+            Limits::default(),
+            PreparationLimits::default(),
+        );
+        assert_eq!(compiled::entries::take(), [0, 0, 0], "{schema}");
+        let compiled::Lane::Original(reason) = selected.compiled else {
+            panic!("unexpected compiled route: {schema}")
+        };
+        for text in ["0", "[]", "[[]]", "[0]"] {
+            assert_eq!(
+                compare(&selected, &original, &JsonValue::parse(text).unwrap()).0,
+                "original"
+            );
+        }
+        rows.push(json!({"schema":schema,"reason":reason}));
+    }
+    write(
+        "recursive-admission.json",
+        &json!({"all_equal":true,"zero_projection_or_backend_entries":true,"rows":rows}),
+    );
+}
+
+#[test]
+fn recursive_preflight_and_completion_observed_cancellation_are_terminal() {
+    struct Polls {
+        at: usize,
+        seen: AtomicUsize,
+    }
+    impl WorkControl for Polls {
+        fn is_cancelled(&self) -> bool {
+            self.seen.fetch_add(1, Ordering::Relaxed) == self.at
+        }
+    }
+    let (selected, original) = owners(
+        RECURSIVE_INTEGER_ARRAY,
+        &ExternalSchemas::default(),
+        Limits::default(),
+        PreparationLimits::default(),
+    );
+    let value = nested("0", 32);
+    let healthy = Polls {
+        at: usize::MAX,
+        seen: AtomicUsize::new(0),
+    };
+    assert!(matches!(
+        selected.evaluate(&value, Detail::Outcome, &healthy),
+        ValueOutcome::Satisfies
+    ));
+    let total = healthy.seen.load(Ordering::Relaxed);
+    assert!(total > 2);
+    for (at, entries) in [(1, 0), (total - 1, 1)] {
+        compiled::entries::take();
+        let control = Polls {
+            at,
+            seen: AtomicUsize::new(0),
+        };
+        assert!(
+            matches!(selected.evaluate(&value,Detail::Outcome,&control),ValueOutcome::NoVerdict{detail} if detail.reason==NoVerdictReason::Cancelled)
+        );
+        assert_eq!(compiled::entries::take(), [0, 0, entries]);
+        assert_eq!(compare(&selected, &original, &value).0, "compiled");
+    }
+    write(
+        "recursive-cancellation.json",
+        &json!({"preflight_zero_backend":true,"completion_one_backend":true,"no_retry":true,"healthy_reuse":true,"actual_polls":total}),
+    );
+}
+
+#[test]
+#[cfg_attr(
+    debug_assertions,
+    ignore = "release-only compiled recursion boundary stack qualification"
+)]
+fn recursive_compiled_boundary_runs_on_qualified_native_threads() {
+    for stack in [256 * 1024, 1024 * 1024] {
+        let (selected, original) = owners(
+            RECURSIVE_INTEGER_ARRAY,
+            &ExternalSchemas::default(),
+            Limits::default(),
+            PreparationLimits::default(),
+        );
+        std::thread::Builder::new()
+            .stack_size(stack)
+            .spawn(move || {
+                let limit = selected.compiled.qualified_depth().unwrap();
+                for depth in [limit, limit + 1] {
+                    for leaf in ["0", "false"] {
+                        assert_eq!(
+                            compare(&selected, &original, &nested(leaf, depth)).0,
+                            if depth == limit {
+                                "compiled"
+                            } else {
+                                "original"
+                            }
+                        );
+                    }
+                }
+            })
+            .unwrap()
+            .join()
+            .expect("qualified compiled recursion stack");
+    }
+    write(
+        "recursive-stack.json",
+        &json!({"native_thread_bytes":[256*1024,1024*1024],"compiled_exact_boundary":true,"original_beyond_boundary":true,"satisfying_and_failing":true}),
+    );
 }

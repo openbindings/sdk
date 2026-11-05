@@ -123,6 +123,13 @@ pub(super) struct Prepared {
     reservation: usize,
 }
 impl Lane {
+    #[cfg(test)]
+    pub(super) fn qualified_depth(&self) -> Option<usize> {
+        match self {
+            Self::Original(_) => None,
+            Self::Compiled(prepared) => prepared.inner.deepest,
+        }
+    }
     pub(super) fn prepare(
         plan: &crate::semantic::Plan,
         limits: &crate::Limits,
@@ -145,6 +152,7 @@ impl Lane {
         entries::record(0);
         let definitions =
             space.program_definitions_reached(environment.entry(), &reach, attempt)?;
+        drop(reach); // Lowering owns its output; construction no longer needs the map.
         let compiler = Compiler {
             limits: Limits::default(),
             readings: std::mem::take(&mut features.readings),
@@ -191,6 +199,22 @@ impl Lane {
             return None;
         }
         let features = &prepared.features;
+        if features.recursive && features.scratch {
+            // This recursive profile has only type:integer exact predicates.
+            // Plain integer tokens use the backend's allocation-free lexical
+            // test, including arbitrarily long integers and -0. Decimal and
+            // exponent interpretation remains on Plan before backend entry.
+            for token in backend::number_nodes(value) {
+                if let Err(detail) = control.check() {
+                    return Some(ValueOutcome::NoVerdict {
+                        detail: detail.into(),
+                    });
+                }
+                if token.is_some_and(|n| n.bytes().any(|b| matches!(b, b'.' | b'e' | b'E'))) {
+                    return None;
+                }
+            }
+        }
         if features.multiple {
             for token in backend::number_nodes(value) {
                 if let Err(detail) = control.check() {
@@ -233,7 +257,7 @@ impl Lane {
                 return None;
             }
         }
-        if features.scratch {
+        if features.scratch && !features.recursive {
             // Type-only integral tokens and i64 comparisons allocate no exact
             // decimal scratch. Other SDK-owned equality/uniqueness/numeric work
             // receives a conservative subtree-and-visit reservation before entry.
@@ -665,8 +689,8 @@ fn exceeds_size(error: &jsonschema::ValidationError<'_>) -> bool {
 // Share the contract's pattern memory among the distinct `patternProperties`
 // name forms of the bundled `document` and its `pattern` matchers, because a
 // name does not fit its first allowance, and build the validator. A name that
-// does not fit what it is given refuses preparation at its keyword's original
-// location, the first in the bundle's order. The library takes one size
+// does not fit what it is given refuses preparation in bundle order. Original
+// locations remain with Plan, not the private constructor. The library takes one size
 // setting for every name: when the names first share it, its build is their
 // compilation, and otherwise it builds again within the largest compiled size
 // any name was given, so no name builds more than its own.
