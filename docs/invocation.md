@@ -74,9 +74,14 @@ retaining or polling provider work. Local cancellation affects only that attempt
 external cancellation synchronously revokes its shared handoffs. Dropping output
 cancels and releases its future. None of these operations promises rollback.
 
-`InvocationLimits` bounds input/output queue capacity, value token bytes and
-terminal encoding bytes. A token-byte bound does not bound retained parent JSON
-arenas. Sixty-four SDK I/O credits per outer output poll bound cooperative progress,
+`InvocationLimits` bounds input/output queue capacity and terminal encoding bytes.
+`max_value_bytes` is optional and defaults to `None`: invocation adds no size cap
+on already parsed input or output values. Set `Some(bytes)` to apply a delivery
+policy, including `Some(0)` to refuse every value. This check does not bound parsing
+allocations or retained parent JSON arenas. JSON parsing independently retains its
+32 MiB default byte limit. Error encoding checks its byte budget before extending
+the serialization buffer; it does not bound allocations already made by the provider.
+Sixty-four SDK I/O credits per outer output poll bound cooperative progress,
 including absent-schema bypass and graceful EOF. Already blocked polls consume no
 credits. Arbitrary provider CPU is outside that cooperative I/O bound.
 

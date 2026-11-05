@@ -113,8 +113,11 @@ but never validates values or dispatches the operation. Ordinary errors carry no
 prediction; `ERR_REFUSED` predicts refusal of the same input. A later invocation
 selects independently and may discover additional requirements. Context acquisition, approvals and retry policy belong to the host.
 
-`InvocationLimits` bounds queue capacity and value/error encoding. Token-byte
-limits do not bound retained parent JSON arenas. Provider code/data errors remain
+`InvocationLimits` bounds queue capacity and error encoding. Its optional
+`max_value_bytes` defaults to `None`, so invocation adds no size cap on already
+parsed values. Set `Some(bytes)` for a delivery policy; `Some(0)` refuses every
+value. The check does not bound parsing allocations or retained parent JSON arenas.
+JSON parsing retains its independent 32 MiB default byte limit. Provider code/data errors remain
 exact, subject to finite encoding limits and reserved-code admission. Providers
 own the no-output/no-operation-effect guarantee of `CONTEXT_REQUIRED`; the SDK
 rejects such a challenge after output has already committed.

@@ -27,15 +27,17 @@ use std::{
 type Outcome = Result<(), InvocationError>;
 const POLL_CREDITS: usize = 64;
 
-/// Finite handoff policy; exact token bytes do not bound retained parent arenas.
+/// Queue capacities, optional value admission policy and error encoding budget.
 #[derive(Clone, Copy, Debug)]
 pub struct InvocationLimits {
     /// Accepted inputs awaiting delivery, plus at most one pending check.
     pub input_capacity: usize,
     /// Committed outputs awaiting the caller, plus at most one pending emission.
     pub output_capacity: usize,
-    /// Maximum token bytes for each input or output value.
-    pub max_value_bytes: usize,
+    /// Optional maximum token bytes for each input or output value; no cap by default.
+    /// Values are already parsed when this is checked. This policy does not bound
+    /// parsing allocations or retained parent arenas; JSON parsing has its own limits.
+    pub max_value_bytes: Option<usize>,
     /// Maximum encoded terminal error or advisory challenge bytes.
     pub max_error_bytes: usize,
 }
@@ -44,7 +46,7 @@ impl Default for InvocationLimits {
         Self {
             input_capacity: 1,
             output_capacity: 4,
-            max_value_bytes: 1024 * 1024,
+            max_value_bytes: None,
             max_error_bytes: 64 * 1024,
         }
     }
@@ -54,17 +56,13 @@ impl Default for InvocationLimits {
 pub struct LimitError;
 impl fmt::Display for LimitError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("capacities and value limit must be positive; terminal limit must be at least 256 bytes")
+        f.write_str("capacities must be positive; terminal limit must be at least 256 bytes")
     }
 }
 impl std::error::Error for LimitError {}
 impl InvocationLimits {
     pub(crate) fn validate(self) -> Result<Self, LimitError> {
-        if self.input_capacity == 0
-            || self.output_capacity == 0
-            || self.max_value_bytes == 0
-            || self.max_error_bytes < 256
-        {
+        if self.input_capacity == 0 || self.output_capacity == 0 || self.max_error_bytes < 256 {
             Err(LimitError)
         } else {
             Ok(self)
@@ -458,7 +456,12 @@ impl InvocationInput {
     /// Returns Closed after either input half closes, or ValueTooLarge for an
     /// oversized submission that was not accepted.
     pub async fn send(&mut self, value: JsonValue) -> Result<(), WriteError> {
-        if value.bytes().len() > self.shared.limits.max_value_bytes {
+        if self
+            .shared
+            .limits
+            .max_value_bytes
+            .is_some_and(|maximum| value.bytes().len() > maximum)
+        {
             return Err(WriteError::ValueTooLarge);
         }
         let mut value = Some(value);
@@ -826,7 +829,11 @@ impl ProviderOutput {
     /// Returns the invocation's terminal failure on rejection, cancellation,
     /// oversized output or prior failure; after success it returns ERR_CANCELLED.
     pub async fn send(&mut self, value: JsonValue) -> Result<(), InvocationError> {
-        let oversized = value.bytes().len() > self.shared.limits.max_value_bytes;
+        let oversized = self
+            .shared
+            .limits
+            .max_value_bytes
+            .is_some_and(|maximum| value.bytes().len() > maximum);
         let mut value = Some(value);
         let mut offer = OutputOffer {
             shared: self.shared.clone(),

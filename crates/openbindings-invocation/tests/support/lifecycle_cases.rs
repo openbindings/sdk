@@ -442,11 +442,40 @@ async fn native_borrowed_nonclone_provider_is_send_and_retained_output_survives(
     assert_eq!(retained.text(), "null");
 }
 #[tokio::test]
+async fn default_delivery_accepts_values_above_the_retired_one_mib_cap() {
+    let provider = Fixture::new(Mode::Echo);
+    let client = BindingClient::new(&provider);
+    let (mut input, mut output) = client.invoke(request(), cancel()).unwrap().split();
+    let value = JsonValue::string(&"x".repeat(1024 * 1024)).unwrap();
+    input.send(value.clone()).await.unwrap();
+    input.close();
+    let Some(OutputEvent::Output(delivered)) = output.next().await else {
+        panic!("the default policy must deliver the parsed value")
+    };
+    assert_eq!(delivered.bytes(), value.bytes());
+    assert!(matches!(output.next().await, Some(OutputEvent::Complete)));
+}
+
+#[tokio::test]
+async fn an_explicit_zero_value_allowance_refuses_all_values() {
+    let provider = Fixture::new(Mode::Echo);
+    let client = BindingClient::new(&provider)
+        .with_limits(InvocationLimits {
+            max_value_bytes: Some(0),
+            ..Default::default()
+        })
+        .unwrap();
+    let (mut input, _output) = client.invoke(request(), cancel()).unwrap().split();
+    assert_eq!(input.send(json("0")).await, Err(WriteError::ValueTooLarge));
+    assert_eq!(provider.calls.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
 async fn delivery_limits_are_local_on_input_and_terminal_on_bad_provider_output() {
     let provider = Fixture::new(Mode::Echo);
     let client = BindingClient::new(&provider)
         .with_limits(InvocationLimits {
-            max_value_bytes: 1,
+            max_value_bytes: Some(1),
             ..Default::default()
         })
         .unwrap();
@@ -462,7 +491,7 @@ async fn delivery_limits_are_local_on_input_and_terminal_on_bad_provider_output(
     let provider = Fixture::new(Mode::Null);
     let client = BindingClient::new(&provider)
         .with_limits(InvocationLimits {
-            max_value_bytes: 1,
+            max_value_bytes: Some(1),
             ..Default::default()
         })
         .unwrap();

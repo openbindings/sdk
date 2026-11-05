@@ -468,7 +468,7 @@ fn established_validation_or_size_failure_wins_over_later_oversized_output() {
         ExternalSchemas::default(),
     )
     .with_limits(openbindings_invocation::InvocationLimits {
-        max_value_bytes: 1,
+        max_value_bytes: Some(1),
         ..Default::default()
     })
     .unwrap();
@@ -486,7 +486,7 @@ fn established_validation_or_size_failure_wins_over_later_oversized_output() {
     let published = Arc::new(Mutex::new(None));
     let client = BindingClient::new(HoldOutput(published.clone()))
         .with_limits(openbindings_invocation::InvocationLimits {
-            max_value_bytes: 1,
+            max_value_bytes: Some(1),
             ..Default::default()
         })
         .unwrap();
