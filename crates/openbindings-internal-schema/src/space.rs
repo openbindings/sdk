@@ -1340,7 +1340,20 @@ impl SchemaSpace {
     ) -> Result<Definitions<'_>, Failure> {
         control.check()?;
         let reach = self.reach_unchecked(entry, control)?;
-        let in_place_cycle = match self.check_cycles(&reach, control) {
+        self.program_definitions_reached(entry, &reach, control)
+    }
+    /// Lower the same bounded definitions using completed original reach facts
+    /// from this space and entry. The version-locked companion supplies its
+    /// admitted closed graph; this does not resolve or reinterpret references.
+    /// Text, node, depth and cycle guards remain those of program_definitions.
+    pub fn program_definitions_reached(
+        &self,
+        entry: usize,
+        reach: &Reach,
+        control: &dyn Control,
+    ) -> Result<Definitions<'_>, Failure> {
+        control.check()?;
+        let in_place_cycle = match self.check_cycles(reach, control) {
             Ok(()) => false,
             Err(failure) if failure.reason == FailureReason::ConservativePreparation => true,
             Err(failure) => return Err(failure),
@@ -1359,7 +1372,7 @@ impl SchemaSpace {
             if !std::mem::replace(written, true) {
                 self.projection(
                     entry,
-                    &reach,
+                    reach,
                     control,
                     namespace,
                     false,
@@ -1388,7 +1401,7 @@ impl SchemaSpace {
                 Some(value) => (Schema::Boolean(value), node.value.text().len(), 1usize),
                 None => {
                     let fields =
-                        self.fields(id, &reach, namespace, true, &mut values, &mut separated)?;
+                        self.fields(id, reach, namespace, true, &mut values, &mut separated)?;
                     let mut bound = 2usize;
                     let mut count = 1usize;
                     for (keyword, field) in &fields {

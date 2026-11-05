@@ -33,7 +33,3 @@ openbindings-internal-schema = { version = "=0.2.0-alpha.1", path = "../openbind
 openbindings-schema-evaluator-test-support = { version = "=0.2.0-alpha.1", path = "../openbindings-schema-evaluator-test-support" }
 # Independent matcher used only by Reader equivalence tests.
 regex = "1.13.1"
-
-[features]
-# Internal compiler-conversion qualification, not a public evaluator mode.
-conversion-check = []

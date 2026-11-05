@@ -94,6 +94,7 @@ impl<'a> Interpreted<'a> {
 }
 
 pub(super) struct Plan {
+    complete_scans: bool,
     environment: SchemaEnvironment,
     entry: usize,
     limits: Limits,
@@ -110,6 +111,42 @@ pub(super) struct Plan {
     value_hash: std::collections::hash_map::RandomState,
 }
 impl Plan {
+    /// Reuse this Plan's completed original-node interpretation and resolved
+    /// queries. Missing scan facts never certify a closed compiler input.
+    pub(super) fn compiled_reach(
+        &self,
+        control: &dyn openbindings_internal_schema::Control,
+    ) -> Result<Option<openbindings_internal_schema::Reach>, PreparationFailure> {
+        control.check()?;
+        if !self.complete_scans
+            || self.fields.len() > 100_000
+            || !self.compiled_static_queries()
+            || !self.fields.contains_key(&self.entry)
+        {
+            return Ok(None);
+        }
+        let mut reach = openbindings_internal_schema::Reach::default();
+        for &node in self.fields.keys() {
+            control.check()?;
+            reach.nodes.insert(node);
+        }
+        reach.resources.extend(self.resources.iter().copied());
+        for (&(holder, kind), query) in &self.queries {
+            control.check()?;
+            let Ok(target) = query.as_ref() else {
+                return Ok(None);
+            };
+            if kind != ReferenceKind::Static
+                || !reach.nodes.contains(&holder)
+                || !reach.nodes.contains(&target.node)
+            {
+                return Ok(None);
+            }
+            reach.targets.insert((holder, false), target.clone());
+            reach.edges.entry(holder).or_default().push(target.node);
+        }
+        Ok(Some(reach))
+    }
     pub(super) fn with_compiled(
         environment: SchemaEnvironment,
         limits: Limits,
@@ -151,6 +188,7 @@ impl Plan {
             .iter()
             .all(|((_, kind), query)| *kind == ReferenceKind::Static && query.is_ok())
     }
+    #[cfg(test)]
     pub(super) fn new(
         environment: SchemaEnvironment,
         limits: Limits,
@@ -176,6 +214,7 @@ impl Plan {
     ) -> Result<Self, PreparationFailure> {
         let checked = preparation::check_from(construction, entry)?;
         Ok(Self {
+            complete_scans: checked.complete_scans,
             environment: construction.environment().clone(),
             entry,
             limits: construction.limits().clone(),

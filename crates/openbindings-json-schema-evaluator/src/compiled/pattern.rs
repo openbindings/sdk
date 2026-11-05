@@ -1,83 +1,12 @@
-//! Schema regular expressions as OpenBindings reads them: ECMA-262 11th edition
-//! patterns with Unicode semantics (the `u` flag) and no other flag, for
-//! `pattern` values and `patternProperties` names alike.
-//!
-//! Every pattern is parsed here before the JSON Schema library sees it. A
-//! pattern that is not valid with Unicode semantics has no reading, and the
-//! evaluator does not match it: whether a string matches it is undefined. A
-//! valid pattern is matched by a linear-time engine (the `regex` crate) when it
-//! has a form in that engine's syntax with the same meaning:
-//! [`Reading::Linear`] holds that form, which spells every character set out as
-//! code points so the two dialects read it alike. Three kinds of valid pattern
-//! are not matched: one that only a backtracking engine can match (lookaround
-//! and backreferences), one with a Unicode property escape, whose character
-//! tables the evaluator does not qualify, and one with a non-word-boundary
-//! assertion `\B`. The word boundary `\b` has a form: ECMA-262 reads it with
-//! `\w` as `[A-Za-z0-9_]`, as the regex crate's ASCII word boundary does, and
-//! an ASCII word boundary never falls inside a multi-byte character. Its
-//! complement `(?-u:\B)` does, and the regex crate's `is_match` then answers no
-//! for a pattern that another branch matches (`\x{E9}|(?-u:\B)` on "aéa"), so
-//! `\B` is not matched.
-//!
-//! The values the evaluator checks are strings of Unicode scalar values: a
-//! string with an unpaired surrogate is refused before any pattern reads it. A
-//! pattern can still name a lone surrogate with an escape; such an atom matches
-//! nothing those strings hold, and a class gains nothing from it.
+//! Current normalized pattern facts with the unchanged private Regex size and
+//! memory admission. This module does not read sources or define another syntax.
 pub(crate) use crate::pattern::{Simple, exact};
 
-/// What the evaluator can do with a valid pattern.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) enum Reading {
-    /// The pattern in the `regex` crate's syntax, written to have the same
-    /// matches.
-    Linear(Linear),
-    /// A valid pattern the evaluator does not match.
-    Unsupported(Unsupported),
-}
-/// A pattern the linear-time engine matches.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct Linear {
-    /// The pattern in the `regex` crate's syntax.
-    pub(crate) form: String,
-    /// A matcher that needs no compiled automaton, for the patterns that are
-    /// one anchored sequence of single-character runs.
-    pub(crate) simple: Option<Simple>,
-}
-/// Why a pattern is not matched.
+pub(crate) type Reading = crate::pattern::Linear;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Unsupported {
-    /// It is not a valid pattern with Unicode semantics, so whether a string
-    /// matches it is undefined.
-    Invalid,
-    /// It needs a backtracking engine.
-    Backtracking,
-    /// It has a Unicode property escape.
-    PropertyEscape,
-    /// It has a non-word-boundary assertion, `\B`.
-    NonWordBoundary,
-    /// Its form is longer than the pattern byte limit, or does not compile
-    /// within the most compiled size any one pattern is given
-    /// ([`COMPILED_SIZE`]), which is found when the pattern is first compiled.
     Size,
-    /// Its form does not compile within what the value contract's pattern memory
-    /// gives it, found when the pattern is first compiled.
     Memory(Shortfall),
-}
-impl Unsupported {
-    /// Whether the pattern is not matched for what it says rather than for a
-    /// limit: its match is then a stand-in, which a value's verdict need not
-    /// depend on. A pattern a limit leaves unmatched is no stand-in: as a
-    /// `pattern`, it gives no verdict wherever a string reaches it, and as a
-    /// `patternProperties` name, it refuses the value contract.
-    pub(crate) fn stands_in(self) -> bool {
-        matches!(
-            self,
-            Unsupported::Invalid
-                | Unsupported::Backtracking
-                | Unsupported::PropertyEscape
-                | Unsupported::NonWordBoundary
-        )
-    }
 }
 /// How a value contract's pattern memory fell short, for the refusal to state.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -109,15 +38,6 @@ pub(crate) enum Shortfall {
         compiled: usize,
     },
 }
-/// Why a pattern has no reading.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum Refusal {
-    /// It is not a valid pattern with Unicode semantics.
-    Invalid,
-    /// Its groups nest more deeply than the admitted limit.
-    Depth,
-}
-
 /// The most compiled size the linear-time engine gives any one pattern's form,
 /// in bytes. Counted repetitions of large sets, such as `^.{1,10000}$` (about
 /// 13.2 MiB), need more than the engine's default of 10 MiB.
@@ -143,15 +63,12 @@ pub(crate) struct Allowance {
 
 /// The pattern's form compiled for the linear-time engine within `allowance`;
 /// `None` when it does not fit.
-pub(crate) fn compile(form: &str, allowance: Allowance) -> Option<regex::Regex> {
-    checked_compile(form, allowance, None)
-}
 pub(crate) fn checked_compile(
     form: &str,
     allowance: Allowance,
-    control: Option<&dyn openbindings::WorkControl>,
+    control: &dyn openbindings::WorkControl,
 ) -> Option<regex::Regex> {
-    if control.is_some_and(|c| c.check().is_err()) {
+    if control.check().is_err() {
         return None;
     }
     #[cfg(test)]
@@ -161,7 +78,7 @@ pub(crate) fn checked_compile(
         .dfa_size_limit(allowance.cache)
         .build()
         .ok();
-    if control.is_some_and(|c| c.check().is_err()) {
+    if control.check().is_err() {
         return None;
     }
     result
@@ -259,7 +176,7 @@ impl Memory {
         forms: &[&str],
         names: usize,
         together: &mut dyn FnMut(Allowance) -> bool,
-        control: Option<&dyn openbindings::WorkControl>,
+        control: &dyn openbindings::WorkControl,
     ) -> Vec<Given> {
         let keep = |at: usize| at >= names;
         let left = self.left();
@@ -342,7 +259,7 @@ fn least(
     form: &str,
     fits: Allowance,
     keep: bool,
-    control: Option<&dyn openbindings::WorkControl>,
+    control: &dyn openbindings::WorkControl,
 ) -> (usize, Option<regex::Regex>) {
     let attempt = |compiled| {
         checked_compile(
@@ -373,29 +290,4 @@ fn least(
         }
     }
     (size, regex)
-}
-
-/// Read one pattern, refusing groups nested more than `max_depth` deep. A
-/// valid pattern whose form would be longer than `max_form` bytes is read as
-/// [`Unsupported::Size`], and its form is not written out.
-// The baseline backend now consumes the current admitted Reader, so Rust
-// identifier tables, normalization and authored group policy have one owner.
-pub(crate) fn read(source: &str, depth: usize, bytes: usize) -> Result<Reading, Refusal> {
-    crate::pattern::read(source, depth, bytes)
-        .map(|reading| match reading {
-            crate::pattern::Reading::Linear(linear) => Reading::Linear(Linear {
-                form: linear.form,
-                simple: linear.simple,
-            }),
-            crate::pattern::Reading::Unsupported(reason) => Reading::Unsupported(match reason {
-                crate::pattern::Unsupported::Backtracking => Unsupported::Backtracking,
-                crate::pattern::Unsupported::PropertyEscape => Unsupported::PropertyEscape,
-                crate::pattern::Unsupported::NonWordBoundary => Unsupported::NonWordBoundary,
-                crate::pattern::Unsupported::Size => Unsupported::Size,
-            }),
-        })
-        .map_err(|reason| match reason {
-            crate::pattern::Refusal::Invalid => Refusal::Invalid,
-            crate::pattern::Refusal::Depth => Refusal::Depth,
-        })
 }

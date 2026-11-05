@@ -7,6 +7,7 @@ use openbindings_internal_schema::{child_shape, schema_index::SchemaSelector};
 use std::collections::{BTreeSet, VecDeque};
 
 pub(super) struct Checked {
+    pub complete_scans: bool,
     pub custom: Vec<usize>,
     pub resources: Vec<usize>,
     pub formats: HashMap<usize, formats::Format>,
@@ -375,6 +376,7 @@ pub(super) fn check_from(
     resources.sort_unstable();
     control.check()?;
     Ok(Checked {
+        complete_scans: fields.len() == visited.len(),
         custom,
         resources,
         formats,

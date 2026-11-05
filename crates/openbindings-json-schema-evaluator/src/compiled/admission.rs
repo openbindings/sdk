@@ -1,7 +1,7 @@
 //! Pre-entry selection for the private restored compiler experiment.
 use super::*;
 use openbindings_internal_schema::{
-    Control, Failure, FailureReason, OriginalEnvironment,
+    Control, OriginalEnvironment,
     dialect::{Dialect, Profile},
 };
 
@@ -19,28 +19,13 @@ pub(super) struct Features {
     pub readings: HashMap<String, pattern::Reading>,
 }
 
-pub(super) enum Selection {
-    Original(&'static str),
-    Eligible(Features),
+pub(super) struct Admitted {
+    pub features: Features,
+    pub reach: openbindings_internal_schema::Reach,
 }
-
-fn original_on_admission_failure(
-    failure: Failure,
-    attempt: &dyn Control,
-) -> Result<Selection, PreparationFailure> {
-    if failure.reason == FailureReason::Cancelled {
-        return Err(failure.into());
-    }
-    // Actual shared exhaustion/cancellation remains sticky. Structural/profile
-    // inability at this selection stage has not entered projection or backend.
-    attempt.check().map_err(PreparationFailure::from)?;
-    if failure.reason == FailureReason::EvaluatorFailure {
-        return Err(failure.into());
-    }
-    Ok(Selection::Original(
-        "original-reference-or-structural-profile",
-    ))
-}
+// The outer Result preserves actual preparation failure; this inner capability
+// result chooses original evaluation without a backend attempt or heap wrapper.
+pub(super) type Selection = Result<Admitted, &'static str>;
 
 pub(super) fn select(
     plan: &crate::semantic::Plan,
@@ -59,7 +44,7 @@ pub(super) fn select(
         || limits.total_pattern_memory != default.total_pattern_memory
         || limits.schema_resources != default.schema_resources
     {
-        return Ok(Selection::Original("explicit-evaluator-allowance"));
+        return Ok(Err("explicit-evaluator-allowance"));
     }
     let default = PreparationLimits::default();
     if preparation.max_schema_nodes != default.max_schema_nodes
@@ -67,13 +52,13 @@ pub(super) fn select(
         || preparation.max_sdk_work_units != default.max_sdk_work_units
         || preparation.max_sdk_reservation_bytes != default.max_sdk_reservation_bytes
     {
-        return Ok(Selection::Original("explicit-preparation-allowance"));
+        return Ok(Err("explicit-preparation-allowance"));
     }
     if !plan.compiled_static_queries() {
-        return Ok(Selection::Original("unsettled-or-dynamic-reference"));
+        return Ok(Err("unsettled-or-dynamic-reference"));
     }
     if !plan.compiled_known_patterns() {
-        return Ok(Selection::Original("local-pattern-effect-or-limit"));
+        return Ok(Err("local-pattern-effect-or-limit"));
     }
     let environment = plan.compiled_environment();
     let space = environment.space();
@@ -82,9 +67,8 @@ pub(super) fn select(
     attempt
         .charge_allocation(space.node_count().saturating_mul(1024).saturating_add(512))
         .map_err(PreparationFailure::from)?;
-    let reach = match space.reach(environment.entry(), attempt) {
-        Ok(reach) => reach,
-        Err(failure) => return original_on_admission_failure(failure, attempt),
+    let Some(mut reach) = plan.compiled_reach(attempt)? else {
+        return Ok(Err("incomplete-prepared-closure"));
     };
     let mut nodes: Vec<_> = reach.nodes.iter().copied().collect();
     nodes.sort_unstable();
@@ -101,16 +85,16 @@ pub(super) fn select(
         attempt.check().map_err(PreparationFailure::from)?;
         let original = space.node(node);
         let Some(profile) = original.profile else {
-            return Ok(Selection::Original("unknown-original-profile"));
+            return Ok(Err("unknown-original-profile"));
         };
         if profile != Profile::standard(Dialect::Draft202012) {
-            return Ok(Selection::Original("custom-or-foreign-profile"));
+            return Ok(Err("custom-or-foreign-profile"));
         }
         if !space.eligible(original.resource) || space.query_inventory(original.resource).is_err() {
-            return Ok(Selection::Original("unestablished-original-identity"));
+            return Ok(Err("unestablished-original-identity"));
         }
         if backend::has_unpaired(&original.value) || original.value.has_duplicate_names() {
-            return Ok(Selection::Original("exact-schema-text-or-duplicate-names"));
+            return Ok(Err("exact-schema-text-or-duplicate-names"));
         }
         let value = original.value.view();
         source_bytes = source_bytes.saturating_add(original.value.bytes().len());
@@ -123,9 +107,7 @@ pub(super) fn select(
         .iter()
         .any(|keyword| profile.get(value, keyword).is_some())
         {
-            return Ok(Selection::Original(
-                "original-annotation-or-recursive-scope",
-            ));
+            return Ok(Err("original-annotation-or-recursive-scope"));
         }
         let mut weight = 0usize;
         if let Some(types) = profile.get(value, "type") {
@@ -146,7 +128,7 @@ pub(super) fn select(
                 if keyword == "multipleOf" {
                     features.multiple = true;
                     if !multiple_token(bound) || !inline_multiple_token(bound) {
-                        return Ok(Selection::Original("multiple-of-arithmetic-domain"));
+                        return Ok(Err("multiple-of-arithmetic-domain"));
                     }
                 }
             }
@@ -180,9 +162,18 @@ pub(super) fn select(
             weight = weight.saturating_add(1);
         }
         own.insert(node, weight);
-        // Advancing applications also repeat when their parent is referred to
-        // repeatedly. The in-place graph alone cannot bound cumulative scratch.
+        // Reuse resolved reference targets, and add original active child
+        // applications. Keep same-instance edges for projection and every edge
+        // for the cumulative scratch bound, including repeated child paths.
         for keyword in [
+            "allOf",
+            "anyOf",
+            "oneOf",
+            "not",
+            "if",
+            "then",
+            "else",
+            "dependentSchemas",
             "properties",
             "patternProperties",
             "additionalProperties",
@@ -191,17 +182,26 @@ pub(super) fn select(
             "prefixItems",
             "contains",
         ] {
+            if matches!(keyword, "then" | "else") && profile.get(value, "if").is_none() {
+                continue;
+            }
             let Some(operand) = profile.get(value, keyword) else {
                 continue;
             };
+            let in_place = matches!(
+                keyword,
+                "allOf" | "anyOf" | "oneOf" | "not" | "if" | "then" | "else" | "dependentSchemas"
+            );
             let children: Vec<_> = match keyword {
-                "properties" | "patternProperties" => operand
+                "properties" | "patternProperties" | "dependentSchemas" => operand
                     .members()
                     .into_iter()
                     .flatten()
                     .map(|m| m.value)
                     .collect(),
-                "prefixItems" => operand.elements().into_iter().flatten().collect(),
+                "prefixItems" | "allOf" | "anyOf" | "oneOf" => {
+                    operand.elements().into_iter().flatten().collect()
+                }
                 _ => vec![operand],
             };
             for child in children {
@@ -210,17 +210,25 @@ pub(super) fn select(
                     .positions
                     .get(&backend::ref_id(child))
                 {
-                    features.advancing = true;
+                    if !reach.nodes.contains(&target) {
+                        return Ok(Err("incomplete-prepared-closure"));
+                    }
+                    if in_place {
+                        reach.edges.entry(node).or_default().push(target);
+                    } else {
+                        features.advancing = true;
+                    }
                     edges.entry(node).or_default().push(target);
                 }
             }
         }
         if let Some(pattern) = profile.get(value, "pattern").and_then(|v| v.as_str()) {
             if !read_pattern(pattern, attempt, &mut features.readings, reading, false)? {
-                return Ok(Selection::Original("pattern-reader-capability"));
+                return Ok(Err("pattern-reader-capability"));
             }
             if accounted_sources.insert(pattern) {
-                if let pattern::Reading::Linear(linear) = &features.readings[pattern] {
+                {
+                    let linear = &features.readings[pattern];
                     attempt
                         .charge_work(linear.form.len().saturating_mul(2).saturating_add(1))
                         .map_err(PreparationFailure::from)?;
@@ -247,12 +255,13 @@ pub(super) fn select(
             let mut names: HashMap<(usize, u64), Vec<&str>> = HashMap::new();
             for pattern in patterns {
                 let Some(pattern) = pattern.name.as_str() else {
-                    return Ok(Selection::Original("exact-pattern-name"));
+                    return Ok(Err("exact-pattern-name"));
                 };
                 if !read_pattern(pattern, attempt, &mut features.readings, reading, true)? {
-                    return Ok(Selection::Original("pattern-name-reader-capability"));
+                    return Ok(Err("pattern-name-reader-capability"));
                 }
-                if let pattern::Reading::Linear(linear) = &features.readings[pattern] {
+                {
+                    let linear = &features.readings[pattern];
                     attempt
                         .charge_work(linear.form.len().saturating_add(1))
                         .map_err(PreparationFailure::from)?;
@@ -264,9 +273,8 @@ pub(super) fn select(
                         attempt
                             .charge_work(linear.form.len().saturating_add(1))
                             .map_err(PreparationFailure::from)?;
-                        if matches!(&features.readings[*prior],pattern::Reading::Linear(previous) if previous.form==linear.form)
-                        {
-                            return Ok(Selection::Original("normalized-property-name-alias"));
+                        if features.readings[*prior].form == linear.form {
+                            return Ok(Err("normalized-property-name-alias"));
                         }
                     }
                     bucket.push(pattern);
@@ -279,11 +287,11 @@ pub(super) fn select(
             || pattern::Memory::most_patterns(limits.total_pattern_memory, matched_bytes)
                 .is_none_or(|most| compiled_patterns > most)
         {
-            return Ok(Selection::Original("restored-private-pattern-profile"));
+            return Ok(Err("restored-private-pattern-profile"));
         }
     }
-    // The reach graph's edges are precisely same-instance applications. Its
-    // prior cycle check makes this a finite upper bound on predicate visits.
+    // The full application graph includes advancing children. Closed acyclic
+    // paths bound cumulative predicate visits; cycles still choose Plan here.
     let mut weights = HashMap::<usize, usize>::new();
     let mut visiting = std::collections::HashSet::new();
     for &root in &nodes {
@@ -305,9 +313,7 @@ pub(super) fn select(
                 features.multiplier = features.multiplier.max(sum);
             } else {
                 if !visiting.insert(node) {
-                    return Ok(Selection::Original(
-                        "productive-recursive-application-profile",
-                    ));
+                    return Ok(Err("productive-recursive-application-profile"));
                 }
                 pending.push((node, true));
                 for &child in edges {
@@ -332,7 +338,7 @@ pub(super) fn select(
         )
         .map_err(PreparationFailure::from)?;
     attempt.check().map_err(PreparationFailure::from)?;
-    Ok(Selection::Eligible(features))
+    Ok(Ok(Admitted { features, reach }))
 }
 
 fn read_pattern(
@@ -365,13 +371,7 @@ fn read_pattern(
     if linear.simple.is_none() && source.contains('{') {
         return Ok(false);
     }
-    readings.insert(
-        source.to_owned(),
-        pattern::Reading::Linear(pattern::Linear {
-            form: linear.form,
-            simple: linear.simple,
-        }),
-    );
+    readings.insert(source.to_owned(), linear);
     attempt.check().map_err(PreparationFailure::from)?;
     Ok(true)
 }

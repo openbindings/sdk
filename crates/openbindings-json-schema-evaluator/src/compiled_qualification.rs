@@ -670,3 +670,59 @@ fn compiled_decision_large_pattern_current_positive() {
         &JsonValue::parse(r#"{"a":1}"#).unwrap(),
     );
 }
+
+#[test]
+fn shared_preparation_targets_edges_and_lowering_match_original() {
+    for schema in [
+        r##"{"type":"integer","minimum":0}"##.to_owned(),
+        r##"{"$defs":{"leaf":{"type":"integer"}},"allOf":[{"$ref":"#/$defs/leaf"},{"properties":{"x":{"$ref":"#/$defs/leaf"}}},{"if":{"type":"array"},"then":{"items":{"$ref":"#/$defs/leaf"}},"else":{"not":false}}]}"##.to_owned(),
+        format!(r##"{{"$defs":{{"leaf":{{"type":"integer"}}}},"allOf":[{}]}}"##,vec![r##"{"$ref":"#/$defs/leaf"}"##;5000].join(",")),
+    ] {
+        let (selected,_)=owners(&schema,&ExternalSchemas::default(),Limits::default(),PreparationLimits::default());
+        crate::compiled::verify_shared_reach(&selected.plan);
+    }
+}
+
+#[test]
+fn a_skipped_active_carrier_cannot_disappear_from_shared_compiler_facts() {
+    let u = "https://closed-facts.test/U";
+    let v = "https://closed-facts.test/V";
+    for schema in [
+        json!({"properties":{"x":{"$id":u,"type":"string"}}}),
+        json!({"allOf":[{"$id":u,"type":"string"}]}),
+    ] {
+        let supplied = ExternalSchemas::new([ExternalSchema {
+            uri: v.into(),
+            document: JsonValue::parse(schema.to_string()).unwrap(),
+        }])
+        .unwrap();
+        let document=json!({"openbindings":"0.2.0","schemas":{"owner":{"$id":u,"type":"integer"}},"operations":{"op":{"input":{"$ref":v}}}}).to_string();
+        compiled::entries::take();
+        let selected = prepare_document(
+            &document,
+            &supplied,
+            &DefaultEvaluator::new(),
+            &PreparationLimits::default(),
+        )
+        .unwrap();
+        assert_eq!(compiled::entries::take(), [0, 0, 0]);
+        assert!(matches!(
+            selected.compiled,
+            compiled::Lane::Original("incomplete-prepared-closure")
+        ));
+        assert!(selected.plan.compiled_reach(&|| false).unwrap().is_none());
+        let original = prepare_document(
+            &document,
+            &supplied,
+            &Original(Limits::default()),
+            &PreparationLimits::default(),
+        )
+        .unwrap();
+        for text in ["{}", r#"{"x":1}"#, r#"{"x":"a"}"#] {
+            assert_eq!(
+                compare(&selected, &original, &JsonValue::parse(text).unwrap()).0,
+                "original"
+            );
+        }
+    }
+}

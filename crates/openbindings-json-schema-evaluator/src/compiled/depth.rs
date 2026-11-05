@@ -7,9 +7,9 @@
 //! checked against the evaluator's depth limit before evaluation, in constant
 //! time, so evaluation itself carries no depth accounting.
 //!
-//! References that apply to the same instance never form a cycle: preparation
-//! unfolds each such cycle so that a schema applying again is a stand-in
-//! (`crate::compiled::cycles`). Every cycle therefore passes a keyword that applies to a
+//! References that apply to the same instance are acyclic in the admitted
+//! value lane; other interpretations retain Plan. Every qualified cycle passes
+//! a keyword that applies to a
 //! child instance, and a path can pass such keywords at most as many times as
 //! the value is deep. With the strongly connected components of the references,
 //! a path stays in each component for some descents, entering at most the
@@ -68,69 +68,6 @@ impl Bound {
 /// References that apply to the same instance form a cycle.
 #[derive(Debug)]
 pub(crate) struct Cycle;
-
-/// The heaviest run of references an `unevaluatedProperties` or
-/// `unevaluatedItems` keyword's annotation walk follows from its holder:
-/// references through `$ref`, `$dynamicRef`, `allOf`, `anyOf`, `oneOf`, `if`,
-/// `then`, `else` and `dependentSchemas`, which apply to the same instance,
-/// each weighing what its [`Edge::walk`](crate::compiled::bundle::Edge::walk) adds, and
-/// [`HOLDER_WALK`](crate::compiled::bundle::HOLDER_WALK) more when it reaches another
-/// holder. The library compiles that walk by recursion, so its weight bounds
-/// the stack preparation takes. Returns the weight and the holder whose walk
-/// it is, if any holder walks. The definitions' same-instance references are
-/// acyclic, which [`bound`] establishes first.
-pub(crate) fn longest_walk(definitions: &[Definition], holders: &[bool]) -> Option<(u32, u32)> {
-    // The longest walked path from any holder ending at each definition, with
-    // the holder it starts from, propagated in topological order of the walked
-    // references.
-    let walked = |edge: &crate::compiled::bundle::Edge| edge.walked && !edge.descends;
-    let mut pending = vec![0u32; definitions.len()];
-    for definition in definitions {
-        for edge in definition.edges.iter().filter(|edge| walked(edge)) {
-            pending[edge.to as usize] += 1;
-        }
-    }
-    let mut ending: Vec<Option<(u32, u32)>> = holders
-        .iter()
-        .enumerate()
-        .map(|(holder, &holds)| holds.then_some((0, holder as u32)))
-        .collect();
-    let mut ready: Vec<u32> = (0..definitions.len() as u32)
-        .filter(|&node| pending[node as usize] == 0)
-        .collect();
-    let mut longest: Option<(u32, u32)> = None;
-    while let Some(node) = ready.pop() {
-        let at = ending[node as usize];
-        if let Some(at) = at
-            && longest.is_none_or(|known| at.0 > known.0)
-        {
-            longest = Some(at);
-        }
-        for edge in definitions[node as usize]
-            .edges
-            .iter()
-            .filter(|edge| walked(edge))
-        {
-            let target = edge.to as usize;
-            if let Some((length, holder)) = at {
-                let reached = if holders[target] {
-                    crate::compiled::bundle::HOLDER_WALK
-                } else {
-                    0
-                };
-                let next = (length + edge.walk + reached, holder);
-                if ending[target].is_none_or(|known| next.0 > known.0) {
-                    ending[target] = Some(next);
-                }
-            }
-            pending[target] -= 1;
-            if pending[target] == 0 {
-                ready.push(edge.to);
-            }
-        }
-    }
-    longest
-}
 
 /// The bound for evaluating `definitions` from `entry`, which evaluation
 /// reaches holding `entry_weight` objects, the entry's own included.
@@ -363,19 +300,13 @@ mod tests {
     use super::*;
     use crate::compiled::bundle::Edge;
     fn graph(edges: &[(u32, u32, u32, bool)], n: usize) -> Vec<Definition> {
-        let mut definitions: Vec<Definition> = (0..n)
-            .map(|i| Definition {
-                number: i as u32,
-                edges: Vec::new(),
-            })
-            .collect();
+        let mut definitions: Vec<Definition> =
+            (0..n).map(|_| Definition { edges: Vec::new() }).collect();
         for &(from, to, weight, descends) in edges {
             definitions[from as usize].edges.push(Edge {
                 to,
                 weight,
                 descends,
-                walked: !descends,
-                walk: crate::compiled::bundle::REFERENCE_WALK,
             });
         }
         definitions

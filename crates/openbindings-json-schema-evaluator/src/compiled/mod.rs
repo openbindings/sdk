@@ -1,18 +1,11 @@
 //! Private restoration of the18a66957 compiled value validator.
 //! Experimental selection is owned by the parent; no public legacy API is exposed.
 mod admission;
-mod bounds;
 mod bundle;
-mod cycles;
 mod depth;
-mod es2020_properties;
-mod explain;
-mod missing;
 mod operands;
 mod pass;
 mod pattern;
-mod stack;
-mod unevaluated_walk;
 #[cfg(test)]
 pub(super) mod entries {
     use std::cell::Cell;
@@ -35,36 +28,21 @@ pub(super) mod entries {
 }
 use openbindings::*;
 use openbindings_internal_json::backend::{self, FlatJson};
-#[cfg(feature = "conversion-check")]
-use openbindings_internal_schema::Program as EvaluationProgram;
-use openbindings_internal_schema::{Definitions, SchemaSpace, SuppliedSet};
+use openbindings_internal_schema::Definitions;
 use serde_json::Value;
 use std::{collections::HashMap, sync::Arc};
-type SchemaLocation = SchemaOrigin;
 #[derive(Clone, Debug)]
 struct Limits {
-    evaluation_steps: Option<usize>,
-    stack_bytes: usize,
     compile_json_depth: usize,
-    pattern_bytes: usize,
-    pattern_depth: usize,
     total_pattern_bytes: usize,
     total_pattern_memory: usize,
-    program_bytes: usize,
-    schema_resources: Option<usize>,
 }
 impl Default for Limits {
     fn default() -> Self {
         Self {
-            evaluation_steps: None,
-            stack_bytes: 256 * 1024,
             compile_json_depth: 512,
-            pattern_bytes: 1024 * 1024,
-            pattern_depth: 32,
             total_pattern_bytes: 4 * 1024 * 1024,
             total_pattern_memory: 64 * 1024 * 1024,
-            program_bytes: 48 * 1024 * 1024,
-            schema_resources: None,
         }
     }
 }
@@ -130,7 +108,13 @@ fn preparation_detail(detail: NoVerdict) -> PreparationFailure {
 /// An experimental private choice, established before projection/backend entry.
 #[derive(Clone)]
 pub(super) enum Lane {
-    Original(&'static str),
+    Original(
+        #[cfg_attr(
+            not(test),
+            expect(dead_code, reason = "qualification retains pre-entry route reasons")
+        )]
+        &'static str,
+    ),
     Compiled(Arc<Prepared>),
 }
 pub(super) struct Prepared {
@@ -148,17 +132,19 @@ impl Lane {
         reading: &dyn Fn(&str) -> Result<Option<crate::pattern::Linear>, PreparationFailure>,
     ) -> Result<Self, PreparationFailure> {
         use openbindings_internal_schema::OriginalEnvironment;
-        let mut features = match admission::select(plan, limits, preparation, attempt, reading)? {
-            admission::Selection::Original(reason) => return Ok(Self::Original(reason)),
-            admission::Selection::Eligible(features) => features,
-        };
+        let (mut features, reach) =
+            match admission::select(plan, limits, preparation, attempt, reading)? {
+                Err(reason) => return Ok(Self::Original(reason)),
+                Ok(admission::Admitted { features, reach }) => (features, reach),
+            };
         attempt.check().map_err(PreparationFailure::from)?;
         control.check()?;
         let environment = plan.compiled_environment();
         let space = environment.space();
         #[cfg(test)]
         entries::record(0);
-        let definitions = space.program_definitions(environment.entry(), attempt)?;
+        let definitions =
+            space.program_definitions_reached(environment.entry(), &reach, attempt)?;
         let compiler = Compiler {
             limits: Limits::default(),
             readings: std::mem::take(&mut features.readings),
@@ -168,8 +154,7 @@ impl Lane {
             attempt,
             cancelled: std::sync::atomic::AtomicBool::new(false),
         };
-        let result =
-            compiler.prepared(definitions, space, environment.entry(), Vec::new(), &bridge);
+        let result = compiler.prepared(definitions, &bridge);
         // Preserve the shared cause before translating the private constructor's
         // stop carrier. Resource exhaustion is never relabelled cancellation.
         let completion = bridge.check();
@@ -178,13 +163,6 @@ impl Lane {
         control.check()?;
         attempt.check().map_err(PreparationFailure::from)?;
         let inner = result.map_err(preparation_detail)?;
-        if inner.stand_ins.is_some() {
-            return Err(PreparationFailure::new(
-                PreparationFailureKind::UnsupportedCapability {
-                    capability: "compiled-lane-admission-disagreement".into(),
-                },
-            ));
-        }
         Ok(Self::Compiled(Arc::new(Prepared {
             inner,
             features,
@@ -232,9 +210,7 @@ impl Lane {
             // pair. This initial lane admits only a root array of scalar values
             // whose exact numeric representation is inline; Plan covers the
             // larger domain without a quadratic scratch under-estimate.
-            let Some(mut elements) = value.view().elements() else {
-                return None;
-            };
+            let mut elements = value.view().elements()?;
             let mut cancelled = false;
             if !elements.all(|item| {
                 if control.check().is_err() {
@@ -318,276 +294,46 @@ impl Lane {
         })
     }
 }
-// The projected resources converted for the library, each definition's number
-// with its node in the space, the entry's projected reference, and the
-// sources of the patterns preparation reads.
-struct Converted<'a> {
-    resources: Vec<bundle::Resource>,
-    numbers: HashMap<u32, usize>,
-    entry: String,
-    sources: operands::Sources<'a>,
-}
+// Only the closed value program is lowered here. Original admission,
+// reference resolution and diagnostics belong to the shared Plan facts.
 impl Compiler {
     fn prepared(
         &self,
         projected: Definitions<'_>,
-        space: &SchemaSpace,
-        entry: usize,
-        missing: Vec<String>,
         control: &dyn WorkControl,
     ) -> Result<Arc<Compiled>, NoVerdict> {
-        if self
-            .limits
-            .schema_resources
-            .is_some_and(|cap| projected.resources.len() > cap)
-        {
-            return Err(no_verdict(
-                NoVerdictReason::LimitExceeded,
-                "schema-resource-limit",
-                "the value contract reaches more schema resources than the configured limit",
-            ));
+        if projected.in_place_cycle {
+            return Err(program_failure());
         }
         let mut operands = operands::Operands::default();
-        #[cfg(feature = "conversion-check")]
-        let bounds: Vec<(usize, usize)> = projected
-            .resources
-            .iter()
-            .map(|resource| (resource.bytes, resource.nodes))
-            .collect();
-        let cyclic = projected.in_place_cycle;
-        let converted = self.defined(projected, &mut operands, space, &missing, control)?;
-        // The SDK's own tests and tools (`conversion-check`) check that the
-        // definitions convert as the program's text does.
-        #[cfg(feature = "conversion-check")]
-        self.check_conversion(&converted, &operands, space, entry, &missing, &bounds);
-        #[cfg(not(feature = "conversion-check"))]
-        let _ = entry;
-        Ok(Arc::new(self.compile(
-            converted, operands, space, missing, cyclic, control,
-        )?))
-    }
-    // Convert a projection's definitions as the evaluator converted the
-    // program's text, which `conversion-check` still checks (`parsed`).
-    fn defined<'a>(
-        &self,
-        projected: openbindings_internal_schema::Definitions<'a>,
-        operands: &mut operands::Operands,
-        space: &SchemaSpace,
-        missing: &[String],
-        control: &dyn WorkControl,
-    ) -> Result<Converted<'a>, NoVerdict> {
-        let mut numbers = HashMap::new();
         let mut sources = operands::Sources::new();
         let mut resources = Vec::with_capacity(projected.resources.len());
         let mut entry = None;
-        let mut stand_ins = Vec::new();
         for resource in projected.resources {
             control.check()?;
-            // Each definition's node, and the stand-ins' definitions, which
-            // are the missing keyword, by name.
-            for definition in &resource.definitions {
-                let number = definition
-                    .name
-                    .strip_prefix('n')
-                    .and_then(|n| n.parse::<u32>().ok())
-                    .ok_or_else(program_failure)?;
-                numbers.insert(number, definition.node);
-                if !missing.is_empty()
-                    && let Some(at) = space
-                        .source_uri(definition.node)
-                        .and_then(|uri| missing.binary_search_by(|m| m.as_str().cmp(uri)).ok())
-                {
-                    stand_ins.push((definition.name.clone(), at));
-                }
-            }
-            let mut definitions = operands.definitions(
+            let definitions = operands.definitions(
                 resource.definitions,
                 &projected.literals,
                 &self.limits,
                 &mut sources,
                 control,
             )?;
-            for (name, at) in stand_ins.drain(..) {
-                if let Some(schema) = definitions.get_mut(&name) {
-                    *schema = serde_json::json!({ missing::KEYWORD: at });
-                }
-            }
             if resource.uri == projected.entry_uri {
                 entry = resource.entry;
             }
-            resources.push(bundle::Resource {
-                uri: resource.uri,
-                definitions,
-            });
+            resources.push(bundle::Resource { definitions });
         }
-        Ok(Converted {
-            resources,
-            numbers,
-            entry: entry.ok_or_else(program_failure)?,
-            sources,
-        })
-    }
-    // Convert a projection the core wrote as text: `literals` are its
-    // separated `const` and `enum` values, in an arena holding only them,
-    // which the program names by index; `nodes` are each projected resource's
-    // definitions' nodes in `space`, in `$defs` order.
-    #[cfg(feature = "conversion-check")]
-    #[allow(clippy::too_many_arguments)]
-    fn parsed<'a>(
-        &self,
-        program: &'a EvaluationProgram,
-        literals: &[JsonValue],
-        nodes: &[Vec<usize>],
-        operands: &mut operands::Operands,
-        space: &SchemaSpace,
-        missing: &[String],
-        control: &dyn WorkControl,
-    ) -> Result<Converted<'a>, NoVerdict> {
-        let mut numbers = HashMap::new();
-        let mut sources = operands::Sources::new();
-        let mut resources = Vec::with_capacity(program.resources.len());
-        let mut entry = None;
-        for (index, resource) in program.resources.iter().enumerate() {
-            control.check()?;
-            let mut root = operands.resource(
-                &resource.document,
-                literals,
-                &self.limits,
-                &mut sources,
-                control,
-            )?;
-            let Some(Value::Object(mut definitions)) =
-                root.as_object_mut().and_then(|r| r.remove("$defs"))
-            else {
-                return Err(program_failure());
-            };
-            // Every schema projected from a stand-in is the missing keyword.
-            if !missing.is_empty() {
-                for ((_, schema), &node) in definitions.iter_mut().zip(&nodes[index]) {
-                    if let Some(at) = space
-                        .source_uri(node)
-                        .and_then(|uri| missing.binary_search_by(|m| m.as_str().cmp(uri)).ok())
-                    {
-                        *schema = serde_json::json!({ missing::KEYWORD: at });
-                    }
-                }
-            }
-            for (name, &node) in definitions.keys().zip(&nodes[index]) {
-                let number = name
-                    .strip_prefix('n')
-                    .and_then(|n| n.parse::<u32>().ok())
-                    .ok_or_else(program_failure)?;
-                numbers.insert(number, node);
-            }
-            if resource.uri == program.entry_uri {
-                entry = root.get("$ref").and_then(Value::as_str).map(str::to_owned);
-            }
-            resources.push(bundle::Resource {
-                uri: resource.uri.clone(),
-                definitions,
-            });
-        }
-        Ok(Converted {
-            resources,
-            numbers,
-            entry: entry.ok_or_else(program_failure)?,
-            sources,
-        })
-    }
-    // That the text projection, converted, gives what the definitions gave.
-    #[cfg(feature = "conversion-check")]
-    fn check_conversion(
-        &self,
-        converted: &Converted,
-        operands: &operands::Operands,
-        space: &SchemaSpace,
-        entry: usize,
-        missing: &[String],
-        bounds: &[(usize, usize)],
-    ) {
-        let unmapped = space
-            .program_unmapped(entry, &|| false)
-            .expect("the text projection admits what the definitions admit");
-        let mut text_operands = operands::Operands::default();
-        let text = self
-            .parsed(
-                &unmapped.program,
-                &unmapped.literals,
-                &unmapped.definitions,
-                &mut text_operands,
-                space,
-                missing,
-                &std::sync::atomic::AtomicBool::new(false),
-            )
-            .expect("the text converts as the definitions do");
-        assert_eq!(text.entry, converted.entry);
-        assert_eq!(text.numbers, converted.numbers);
-        assert_eq!(text.sources, converted.sources);
-        assert_eq!(text.resources.len(), converted.resources.len());
-        // The definitions' bounds on each resource's text hold.
-        for ((resource, text), (bytes, nodes)) in unmapped
-            .program
-            .resources
-            .iter()
-            .zip(&text.resources)
-            .zip(bounds)
-        {
-            assert_eq!(resource.uri, text.uri);
-            assert!(resource.document.text().len() <= *bytes);
-            assert_eq!(
-                openbindings_internal_json::backend::node_count(resource.document.view()),
-                *nodes
-            );
-        }
-        for (text, converted) in text.resources.iter().zip(&converted.resources) {
-            assert_eq!(text.uri, converted.uri);
-            assert_eq!(text.definitions, converted.definitions);
-            // Equal maps can still iterate differently, as they do when
-            // serde_json keeps insertion order, so the order must agree too.
-            assert_eq!(
-                serde_json::to_string(&text.definitions).expect("definitions serialize"),
-                serde_json::to_string(&converted.definitions).expect("definitions serialize"),
-            );
-        }
-        assert!(text_operands.same_literals(operands));
-    }
-    #[allow(clippy::too_many_arguments)]
-    fn compile(
-        &self,
-        converted: Converted,
-        mut operands: operands::Operands,
-        space: &SchemaSpace,
-        missing: Vec<String>,
-        cyclic: bool,
-        control: &dyn WorkControl,
-    ) -> Result<Compiled, NoVerdict> {
-        let Converted {
-            mut resources,
-            numbers,
-            entry,
-            mut sources,
-        } = converted;
-        // Read every pattern while the schemas still have their original
-        // locations, counting the forms kept for them together. A schema's
-        // `patternProperties` names that the evaluator does not match are
-        // left out, and a stand-in takes their place.
         let mut kept = Kept::default();
-        let mut names = Vec::new();
         for resource in &mut resources {
-            for (name, schema) in resource.definitions.iter_mut() {
+            for (name, schema) in &mut resource.definitions {
                 control.check()?;
-                let number = name[1..].parse::<u32>().map_err(|_| program_failure())?;
                 let source = if sources.is_empty() {
                     None
                 } else {
+                    let number = name[1..].parse::<u32>().map_err(|_| program_failure())?;
                     sources.remove(&number)
                 };
-                let located = |keyword| {
-                    numbers
-                        .get(&number)
-                        .map(|&node| keyword_location(space, node, keyword))
-                };
-                let unmatched = patterns(
+                patterns(
                     schema,
                     source,
                     &self.limits,
@@ -595,206 +341,31 @@ impl Compiler {
                     &mut operands,
                     &mut kept,
                 )
-                .map_err(|(keyword, mut detail)| {
-                    detail.location = located(keyword);
-                    detail
-                })?;
-                if let Some(unsupported) = unmatched {
-                    if let Value::Object(schema) = schema {
-                        let at = Value::from(names.len());
-                        // A member `additionalProperties` reaches might match
-                        // one of the names, so it reaches the stand-in too.
-                        if let Some(additional) = schema.remove("additionalProperties") {
-                            let mut member = serde_json::Map::new();
-                            member.insert(operands::NAME_MEMBER.into(), at.clone());
-                            schema.insert(
-                                "additionalProperties".into(),
-                                serde_json::json!({ "allOf": [Value::Object(member), additional] }),
-                            );
-                        }
-                        schema.insert(operands::NAMES.into(), at);
-                    }
-                    names.push(UnmatchedNames {
-                        unsupported,
-                        location: located("patternProperties"),
-                    });
-                }
+                .map_err(|(_, detail)| detail)?;
             }
         }
-        // Each pattern the contract compiles holds its first allowance of the
-        // pattern memory, the library's `patternProperties` names and the
-        // SDK's `pattern` matchers alike, and each run matcher its own bytes.
         let memory = pattern::Memory::new(
             self.limits.total_pattern_memory,
             kept.compiled,
             kept.matched,
         );
         drop(kept);
-        // The library's unevaluated validators recurse in ways the static
-        // bound does not model, so a contract holding one is guarded: every
-        // read of a child instance checks the stack its pass has used, once
-        // for every level of the value.
-        let guarded = resources.iter().any(|resource| {
-            resource.definitions.values().any(|schema| {
-                schema.get("unevaluatedProperties").is_some()
-                    || schema.get("unevaluatedItems").is_some()
-            })
-        });
-        let mut bundle = bundle::bundle(
-            resources,
-            &entry,
-            &bundle::Options {
-                program_bytes: self.limits.program_bytes,
-                markers: self.limits.evaluation_steps.is_some(),
-            },
-        )
-        .map_err(|refusal| match refusal {
-            bundle::Refusal::Budget(growth) => specialization_limit(growth),
-            bundle::Refusal::Shape => program_failure(),
-        })?;
-        // Each schema that would apply again without consuming the instance
-        // is a stand-in, which names that schema's original location.
-        // Its copies share what specialization leaves of the program budget.
-        let mut budget = self.limits.program_bytes.saturating_sub(bundle.grown);
-        let cycles: Vec<Option<SchemaLocation>> = if cyclic {
-            let (stand_ins, charged) = cycles::unfold(&mut bundle, budget, control)?;
-            budget = budget.saturating_sub(charged);
-            stand_ins
-                .into_iter()
-                .map(|number| {
-                    numbers
-                        .get(&number)
-                        .map(|&node| original_location(space.location(node)))
-                })
-                .collect()
-        } else {
-            Vec::new()
-        };
-        // An unevaluated keyword reads its annotation sources' structure, so
-        // a stand-in among them refuses preparation.
-        if guarded
-            && !cycles.is_empty()
-            && let Some(at) = missing::behind_unevaluated(&bundle, operands::CYCLE)
-        {
-            let mut detail =
-                in_place_cycle("static preparation found a potentially evaluated in-place cycle");
-            detail.location = cycles.get(at as usize).cloned().flatten();
-            return Err(detail);
-        }
-        if guarded
-            && !names.is_empty()
-            && let Some(at) = missing::behind_unevaluated(&bundle, operands::NAMES)
-        {
-            let names = &names[at as usize];
-            let mut detail = unsupported_pattern(names.unsupported, "patternProperties");
-            detail.location = names.location.clone();
-            return Err(detail);
-        }
-        if guarded && let Some(at) = missing::behind_unevaluated(&bundle, missing::KEYWORD) {
-            let mut detail = no_verdict(
-                NoVerdictReason::ResourceUnavailable,
-                "resource-unavailable",
-                "static preparation requires a resource that was not supplied",
-            );
-            detail.location = missing.get(at as usize).map(|uri| {
-                SchemaLocation::new(
-                    Some(uri.clone()),
-                    Pointer::from_utf16(&[]).expect("the root pointer"),
-                )
-            });
-            return Err(detail);
-        }
-        if guarded {
-            unevaluated_walk::apply(&mut bundle);
-        }
-        let host = stack::Stack {
-            bytes: self.limits.stack_bytes,
-        };
-        let guard = guarded.then(|| host.guard());
-        let bound =
-            depth::bound(&bundle.definitions, bundle.entry, bundle.entry_weight).map_err(|_| {
-                no_verdict(
-                    NoVerdictReason::ConservativePreparation,
-                    "evaluation-cycle",
-                    "evaluation could recurse without consuming the instance",
-                )
-            })?;
+        let bundle = bundle::bundle(resources, &entry.ok_or_else(program_failure)?)
+            .map_err(|_| program_failure())?;
+        let deepest = depth::bound(&bundle.definitions, bundle.entry, 2)
+            .map_err(|_| program_failure())?
+            .deepest(1024);
         control.check()?;
-        let locations = explain::Locations::new(space, &numbers, &bundle);
-        // Without an unevaluated keyword, no definition holds a walk.
-        let holders: Vec<bool> = if guarded {
-            bundle
-                .schemas
-                .iter()
-                .map(|schema| {
-                    schema.get("unevaluatedProperties").is_some()
-                        || schema.get("unevaluatedItems").is_some()
-                })
-                .collect()
-        } else {
-            Vec::new()
-        };
-        if guarded
-            && let Some((length, holder)) = depth::longest_walk(&bundle.definitions, &holders)
-            && length > host.walk()
-        {
-            let mut detail = host.walk_too_heavy(length);
-            // The holder's keyword whose walk it is, at its original location.
-            let schema = &bundle.schemas[holder as usize];
-            let keyword = if schema.get("unevaluatedProperties").is_some() {
-                "unevaluatedProperties"
-            } else {
-                "unevaluatedItems"
-            };
-            detail.location = locations
-                .locate(&format!(
-                    "{}#/$defs/{}/{keyword}",
-                    bundle::URI,
-                    bundle.names[holder as usize]
-                ))
-                .map(|(location, _)| location);
-            return Err(detail);
-        }
-        // A value contract with a stand-in has a bounds program, which decides
-        // the values a pass that reaches a stand-in leaves undecided when no
-        // answer of the stand-ins can change their verdict. It takes what is
-        // left of the program budget.
-        let stand_in_patterns = operands.stand_in_patterns();
-        let explains = !cycles.is_empty() || !names.is_empty() || operands.holds_invalid_pattern();
-        let standing = !missing.is_empty()
-            || !cycles.is_empty()
-            || !names.is_empty()
-            || stand_in_patterns.contains(&true);
-        let program = if standing {
-            bounds::program(&bundle, &stand_in_patterns, budget)
-        } else {
-            None
-        };
-        drop(stand_in_patterns);
-        let registered = operands::Registered {
-            markers: self.limits.evaluation_steps.is_some(),
-            missing: !missing.is_empty(),
-            cycles: !cycles.is_empty(),
-            names: !names.is_empty(),
-            phase: false,
-        };
         let document = bundle.document();
         let first = memory.first();
         let keywords = operands.keywords(memory);
         keywords.patterns().complete(control)?;
         let options = keywords
-            .register(jsonschema::options_for::<FlatJson>(), registered)
+            .register(jsonschema::options_for::<FlatJson>())
             .with_draft(jsonschema::Draft::Draft202012)
             .with_retriever(NoRetrieval)
             .should_validate_formats(false)
             .with_pattern_options(pattern_options(first));
-        // The library takes one size setting for every `patternProperties`
-        // name, so the names first compile within their first allowances. When
-        // one does not fit, the SDK shares the pattern memory among the names
-        // and the `pattern` matchers itself, and the library compiles the
-        // names again within the largest compiled size any name was given:
-        // each name's form compiles to the same program within any size limit
-        // it fits.
         control.check()?;
         #[cfg(test)]
         entries::record(1);
@@ -802,166 +373,14 @@ impl Compiler {
         control.check()?;
         let validator = match built {
             Ok(validator) => validator,
-            Err(error) if exceeds_size(&error) => share_names(
-                options,
-                first,
-                &document,
-                keywords.patterns(),
-                &locations,
-                control,
-            )?,
-            Err(error) => return Err(preparation_error(&error, &locations)),
-        };
-        drop(document);
-        control.check()?;
-        let bounds = match program {
-            Some(program) => self.bounds(program, &keywords, registered, host, control)?,
-            None => None,
-        };
-        let stand_ins = standing.then(|| {
-            Box::new(StandIns {
-                missing,
-                cycles,
-                names,
-                bounds,
-                explains,
-            })
-        });
-        Ok(Compiled {
-            validator,
-            patterns: keywords.patterns().clone(),
-            locations,
-            deepest: bound.deepest(host.evaluation_depth()),
-            deepest_explained: bound.deepest(host.evaluation_depth() / 2),
-            host,
-            guard,
-            limits: self.limits.clone(),
-            stand_ins,
-        })
-    }
-    // Compile a bounds program, unless its depth bound, its unevaluated
-    // keywords' walks or its `patternProperties` names do not fit what the
-    // value contract's own program leaves: then the contract has none.
-    fn bounds(
-        &self,
-        program: bounds::Program,
-        keywords: &operands::Keywords,
-        registered: operands::Registered,
-        host: stack::Stack,
-        control: &dyn WorkControl,
-    ) -> Result<Option<Bounds>, NoVerdict> {
-        let bounds::Program {
-            bundle,
-            lower,
-            upper,
-            original,
-        } = program;
-        let weight = bundle::BOUNDS_ENTRY_WEIGHT;
-        let (Ok(lower_bound), Ok(upper_bound), Ok(original_bound)) = (
-            depth::bound(&bundle.definitions, lower, weight),
-            depth::bound(&bundle.definitions, upper, weight),
-            depth::bound(&bundle.definitions, original, weight),
-        ) else {
-            return Ok(None);
-        };
-        let holders: Vec<bool> = bundle
-            .schemas
-            .iter()
-            .map(|schema| {
-                schema.get("unevaluatedProperties").is_some()
-                    || schema.get("unevaluatedItems").is_some()
-            })
-            .collect();
-        if holders.contains(&true)
-            && depth::longest_walk(&bundle.definitions, &holders)
-                .is_some_and(|(length, _)| length > host.walk())
-        {
-            return Ok(None);
-        }
-        // The library compiles the program's `patternProperties` names again,
-        // each distinct form once, so they must fit in what the contract's
-        // own patterns leave of the pattern memory and can never ask for.
-        let names = distinct_names(&bundle.schemas);
-        let first = if names == 0 {
-            keywords.patterns().first()
-        } else {
-            match keywords.patterns().spare() {
-                Some((left, first))
-                    if names.saturating_mul(first.compiled.saturating_add(first.cache)) <= left =>
-                {
-                    first
-                }
-                _ => return Ok(None),
+            Err(error) if exceeds_size(&error) => {
+                share_names(options, first, &document, keywords.patterns(), control)?
             }
+            Err(error) => return Err(preparation_error(&error)),
         };
         control.check()?;
-        let document = bundle.document_with_bounds(lower, upper, original);
-        // The value contract's own schemas hold its stand-ins' keywords.
-        let registered = operands::Registered {
-            markers: true,
-            phase: true,
-            ..registered
-        };
-        let options = keywords
-            .register(jsonschema::options_for::<FlatJson>(), registered)
-            .with_draft(jsonschema::Draft::Draft202012)
-            .with_retriever(NoRetrieval)
-            .should_validate_formats(false)
-            .with_pattern_options(pattern_options(first));
-        let Ok(validator) = options.build(&document) else {
-            return Ok(None);
-        };
-        drop(document);
-        control.check()?;
-        let depth = host.evaluation_depth();
-        Ok(Some(Bounds {
-            validator,
-            deepest: [
-                lower_bound.deepest(depth),
-                upper_bound.deepest(depth),
-                original_bound.deepest(depth),
-            ],
-            deepest_explained: upper_bound.deepest(depth / 2),
-        }))
+        Ok(Arc::new(Compiled { validator, deepest }))
     }
-}
-// The distinct `patternProperties` names a bundle's schemas hold.
-fn distinct_names(schemas: &[Value]) -> usize {
-    fn collect<'v>(value: &'v Value, names: &mut std::collections::HashSet<&'v str>) {
-        match value {
-            Value::Object(members) => {
-                for (keyword, member) in members {
-                    if keyword == "patternProperties"
-                        && let Value::Object(patterns) = member
-                    {
-                        names.extend(patterns.keys().map(String::as_str));
-                    }
-                    collect(member, names);
-                }
-            }
-            Value::Array(items) => items.iter().for_each(|item| collect(item, names)),
-            _ => {}
-        }
-    }
-    let mut names = std::collections::HashSet::new();
-    for schema in schemas {
-        collect(schema, &mut names);
-    }
-    names.len()
-}
-// The stand-in for one schema's `patternProperties` names the evaluator does
-// not match: why the first of them is not matched, and the keyword's original
-// location.
-struct UnmatchedNames {
-    unsupported: pattern::Unsupported,
-    location: Option<SchemaLocation>,
-}
-fn in_place_cycle(message: &str) -> NoVerdict {
-    no_verdict(
-        NoVerdictReason::ConservativePreparation,
-        "in-place-cycle",
-        message,
-    )
 }
 fn program_failure() -> NoVerdict {
     no_verdict(
@@ -970,20 +389,6 @@ fn program_failure() -> NoVerdict {
         "the projected program has an unexpected shape",
     )
 }
-fn keyword_location(space: &SchemaSpace, node: usize, keyword: &str) -> SchemaLocation {
-    let mut at = space.location(node);
-    backend::push_pointer(&mut at.pointer, &format!("/{keyword}"));
-    original_location(at)
-}
-
-// Read each `pattern`, from its `source`, and `patternProperties` name of one
-// schema, or refuse it, naming the keyword. The SDK's `pattern` keyword
-// matches a pattern through its reading, and stands in when a string reaches
-// one the evaluator does not match. The library matches `patternProperties`
-// names itself, so each is written in its linear form. A name the evaluator
-// does not match for its syntax is left out, its subschema set aside, and the
-// first such name's reason is returned, so a stand-in can take their place; a
-// name without a form for a limit refuses the contract.
 fn patterns<'a>(
     schema: &mut Value,
     source: Option<std::borrow::Cow<'a, str>>,
@@ -991,9 +396,9 @@ fn patterns<'a>(
     readings: &HashMap<String, pattern::Reading>,
     operands: &mut operands::Operands,
     kept: &mut Kept<'a>,
-) -> Result<Option<pattern::Unsupported>, (&'static str, NoVerdict)> {
+) -> Result<(), (&'static str, NoVerdict)> {
     let Value::Object(schema) = schema else {
-        return Ok(None);
+        return Ok(());
     };
     // Count each form the evaluator keeps as it is written, and the memory
     // of each it compiles or matches with a run matcher, so preparation stops
@@ -1046,10 +451,8 @@ fn patterns<'a>(
                     .map_err(|detail| ("pattern", detail))?;
                 // Patterns with the same form share one matcher, which keeps
                 // the form and compiles it unless the run matcher matches it.
-                if let pattern::Reading::Linear(linear) = &reading
-                    && !operands.has_pattern(&linear.form)
-                {
-                    count("pattern", &linear.form, linear.simple.as_ref())?;
+                if !operands.has_pattern(&reading.form) {
+                    count("pattern", &reading.form, reading.simple.as_ref())?;
                 }
                 let key = operands.pattern(reading);
                 kept.read.insert(source, key.clone());
@@ -1059,31 +462,16 @@ fn patterns<'a>(
         *slot = Value::String(key);
     }
     // The library matches these names itself, so the bundle keeps each form.
-    let mut unmatched = None;
-    let mut set_aside = Vec::new();
     if let Some(Value::Object(names)) = schema.get_mut("patternProperties") {
         let original = std::mem::take(names);
         for (source, subschema) in original {
             let refuse = |detail| ("patternProperties", detail);
-            let mut form = match readings
+            let mut form = readings
                 .get(source.as_str())
-                .cloned()
                 .ok_or_else(program_failure)
                 .map_err(refuse)?
-            {
-                pattern::Reading::Linear(linear) => linear.form,
-                pattern::Reading::Unsupported(unsupported) if unsupported.stands_in() => {
-                    unmatched.get_or_insert(unsupported);
-                    set_aside.push(subschema);
-                    continue;
-                }
-                pattern::Reading::Unsupported(unsupported) => {
-                    return Err(refuse(unsupported_pattern(
-                        unsupported,
-                        "patternProperties",
-                    )));
-                }
-            };
+                .form
+                .clone();
             // Two names may share a form; an empty group keeps them apart.
             while names.contains_key(&form) {
                 form.push_str("(?:)");
@@ -1093,10 +481,7 @@ fn patterns<'a>(
             names.insert(form, subschema);
         }
     }
-    if !set_aside.is_empty() {
-        schema.insert(operands::NAME_SCHEMAS.into(), Value::Array(set_aside));
-    }
-    Ok(unmatched)
+    Ok(())
 }
 // What preparation has kept for a contract's patterns so far.
 #[derive(Default)]
@@ -1112,54 +497,8 @@ struct Kept<'a> {
     // repeated pattern is read once.
     read: HashMap<std::borrow::Cow<'a, str>, String>,
 }
-// A pattern's reading: an invalid pattern is read as one the evaluator does
-// not match, whose match is undefined.
-fn read_pattern(source: &str, limits: &Limits) -> Result<pattern::Reading, NoVerdict> {
-    if source.len() > limits.pattern_bytes {
-        return Err(no_verdict(
-            NoVerdictReason::LimitExceeded,
-            "pattern-byte-limit",
-            "pattern exceeds the admitted byte limit",
-        ));
-    }
-    // A form longer than the pattern byte limit is neither written out nor
-    // compiled: its parse alone could take memory far beyond the engine's
-    // compiled size limit.
-    match pattern::read(source, limits.pattern_depth, limits.pattern_bytes) {
-        Ok(reading) => Ok(reading),
-        Err(pattern::Refusal::Invalid) => {
-            Ok(pattern::Reading::Unsupported(pattern::Unsupported::Invalid))
-        }
-        Err(pattern::Refusal::Depth) => Err(no_verdict(
-            NoVerdictReason::LimitExceeded,
-            "pattern-depth-limit",
-            "pattern nesting exceeds the admitted limit",
-        )),
-    }
-}
-// Why a pattern `keyword` holds is not matched.
-fn unsupported_pattern(unsupported: pattern::Unsupported, keyword: &str) -> NoVerdict {
-    match unsupported {
-        pattern::Unsupported::Invalid => no_verdict(
-            NoVerdictReason::ConservativePreparation,
-            "schema-pattern-compilation",
-            format!("the schema {keyword} regular expression could not be compiled"),
-        ),
-        pattern::Unsupported::Backtracking => no_verdict(
-            NoVerdictReason::UnsupportedCapability,
-            "pattern-backtracking",
-            "the schema pattern needs a backtracking engine, which this evaluator does not run",
-        ),
-        pattern::Unsupported::PropertyEscape => no_verdict(
-            NoVerdictReason::UnsupportedCapability,
-            "unicode-property-matching",
-            "Unicode property-escape matching is outside the qualified evaluator capability",
-        ),
-        pattern::Unsupported::NonWordBoundary => no_verdict(
-            NoVerdictReason::UnsupportedCapability,
-            "pattern-non-word-boundary",
-            "the schema pattern's non-word-boundary assertion is outside the qualified evaluator capability",
-        ),
+fn unsupported_pattern(reason: pattern::Unsupported, _keyword: &str) -> NoVerdict {
+    match reason {
         pattern::Unsupported::Size => no_verdict(
             NoVerdictReason::LimitExceeded,
             "pattern-size-limit",
@@ -1168,7 +507,6 @@ fn unsupported_pattern(unsupported: pattern::Unsupported, keyword: &str) -> NoVe
         pattern::Unsupported::Memory(shortfall) => pattern_memory_limit(shortfall),
     }
 }
-// The refusal states the arithmetic, so its message says why and what to raise.
 fn pattern_memory_limit(shortfall: pattern::Shortfall) -> NoVerdict {
     const RAISE: &str = "raise total_pattern_memory (totalPatternMemory in TypeScript)";
     let first = bytes(pattern::FIRST);
@@ -1281,26 +619,6 @@ fn pattern_memory_limit(shortfall: pattern::Shortfall) -> NoVerdict {
         message,
     )
 }
-// The refusal states the arithmetic, so its message says why and what to raise.
-fn specialization_limit(growth: bundle::Growth) -> NoVerdict {
-    no_verdict(
-        NoVerdictReason::LimitExceeded,
-        "program-specialization-limit",
-        format!(
-            "this value contract's dynamic references specialize {} schemas, taking {}, and \
-             {} dynamic contexts holding {} entries, taking {}, before preparation stops: \
-             together they pass its projected schemas' {} by more than its {} program_bytes; \
-             raise program_bytes (programBytes in TypeScript)",
-            growth.definitions,
-            bytes(growth.definition_bytes),
-            growth.contexts,
-            growth.entries,
-            bytes(growth.context_bytes),
-            bytes(growth.projected),
-            bytes(growth.budget),
-        ),
-    )
-}
 // A count of bytes as a message states it, rounded up in the units `bytes`
 // uses, so a count past a limit `bytes` states never reads as within it.
 fn bytes_up(count: usize) -> String {
@@ -1357,7 +675,6 @@ fn share_names(
     first: pattern::Allowance,
     document: &Value,
     patterns: &operands::Patterns,
-    locations: &explain::Locations,
     control: &dyn WorkControl,
 ) -> Result<jsonschema::Validator<FlatJson>, NoVerdict> {
     control.check()?;
@@ -1365,13 +682,12 @@ fn share_names(
         return Err(program_failure());
     };
     let mut seen = std::collections::HashSet::new();
-    let (mut forms, mut holders) = (Vec::new(), Vec::new());
-    for (definition, schema) in definitions {
+    let mut forms = Vec::new();
+    for schema in definitions.values() {
         if let Some(Value::Object(names)) = schema.get("patternProperties") {
             for form in names.keys() {
                 if seen.insert(form.as_str()) {
                     forms.push(form.as_str());
-                    holders.push(definition);
                 }
             }
         }
@@ -1391,25 +707,14 @@ fn share_names(
         if control.check().is_err() {
             return false;
         }
-        let fits = built.as_ref().is_some_and(|(_, built)| built.is_ok());
-        fits
+        built.as_ref().is_some_and(|(_, built)| built.is_ok())
     };
     let mut largest = 0;
-    for (given, definition) in patterns
-        .share_with(&forms, &mut together, control)
-        .into_iter()
-        .zip(holders)
-    {
+    for given in patterns.share_with(&forms, &mut together, control) {
         match given {
             Ok(compiled) => largest = largest.max(compiled),
             Err(unsupported) => {
-                let mut detail = unsupported_pattern(unsupported, "patternProperties");
-                detail.location = locations
-                    .locate(&format!(
-                        "{}#/$defs/{definition}/patternProperties",
-                        bundle::URI
-                    ))
-                    .map(|(location, _)| location);
+                let detail = unsupported_pattern(unsupported, "patternProperties");
                 return Err(detail);
             }
         }
@@ -1430,7 +735,7 @@ fn share_names(
     let result = options
         .with_pattern_options(pattern_options(allowance))
         .build(document)
-        .map_err(|error| preparation_error(&error, locations));
+        .map_err(|error| preparation_error(&error));
     control.check()?;
     result
 }
@@ -1439,18 +744,9 @@ fn pattern_options(allowance: pattern::Allowance) -> jsonschema::PatternOptions<
         .size_limit(allowance.compiled)
         .dfa_size_limit(allowance.cache)
 }
-fn preparation_error(
-    error: &jsonschema::ValidationError<'_>,
-    locations: &explain::Locations,
-) -> NoVerdict {
-    // Read only trusted kind metadata, never dependency Display text or schema
-    // values.
+fn preparation_error(error: &jsonschema::ValidationError<'_>) -> NoVerdict {
     if exceeds_size(error) {
-        let mut detail = unsupported_pattern(pattern::Unsupported::Size, "patternProperties");
-        detail.location = locations
-            .locate(&format!("{}#{}", bundle::URI, error.schema_path().as_str()))
-            .map(|(location, _)| location);
-        return detail;
+        return unsupported_pattern(pattern::Unsupported::Size, "patternProperties");
     }
     no_verdict(
         NoVerdictReason::ConservativePreparation,
@@ -1458,587 +754,39 @@ fn preparation_error(
         "the evaluator could not prepare the projected schema",
     )
 }
-
 struct Compiled {
     validator: jsonschema::Validator<FlatJson>,
-    // The `pattern` keywords' matchers, which the validator shares, and their
-    // sites, which name the keyword a pass stopped at.
-    patterns: Arc<operands::Patterns>,
-    locations: explain::Locations,
-    // The deepest value the depth bound admits within the limit, and within
-    // half of it for explanations; `usize::MAX` when every value is.
     deepest: Option<usize>,
-    deepest_explained: Option<usize>,
-    // The stack the host gives, and the stack a guarded contract's pass may
-    // use, in bytes.
-    host: stack::Stack,
-    guard: Option<usize>,
-    limits: Limits,
-    // What the contract's stand-ins stand for, and its bounds program, when
-    // it has any.
-    stand_ins: Option<Box<StandIns>>,
-}
-struct StandIns {
-    // The resources the contract reaches but the request did not supply, by
-    // the index their stand-ins' keyword holds.
-    missing: Vec<String>,
-    // The original location of each schema that would apply again, by the
-    // index its stand-in's keyword holds.
-    cycles: Vec<Option<SchemaLocation>>,
-    // Each schema's unmatched `patternProperties` names, likewise.
-    names: Vec<UnmatchedNames>,
-    bounds: Option<Bounds>,
-    // Whether the contract holds a stand-in for an in-place cycle, an invalid
-    // pattern or `patternProperties` names, and so explains a failure its own
-    // explanation names no problem for through `bounds`.
-    explains: bool,
-}
-/// How many times the work of a verdict pass that reached a stand-in the pass
-/// over a bound may do, as the evaluation work allowance counts work.
-const BOUNDS_WORK: usize = 8;
-/// How many times the work of collecting the value contract's own errors the
-/// collection that explains a failure through a bound may do.
-const EXPLANATION_WORK: usize = 64;
-/// The work a pass over a bound may do beyond that, for the program's own
-/// root and entries.
-const BOUNDS_SLACK: usize = 64;
-// A compiled bounds program (`crate::compiled::bounds`), the deepest values its entries
-// admit, by phase, as `Compiled` holds its own, and the deepest its upper
-// entry explains.
-struct Bounds {
-    validator: jsonschema::Validator<FlatJson>,
-    deepest: [Option<usize>; 3],
-    deepest_explained: Option<usize>,
-}
-impl Bounds {
-    // The deepest values the entry for `phase` admits.
-    fn deepest(&self, phase: pass::Phase) -> Option<usize> {
-        self.deepest[match phase {
-            pass::Phase::Lower => 0,
-            pass::Phase::Upper | pass::Phase::UpperErrors => 1,
-            pass::Phase::Original | pass::Phase::OriginalErrors => 2,
-        }]
-    }
-    // The first of the library's errors for `value` against the entry for
-    // `phase`, which reaches the same verdict as its validity test. Every use
-    // of the program goes through this one call to the library's error
-    // collection, which the value contract's own passes never call, so its
-    // verdict passes and explanations are compiled as they would be without
-    // the program. A verdict phase's root makes the library check its entry
-    // by its validity test.
-    #[inline(never)]
-    fn first_error<'v>(
-        &'v self,
-        phase: pass::Phase,
-        value: &'v JsonValue,
-    ) -> Result<(), jsonschema::ValidationError<'v>> {
-        pass::bound(phase, || {
-            match self.validator.iter_errors(backend::view(value)).next() {
-                Some(error) => Err(error),
-                None => Ok(()),
-            }
-        })
-    }
-}
-fn verdict_only_failure() -> ValueOutcome {
-    ValueOutcome::Fails {
-        message: "value does not satisfy the value contract".into(),
-        problems: Vec::new(),
-        problems_complete: false,
-    }
-}
-impl SchemaValidator for Compiled {
-    fn evaluate(
-        &self,
-        value: &JsonValue,
-        detail: Detail,
-        control: &dyn WorkControl,
-    ) -> ValueOutcome {
-        if let Err(detail) = control.check() {
-            let detail = detail.into();
-            return ValueOutcome::NoVerdict { detail };
-        }
-        if !self.nests_within(value, self.deepest) {
-            return ValueOutcome::NoVerdict {
-                detail: self.host.too_deep(self.deepest),
-            };
-        }
-        // A pass that reached a stand-in keeps its verdict only where its
-        // bounds program decides it.
-        let verdict = self.run(
-            || self.validator.is_valid(backend::view(value)),
-            |valid, stop| Ok((valid, stop)),
-        );
-        let (valid, decided) = match verdict {
-            Err(detail) => return ValueOutcome::NoVerdict { detail },
-            Ok((valid, None)) => (valid, None),
-            Ok((valid, Some(stop))) => match self.decided(value, valid, stop) {
-                Some(bounds) => (valid, Some(bounds)),
-                None => {
-                    return ValueOutcome::NoVerdict {
-                        detail: self.stopped(stop),
-                    };
-                }
-            },
-        };
-        // A completed verdict pass establishes its verdict: cancellation
-        // observed later never discards it.
-        match valid {
-            true => ValueOutcome::Satisfies,
-            false if detail == Detail::Outcome => verdict_only_failure(),
-            // An established failure survives interruption of optional diagnostics.
-            false => match decided {
-                None => self.explained(value, control),
-                Some(bounds) => self.bounds_diagnostics(bounds, value, control),
-            },
-        }
-    }
 }
 impl Compiled {
-    // Whether evaluating `value` nests no more than `limit` schemas deep. The
-    // bound grows with the value's depth only for a recursive contract; the
-    // value's node count bounds its depth without reading it, and otherwise
-    // the scan stops at the first container nested too deep.
     fn nests_within(&self, value: &JsonValue, deepest: Option<usize>) -> bool {
         match deepest {
             None => false,
             Some(usize::MAX) => true,
-            Some(deepest) => {
-                backend::node_count(value.view()) <= deepest
-                    || backend::depth_at_most(value, deepest)
+            Some(limit) => {
+                backend::node_count(value.view()) <= limit || backend::depth_at_most(value, limit)
             }
         }
     }
-    // Whether the bounds program decides `value`, whose verdict pass stopped
-    // at `stop` with the verdict `valid`: the pass's answers are one way the
-    // stand-ins can come out, so a pass that holds is decided when the lower
-    // bound holds too, and one that fails when the upper bound fails too.
-    // Gives the program that decided it.
-    fn decided(&self, value: &JsonValue, valid: bool, stop: pass::Stop) -> Option<&Bounds> {
-        if !stop.stands_in() {
-            return None;
-        }
-        let bounds = self.stand_ins.as_ref()?.bounds.as_ref()?;
-        let phase = if valid {
-            pass::Phase::Lower
-        } else {
-            pass::Phase::Upper
-        };
-        if !self.nests_within(value, bounds.deepest(phase)) {
-            return None;
-        }
-        let allowance = self.allowance(bounds, pass::Phase::Original, BOUNDS_WORK, value)?;
-        let bound = self.run(
-            || {
-                openbindings_internal_json::work::scope(allowance, || {
-                    bounds.first_error(phase, value).is_ok()
-                })
-            },
-            |holds, stop| Ok((holds, stop)),
-        );
-        match bound {
-            Ok((Ok(holds), None)) if holds == valid => Some(bounds),
-            _ => None,
-        }
-    }
-    // The work a pass over `bounds` for `value` may do: `times` the work of
-    // the value contract's own pass, which the program's own entry measures
-    // in `phase`, checking validity or collecting errors, and `BOUNDS_SLACK`
-    // more. Past that, a pass gives up, so deciding or explaining a value
-    // never costs more than a multiple of checking or explaining it. `None`
-    // when that pass cannot be measured within the contract's limits.
-    fn allowance(
-        &self,
-        bounds: &Bounds,
-        phase: pass::Phase,
-        times: usize,
-        value: &JsonValue,
-    ) -> Option<usize> {
-        if !self.nests_within(value, bounds.deepest(phase)) {
-            return None;
-        }
-        let measured = self.run(
-            || {
-                openbindings_internal_json::work::measure(|| {
-                    bounds.first_error(phase, value).is_ok()
-                })
-            },
-            |measured, _| Ok(measured),
-        );
-        let Ok(Ok((_, work))) = measured else {
-            return None;
-        };
-        Some(work.saturating_mul(times).saturating_add(BOUNDS_SLACK))
-    }
-    // One verdict or diagnostic pass, and what it evaluated unless it met a
-    // reason to give no verdict. The pass carries only `evaluate`'s own
-    // result, so a verdict pass moves a `bool` rather than a no-verdict.
     fn pass<T>(&self, evaluate: impl FnOnce() -> T) -> Result<T, NoVerdict> {
-        self.run(evaluate, |result, stop| match stop {
-            None => Ok(result),
-            Some(stop) => Err(self.stopped(stop)),
-        })
-    }
-    // One pass, whose result `then` answers from with the stand-in or
-    // pattern it stopped at, if any; any other reason to give no verdict is
-    // an error. `then` takes the result where the pass leaves it, so a
-    // diagnostic pass moves its problem once.
-    fn run<T, R>(
-        &self,
-        evaluate: impl FnOnce() -> T,
-        then: impl FnOnce(T, Option<pass::Stop>) -> Result<R, NoVerdict>,
-    ) -> Result<R, NoVerdict> {
-        let run = || pass::scope(evaluate);
-        let allowed = || match self.limits.evaluation_steps {
-            Some(steps) => openbindings_internal_json::work::scope(steps, run),
-            None => Ok(run()),
-        };
-        // A guarded pass that used more stack than it may stopped descending,
-        // so its result answers nothing.
-        let (evaluated, deep) = match self.guard {
-            None => (backend::string_scope(allowed), false),
-            Some(bytes) => {
-                match backend::string_scope(|| {
-                    openbindings_internal_json::work::guard(bytes, allowed)
-                }) {
-                    Ok((evaluated, deep)) => (Ok(evaluated), deep),
-                    Err(lone) => (Err(lone), false),
-                }
-            }
-        };
-        let evaluated = evaluated.map_err(|_| {
+        let (result, stop) = backend::string_scope(|| pass::scope(evaluate)).map_err(|_| {
             no_verdict(
                 NoVerdictReason::UnsupportedCapability,
                 "lone-surrogate-instance",
                 "a reached keyword requires Unicode scalar string interpretation",
             )
         })?;
-        if deep {
-            return Err(self.host.guard_exceeded());
-        }
-        match evaluated {
-            Err(openbindings_internal_json::work::Spent) => Err(no_verdict(
-                NoVerdictReason::LimitExceeded,
-                "evaluation-work-limit",
-                "evaluation work limit reached",
-            )),
-            Ok((_, Some(pass::Stop::Arithmetic))) => Err(no_verdict(
-                NoVerdictReason::LimitExceeded,
-                "numeric-arithmetic-limit",
-                "numeric arithmetic exceeds the admitted evaluation limit",
-            )),
-            Ok((result, stop)) => then(result, stop),
-        }
-    }
-    // The no-verdict a pass that stopped at `stop` gives, naming where.
-    fn stopped(&self, stop: pass::Stop) -> NoVerdict {
-        let stand_ins = self.stand_ins.as_deref();
         match stop {
-            pass::Stop::Unmatched(unsupported, site) => {
-                // The `pattern` keyword that holds it, at its original location.
-                let mut detail = unsupported_pattern(unsupported, "pattern");
-                detail.location = self.patterns.site(site).and_then(|at| {
-                    self.locations
-                        .locate(&format!("{}#{}", bundle::URI, at.as_str()))
-                        .map(|(location, _)| location)
-                });
-                detail
-            }
-            pass::Stop::Missing(at) => {
-                let mut detail = no_verdict(
-                    NoVerdictReason::ResourceUnavailable,
-                    "resource-unavailable",
-                    "evaluation reached a resource that was not supplied",
-                );
-                detail.location = stand_ins
-                    .and_then(|stand_ins| stand_ins.missing.get(at as usize))
-                    .map(|uri| {
-                        SchemaLocation::new(
-                            Some(uri.clone()),
-                            Pointer::from_utf16(&[]).expect("the root pointer"),
-                        )
-                    });
-                detail
-            }
-            pass::Stop::Cycle(at) => {
-                let mut detail = in_place_cycle(
-                    "evaluation reached a schema that would apply again without consuming the instance",
-                );
-                detail.location = stand_ins
-                    .and_then(|stand_ins| stand_ins.cycles.get(at as usize))
-                    .cloned()
-                    .flatten();
-                detail
-            }
-            pass::Stop::Names(at) => {
-                let names = stand_ins.and_then(|stand_ins| stand_ins.names.get(at as usize));
-                let mut detail = unsupported_pattern(
-                    names.map_or(pattern::Unsupported::Invalid, |names| names.unsupported),
-                    "patternProperties",
-                );
-                detail.location = names.and_then(|names| names.location.clone());
-                detail
-            }
-            pass::Stop::Arithmetic => no_verdict(
+            None => Ok(result),
+            Some(pass::Stop::Arithmetic) => Err(no_verdict(
                 NoVerdictReason::LimitExceeded,
                 "numeric-arithmetic-limit",
                 "numeric arithmetic exceeds the admitted evaluation limit",
-            ),
-        }
-    }
-    // The library's first error for `value`, which the value contract fails,
-    // at its keyword's original location.
-    fn diagnostics(&self, value: &JsonValue, control: &dyn WorkControl) -> ValueOutcome {
-        // Validity is already established. Failure to obtain detail (including
-        // cancellation or exhausted work) must never turn it into no-verdict.
-        // Building the library's error takes about twice the stack per level a
-        // check takes, so a value is explained only within half the limit.
-        let explains = self.nests_within(value, self.deepest_explained);
-        let problem = (explains).then(|| {
-            self.pass(|| -> Result<_, NoVerdict> {
-                control.check()?;
-                let Err(error) = self.validator.validate(backend::view(value)) else {
-                    return Ok(None);
-                };
-                let Some((schema, keyword)) = error
-                    .absolute_keyword_location()
-                    .and_then(|uri| self.locations.locate(uri.as_str()))
-                else {
-                    return Ok(None);
-                };
-                control.check()?;
-                let instance = instance_pointer(error.instance_path().as_str());
-                let (code, message) = match keyword {
-                    // The library reports the transform's own keyword; the
-                    // problem names the one it stands for.
-                    Some(keyword) => (keyword.to_owned(), PATTERN_MEMBER.to_owned()),
-                    None => (
-                        error.kind().keyword().to_owned(),
-                        diagnostic_message(error.kind()),
-                    ),
-                };
-                Ok(Some(ValueProblem::new(instance, schema, code, message)))
-            })
-            .and_then(|problem| problem)
-        });
-        let problems = match problem {
-            Some(Ok(Some(problem))) => {
-                debug_assert!(value.at_pointer(&problem.instance).is_some());
-                // The library's first error is the only problem.
-                vec![problem]
-            }
-            _ => Vec::new(),
-        };
-        ValueOutcome::Fails {
-            message: "value does not satisfy the value contract".into(),
-            problems,
-            // A first error never claims exhaustive diagnostics.
-            problems_complete: false,
-        }
-    }
-    // The explanation of a failure the verdict pass established without
-    // reaching a stand-in: the value contract's own. Where that names no
-    // problem, a value contract holding a stand-in for an in-place cycle, an
-    // invalid pattern or `patternProperties` names explains the failure
-    // through its bounds program, whose upper bound fails too.
-    fn explained(&self, value: &JsonValue, control: &dyn WorkControl) -> ValueOutcome {
-        let outcome = self.diagnostics(value, control);
-        if !matches!(&outcome, ValueOutcome::Fails { problems, .. } if problems.is_empty()) {
-            return outcome;
-        }
-        let Some(bounds) = self
-            .stand_ins
-            .as_deref()
-            .filter(|stand_ins| stand_ins.explains)
-            .and_then(|stand_ins| stand_ins.bounds.as_ref())
-        else {
-            return outcome;
-        };
-        self.bounds_diagnostics(bounds, value, control)
-    }
-    // The explanation of a value whose failure the bounds program shows: the
-    // library's first error for its upper bound, which fails however the
-    // stand-ins come out, within a multiple of the work of collecting the
-    // value contract's own errors. It is a function of its own, beside the
-    // value contract's own explanation, which then compiles as it would
-    // without it.
-    #[inline(never)]
-    fn bounds_diagnostics(
-        &self,
-        bounds: &Bounds,
-        value: &JsonValue,
-        control: &dyn WorkControl,
-    ) -> ValueOutcome {
-        let explains = self.nests_within(value, bounds.deepest_explained);
-        let allowance = explains
-            .then(|| self.allowance(bounds, pass::Phase::OriginalErrors, EXPLANATION_WORK, value))
-            .flatten();
-        let problem = allowance.map(|allowance| {
-            self.pass(|| -> Result<_, NoVerdict> {
-                control.check()?;
-                let Ok(Err(error)) = openbindings_internal_json::work::scope(allowance, || {
-                    bounds.first_error(pass::Phase::UpperErrors, value)
-                }) else {
-                    return Ok(None);
-                };
-                let Some((schema, keyword)) = error
-                    .absolute_keyword_location()
-                    .and_then(|uri| self.locations.locate_bounds(uri.as_str()))
-                else {
-                    return Ok(None);
-                };
-                control.check()?;
-                let instance = instance_pointer(error.instance_path().as_str());
-                let (code, message) = match keyword {
-                    // The program's own definitions stand for the keyword
-                    // they are written for.
-                    Some(keyword) => (keyword.to_owned(), standing_message(keyword).to_owned()),
-                    None => (
-                        error.kind().keyword().to_owned(),
-                        diagnostic_message(error.kind()),
-                    ),
-                };
-                Ok(Some(ValueProblem::new(instance, schema, code, message)))
-            })
-            .and_then(|problem| problem)
-        });
-        let problems = match problem {
-            Some(Ok(Some(problem))) => {
-                debug_assert!(value.at_pointer(&problem.instance).is_some());
-                vec![problem]
-            }
-            _ => Vec::new(),
-        };
-        ValueOutcome::Fails {
-            message: "value does not satisfy the value contract".into(),
-            problems,
-            problems_complete: false,
+            )),
+            Some(pass::Stop::Unmatched(reason)) => Err(unsupported_pattern(reason, "pattern")),
         }
     }
 }
-// The message of a problem at a keyword a transform's definition stands for.
-fn standing_message(keyword: &str) -> &'static str {
-    match keyword {
-        "patternProperties" => PATTERN_MEMBER,
-        "additionalProperties" => "this member is not permitted by the schema",
-        _ => "value does not satisfy the constraint at the schema location",
-    }
-}
-
-// The library's instance path is the failing node's exact pointer from the
-// value. It escapes `~` and `/` as RFC 6901 does and writes indices in decimal,
-// and it spells each member name as the value does: evaluation presents scalar
-// names, including those holding the view's marker U+E000, as themselves, and
-// a name with an unpaired unit can only be read through `AsRef<str>` or
-// `Cow<str>`, which marks the pass unsupported: a path built in such a pass
-// may hold the view's spelling, but the pass and its problem are discarded.
-fn instance_pointer(path: &str) -> Pointer {
-    backend::escaped_pointer(path.to_owned())
-}
-
-const PATTERN_MEMBER: &str =
-    "an object member does not satisfy the schema of a pattern its name matches";
-
-// A fixed message for each kind of error, never the library's Display text,
-// which renders schema and instance values.
-fn diagnostic_message(kind: &jsonschema::error::ValidationErrorKind) -> String {
-    use jsonschema::error::ValidationErrorKind as K;
-    let keyword_message = match kind.keyword() {
-        "pattern" => Some("string does not match the schema pattern"),
-        "minimum" => Some(
-            "number is below the inclusive lower bound; inspect minimum at the schema location",
-        ),
-        "maximum" => {
-            Some("number exceeds the inclusive upper bound; inspect maximum at the schema location")
-        }
-        "exclusiveMinimum" => Some(
-            "number must exceed the lower bound; inspect exclusiveMinimum at the schema location",
-        ),
-        "exclusiveMaximum" => Some(
-            "number must be below the upper bound; inspect exclusiveMaximum at the schema location",
-        ),
-        "minLength" => Some(
-            "string has fewer characters than required; inspect minLength at the schema location",
-        ),
-        "maxLength" => Some(
-            "string exceeds the permitted character count; inspect maxLength at the schema location",
-        ),
-        "minItems" => {
-            Some("array has fewer items than required; inspect minItems at the schema location")
-        }
-        "maxItems" => {
-            Some("array exceeds the permitted item count; inspect maxItems at the schema location")
-        }
-        "minProperties" => Some(
-            "object has fewer members than required; inspect minProperties at the schema location",
-        ),
-        "maxProperties" => Some(
-            "object exceeds the permitted member count; inspect maxProperties at the schema location",
-        ),
-        "enum" => {
-            Some("value is not one of the allowed values; inspect enum at the schema location")
-        }
-        "const" => {
-            Some("value differs from the required constant; inspect const at the schema location")
-        }
-        _ => None,
-    };
-    if let Some(message) = keyword_message {
-        return message.into();
-    }
-    let message = match kind {
-        K::Type { kind } => {
-            // The engine type enum has seven fixed names. Never render the schema
-            // or rejected instance, including user-controlled enum/member values.
-            use jsonschema::error::TypeKind;
-            return match kind {
-                TypeKind::Single(expected) => format!("expected JSON type: {expected}"),
-                TypeKind::Multiple(expected) => format!(
-                    "expected one of JSON types: {}",
-                    expected
-                        .iter()
-                        .map(|ty| ty.as_str())
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                ),
-            };
-        }
-        K::Required { .. } => {
-            "object is missing a required member; inspect the required keyword at the schema location"
-        }
-        K::AdditionalProperties { .. } | K::UnevaluatedProperties { .. } => {
-            "this member is not permitted by the schema"
-        }
-        K::AdditionalItems { .. } | K::UnevaluatedItems { .. } => {
-            "this array item is not permitted by the schema"
-        }
-        K::PropertyNames { .. } => {
-            "object contains a member name that does not satisfy the propertyNames schema"
-        }
-        K::UniqueItems => "array contains equal items where unique items are required",
-        _ => "value does not satisfy the constraint at the schema location",
-    };
-    message.into()
-}
-
-fn original_location(at: openbindings_internal_schema::Location) -> SchemaLocation {
-    SchemaLocation::new(at.resource, at.pointer)
-}
-fn projection_failure(f: openbindings_internal_schema::Failure) -> NoVerdict {
-    use openbindings_internal_schema::FailureReason as F;
-    let reason = match f.reason {
-        F::UnsupportedCapability => NoVerdictReason::UnsupportedCapability,
-        F::ConservativePreparation => NoVerdictReason::ConservativePreparation,
-        F::ResourceUnavailable => NoVerdictReason::ResourceUnavailable,
-        F::LimitExceeded => NoVerdictReason::LimitExceeded,
-        F::Cancelled => NoVerdictReason::Cancelled,
-        F::EvaluatorFailure => NoVerdictReason::EvaluatorFailure,
-    };
-    let mut detail = NoVerdict::new(reason, f.code, f.message);
-    detail.location = f.location.map(original_location);
-    detail
-}
-
 #[cfg(test)]
 mod construction_boundary_tests {
     use super::*;
@@ -2066,7 +814,7 @@ mod construction_boundary_tests {
                         compiled: pattern::FIRST,
                         cache: 0
                     },
-                    Some(&bridge)
+                    &bridge
                 )
                 .is_none()
             );
@@ -2082,7 +830,7 @@ mod construction_boundary_tests {
                         compiled: pattern::FIRST,
                         cache: 0
                     },
-                    Some(&bridge)
+                    &bridge
                 )
                 .is_none()
             );
@@ -2095,4 +843,78 @@ mod construction_boundary_tests {
         })
         .unwrap();
     }
+}
+
+#[cfg(test)]
+pub(super) fn verify_shared_reach(plan: &crate::semantic::Plan) {
+    use openbindings_internal_schema::OriginalEnvironment;
+    let environment = plan.compiled_environment();
+    let space = environment.space();
+    let selected = admission::select(
+        plan,
+        &crate::Limits::default(),
+        &PreparationLimits::default(),
+        &|| false,
+        &|_| Ok(None),
+    )
+    .unwrap();
+    let Ok(admission::Admitted { reach: shared, .. }) = selected else {
+        panic!("closed no-pattern fixture must compile")
+    };
+    let original = space.reach(environment.entry(), &|| false).unwrap();
+    assert_eq!(shared.nodes, original.nodes);
+    assert_eq!(shared.resources, original.resources);
+    assert_eq!(shared.targets.len(), original.targets.len());
+    for (key, target) in &shared.targets {
+        let expected = &original.targets[key];
+        assert_eq!(target.node, expected.node);
+        assert_eq!(target.dynamic_name, expected.dynamic_name);
+    }
+    let sorted = |mut edges: HashMap<usize, Vec<usize>>| {
+        for children in edges.values_mut() {
+            children.sort_unstable();
+        }
+        edges
+    };
+    assert_eq!(sorted(shared.edges.clone()), sorted(original.edges.clone()));
+    // The actual bounded lowerer consumes this shared closure. Compare its
+    // converted document against the original path without compiling a second
+    // value engine or changing any public allowance.
+    let lower = |definitions: Definitions<'_>| {
+        let mut operands = operands::Operands::default();
+        let mut sources = operands::Sources::new();
+        let mut resources = Vec::new();
+        let mut entry = None;
+        for resource in definitions.resources {
+            if resource.uri == definitions.entry_uri {
+                entry = resource.entry;
+            }
+            resources.push(bundle::Resource {
+                definitions: operands
+                    .definitions(
+                        resource.definitions,
+                        &definitions.literals,
+                        &Limits::default(),
+                        &mut sources,
+                        &std::sync::atomic::AtomicBool::new(false),
+                    )
+                    .unwrap(),
+            });
+        }
+        bundle::bundle(resources, &entry.unwrap())
+            .unwrap()
+            .document()
+    };
+    assert_eq!(
+        lower(
+            space
+                .program_definitions_reached(environment.entry(), &shared, &|| false)
+                .unwrap()
+        ),
+        lower(
+            space
+                .program_definitions(environment.entry(), &|| false)
+                .unwrap()
+        )
+    );
 }
