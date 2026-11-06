@@ -25,6 +25,9 @@ examples. `python3 tools/verify.py --browser` adds browser checks.
 
 `tools/verify-api-reference.py` checks Rust documentation and TypeScript reference
 contracts. `tools/verify-rust-snippets.py` executes prose examples.
+`tools/verify-kind-adapter.py` checks the adapter guide's verbatim Rust blocks
+against its external example, then tests and lints that example with its lockfile.
+Add `--wasm` to build its library for `wasm32-unknown-unknown`.
 `tools/verify-product-labels.py --self-test` checks product vocabulary boundaries.
 `tools/verify-doc-links.py` checks local Markdown targets and fragments without
 network access, including repository URLs that name this checkout. Remote URLs

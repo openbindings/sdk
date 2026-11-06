@@ -1,5 +1,8 @@
 # OpenBindings kind description
 
+For a complete protocol implementation walkthrough, read
+[writing a binding kind adapter](https://github.com/openbindings/sdk/blob/main/docs/writing-a-kind.md).
+
 Exact carriers and directly callable implementations of the kind-descriptor interface:
 listed kinds, kind descriptions, check disclosures, proposed sources and checked
 source entries. Support is a list of operation keys claimed by the provider for

@@ -1,5 +1,8 @@
 # OpenBindings source pulling
 
+For a complete protocol implementation walkthrough, read
+[writing a binding kind adapter](https://github.com/openbindings/sdk/blob/main/docs/writing-a-kind.md).
+
 This unpublished companion is being implemented against source-puller version
 0.1.0 at interfaces revision `5006884a39c055103fad49e7c47b3141726f8dd8`.
 It carries additions to one original document and the report of pulling one

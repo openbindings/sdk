@@ -6,6 +6,8 @@ use openbindings_internal_cancellation::CancellationToken;
 use std::future::Future;
 
 /// Provider of kind listings and descriptions. Queries perform no operation under a kind.
+/// See [writing a binding kind adapter](https://github.com/openbindings/sdk/blob/main/docs/writing-a-kind.md)
+/// for a complete implementation and support disclosures.
 pub trait KindDescriptor {
     /// Provider-defined query failure; the interface does not prescribe a query error record.
     type Error;
@@ -27,6 +29,8 @@ pub trait KindDescriptor {
     ) -> Self::Describe<'_>;
 }
 /// Provider that checks proposed source entries under their kinds.
+/// See [writing a binding kind adapter](https://github.com/openbindings/sdk/blob/main/docs/writing-a-kind.md)
+/// for source-data ownership, context challenges and checked calls.
 pub trait SourceChecker {
     /// Native transport, decoding or admission failure, distinct from a kind rejection.
     type Error;

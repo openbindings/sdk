@@ -5,6 +5,9 @@ are unpublished; the migration does not preserve superseded SDK interfaces.
 Start with the [Rust guide](rust-first-use.md) or [TypeScript guide](../packages/typescript/README.md).
 Definition-level Rustdoc and JSDoc specify each method's ownership, result and limits.
 
+For protocol implementations, read [writing a binding kind adapter](writing-a-kind.md).
+It builds a complete adapter and explains the checked calls and kind-owned rules.
+
 | Responsibility | Definition source | Reference command |
 | --- | --- | --- |
 | Exact documents, canonical entries, conformance and schemas | [openbindings](../crates/openbindings/src/lib.rs) | `cargo doc --locked --no-deps -p openbindings` |

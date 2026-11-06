@@ -41,6 +41,8 @@ impl<E: std::error::Error + 'static> std::error::Error for PullFailure<E> {
     }
 }
 /// Explicit kind-owned source observation and projection; no source operation is invoked.
+/// See [writing a binding kind adapter](https://github.com/openbindings/sdk/blob/main/docs/writing-a-kind.md)
+/// for implementation, report obligations and checked calls.
 pub trait SourcePuller {
     /// Native operational error, including inability to produce a truthful report.
     type Error;

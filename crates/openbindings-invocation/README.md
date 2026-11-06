@@ -1,5 +1,8 @@
 # OpenBindings invocation
 
+For a complete protocol implementation walkthrough, read
+[writing a binding kind adapter](https://github.com/openbindings/sdk/blob/main/docs/writing-a-kind.md).
+
 `BindingInvoker` runs one binding of an owned conformant document.
 `OperationInvoker` resolves operations, selects bindings and validates values.
 `DefaultOperationInvoker<P,E>` supplies that implementation using a binding invoker,

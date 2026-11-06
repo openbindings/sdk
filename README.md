@@ -75,6 +75,9 @@ Start with the crate guide for
 [source pulling](crates/openbindings-source-pull/README.md) or
 [invocation](crates/openbindings-invocation/README.md).
 
+To implement a protocol, start with [writing a binding kind adapter](docs/writing-a-kind.md)
+and its [tested external example](examples/kind-adapter/README.md).
+
 ## Limits and compatibility
 
 Parsing, document conformance and value validation are separate steps. A prepared

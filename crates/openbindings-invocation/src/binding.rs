@@ -21,6 +21,8 @@ pub enum PreflightOutcome {
 /// Execute an explicitly addressed binding. Neither method selects a binding or
 /// validates operation values. Futures may borrow provider configuration and need
 /// not implement Send. The provider owns kind-defined effects and cleanup.
+/// See [writing a binding kind adapter](https://github.com/openbindings/sdk/blob/main/docs/writing-a-kind.md)
+/// for a complete implementation and the future-drop cancellation model.
 pub trait BindingInvoker {
     /// Lazy invocation work, completed with exactly one terminal result.
     type Invoke<'a>: Future<Output = Result<(), InvocationError>>

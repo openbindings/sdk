@@ -48,6 +48,7 @@ print(f"Evaluator replay: {len(replay['report']['observations'])} observations; 
 run([sys.executable, 'tools/verify-rust-snippets.py'])
 run([sys.executable, 'tools/verify-source-pull.py'])
 run([sys.executable, 'tools/verify-invocation.py'])
+run([sys.executable, 'tools/verify-kind-adapter.py'])
 run([sys.executable, 'tools/verify-invocation-resources.py'])
 run([sys.executable, 'tools/verify-diagnostics.py'])
 run([sys.executable, 'tools/test-interface-verifiers.py'])
@@ -73,6 +74,7 @@ if a.browser:
     run([sys.executable, 'tools/qualification/replay/check-container-findings.py', '--binary', Path(env['CARGO_TARGET_DIR']) / 'debug' / ('sdk-production-observer.exe' if os.name == 'nt' else 'sdk-production-observer')])
     run([sys.executable, 'tools/verify-source-pull.py', '--archives', '--wasm'])
     run([sys.executable, 'tools/verify-invocation.py', '--archives', '--wasm'])
+    run([sys.executable, 'tools/verify-kind-adapter.py', '--wasm'])
     run([sys.executable, 'tools/qualification/replay/prepare-browser-fixtures.py'])
     for engine in ['chromium', 'webkit']:
         run(['node', 'packages/typescript/test/browser.mjs', engine])
