@@ -1,0 +1,45 @@
+{
+  "version": "1.0",
+  "description": "A fragment-only reference inside a schema that declares $id resolves within that schema resource (core section 7), not against the document root: #/$defs/X names the resource's own definition.",
+  "mode": "identical",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "value": {
+        "input": {
+          "$id": "https://example.com/schemas/value",
+          "$defs": {
+            "X": {
+              "type": "string"
+            }
+          },
+          "$ref": "#/$defs/X"
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "value": {
+        "input": {
+          "$id": "https://example.com/schemas/value",
+          "$defs": {
+            "X": {
+              "type": "string"
+            }
+          },
+          "$ref": "#/$defs/X"
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "compatible"
+    }
+  }
+}

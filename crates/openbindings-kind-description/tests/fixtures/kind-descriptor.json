@@ -63,6 +63,14 @@
           "description": "Fetches the OpenAPI document when asked to embed it, or confirms it is served at origin. Sends no other request.",
           "executes": false
         },
+        "pull": {
+          "description": "Reads the embedded OpenAPI document, or fetches the one the data names. Sends no other request.",
+          "executes": false
+        },
+        "invoke": {
+          "description": "Calls the binding as the kind defines it.",
+          "executes": false
+        },
         "sourceData": {
           "oneOf": [
             {
@@ -140,6 +148,14 @@
         "check": {
           "description": "Starts the server with the given command, completes the MCP initialize handshake to confirm it works and read its name, then stops it.",
           "executes": true
+        },
+        "pull": {
+          "description": "Starts the server the data names and lists its tools.",
+          "executes": true
+        },
+        "invoke": {
+          "description": "Calls the binding as the kind defines it.",
+          "executes": false
         },
         "sourceData": {
           "type": "object",
@@ -223,6 +239,24 @@
         ],
         "check": {
           "description": "Fetches the document."
+        }
+      },
+      "schemaValid": false
+    },
+    {
+      "description": "A pull disclosure says whether it executes",
+      "operation": "describeKind",
+      "input": {
+        "kind": "example.mcp-stdio@1"
+      },
+      "output": {
+        "kind": "example.mcp-stdio@1",
+        "description": "An MCP server started over standard input and output.",
+        "supports": [
+          "openbindings.source-puller.pullSource"
+        ],
+        "pull": {
+          "description": "Starts the server."
         }
       },
       "schemaValid": false

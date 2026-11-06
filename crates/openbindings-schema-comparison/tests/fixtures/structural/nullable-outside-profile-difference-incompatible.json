@@ -1,0 +1,34 @@
+{
+  "version": "1.0",
+  "description": "nullable is not converted to a type union: a schema carrying nullable true differs from the same schema without it, and from a type union with null.",
+  "mode": "identical",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "nullableScalar": {
+        "input": {
+          "type": "string",
+          "nullable": true
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "nullableScalar": {
+        "input": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "incompatible"
+    }
+  }
+}

@@ -62,6 +62,13 @@ resources. The attempt token is useful for detached work and synchronous loops
 that stop cooperatively. The SDK does not undo effects already performed.
 
 This unpublished companion applies interface version `0.1.0` at revision
-`5815fb106bddd2c85ff4e93e0077570b3f6b9e74`, alongside the OpenBindings 0.2 document
+`5006884a39c055103fad49e7c47b3141726f8dd8`, alongside the OpenBindings 0.2 document
 model. Interface and SDK versions are independent. No TypeScript interface API is
 claimed.
+
+Descriptions carry `pull` exactly when `supports` names
+`openbindings.source-puller.pullSource`, and `invoke` exactly when it names
+`openbindings.binding-invoker.invokeBinding`. `PullDescription` and
+`InvokeDescription` retain each disclosure's sentence and `executes` flag.
+Unknown operation keys in `supports` remain valid claims. These disclosures do
+not grant permission to execute.

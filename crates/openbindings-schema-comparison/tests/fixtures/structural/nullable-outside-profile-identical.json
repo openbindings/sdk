@@ -1,0 +1,51 @@
+{
+  "version": "1.0",
+  "description": "nullable is not a JSON Schema 2020-12 keyword (core section 5.5): the profile gives it no meaning and retains it as a keyword outside the profile, so schemas carrying the same nullable are identical.",
+  "mode": "identical",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "nullableScalar": {
+        "input": {
+          "type": "string",
+          "nullable": true
+        }
+      },
+      "nullableFalse": {
+        "input": {
+          "type": "string",
+          "nullable": false
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "nullableScalar": {
+        "input": {
+          "type": [
+            "string"
+          ],
+          "nullable": true
+        }
+      },
+      "nullableFalse": {
+        "input": {
+          "type": [
+            "string"
+          ],
+          "nullable": false
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "compatible"
+    }
+  }
+}

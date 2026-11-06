@@ -2,7 +2,7 @@
 
 This unpublished migration targets specification
 `c1419c9fc3ae5a00c2b83da710c11bf67dab7934` and interfaces
-`5815fb106bddd2c85ff4e93e0077570b3f6b9e74` on
+`5006884a39c055103fad49e7c47b3141726f8dd8` on
 `codex/sdk-02-foundation`. Existing APIs and module boundaries remain replaceable.
 There is no compatibility requirement for the earlier SDK.
 
@@ -42,7 +42,7 @@ companions and their shared legacy records have been removed. Source pulling
 uses original-document requests and explicit adoption, with separate checked
 report relationships and kind-owned fidelity. External consumers now exercise
 pull/adopt/invoke through source packages, Cargo archives and Node/Wasm. `openbindings-kind-description` now implements exact
-kind descriptions, check disclosures and source-checking interfaces against the same
+kind descriptions, check, pull and invocation disclosures and source-checking interfaces against the same
 interface pin. Queries perform no checks, context stays separate from authored
 source data, and transport/admission failures are distinct from kind rejections.
 
@@ -77,11 +77,12 @@ Kind-description review resolved support-disclosure, exact extension, operationa
 failure and cancellation-handoff findings. These receipts qualify their bounded
 scopes, not arbitrary provider behavior or unrestricted recursion.
 
-The comparison checkpoint passes all 14 ordinary and 10 exact identity fixture
+The comparison checkpoint passes all 27 ordinary and 10 exact identity fixture
 groups, 64 independently authored controls, all observed cancellation checkpoints
 and independent allocation probes. The 88 directional groups remain outside scope.
-Both Rust toolchains, Wasm builds, documentation and dependency checks pass; unsupported
-anchors and ambiguous enum-intersection multiplicity remain documented failures.
+Earlier qualification covered both Rust toolchains. This repin uses the Rust
+toolchain on PATH, with Wasm, documentation and dependency checks recorded in its
+receipt; ambiguous enum-intersection multiplicity remains a documented failure.
 
 ## Remaining work
 
@@ -96,3 +97,12 @@ validation, independent review, corrections and feature-branch checkpoints.
 The normative inputs and full alignment map are retained in the adjacent
 `sdk-migration` coordination repository. No release, merge or completed-alignment
 claim is implied by this checkpoint.
+
+The 2026-11-06 interface repin applies removal proposals, wrapped schema proposals,
+multiple losses, unassessed entries and their complete-pull condition. Core schema
+references participate in the uses closure. All 37 pull-report cases, 15 kind
+descriptor cases and five source-puller examples use the new publication bytes.
+Comparison retains nullable outside the profile, conjoins reference siblings,
+resolves schema resource bases, keeps needed definitions and preserves allOf
+branches whose merge would loosen a closed branch or involve a union. The
+specification pin and historical alignment records are unchanged.

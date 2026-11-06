@@ -13,26 +13,24 @@ pub(crate) fn all_of(
     attempt: &mut Attempt<'_>,
 ) -> Result<Value, Failure> {
     attempt.depth(depth)?;
-    let mut retain = outside(&siblings, depth, attempt)?;
+    let mut retain = outside(&siblings, depth, attempt)? || unmergeable(&siblings);
     for branch in &branches {
         let Value::Object(object) = branch else {
             return Err(Failure::InvalidSchema);
         };
-        retain |= outside(object, depth + 1, attempt)?;
+        retain |= outside(object, depth + 1, attempt)? || unmergeable(object);
+        retain |= closed_across(object, &siblings, attempt)?
+            || closed_across(&siblings, object, attempt)?;
+        for other in &branches {
+            if let Value::Object(other) = other {
+                retain |= closed_across(object, other, attempt)?;
+            }
+        }
     }
     if retain {
         let key = value::literal("allOf", attempt)?;
         value::insert(&mut siblings, key, Value::Array(branches), attempt)?;
         return Ok(Value::Object(siblings));
-    }
-    // Refuse the entire merge after all branches normalized; no earlier false
-    // flag or empty intersection conceals a required reference/capability error.
-    if unions(&siblings)
-        || branches
-            .iter()
-            .any(|branch| matches!(branch,Value::Object(object) if unions(object)))
-    {
-        return Err(Failure::UnionMerge);
     }
     let mut result = Value::Object(siblings);
     for branch in branches {
@@ -40,8 +38,44 @@ pub(crate) fn all_of(
     }
     Ok(result)
 }
-fn unions(object: &Object) -> bool {
-    get(object, "oneOf").is_some() || get(object, "anyOf").is_some()
+// A branch's additionalProperties applies to properties absent from that branch,
+// including properties declared in another branch. Merging must not admit them.
+fn closed_across(
+    closed: &Object,
+    other: &Object,
+    attempt: &mut Attempt<'_>,
+) -> Result<bool, Failure> {
+    if !matches!(
+        get(closed, "additionalProperties"),
+        Some(Value::Boolean(false) | Value::Object(_))
+    ) {
+        return Ok(false);
+    }
+    let Some(Value::Object(properties)) = get(other, "properties") else {
+        return Ok(false);
+    };
+    let declared = get(closed, "properties");
+    for name in properties.keys() {
+        attempt.work(
+            name.len().saturating_add(1).saturating_mul(
+                closed
+                    .len()
+                    .saturating_add(properties.len())
+                    .saturating_add(1),
+            ),
+        )?;
+        if !matches!(declared, Some(Value::Object(own)) if own.contains_key(name)) {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+fn unmergeable(object: &Object) -> bool {
+    // A retained nested conjunction has no merge rule either. Keep its parent
+    // rather than attempting to merge two retained allOf arrays as keywords.
+    get(object, "oneOf").is_some()
+        || get(object, "anyOf").is_some()
+        || get(object, "allOf").is_some()
 }
 fn pair(
     left: Value,
@@ -53,13 +87,16 @@ fn pair(
     let (Value::Object(left), Value::Object(right)) = (left, right) else {
         return Err(Failure::InvalidSchema);
     };
-    if outside(&left, depth, attempt)? || outside(&right, depth, attempt)? {
+    if outside(&left, depth, attempt)?
+        || outside(&right, depth, attempt)?
+        || unmergeable(&left)
+        || unmergeable(&right)
+        || closed_across(&left, &right, attempt)?
+        || closed_across(&right, &left, attempt)?
+    {
         let mut branches = attempt.vector(2)?;
         branches.extend([Value::Object(left), Value::Object(right)]);
         return all_of(Object::new(), branches, depth, attempt);
-    }
-    if unions(&left) || unions(&right) {
-        return Err(Failure::UnionMerge);
     }
     merge_maps(left, right, depth, attempt, false).map(Value::Object)
 }

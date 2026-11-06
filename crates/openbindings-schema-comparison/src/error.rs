@@ -18,8 +18,6 @@ pub enum ComparisonFailure {
     UnsupportedNormalization,
     /// An active original reference target is reached again.
     ReferenceCycle,
-    /// The profile does not merge a union-bearing allOf branch.
-    UnionMerge,
     /// A specified type/enum intersection is empty, or merged const values conflict.
     /// This is not a general schema satisfiability classification.
     UnsatisfiableMerge,
@@ -38,7 +36,6 @@ impl fmt::Display for ComparisonFailure {
             Self::UnsupportedReference => "this reference form is not implemented",
             Self::UnsupportedNormalization => "this normalization edge is not implemented",
             Self::ReferenceCycle => "the comparison profile cannot inline a reference cycle",
-            Self::UnionMerge => "the comparison profile cannot merge an allOf union branch",
             Self::UnsatisfiableMerge => "the profile merge is unsatisfiable",
             Self::LimitExceeded(_) => "the comparison exhausted a configured resource allowance",
             Self::Cancelled => "the caller cancelled the comparison",

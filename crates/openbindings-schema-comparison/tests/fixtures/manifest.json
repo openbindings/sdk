@@ -118,6 +118,22 @@
       "findings": []
     },
     {
+      "path": "structural/identical-absent-slot-difference-incompatible.json",
+      "mode": "identical",
+      "direction": "input",
+      "verdict": "incompatible",
+      "findings": [
+        "unspecified"
+      ]
+    },
+    {
+      "path": "structural/identical-absent-slots-identical.json",
+      "mode": "identical",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
       "path": "structural/identical-detects-difference-incompatible.json",
       "mode": "identical",
       "direction": "input",
@@ -141,6 +157,38 @@
       "direction": "input",
       "verdict": "compatible",
       "findings": []
+    },
+    {
+      "path": "structural/normalize-allof-closed-branch-retained-identical.json",
+      "mode": "identical",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "structural/normalize-allof-closed-branch-retained-incompatible.json",
+      "mode": "identical",
+      "direction": "input",
+      "verdict": "incompatible",
+      "findings": [
+        "identity"
+      ]
+    },
+    {
+      "path": "structural/normalize-allof-union-retained-identical.json",
+      "mode": "identical",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "structural/normalize-allof-union-retained-incompatible.json",
+      "mode": "identical",
+      "direction": "input",
+      "verdict": "incompatible",
+      "findings": [
+        "identity"
+      ]
     },
     {
       "path": "structural/normalize-allof-flatten-identical.json",
@@ -178,14 +226,55 @@
       "findings": []
     },
     {
-      "path": "structural/normalize-nullable-identical.json",
+      "path": "structural/normalize-defs-kept-for-retained-reference-identical.json",
       "mode": "identical",
       "direction": "input",
       "verdict": "compatible",
       "findings": []
     },
     {
+      "path": "structural/normalize-defs-kept-for-retained-reference-incompatible.json",
+      "mode": "identical",
+      "direction": "input",
+      "verdict": "incompatible",
+      "findings": [
+        "identity"
+      ]
+    },
+    {
       "path": "structural/normalize-ref-inline-identical.json",
+      "mode": "identical",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "structural/normalize-ref-resource-difference-incompatible.json",
+      "mode": "identical",
+      "direction": "input",
+      "verdict": "incompatible",
+      "findings": [
+        "identity"
+      ]
+    },
+    {
+      "path": "structural/normalize-ref-resource-identical.json",
+      "mode": "identical",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "structural/normalize-ref-siblings-difference-incompatible.json",
+      "mode": "identical",
+      "direction": "input",
+      "verdict": "incompatible",
+      "findings": [
+        "length-bounds"
+      ]
+    },
+    {
+      "path": "structural/normalize-ref-siblings-identical.json",
       "mode": "identical",
       "direction": "input",
       "verdict": "compatible",
@@ -207,6 +296,22 @@
     },
     {
       "path": "structural/normalize-union-ordering-identical.json",
+      "mode": "identical",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "structural/nullable-outside-profile-difference-incompatible.json",
+      "mode": "identical",
+      "direction": "input",
+      "verdict": "incompatible",
+      "findings": [
+        "identity"
+      ]
+    },
+    {
+      "path": "structural/nullable-outside-profile-identical.json",
       "mode": "identical",
       "direction": "input",
       "verdict": "compatible",

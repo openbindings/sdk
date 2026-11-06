@@ -79,7 +79,7 @@ def check(data):
 def load(directory):
     manifest = json.loads((directory / 'alignment.json').read_text())
     assert manifest['spec_revision'] == 'c1419c9fc3ae5a00c2b83da710c11bf67dab7934'
-    assert manifest['interfaces_revision'] == '5815fb106bddd2c85ff4e93e0077570b3f6b9e74'
+    assert manifest['interfaces_revision'] == '5006884a39c055103fad49e7c47b3141726f8dd8'
     data = {'_manifest': manifest}
     for name, expected in manifest['sha256'].items():
         raw = (directory / name).read_bytes()

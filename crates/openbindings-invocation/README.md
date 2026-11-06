@@ -14,7 +14,7 @@ limits are arguments to `invoke_with_limits` and `preflight_with_limits`.
 Invalid limits return `BoundaryFailureKind::InvalidLimits` before provider work.
 
 This implementation targets the binding-invoker and operation-invoker **0.1**
-interfaces at revision `5815fb106bddd2c85ff4e93e0077570b3f6b9e74`, independently of
+interfaces at revision `5006884a39c055103fad49e7c47b3141726f8dd8`, independently of
 OpenBindings core **0.2** and the package version.
 
 ```rust

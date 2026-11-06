@@ -190,3 +190,137 @@ fn every_validation_cancellation_checkpoint_allows_an_independent_retry() {
         .validate_for(&request, &PullLimits::default(), &AtomicBool::new(false))
         .unwrap();
 }
+
+#[test]
+fn core_references_close_uses_across_operations_schemas_and_resources() {
+    let request = PullRequest::new(
+        checked(r#"{"openbindings":"0.2.0","operations":{},"sources":{"s":{"kind":"k"}}}"#),
+        "s",
+    );
+    for reference in ["#/schemas/A", "urn:example:A"] {
+        for (uses, valid) in [
+            (vec![], false),
+            (vec!["schemas/A"], false),
+            (vec!["schemas/A", "schemas/B"], true),
+        ] {
+            let value = serde_json::json!({"additions":{
+                "operations":{"o":{"input":{"$ref":reference}}},
+                "schemas":{"A":{"$id":"urn:example:A","$ref":"urn:example:B"},"B":{"$id":"urn:example:B","type":"string"}},
+                "bindings":{"b":{"operation":"o","source":"s","data":{"$ref":"#/schemas/opaque"}}}
+            },"report":{"exhaustive":true,"added":[{"binding":"b","operation":"o","uses":uses}]}});
+            let result = PullResult::from_json(json(&value.to_string())).unwrap();
+            let checked =
+                result.validate_for(&request, &PullLimits::default(), &AtomicBool::new(false));
+            if valid {
+                assert!(checked.is_ok(), "{checked:?}");
+            } else {
+                assert!(
+                    matches!(
+                        checked,
+                        Err(PullValidationError::Relationship(
+                            RelationshipError::UsesClosure
+                        ))
+                    ),
+                    "{checked:?}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn proposal_schema_references_and_their_uses_are_closed() {
+    let request = PullRequest::new(
+        checked(
+            r#"{"openbindings":"0.2.0","operations":{"o":{}},"schemas":{"S":true},"sources":{"s":{"kind":"k"}},"bindings":{"b":{"operation":"o","source":"s"}}}"#,
+        ),
+        "s",
+    );
+    for schema_proposal in [true, false] {
+        for (uses, valid) in [
+            (vec![], false),
+            (vec!["schemas/A"], false),
+            (vec!["schemas/A", "schemas/B"], true),
+        ] {
+            let mut proposal = serde_json::json!({"uses":uses});
+            proposal[if schema_proposal { "schema" } else { "input" }] =
+                serde_json::json!({"$ref":"#/schemas/A"});
+            let mut existing =
+                serde_json::json!({"status":"stale","change":"dangerous","proposal":proposal});
+            existing[if schema_proposal { "schema" } else { "binding" }] =
+                serde_json::json!(if schema_proposal { "S" } else { "b" });
+            let entries = if schema_proposal {
+                vec![
+                    existing,
+                    serde_json::json!({"binding":"b","status":"current"}),
+                ]
+            } else {
+                vec![existing]
+            };
+            let value = serde_json::json!({"additions":{"schemas":{"A":{"$ref":"#/schemas/B"},"B":true}},"report":{"exhaustive":true,"added":[],"existing":entries}});
+            let result = PullResult::from_json(json(&value.to_string())).unwrap();
+            let checked =
+                result.validate_for(&request, &PullLimits::default(), &AtomicBool::new(false));
+            assert_eq!(checked.is_ok(), valid, "{checked:?}");
+        }
+    }
+}
+
+#[test]
+fn schema_proposal_may_use_an_added_binding_with_the_same_key() {
+    let request = PullRequest::new(
+        checked(
+            r#"{"openbindings":"0.2.0","operations":{},"schemas":{"S":true},"sources":{"s":{"kind":"k"}}}"#,
+        ),
+        "s",
+    );
+    let result = PullResult::from_json(json(
+        r#"{
+        "additions":{"operations":{"o":{}},"bindings":{"S":{"operation":"o","source":"s"}}},
+        "report":{"exhaustive":true,"added":[{"binding":"S","operation":"o"}],
+            "existing":[{"schema":"S","status":"stale","change":"dangerous",
+                "proposal":{"schema":false,"uses":["bindings/S","operations/o"]}}]}
+    }"#,
+    ))
+    .unwrap();
+    result
+        .validate_for(&request, &PullLimits::default(), &AtomicBool::new(false))
+        .unwrap();
+}
+
+#[test]
+fn core_reference_closure_follows_existing_entries_to_additions() {
+    let request = PullRequest::new(
+        checked(
+            r##"{"openbindings":"0.2.0","operations":{},"schemas":{"A":{"$ref":"urn:example:B"}},"sources":{"s":{"kind":"k"}}}"##,
+        ),
+        "s",
+    );
+    for (uses, valid) in [(vec![], false), (vec!["schemas/B"], true)] {
+        let value = serde_json::json!({"additions":{
+            "operations":{"o":{"input":{"$ref":"#/schemas/A"}}},
+            "schemas":{"B":{"$id":"urn:example:B","type":"string"}},
+            "bindings":{"b":{"operation":"o","source":"s"}}
+        },"report":{"exhaustive":true,"added":[{"binding":"b","operation":"o","uses":uses}]}});
+        let result = PullResult::from_json(json(&value.to_string())).unwrap();
+        let checked =
+            result.validate_for(&request, &PullLimits::default(), &AtomicBool::new(false));
+        assert_eq!(checked.is_ok(), valid, "{checked:?}");
+    }
+}
+
+#[test]
+fn an_existing_operation_reference_follows_only_the_named_slot() {
+    let request = PullRequest::new(
+        checked(
+            r##"{"openbindings":"0.2.0","operations":{"existing":{"input":true,"output":{"$ref":"urn:example:B"}}},"sources":{"s":{"kind":"k"}}}"##,
+        ),
+        "s",
+    );
+    let result = PullResult::from_json(json(r##"{"additions":{"operations":{"o":{"input":{"$ref":"#/operations/existing/input"}}},"schemas":{"B":{"$id":"urn:example:B","type":"string"}},"bindings":{"b":{"operation":"o","source":"s"}}},"report":{"exhaustive":true,"added":[{"binding":"b","operation":"o"}]}}"##)).unwrap();
+    assert!(
+        result
+            .validate_for(&request, &PullLimits::default(), &AtomicBool::new(false))
+            .is_ok()
+    );
+}

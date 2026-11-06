@@ -1,0 +1,59 @@
+{
+  "version": "1.0",
+  "description": "A $ref beside a union is retained, and is identical to the same schema: identity stays decidable.",
+  "mode": "identical",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "schemas": {
+      "Pet": {
+        "oneOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "integer"
+          }
+        ]
+      }
+    },
+    "operations": {
+      "submit": {
+        "input": {
+          "$ref": "#/schemas/Pet",
+          "minLength": 1
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "schemas": {
+      "Pet": {
+        "oneOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "integer"
+          }
+        ]
+      }
+    },
+    "operations": {
+      "submit": {
+        "input": {
+          "$ref": "#/schemas/Pet",
+          "minLength": 1
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "compatible"
+    }
+  }
+}

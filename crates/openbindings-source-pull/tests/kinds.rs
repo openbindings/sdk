@@ -63,7 +63,6 @@ fn complete<F: Future>(future: F) -> F::Output {
 enum ObservationError {
     Source,
     Comparison(ComparisonFailure),
-    RemovalNotRepresentable,
 }
 struct Offer {
     key: String,
@@ -179,8 +178,22 @@ fn reconcile(request: &PullRequest, observed: Observation) -> Result<PullResult,
             continue;
         }
         let reused = if let Some(operation) = operations.get(&offer.key) {
-            if slots(offer, &observed, operation, original)? != [Identity::Equal; 2] {
-                omitted.push(json(&format!(r#"{{"status":"conflict","reasonCode":"offered-schema-differs","message":"The offered input or output differs from the existing operation.","details":{{"operation":{}}}}}"#, quote(&offer.key))));
+            let compared = match slots(offer, &observed, operation, original) {
+                Ok(compared) => compared,
+                Err(ObservationError::Comparison(
+                    ComparisonFailure::MissingReference
+                    | ComparisonFailure::ReferenceCycle
+                    | ComparisonFailure::InvalidReference
+                    | ComparisonFailure::UnsupportedReference
+                    | ComparisonFailure::UnsatisfiableMerge,
+                )) => {
+                    omitted.push(json(&format!(r#"{{"status":"implementation-unsupported","reasonCode":"comparison-unfinished","message":"The offered schemas could not be compared.","item":{},"existing":{}}}"#, quote(&format!("operations/{}", offer.key)), quote(&format!("operations/{}", offer.key)))));
+                    continue;
+                }
+                Err(error) => return Err(error),
+            };
+            if compared != [Identity::Equal; 2] {
+                omitted.push(json(&format!(r#"{{"status":"conflict","reasonCode":"offered-schema-differs","message":"The offered input or output differs from the existing operation.","item":{},"existing":{},"offered":{}}}"#, quote(&format!("operations/{}", offer.key)), quote(&format!("operations/{}", offer.key)), offer.operation.text())));
                 continue;
             }
             true
@@ -242,23 +255,32 @@ fn reconcile(request: &PullRequest, observed: Observation) -> Result<PullResult,
         {
             proposal.insert("data".into(), offer.data.clone());
         }
-        for name in ["input", "output"] {
-            // A kind's would-write comparison includes annotations and exact
-            // schema organization. Profile identity is only the reuse rule.
-            let unchanged = match (offer.operation.get(name), operation.get(name)) {
-                (None, None) => true,
-                (Some(offered), Some(current)) => offered
-                    .to_owned()
-                    .semantic_eq(&current.to_owned())
-                    .ok_or(ObservationError::Source)?,
-                _ => false,
-            };
-            if !unchanged {
-                let Some(value) = offer.operation.get(name) else {
-                    return Err(ObservationError::RemovalNotRepresentable);
-                };
-                proposal.insert(name.into(), value.to_owned());
+        let comparisons = match slots(offer, &observed, operation, original) {
+            Ok(comparisons) => comparisons,
+            Err(ObservationError::Comparison(
+                ComparisonFailure::MissingReference
+                | ComparisonFailure::ReferenceCycle
+                | ComparisonFailure::InvalidReference
+                | ComparisonFailure::UnsupportedReference
+                | ComparisonFailure::UnsatisfiableMerge,
+            )) => {
+                existing.push(json(&format!(r#"{{"binding":{},"status":"unassessed","reasonCode":"comparison-unfinished","message":"The offered schemas could not be compared."}}"#, quote(key))));
+                continue;
             }
+            Err(error) => return Err(error),
+        };
+        let mut remove = Vec::new();
+        for (name, comparison) in ["input", "output"].into_iter().zip(comparisons) {
+            if comparison == Identity::Different {
+                if let Some(value) = offer.operation.get(name) {
+                    proposal.insert(name.into(), value.to_owned());
+                } else {
+                    remove.push(json(&quote(name)));
+                }
+            }
+        }
+        if !remove.is_empty() {
+            proposal.insert("remove".into(), array(&remove));
         }
         let status = if proposal.is_empty() {
             "\"status\":\"current\"".into()
@@ -283,12 +305,12 @@ fn reconcile(request: &PullRequest, observed: Observation) -> Result<PullResult,
 }
 
 #[test]
-fn stale_schema_annotations_are_not_erased_by_the_operation_reuse_profile() {
+fn schema_annotations_remain_the_authors_under_profile_identity() {
     for (current, offered, expected) in [
         (
             r#"{"type":"string","title":"old"}"#,
             r#"{"type":"string","title":"new"}"#,
-            ExistingStatus::Stale,
+            ExistingStatus::Current,
         ),
         (
             r#"{"type":"string","title":"old"}"#,
@@ -299,6 +321,11 @@ fn stale_schema_annotations_are_not_erased_by_the_operation_reuse_profile() {
             r#"{"minimum":1}"#,
             r#"{"minimum":1.0}"#,
             ExistingStatus::Current,
+        ),
+        (
+            r#"{"type":"number","title":"old"}"#,
+            r#"{"type":"string","title":"new"}"#,
+            ExistingStatus::Stale,
         ),
     ] {
         let original = document(&format!(
@@ -667,34 +694,54 @@ fn a_caller_can_discard_or_explicitly_adopt_one_dependency_closed_subset() {
 }
 
 #[test]
-fn comparison_failure_and_removal_only_drift_are_operational_inability() {
+fn comparison_gaps_and_removal_proposals_are_reported() {
     let client = Embedded;
     let comparison = document(
         r##"{"openbindings":"0.2.0","operations":{"a":{"input":true}},"sources":{"catalog":{"kind":"example.embedded@1","data":{"items":[{"key":"a","operation":{"input":{"$ref":"#/missing"}},"data":{"item":"a"}}]}}}}"##,
     );
-    let error = complete(client.pull_source(
+    let result = complete(client.pull_source(
         PullRequest::new(comparison, "catalog"),
         CancellationToken::new(),
     ))
-    .unwrap_err();
-    assert!(matches!(
-        error,
-        PullError::Provider(PullFailure::Operational(ObservationError::Comparison(
-            ComparisonFailure::MissingReference
-        )))
-    ));
+    .unwrap();
+    assert_eq!(
+        result.report().omitted().unwrap().next().unwrap().status(),
+        OmittedStatus::ImplementationUnsupported
+    );
+    assert!(!result.report().is_complete());
     let removal = document(
         r#"{"openbindings":"0.2.0","operations":{"a":{"input":true}},"sources":{"catalog":{"kind":"example.embedded@1","data":{"items":[{"key":"a","operation":{},"data":{"item":"a"}}]}}},"bindings":{"a":{"operation":"a","source":"catalog","data":{"item":"a"}}}}"#,
     );
-    let error = complete(client.pull_source(
-        PullRequest::new(removal, "catalog"),
+    let result = complete(client.pull_source(
+        PullRequest::new(removal.clone(), "catalog"),
         CancellationToken::new(),
     ))
-    .unwrap_err();
-    assert!(matches!(
-        error,
-        PullError::Provider(PullFailure::Operational(
-            ObservationError::RemovalNotRepresentable
-        ))
-    ));
+    .unwrap();
+    let entry = result.report().existing().unwrap().next().unwrap();
+    assert_eq!(entry.status(), ExistingStatus::Stale);
+    let Some(Proposal::Binding(proposal)) = entry.proposal() else {
+        panic!("binding proposal")
+    };
+    assert_eq!(
+        proposal
+            .remove()
+            .unwrap()
+            .map(|v| v.as_str().unwrap())
+            .collect::<Vec<_>>(),
+        ["input"]
+    );
+    let edited = removal
+        .document()
+        .edit(&[Edit::remove(&["operations", "a", "input"])])
+        .unwrap();
+    let edited = edited.validate().unwrap().conformant().unwrap();
+    let next = complete(client.pull_source(
+        PullRequest::new(edited, "catalog"),
+        CancellationToken::new(),
+    ))
+    .unwrap();
+    assert_eq!(
+        next.report().existing().unwrap().next().unwrap().status(),
+        ExistingStatus::Current
+    );
 }

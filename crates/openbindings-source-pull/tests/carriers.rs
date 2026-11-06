@@ -8,10 +8,11 @@ fn result(additions: &str, report: &str) -> JsonValue {
 }
 
 #[test]
-fn all_21_pinned_pull_report_cases_keep_shape_and_complete_answers() {
+fn all_37_pinned_pull_report_cases_keep_shape_and_complete_answers() {
     let pack = json(include_str!("fixtures/pull-report.json"));
     let mut positive = 0;
     let mut negative = 0;
+    let mut mismatches = Vec::new();
     for case in pack.get("tests").unwrap().elements().unwrap() {
         let value = result(
             case.get("additions").unwrap().text(),
@@ -19,15 +20,15 @@ fn all_21_pinned_pull_report_cases_keep_shape_and_complete_answers() {
         );
         let admitted = PullResult::from_json(value.clone());
         let expected = case.get("schemaValid").unwrap().as_bool().unwrap();
-        assert_eq!(
-            admitted.is_ok(),
-            expected,
-            "{}",
-            case.get("description").unwrap().text()
-        );
+        if admitted.is_ok() != expected {
+            mismatches.push(format!(
+                "{}: {admitted:?}",
+                case.get("description").unwrap().text()
+            ));
+        }
         if expected {
             positive += 1;
-            let admitted = admitted.unwrap();
+            let Ok(admitted) = admitted else { continue };
             assert_eq!(
                 admitted.report().is_complete(),
                 case.get("completePull").unwrap().as_bool().unwrap()
@@ -37,7 +38,8 @@ fn all_21_pinned_pull_report_cases_keep_shape_and_complete_answers() {
             negative += 1;
         }
     }
-    assert_eq!((positive, negative), (14, 7));
+    assert_eq!((positive, negative), (26, 11));
+    assert!(mismatches.is_empty(), "{}", mismatches.join("\n"));
 }
 #[test]
 fn all_five_published_example_results_are_admitted_without_projection_or_edits() {
@@ -84,7 +86,7 @@ fn opaque_output_fields_and_owned_children_keep_exact_values_after_parent_drop()
     let Proposal::Source(proposal) = proposal else {
         panic!("source proposal")
     };
-    assert_eq!(proposal.data().text(), "null");
+    assert_eq!(proposal.data().unwrap().text(), "null");
     assert_eq!(
         proposal
             .value()
@@ -132,12 +134,12 @@ fn proposal_authority_is_target_local_and_unknown_metadata_never_gains_edit_powe
     let data = r#"{"data":{"description":"opaque","operation":"opaque","source":"opaque","preference":1,"idempotent":true},"application":{"description":"metadata"}}"#;
     assert!(BindingProposal::from_json(json(data)).is_ok());
     assert!(SourceProposal::from_json(json(data)).is_ok());
-    let entry=ExistingEntry::from_json(json(r#"{"schema":"S","status":"stale","change":"dangerous","proposal":{"description":"schema annotation","uses":["opaque", "opaque"],"type":"string"}}"#)).unwrap();
+    let entry=ExistingEntry::from_json(json(r#"{"schema":"S","status":"stale","change":"dangerous","proposal":{"schema":{"description":"schema annotation","uses":["opaque", "opaque"],"type":"string"}}}"#)).unwrap();
     assert!(matches!(entry.proposal(), Some(Proposal::Schema(_))));
     for schema in ["true", "false", "{}"] {
         assert!(
             ExistingEntry::from_json(json(&format!(
-                r#"{{"schema":"S","status":"stale","change":"dangerous","proposal":{schema}}}"#
+                r#"{{"schema":"S","status":"stale","change":"dangerous","proposal":{{"schema":{schema}}}}}"#
             )))
             .is_ok()
         );
@@ -172,15 +174,20 @@ fn absence_null_and_removal_only_drift_are_not_interchangeable() {
     assert_eq!(empty.omitted().unwrap().len(), 0);
 }
 #[test]
-fn complete_pull_checks_only_exhaustive_and_implementation_unsupported() {
+fn complete_pull_checks_exhaustive_and_all_assessment_gaps() {
     for status in [
         "excluded",
         "invalid",
         "conflict",
         "implementation-unsupported",
     ] {
+        let conflict = if status == "conflict" {
+            r#", "existing":"operations/o", "offered":{}"#
+        } else {
+            ""
+        };
         let report = format!(
-            r#"{{"exhaustive":true,"limitation":{{"code":"note","message":"additional detail"}},"added":[{{"binding":"b","operation":"o","lossy":{{"reasonCode":"approximation","message":""}}}}],"omitted":[{{"status":"{status}","reasonCode":"kind.reason","message":"","rule":"kind.rule@1"}}]}}"#
+            r#"{{"exhaustive":true,"added":[{{"binding":"b","operation":"o","lossy":[{{"reasonCode":"approximation","message":""}}]}}],"omitted":[{{"status":"{status}","reasonCode":"kind.reason","message":"","rule":"kind.rule@1"{conflict}}}]}}"#
         );
         assert_eq!(
             PullReport::from_json(json(&report)).unwrap().is_complete(),
@@ -229,5 +236,82 @@ fn binding_carrier_preferences_use_exact_integer_and_safe_range_rules() {
             r#"{{"bindings":{{"b":{{"operation":"o","source":"s","preference":{number}}}}}}}"#
         ));
         assert_eq!(PullAdditions::from_json(value).is_ok(), valid, "{number}");
+    }
+}
+
+#[test]
+fn removal_lists_and_schema_proposals_keep_absence_distinct_from_null() {
+    for text in [
+        r#"{"remove":[]}"#,
+        r#"{"remove":["output","output"]}"#,
+        r#"{"remove":["output"],"output":true}"#,
+        r#"{"remove":["description"]}"#,
+    ] {
+        assert!(BindingProposal::from_json(json(text)).is_err(), "{text}");
+    }
+    let proposal =
+        BindingProposal::from_json(json(r#"{"remove":["data","input","output"]}"#)).unwrap();
+    assert_eq!(proposal.remove().unwrap().len(), 3);
+    for text in [
+        r#"{"remove":[]}"#,
+        r#"{"remove":["data","data"]}"#,
+        r#"{"remove":["input"]}"#,
+        r#"{"data":null,"remove":["data"]}"#,
+    ] {
+        assert!(SourceProposal::from_json(json(text)).is_err(), "{text}");
+    }
+    let proposal = SourceProposal::from_json(json(r#"{"remove":["data"]}"#)).unwrap();
+    assert!(proposal.data().is_none());
+    assert_eq!(
+        proposal.remove().unwrap().next().unwrap().as_str(),
+        Some("data")
+    );
+    let proposal =
+        SchemaProposal::from_json(json(r#"{"schema":false,"uses":["schemas/S"]}"#)).unwrap();
+    assert_eq!(proposal.schema().view().as_bool(), Some(false));
+    assert_eq!(proposal.uses().unwrap().len(), 1);
+}
+
+#[test]
+fn published_closed_status_sets_and_open_metadata_are_distinct() {
+    assert!(ExistingEntry::from_json(json(r#"{"binding":"b","status":"future"}"#)).is_err());
+    assert!(
+        ExistingEntry::from_json(json(
+            r#"{"binding":"b","status":"stale","change":"future","proposal":{"data":null}}"#
+        ))
+        .is_err()
+    );
+    assert!(
+        OmittedEntry::from_json(json(r#"{"status":"future","reasonCode":"r","message":""}"#))
+            .is_err()
+    );
+    assert!(
+        PullReport::from_json(json(
+            r#"{"exhaustive":true,"added":[],"limitation":{"code":"r","message":"reason"}}"#
+        ))
+        .is_err()
+    );
+    for text in [
+        r#"{"binding":"b","operation":"o","lossy":[]}"#,
+        r#"{"binding":"b","operation":"o","lossy":{"reasonCode":"r","message":""}}"#,
+    ] {
+        assert!(AddedEntry::from_json(json(text)).is_err());
+    }
+    let entry = AddedEntry::from_json(json(r#"{"binding":"b","operation":"o","lossy":[{"reasonCode":"a","message":""},{"reasonCode":"b","message":"","future":true}]}"#)).unwrap();
+    assert_eq!(entry.lossy().unwrap().len(), 2);
+    let entry = ExistingEntry::from_json(json(r#"{"binding":"b","status":"unassessed","reasonCode":"r","message":"","references":["schemas/S"],"future":true}"#)).unwrap();
+    assert_eq!(entry.status(), ExistingStatus::Unassessed);
+    assert_eq!(entry.references().unwrap().len(), 1);
+    for text in [
+        r#"{"schema":"S","status":"current","references":["schemas/T"]}"#,
+        r#"{"binding":"b","status":"current","references":[]}"#,
+        r#"{"status":"invalid","reasonCode":"r","message":"","offered":true}"#,
+    ] {
+        let admitted = if text.contains("invalid") {
+            OmittedEntry::from_json(json(text)).is_ok()
+        } else {
+            ExistingEntry::from_json(json(text)).is_ok()
+        };
+        assert!(!admitted, "{text}");
     }
 }

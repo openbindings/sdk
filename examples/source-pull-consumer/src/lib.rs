@@ -40,8 +40,24 @@ fn array(values: &[JsonValue]) -> JsonValue {
 pub enum CatalogError {
     Source,
     Comparison(ComparisonFailure),
-    RemovalNotRepresentable,
 }
+impl std::fmt::Display for CatalogError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Source => f.write_str("the source does not match the local catalog kind"),
+            Self::Comparison(error) => write!(f, "catalog schema comparison failed: {error}"),
+        }
+    }
+}
+impl std::error::Error for CatalogError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Comparison(error) => Some(error),
+            Self::Source => None,
+        }
+    }
+}
+
 struct Offer {
     key: String,
     operation: JsonValue,
@@ -153,8 +169,22 @@ fn reconcile(request: &PullRequest, observed: Observation) -> Result<PullResult,
             continue;
         }
         let reused = if let Some(operation) = operations.get(&offer.key) {
-            if slots(offer, &observed, operation, original)? != [Identity::Equal; 2] {
-                omitted.push(json(&format!(r#"{{"status":"conflict","reasonCode":"offered-schema-differs","message":"The offered input or output differs from the existing operation.","details":{{"operation":{}}}}}"#, quote(&offer.key))));
+            let compared = match slots(offer, &observed, operation, original) {
+                Ok(compared) => compared,
+                Err(CatalogError::Comparison(
+                    ComparisonFailure::MissingReference
+                    | ComparisonFailure::ReferenceCycle
+                    | ComparisonFailure::InvalidReference
+                    | ComparisonFailure::UnsupportedReference
+                    | ComparisonFailure::UnsatisfiableMerge,
+                )) => {
+                    omitted.push(json(&format!(r#"{{"status":"implementation-unsupported","reasonCode":"comparison-unfinished","message":"The offered schemas could not be compared.","item":{},"existing":{}}}"#, quote(&format!("operations/{}", offer.key)), quote(&format!("operations/{}", offer.key)))));
+                    continue;
+                }
+                Err(error) => return Err(error),
+            };
+            if compared != [Identity::Equal; 2] {
+                omitted.push(json(&format!(r#"{{"status":"conflict","reasonCode":"offered-schema-differs","message":"The offered input or output differs from the existing operation.","item":{},"existing":{},"offered":{}}}"#, quote(&format!("operations/{}", offer.key)), quote(&format!("operations/{}", offer.key)), offer.operation.text())));
                 continue;
             }
             true
@@ -216,23 +246,32 @@ fn reconcile(request: &PullRequest, observed: Observation) -> Result<PullResult,
         {
             proposal.insert("data".into(), offer.data.clone());
         }
-        for name in ["input", "output"] {
-            // A kind's would-write comparison includes annotations and exact
-            // schema organization. Profile identity is only the reuse rule.
-            let unchanged = match (offer.operation.get(name), operation.get(name)) {
-                (None, None) => true,
-                (Some(offered), Some(current)) => offered
-                    .to_owned()
-                    .semantic_eq(&current.to_owned())
-                    .ok_or(CatalogError::Source)?,
-                _ => false,
-            };
-            if !unchanged {
-                let Some(value) = offer.operation.get(name) else {
-                    return Err(CatalogError::RemovalNotRepresentable);
-                };
-                proposal.insert(name.into(), value.to_owned());
+        let comparisons = match slots(offer, &observed, operation, original) {
+            Ok(comparisons) => comparisons,
+            Err(CatalogError::Comparison(
+                ComparisonFailure::MissingReference
+                | ComparisonFailure::ReferenceCycle
+                | ComparisonFailure::InvalidReference
+                | ComparisonFailure::UnsupportedReference
+                | ComparisonFailure::UnsatisfiableMerge,
+            )) => {
+                existing.push(json(&format!(r#"{{"binding":{},"status":"unassessed","reasonCode":"comparison-unfinished","message":"The offered schemas could not be compared."}}"#, quote(key))));
+                continue;
             }
+            Err(error) => return Err(error),
+        };
+        let mut remove = Vec::new();
+        for (name, comparison) in ["input", "output"].into_iter().zip(comparisons) {
+            if comparison == Identity::Different {
+                if let Some(value) = offer.operation.get(name) {
+                    proposal.insert(name.into(), value.to_owned());
+                } else {
+                    remove.push(json(&quote(name)));
+                }
+            }
+        }
+        if !remove.is_empty() {
+            proposal.insert("remove".into(), array(&remove));
         }
         let status = if proposal.is_empty() {
             "\"status\":\"current\"".into()

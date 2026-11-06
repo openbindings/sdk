@@ -1,7 +1,7 @@
 # Evaluator qualification inputs
 
 The current suite is the reviewed adjudication against spec c1419c9 and interfaces
-5815fb1. All 1,566 historical case identities remain accounted for: 1,546 value
+5006884. All 1,566 historical case identities remain accounted for: 1,546 value
 cases in 486 groups, and 20 exact original negative document-admission witnesses.
 The four retained supplied-resource reexpressions keep their original documents
 as OBI-09 negatives. The separate identity ledger explains each disposition.

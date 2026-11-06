@@ -31,8 +31,8 @@ impl SchemaInput {
     pub fn standalone(schema: JsonValue) -> Self {
         Self::new(schema.clone(), schema)
     }
-    /// Set an explicit absolute reference base for this profile input. `$id`
-    /// fields never change it. This is not an OBI acquisition-base declaration.
+    /// Set the absolute starting base for this profile input. A schema resource's
+    /// `$id` establishes its own base. This is not an OBI acquisition-base declaration.
     #[must_use]
     pub fn with_base(mut self, base: impl Into<String>) -> Self {
         self.base = Some(base.into());

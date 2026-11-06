@@ -45,7 +45,7 @@ pub(crate) fn known(name: &[u16]) -> bool {
     .iter()
     .any(|key| is(name, key))
 }
-fn stripped(name: &[u16]) -> bool {
+pub(crate) fn stripped(name: &[u16]) -> bool {
     name.starts_with(&[b'x' as u16, b'-' as u16])
         || [
             "title",
@@ -58,8 +58,6 @@ fn stripped(name: &[u16]) -> bool {
             "$schema",
             "format",
             "discriminator",
-            "nullable",
-            "$defs",
         ]
         .iter()
         .any(|key| is(name, key))
@@ -104,6 +102,7 @@ impl Engine {
         attempt: &mut Attempt<'_>,
     ) -> Result<Value, Failure> {
         attempt.depth(depth)?;
+        let scope = self.resources.enter(schema, scope, attempt)?;
         let identity = (backend::occurrence(schema), scope);
         attempt.work(self.active.len().saturating_add(1))?;
         if self.active.contains(&identity) {
@@ -138,23 +137,27 @@ impl Engine {
             let key = value::name(member.name, attempt)?;
             value::insert(&mut raw, key, member.value.to_owned(), attempt)?;
         }
-        if let Some(reference) = get(&raw, "$ref") {
+        let target = if let Some(reference) = get(&raw, "$ref") {
             let (target, target_scope) =
                 self.resources.resolve(scope, reference.view(), attempt)?;
-            return self.schema(target.view(), target_scope, depth + 1, attempt);
-        }
-        let nullable = get(&raw, "nullable").and_then(|value| value.view().as_bool()) == Some(true);
+            Some(self.schema(target.view(), target_scope, depth + 1, attempt)?)
+        } else {
+            None
+        };
         let mut object = Object::new();
         let mut branches = None;
         for (key, raw) in raw {
-            if stripped(&key) {
+            if stripped(&key)
+                || is(&key, "$ref")
+                || (is(&key, "$defs") && !self.resources.keep_defs(scope))
+            {
                 continue;
             }
             let raw = raw.view();
             let normalized = if is(&key, "type") {
-                strings(raw, true, nullable, attempt)?
+                strings(raw, true, attempt)?
             } else if is(&key, "required") {
-                strings(raw, false, false, attempt)?
+                strings(raw, false, attempt)?
             } else if is(&key, "properties") {
                 let mut properties = Object::new();
                 for member in raw.members().ok_or(Failure::InvalidSchema)? {
@@ -207,18 +210,23 @@ impl Engine {
             };
             value::insert(&mut object, key, normalized, attempt)?;
         }
-        match branches {
-            Some(branches) => merge::all_of(object, branches, depth, attempt),
-            None => Ok(Value::Object(object)),
+        let siblings = match branches {
+            Some(branches) => merge::all_of(object, branches, depth, attempt)?,
+            None => Value::Object(object),
+        };
+        if let Some(target) = target {
+            if matches!(&siblings, Value::Object(object) if object.is_empty()) {
+                return Ok(target);
+            }
+            let mut conjunction = attempt.vector(2)?;
+            conjunction.extend([target, siblings]);
+            merge::all_of(Object::new(), conjunction, depth, attempt)
+        } else {
+            Ok(siblings)
         }
     }
 }
-fn strings(
-    raw: JsonRef<'_>,
-    types: bool,
-    nullable: bool,
-    attempt: &mut Attempt<'_>,
-) -> Result<Value, Failure> {
+fn strings(raw: JsonRef<'_>, types: bool, attempt: &mut Attempt<'_>) -> Result<Value, Failure> {
     let mut names = BTreeMap::new();
     let mut add = |raw: JsonRef<'_>| -> Result<(), Failure> {
         let key = value::name(raw, attempt)?;
@@ -252,12 +260,6 @@ fn strings(
         }
         for item in elements {
             add(item)?;
-        }
-    }
-    if nullable {
-        let null = value::literal("null", attempt)?;
-        if !names.contains_key(&null) {
-            value::insert(&mut names, null, (), attempt)?;
         }
     }
     let mut result = attempt.vector(names.len())?;

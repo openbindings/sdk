@@ -1,7 +1,6 @@
 use openbindings::{ConformantDocument, Document, Edit, JsonRef, JsonValue};
-use openbindings_schema_comparison::ComparisonFailure;
 use openbindings_source_pull::*;
-use source_pull_consumer::{CatalogError, Embedded, Fixed};
+use source_pull_consumer::{Embedded, Fixed};
 use std::{
     collections::BTreeMap,
     future::Future,
@@ -79,12 +78,12 @@ fn default_checked_pull_completes_a_ten_thousand_item_catalog() {
 }
 
 #[test]
-fn stale_schema_annotations_are_not_erased_by_the_operation_reuse_profile() {
+fn schema_annotations_remain_the_authors_under_profile_identity() {
     for (current, offered, expected) in [
         (
             r#"{"type":"string","title":"old"}"#,
             r#"{"type":"string","title":"new"}"#,
-            ExistingStatus::Stale,
+            ExistingStatus::Current,
         ),
         (
             r#"{"type":"string","title":"old"}"#,
@@ -95,6 +94,11 @@ fn stale_schema_annotations_are_not_erased_by_the_operation_reuse_profile() {
             r#"{"minimum":1}"#,
             r#"{"minimum":1.0}"#,
             ExistingStatus::Current,
+        ),
+        (
+            r#"{"type":"number","title":"old"}"#,
+            r#"{"type":"string","title":"new"}"#,
+            ExistingStatus::Stale,
         ),
     ] {
         let original = document(&format!(
@@ -364,34 +368,54 @@ fn a_caller_can_discard_or_explicitly_adopt_one_dependency_closed_subset() {
 }
 
 #[test]
-fn comparison_failure_and_removal_only_drift_are_operational_inability() {
+fn comparison_gaps_and_removal_proposals_are_reported() {
     let client = Embedded;
     let comparison = document(
         r##"{"openbindings":"0.2.0","operations":{"a":{"input":true}},"sources":{"catalog":{"kind":"example.embedded@1","data":{"items":[{"key":"a","operation":{"input":{"$ref":"#/missing"}},"data":{"item":"a"}}]}}}}"##,
     );
-    let error = complete(client.pull_source(
+    let result = complete(client.pull_source(
         PullRequest::new(comparison, "catalog"),
         CancellationToken::new(),
     ))
-    .unwrap_err();
-    assert!(matches!(
-        error,
-        PullError::Provider(PullFailure::Operational(CatalogError::Comparison(
-            ComparisonFailure::MissingReference
-        )))
-    ));
+    .unwrap();
+    assert_eq!(
+        result.report().omitted().unwrap().next().unwrap().status(),
+        OmittedStatus::ImplementationUnsupported
+    );
+    assert!(!result.report().is_complete());
     let removal = document(
         r#"{"openbindings":"0.2.0","operations":{"a":{"input":true}},"sources":{"catalog":{"kind":"example.embedded@1","data":{"items":[{"key":"a","operation":{},"data":{"item":"a"}}]}}},"bindings":{"a":{"operation":"a","source":"catalog","data":{"item":"a"}}}}"#,
     );
-    let error = complete(client.pull_source(
-        PullRequest::new(removal, "catalog"),
+    let result = complete(client.pull_source(
+        PullRequest::new(removal.clone(), "catalog"),
         CancellationToken::new(),
     ))
-    .unwrap_err();
-    assert!(matches!(
-        error,
-        PullError::Provider(PullFailure::Operational(
-            CatalogError::RemovalNotRepresentable
-        ))
-    ));
+    .unwrap();
+    let entry = result.report().existing().unwrap().next().unwrap();
+    assert_eq!(entry.status(), ExistingStatus::Stale);
+    let Some(Proposal::Binding(proposal)) = entry.proposal() else {
+        panic!("binding proposal")
+    };
+    assert_eq!(
+        proposal
+            .remove()
+            .unwrap()
+            .map(|v| v.as_str().unwrap())
+            .collect::<Vec<_>>(),
+        ["input"]
+    );
+    let edited = removal
+        .document()
+        .edit(&[Edit::remove(&["operations", "a", "input"])])
+        .unwrap();
+    let edited = edited.validate().unwrap().conformant().unwrap();
+    let next = complete(client.pull_source(
+        PullRequest::new(edited, "catalog"),
+        CancellationToken::new(),
+    ))
+    .unwrap();
+    assert_eq!(
+        next.report().existing().unwrap().next().unwrap().status(),
+        ExistingStatus::Current
+    );
 }

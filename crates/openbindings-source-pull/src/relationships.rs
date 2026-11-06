@@ -265,10 +265,11 @@ pub(crate) fn check(
             if !retain(&mut existing, section, name, attempt)? {
                 return Err(Rule::DuplicateTarget.into());
             }
-            if section == Section::Bindings
+            if matches!(section, Section::Bindings | Section::Schemas)
                 && let Some(proposal) = entry.get("proposal")
             {
-                let uses = additions.uses(proposal.get("uses"), Some(name), attempt)?;
+                let own_binding = (section == Section::Bindings).then_some(name);
+                let uses = additions.uses(proposal.get("uses"), own_binding, attempt)?;
                 closure(&uses, None, None, &added, attempt)?;
             }
         }

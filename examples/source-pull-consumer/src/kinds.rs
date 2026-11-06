@@ -57,6 +57,7 @@ impl KindDescriptor for KindCatalog {
         let mut value = serde_json::json!({
             "kind":kind,"description":"Local echo catalog fixture.","supports":SUPPORTS,
             "check":{"description":"Check the supplied catalog carriage without executing its operations; offered OBI entries are validated when pulled.","executes":false},
+            "pull":{"description":"Reads the supplied catalog without running its operations.","executes":false},
             "bindingData":{"type":"object","required":["item"],"properties":{"item":{"type":"string","pattern":SCALAR_STRING}}}
         });
         if kind == "example.embedded@1" {

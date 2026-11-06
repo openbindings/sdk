@@ -11,8 +11,10 @@ impl PullResult {
     /// change classifications, opaque dependency closure or exhaustiveness claims.
     ///
     /// The returned document retains the original JSON admission limits. The
-    /// relationship allowances do not account for core edit/validation internals;
-    /// cancellation is checked on both sides of those synchronous core calls.
+    /// fixed core edit, validation and inspection passes of a pull stay within the
+    /// document limits and do not spend the relationship ledger; each repeat that
+    /// colliding proposals force does. Cancellation is checked between passes and
+    /// during reference inspection.
     pub fn validate_for(
         &self,
         request: &PullRequest,
@@ -80,7 +82,9 @@ pub(crate) fn validate(
     let validation = prospective.validate();
     attempt.check()?;
     let validation = validation.map_err(Failure::Version)?;
-    validation
+    let prospective = validation
         .conformant()
-        .ok_or(Failure::Prospective(validation))
+        .ok_or(Failure::Prospective(validation))?;
+    crate::core_uses::check(request, result, &prospective, attempt)?;
+    Ok(prospective)
 }

@@ -49,7 +49,6 @@ fn independently_authored_design_controls_keep_their_expected_classifications() 
                 | ComparisonFailure::UnsupportedReference,
             ) => "Failure(Reference)",
             Err(ComparisonFailure::UnsatisfiableMerge) => "Failure(SchemaMerge)",
-            Err(ComparisonFailure::UnionMerge) => "Failure(UnionMerge)",
             other => panic!("unexpected {}: {other:?}", case["id"]),
         };
         assert_eq!(
@@ -241,5 +240,68 @@ fn unresolved_enum_intersection_multiplicity_is_a_failure_while_standalone_value
             &ComparisonLimits::default()
         ),
         Err(ComparisonFailure::UnsupportedNormalization)
+    );
+}
+
+#[test]
+fn resources_keep_reference_scope_and_outside_dependencies_without_reading_instance_data() {
+    for (left, right, expected) in [
+        (
+            r##"{"$defs":{"P":true},"x-\ud800":true}"##,
+            r##"{}"##,
+            Identity::Equal,
+        ),
+        (
+            r##"{"$id":"https://example.test/S","$defs":{"P":{"type":"string"}},"properties":{"p":{"$ref":"#/$defs/P"}}}"##,
+            r##"{"$id":"https://example.test/S","$defs":{"P":{"type":"string"}},"properties":{"p":{"type":"string"}}}"##,
+            Identity::Equal,
+        ),
+        (
+            r##"{"$defs":{"P":{"type":"string"}},"properties":{"p":{"$dynamicRef":"#/$defs/P"}}}"##,
+            r##"{"$defs":{"P":{"type":"number"}},"properties":{"p":{"$dynamicRef":"#/$defs/P"}}}"##,
+            Identity::Different,
+        ),
+        (
+            r##"{"$defs":{"P":true},"const":{"$id":"relative","$ref":"%"}}"##,
+            r##"{"const":{"$id":"relative","$ref":"%"}}"##,
+            Identity::Equal,
+        ),
+        (
+            r##"{"$defs":{"P":{"$anchor":"named","type":"string"}},"properties":{"p":{"$ref":"#named"}}}"##,
+            r##"{"$defs":{"P":{"$anchor":"named","type":"string"}},"properties":{"p":{"$ref":"#named"}}}"##,
+            Identity::Equal,
+        ),
+    ] {
+        let left = SchemaInput::standalone(json(left));
+        let right = SchemaInput::standalone(json(right));
+        assert_eq!(
+            identical(Some(&left), Some(&right), &ComparisonLimits::default()),
+            Ok(expected)
+        );
+    }
+    // Each nested resource supplies its own fragment root, independently of the outer one.
+    let schema = json(
+        r##"{"$id":"https://example.test/outer","$defs":{"P":false,"Inner":{"$id":"inner","$defs":{"P":true},"$ref":"#/$defs/P"}},"$ref":"inner"}"##,
+    );
+    let same = SchemaInput::standalone(schema);
+    assert_eq!(
+        identical(Some(&same), Some(&same), &ComparisonLimits::default()),
+        Ok(Identity::Equal)
+    );
+}
+
+#[test]
+fn nested_retained_conjunctions_keep_authored_order() {
+    let first = r#"{"allOf":[{"properties":{"a":true},"additionalProperties":false},{"properties":{"b":true}}]}"#;
+    let second = r#"{"allOf":[{"oneOf":[true,false]},{"type":"string"}]}"#;
+    let left = SchemaInput::standalone(json(&format!(r#"{{"allOf":[{first},{second}]}}"#)));
+    let right = SchemaInput::standalone(json(&format!(r#"{{"allOf":[{second},{first}]}}"#)));
+    assert_eq!(
+        identical(Some(&left), Some(&left), &ComparisonLimits::default()),
+        Ok(Identity::Equal)
+    );
+    assert_eq!(
+        identical(Some(&left), Some(&right), &ComparisonLimits::default()),
+        Ok(Identity::Different)
     );
 }

@@ -1,0 +1,45 @@
+{
+  "version": "1.0",
+  "description": "A kept $defs compares structurally: the same definitions behind the same retained reference are identical.",
+  "mode": "identical",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "value": {
+        "input": {
+          "$id": "urn:example:S",
+          "$dynamicRef": "#/$defs/P",
+          "$defs": {
+            "P": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "value": {
+        "input": {
+          "$id": "urn:example:S",
+          "$dynamicRef": "#/$defs/P",
+          "$defs": {
+            "P": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "compatible"
+    }
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "version": "1.0",
+  "description": "$defs is kept where a keyword retained outside the profile, here $dynamicRef, could refer into it: two schemas differing only in the definition it names differ.",
+  "mode": "identical",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "value": {
+        "input": {
+          "$id": "urn:example:S",
+          "$dynamicRef": "#/$defs/P",
+          "$defs": {
+            "P": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "value": {
+        "input": {
+          "$id": "urn:example:S",
+          "$dynamicRef": "#/$defs/P",
+          "$defs": {
+            "P": {
+              "type": "integer"
+            }
+          }
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "incompatible"
+    }
+  }
+}

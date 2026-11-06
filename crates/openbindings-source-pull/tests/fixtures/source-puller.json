@@ -146,7 +146,7 @@
         },
         "PullAddedEntry": {
             "type": "object",
-            "description": "One added binding. Each added binding has exactly one entry. operation names the operation it realizes: an added operation, or, when reused is present, an operation already in the input document whose input and output equal what the source offers. uses names every other addition the entry needs. A caller keeps the entry by inserting it, its operation when that operation is added, and its uses.",
+            "description": "One added binding. Each added binding has exactly one entry. operation names the operation it realizes: an added operation, or, when reused is present, an operation already in the input document, under its own key, that one of the offered operation's identifiers, its key or an alias, identifies as a key or an alias, and whose input and output equal what the source offers. uses names every other addition the entry needs. A caller keeps the entry by inserting it, its operation when that operation is added, and its uses.",
             "properties": {
                 "binding": {
                     "type": "string",
@@ -160,13 +160,18 @@
                 },
                 "reused": {
                     "const": true,
-                    "description": "Present when the operation already existed in the input document and the puller bound the source to it because the offered input and output equal the existing ones under the schema-comparison profile's identical mode. Absent when the operation is an addition."
+                    "description": "Present when the operation already existed in the input document, one of the offered operation's identifiers, its key or an alias, identifying it as its key or one of its aliases, and the puller bound the source to it because the offered input and output equal the existing ones under the schema-comparison profile's identical mode. Absent when the operation is an addition."
                 },
                 "uses": {
                     "$ref": "#/schemas/PullUses"
                 },
                 "lossy": {
-                    "$ref": "#/schemas/PullLoss"
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "$ref": "#/schemas/PullLoss"
+                    },
+                    "description": "Each loss of fidelity in the addition, such as an approximated schema; an addition that lost fidelity twice lists both."
                 }
             },
             "required": [
@@ -176,7 +181,7 @@
         },
         "PullBindingProposal": {
             "type": "object",
-            "description": "How the puller would write a stale binding and the operation it realizes now, carrying only what the kind owns. data is the binding data it would write; input and output are the operation's schemas it would write; each appears where the puller would write it differently, and at least one appears. uses names the additions the proposal needs. The operation's description, preference and idempotent are the author's and are not in a proposal. A caller applies a proposal by copying what it carries onto the existing binding and operation and inserting what uses names.",
+            "description": "How the puller would write a stale binding and the operation it realizes now, carrying only what the kind owns. data is the binding data it would write; input and output are the operation's schemas it would write; remove names what it would no longer write: the binding's data, or the operation's input or output. Each of data, input and output appears where the puller would write it differently, a member named in remove does not also appear, each name appears at most once, and at least one of the four appears. uses names the additions the proposal needs. The operation's description, and the binding's preference and idempotent, are the author's and are not in a proposal. A caller applies a proposal by copying what it carries onto the existing binding and operation, removing what remove names, and inserting what uses names.",
             "properties": {
                 "data": {
                     "description": "Proposed binding data, read under the source's kind: any JSON value."
@@ -188,6 +193,18 @@
                 "output": {
                     "$ref": "#/schemas/JSONSchemaValue",
                     "description": "Proposed output schema for the operation the binding realizes."
+                },
+                "remove": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "enum": [
+                            "data",
+                            "input",
+                            "output"
+                        ]
+                    },
+                    "description": "What the puller would no longer write: data, the binding's data; input or output, the schema of the operation the binding realizes. Each name appears at most once, and a member named here does not also appear in the proposal."
                 },
                 "uses": {
                     "$ref": "#/schemas/PullUses"
@@ -208,24 +225,69 @@
                     "required": [
                         "output"
                     ]
+                },
+                {
+                    "required": [
+                        "remove"
+                    ]
                 }
             ]
         },
         "PullSourceProposal": {
             "type": "object",
-            "description": "How the puller would write the source entry's data now. Only a kind whose definition treats its source data as something the kind may refresh proposes this; the interface takes no stance on what a kind's data means.",
+            "description": "How the puller would write the source entry's data now: the data it would write, or, under remove, that it would write none. Only a kind whose definition treats its source data as something the kind may refresh proposes this; the interface takes no stance on what a kind's data means.",
             "properties": {
                 "data": {
                     "description": "Proposed source data, read under the source's kind: any JSON value."
+                },
+                "remove": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 1,
+                    "items": {
+                        "const": "data"
+                    },
+                    "description": "Present when the puller would write the source with no data."
+                }
+            },
+            "oneOf": [
+                {
+                    "required": [
+                        "data"
+                    ],
+                    "properties": {
+                        "remove": false
+                    }
+                },
+                {
+                    "required": [
+                        "remove"
+                    ],
+                    "properties": {
+                        "data": false
+                    }
+                }
+            ]
+        },
+        "PullSchemaProposal": {
+            "type": "object",
+            "description": "How the puller would write a stale schemas entry now: the schema it would write, and the additions it needs. A caller applies it by replacing the entry with schema and inserting what uses names.",
+            "properties": {
+                "schema": {
+                    "$ref": "#/schemas/JSONSchemaValue",
+                    "description": "The schema the puller would write for the entry."
+                },
+                "uses": {
+                    "$ref": "#/schemas/PullUses"
                 }
             },
             "required": [
-                "data"
+                "schema"
             ]
         },
         "PullExistingEntry": {
             "type": "object",
-            "description": "How one entry of the input document that the pulled source accounts for compares with what the puller read: a binding naming the source, a schema the source offers under a key the document already has, or the source entry itself. Exactly one of binding, schema or source names the entry. current: the puller would write the entry unchanged. stale: the entry still corresponds to something the source offers, but the puller would write it differently now; the entry carries a proposal and the kind's judgment of the change. unmatched: nothing the puller read and would write corresponds to the entry any more; when exhaustive is false, it may correspond to something unread.",
+            "description": "How one entry of the input document that the pulled source accounts for compares with what the puller read: a binding naming the source, a schema the source offers under a key the document already has, or the source entry itself. Exactly one of binding, schema or source names the entry. current: the puller would write the entry unchanged. Schemas compare as the schema-comparison profile's identical mode compares them, so a difference only in what the profile strips as annotations never makes an entry stale: annotations are the author's. A reference spelled the same in the entry and in what the puller would write counts as the same when its target is something the source offers that this report accounts for, a schemas entry the report lists or the input or output of an operation a binding the report lists realizes, so a change behind it is reported once, at its target's own entry; the comparison keeps such a reference as a leaf equal to one spelled the same, applies every other normalization of the profile, and keeps the reference's siblings and an allOf that holds it unmerged. Any other reference is followed, and an entry that then differs only through a target the report does not account for is unassessed, since nothing the puller would write at the entry carries the change. Binding data and source data compare as JSON values. stale: the entry still corresponds to something the source offers, but the puller would write it differently now; the entry carries a proposal and the kind's judgment of the change. unmatched: nothing the puller read and would write corresponds to the entry any more; when exhaustive is false, it may correspond to something unread. unassessed: the entry corresponds to something the source offers, but the puller could not judge it, as when it cannot represent that item; reasonCode and message say why.",
             "properties": {
                 "binding": {
                     "type": "string",
@@ -247,9 +309,10 @@
                     "enum": [
                         "current",
                         "stale",
-                        "unmatched"
+                        "unmatched",
+                        "unassessed"
                     ],
-                    "description": "current: the puller would write the entry unchanged; stale: it still corresponds to something the source offers, but the puller would write it differently now; unmatched: nothing the puller read and would write corresponds to it any more, and when exhaustive is false it may correspond to something unread."
+                    "description": "current: the puller would write the entry unchanged. Schemas compare as the schema-comparison profile's identical mode compares them, so a difference only in what the profile strips as annotations never makes an entry stale: annotations are the author's. A reference spelled the same in the entry and in what the puller would write counts as the same when its target is something the source offers that this report accounts for, a schemas entry the report lists or the input or output of an operation a binding the report lists realizes, so a change behind it is reported once, at its target's own entry; the comparison keeps such a reference as a leaf equal to one spelled the same, applies every other normalization of the profile, and keeps the reference's siblings and an allOf that holds it unmerged. Any other reference is followed, and an entry that then differs only through a target the report does not account for is unassessed, since nothing the puller would write at the entry carries the change. Binding data and source data compare as JSON values. stale: it still corresponds to something the source offers, but the puller would write it differently now; unmatched: nothing the puller read and would write corresponds to it any more, and when exhaustive is false it may correspond to something unread; unassessed: it corresponds to something the source offers, but the puller could not judge it."
                 },
                 "change": {
                     "type": "string",
@@ -258,23 +321,32 @@
                         "dangerous",
                         "non-breaking"
                     ],
-                    "description": "Only on a stale entry: the kind's judgment of the proposal's effect on a caller of the affected operation. breaking: a caller that satisfied the old input or relied on the old output may fail. dangerous: a caller may fail depending on how it was written. non-breaking: no caller is affected. A kind that cannot classify a change says dangerous. A label for agents and policy, not an instruction to apply."
+                    "description": "Only on a stale entry: the kind's judgment of the proposal's effect on a caller of the affected operation. breaking: a caller that satisfied the old input or relied on the old output may fail. dangerous: a caller may fail depending on how it was written. non-breaking: no caller is affected; a non-breaking proposal of only the input or output leaves the existing binding realizing its operation as core section 5.3 states realization, so the author may decline it without breaking the claim, while a proposal of data says the existing data may no longer reach what the source offers. A kind that cannot classify a change says dangerous. For a schema several operations reach, as an input of one and an output of another, the label is the most severe across them. A label for agents and policy, not an instruction to apply."
                 },
                 "proposal": {
-                    "description": "Only on a stale entry: what the puller would write now, carrying only what the kind owns. For a binding, a PullBindingProposal; for a schema, the schema itself; for the source, a PullSourceProposal."
+                    "description": "Only on a stale entry: what the puller would write now, carrying only what the kind owns. For a binding, a PullBindingProposal; for a schema, a PullSchemaProposal; for the source, a PullSourceProposal."
+                },
+                "references": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "description": "Only on a binding's entry: what its data refers to in the input document, as labels, schemas/<key>, or operations/<key>/input or /output, the list closed, absent when it refers to nothing there. A reader sees nothing inside binding data, so this is how it learns what the binding depends on. A label names the whole entry or input or output, so a change anywhere in it reaches the binding."
                 },
                 "reasonCode": {
                     "type": "string",
                     "minLength": 1,
-                    "description": "Stable namespaced reason code for a stale or unmatched entry."
+                    "description": "Stable namespaced reason code for a stale, unmatched or unassessed entry; required for unassessed."
                 },
                 "message": {
                     "type": "string",
-                    "description": "Human-readable explanation of a stale or unmatched entry."
+                    "description": "Human-readable explanation of a stale, unmatched or unassessed entry; required for unassessed."
                 },
                 "details": {
                     "type": "object",
-                    "description": "Kind-specific structured evidence about a stale or unmatched entry.",
+                    "description": "Kind-specific structured evidence about a stale, unmatched or unassessed entry.",
                     "additionalProperties": true
                 }
             },
@@ -304,8 +376,9 @@
                                 "binding": false,
                                 "source": false,
                                 "proposal": {
-                                    "$ref": "#/schemas/JSONSchemaValue"
-                                }
+                                    "$ref": "#/schemas/PullSchemaProposal"
+                                },
+                                "references": false
                             }
                         },
                         {
@@ -317,7 +390,8 @@
                                 "schema": false,
                                 "proposal": {
                                     "$ref": "#/schemas/PullSourceProposal"
-                                }
+                                },
+                                "references": false
                             }
                         }
                     ]
@@ -355,6 +429,19 @@
                                 "proposal": false,
                                 "change": false
                             }
+                        },
+                        {
+                            "properties": {
+                                "status": {
+                                    "const": "unassessed"
+                                },
+                                "proposal": false,
+                                "change": false
+                            },
+                            "required": [
+                                "reasonCode",
+                                "message"
+                            ]
                         }
                     ]
                 }
@@ -362,7 +449,7 @@
         },
         "PullOmittedEntry": {
             "type": "object",
-            "description": "Something the source offers that the pull did not represent. details describes it but is not an address: no request names an item by it.",
+            "description": "Something the source offers that the pull did not represent. item labels it when it has a key. A conflict names what the document holds as existing and the item's version of it as offered. details describes the item further but is not an address: no request names an item by it.",
             "properties": {
                 "status": {
                     "type": "string",
@@ -372,7 +459,7 @@
                         "implementation-unsupported",
                         "conflict"
                     ],
-                    "description": "excluded: left out under a kind-defined rule, identified by rule; invalid: a malformed or contradictory part of the source; implementation-unsupported: something the kind admits that this implementation did not represent; conflict: the item would add an operation under a key the document already has whose input or output differ from the item's, so the puller leaves it out and the author decides. An implementation's restriction of a kind defined elsewhere is implementation-unsupported, not excluded."
+                    "description": "excluded: left out under a kind-defined rule, identified by rule; invalid: a malformed or contradictory part of the source; implementation-unsupported: something the kind admits that this implementation did not represent; conflict: the item needs something the document already holds with another shape: an operation that one of the item's identifiers, its key or an alias, identifies whose input or output differ from the item's, or two operations the item's identifiers identify at once, a schemas entry under the key the item refers to, another operation's input or output the item refers to, or an identifier, a $id or a plain name, that the item's additions would declare again. The puller leaves it out and the author decides. An implementation's restriction of a kind defined elsewhere is implementation-unsupported, not excluded."
                 },
                 "reasonCode": {
                     "type": "string",
@@ -388,9 +475,49 @@
                     "minLength": 1,
                     "description": "Evidence identifying the kind-owned rule governing the exclusion, including enough revision information to locate its defining document or code. Required for excluded."
                 },
+                "item": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "The item left out, as a <map>/<key> label of what the source offers it as: operations/<key>, the key the source offers, or schemas/<key>. Present whenever the omitted part has a key; absent for a part with none."
+                },
+                "existing": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Required on a conflict: what the document holds that differs, as a label, operations/<key> by the operation's own key even when the item offers it under an alias, or schemas/<key>; for a conflict over an identifier, the place that declares it, schemas/<key>, operations/<key>/input or operations/<key>/output. When the item's identifiers identify several operations, the first of them in the order of the identifiers, the item's key and then its aliases. On any other status of an operation item, present exactly when the item's identifiers identify an operation of the document: that operation, as operations/<key>, so a reader can tell what the omission touches."
+                },
+                "alsoIdentifies": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "description": "Present exactly when an operation item's identifiers identify several operations of the document: each operation beyond existing, as operations/<key> by its own key, in the order of the item's identifiers."
+                },
+                "offered": {
+                    "type": [
+                        "object",
+                        "boolean"
+                    ],
+                    "description": "Only on a conflict, and required there: the item's version of what existing labels. For an operation, an object carrying the offered input and output, each absent where the item offers none, and the offered aliases, absent when it offers none, so the identifier through which it conflicts is plain; for a schemas entry, the schema the item needs under that key; for a conflict over an identifier, the schema in the item's additions that would declare it, whatever existing labels."
+                },
+                "identifier": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Only on a conflict over an identifier, and present exactly then: the $id or plain name the item's additions would declare again. existing then labels the place that declares it, and offered is the item's schema that would declare it."
+                },
+                "through": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "description": "Only on a conflict: when existing and offered read the same and differ through what they refer to, those parts as labels, schemas/<key> for a schemas entry and operations/<key>/input or operations/<key>/output for another operation's input or output."
+                },
                 "details": {
                     "type": "object",
-                    "description": "Kind-specific structured evidence describing the omitted item; for a conflict, the existing operation's key. It is not an address.",
+                    "description": "Kind-specific structured evidence describing the omitted item. It is not an address.",
                     "additionalProperties": true
                 }
             },
@@ -404,7 +531,10 @@
                     "properties": {
                         "status": {
                             "const": "excluded"
-                        }
+                        },
+                        "offered": false,
+                        "through": false,
+                        "identifier": false
                     },
                     "required": [
                         "rule"
@@ -415,11 +545,24 @@
                         "status": {
                             "enum": [
                                 "invalid",
-                                "implementation-unsupported",
-                                "conflict"
+                                "implementation-unsupported"
                             ]
-                        }
+                        },
+                        "offered": false,
+                        "through": false,
+                        "identifier": false
                     }
+                },
+                {
+                    "properties": {
+                        "status": {
+                            "const": "conflict"
+                        }
+                    },
+                    "required": [
+                        "existing",
+                        "offered"
+                    ]
                 }
             ]
         },
@@ -490,7 +633,8 @@
                     "properties": {
                         "exhaustive": {
                             "const": true
-                        }
+                        },
+                        "limitation": false
                     }
                 },
                 {
@@ -524,7 +668,7 @@
     },
     "operations": {
         "openbindings.source-puller.pullSource": {
-            "description": "Pull the named source of the supplied interface document and return what it offers as additions, with a report of the same pull. source is the key of a sources entry in interface; a key that names no sources entry fails the call. The puller reads the source's data under the source's kind, and whatever that data refers to as the kind defines; what the data means and what the kind consults to read it is the kind's definition alone. A kind that needs values it was not given to read the source completes unsuccessfully with CONTEXT_REQUIRED, carrying the context document's challenge (message and schema), and a later call supplies them as context. The pull expresses each item the source offers as an operation, the schemas it needs and a binding naming the source, and adds what no current or stale binding of that source already binds. It never adds a second binding for something already bound: a stale binding gets a proposal, not a duplicate. Only bindings naming the pulled source take part. When an offered operation's key is already in the document, the puller compares the offered input and output with the existing operation's: equal under the schema-comparison profile's identical mode, the added binding realizes the existing operation and its added entry says reused; otherwise the item is omitted as a conflict and the author decides. Added operation keys are new to the document's operation identifier namespace, which holds operation keys and aliases; added schema and binding keys are new to their maps; added bindings name the pulled source. Inserting the additions into the input document gives the pulled document. The report's added entries account for each added binding exactly once, naming the operation it realizes, whether that operation already existed, every other addition it needs and any disclosed loss of fidelity. Its existing entries report each binding naming the source, each schema the source offers under a key the document already has, and the source entry itself where the kind has something to report, as current, stale with a proposal and the kind's judgment of the change, or unmatched. A proposal carries only what the kind owns: a binding's data, the input or output of the operation it realizes, and the additions they use; a schema; the source's data. Its omitted entries report what the source offers that was not represented: excluded under a kind-defined rule, invalid, implementation-unsupported, or a conflict with an existing operation. exhaustive says whether the puller read the whole source; a non-exhaustive report carries limitation evidence. The result is a complete pull when exhaustive is true and no omitted entry is implementation-unsupported; kind-defined exclusions, invalid parts, conflicts and lossy additions still meet it. Callers apply that condition or their own policy, and a partial result makes its gaps explicit without claiming a complete pull. Inspection is a pull whose result is read and discarded. To keep only some of the result, a caller keeps the chosen added entries, inserting each one, its operation when that operation is added, and what its uses name. Drift is read from existing and added. The report is an author claim that consumers may assess independently, and disclosure does not make an unsound binding faithful. Editing an added or existing entry afterward creates a new author claim. A pull changes neither the input document nor the source, and performs none of the source's operations. Naming, composition, report construction, validation strategy and failure recovery remain implementation choices.",
+            "description": "Pull the named source of the supplied interface document and return what it offers as additions, with a report of the same pull. source is the key of a sources entry in interface; a key that names no sources entry fails the call. The puller reads the source's data under the source's kind, and whatever that data refers to as the kind defines; what the data means and what the kind consults to read it is the kind's definition alone. A kind that needs values it was not given to read the source completes unsuccessfully with CONTEXT_REQUIRED, carrying the context document's challenge (message and schema), and a later call supplies them as context. The pull expresses each item the source offers as an operation, the schemas it needs and a binding naming the source, and adds what no current, stale or unassessed binding of that source already binds. It never adds a second binding for something already bound: a stale binding gets a proposal, and an unassessed one is left as it is, never duplicated. Only bindings naming the pulled source take part. When one of an offered operation's identifiers, its key or one of its aliases, already identifies an operation of the document, as its key or one of its aliases, the puller compares the offered input and output with the existing operation's: equal under the schema-comparison profile's identical mode, the added binding realizes the existing operation, naming its own key, and its added entry says reused; otherwise the item is omitted as a conflict and the author decides, as it is when its identifiers identify two different operations of the document; a comparison that cannot finish (a reference cycle, a reference it cannot resolve, an unsatisfiable merge) decides neither, and the item is omitted as implementation-unsupported. An item that needs a schemas entry, or another operation's input or output, that the document holds with another shape is omitted as a conflict too, since an addition never claims the author's shape, and so is an item whose additions would declare again an identifier the document declares, a $id or a plain name. Added operation keys are new to the document's operation identifier namespace, which holds operation keys and aliases; added schema and binding keys are new to their maps; added bindings name the pulled source. Inserting the additions into the input document gives the pulled document. The report's added entries account for each added binding exactly once, naming the operation it realizes, whether that operation already existed, every other addition it needs and any disclosed loss of fidelity. Its existing entries report each binding naming the source, each schema the source offers under a key the document already has, and the source entry itself where the kind has something to report, as current, stale with a proposal and the kind's judgment of the change, unmatched, or unassessed when the puller could not judge the entry, a comparison that cannot finish among the reasons. current is judged as the schema-comparison profile's identical mode compares schemas, so annotations, which are the author's, never make an entry stale. A proposal carries only what the kind owns: a binding's data, the input or output of the operation it realizes, what of those the puller would no longer write, and the additions they use; a schema and the additions it uses; the source's data, or its removal. Its omitted entries report what the source offers that was not represented: excluded under a kind-defined rule, invalid, implementation-unsupported, or a conflict with what the document holds, each labelling the item it leaves out, a conflict also naming what the document holds and the item's version of it. exhaustive says whether the puller read the whole source; a non-exhaustive report carries limitation evidence. The result is a complete pull when exhaustive is true, no omitted entry is implementation-unsupported and no existing entry is unassessed; kind-defined exclusions, invalid parts, conflicts and lossy additions still meet it. Callers apply that condition or their own policy, and a partial result makes its gaps explicit without claiming a complete pull. Inspection is a pull whose result is read and discarded. To keep only some of the result, a caller keeps the chosen added entries, inserting each one, its operation when that operation is added, and what its uses name. Drift is read from existing and added. The report is an author claim that consumers may assess independently, and disclosure does not make an unsound binding faithful. Editing an added or existing entry afterward creates a new author claim. A pull changes neither the input document nor the source, and performs none of the source's operations; a kind whose pull runs what the data names, such as starting a server, discloses it in the kind descriptor's pull description, and an application asks before running it. Naming, composition, report construction, validation strategy and failure recovery remain implementation choices.",
             "input": {
                 "$ref": "#/schemas/PullSourceInput"
             },

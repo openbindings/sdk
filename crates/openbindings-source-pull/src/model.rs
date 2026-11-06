@@ -44,7 +44,7 @@ macro_rules! finite {
         }
     };
 }
-finite!(ExistingStatus,"The producer's observation of an existing entry.","status",Current=>"current",Stale=>"stale",Unmatched=>"unmatched");
+finite!(ExistingStatus,"The producer's observation of an existing entry.","status",Current=>"current",Stale=>"stale",Unmatched=>"unmatched",Unassessed=>"unassessed");
 finite!(Change,"The kind's judgment of a stale proposal's effect, not an instruction to apply it.","change",Breaking=>"breaking",Dangerous=>"dangerous",NonBreaking=>"non-breaking");
 finite!(OmittedStatus,"Why a source offering was omitted from this pull.","status",Excluded=>"excluded",Invalid=>"invalid",ImplementationUnsupported=>"implementation-unsupported",Conflict=>"conflict");
 
@@ -76,17 +76,26 @@ macro_rules! optional_value {
         }
     };
 }
-macro_rules! uses_accessor {
-    () => {
-        /// Iterate exact dependency labels in authored order; absence differs from an empty list.
-        pub fn uses(&self) -> Option<impl ExactSizeIterator<Item = JsonStringRef<'_>>> {
-            self.0.value().get("uses").map(|values| {
+macro_rules! labels_accessor {
+    ($method:ident, $field:literal, $doc:literal) => {
+        #[doc=$doc]
+        pub fn $method(&self) -> Option<impl ExactSizeIterator<Item = JsonStringRef<'_>>> {
+            self.0.value().get($field).map(|values| {
                 values
                     .elements()
-                    .expect("admitted uses")
+                    .expect("admitted labels")
                     .map(|v| v.as_string().expect("admitted label"))
             })
         }
+    };
+}
+macro_rules! uses_accessor {
+    () => {
+        labels_accessor!(
+            uses,
+            "uses",
+            "Iterate exact addition labels in authored order; absence differs from an empty list."
+        );
     };
 }
 carrier!(
@@ -142,10 +151,10 @@ impl PullLimitation {
 }
 carrier!(
     BindingProposal,
-    "Proposed binding data and/or operation schemas; author-owned fields are excluded."
+    "Proposed edits to binding data and/or operation schemas; author-owned fields are excluded."
 );
 impl BindingProposal {
-    /// Admit an open proposal carrying data, input or output. Known author-owned
+    /// Admit an open proposal carrying data, input, output or remove. Known author-owned
     /// fields are forbidden; retained unknown metadata gains no edit authority.
     pub fn from_json(value: JsonValue) -> Result<Self, CarrierError> {
         let object = carrier::object(value)?;
@@ -165,7 +174,7 @@ impl BindingProposal {
         ) {
             return Err(CarrierError::ProposalAuthority);
         }
-        if !["data", "input", "output"]
+        if !["data", "input", "output", "remove"]
             .iter()
             .any(|name| object.value().get(name).is_some())
         {
@@ -176,9 +185,15 @@ impl BindingProposal {
                 carrier::schema(schema, name)?;
             }
         }
+        carrier::removals(&object, &["data", "input", "output"])?;
         carrier::uses(&object)?;
         Ok(Self(object))
     }
+    labels_accessor!(
+        remove,
+        "remove",
+        "Iterate binding data and operation slots the kind would no longer write."
+    );
     optional_value!(
         data,
         "data",
@@ -198,35 +213,62 @@ impl BindingProposal {
 }
 carrier!(
     SourceProposal,
-    "Proposed replacement source data; changing the kind or description is not authorized."
+    "Proposed replacement or removal of source data; changing the kind or description is not authorized."
 );
 impl SourceProposal {
-    /// Admit required data, including null, and retain other allowed metadata.
+    /// Admit replacement data, including null, or removal of source data.
     pub fn from_json(value: JsonValue) -> Result<Self, CarrierError> {
         let object = carrier::object(value)?;
-        carrier::field(&object, "data")?;
+        if object.value().get("data").is_none() && object.value().get("remove").is_none() {
+            return Err(CarrierError::MissingField("data"));
+        }
+        carrier::removals(&object, &["data"])?;
         if carrier::forbidden(&object, &["kind", "description"]) {
             return Err(CarrierError::ProposalAuthority);
         }
         Ok(Self(object))
     }
-    /// Retain the required proposed source data exactly.
-    pub fn data(&self) -> JsonValue {
+    optional_value!(
+        data,
+        "data",
+        "Retain replacement source data; absence means the proposal removes it."
+    );
+    labels_accessor!(
+        remove,
+        "remove",
+        "Iterate the source data removal, when present."
+    );
+}
+carrier!(
+    SchemaProposal,
+    "A replacement schema and the additions it needs."
+);
+impl SchemaProposal {
+    /// Admit a schema proposal without interpreting its schema as report fields.
+    pub fn from_json(value: JsonValue) -> Result<Self, CarrierError> {
+        let object = carrier::object(value)?;
+        carrier::schema(carrier::field(&object, "schema")?, "schema")?;
+        carrier::uses(&object)?;
+        Ok(Self(object))
+    }
+    /// Retain the exact replacement schema, including boolean or empty object forms.
+    pub fn schema(&self) -> JsonValue {
         self.0
             .value()
-            .get("data")
-            .expect("admitted data")
+            .get("schema")
+            .expect("admitted schema")
             .to_owned()
     }
+    uses_accessor!();
 }
 /// A proposal's target determines what its payload means. Schema contents stay opaque.
 #[derive(Clone, Debug)]
 pub enum Proposal {
     /// Only binding data, operation input/output and named additions may be applied.
     Binding(BindingProposal),
-    /// The exact whole schema, including a Boolean or empty object.
-    Schema(JsonValue),
-    /// Only source data may be replaced.
+    /// The replacement schema and its required additions.
+    Schema(SchemaProposal),
+    /// Only source data may be replaced or removed.
     Source(SourceProposal),
 }
 /// One entry-specific existing-entry key, borrowed without normalization.
@@ -250,7 +292,7 @@ impl fmt::Debug for ExistingTarget<'_> {
 }
 carrier!(
     ExistingEntry,
-    "A current, stale or unmatched observation of one existing document entry."
+    "A current, stale, unmatched or unassessed observation of one existing document entry."
 );
 impl ExistingEntry {
     /// Admit the target/status/proposal relationships, retaining open metadata.
@@ -276,7 +318,11 @@ impl ExistingEntry {
                     return Err(CarrierError::StatusFields);
                 }
             }
-            ExistingStatus::Unmatched => {
+            ExistingStatus::Unmatched | ExistingStatus::Unassessed => {
+                if status == ExistingStatus::Unassessed {
+                    carrier::field(&object, "reasonCode")?;
+                    carrier::field(&object, "message")?;
+                }
                 if carrier::forbidden(&object, &["proposal", "change"]) {
                     return Err(CarrierError::StatusFields);
                 }
@@ -291,15 +337,26 @@ impl ExistingEntry {
                     "source" => {
                         SourceProposal::from_json(proposal.to_owned())?;
                     }
-                    _ => carrier::schema(proposal, "proposal")?,
+                    _ => {
+                        SchemaProposal::from_json(proposal.to_owned())?;
+                    }
                 }
             }
         }
+        if target != "binding" && object.value().get("references").is_some() {
+            return Err(CarrierError::FieldType("references"));
+        }
+        carrier::labels(&object, "references")?;
         carrier::optional_string(&object, "reasonCode", true)?;
         carrier::optional_string(&object, "message", false)?;
         carrier::details(&object)?;
         Ok(Self(object))
     }
+    labels_accessor!(
+        references,
+        "references",
+        "Iterate the input document entries referenced by binding data."
+    );
     /// Read the exact entry type and key this observation addresses.
     pub fn target(&self) -> ExistingTarget<'_> {
         for (name, role) in [("binding", 0), ("schema", 1), ("source", 2)] {
@@ -333,7 +390,9 @@ impl ExistingEntry {
             ExistingTarget::Binding(_) => {
                 Proposal::Binding(BindingProposal(value.as_object().expect("proposal")))
             }
-            ExistingTarget::Schema(_) => Proposal::Schema(value),
+            ExistingTarget::Schema(_) => {
+                Proposal::Schema(SchemaProposal(value.as_object().expect("proposal")))
+            }
             ExistingTarget::Source(_) => {
                 Proposal::Source(SourceProposal(value.as_object().expect("proposal")))
             }
@@ -373,7 +432,13 @@ impl AddedEntry {
         }
         carrier::uses(&object)?;
         if let Some(value) = object.value().get("lossy") {
-            PullLoss::from_json(value.to_owned())?;
+            let losses = value.elements().ok_or(CarrierError::FieldType("lossy"))?;
+            if losses.len() == 0 {
+                return Err(CarrierError::FieldType("lossy"));
+            }
+            for loss in losses {
+                PullLoss::from_json(loss.to_owned())?;
+            }
         }
         Ok(Self(object))
     }
@@ -387,12 +452,14 @@ impl AddedEntry {
     pub fn reused(&self) -> bool {
         self.0.value().get("reused").is_some()
     }
-    /// Retain optional disclosed loss without treating it as proof of fidelity.
-    pub fn lossy(&self) -> Option<PullLoss> {
-        self.0
-            .value()
-            .get("lossy")
-            .map(|v| PullLoss(v.to_owned().as_object().expect("loss")))
+    /// Retain optional disclosed losses without treating them as proof of fidelity.
+    pub fn lossy(&self) -> Option<impl ExactSizeIterator<Item = PullLoss>> {
+        self.0.value().get("lossy").map(|values| {
+            values
+                .elements()
+                .expect("admitted losses")
+                .map(|v| PullLoss(v.to_owned().as_object().expect("loss")))
+        })
     }
     uses_accessor!();
 }
@@ -411,7 +478,18 @@ impl OmittedEntry {
         if status == OmittedStatus::Excluded {
             carrier::field(&object, "rule")?;
         }
-        carrier::optional_string(&object, "rule", true)?;
+        for name in ["rule", "item", "existing", "identifier"] {
+            carrier::optional_string(&object, name, true)?;
+        }
+        for name in ["alsoIdentifies", "through"] {
+            carrier::labels(&object, name)?;
+        }
+        if status == OmittedStatus::Conflict {
+            carrier::field(&object, "existing")?;
+            carrier::schema(carrier::field(&object, "offered")?, "offered")?;
+        } else if carrier::forbidden(&object, &["offered", "through", "identifier"]) {
+            return Err(CarrierError::StatusFields);
+        }
         carrier::details(&object)?;
         Ok(Self(object))
     }
@@ -453,6 +531,8 @@ impl PullReport {
             .ok_or(CarrierError::FieldType("exhaustive"))?;
         if !exhaustive {
             carrier::field(&object, "limitation")?;
+        } else if object.value().get("limitation").is_some() {
+            return Err(CarrierError::StatusFields);
         }
         if let Some(value) = object.value().get("limitation") {
             PullLimitation::from_json(value.to_owned())?;
@@ -486,7 +566,7 @@ impl PullReport {
             .and_then(|v| v.as_bool())
             .expect("exhaustive")
     }
-    /// Retain an optional limitation; it may also accompany an exhaustive report.
+    /// Retain the limitation required for a non-exhaustive report.
     pub fn limitation(&self) -> Option<PullLimitation> {
         self.0
             .value()
@@ -523,6 +603,9 @@ impl PullReport {
     /// This checks the report's claim, not what the producer actually read.
     pub fn is_complete(&self) -> bool {
         self.exhaustive()
+            && self.existing().is_none_or(|mut entries| {
+                entries.all(|entry| entry.status() != ExistingStatus::Unassessed)
+            })
             && self.omitted().is_none_or(|mut entries| {
                 entries.all(|entry| entry.status() != OmittedStatus::ImplementationUnsupported)
             })

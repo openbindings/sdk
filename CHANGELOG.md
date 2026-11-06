@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-11-06 interface repin (unreleased)
+
+- Apply interfaces `5006884a39c055103fad49e7c47b3141726f8dd8`; retain specification
+  `c1419c9fc3ae5a00c2b83da710c11bf67dab7934`.
+- Align pull carriers, removal proposals, schema proposal dependencies, multiple
+  losses, unassessed entries and core reference closure with the merged drafts.
+- Add kind pull and invocation disclosures and apply the comparison normalization,
+  resource reference, retained definition and absent-slot cases.
+- Index core uses closure and batch proposal inspection under the relationship
+  work ledger. Remove obsolete union-merge and unrepresentable-removal failures;
+  expose the local catalog error through Display and its wrapped error source.
+
+
 ## 0.2.0-alpha.1 (working draft)
 
 This first release remains unpublished. The SDK and specification versions are

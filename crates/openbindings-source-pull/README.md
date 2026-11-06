@@ -1,7 +1,7 @@
 # OpenBindings source pulling
 
 This unpublished companion is being implemented against source-puller version
-0.1.0 at interfaces revision `5815fb106bddd2c85ff4e93e0077570b3f6b9e74`.
+0.1.0 at interfaces revision `5006884a39c055103fad49e7c47b3141726f8dd8`.
 It carries additions to one original document and the report of pulling one
 selected source. Kind implementations own source interpretation and projection.
 A report is a producer claim, not proof of live availability or fidelity.
@@ -36,7 +36,8 @@ async fn inspect<P: SourcePuller>(provider: P, document: ConformantDocument)
 }
 ```
 
-`is_complete` means exhaustive with no implementation-unsupported omission. It
+`is_complete` means exhaustive with no implementation-unsupported omission and
+no unassessed existing entry. It
 does not independently verify that the source was read. A context challenge is
 returned to the caller; no context collection, source check, retry or source
 operation is performed automatically. Dropping pending work cancels its child
@@ -70,18 +71,26 @@ errors are not measured as JSON; exact context challenges are.
 
 The work default supports the intended 10,000-item catalog workflow while staying
 finite. Its checked B-tree search accounting follows the supported Rust node
-fanout, rather than a binary-tree height. The measured catalog requires
-46,765,436 relationship work units and 48,471,232 reserved bytes; the earlier
+fanout, rather than a binary-tree height. Before core reference closure was added,
+the measured catalog required 46,765,436 relationship work units and 48,471,232
+reserved bytes; the earlier
 20-million work policy refused it. This is an explicit SDK policy revision,
 not a specification requirement or a whole-call memory guarantee. Wider keys,
 denser relationships or larger catalogs may still require caller-selected limits.
 
-The publication has no proposal deletion representation. Omission means no
-change, `data: null` sets null, and null is invalid for input/output schemas.
-Removal-only drift requires operational inability or a separate caller-owned
-removal edit; it must not become a fabricated current/unmatched report.
+Binding proposals carry `data`, `input`, `output`, or a nonempty `remove` list
+naming the fields the kind would no longer write. Source proposals carry `data`
+or `remove: ["data"]`. Schema proposals carry `{schema, uses?}`. Omission leaves
+a field unchanged; `data: null` sets null. Applying proposals remains the caller's
+explicit edit. Added entries carry a nonempty array of `lossy` disclosures when
+needed. Exhaustive reports carry no limitation.
 
-Qualification includes the 21 pinned pull-report cases, five published examples,
+Dependency checks include core schema references in added operations, added
+schemas and proposed schemas, including references resolved by resource identity.
+Only a kind can establish dependencies inside its opaque data. Core reference
+inspection has its own bounded traversal; incomplete inspection fails validation.
+
+Qualification includes the 37 pinned pull-report cases, five published examples,
 74 independently designed controls and two illustrative kind consumers. The old
 inspection/synthesis companions and consumers are removed; full SDK integration
 and final performance qualification remain separate work.

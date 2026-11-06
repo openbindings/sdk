@@ -44,12 +44,13 @@ fn document_identity(left: &JsonValue, right: &JsonValue) -> Result<Identity, Co
     Ok(answer)
 }
 #[test]
-fn all_14_original_identity_groups_preserve_the_published_verdicts() {
+fn all_27_pinned_identity_groups_preserve_the_published_verdicts() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
     let manifest: serde_json::Value =
         serde_json::from_str(include_str!("fixtures/manifest.json")).unwrap();
     let mut identity = 0;
     let mut directional = 0;
+    let mut mismatches = Vec::new();
     for record in manifest["files"].as_array().unwrap() {
         if record["mode"] != "identical" {
             directional += 1;
@@ -67,13 +68,19 @@ fn all_14_original_identity_groups_preserve_the_published_verdicts() {
         } else {
             Identity::Different
         };
-        assert_eq!(result, Ok(expected), "{}", record["path"]);
+        if result != Ok(expected) {
+            mismatches.push(format!(
+                "{}: {result:?}, expected {expected:?}",
+                record["path"]
+            ));
+        }
     }
     assert_eq!(
         (identity, directional),
-        (14, 59),
+        (27, 59),
         "directional groups are outside this identity API, not passed"
     );
+    assert!(mismatches.is_empty(), "{}", mismatches.join("\n"));
 }
 #[test]
 fn all_10_exact_value_identity_groups_preserve_the_published_verdicts() {

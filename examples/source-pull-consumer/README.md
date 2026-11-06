@@ -21,9 +21,11 @@ descriptions constrain selectors to scalar strings (and fixed selectors to echo)
 The SDK evaluator may honestly decline lone-surrogate pattern instances; actual
 source checking rejects non-scalar keys.
 
-Projection reads source alone. Reuse uses the pinned comparison profile; existing
-entry drift compares the exact semantic values the kind would write. Each provider
-really suspends once, exercising caller-owned async work without an SDK async runtime.
+Projection reads source alone. Reuse and existing schema drift use the pinned
+comparison profile, so annotation changes stay with the author. Binding data
+compares as exact JSON. Removed operation schemas produce removal proposals;
+unfinished comparisons produce explicit omissions or unassessed entries. Each pull
+suspends once, exercising caller-owned async work without an SDK async runtime.
 The consumer explicitly adopts additions or applies proposals and revalidates.
 
 Run `python3 tools/verify-source-pull.py` from the SDK root; add `--archives --wasm`

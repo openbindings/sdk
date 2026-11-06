@@ -21,7 +21,7 @@ pub enum CarrierError {
     StatusFields,
     /// A proposal carries a known field outside the kind's edit authority.
     ProposalAuthority,
-    /// A binding proposal carries none of data, input or output.
+    /// A binding proposal carries none of data, input, output or remove.
     EmptyBindingProposal,
     /// A uses list repeats an exact label.
     DuplicateUse,
@@ -44,7 +44,7 @@ impl fmt::Display for CarrierError {
                 f.write_str("the proposal exceeds the kind's edit authority")
             }
             Self::EmptyBindingProposal => {
-                f.write_str("a binding proposal requires data, input or output")
+                f.write_str("a binding proposal requires data, input, output or remove")
             }
             Self::DuplicateUse => f.write_str("the uses list repeats a label"),
         }
@@ -162,5 +162,33 @@ pub(crate) fn binding(value: JsonValue) -> Result<(), CarrierError> {
     }
     // Whole core-field/name relationships are checked on the prospective
     // document; this is the published open Binding carrier's structural check.
+    Ok(())
+}
+
+/// Validate a nonempty list of labels without assigning meaning to opaque data.
+pub(crate) fn labels(object: &JsonObject, name: &'static str) -> Result<(), CarrierError> {
+    if let Some(value) = object.value().get(name) {
+        let values = value.elements().ok_or(CarrierError::FieldType(name))?;
+        if values.len() == 0 {
+            return Err(CarrierError::FieldType(name));
+        }
+        for value in values {
+            string(value, name, true)?;
+        }
+    }
+    Ok(())
+}
+pub(crate) fn removals(object: &JsonObject, allowed: &[&str]) -> Result<(), CarrierError> {
+    labels(object, "remove")?;
+    if let Some(value) = object.value().get("remove") {
+        let mut seen = HashSet::new();
+        for value in value.elements().expect("removal list") {
+            let name = value.as_str().ok_or(CarrierError::FieldType("remove"))?;
+            if !allowed.contains(&name) || !seen.insert(name) || object.value().get(name).is_some()
+            {
+                return Err(CarrierError::FieldType("remove"));
+            }
+        }
+    }
     Ok(())
 }

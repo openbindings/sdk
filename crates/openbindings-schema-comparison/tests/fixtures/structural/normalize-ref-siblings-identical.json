@@ -1,0 +1,40 @@
+{
+  "version": "1.0",
+  "description": "A $ref's siblings are conjoined with its target, as JSON Schema 2020-12 applies them: {$ref: Base, maxLength: 10} with Base a string is the string of at most 10.",
+  "mode": "identical",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "schemas": {
+      "Base": {
+        "type": "string"
+      }
+    },
+    "operations": {
+      "name": {
+        "input": {
+          "$ref": "#/schemas/Base",
+          "maxLength": 10
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "name": {
+        "input": {
+          "type": "string",
+          "maxLength": 10
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "compatible"
+    }
+  }
+}

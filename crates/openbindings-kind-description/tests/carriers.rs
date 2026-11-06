@@ -14,7 +14,8 @@ fn all_pinned_carrier_cases_keep_their_published_answers() {
     let fixture: Value =
         serde_json::from_str(include_str!("fixtures/kind-descriptor.json")).unwrap();
     let cases = fixture["tests"].as_array().unwrap();
-    assert_eq!(cases.len(), 14);
+    assert_eq!(cases.len(), 15);
+    let mut mismatches = Vec::new();
     for case in cases {
         let valid = match case["operation"].as_str().unwrap() {
             "listKinds" => case["output"].as_array().is_some_and(|values| {
@@ -32,13 +33,11 @@ fn all_pinned_carrier_cases_keep_their_published_answers() {
             }
             _ => panic!("unrecognized published operation"),
         };
-        assert_eq!(
-            valid,
-            case["schemaValid"].as_bool().unwrap(),
-            "{}",
-            case["description"]
-        );
+        if valid != case["schemaValid"].as_bool().unwrap() {
+            mismatches.push(case["description"].to_string());
+        }
     }
+    assert!(mismatches.is_empty(), "{}", mismatches.join("\n"));
 }
 
 #[test]
@@ -225,4 +224,47 @@ fn exact_extension_prefixes_do_not_claim_document_unicode_conformance() {
         document.validate().unwrap().report().evidence["OBI-01"],
         openbindings::Evidence::Violated
     );
+}
+
+#[test]
+fn pull_and_invocation_disclosures_match_exact_operation_claims() {
+    for (field, operation) in [
+        ("pull", "openbindings.source-puller.pullSource"),
+        ("invoke", "openbindings.binding-invoker.invokeBinding"),
+    ] {
+        for (supports, disclosure, valid) in [
+            (
+                vec![operation],
+                Some(serde_json::json!({"description":"Reads the named source.","executes":false})),
+                true,
+            ),
+            (vec![operation], None, false),
+            (
+                vec![operation],
+                Some(serde_json::json!({"description":"Reads."})),
+                false,
+            ),
+            (vec!["future.operation"], None, true),
+            (
+                vec!["future.operation"],
+                Some(serde_json::json!({"description":"Reads.","executes":false})),
+                false,
+            ),
+        ] {
+            let mut value = serde_json::json!({"kind":"k","description":"d","supports":supports});
+            if let Some(disclosure) = disclosure {
+                value[field] = disclosure;
+            }
+            let admitted = KindDescription::from_json(json(&value));
+            assert_eq!(admitted.is_ok(), valid, "{value}");
+            if valid && supports == [operation] {
+                let admitted = admitted.unwrap();
+                if field == "pull" {
+                    assert!(!admitted.pull().unwrap().executes());
+                } else {
+                    assert!(!admitted.invoke().unwrap().executes());
+                }
+            }
+        }
+    }
 }

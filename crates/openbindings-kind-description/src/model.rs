@@ -25,6 +25,10 @@ pub enum CarrierError {
     ReservedCode,
     /// The check disclosure contradicts the explicit support claims.
     InconsistentCheckSupport,
+    /// The pull disclosure contradicts the explicit support claim.
+    InconsistentPullSupport,
+    /// The invocation disclosure contradicts the explicit support claim.
+    InconsistentInvokeSupport,
 }
 impl fmt::Display for CarrierError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -37,6 +41,12 @@ impl fmt::Display for CarrierError {
             Self::EmptyString(field) => write!(f, "the carrier field {field} must not be empty"),
             Self::DuplicateSupport => f.write_str("the support list repeats an operation key"),
             Self::ReservedCode => f.write_str("the reserved code requires a context challenge"),
+            Self::InconsistentPullSupport => {
+                f.write_str("pull disclosure contradicts support claims")
+            }
+            Self::InconsistentInvokeSupport => {
+                f.write_str("invoke disclosure contradicts support claims")
+            }
             Self::InconsistentCheckSupport => {
                 f.write_str("check disclosure contradicts support claims")
             }
@@ -228,8 +238,70 @@ impl CheckDescription {
     }
 }
 carrier!(
+    PullDescription,
+    "A pull's human-readable disclosure and whether it executes something the source names."
+);
+impl PullDescription {
+    /// Admit the open pull-disclosure carrier; this does not grant permission to execute.
+    pub fn from_json(value: JsonValue) -> Result<Self, CarrierError> {
+        let object = object(value, None)?;
+        string(field(&object, "description")?, "description", true)?;
+        field(&object, "executes")?
+            .as_bool()
+            .ok_or(CarrierError::FieldType("executes"))?;
+        Ok(Self(object))
+    }
+    /// Borrow the exact nonempty disclosure.
+    pub fn description(&self) -> JsonStringRef<'_> {
+        self.0
+            .value()
+            .get("description")
+            .and_then(|value| value.as_string())
+            .expect("admitted description")
+    }
+    /// Whether the implementation says its pull executes something the source data names.
+    pub fn executes(&self) -> bool {
+        self.0
+            .value()
+            .get("executes")
+            .and_then(|value| value.as_bool())
+            .expect("admitted executes")
+    }
+}
+carrier!(
+    InvokeDescription,
+    "An invocation's human-readable disclosure and whether it executes something the source names."
+);
+impl InvokeDescription {
+    /// Admit the open invocation-disclosure carrier; this does not grant permission to execute.
+    pub fn from_json(value: JsonValue) -> Result<Self, CarrierError> {
+        let object = object(value, None)?;
+        string(field(&object, "description")?, "description", true)?;
+        field(&object, "executes")?
+            .as_bool()
+            .ok_or(CarrierError::FieldType("executes"))?;
+        Ok(Self(object))
+    }
+    /// Borrow the exact nonempty disclosure.
+    pub fn description(&self) -> JsonStringRef<'_> {
+        self.0
+            .value()
+            .get("description")
+            .and_then(|value| value.as_string())
+            .expect("admitted description")
+    }
+    /// Whether the implementation says its invocation executes something the source or binding data names.
+    pub fn executes(&self) -> bool {
+        self.0
+            .value()
+            .get("executes")
+            .and_then(|value| value.as_bool())
+            .expect("admitted executes")
+    }
+}
+carrier!(
     KindDescription,
-    "A kind's description, per-operation claims, optional check disclosure and two data schemas."
+    "A kind's description, per-operation claims, operation disclosures and two data schemas."
 );
 impl KindDescription {
     /// Admit the open description carrier without evaluating either data schema.
@@ -252,6 +324,37 @@ impl KindDescription {
         if (declares_check && !has_check) || (has_check && operations.is_empty() == Some(true)) {
             return Err(CarrierError::InconsistentCheckSupport);
         }
+        for (name, operation, error) in [
+            (
+                "pull",
+                "openbindings.source-puller.pullSource",
+                CarrierError::InconsistentPullSupport,
+            ),
+            (
+                "invoke",
+                "openbindings.binding-invoker.invokeBinding",
+                CarrierError::InconsistentInvokeSupport,
+            ),
+        ] {
+            let disclosure = object.value().get(name);
+            let supported = operations
+                .elements()
+                .expect("admitted supports")
+                .any(|value| value.as_str() == Some(operation));
+            if supported != disclosure.is_some() {
+                return Err(error);
+            }
+            if let Some(value) = disclosure {
+                match name {
+                    "pull" => {
+                        PullDescription::from_json(value.to_owned())?;
+                    }
+                    _ => {
+                        InvokeDescription::from_json(value.to_owned())?;
+                    }
+                }
+            }
+        }
         Ok(Self(object))
     }
     kind_accessor!();
@@ -270,6 +373,20 @@ impl KindDescription {
             .value()
             .get("check")
             .map(|value| CheckDescription(value.to_owned().as_object().expect("admitted check")))
+    }
+    /// Retain the pull disclosure, present exactly when the kind claims pullSource.
+    pub fn pull(&self) -> Option<PullDescription> {
+        self.0
+            .value()
+            .get("pull")
+            .map(|value| PullDescription(value.to_owned().as_object().expect("admitted pull")))
+    }
+    /// Retain the call disclosure, present exactly when the kind claims invokeBinding.
+    pub fn invoke(&self) -> Option<InvokeDescription> {
+        self.0
+            .value()
+            .get("invoke")
+            .map(|value| InvokeDescription(value.to_owned().as_object().expect("admitted invoke")))
     }
     /// Retain the optional exact source-data schema. Absence is not an empty schema.
     pub fn source_data(&self) -> Option<JsonValue> {

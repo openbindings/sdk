@@ -4,6 +4,7 @@
 
 mod budget;
 mod carrier;
+mod core_uses;
 mod error;
 mod model;
 mod pull;
@@ -22,4 +23,4 @@ pub use request::PullRequest;
 /// Adopted source-puller interface version, independent of the SDK version.
 pub const INTERFACE_VERSION: &str = "0.1.0";
 /// Exact interface publication used by this companion.
-pub const APPLIED_INTERFACE_REVISION: &str = "5815fb106bddd2c85ff4e93e0077570b3f6b9e74";
+pub const APPLIED_INTERFACE_REVISION: &str = "5006884a39c055103fad49e7c47b3141726f8dd8";

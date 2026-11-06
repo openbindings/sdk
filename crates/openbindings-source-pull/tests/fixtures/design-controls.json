@@ -830,7 +830,9 @@
               "status": "stale",
               "change": "non-breaking",
               "message": "The component gained an optional email.",
-              "proposal": {}
+              "proposal": {
+                "schema": {}
+              }
             }
           ]
         }
@@ -899,7 +901,9 @@
               "status": "stale",
               "change": "non-breaking",
               "message": "The component gained an optional email.",
-              "proposal": true
+              "proposal": {
+                "schema": true
+              }
             }
           ]
         }
@@ -968,7 +972,9 @@
               "status": "stale",
               "change": "non-breaking",
               "message": "The component gained an optional email.",
-              "proposal": false
+              "proposal": {
+                "schema": false
+              }
             }
           ]
         }
@@ -1037,7 +1043,9 @@
               "status": "stale",
               "change": "non-breaking",
               "message": "The component gained an optional email.",
-              "proposal": null
+              "proposal": {
+                "schema": null
+              }
             }
           ]
         }
@@ -1107,12 +1115,14 @@
               "change": "non-breaking",
               "message": "The component gained an optional email.",
               "proposal": {
-                "description": "kind schema annotation",
-                "type": "string",
-                "uses": [
-                  "not-a-PullUses-label"
-                ],
-                "preference": null
+                "schema": {
+                  "description": "kind schema annotation",
+                  "type": "string",
+                  "uses": [
+                    "not-a-PullUses-label"
+                  ],
+                  "preference": null
+                }
               }
             }
           ]
@@ -1668,9 +1678,9 @@
           }
         }
       },
-      "expected": "accept",
+      "expected": "reject-carrier",
       "authority": "source-puller/0.1.json#/schemas/PullReport/oneOf",
-      "note": "is_complete remains true; no prohibition on limitation under exhaustive:true."
+      "note": "The exhaustive branch of PullReport forbids limitation."
     },
     {
       "id": "limitation-message-empty",
@@ -1781,13 +1791,15 @@
             {
               "binding": "getUser.api",
               "operation": "getUser",
-              "lossy": {
-                "reasonCode": "example.schema-approximated",
-                "message": "",
-                "details": {
-                  "construct": "discriminator"
+              "lossy": [
+                {
+                  "reasonCode": "example.schema-approximated",
+                  "message": "",
+                  "details": {
+                    "construct": "discriminator"
+                  }
                 }
-              }
+              ]
             }
           ]
         }
@@ -1850,7 +1862,9 @@
               "details": {
                 "operation": "getUser"
               },
-              "rule": "retained"
+              "rule": "retained",
+              "existing": "operations/o",
+              "offered": {}
             }
           ]
         }
@@ -1910,7 +1924,13 @@
               "status": "conflict",
               "reasonCode": "openbindings.source-puller.operation-conflict",
               "message": "The source offers getUser with a different input; the document's getUser takes a string.",
-              "details": null
+              "details": null,
+              "existing": "operations/getUser",
+              "offered": {
+                "input": {
+                  "type": "number"
+                }
+              }
             }
           ]
         }
@@ -2199,24 +2219,28 @@
             {
               "binding": "getUser.api",
               "operation": "getUser",
-              "lossy": {
-                "reasonCode": "example.schema-approximated",
-                "message": "The response schema is approximated as an object.",
-                "details": {
-                  "construct": "discriminator"
+              "lossy": [
+                {
+                  "reasonCode": "example.schema-approximated",
+                  "message": "The response schema is approximated as an object.",
+                  "details": {
+                    "construct": "discriminator"
+                  }
                 }
-              }
+              ]
             },
             {
               "binding": "getUser.api",
               "operation": "getUser",
-              "lossy": {
-                "reasonCode": "example.schema-approximated",
-                "message": "The response schema is approximated as an object.",
-                "details": {
-                  "construct": "discriminator"
+              "lossy": [
+                {
+                  "reasonCode": "example.schema-approximated",
+                  "message": "The response schema is approximated as an object.",
+                  "details": {
+                    "construct": "discriminator"
+                  }
                 }
-              }
+              ]
             }
           ]
         }
@@ -2267,13 +2291,15 @@
             {
               "binding": "getUser.api",
               "operation": "other",
-              "lossy": {
-                "reasonCode": "example.schema-approximated",
-                "message": "The response schema is approximated as an object.",
-                "details": {
-                  "construct": "discriminator"
+              "lossy": [
+                {
+                  "reasonCode": "example.schema-approximated",
+                  "message": "The response schema is approximated as an object.",
+                  "details": {
+                    "construct": "discriminator"
+                  }
                 }
-              }
+              ]
             }
           ]
         }
@@ -2327,13 +2353,15 @@
             {
               "binding": "getUser.api",
               "operation": "getUser",
-              "lossy": {
-                "reasonCode": "example.schema-approximated",
-                "message": "The response schema is approximated as an object.",
-                "details": {
-                  "construct": "discriminator"
+              "lossy": [
+                {
+                  "reasonCode": "example.schema-approximated",
+                  "message": "The response schema is approximated as an object.",
+                  "details": {
+                    "construct": "discriminator"
+                  }
                 }
-              }
+              ]
             }
           ]
         }
@@ -2461,13 +2489,15 @@
             {
               "binding": "getUser.api",
               "operation": "getUser",
-              "lossy": {
-                "reasonCode": "example.schema-approximated",
-                "message": "The response schema is approximated as an object.",
-                "details": {
-                  "construct": "discriminator"
+              "lossy": [
+                {
+                  "reasonCode": "example.schema-approximated",
+                  "message": "The response schema is approximated as an object.",
+                  "details": {
+                    "construct": "discriminator"
+                  }
                 }
-              },
+              ],
               "reused": true
             }
           ]
@@ -2521,13 +2551,15 @@
             {
               "binding": "getUser.api",
               "operation": "getUser",
-              "lossy": {
-                "reasonCode": "example.schema-approximated",
-                "message": "The response schema is approximated as an object.",
-                "details": {
-                  "construct": "discriminator"
+              "lossy": [
+                {
+                  "reasonCode": "example.schema-approximated",
+                  "message": "The response schema is approximated as an object.",
+                  "details": {
+                    "construct": "discriminator"
+                  }
                 }
-              }
+              ]
             }
           ]
         }
@@ -2584,13 +2616,15 @@
             {
               "binding": "getUser.api",
               "operation": "getUser",
-              "lossy": {
-                "reasonCode": "example.schema-approximated",
-                "message": "The response schema is approximated as an object.",
-                "details": {
-                  "construct": "discriminator"
+              "lossy": [
+                {
+                  "reasonCode": "example.schema-approximated",
+                  "message": "The response schema is approximated as an object.",
+                  "details": {
+                    "construct": "discriminator"
+                  }
                 }
-              }
+              ]
             }
           ]
         }
@@ -2650,13 +2684,15 @@
             {
               "binding": "getUser.api",
               "operation": "getUser",
-              "lossy": {
-                "reasonCode": "example.schema-approximated",
-                "message": "The response schema is approximated as an object.",
-                "details": {
-                  "construct": "discriminator"
+              "lossy": [
+                {
+                  "reasonCode": "example.schema-approximated",
+                  "message": "The response schema is approximated as an object.",
+                  "details": {
+                    "construct": "discriminator"
+                  }
                 }
-              }
+              ]
             }
           ]
         }
@@ -2710,13 +2746,15 @@
             {
               "binding": "getUser.api",
               "operation": "alias",
-              "lossy": {
-                "reasonCode": "example.schema-approximated",
-                "message": "The response schema is approximated as an object.",
-                "details": {
-                  "construct": "discriminator"
+              "lossy": [
+                {
+                  "reasonCode": "example.schema-approximated",
+                  "message": "The response schema is approximated as an object.",
+                  "details": {
+                    "construct": "discriminator"
+                  }
                 }
-              }
+              ]
             }
           ]
         }
@@ -3117,13 +3155,15 @@
             {
               "binding": "getUser.api",
               "operation": "getUser",
-              "lossy": {
-                "reasonCode": "example.schema-approximated",
-                "message": "The response schema is approximated as an object.",
-                "details": {
-                  "construct": "discriminator"
+              "lossy": [
+                {
+                  "reasonCode": "example.schema-approximated",
+                  "message": "The response schema is approximated as an object.",
+                  "details": {
+                    "construct": "discriminator"
+                  }
                 }
-              },
+              ],
               "uses": [
                 "bindings/getUser.api"
               ]
@@ -3531,13 +3571,15 @@
             {
               "binding": "getUser.api",
               "operation": "getUser",
-              "lossy": {
-                "reasonCode": "example.schema-approximated",
-                "message": "The response schema is approximated as an object.",
-                "details": {
-                  "construct": "discriminator"
+              "lossy": [
+                {
+                  "reasonCode": "example.schema-approximated",
+                  "message": "The response schema is approximated as an object.",
+                  "details": {
+                    "construct": "discriminator"
+                  }
                 }
-              },
+              ],
               "uses": [
                 "operations/getUser"
               ]
@@ -3834,13 +3876,15 @@
             {
               "binding": "getUser.api",
               "operation": "getUser",
-              "lossy": {
-                "reasonCode": "example.schema-approximated",
-                "message": "The response schema is approximated as an object.",
-                "details": {
-                  "construct": "discriminator"
+              "lossy": [
+                {
+                  "reasonCode": "example.schema-approximated",
+                  "message": "The response schema is approximated as an object.",
+                  "details": {
+                    "construct": "discriminator"
+                  }
                 }
-              }
+              ]
             }
           ]
         }
@@ -3889,13 +3933,15 @@
             {
               "binding": "getUser.api",
               "operation": "getUser",
-              "lossy": {
-                "reasonCode": "example.schema-approximated",
-                "message": "The response schema is approximated as an object.",
-                "details": {
-                  "construct": "discriminator"
+              "lossy": [
+                {
+                  "reasonCode": "example.schema-approximated",
+                  "message": "The response schema is approximated as an object.",
+                  "details": {
+                    "construct": "discriminator"
+                  }
                 }
-              }
+              ]
             }
           ]
         }
@@ -3946,13 +3992,15 @@
             {
               "binding": "getUser.api",
               "operation": "getUser",
-              "lossy": {
-                "reasonCode": "example.schema-approximated",
-                "message": "The response schema is approximated as an object.",
-                "details": {
-                  "construct": "discriminator"
+              "lossy": [
+                {
+                  "reasonCode": "example.schema-approximated",
+                  "message": "The response schema is approximated as an object.",
+                  "details": {
+                    "construct": "discriminator"
+                  }
                 }
-              }
+              ]
             }
           ]
         }
@@ -4006,13 +4054,15 @@
             {
               "binding": "getUser.api",
               "operation": "getUser",
-              "lossy": {
-                "reasonCode": "example.schema-approximated",
-                "message": "The response schema is approximated as an object.",
-                "details": {
-                  "construct": "discriminator"
+              "lossy": [
+                {
+                  "reasonCode": "example.schema-approximated",
+                  "message": "The response schema is approximated as an object.",
+                  "details": {
+                    "construct": "discriminator"
+                  }
                 }
-              }
+              ]
             }
           ]
         }
@@ -4103,9 +4153,9 @@
           ]
         }
       },
-      "expected": "kind-evidence-required",
+      "expected": "reject-relationship",
       "authority": "source-puller/README.md:123-128",
-      "note": "Prospective all-additions conformance alone cannot certify chosen-subset closure. A stronger checker may inspect proven core references; it must not claim complete opaque-data closure."
+      "note": "PullAddedEntry uses must include every addition needed through core schema references."
     },
     {
       "id": "unknown-change-judgment-is-dangerous",
