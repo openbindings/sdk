@@ -1019,7 +1019,6 @@ name = "openbindings-schema-evaluator-test-support"
 version = "0.2.0-alpha.1"
 dependencies = [
  "openbindings",
- "openbindings-json-schema-evaluator",
  "serde",
  "serde_json",
 ]

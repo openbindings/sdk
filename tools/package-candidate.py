@@ -106,7 +106,8 @@ def compat_fixture(compat, versions, patches):
 
 def self_test():
     """The order counts every dependency table, and the check refuses an order
-    that does not; the archive consumer holds the whole compatibility fixture."""
+    that does not; current source manifests must also be acyclic. The archive
+    consumer holds the whole compatibility fixture."""
     local = PUBLIC_CRATES | INTERNAL_CRATES
     dev_only = {
         "package": {"name": "openbindings-http-discovery"},
@@ -142,6 +143,23 @@ def self_test():
         pass
     else:
         raise AssertionError("Accepted a crate published before its development dependency")
+    dependencies["openbindings-json-schema-evaluator"].add("openbindings-schema-evaluator-test-support")
+    dependencies["openbindings-schema-evaluator-test-support"].add("openbindings-json-schema-evaluator")
+    try:
+        publication_order(dependencies)
+    except SystemExit as error:
+        assert "Local publication dependency cycle:" in str(error)
+    else:
+        raise AssertionError("Accepted mutually dependent evaluator/test-support archives")
+    # Catch a source dependency cycle in the portable verifier, before the clean
+    # archive job. Archive validation below remains authoritative after Cargo's
+    # manifest normalization; no dependency table is exempted there.
+    source_dependencies = {}
+    for manifest in artifact_manifests():
+        data = tomllib.loads(manifest.read_text(encoding='utf-8'))
+        if data["package"]["name"] in local:
+            source_dependencies[data["package"]["name"]] = local_dependencies(data, local)
+    publication_order(source_dependencies)
     with tempfile.TemporaryDirectory(prefix="openbindings-compat-") as temporary:
         compat = Path(temporary) / "compat-consumer"
         compat_fixture(compat, {name: "0.0.0" for name in PUBLIC_CRATES}, "")

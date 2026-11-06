@@ -102,15 +102,10 @@ impl Drop for Scope {
     }
 }
 
-// The address of a local in a frame of its own, near the top of the stack.
-#[inline(never)]
-fn stack_address() -> usize {
-    let probe = 0u8;
-    std::hint::black_box(std::ptr::addr_of!(probe)) as usize
-}
-
 /// Run `evaluate` using at most `bytes` of stack below this call, also
 /// returning whether it used more: from then on every charge failed.
+// A distinct live frame keeps the origin above charges made by the callback.
+#[inline(never)]
 pub fn guard<T>(bytes: usize, evaluate: impl FnOnce() -> T) -> (T, bool) {
     struct Restore(Option<(usize, usize)>, bool);
     impl Drop for Restore {
@@ -122,14 +117,18 @@ pub fn guard<T>(bytes: usize, evaluate: impl FnOnce() -> T) -> (T, bool) {
             });
         }
     }
+    // Keep the origin in this live frame, not a temporary TLS/setup frame.
+    let probe = 0u8;
+    let start = std::hint::black_box(std::ptr::addr_of!(probe)) as usize;
     let _restore = STATE.with(|state| {
         let saved = Restore(state.stack.get(), state.deep.get());
-        state.stack.set(Some((stack_address(), bytes)));
+        state.stack.set(Some((start, bytes)));
         state.deep.set(false);
         state.engage();
         saved
     });
     let result = evaluate();
+    std::hint::black_box(&probe);
     (result, STATE.with(|state| state.deep.get()))
 }
 

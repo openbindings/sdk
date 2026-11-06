@@ -6,15 +6,19 @@ Every value is checked and explained. Failure explanations are also exercised
 under cancellation and as a value nested inside a larger exact input.
 
 ```rust
-use openbindings_schema_evaluator_test_support::run;
-let evaluator = openbindings_json_schema_evaluator::DefaultEvaluator::new();
-let report = run(&evaluator);
-// A release gate requires report.is_success(). Inspect individual observations
-// while implementing missing capabilities; refusals remain qualification gaps.
-for observation in &report.observations {
-    if !observation.failures.is_empty() {
-        eprintln!("{}: {:?}", observation.id, observation.failures);
+use openbindings::SchemaEvaluator;
+use openbindings_schema_evaluator_test_support::{Report, run};
+
+fn qualify(evaluator: &impl SchemaEvaluator) -> Report {
+    let report = run(evaluator);
+    // A release gate requires report.is_success(). Inspect individual observations
+    // while implementing missing capabilities; refusals remain qualification gaps.
+    for observation in &report.observations {
+        if !observation.failures.is_empty() {
+            eprintln!("{}: {:?}", observation.id, observation.failures);
+        }
     }
+    report
 }
 ```
 
@@ -40,4 +44,6 @@ Use `run` and `Report` for the ordinary workflow. `suite`, `judge`, `judge_detai
 and `judge_interruptions` support independent harnesses and controls. The
 [custom evaluator guide](https://github.com/openbindings/sdk/blob/main/docs/schema-evaluators.md)
 describes the original document and resource context supplied to an evaluator.
-This unpublished package requires Rust 1.88.
+The default evaluator owns the integration tests and `replay` example that run
+this suite against its implementation; this package depends only on core and
+serialization libraries. This unpublished package requires Rust 1.88.

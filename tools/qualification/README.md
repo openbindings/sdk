@@ -21,7 +21,7 @@ browser replay. These policies remain live contract inputs.
 Check and explain every case through the public evaluator API:
 
 ```sh
-cargo run --locked -p openbindings-schema-evaluator-test-support --example replay
+cargo run --locked -p openbindings-json-schema-evaluator --example replay
 ```
 
 The live allocation thresholds and generators are described in

@@ -853,6 +853,7 @@ dependencies = [
  "openbindings",
  "openbindings-internal-json",
  "openbindings-internal-schema",
+ "regex",
  "regex-automata",
  "regex-syntax",
  "serde",

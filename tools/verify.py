@@ -25,7 +25,7 @@ run([sys.executable, 'tools/verify-msrv.py', '--version', '1.88'])
 run(['cargo', 'fmt', '--all', '--check'])
 run(['cargo', 'run', '--locked', '--manifest-path', 'tools/identifier-ranges/Cargo.toml', '--', '--check'])
 run(['cargo', 'clippy', '--locked', '--workspace', '--all-targets', '--features', 'openbindings-http-discovery/native', '--', '-D', 'warnings'])
-run(['cargo', 'test', '--locked', '--workspace', '--features', 'openbindings-http-discovery/native'])
+run(['cargo', 'test', '--locked', '--workspace', '--no-fail-fast', '--features', 'openbindings-http-discovery/native'])
 run([sys.executable, 'tools/verify-api-reference.py', '--rust-only'])
 # Offline checks below read every platform's dependencies; fetch them all first.
 run(['cargo', 'fetch', '--locked'])
@@ -41,7 +41,7 @@ if not replay_receipt.is_absolute():
     replay_receipt = root / replay_receipt
 replay_receipt.parent.mkdir(parents=True, exist_ok=True)
 with replay_receipt.open('wb') as output:
-    run(['cargo', 'run', '--locked', '-p', 'openbindings-schema-evaluator-test-support', '--example', 'replay'], stdout=output)
+    run(['cargo', 'run', '--locked', '-p', 'openbindings-json-schema-evaluator', '--example', 'replay'], stdout=output)
 with replay_receipt.open(encoding='utf-8') as source:
     replay = json.load(source)
 print(f"Evaluator replay: {len(replay['report']['observations'])} observations; full receipt: {replay_receipt}", flush=True)
