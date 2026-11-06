@@ -168,19 +168,37 @@ schema coordinate is substituted for an unavailable origin.
 
 Cheap failures contain no problems. An explanation may be incomplete because of
 diagnostic policy, work limits or cancellation; inspect `problems_complete`
-(TypeScript `problemsComplete`). Schema details are opt-in source facts that may
-contain application secrets. Debug output is redacted, while explicit fields,
-serialization and display are subject to the application's disclosure policy.
+(TypeScript `problemsComplete`). Schema facts in `details` may contain application secrets. `Debug` is redacted,
+and messages stay fixed SDK text. Serializing whole problems into a public
+response sends schema facts. An app with a private contract should forward only
+`instance` and `code`. Rejected instance values are never copied into facts or
+messages.
 
 The default evaluator explains only after establishing failure. It uses the
 remaining evaluation work and storage allowance to retain up to 100 distinct
 assertions (`MAX_EXPLANATION_PROBLEMS` internally). Problems sort lexically by
 exact UTF-16 instance pointer, then schema source URI and exact schema pointer.
 Repeated applications of the same assertion to the same occurrence are one
-problem. Each missing required member
-is a separate problem at the existing parent instance. The current default
-evaluator leaves schema `details` absent; asking for an explanation does not
-currently opt into disclosure of schema operands or member names.
+problem. Each missing required member is a separate problem at the existing
+parent instance. Problems tied on instance and schema location retain the
+schema's `required` array order.
+
+`details` contains established schema facts: `Required { member }` for missing
+members (also in active `dependentRequired` and array `dependencies`),
+`Type { expected }` for all expected types, `NumericBound { bound }` for
+`minimum`, `maximum`, `exclusiveMinimum` and `exclusiveMaximum`,
+`SizeBound { bound }` for `minLength`, `maxLength`, `minItems`, `maxItems`,
+`minProperties` and `maxProperties`, and `Enum { choices }` for the complete
+allowed list. Bounds and enum choices retain original JSON token text without
+floating-point conversion. Serialization uses a kebab-case `kind` tag, such as
+`{"kind":"numeric-bound","bound":"1E+400"}`.
+
+Keywords without a matching variant, including `const`, `pattern`, `multipleOf`
+and `additionalProperties`, have no `details`. Pattern text stays out. Facts
+count against the existing diagnostic storage allowance. A fact that cannot
+fit or cannot be represented exactly, such as a required member containing an
+unpaired surrogate, is omitted and sets `problems_complete` to false. Enum lists
+are never partial. These omissions never change the verdict.
 
 Conjunctions, references, properties, items, and active dependencies report all
 their applicable failures. A concrete `if` selects only the failing `then` or

@@ -228,7 +228,8 @@ impl Run<'_> {
                 Ok(problem)
             });
             match next {
-                Ok(Some((problem, width))) => {
+                Ok(Some((problem, width, facts_complete))) => {
+                    complete &= facts_complete;
                     sort_width = sort_width.max(width);
                     problems.push(problem);
                 }
@@ -256,7 +257,7 @@ impl Run<'_> {
         {
             return (Vec::new(), false);
         }
-        problems.sort_unstable_by(|a, b| {
+        let compare = |a: &ValueProblem, b: &ValueProblem| {
             a.instance
                 .utf16_units()
                 .cmp(b.instance.utf16_units())
@@ -267,7 +268,16 @@ impl Run<'_> {
                         .utf16_units()
                         .cmp(b.schema.pointer.utf16_units())
                 })
-        });
+        };
+        // At most 100 problems: stable insertion sort needs no scratch storage.
+        // Equal locations retain witness order, including the required array.
+        for index in 1..problems.len() {
+            let mut at = index;
+            while at > 0 && compare(&problems[at - 1], &problems[at]).is_gt() {
+                problems.swap(at - 1, at);
+                at -= 1;
+            }
+        }
         (problems, complete)
     }
 
@@ -275,7 +285,7 @@ impl Run<'_> {
         &mut self,
         seed: &WitnessSeed,
         root: &JsonValue,
-    ) -> Result<Option<(ValueProblem, usize)>, NoVerdict> {
+    ) -> Result<Option<(ValueProblem, usize, bool)>, NoVerdict> {
         let Some(instance) = backend::node(root, seed.instance) else {
             return Ok(None);
         };
@@ -325,7 +335,7 @@ impl Run<'_> {
         .ok_or_else(|| decision::limit("semantic-analysis-memory-limit"))?;
         self.graph.tick()?;
         self.graph.charge(bytes)?;
-        let problem = ValueProblem::new(
+        let mut problem = ValueProblem::new(
             backend::relative_pointer(instance, root.view()),
             SchemaOrigin::new(
                 source.uri.clone(),
@@ -334,9 +344,92 @@ impl Run<'_> {
             code,
             message,
         );
+        let member = seed.member.and_then(|id| backend::node(&source.value, id));
+        let (details, facts_complete) = schema_facts(&mut self.graph, code, schema, member)?;
+        problem.details = details;
         self.graph.tick()?;
-        Ok(Some((problem, bytes)))
+        Ok(Some((problem, bytes, facts_complete)))
     }
+}
+
+// Only original schema references enter this function. Facts are materialized
+// after failure; the outcome and compiled lanes never read or copy them.
+fn schema_facts(
+    graph: &mut Graph<'_>,
+    keyword: &str,
+    operand: JsonRef<'_>,
+    member: Option<JsonRef<'_>>,
+) -> Result<(Option<ValueProblemDetails>, bool), NoVerdict> {
+    let details = match keyword {
+        "required" | "dependentRequired" | "dependencies" => {
+            fact_string(graph, member.and_then(JsonRef::as_str))?
+                .map(|member| ValueProblemDetails::Required { member })
+        }
+        "type" => {
+            let expected = if operand.kind() == JsonKind::Array {
+                fact_strings(graph, || operand.elements().unwrap().map(JsonRef::as_str))?
+            } else {
+                fact_strings(graph, || std::iter::once(operand.as_str()))?
+            };
+            expected.map(|expected| ValueProblemDetails::Type { expected })
+        }
+        "minimum" | "maximum" | "exclusiveMinimum" | "exclusiveMaximum" => {
+            fact_string(graph, Some(operand.text()))?
+                .map(|bound| ValueProblemDetails::NumericBound { bound })
+        }
+        "minLength" | "maxLength" | "minItems" | "maxItems" | "minProperties" | "maxProperties" => {
+            fact_string(graph, Some(operand.text()))?
+                .map(|bound| ValueProblemDetails::SizeBound { bound })
+        }
+        "enum" => fact_strings(graph, || {
+            operand
+                .elements()
+                .expect("validated enum")
+                .map(|v| Some(v.text()))
+        })?
+        .map(|choices| ValueProblemDetails::Enum { choices }),
+        _ => return Ok((None, true)),
+    };
+    let complete = details.is_some();
+    Ok((details, complete))
+}
+
+fn fact_fits(graph: &mut Graph<'_>, bytes: Option<usize>) -> Result<bool, NoVerdict> {
+    let Some(bytes) = bytes.filter(|bytes| *bytes <= graph.remaining().bytes) else {
+        return Ok(false);
+    };
+    graph.charge(bytes)?;
+    Ok(true)
+}
+
+fn fact_string(graph: &mut Graph<'_>, text: Option<&str>) -> Result<Option<String>, NoVerdict> {
+    let Some(text) = text else {
+        // A Rust String cannot preserve an unpaired UTF-16 unit.
+        return Ok(None);
+    };
+    Ok(fact_fits(graph, Some(text.len()))?.then(|| text.to_owned()))
+}
+
+fn fact_strings<'a, I: ExactSizeIterator<Item = Option<&'a str>>>(
+    graph: &mut Graph<'_>,
+    texts: impl Fn() -> I,
+) -> Result<Option<Vec<String>>, NoVerdict> {
+    // Charge all string bytes and the exact vector backing before allocating.
+    // Refusal never copies a prefix of an enum or expected-type list.
+    let bytes = texts().try_fold(0usize, |bytes, text| {
+        bytes
+            .checked_add(size_of::<String>())?
+            .checked_add(text?.len())
+    });
+    if !fact_fits(graph, bytes)? {
+        return Ok(None);
+    }
+    let texts = texts();
+    let mut values = Vec::with_capacity(texts.len());
+    for text in texts {
+        values.push(text.expect("preflight checked exact strings").to_owned());
+    }
+    Ok(Some(values))
 }
 
 #[cfg(test)]

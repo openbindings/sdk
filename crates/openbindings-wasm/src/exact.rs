@@ -134,6 +134,9 @@ impl Exact for ValueProblem {
             schema: json(&self.schema),
             code: &self.code,
             message: &self.message,
+            // Facts already contain exact scalar strings, including original
+            // JSON tokens. Serialize them as strings, never as parsed numbers
+            // or enum values; only the pointer fields need UTF-16 encoding.
             details: &self.details,
         })
     }
@@ -237,23 +240,36 @@ mod tests {
             "assertion failed",
         );
         agrees(&problem);
+        assert!(!problem.exact().contains("\"details\""));
         for details in [
             ValueProblemDetails::Type {
                 expected: vec!["integer".into(), "null".into()],
             },
             ValueProblemDetails::Required {
-                member: "a/\"😀".into(),
+                member: "a/\"\n😀".into(),
             },
             ValueProblemDetails::NumericBound {
-                bound: "1e1000".into(),
+                bound: "1E+1000".into(),
             },
-            ValueProblemDetails::SizeBound { bound: "2".into() },
+            ValueProblemDetails::SizeBound {
+                bound: "2.00e+0".into(),
+            },
             ValueProblemDetails::Enum {
-                choices: vec!["null".into(), r#"{"a":1}"#.into()],
+                choices: vec![
+                    "null".into(),
+                    r#"{ "a": 1E+400 }"#.into(),
+                    r#""\ud800""#.into(),
+                    "-0.00".into(),
+                    "9007199254740993".into(),
+                ],
             },
         ] {
             problem.details = Some(details);
             agrees(&problem);
+            assert_eq!(
+                serde_json::from_str::<serde_json::Value>(&problem.exact()).unwrap()["details"],
+                serde_json::to_value(&problem.details).unwrap(),
+            );
             agrees(&ValueOutcome::Fails {
                 message: "failure".into(),
                 problems: vec![problem.clone()],

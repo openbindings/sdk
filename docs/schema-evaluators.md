@@ -38,11 +38,20 @@ The cheap `evaluate` call returns no problems and sets this flag to false.
 
 For `allOf`, problems come from the branches established to fail. For failed
 `anyOf`, `oneOf` or `not`, the problem names that applicator; it does not list
-branch assertions as independent failures. The default evaluator does not include
-schema facts in `details`, including missing required names, expected types,
-bounds or enum choices. Codes and locations identify assertions; messages are
-advisory. A custom evaluator can supply facts, subject to the application's
-disclosure policy.
+branch assertions as independent failures. The default evaluator includes
+schema facts in `details`: missing required names, expected types, exact numeric
+and size bounds, and complete enum choices. Bounds and choices preserve original
+JSON token text. Missing members at tied locations keep required-array order.
+Keywords without a matching variant, such as `const`, `pattern`, `multipleOf`
+and `additionalProperties`, have no details. Pattern text stays out. Facts count
+against the diagnostic storage allowance; facts that do not fit or cannot be
+represented exactly are omitted and leave `problems_complete` false. An enum
+list is always complete when present.
+
+Messages stay fixed SDK text, and `Debug` redacts facts. Rejected instance values
+are never copied into facts or messages. Serializing whole problems into a public
+response sends schema facts. An app with a private contract should forward only
+`instance` and `code`.
 
 ## Bring your own
 

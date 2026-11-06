@@ -217,9 +217,19 @@ all reportable failures were collected; a limit, missing witness or interrupted
 diagnostic work leaves it false without changing the failure verdict. `allOf`
 collects failures from its failing branches. Failed `anyOf`, `oneOf` and `not`
 report the applicator itself, without treating their branch failures as independent
-problems. Schema facts such as required member names, bounds and enum choices
-are not included: the default evaluator leaves `details` absent. Custom evaluators
-may include those facts, so choose their disclosure policy in the application.
+problems. `details` includes missing required member names, expected types,
+exact numeric and size bounds, and complete enum choices from the original
+schema. Bounds and choices are original JSON token strings. Missing members
+with tied locations keep the schema's `required` array order. Keywords without
+a matching variant, such as `const`, `pattern`, `multipleOf` and
+`additionalProperties`, have no details; pattern text stays out. Facts that
+cannot fit the diagnostic allowance or be represented exactly are omitted and
+leave `problems_complete` false. Enum lists are never partial.
+
+Messages remain fixed SDK text, and `Debug` redacts schema facts. Rejected
+instance values are never copied into facts or messages. Serializing whole
+problems into a public response sends schema facts. An app with a private
+contract should forward only `instance` and `code`.
 
 Serialized problem and schema-origin pointers replace unpaired UTF-16 units with
 U+FFFD so they can be ordinary JSON strings. Keep the original `Pointer` for exact

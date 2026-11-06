@@ -85,8 +85,13 @@ impl Default for Limits {
 ///
 /// Preparation and evaluation honor their explicit limits and cancellation.
 /// [`Detail::Outcome`] avoids collecting failure explanations. [`Detail::Explain`]
-/// may supply a bounded diagnostic at an established original source location;
-/// it does not change the semantic outcome. A custom [`SchemaEvaluator`] can
+/// supplies bounded problems at original source locations, with schema facts in
+/// `ValueProblem::details`: missing members, expected types, exact numeric/size
+/// bounds and complete enum choices. Messages stay fixed and Debug is redacted.
+/// Whole-problem serialization sends schema facts; an app with a private contract
+/// should forward only `instance` and `code` publicly. Facts that cannot fit or
+/// be represented exactly leave diagnostics incomplete without changing the
+/// outcome. A custom [`SchemaEvaluator`] can
 /// provide different qualified capabilities.
 pub struct DefaultEvaluator {
     limits: Limits,

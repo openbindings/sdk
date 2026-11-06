@@ -183,7 +183,7 @@ is optional. Required format assertion supports all 19 standard attributes;
 unknown required attributes refuse preparation. Its `regex` attribute checks
 ECMA-262 11th-edition no-flags syntax with Annex B, without executing a pattern.
 An external resource's declared dialect is never silently read as 2020-12.
-See [evaluator profiles and preparation](../../docs/schema-evaluators.md) for
+See [evaluator profiles and preparation](https://github.com/openbindings/sdk/blob/main/docs/schema-evaluators.md) for
 custom meta-schema admission and the structural and cooperative resource limits.
 
 `evaluate` is the cheap check: failure has no problems and marks diagnostics
@@ -191,13 +191,24 @@ incomplete. `explain` preserves the same result and reports available bounded
 problems at original source locations. Some semantic failures currently have no
 specific diagnostic evidence and retain `problems_complete = false`. The
 [API reference](https://github.com/openbindings/sdk/blob/main/docs/api-reference.md) describes the 100-problem cap, ordering,
-and applicator reporting rules. Optional
-detail work never retracts an established result. Oversized origins are omitted
+and applicator reporting rules. `details` includes missing required member names,
+expected types, exact numeric and size bounds, and complete enum choices from
+the original schema. Bounds and choices retain original JSON token text. Tied
+missing-member problems keep required-array order. Keywords without a matching
+variant, including `const`, `pattern`, `multipleOf` and `additionalProperties`,
+have no details. Facts count against the diagnostic storage allowance. A fact
+that cannot fit or be represented exactly is omitted and leaves
+`problems_complete` false; enum lists are never partial.
+
+Messages stay fixed SDK text and `Debug` redacts facts. Rejected instance values
+are never copied into facts or messages. Serializing whole problems into a public
+response sends schema facts. An app with a private contract should forward only
+`instance` and `code`. Detail work never retracts an established result. Oversized origins are omitted
 before copying them, pattern diagnostics do not echo authored regex text, and an
 unavailable resource has no invented source coordinate.
 
 Prepared validators retain one immutable original schema environment, prepared
 primitive operands and shared pattern programs. Each call owns its mutable proof
 state and search caches. No caller borrow is retained.
-See [custom evaluators](../../docs/schema-evaluators.md),
-[first use](examples/first_use.rs), and [replacement](examples/replacement.rs).
+See [custom evaluators](https://github.com/openbindings/sdk/blob/main/docs/schema-evaluators.md),
+[first use](https://github.com/openbindings/sdk/blob/main/crates/openbindings-json-schema-evaluator/examples/first_use.rs), and [replacement](https://github.com/openbindings/sdk/blob/main/crates/openbindings-json-schema-evaluator/examples/replacement.rs).

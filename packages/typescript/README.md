@@ -265,9 +265,21 @@ at original locations, with additional allocation and work, up to 100 problems.
 missing witnesses, cancellation or exhausted diagnostic limits leave it false
 without changing the failure verdict. `allOf` collects problems from its failing
 branches. Failed `anyOf`, `oneOf` and `not` report the applicator itself, without
-listing branch assertions as independent problems. Schema facts such as required
-member names, expected types, bounds and enum choices are not included; `details`
-is absent. A problem's `instance` is relative to the exact value passed;
+listing branch assertions as independent problems. `details` contains schema
+facts: missing required member names, expected types, numeric and size bounds,
+and complete enum choices. Bounds and choices are exact original JSON token
+strings; do not convert them to `Number`. Tied missing-member problems retain
+required-array order. Keywords without a matching variant, such as `const`,
+`pattern`, `multipleOf` and `additionalProperties`, have no details; pattern text
+stays out. Facts that cannot fit the diagnostic storage allowance or be
+represented exactly are omitted and leave `problemsComplete` false. Enum lists
+are never partial. Messages stay fixed SDK text. Rejected instance values are
+never copied into facts or messages. Rust `Debug` remains redacted.
+
+Serializing whole problems into a public response sends schema facts. An app
+with a private contract should forward only `instance` and `code`.
+
+A problem's `instance` is relative to the exact value passed;
 `schema.sourceUri` and `schema.pointer` identify the original schema source.
 `value.locate(problem.instance)`, `ConformantDocument.locate(problem.schema)` and
 `ExternalSchemas.locate(problem.schema)` compute source coordinates on demand.

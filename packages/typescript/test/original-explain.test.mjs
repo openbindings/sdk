@@ -59,20 +59,26 @@ test("explain returns every located failure with truthful completeness", () => {
         details,
       ]),
       [
-        ["", null, "/operations/op/input/required", "required", undefined],
+        [
+          "",
+          null,
+          "/operations/op/input/required",
+          "required",
+          { kind: "required", member: "c" },
+        ],
         [
           "/a",
           null,
           "/operations/op/input/properties/a/type",
           "type",
-          undefined,
+          { kind: "type", expected: ["string"] },
         ],
         [
           "/b",
           null,
           "/operations/op/input/properties/b/type",
           "type",
-          undefined,
+          { kind: "type", expected: ["integer"] },
         ],
         [
           "/z",

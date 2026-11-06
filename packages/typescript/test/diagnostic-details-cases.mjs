@@ -1,6 +1,6 @@
 import * as testing from "../dist/testing.js";
 import { prepareInput } from "./conformant-contracts.mjs";
-/** Public-package location/privacy/retention controls; portable across Node and browsers. Explanations name each failing keyword at its original location and carry no schema facts. */
+/** Public-package location/privacy/retention controls; portable across Node and browsers. Explanations name each failing keyword at its original location and include exact schema facts without rejected instance data. */
 export function diagnosticDetailsCases(sdk) {
   let assertions = 0;
   const check = (ok, text) => {
@@ -38,17 +38,76 @@ export function diagnosticDetailsCases(sdk) {
       contract.dispose();
     }
   }
+  const secret = "SECRET-instance";
+  const numericSecret = "987654321.123456789";
   const cases = [
-    ['{"type":"integer"}', '"SECRET-instance"', "type"],
-    ['{"required":["SECRET/member~key"]}', "{}", "required"],
-    ['{"minimum":9007199254740993}', "9007199254740992", "minimum"],
-    ['{"maxLength":3}', '"long"', "maxLength"],
     [
-      '{"enum":["SECRET-choice",9007199254740993,{"x":1e-999}]}',
-      "null",
+      '{"type":"integer"}',
+      '"SECRET-instance"',
+      "type",
+      { kind: "type", expected: ["integer"] },
+      secret,
+    ],
+    [
+      '{"type":["null","object"]}',
+      '"SECRET-instance"',
+      "type",
+      { kind: "type", expected: ["null", "object"] },
+      secret,
+    ],
+    [
+      '{"required":["SECRET/member~key"]}',
+      '{"present":"SECRET-instance"}',
+      "required",
+      { kind: "required", member: "SECRET/member~key" },
+      secret,
+    ],
+    [
+      String.raw`{"enum":["SECRET-choice",9007199254740993,{ "x" : 1e-999 },"schema\u002dchoice"]}`,
+      '"SECRET-instance"',
       "enum",
+      {
+        kind: "enum",
+        choices: [
+          '"SECRET-choice"',
+          "9007199254740993",
+          '{ "x" : 1e-999 }',
+          String.raw`"schema\u002dchoice"`,
+        ],
+      },
+      secret,
     ],
   ];
+  for (const [keyword, token] of [
+    ["minimum", "1E+400"],
+    ["maximum", "-0.00"],
+    ["exclusiveMinimum", "9007199254740993"],
+    ["exclusiveMaximum", "1e-999"],
+  ])
+    cases.push([
+      `{"${keyword}":${token}}`,
+      numericSecret,
+      keyword,
+      { kind: "numeric-bound", bound: token },
+      numericSecret,
+    ]);
+  for (const [minimum, maximum, input] of [
+    ["minLength", "maxLength", '"SECRET-instance"'],
+    ["minItems", "maxItems", '["SECRET-instance"]'],
+    ["minProperties", "maxProperties", '{"present":"SECRET-instance"}'],
+  ]) {
+    for (const [keyword, token] of [
+      [minimum, "1.000e+3"],
+      [maximum, "0e0"],
+    ])
+      cases.push([
+        `{"${keyword}":${token}}`,
+        input,
+        keyword,
+        { kind: "size-bound", bound: token },
+        secret,
+      ]);
+  }
   // Exact operands fail at their original keywords after the engine's numeric
   // substitution.
   for (const token of [
@@ -68,7 +127,11 @@ export function diagnosticDetailsCases(sdk) {
         check(result.problems.length === 0, "cheap check omits payloads");
       else {
         const problem = result.problems[0];
-        check(problem.details === undefined, "no schema facts");
+        check(
+          problem.details?.kind === "numeric-bound" &&
+            problem.details.bound === token,
+          "exact original numeric token",
+        );
         check(
           problem.schema.pointer === "/operations/op/input/exclusiveMinimum",
           "original numeric location",
@@ -81,7 +144,7 @@ export function diagnosticDetailsCases(sdk) {
     }
   }
   const examples = [];
-  for (const [schema, input, keyword] of cases) {
+  for (const [schema, input, keyword, facts, rejected] of cases) {
     const ordinary = run(schema, input),
       detailed = run(schema, input, "explain");
     check(
@@ -97,22 +160,98 @@ export function diagnosticDetailsCases(sdk) {
     const problem = detailed.problems[0];
     check(
       detailed.problemsComplete &&
-        problem.details === undefined &&
+        JSON.stringify(problem.details) === JSON.stringify(facts) &&
         problem.code === keyword &&
         problem.schema.pointer === "/operations/op/input/" + keyword &&
         !problem.message.includes("SECRET"),
-      "original keyword location without facts",
+      "original keyword location with exact schema facts",
+    );
+    check(
+      !JSON.stringify(detailed).includes(rejected),
+      "rejected value never serialized",
+    );
+    check(
+      problem.message === "value fails this schema assertion",
+      "fixed message",
+    );
+    check(
+      JSON.stringify(
+        JSON.parse(JSON.stringify(detailed)).problems[0].details,
+      ) === JSON.stringify(facts),
+      "serialized facts",
     );
     if (keyword === "required")
       check(problem.instance === "", "required parent location");
     examples.push(detailed);
   }
+  const missing = run('{"required":["z","a"]}', "{}", "explain");
+  check(
+    missing.problemsComplete &&
+      JSON.stringify(missing.problems.map((p) => p.details)) ===
+        JSON.stringify([
+          { kind: "required", member: "z" },
+          { kind: "required", member: "a" },
+        ]),
+    "missing members retain array order",
+  );
+  for (const [schema, input] of [
+    ['{"const":"SECRET-schema"}', '"SECRET-instance"'],
+    ['{"pattern":"^SECRET-pattern$"}', '"SECRET-instance"'],
+    ['{"multipleOf":2}', "3"],
+    ['{"additionalProperties":false}', '{"present":"SECRET-instance"}'],
+  ]) {
+    const result = run(schema, input, "explain");
+    check(
+      result.status === "fails" &&
+        result.problemsComplete &&
+        result.problems.length === 1,
+      "unsupported fact keyword still explained",
+    );
+    check(
+      result.problems[0].details === undefined &&
+        !JSON.stringify(result).includes("SECRET"),
+      "no variant means no facts, pattern text stays out",
+    );
+  }
+  const hostile = prepare(
+    doc(
+      JSON.stringify({
+        items: {
+          enum: Array.from(
+            { length: 64 },
+            (_, i) => `${i}:${"s".repeat(8192)}`,
+          ),
+        },
+      }),
+    ),
+    { limits: { evaluationSdkReservationBytes: 256 * 1024 } },
+  );
+  try {
+    const value = Array(32).fill(false);
+    check(
+      hostile.evaluate(value).status === "fails",
+      "hostile enum establishes failure",
+    );
+    const result = hostile.explain(value);
+    check(
+      result.status === "fails" &&
+        !result.problemsComplete &&
+        result.problems.length === 32,
+      "unfunded enum facts preserve all located failures",
+    );
+    check(
+      result.problems.every((p) => p.details === undefined),
+      "unfunded enum has no partial choices",
+    );
+  } finally {
+    hostile.dispose();
+  }
   const largeName = "é".repeat(10000);
   const large = run(JSON.stringify({ required: [largeName] }), "{}", "explain");
   check(
-    large.problems[0].details === undefined &&
+    large.problems[0].details?.member === largeName &&
       !large.problems[0].message.includes(largeName),
-    "explanation copies no source-controlled name",
+    "large schema member appears only in details",
   );
   const resourceText =
     '{"allOf":[{"properties":{"a/~":{"minimum":9007199254740993}}}],"x-padding":"' +
@@ -137,6 +276,34 @@ export function diagnosticDetailsCases(sdk) {
       parsed.value.dispose();
     }
   }
+  const unpaired = fromResource(String.raw`{"required":["\ud800","scalar"]}`);
+  try {
+    const result = unpaired.explain({});
+    check(
+      result.status === "fails" &&
+        !result.problemsComplete &&
+        result.problems.length === 2,
+      "unrepresentable fact keeps failure incomplete",
+    );
+    check(
+      result.problems[0].details === undefined &&
+        result.problems[1].details.member === "scalar",
+      "no lossy required member",
+    );
+  } finally {
+    unpaired.dispose();
+  }
+  const exactEnum = fromResource(String.raw`{"enum":["\ud800"]}`);
+  try {
+    const result = exactEnum.explain(null);
+    check(
+      result.problemsComplete &&
+        result.problems[0].details.choices[0] === String.raw`"\ud800"`,
+      "enum retains exact unpaired token text",
+    );
+  } finally {
+    exactEnum.dispose();
+  }
   // Warm all process-global schema arenas before comparing application retention.
   let warm = fromResource(resourceText);
   warm.dispose();
@@ -152,6 +319,11 @@ export function diagnosticDetailsCases(sdk) {
     const oldResult = old.explain({ "a/~": 6 }),
       newResult = newer.explain({ "a/~": 6 });
     explainedArenas = testing.liveStorageOwners();
+    check(
+      oldResult.problems[0].details.bound === "9007199254740993" &&
+        newResult.problems[0].details.bound === "7",
+      "facts use each original resource",
+    );
     check(
       oldResult.problems[0].schema.pointer ===
         "/allOf/0/properties/a~1~0/minimum" &&

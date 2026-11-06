@@ -62,7 +62,7 @@ export interface UndefinedResult {
   location: SchemaOrigin | null;
 }
 
-/** Opt-in schema facts, not rejected instance data. Bounds and enum choices are exact JSON token strings: do not coerce them to Number. Source facts can contain secrets and must be rendered as text under an application disclosure policy. Each variant contains complete facts. */
+/** Schema facts included by explain(), never copied from rejected instance data. Bounds and enum choices are exact JSON token strings: do not coerce them to Number. Serializing whole problems into a public response sends schema facts; an app with a private contract should forward only instance and code. Render facts as text. Each variant contains complete facts. */
 export type ValueProblemDetails =
   | {
       /** Complete expected JSON type names, drawn from the fixed JSON type vocabulary. */
@@ -105,7 +105,7 @@ export interface ValueProblem {
   code: string;
   /** Explanatory text; present pointers separately and safely. */
   message: string;
-  /** Optional schema facts. Absent means disabled or unavailable. */
+  /** Schema facts from the failed keyword. Absent means no matching variant or unavailable facts; facts that cannot fit or be represented exactly leave problemsComplete false. */
   details?: ValueProblemDetails;
 }
 
@@ -122,7 +122,7 @@ export type ValueOutcome =
       message: string;
       /** Retained actual failing instance locations. */
       problems: readonly ValueProblem[];
-      /** Whether selected failure diagnostics, including requested details, completed; false does not weaken the established failure. */
+      /** Whether selected failure diagnostics, including schema facts, completed; false does not weaken the established failure. */
       problemsComplete: boolean;
     }
   | {
@@ -652,7 +652,7 @@ export class PreparedSchema extends Managed {
     value: Exclude<JsonInput, ExactJson>,
     options?: WorkOptions,
   ): ValueCheck;
-  /** Explain an exact root with the same verdict as evaluate() and available bounded problems at original locations. Explanation can allocate more than the cheap check. Missing witnesses, exhausted diagnostic limits or cancellation after an established failure leave problemsComplete false without changing the verdict. */
+  /** Explain an exact root with the same verdict as evaluate() and available bounded problems and schema facts at original locations. Explanation can allocate more than the cheap check. Missing witnesses, exhausted diagnostic limits or cancellation after an established failure leave problemsComplete false without changing the verdict. */
   explain(value: ExactJson, options?: WorkOptions): ValueOutcome;
   /** Explain a value that may be ordinary or exact: an ordinary one is admitted first, so input-error remains possible. */
   explain(value: JsonInput, options?: WorkOptions): ValueCheck;

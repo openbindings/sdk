@@ -157,6 +157,53 @@ fn multiple_local_assertions_and_missing_members_are_all_retained() {
             "/required"
         ]
     );
+    assert_eq!(
+        problems
+            .iter()
+            .map(|p| p.details.as_ref())
+            .collect::<Vec<_>>(),
+        ["c", "d", "a", "b"]
+            .map(|member| Some(ValueProblemDetails::Required {
+                member: member.into()
+            }))
+            .iter()
+            .map(Option::as_ref)
+            .collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn facts_reserve_exact_backing_before_copying_and_never_return_partial_lists() {
+    let control = AtomicBool::new(false);
+    for (schema, keyword, bytes) in [
+        (r#"{"required":["é"]}"#, "required", 2),
+        (
+            r#"{"type":["null","integer"]}"#,
+            "type",
+            2 * size_of::<String>() + 11,
+        ),
+        (r#"{"minimum":1E+400}"#, "minimum", 6),
+        (r#"{"minItems":2.00e+0}"#, "minItems", 7),
+        (
+            r#"{"enum":[1E+400,"é"]}"#,
+            "enum",
+            2 * size_of::<String>() + 10,
+        ),
+    ] {
+        let source = JsonValue::parse(schema).unwrap();
+        let operand = source.get(keyword).unwrap();
+        let member = (keyword == "required").then(|| operand.element(0).unwrap());
+        let mut graph = Graph::new(bytes - 1, None, 0, &control);
+        let (facts, complete) = schema_facts(&mut graph, keyword, operand, member).unwrap();
+        assert!(facts.is_none(), "{schema}");
+        assert!(!complete);
+        assert_eq!(graph.remaining().bytes, bytes - 1, "refusal copies nothing");
+        let mut graph = Graph::new(bytes, None, 0, &control);
+        let (facts, complete) = schema_facts(&mut graph, keyword, operand, member).unwrap();
+        assert!(facts.is_some(), "{schema}");
+        assert!(complete);
+        assert_eq!(graph.remaining().bytes, 0);
+    }
 }
 
 #[test]

@@ -348,7 +348,10 @@ impl fmt::Debug for UndefinedResult {
 #[non_exhaustive]
 /// Optional schema facts. Treat source operands as sensitive; none contain a
 /// rejected instance value. Numeric bounds and enum choices are exact JSON token
-/// strings. Every variant contains complete facts.
+/// strings. Every variant contains complete facts. The default evaluator includes
+/// these in explanations when representable within its diagnostic allowance.
+/// `Debug` redacts facts. Serializing whole problems sends schema facts; apps
+/// with a private contract should forward only `instance` and `code` publicly.
 pub enum ValueProblemDetails {
     /// Complete expected types from the fixed JSON type vocabulary.
     Type {
@@ -416,7 +419,10 @@ pub struct ValueProblem {
     pub code: String,
     /// Explanatory text; custom evaluators should avoid exposing instance values or source-controlled strings by default.
     pub message: String,
-    /// Optional schema facts. None means disabled or unavailable.
+    /// Schema facts established by the failed keyword: missing member, expected
+    /// types, exact numeric/size bound, or complete enum choices. `None` means no
+    /// matching variant or unavailable facts. The default evaluator marks
+    /// diagnostics incomplete if a fact cannot fit or be represented exactly.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub details: Option<ValueProblemDetails>,
 }
@@ -507,7 +513,7 @@ pub enum ValueOutcome {
         message: String,
         /// Retained actual failing instance locations; diagnostics may be bounded after failure is established.
         problems: Vec<ValueProblem>,
-        /// Whether selected diagnostics, including requested details, completed. False does not weaken the established failure verdict.
+        /// Whether selected diagnostics, including schema facts, completed. False does not weaken the established failure verdict.
         problems_complete: bool,
     },
     /// Whether the value satisfies the selected schema is established to be undefined.
@@ -650,7 +656,7 @@ pub enum Detail {
     /// The verdict only. A failure carries no problems and `problems_complete`
     /// is false.
     Outcome,
-    /// The verdict with problems that explain a failure.
+    /// The verdict with problems and available schema facts that explain a failure.
     Explain,
 }
 /// Owned validator returned by a [`SchemaEvaluator`]. Repeated calls must preserve caller input and retain no accidental borrow of a completed request. Only claim established semantic verdicts; bound diagnostic work separately and report incompleteness.
@@ -755,9 +761,15 @@ impl<V: SchemaValidator> PreparedSchema<V> {
     /// by the evaluator, not the SDK. The default evaluator retains a bounded
     /// collection of failures and materializes their original schema and instance
     /// locations after establishing failure, ordered by instance then schema.
-    /// Messages use fixed SDK text; the default evaluator omits schema facts.
+    /// Tied locations retain required-array order. Messages use fixed SDK text;
+    /// `details` contains missing members, expected types, exact numeric/size
+    /// bounds and complete enum choices from the original schema. Other keywords
+    /// have no details; pattern text stays out. Debug output redacts all facts.
+    /// Serializing whole problems sends schema facts. An app with a private
+    /// contract should forward only `instance` and `code` in public responses.
     /// Exhausting the remaining work or storage allowance keeps the failure but
-    /// may omit problems. Use [`Self::evaluate`] when no explanation is needed.
+    /// may omit problems or facts. Facts that cannot be represented exactly are
+    /// also omitted. Use [`Self::evaluate`] when no explanation is needed.
     /// Failure diagnostics can be incomplete; inspect `problems_complete` rather
     /// than assuming every failed keyword is reported.
     pub fn explain(&self, value: &JsonValue) -> ValueOutcome {

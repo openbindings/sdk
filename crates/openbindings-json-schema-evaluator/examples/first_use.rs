@@ -111,6 +111,12 @@ fn main() -> Result<(), Box<dyn Error>> {
                         schema.byte_column,
                         problem.message
                     );
+                    // This local display deliberately includes schema facts.
+                    // For a public response with a private contract, forward
+                    // only instance and code instead of serializing the problem.
+                    if let Some(details) = &problem.details {
+                        println!("schema facts: {}", serde_json::to_string(details)?);
+                    }
                 }
                 println!("selected diagnostics complete: {problems_complete}");
             }

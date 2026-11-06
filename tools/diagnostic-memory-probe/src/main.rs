@@ -5,6 +5,8 @@ use std::alloc::{GlobalAlloc, Layout, System};
 use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
 
 mod constructors;
+#[cfg(test)]
+mod explain;
 mod integers;
 mod limits;
 mod near_misses;

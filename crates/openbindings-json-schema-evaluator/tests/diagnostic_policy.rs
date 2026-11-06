@@ -447,7 +447,7 @@ fn external_evaluator_construction_and_matching_stay_supported() {
 }
 
 #[test]
-fn explanations_carry_no_schema_facts_and_redact_debug() {
+fn explanations_serialize_schema_facts_but_never_instance_values_and_redact_debug() {
     let doc = document(serde_json::json!({"enum":["SECRET-schema-choice"]}));
     let contract = ready(&doc);
     for text in [format!("{contract:?}"), format!("{contract:#?}")] {
@@ -457,9 +457,23 @@ fn explanations_carry_no_schema_facts_and_redact_debug() {
     let ValueOutcome::Fails { problems, .. } = &outcome else {
         panic!("expected failure")
     };
-    // Explanations name the keyword's location and carry no schema facts.
-    assert!(problems.iter().all(|problem| problem.details.is_none()));
-    assert!(!serde_json::to_string(&outcome).unwrap().contains("SECRET"));
+    assert_eq!(problems.len(), 1);
+    assert_eq!(
+        problems[0].details,
+        Some(ValueProblemDetails::Enum {
+            choices: vec![r#""SECRET-schema-choice""#.into()],
+        })
+    );
+    let serialized = serde_json::to_string(&outcome).unwrap();
+    assert!(serialized.contains("SECRET-schema-choice"));
+    assert!(!serialized.contains("SECRET-instance"));
+    safe(&problems[0].message);
+    for text in [
+        format!("{:?}", problems[0]),
+        format!("{:?}", problems[0].details),
+    ] {
+        assert!(!text.contains("SECRET"));
+    }
     for text in [format!("{outcome:?}"), format!("{outcome:#?}")] {
         assert!(!text.contains("SECRET"));
     }
