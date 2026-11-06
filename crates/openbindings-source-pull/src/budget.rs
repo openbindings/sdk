@@ -3,12 +3,9 @@ use openbindings::WorkControl;
 
 /// Finite local handoff and relationship-checking policy.
 /// Provider work and prior JSON admission are outside these allowances. A pull
-/// makes a fixed number of core edit, validation and reference inspection passes,
-/// bounded by the JSON and core limits, so a document those limits admit is not
-/// refused for its size here. Only repeats a result can multiply spend relationship
-/// work: extra rounds for colliding proposals. Relationship indexes and edit
-/// metadata use the allocation ledger. Cancellation is checked between core passes
-/// and during reference inspection.
+/// makes core edit and validation passes bounded by the JSON and core limits.
+/// Relationship indexes and edit metadata use the allocation ledger.
+/// Cancellation is checked between core passes.
 #[derive(Clone, Copy, Debug)]
 pub struct PullLimits {
     /// Maximum inline request bytes, including separately supplied context; default 32 MiB.
@@ -41,11 +38,6 @@ pub(crate) struct Attempt<'a> {
     allocation: usize,
     entries: usize,
     failure: Option<&'static str>,
-}
-impl WorkControl for Attempt<'_> {
-    fn is_cancelled(&self) -> bool {
-        self.control.is_cancelled()
-    }
 }
 impl<'a> Attempt<'a> {
     pub(crate) fn new(limits: PullLimits, control: &'a dyn WorkControl) -> Self {

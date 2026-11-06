@@ -297,12 +297,12 @@ fn embedded_kind_reports_stale_current_unmatched_and_partial_without_overwriting
 }
 
 #[test]
-fn a_caller_can_discard_or_explicitly_adopt_one_dependency_closed_subset() {
+fn a_caller_can_keep_part_of_a_pull_by_following_schema_references() {
     let original = document(
         r#"{"openbindings":"0.2.0","operations":{},"sources":{"s":{"kind":"example.catalog@1"}}}"#,
     );
     let request = PullRequest::new(original.clone(), "s");
-    let result = PullResult::from_json(json(r##"{"additions":{"operations":{"a":{"input":{"$ref":"#/schemas/S"}},"b":{"input":{"$ref":"#/schemas/T"}}},"schemas":{"S":{"type":"string"},"T":{"type":"integer"}},"bindings":{"a":{"source":"s","operation":"a"},"b":{"source":"s","operation":"b"}}},"report":{"exhaustive":true,"added":[{"binding":"a","operation":"a","uses":["schemas/S"]},{"binding":"b","operation":"b","uses":["schemas/T"]}]}}"##)).unwrap();
+    let result = PullResult::from_json(json(r##"{"additions":{"operations":{"a":{"input":{"$ref":"#/schemas/S"}},"b":{"input":{"$ref":"#/schemas/T"}}},"schemas":{"S":{"type":"string"},"T":{"type":"integer"}},"bindings":{"a":{"source":"s","operation":"a"},"b":{"source":"s","operation":"b"}}},"report":{"exhaustive":true,"added":[{"binding":"a","operation":"a"},{"binding":"b","operation":"b"}]}}"##)).unwrap();
     result
         .validate_for(&request, &PullLimits::default(), &AtomicBool::new(false))
         .unwrap();
@@ -318,6 +318,16 @@ fn a_caller_can_discard_or_explicitly_adopt_one_dependency_closed_subset() {
         .get("a")
         .unwrap()
         .to_owned();
+    // Follow a's input reference to the schema addition before inserting it.
+    assert_eq!(
+        operation
+            .get("input")
+            .unwrap()
+            .get("$ref")
+            .unwrap()
+            .as_str(),
+        Some("#/schemas/S")
+    );
     let schema = additions
         .schemas()
         .unwrap()
@@ -356,7 +366,7 @@ fn a_caller_can_discard_or_explicitly_adopt_one_dependency_closed_subset() {
             .is_none()
     );
     assert!(selected.value().get("schemas").unwrap().get("T").is_none());
-    // Missing the reported dependency is caught by revalidation of this chosen
+    // Missing the schema reference target is caught by revalidation of this chosen
     // edit; validation of the all-additions snapshot did not authorize any subset.
     let incomplete = original
         .document()

@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-11-06 binding data needs (unreleased)
+
+- Apply interfaces `3e3dc453a93b611a8e9ea1813ec63a2216830f45`; retain specification
+  `c1419c9fc3ae5a00c2b83da710c11bf67dab7934`. The interfaces revision is an open
+  proposal and will be repinned after squash merge.
+- `uses` names only additions needed by binding data and is not transitive.
+  Remove report and core schema-reference closure checks. Keep label checks and
+  prospective document conformance. Schema proposals carry `{schema}`; remove
+  their `uses` accessor and treat that member as unknown metadata.
+- Refresh publication fixtures, scale tests, selective-adoption examples and the
+  adapter guide. Callers keeping part of a pull follow schema references and each
+  reached added binding's operation and `uses`. No default limit changes.
+
 ## 2026-11-06 interface repin (unreleased)
 
 - Apply interfaces `5006884a39c055103fad49e7c47b3141726f8dd8`; retain specification

@@ -94,7 +94,7 @@ macro_rules! uses_accessor {
         labels_accessor!(
             uses,
             "uses",
-            "Iterate exact addition labels in authored order; absence differs from an empty list."
+            "Iterate other additions the binding data needs, in authored order; absence differs from an empty list."
         );
     };
 }
@@ -241,14 +241,13 @@ impl SourceProposal {
 }
 carrier!(
     SchemaProposal,
-    "A replacement schema and the additions it needs."
+    "The replacement schema for an existing schema entry."
 );
 impl SchemaProposal {
     /// Admit a schema proposal without interpreting its schema as report fields.
     pub fn from_json(value: JsonValue) -> Result<Self, CarrierError> {
         let object = carrier::object(value)?;
         carrier::schema(carrier::field(&object, "schema")?, "schema")?;
-        carrier::uses(&object)?;
         Ok(Self(object))
     }
     /// Retain the exact replacement schema, including boolean or empty object forms.
@@ -259,14 +258,13 @@ impl SchemaProposal {
             .expect("admitted schema")
             .to_owned()
     }
-    uses_accessor!();
 }
 /// A proposal's target determines what its payload means. Schema contents stay opaque.
 #[derive(Clone, Debug)]
 pub enum Proposal {
     /// Only binding data, operation input/output and named additions may be applied.
     Binding(BindingProposal),
-    /// The replacement schema and its required additions.
+    /// The replacement schema; its references show which additions it needs.
     Schema(SchemaProposal),
     /// Only source data may be replaced or removed.
     Source(SourceProposal),

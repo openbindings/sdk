@@ -120,6 +120,6 @@ fn applied_context_authority_is_separate_from_package_version() {
     assert_eq!(openbindings_context::CONTEXT_VERSION, "0.1");
     assert_eq!(
         openbindings_context::APPLIED_INTERFACE_REVISION,
-        "5006884a39c055103fad49e7c47b3141726f8dd8"
+        "3e3dc453a93b611a8e9ea1813ec63a2216830f45"
     );
 }

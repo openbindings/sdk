@@ -49,10 +49,8 @@ pub enum RelationshipError {
     ExistingTarget,
     /// An existing report repeats the same entry type and key.
     DuplicateTarget,
-    /// A uses label is malformed, names no addition, or names its own binding.
+    /// A uses label is malformed, repeated, names no addition, or names its own binding.
     Uses,
-    /// Known dependencies of a retained added binding are not retained transitively.
-    UsesClosure,
 }
 /// Failure of local result validation, distinct from a provider's operational error.
 pub enum PullValidationError {

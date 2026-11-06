@@ -8,7 +8,7 @@ fn result(additions: &str, report: &str) -> JsonValue {
 }
 
 #[test]
-fn all_37_pinned_pull_report_cases_keep_shape_and_complete_answers() {
+fn all_38_pinned_pull_report_cases_keep_shape_and_complete_answers() {
     let pack = json(include_str!("fixtures/pull-report.json"));
     let mut positive = 0;
     let mut negative = 0;
@@ -38,7 +38,7 @@ fn all_37_pinned_pull_report_cases_keep_shape_and_complete_answers() {
             negative += 1;
         }
     }
-    assert_eq!((positive, negative), (26, 11));
+    assert_eq!((positive, negative), (27, 11));
     assert!(mismatches.is_empty(), "{}", mismatches.join("\n"));
 }
 #[test]
@@ -269,7 +269,6 @@ fn removal_lists_and_schema_proposals_keep_absence_distinct_from_null() {
     let proposal =
         SchemaProposal::from_json(json(r#"{"schema":false,"uses":["schemas/S"]}"#)).unwrap();
     assert_eq!(proposal.schema().view().as_bool(), Some(false));
-    assert_eq!(proposal.uses().unwrap().len(), 1);
 }
 
 #[test]
@@ -313,5 +312,31 @@ fn published_closed_status_sets_and_open_metadata_are_distinct() {
             ExistingEntry::from_json(json(text)).is_ok()
         };
         assert!(!admitted, "{text}");
+    }
+}
+
+#[test]
+fn schema_proposal_uses_is_only_retained_unknown_metadata() {
+    // The open proposal carrier retains additional members without treating
+    // them as binding data needs, even when they are not a label list.
+    for uses in [
+        "null",
+        "42",
+        r#"["schemas/S","schemas/S"]"#,
+        r#"["missing"]"#,
+    ] {
+        let value = json(&format!(r#"{{"schema":false,"uses":{uses}}}"#));
+        let proposal = SchemaProposal::from_json(value.clone()).unwrap();
+        assert_eq!(proposal.schema().view().as_bool(), Some(false));
+        assert_eq!(proposal.to_json().value().text(), value.text());
+        let entry = ExistingEntry::from_json(json(&format!(
+            r#"{{"schema":"S","status":"stale","change":"dangerous","proposal":{}}}"#,
+            value.text()
+        )))
+        .unwrap();
+        let Proposal::Schema(proposal) = entry.proposal().unwrap() else {
+            panic!("schema proposal")
+        };
+        assert_eq!(proposal.to_json().value().text(), value.text());
     }
 }

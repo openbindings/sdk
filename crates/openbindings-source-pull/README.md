@@ -4,7 +4,7 @@ For a complete protocol implementation walkthrough, read
 [writing a binding kind adapter](https://github.com/openbindings/sdk/blob/main/docs/writing-a-kind.md).
 
 This unpublished companion is being implemented against source-puller version
-0.1.0 at interfaces revision `5006884a39c055103fad49e7c47b3141726f8dd8`.
+0.1.0 at interfaces revision `3e3dc453a93b611a8e9ea1813ec63a2216830f45`.
 It carries additions to one original document and the report of pulling one
 selected source. Kind implementations own source interpretation and projection.
 A report is a producer claim, not proof of live availability or fidelity.
@@ -18,9 +18,9 @@ optional shared `Context`. `SourcePuller` supplies borrowed finite work and its
 own native operational error through `handle_pull_source`. Import `SourcePullerExt`
 to call the SDK-owned `pull_source` method directly on the implementation. It checks source existence before dispatch,
 then checks key/alias collisions, selected-source attribution, report coverage,
-canonical operation keys, uses labels and known report dependency closure. It
-validates a prospective document with all additions before returning the exact
-result. The original remains unchanged and stale proposals are never applied.
+canonical operation keys and uses labels. It validates a prospective document
+with all additions before returning the exact result. The original remains
+unchanged and stale proposals are never applied.
 Use `pull_source_with_limits(request, control, limits)` for caller-selected limits.
 The blanket implementation cannot be overridden by an adapter; explicit calls to
 `handle_pull_source` bypass its checks. Local checked failures are `PullError`.
@@ -58,9 +58,13 @@ according to the application's disclosure policy.
 `PullResult::validate_for` also checks an already supplied result and returns the
 prospective conformant document. That establishes core conformance, not offered
 schema identity behind a reuse claim, faithful execution, live availability,
-change judgments or dependency closure inside opaque kind data. A caller adopts
-a chosen dependency-closed subset or applies permitted proposal fields through
-explicit document edits, then revalidates that edited snapshot.
+change judgments or needs hidden in binding data. To keep part of a pull, a
+caller inserts the chosen bindings, their operations when added, and what their
+`uses` names. Follow schema references to further additions, including references
+through existing entries. Each reached added binding brings its own operation
+and `uses`. Repeat until nothing new comes in, then validate the edited snapshot.
+Apply permitted proposal fields through explicit edits and follow their schema
+references and binding data `uses` the same way.
 
 `PullLimits` defaults to 32 MiB request/response handoffs, 100,000 indexed entries
 and uses labels, 64 million relationship work units and 64 MiB cumulative
@@ -74,26 +78,27 @@ errors are not measured as JSON; exact context challenges are.
 
 The work default supports the intended 10,000-item catalog workflow while staying
 finite. Its checked B-tree search accounting follows the supported Rust node
-fanout, rather than a binary-tree height. Before core reference closure was added,
-the measured catalog required 46,765,436 relationship work units and 48,471,232
-reserved bytes; the earlier
-20-million work policy refused it. This is an explicit SDK policy revision,
-not a specification requirement or a whole-call memory guarantee. Wider keys,
-denser relationships or larger catalogs may still require caller-selected limits.
+fanout. Wider keys, denser relationships or larger catalogs may require
+caller-selected limits. These allowances are SDK policy, not specification
+requirements or a whole-call memory guarantee.
 
 Binding proposals carry `data`, `input`, `output`, or a nonempty `remove` list
 naming the fields the kind would no longer write. Source proposals carry `data`
-or `remove: ["data"]`. Schema proposals carry `{schema, uses?}`. Omission leaves
+or `remove: ["data"]`. Schema proposals carry `{schema}`. Omission leaves
 a field unchanged; `data: null` sets null. Applying proposals remains the caller's
 explicit edit. Added entries carry a nonempty array of `lossy` disclosures when
 needed. Exhaustive reports carry no limitation.
 
-Dependency checks include core schema references in added operations, added
-schemas and proposed schemas, including references resolved by resource identity.
-Only a kind can establish dependencies inside its opaque data. Core reference
-inspection has its own bounded traversal; incomplete inspection fails validation.
+`uses` on an added entry names other additions the binding's data needs; on a
+binding proposal it names what the proposed `data` needs. A schema reference
+shows its own target and is left out. The list is not transitive. Each label is
+`<map>/<key>`, names an addition, appears once and does not name its own binding.
+Only the kind can establish needs hidden in binding data. Schema proposals have
+no `uses` accessor; an additional member with that name is retained as unknown
+metadata. Existing binding `references` name what the data refers to in the
+input document; follow schema references for what those entries reach in turn.
 
-Qualification includes the 37 pinned pull-report cases, five published examples,
+Qualification includes the 38 pinned pull-report cases, five published examples,
 74 independently designed controls and two illustrative kind consumers. The old
 inspection/synthesis companions and consumers are removed; full SDK integration
 and final performance qualification remain separate work.

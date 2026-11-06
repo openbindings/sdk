@@ -25,7 +25,7 @@
       "completePull": true
     },
     {
-      "description": "An added binding names its operation and every addition it uses, directly or through another; the source entry is reported current",
+      "description": "An added binding names its operation and the addition its data needs; what its schemas refer to shows in the additions; the source entry is reported current",
       "interface": {
         "openbindings": "0.2.0",
         "schemas": {
@@ -64,6 +64,14 @@
                 "type": "string"
               }
             }
+          },
+          "ApiError": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string"
+              }
+            }
           }
         },
         "operations": {
@@ -81,7 +89,8 @@
             "operation": "getUser",
             "source": "api",
             "data": {
-              "selector": "#/paths/~1users~1{id}/get"
+              "selector": "#/paths/~1users~1{id}/get",
+              "errors": "ApiError"
             }
           }
         }
@@ -93,8 +102,7 @@
             "binding": "getUser.api",
             "operation": "getUser",
             "uses": [
-              "schemas/User",
-              "schemas/Address"
+              "schemas/ApiError"
             ]
           }
         ],
@@ -290,7 +298,7 @@
       "completePull": true
     },
     {
-      "description": "A stale binding proposes an output schema and names the additions the proposal uses",
+      "description": "A stale binding proposes an output schema that refers to an addition",
       "interface": {
         "openbindings": "0.2.0",
         "operations": {
@@ -343,9 +351,72 @@
             "proposal": {
               "output": {
                 "$ref": "#/schemas/User"
+              }
+            }
+          }
+        ]
+      },
+      "schemaValid": true,
+      "completePull": true
+    },
+    {
+      "description": "A stale binding proposes data that needs an addition",
+      "interface": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "getUser": {
+            "output": {
+              "type": "object"
+            }
+          }
+        },
+        "sources": {
+          "api": {
+            "kind": "example.report@1",
+            "data": {
+              "location": "https://example.com/openapi.json"
+            }
+          }
+        },
+        "bindings": {
+          "getUser.api": {
+            "operation": "getUser",
+            "source": "api",
+            "data": {
+              "selector": "#/paths/~1users~1{id}/get"
+            }
+          }
+        }
+      },
+      "source": "api",
+      "additions": {
+        "schemas": {
+          "ApiError": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "report": {
+        "exhaustive": true,
+        "added": [],
+        "existing": [
+          {
+            "binding": "getUser.api",
+            "status": "stale",
+            "change": "non-breaking",
+            "message": "The binding now reads error bodies as ApiError.",
+            "proposal": {
+              "data": {
+                "selector": "#/paths/~1users~1{id}/get",
+                "errors": "ApiError"
               },
               "uses": [
-                "schemas/User"
+                "schemas/ApiError"
               ]
             }
           }
@@ -834,7 +905,7 @@
       "completePull": true
     },
     {
-      "description": "A stale schema's proposal names the additions it uses",
+      "description": "A stale schema's proposal refers to an addition",
       "interface": {
         "openbindings": "0.2.0",
         "schemas": {
@@ -904,10 +975,7 @@
                     "$ref": "#/schemas/TaskStatus"
                   }
                 }
-              },
-              "uses": [
-                "schemas/TaskStatus"
-              ]
+              }
             }
           }
         ]

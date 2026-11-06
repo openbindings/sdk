@@ -1,7 +1,7 @@
 # Pinned schema-comparison test inputs
 
 Interface-derived inputs target revision
-`5006884a39c055103fad49e7c47b3141726f8dd8`. The crate's tests and guide state the
+`3e3dc453a93b611a8e9ea1813ec63a2216830f45`. The crate's tests and guide state the
 supported interface/profile scope. Additional SDK controls are identified below;
 they are test evidence, not replacements for the pinned publication.
 

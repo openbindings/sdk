@@ -5,6 +5,14 @@ includes unfinished alignment work. It is not a merge, release, final whole-SDK
 qualification or completed-alignment claim. Continue on `codex/sdk-02-foundation`;
 existing unpublished APIs have no compatibility protection.
 
+The current interfaces pin is `3e3dc453a93b611a8e9ea1813ec63a2216830f45`.
+`uses` now names only additions needed by binding data; schema proposals carry
+`{schema}`. Source pulling retains label and prospective-document checks and
+removes closure inspection. Callers keeping part of a pull follow schema
+references and each reached added binding's operation and `uses`. Current
+fixtures cover 38 pull-report cases and five examples. The checkpoints below
+retain their historical pins, counts and implementation evidence.
+
 The latest [authored-pattern reuse checkpoint](alignment-checkpoint/authored-pattern-reuse/README.md)
 restores the preserved default expanded-pattern workloads. Independent current/minimum
 Rust review, the complete portable verifier, fresh Node/browser and installed-package
@@ -69,7 +77,7 @@ Comparison passes 14 ordinary and 10 exact identity groups, 64 independent contr
 Rust toolchains and Wasm builds pass for that companion. The 88 directional groups
 are outside its claim. These overlapping inventories are not additive coverage.
 
-## Source-pull implementation saved here
+## Historical source-pull implementation checkpoint
 
 `openbindings-source-pull` implements exact additions, reports, entries, proposals,
 original-document requests, provider/client APIs and offline result validation.

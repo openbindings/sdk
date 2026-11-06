@@ -15,7 +15,7 @@ fn checked(text: &str) -> ConformantDocument {
 }
 
 #[test]
-fn independent_74_design_controls_keep_their_original_classifications() {
+fn independent_74_design_controls_match_the_current_rules() {
     let pack = json(include_str!("fixtures/design-controls.json"));
     let cases = pack.get("cases").unwrap();
     assert_eq!(cases.len(), Some(74));
@@ -163,7 +163,7 @@ fn every_validation_cancellation_checkpoint_allows_an_independent_retry() {
         checked(r#"{"openbindings":"0.2.0","operations":{},"sources":{"s":{"kind":"example@1"}}}"#),
         "s",
     );
-    let result = PullResult::from_json(json(r#"{"additions":{"operations":{"a":{},"b":{}},"schemas":{"S":true},"bindings":{"a":{"source":"s","operation":"a"},"b":{"source":"s","operation":"b"}}},"report":{"exhaustive":true,"added":[{"binding":"a","operation":"a","uses":["bindings/b","operations/b","schemas/S"]},{"binding":"b","operation":"b","uses":["schemas/S"]}]}}"#)).unwrap();
+    let result = PullResult::from_json(json(r#"{"additions":{"operations":{"a":{},"b":{}},"schemas":{"S":true},"bindings":{"a":{"source":"s","operation":"a","data":{"needs":"b"}},"b":{"source":"s","operation":"b","data":{"needs":"S"}}}},"report":{"exhaustive":true,"added":[{"binding":"a","operation":"a","uses":["bindings/b"]},{"binding":"b","operation":"b","uses":["schemas/S"]}]}}"#)).unwrap();
     let baseline = Counter {
         calls: AtomicUsize::new(0),
         cancel_at: usize::MAX,
@@ -192,44 +192,26 @@ fn every_validation_cancellation_checkpoint_allows_an_independent_retry() {
 }
 
 #[test]
-fn core_references_close_uses_across_operations_schemas_and_resources() {
+fn additions_connected_by_schema_references_pass_without_uses() {
     let request = PullRequest::new(
         checked(r#"{"openbindings":"0.2.0","operations":{},"sources":{"s":{"kind":"k"}}}"#),
         "s",
     );
     for reference in ["#/schemas/A", "urn:example:A"] {
-        for (uses, valid) in [
-            (vec![], false),
-            (vec!["schemas/A"], false),
-            (vec!["schemas/A", "schemas/B"], true),
-        ] {
-            let value = serde_json::json!({"additions":{
-                "operations":{"o":{"input":{"$ref":reference}}},
-                "schemas":{"A":{"$id":"urn:example:A","$ref":"urn:example:B"},"B":{"$id":"urn:example:B","type":"string"}},
-                "bindings":{"b":{"operation":"o","source":"s","data":{"$ref":"#/schemas/opaque"}}}
-            },"report":{"exhaustive":true,"added":[{"binding":"b","operation":"o","uses":uses}]}});
-            let result = PullResult::from_json(json(&value.to_string())).unwrap();
-            let checked =
-                result.validate_for(&request, &PullLimits::default(), &AtomicBool::new(false));
-            if valid {
-                assert!(checked.is_ok(), "{checked:?}");
-            } else {
-                assert!(
-                    matches!(
-                        checked,
-                        Err(PullValidationError::Relationship(
-                            RelationshipError::UsesClosure
-                        ))
-                    ),
-                    "{checked:?}"
-                );
-            }
-        }
+        let value = serde_json::json!({"additions":{
+            "operations":{"o":{"input":{"$ref":reference}}},
+            "schemas":{"A":{"$id":"urn:example:A","$ref":"urn:example:B"},"B":{"$id":"urn:example:B","type":"string"}},
+            "bindings":{"b":{"operation":"o","source":"s"}}
+        },"report":{"exhaustive":true,"added":[{"binding":"b","operation":"o"}]}});
+        let result = PullResult::from_json(json(&value.to_string())).unwrap();
+        result
+            .validate_for(&request, &PullLimits::default(), &AtomicBool::new(false))
+            .unwrap();
     }
 }
 
 #[test]
-fn proposal_schema_references_and_their_uses_are_closed() {
+fn binding_and_schema_proposals_refer_to_additions_without_uses() {
     let request = PullRequest::new(
         checked(
             r#"{"openbindings":"0.2.0","operations":{"o":{}},"schemas":{"S":true},"sources":{"s":{"kind":"k"}},"bindings":{"b":{"operation":"o","source":"s"}}}"#,
@@ -237,80 +219,159 @@ fn proposal_schema_references_and_their_uses_are_closed() {
         "s",
     );
     for schema_proposal in [true, false] {
-        for (uses, valid) in [
-            (vec![], false),
-            (vec!["schemas/A"], false),
-            (vec!["schemas/A", "schemas/B"], true),
-        ] {
-            let mut proposal = serde_json::json!({"uses":uses});
-            proposal[if schema_proposal { "schema" } else { "input" }] =
-                serde_json::json!({"$ref":"#/schemas/A"});
-            let mut existing =
-                serde_json::json!({"status":"stale","change":"dangerous","proposal":proposal});
-            existing[if schema_proposal { "schema" } else { "binding" }] =
-                serde_json::json!(if schema_proposal { "S" } else { "b" });
-            let entries = if schema_proposal {
-                vec![
-                    existing,
-                    serde_json::json!({"binding":"b","status":"current"}),
-                ]
-            } else {
-                vec![existing]
-            };
-            let value = serde_json::json!({"additions":{"schemas":{"A":{"$ref":"#/schemas/B"},"B":true}},"report":{"exhaustive":true,"added":[],"existing":entries}});
-            let result = PullResult::from_json(json(&value.to_string())).unwrap();
-            let checked =
-                result.validate_for(&request, &PullLimits::default(), &AtomicBool::new(false));
-            assert_eq!(checked.is_ok(), valid, "{checked:?}");
-        }
+        let mut proposal = serde_json::json!({});
+        proposal[if schema_proposal { "schema" } else { "input" }] =
+            serde_json::json!({"$ref":"#/schemas/A"});
+        let mut existing =
+            serde_json::json!({"status":"stale","change":"dangerous","proposal":proposal});
+        existing[if schema_proposal { "schema" } else { "binding" }] =
+            serde_json::json!(if schema_proposal { "S" } else { "b" });
+        let entries = if schema_proposal {
+            vec![
+                existing,
+                serde_json::json!({"binding":"b","status":"current"}),
+            ]
+        } else {
+            vec![existing]
+        };
+        let value = serde_json::json!({"additions":{"schemas":{"A":{"$ref":"#/schemas/B"},"B":true}},"report":{"exhaustive":true,"added":[],"existing":entries}});
+        let result = PullResult::from_json(json(&value.to_string())).unwrap();
+        result
+            .validate_for(&request, &PullLimits::default(), &AtomicBool::new(false))
+            .unwrap();
     }
 }
 
 #[test]
-fn schema_proposal_may_use_an_added_binding_with_the_same_key() {
+fn schema_proposal_unknown_uses_has_no_relationship_meaning() {
     let request = PullRequest::new(
         checked(
             r#"{"openbindings":"0.2.0","operations":{},"schemas":{"S":true},"sources":{"s":{"kind":"k"}}}"#,
         ),
         "s",
     );
-    let result = PullResult::from_json(json(
-        r#"{
-        "additions":{"operations":{"o":{}},"bindings":{"S":{"operation":"o","source":"s"}}},
-        "report":{"exhaustive":true,"added":[{"binding":"S","operation":"o"}],
-            "existing":[{"schema":"S","status":"stale","change":"dangerous",
-                "proposal":{"schema":false,"uses":["bindings/S","operations/o"]}}]}
-    }"#,
-    ))
-    .unwrap();
-    result
-        .validate_for(&request, &PullLimits::default(), &AtomicBool::new(false))
-        .unwrap();
+    for uses in [
+        serde_json::json!(42),
+        serde_json::json!(["bindings/S", "missing", "missing"]),
+    ] {
+        let value = serde_json::json!({"additions":{},"report":{"exhaustive":true,"added":[],"existing":[{
+            "schema":"S","status":"stale","change":"dangerous","proposal":{"schema":false,"uses":uses}
+        }]}});
+        let result = PullResult::from_json(json(&value.to_string())).unwrap();
+        result
+            .validate_for(&request, &PullLimits::default(), &AtomicBool::new(false))
+            .unwrap();
+    }
 }
 
 #[test]
-fn core_reference_closure_follows_existing_entries_to_additions() {
+fn a_reference_through_an_existing_schema_needs_no_uses() {
     let request = PullRequest::new(
         checked(
             r##"{"openbindings":"0.2.0","operations":{},"schemas":{"A":{"$ref":"urn:example:B"}},"sources":{"s":{"kind":"k"}}}"##,
         ),
         "s",
     );
-    for (uses, valid) in [(vec![], false), (vec!["schemas/B"], true)] {
-        let value = serde_json::json!({"additions":{
-            "operations":{"o":{"input":{"$ref":"#/schemas/A"}}},
-            "schemas":{"B":{"$id":"urn:example:B","type":"string"}},
-            "bindings":{"b":{"operation":"o","source":"s"}}
-        },"report":{"exhaustive":true,"added":[{"binding":"b","operation":"o","uses":uses}]}});
-        let result = PullResult::from_json(json(&value.to_string())).unwrap();
-        let checked =
-            result.validate_for(&request, &PullLimits::default(), &AtomicBool::new(false));
-        assert_eq!(checked.is_ok(), valid, "{checked:?}");
+    let value = serde_json::json!({"additions":{
+        "operations":{"o":{"input":{"$ref":"#/schemas/A"}}},
+        "schemas":{"B":{"$id":"urn:example:B","type":"string"}},
+        "bindings":{"b":{"operation":"o","source":"s"}}
+    },"report":{"exhaustive":true,"added":[{"binding":"b","operation":"o"}]}});
+    let result = PullResult::from_json(json(&value.to_string())).unwrap();
+    result
+        .validate_for(&request, &PullLimits::default(), &AtomicBool::new(false))
+        .unwrap();
+}
+
+fn data_need_fixture(proposal: bool) -> (PullRequest, serde_json::Value) {
+    let mut document =
+        serde_json::json!({"openbindings":"0.2.0","operations":{},"sources":{"s":{"kind":"k"}}});
+    let mut value = serde_json::json!({"additions":{"schemas":{"ApiError":true}},"report":{"exhaustive":true,"added":[]}});
+    if proposal {
+        document["operations"] = serde_json::json!({"o":{}});
+        document["bindings"] = serde_json::json!({"b":{"source":"s","operation":"o"}});
+        value["report"]["existing"] = serde_json::json!([{"binding":"b","status":"stale","change":"dangerous","proposal":{"data":{"errors":"ApiError"}}}]);
+    } else {
+        value["additions"]["operations"] = serde_json::json!({"o":{}});
+        value["additions"]["bindings"] =
+            serde_json::json!({"b":{"source":"s","operation":"o","data":{"errors":"ApiError"}}});
+        value["report"]["added"] = serde_json::json!([{"binding":"b","operation":"o"}]);
+    }
+    (PullRequest::new(checked(&document.to_string()), "s"), value)
+}
+fn needs_entry(value: &mut serde_json::Value, proposal: bool) -> &mut serde_json::Value {
+    if proposal {
+        &mut value["report"]["existing"][0]["proposal"]
+    } else {
+        &mut value["report"]["added"][0]
     }
 }
 
 #[test]
-fn an_existing_operation_reference_follows_only_the_named_slot() {
+fn binding_data_uses_are_checked_for_added_entries_and_proposals() {
+    for proposal in [false, true] {
+        let (request, mut value) = data_need_fixture(proposal);
+        needs_entry(&mut value, proposal)["uses"] = serde_json::json!(["schemas/ApiError"]);
+        let result = PullResult::from_json(json(&value.to_string())).unwrap();
+        result
+            .validate_for(&request, &PullLimits::default(), &AtomicBool::new(false))
+            .unwrap();
+        for label in [
+            "schemas/Missing",
+            "bindings/b",
+            "#/schemas/ApiError",
+            "other/ApiError",
+        ] {
+            let mut invalid = value.clone();
+            needs_entry(&mut invalid, proposal)["uses"] = serde_json::json!([label]);
+            let result = PullResult::from_json(json(&invalid.to_string())).unwrap();
+            assert!(
+                matches!(
+                    result.validate_for(&request, &PullLimits::default(), &AtomicBool::new(false)),
+                    Err(PullValidationError::Relationship(RelationshipError::Uses))
+                ),
+                "{label}"
+            );
+        }
+        needs_entry(&mut value, proposal)["uses"] =
+            serde_json::json!(["schemas/ApiError", "schemas/ApiError"]);
+        assert!(matches!(
+            PullResult::from_json(json(&value.to_string())),
+            Err(CarrierError::DuplicateUse)
+        ));
+    }
+}
+
+#[test]
+fn published_valid_reports_pass_relationship_and_prospective_checks() {
+    let pack = json(include_str!("fixtures/pull-report.json"));
+    let mut passed = 0;
+    for case in pack.get("tests").unwrap().elements().unwrap() {
+        if case.get("schemaValid").unwrap().as_bool() != Some(true) {
+            continue;
+        }
+        let request = PullRequest::new(
+            checked(case.get("interface").unwrap().text()),
+            case.get("source").unwrap().as_str().unwrap(),
+        );
+        let value = json(&format!(
+            r#"{{"additions":{},"report":{}}}"#,
+            case.get("additions").unwrap().text(),
+            case.get("report").unwrap().text()
+        ));
+        let result = PullResult::from_json(value).unwrap();
+        result
+            .validate_for(&request, &PullLimits::default(), &AtomicBool::new(false))
+            .unwrap_or_else(|error| {
+                panic!("{}: {error:?}", case.get("description").unwrap().text())
+            });
+        passed += 1;
+    }
+    assert_eq!(passed, 27);
+}
+
+#[test]
+fn an_existing_operation_input_reference_passes_without_uses() {
     let request = PullRequest::new(
         checked(
             r##"{"openbindings":"0.2.0","operations":{"existing":{"input":true,"output":{"$ref":"urn:example:B"}}},"sources":{"s":{"kind":"k"}}}"##,

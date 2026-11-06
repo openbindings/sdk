@@ -28,6 +28,13 @@ Private compiler graphs, scalar bridge records and lookup indexes are implementa
 mechanisms, not additional public document models. Current interface implementations are Rust
 APIs; the TypeScript facade does not expose their provider protocols.
 
+For source pulling, `AddedEntry::uses` and `BindingProposal::uses` expose only
+additions needed by binding data. `SchemaProposal` exposes the replacement
+`schema`; an additional `uses` member is retained as unknown metadata. The
+checked pull validates labels and all additions together. A caller keeping part
+of a pull follows schema references and each reached added binding's operation
+and `uses`, as the [adapter guide](writing-a-kind.md#what-goes-in-uses) explains.
+
 ## Exact documents and conformance
 
 | Operation | Contract |

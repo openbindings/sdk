@@ -3530,7 +3530,7 @@
       "note": ""
     },
     {
-      "id": "uses-may-redundantly-name-own-added-operation",
+      "id": "binding-data-may-need-own-added-operation",
       "request": {
         "interface": {
           "openbindings": "0.2.0",
@@ -3560,7 +3560,8 @@
               "operation": "getUser",
               "source": "api",
               "data": {
-                "selector": "#/paths/~1users~1{id}/get"
+                "selector": "#/paths/~1users~1{id}/get",
+                "operationSchema": "getUser"
               }
             }
           }
@@ -3588,11 +3589,11 @@
         }
       },
       "expected": "accept",
-      "authority": "source-puller/README.md:123-128",
-      "note": "The operation is another addition, already inserted implicitly; no duplicate label or self-binding."
+      "authority": "source-puller/0.1.json#/schemas/PullUses",
+      "note": "The binding data needs the operation addition as well; this is a distinct addition, not the binding itself."
     },
     {
-      "id": "report-to-report-closed-uses",
+      "id": "binding-data-needs-another-binding",
       "request": {
         "interface": {
           "openbindings": "0.2.0",
@@ -3617,11 +3618,82 @@
           "bindings": {
             "a": {
               "operation": "a",
-              "source": "api"
+              "source": "api",
+              "data": {
+                "needs": "b"
+              }
             },
             "b": {
               "operation": "b",
-              "source": "api"
+              "source": "api",
+              "data": {
+                "needs": "S"
+              }
+            }
+          }
+        },
+        "report": {
+          "exhaustive": true,
+          "added": [
+            {
+              "binding": "a",
+              "operation": "a",
+              "uses": [
+                "bindings/b"
+              ]
+            },
+            {
+              "binding": "b",
+              "operation": "b",
+              "uses": [
+                "schemas/S"
+              ]
+            }
+          ]
+        }
+      },
+      "expected": "accept",
+      "authority": "source-puller/0.1.json#/schemas/PullAddedEntry",
+      "note": "Each binding lists only its own data needs; the caller follows the other binding's operation and uses."
+    },
+    {
+      "id": "binding-data-use-does-not-repeat-the-other-operation",
+      "request": {
+        "interface": {
+          "openbindings": "0.2.0",
+          "operations": {},
+          "sources": {
+            "api": {
+              "kind": "example.review@1"
+            }
+          }
+        },
+        "source": "api"
+      },
+      "result": {
+        "additions": {
+          "operations": {
+            "a": {},
+            "b": {}
+          },
+          "schemas": {
+            "S": {}
+          },
+          "bindings": {
+            "a": {
+              "operation": "a",
+              "source": "api",
+              "data": {
+                "needs": "b",
+                "schema": "S"
+              }
+            },
+            "b": {
+              "operation": "b",
+              "source": "api",
+              "data": {
+                "needs": "S"
+              }
             }
           }
         },
@@ -3633,7 +3705,6 @@
               "operation": "a",
               "uses": [
                 "bindings/b",
-                "operations/b",
                 "schemas/S"
               ]
             },
@@ -3648,11 +3719,11 @@
         }
       },
       "expected": "accept",
-      "authority": "source-puller/README.md:123-128",
-      "note": ""
+      "authority": "source-puller/0.1.json#/schemas/PullAddedEntry",
+      "note": "PullAddedEntry: the caller follows an added binding's own operation and uses; uses is not transitive."
     },
     {
-      "id": "report-to-report-missing-operations-b",
+      "id": "binding-data-use-does-not-repeat-the-other-uses",
       "request": {
         "interface": {
           "openbindings": "0.2.0",
@@ -3677,70 +3748,18 @@
           "bindings": {
             "a": {
               "operation": "a",
-              "source": "api"
+              "source": "api",
+              "data": {
+                "needs": "b",
+                "operation": "b"
+              }
             },
             "b": {
               "operation": "b",
-              "source": "api"
-            }
-          }
-        },
-        "report": {
-          "exhaustive": true,
-          "added": [
-            {
-              "binding": "a",
-              "operation": "a",
-              "uses": [
-                "bindings/b",
-                "schemas/S"
-              ]
-            },
-            {
-              "binding": "b",
-              "operation": "b",
-              "uses": [
-                "schemas/S"
-              ]
-            }
-          ]
-        }
-      },
-      "expected": "reject-relationship",
-      "authority": "source-puller/README.md:123-128",
-      "note": "A needs B, including B's added operation and already-declared dependency closure."
-    },
-    {
-      "id": "report-to-report-missing-schemas-S",
-      "request": {
-        "interface": {
-          "openbindings": "0.2.0",
-          "operations": {},
-          "sources": {
-            "api": {
-              "kind": "example.review@1"
-            }
-          }
-        },
-        "source": "api"
-      },
-      "result": {
-        "additions": {
-          "operations": {
-            "a": {},
-            "b": {}
-          },
-          "schemas": {
-            "S": {}
-          },
-          "bindings": {
-            "a": {
-              "operation": "a",
-              "source": "api"
-            },
-            "b": {
-              "operation": "b",
-              "source": "api"
+              "source": "api",
+              "data": {
+                "needs": "S"
+              }
             }
           }
         },
@@ -3765,9 +3784,9 @@
           ]
         }
       },
-      "expected": "reject-relationship",
-      "authority": "source-puller/README.md:123-128",
-      "note": "A needs B, including B's added operation and already-declared dependency closure."
+      "expected": "accept",
+      "authority": "source-puller/0.1.json#/schemas/PullAddedEntry",
+      "note": "PullAddedEntry: the caller follows an added binding's own operation and uses; uses is not transitive."
     },
     {
       "id": "unbound-added-operation-is-not-extra-report",
@@ -4072,7 +4091,7 @@
       "note": ""
     },
     {
-      "id": "unlisted-schema-dependency-is-producer-claim-gap",
+      "id": "schema-references-need-no-uses",
       "request": {
         "interface": {
           "openbindings": "0.2.0",
@@ -4153,9 +4172,9 @@
           ]
         }
       },
-      "expected": "reject-relationship",
-      "authority": "source-puller/README.md:123-128",
-      "note": "PullAddedEntry uses must include every addition needed through core schema references."
+      "expected": "accept",
+      "authority": "source-puller/0.1.json#/schemas/PullUses",
+      "note": "PullUses: a schema reference shows its own target and is left out."
     },
     {
       "id": "unknown-change-judgment-is-dangerous",

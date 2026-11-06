@@ -8,13 +8,11 @@ impl PullResult {
     /// Check request/result relationships and validate a new snapshot containing
     /// all additions. The original is immutable; stale proposals are not applied.
     /// This proof covers core conformance only, not a kind's fidelity, reuse,
-    /// change classifications, opaque dependency closure or exhaustiveness claims.
+    /// change classifications, binding data needs or exhaustiveness claims.
     ///
     /// The returned document retains the original JSON admission limits. The
-    /// fixed core edit, validation and inspection passes of a pull stay within the
-    /// document limits and do not spend the relationship ledger; each repeat that
-    /// colliding proposals force does. Cancellation is checked between passes and
-    /// during reference inspection.
+    /// core edit and validation passes stay within the document limits and do not
+    /// spend the relationship ledger. Cancellation is checked between passes.
     pub fn validate_for(
         &self,
         request: &PullRequest,
@@ -85,6 +83,5 @@ pub(crate) fn validate(
     let prospective = validation
         .conformant()
         .ok_or(Failure::Prospective(validation))?;
-    crate::core_uses::check(request, result, &prospective, attempt)?;
     Ok(prospective)
 }

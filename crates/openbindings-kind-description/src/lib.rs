@@ -19,4 +19,4 @@ pub use queries::{
 /// Version of the adopted kind-descriptor interface, independent of SDK version.
 pub const INTERFACE_VERSION: &str = "0.1.0";
 /// Exact interface publication used by this companion.
-pub const APPLIED_INTERFACE_REVISION: &str = "5006884a39c055103fad49e7c47b3141726f8dd8";
+pub const APPLIED_INTERFACE_REVISION: &str = "3e3dc453a93b611a8e9ea1813ec63a2216830f45";

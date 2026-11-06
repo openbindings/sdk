@@ -5,7 +5,9 @@ crate in stages. `example.memory@1` is a fictional in-memory protocol: source
 data is exactly `{"channel":"local"}`, binding data is exactly
 `{"mode":"echo"}`, and each input is returned unchanged until input closes.
 It has no transport, network, threads or file access. Its fixed inventory offers
-`echo` without input or output schemas.
+`echo` without input or output schemas. Its binding data needs no other
+additions, so added entries and binding proposals omit `uses`. Schema references,
+when present in another kind, show their own targets and belong outside `uses`.
 
 `Memory` implements binding invocation, advisory preflight, kind description and
 source pull. It does not offer source checking. The pull handles repeated calls,

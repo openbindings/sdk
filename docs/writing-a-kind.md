@@ -15,7 +15,7 @@ The SDK supplies checked calls and exact JSON. It supplies no transport,
 credential store, adapter registry or automatic retry policy.
 
 This page targets the current unpublished `0.2.0-alpha.1` SDK and its interface
-revision `5006884a39c055103fad49e7c47b3141726f8dd8`. The document model is
+revision `3e3dc453a93b611a8e9ea1813ec63a2216830f45`. The document model is
 OpenBindings 0.2. The [example crate](../examples/kind-adapter/README.md) contains
 every Rust block below, with tests. Its fictional in-memory protocol needs no
 network. It builds for native Rust and `wasm32-unknown-unknown`.
@@ -666,7 +666,7 @@ Binding proposals can change binding `data` and the operation's `input` and
 `output`, or remove those slots with a nonempty `remove` array. Source proposals
 can replace `data` or remove it with `remove: ["data"]`. A field cannot be set
 and removed in the same proposal. Omission leaves a field unchanged; `data:null`
-sets JSON null. Schema proposals carry `{schema, uses?}`. A proposal cannot
+sets JSON null. Schema proposals carry `{schema}`. A proposal cannot
 overwrite author-owned descriptions, aliases, preferences, idempotence or other
 annotations. Retained unknown metadata has no edit authority.
 
@@ -683,32 +683,55 @@ and disclosed losses do not make that condition false. The application can
 require more. Completion is a producer claim, not proof of availability or
 truthfulness.
 
-### The current draft's uses lists
+### What goes in `uses`
 
-Currently `uses` lists other additions needed directly or transitively, using
-`schemas/<key>`, `operations/<key>` and `bindings/<key>`. The added binding and
-its newly added operation are implicit when adopting that entry. Proposal lists
-state their required additions too. The SDK checks labels, known report closure
-and core schema-reference closure; only the kind can expose dependencies hidden
-in opaque data. Existing binding entries use `references` to disclose dependencies
-in the original document. These are the current draft's rules. The `uses` rule
-is under review; recheck the pinned interface when updating an adapter.
+On an added entry, `uses` lists the other additions the binding's data needs.
+On a binding proposal, it lists the additions the proposed `data` needs. Use
+`schemas/<key>`, `operations/<key>` or `bindings/<key>` labels, each naming an
+addition, without duplicates or the binding itself. Only the kind can read those
+needs inside binding data. List those needs and nothing else. Do not list what
+a schema reference shows, and do not repeat what another addition needs in turn.
+
+For example, if binding data names `ApiError`, list `schemas/ApiError`. If the
+operation's output refers to `User`, and `User` refers to `Address`, leave both
+out of `uses`. Their references already show the targets. A schema proposal is
+`{schema}` and has no list of needs. An addition may exist for a proposal even
+when no added binding needs it.
+
+To keep part of a pull:
+
+1. Choose the `added` entries to keep and insert their bindings.
+2. Insert each binding's operation when it is an addition, and the additions
+   its `uses` names.
+3. Follow schema references from what you keep. Insert each target that is an
+   addition. Follow references through existing entries too.
+4. For every added binding reached along the way, insert its operation when
+   added and what its own `uses` names. Repeat until nothing new comes in.
+5. Validate the edited document before adopting it.
+
+When applying a proposal, copy its permitted fields and remove what `remove`
+names. Start the same steps from its proposed schemas and, for a binding
+proposal, what its `uses` names. Retaining unknown proposal metadata gives it no
+edit authority.
+
+Existing binding entries use `references` to name what their data refers to in
+the input document. That list also leaves out what schema references show in
+turn. Follow those references to understand which changes reach the binding.
 
 ### What the SDK checks
 
 `PullResult::from_json` checks carrier structure and local field relationships.
 `pull_source` then checks request/source existence, handoff and relationship
 limits, new keys, source attribution, added coverage, existing binding coverage,
-primary operation keys, reuse placement, uses labels and known closure. It also
+primary operation keys, reuse placement and uses labels. It also
 builds a prospective document with every addition and validates core conformance.
-Core-reference inspection has bounded traversal and incomplete inspection fails
-validation. It never applies stale proposals or changes the original document.
+It never applies stale proposals or changes the original document.
 
 It does not prove source exhaustiveness, faithful projection, schema identity
-behind reuse, change judgments or dependencies hidden in kind data. It does not
-reject every unused operation or schema addition; keep your report and additions
-honest and test for orphan output yourself. Core conformance alone does not
-establish those kind-owned claims.
+behind reuse, change judgments or needs hidden in binding data. It does not
+reject every unused operation or schema addition; an addition can serve a
+proposal without an added binding. Keep the report and additions honest. Core
+conformance alone does not establish those kind-owned claims.
 
 `PullResult::validate_for` performs the same validation for a supplied result
 without dispatching a pull. It returns the prospective conformant document,
@@ -829,7 +852,7 @@ Run both native and Wasm builds and exercise any actual host transport separatel
 - Build for Wasm, then verify the host imports and local-future requirements.
 
 For the full current contracts, read the pinned
-[binding invocation](https://github.com/openbindings/interfaces/blob/5006884a39c055103fad49e7c47b3141726f8dd8/binding-invoker/README.md),
-[kind description](https://github.com/openbindings/interfaces/blob/5006884a39c055103fad49e7c47b3141726f8dd8/kind-descriptor/README.md) and
-[source pull](https://github.com/openbindings/interfaces/blob/5006884a39c055103fad49e7c47b3141726f8dd8/source-puller/README.md)
+[binding invocation](https://github.com/openbindings/interfaces/blob/3e3dc453a93b611a8e9ea1813ec63a2216830f45/binding-invoker/README.md),
+[kind description](https://github.com/openbindings/interfaces/blob/3e3dc453a93b611a8e9ea1813ec63a2216830f45/kind-descriptor/README.md) and
+[source pull](https://github.com/openbindings/interfaces/blob/3e3dc453a93b611a8e9ea1813ec63a2216830f45/source-puller/README.md)
 publications. Interface and SDK versions are independent.

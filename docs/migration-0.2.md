@@ -2,7 +2,7 @@
 
 This unpublished migration targets specification
 `c1419c9fc3ae5a00c2b83da710c11bf67dab7934` and interfaces
-`5006884a39c055103fad49e7c47b3141726f8dd8` on
+`3e3dc453a93b611a8e9ea1813ec63a2216830f45` on
 `codex/sdk-02-foundation`. Existing APIs and module boundaries remain replaceable.
 There is no compatibility requirement for the earlier SDK.
 
@@ -98,10 +98,19 @@ The normative inputs and full alignment map are retained in the adjacent
 `sdk-migration` coordination repository. No release, merge or completed-alignment
 claim is implied by this checkpoint.
 
-The 2026-11-06 interface repin applies removal proposals, wrapped schema proposals,
+The current interfaces rule makes `uses` a list of additions needed by binding
+data only. Schema proposals carry `{schema}`. The SDK checks label shape,
+existence, uniqueness and self labels, and validates all additions together;
+it no longer checks report or schema-reference closure. A caller keeping part
+of a pull follows schema references and each reached binding's operation and
+`uses`. The published pull-report corpus now has 38 cases, with 15 kind
+descriptor cases and five source-puller examples unchanged in count. The
+specification pin and historical alignment records are unchanged.
+
+The earlier 2026-11-06 interface repin applied removal proposals, wrapped schema proposals,
 multiple losses, unassessed entries and their complete-pull condition. Core schema
-references participate in the uses closure. All 37 pull-report cases, 15 kind
-descriptor cases and five source-puller examples use the new publication bytes.
+references then participated in the uses closure. Its 37 pull-report cases, 15
+kind descriptor cases and five source-puller examples used that publication.
 Comparison retains nullable outside the profile, conjoins reference siblings,
 resolves schema resource bases, keeps needed definitions and preserves allOf
 branches whose merge would loosen a closed branch or involve a union. The

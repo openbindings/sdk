@@ -27,6 +27,14 @@ compares as exact JSON. Removed operation schemas produce removal proposals;
 unfinished comparisons produce explicit omissions or unassessed entries. Each pull
 suspends once, exercising caller-owned async work without an SDK async runtime.
 The consumer explicitly adopts additions or applies proposals and revalidates.
+Its binding data selects source items and needs no other additions, so the
+reconciler emits no `uses`. Schema references show their own targets.
+
+To keep part of a pull, choose added bindings, insert their operations when added
+and what their `uses` names, then follow schema references to further additions.
+Each reached added binding brings its own operation and `uses`. Repeat until
+nothing new comes in and validate the edited document. The selective-adoption
+test follows an operation's input reference without a hand-written `uses` list.
 
 Run `python3 tools/verify-source-pull.py` from the SDK root; add `--archives --wasm`
 to qualify extracted dependencies and the local TypeScript/Node async Wasm bridge.
