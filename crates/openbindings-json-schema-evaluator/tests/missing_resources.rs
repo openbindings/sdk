@@ -44,6 +44,60 @@ fn verdict(outcome: ValueOutcome) -> char {
         other => panic!("{other:?}"),
     }
 }
+
+#[test]
+fn unavailable_resources_keep_the_original_reference_location() {
+    for external in [
+        None,
+        Some(r#"{"allOf":[{"$ref":"missing"},{"type":"integer"}]}"#),
+    ] {
+        let document = Document::parse(r#"{"openbindings":"0.2.0","operations":{"op":{"input":{"$ref":"https://example.test/a"}}}}"#)
+            .unwrap().validate().unwrap().conformant().unwrap();
+        let resources = ExternalSchemas::new(external.map(|text| ExternalSchema {
+            uri: "https://example.test/a".into(),
+            document: JsonValue::parse(text).unwrap(),
+        }))
+        .unwrap();
+        let prepared = document
+            .operation("op")
+            .unwrap()
+            .input()
+            .unwrap()
+            .prepare(
+                &DefaultEvaluator::new(),
+                &resources,
+                &PreparationLimits::default(),
+            )
+            .unwrap();
+        let value = JsonValue::parse("1").unwrap();
+        for outcome in [prepared.evaluate(&value), prepared.explain(&value)] {
+            let ValueOutcome::NoVerdict { detail } = outcome else {
+                panic!("expected no verdict")
+            };
+            assert_eq!(detail.reason, NoVerdictReason::ResourceUnavailable);
+            let location = detail.location.unwrap();
+            if external.is_some() {
+                assert_eq!(
+                    location.source_uri.as_deref(),
+                    Some("https://example.test/a")
+                );
+                assert_eq!(location.pointer, "/allOf/0/$ref");
+                assert_eq!(
+                    resources.locate(&location).unwrap().pointer,
+                    Some(location.pointer)
+                );
+            } else {
+                assert_eq!(location.source_uri, None);
+                assert_eq!(location.pointer, "/operations/op/input/$ref");
+                assert_eq!(
+                    document.locate(&location).unwrap().pointer,
+                    Some(location.pointer)
+                );
+            }
+            assert!(!detail.message.contains('1'));
+        }
+    }
+}
 const COMPLETIONS: [&str; 18] = [
     "true",
     "false",

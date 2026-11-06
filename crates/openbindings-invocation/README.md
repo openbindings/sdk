@@ -83,6 +83,12 @@ output continues. Terminal completion suppresses an undelivered closure notice.
 Committed values precede the terminal; an output value alone never establishes
 success. Cancellation and failure promise no rollback.
 
+Successful input `send` acknowledges queue acceptance. Retain `call.control()`
+before splitting, or obtain `output.control()`, to read `undelivered_inputs()`:
+`None` while unsettled, then `Some(count)` of accepted inputs never returned to
+the provider by a receive operation. The count is stable after completion,
+error or cancellation; delivery alone does not establish processing.
+
 Providers may split `ProviderIo` into independently polled input/output handles.
 Both input and output implement bounded handoff, and input also implements
 `futures_core::Stream`. Invalid operation input never becomes a clean EOF.

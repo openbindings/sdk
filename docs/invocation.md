@@ -75,6 +75,13 @@ streaming input submission and output consumption concurrently. Dropping a pendi
 input send does not submit its value. Dropping a pending output read releases that
 caller's wake registration while keeping the invocation reusable.
 
+A successful `send` acknowledges acceptance, not delivery to the provider.
+Keep `let control = call.control()` before splitting, or use `output.control()`.
+After the invocation ends, `control.undelivered_inputs()` returns `Some(count)`
+for accepted values never returned by a provider receive, including on `Complete`,
+error or cancellation. It returns `None` while the invocation is unsettled.
+Delivery alone does not establish processing or effects.
+
 Caller input closure drains previously accepted values. Provider input closure
 declines further values and may emit `InputClosed` while output continues. Terminal
 settlement suppresses an undelivered closure notice. Invalid operation input never

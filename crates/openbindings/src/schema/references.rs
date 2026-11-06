@@ -131,6 +131,9 @@ pub struct ReferenceRefusal {
     pub message: String,
     /// Original schema location, when established.
     pub location: Option<SchemaOrigin>,
+    /// Resolved identity of an unavailable resource, when that is the cause.
+    /// This is source-controlled URI text; inspection never fetches it.
+    pub resource_uri: Option<String>,
 }
 impl std::fmt::Debug for ReferenceRefusal {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -183,6 +186,10 @@ fn reference_refusal(f: embedding::Failure) -> ReferenceRefusal {
         code: f.code.into_owned(),
         message: f.message.into_owned(),
         location: f.location.map(crate::schema::evaluation::original_location),
+        resource_uri: match f.query_failure.as_deref() {
+            Some(embedding::QueryFailure::ResourceUnavailable(uri)) => Some(uri.clone()),
+            _ => None,
+        },
     }
 }
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -260,8 +267,9 @@ impl Document {
     pub fn references(&self) -> ReferenceReport {
         self.references_with_resources(ExternalSchemas::default(), &crate::control::NeverCancelled)
     }
-    /// Inspect the draft plus an immutable supplied resource set. The report is
-    /// diagnostic evidence, not a canonical domain view or a prepared schema.
+    /// Inspect the draft and supplied resources reached by its references,
+    /// transitively, within the report's traversal limits. Unreached supplied
+    /// resources are omitted. This is diagnostic evidence, not preparation.
     pub fn references_with_resources(
         &self,
         resources: ExternalSchemas,
@@ -305,6 +313,7 @@ impl Document {
                     code: code.into(),
                     message: message.into(),
                     location: None,
+                    resource_uri: None,
                 }),
             };
         }
@@ -317,7 +326,8 @@ impl ConformantDocument {
     pub fn references(&self) -> ReferenceReport {
         self.references_with_resources(ExternalSchemas::default(), &crate::control::NeverCancelled)
     }
-    /// Inspect references using an immutable supplied resource set and control.
+    /// Inspect references in the document and transitively reached supplied
+    /// resources, within the report's traversal limits, without fetching content.
     pub fn references_with_resources(
         &self,
         resources: ExternalSchemas,

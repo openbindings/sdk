@@ -17,9 +17,8 @@ pub fn initialize_runtime() {
 fn encoded(value: impl serde::Serialize) -> String {
     serde_json::to_string(&value).expect("SDK metadata is serializable")
 }
-// JSON text for named fields, written without a `serde_json::Value` tree,
-// which cannot hold a pointer through a member name with an unpaired unit;
-// such a pointer serializes as an exact escape. Keys are given in order.
+// JSON text for named fields. Exact pointer fields use the private adapter
+// explicitly; ordinary SDK serialization always produces scalar strings.
 macro_rules! object {
     ($($key:literal: $value:expr),* $(,)?) => {{
         let mut text = String::from("{");
@@ -35,6 +34,8 @@ macro_rules! object {
         text
     }};
 }
+mod exact;
+
 // A schema location as exact JSON text, so its pointer keeps unpaired units.
 fn schema_location(text: &str) -> Result<SchemaOrigin, JsValue> {
     let invalid = || {
@@ -160,7 +161,7 @@ impl WasmJson {
             .ok()
             .and_then(|text| openbindings_internal_json::backend::string_pointer(text.view()))
             .ok_or_else(|| error("invalid-pointer", "expected an RFC 6901 pointer"))?;
-        Ok(encoded(self.value.locate(&pointer)))
+        Ok(encoded(exact::json(&self.value.locate(&pointer))))
     }
     pub fn get(&self, name: &str) -> Option<WasmJson> {
         self.value.get(name).map(|v| Self {
@@ -171,7 +172,7 @@ impl WasmJson {
         object!(
             "duplicate_names": self.value.has_duplicate_names(),
             "kind": format!("{:?}", self.value.kind()).to_lowercase(),
-            "location": self.value.location(),
+            "location": exact::json(&self.value.location()),
         )
     }
     pub fn members(&self) -> Option<WasmMembers> {
@@ -478,11 +479,12 @@ impl WasmDocument {
         }
     }
     pub fn references(&self, resources: &WasmResources, cancelled: bool) -> String {
-        encoded(
-            self.handle
+        encoded(exact::json(
+            &self
+                .handle
                 .document()
                 .references_with_resources(resources.resources.clone(), &control(cancelled)),
-        )
+        ))
     }
 }
 /// Evidence and single-use proof transfer tied to the same Rust snapshot.
@@ -502,7 +504,7 @@ impl std::fmt::Debug for WasmDocumentValidation {
 impl WasmDocumentValidation {
     pub fn report(&self) -> String {
         match self.handle.document().validate() {
-            Ok(v) => object!("report": v.report(), "status": "report"),
+            Ok(v) => object!("report": exact::json(v.report()), "status": "report"),
             Err(e) => encoded(json!({"status":"version-refused", "refusal":e})),
         }
     }
@@ -578,7 +580,9 @@ impl WasmConformantDocument {
     /// Locate a schema location, given as exact JSON text, in this document.
     pub fn locate(&self, location: &str) -> Result<String, JsValue> {
         let proof = self.handle.proof("document-conformance")?;
-        Ok(encoded(proof.locate(&schema_location(location)?)))
+        Ok(encoded(exact::json(
+            &proof.locate(&schema_location(location)?),
+        )))
     }
     pub fn openbindings(&self) -> Result<String, JsValue> {
         Ok(encoded(
@@ -1105,7 +1109,9 @@ impl WasmResources {
     }
     /// Locate a schema location, given as exact JSON text, in these resources.
     pub fn locate(&self, location: &str) -> Result<String, JsValue> {
-        Ok(encoded(self.resources.locate(&schema_location(location)?)))
+        Ok(encoded(exact::json(
+            &self.resources.locate(&schema_location(location)?),
+        )))
     }
 }
 impl Default for WasmResources {
@@ -1225,7 +1231,7 @@ impl WasmPreparation {
     pub fn result(&self) -> String {
         match &self.preparation {
             Some(Ok(_)) => encoded(json!({"status":"ready"})),
-            Some(Err(failure)) => object!("failure": failure, "status": "refused"),
+            Some(Err(failure)) => object!("failure": exact::json(failure), "status": "refused"),
             None => encoded(json!({"status":"consumed"})),
         }
     }
@@ -1250,22 +1256,24 @@ impl std::fmt::Debug for WasmPrepared {
 #[wasm_bindgen]
 impl WasmPrepared {
     pub fn evaluate(&self, value: &WasmJson, cancelled: bool) -> String {
-        encoded(
-            self.prepared
+        encoded(exact::json(
+            &self
+                .prepared
                 .evaluate_with_control(&value.value, &control(cancelled)),
-        )
+        ))
     }
     pub fn explain(&self, value: &WasmJson, cancelled: bool) -> String {
-        encoded(
-            self.prepared
+        encoded(exact::json(
+            &self
+                .prepared
                 .explain_with_control(&value.value, &control(cancelled)),
-        )
+        ))
     }
     #[wasm_bindgen(js_name=evaluateJson)]
     pub fn evaluate_json(&self, bytes: &[u8], cancelled: bool) -> Result<String, JsValue> {
         self.prepared
             .evaluate_json_with_control(bytes, &control(cancelled))
-            .map(encoded)
+            .map(|outcome| encoded(exact::json(&outcome)))
             .map_err(input_error)
     }
     /// As [`Self::evaluate_json`], for text encoded into module memory directly.
@@ -1291,7 +1299,7 @@ pub fn validate_bytes(bytes: Vec<u8>, limits: Option<Vec<u32>>) -> Result<String
         Some(limits) => validate_document_owned_with_limits(bytes, admission(&limits)?),
     };
     Ok(match validation {
-        Ok(a) => object!("report": a.report(), "status": "report"),
+        Ok(a) => object!("report": exact::json(a.report()), "status": "report"),
         Err(e) => encoded(json!({"status":"version-refused","refusal":e})),
     })
 }
@@ -1365,7 +1373,7 @@ impl WasmDiscovery {
     pub fn result(&self) -> String {
         match &self.validation {
             Ok(validation) => object!(
-                "report": validation.report(),
+                "report": exact::json(validation.report()),
                 "status": match validation.report().conclusion {
                     Conformance::Conformant => "found",
                     Conformance::NonConformant => "non-conformant",

@@ -54,6 +54,12 @@ fn unavailable_annotation_source_retains_its_resolution_cause() {
         panic!("missing content can change validity and annotations");
     };
     assert_eq!(detail.reason, NoVerdictReason::ResourceUnavailable);
-    // No invented source coordinate for a resource that was never supplied.
-    assert!(detail.location.is_none());
+    // The diagnostic names the original reference, not the missing content.
+    assert_eq!(
+        detail.location,
+        Some(SchemaOrigin::new(
+            None,
+            "/operations/run/input/$ref".parse().unwrap(),
+        ))
+    );
 }

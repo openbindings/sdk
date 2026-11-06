@@ -1,5 +1,10 @@
 # Independent direct exact-pointer correction
 
+Serialization update (2026-11-05): the observations below describe the earlier
+exact JSON encoding. Default Rust `Pointer::Serialize` now replaces each unpaired
+unit with U+FFFD. Stored units and lookup remain exact; the private Wasm metadata
+encoder preserves exact JavaScript pointers. See [the API guide](../api-reference.md).
+
 **PASS for the bounded pointer correction.** No correctness, ownership or allocation blocker was found. This does not qualify Explain witness propagation/materialization or the separate VM construction certificate.
 
 Reviewed `raw.rs::exact_pointer_from`, the private `Pointer::from_escaped_unpaired_units` constructor, new native controls and the actual TypeScript/browser probe. Production source and linked library identities are in `source-hashes.json`; production was not edited.

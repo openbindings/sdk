@@ -214,10 +214,9 @@ pub enum JsonKind {
 /// byte B` when there is no pointer or it is a root's empty pointer. The column
 /// counts UTF-8 bytes. Pointers are source-controlled text: quote them for display.
 ///
-/// Serialization writes JSON text. A pointer through a member name with an
-/// unpaired UTF-16 unit is written with an escape that no `serde_json::Value`
-/// can hold, so `serde_json::to_value` refuses such a location (`json!` panics);
-/// serialize with `serde_json::to_string` or `to_writer`.
+/// Serialization writes pointer fields as ordinary JSON strings, replacing
+/// unpaired UTF-16 units with U+FFFD. Stored pointers stay exact for locating
+/// and editing.
 ///
 /// Later versions may add fields: read them by name and match with `..`.
 #[derive(Clone, PartialEq, Eq, Serialize)]
@@ -955,7 +954,7 @@ mod tests {
         );
         assert_eq!(
             serde_json::to_string(&unpaired.location()).unwrap(),
-            r#"{"pointer":"/\ud800","byte_offset":29,"line":3,"byte_column":12}"#
+            r#"{"pointer":"/�","byte_offset":29,"line":3,"byte_column":12}"#
         );
     }
     #[test]

@@ -100,6 +100,40 @@ fn a_root_failure_displays_its_coordinates_without_the_empty_pointer() {
 }
 
 #[test]
+fn attacker_controlled_member_names_are_safe_in_error_responses() {
+    let document = document(r#"{"additionalProperties":{"type":"string"}}"#);
+    let contract = contract(&document, &ExternalSchemas::default());
+    let value = JsonValue::parse(r#"{"\ud800":1}"#).unwrap();
+    let outcome = contract.explain(&value);
+    let ValueOutcome::Fails { problems, .. } = &outcome else {
+        panic!("expected failure")
+    };
+    assert_eq!(problems.len(), 1);
+    assert_eq!(
+        problems[0].instance.utf16_units().collect::<Vec<_>>(),
+        [47, 0xd800]
+    );
+    assert_eq!(value.at_pointer(&problems[0].instance).unwrap().text(), "1");
+    let response = serde_json::json!({"problems": problems});
+    assert_eq!(response["problems"][0]["instance"], "/�");
+    assert_eq!(
+        serde_json::to_value(problems).unwrap(),
+        response["problems"]
+    );
+    let text = serde_json::to_string(&outcome).unwrap();
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&text).unwrap()["problems"],
+        response["problems"]
+    );
+    let mut bytes = Vec::new();
+    serde_json::to_writer(&mut bytes, &outcome).unwrap();
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&bytes).unwrap()["problems"],
+        response["problems"]
+    );
+}
+
+#[test]
 fn member_names_holding_the_views_marker_are_named_as_the_caller_spells_them() {
     // The evaluator's library view encodes unpaired units with U+E000; a
     // pointer names the caller's own member.

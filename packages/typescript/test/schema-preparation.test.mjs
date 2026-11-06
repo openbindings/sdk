@@ -65,7 +65,10 @@ test("unavailable annotation content remains a per-value inability without inven
     const result = prepared.evaluate({ x: 1 });
     assert.equal(result.status, "no-verdict");
     assert.equal(result.detail.reason, "resource-unavailable");
-    assert.equal(result.detail.location, null);
+    assert.deepEqual(result.detail.location, {
+      sourceUri: null,
+      pointer: "/operations/run/input/$ref",
+    });
   } finally {
     prepared?.dispose();
     doc.dispose();

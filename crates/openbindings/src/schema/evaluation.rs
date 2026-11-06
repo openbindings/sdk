@@ -164,7 +164,7 @@ pub enum NoVerdictReason {
 /// [`ConformantDocument::locate`] for the document and [`ExternalSchemas::locate`] for a
 /// supplied resource. This record contains coordinates, not source text; a
 /// prepared schema may retain immutable original sources needed by its evaluator.
-/// Serializes as JSON text; a pointer through a member name with an unpaired UTF-16 unit has no `serde_json::Value` form, so `serde_json::to_value` refuses such a record and `json!` panics: use `serde_json::to_string` or `to_writer`.
+/// Serializes pointer fields as ordinary JSON strings, replacing unpaired UTF-16 units with U+FFFD; the stored [`Pointer`] stays exact for locating and editing.
 ///
 /// Custom evaluators build one with [`Self::new`] or [`SchemaNode::origin`].
 /// Later versions may add fields: read them by name and match with `..`.
@@ -323,7 +323,7 @@ pub enum ValueProblemDetails {
 /// One established instance failure, located in the value and in the schema.
 /// Custom evaluators build one with [`Self::new`] and [`Self::with_details`].
 /// Later versions may add fields: read them by name and match with `..`.
-/// Serializes as JSON text; a pointer through a member name with an unpaired UTF-16 unit has no `serde_json::Value` form, so `serde_json::to_value` refuses such a record and `json!` panics: use `serde_json::to_string` or `to_writer`.
+/// Serializes pointer fields as ordinary JSON strings, replacing unpaired UTF-16 units with U+FFFD; the stored [`Pointer`] stays exact for locating and editing.
 /// ```compile_fail,E0639
 /// use openbindings::*;
 /// fn build(instance: Pointer, schema: SchemaOrigin) -> ValueProblem {
@@ -438,7 +438,7 @@ impl ValueProblem {
 #[serde(tag = "status", rename_all = "kebab-case")]
 /// Closed result partition for the selected schema and instance: satisfies, fails, undefined, or no verdict. No value outcome proves that the surrounding OpenBindings document conforms.
 ///
-/// Serializes as JSON text naming the variant in `status`, the field every TypeScript result discriminates on; a pointer through a member name with an unpaired UTF-16 unit has no `serde_json::Value` form, so `serde_json::to_value` refuses such a record and `json!` panics: use `serde_json::to_string` or `to_writer`.
+/// Serializes its variant in `status`. Pointer fields are ordinary JSON strings, replacing unpaired UTF-16 units with U+FFFD; stored pointers stay exact.
 #[must_use = "inspect the outcome before continuing"]
 pub enum ValueOutcome {
     /// The instance was established to satisfy the selected schema.

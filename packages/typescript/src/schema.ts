@@ -296,6 +296,8 @@ export interface ReferenceRefusal {
   message: string;
   /** Original location when established. */
   location: SchemaOrigin | null;
+  /** Resolved identity of the unavailable resource, when that is the cause. */
+  resourceUri: string | null;
 }
 
 /** One reference keyword in a supported schema position. Opaque content is not interpreted as schema; located is static resolution, and dynamicLookup still requires evaluation-time scope handling. */

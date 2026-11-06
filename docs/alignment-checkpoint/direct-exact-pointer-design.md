@@ -1,5 +1,10 @@
 # Direct exact pointer construction for original explanations
 
+Serialization update (2026-11-05): the original design below predates the safety
+fix. Stored pointer units and lookup remain exact. Default Rust serialization
+replaces unpaired units with U+FFFD; the private Wasm metadata encoder preserves
+exact JavaScript pointers. See [the API guide](../api-reference.md).
+
 The Explain review found that an exact pointer through an unpaired UTF-16 name
 allocates temporary decoded segment vectors and speculative scalar text. Its
 128-segment witness requests 6,443 bytes for a 258-byte retained pointer. The

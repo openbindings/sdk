@@ -44,6 +44,60 @@ function owning(job) {
   }
 }
 
+test("unpaired problem pointers still address the exact instance member", () =>
+  owning((own) => {
+    const proof = own(
+      conformant(
+        '{"openbindings":"0.2.0","operations":{"op":{"input":{"additionalProperties":{"type":"string"}}}}}',
+      ),
+    );
+    const ready = prepareInput(proof, "op");
+    assert.equal(ready.status, "ready");
+    const prepared = own(ready.schema);
+    const value = own(exact(String.raw`{"\ud800":1}`));
+    const result = prepared.explain(value);
+    assert.equal(result.status, "fails");
+    assert.equal(result.problems[0].instance, "/\ud800");
+    assert.equal(own(value.at(result.problems[0].instance)).text, "1");
+    assert.equal(value.locate(result.problems[0].instance).pointer, "/\ud800");
+  }));
+
+test("transitive missing resources are visible before preparation and located during evaluation", () =>
+  owning((own) => {
+    const proof = own(
+      conformant(
+        '{"openbindings":"0.2.0","operations":{"op":{"input":{"$ref":"https://example.test/a"}}}}',
+      ),
+    );
+    const supplied = own(
+      exact('{"allOf":[{"$ref":"missing"},{"type":"integer"}]}'),
+    );
+    const resources = own(
+      new sdk.ExternalSchemas([["https://example.test/a", supplied]]),
+    );
+    const report = proof.references({ resources });
+    assert.equal(report.complete, true);
+    assert.equal(report.references.length, 2);
+    const missing = report.references[1];
+    assert.deepEqual(missing.location, {
+      sourceUri: "https://example.test/a",
+      pointer: "/allOf/0/$ref",
+    });
+    assert.equal(missing.resolution.status, "unresolved");
+    assert.equal(missing.resolution.detail.reason, "resource-unavailable");
+    assert.equal(
+      missing.resolution.detail.resourceUri,
+      "https://example.test/missing",
+    );
+    const ready = prepareInput(proof, "op", { resources });
+    assert.equal(ready.status, "ready");
+    const prepared = own(ready.schema);
+    const result = prepared.evaluate(1);
+    assert.equal(result.status, "no-verdict");
+    assert.equal(result.detail.reason, "resource-unavailable");
+    assert.deepEqual(result.detail.location, missing.location);
+  }));
+
 test("explained problems locate the value's node and the document's keyword", () =>
   owning((own) => {
     const source =

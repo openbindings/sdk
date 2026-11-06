@@ -432,8 +432,14 @@ fn a_missing_resource_gives_no_verdict_only_where_evaluation_reaches_it() {
         };
         assert_eq!(detail.reason, NoVerdictReason::ResourceUnavailable);
         assert_eq!(detail.code, "resource-unavailable");
-        // Missing content has no original source coordinate to report.
-        assert!(detail.location.is_none());
+        // The missing content has no source, but the original reference does.
+        assert_eq!(
+            detail.location,
+            Some(SchemaOrigin::new(
+                None,
+                "/operations/op/input/anyOf/1/$ref".parse().unwrap(),
+            ))
+        );
     }
 }
 #[test]

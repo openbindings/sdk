@@ -1164,15 +1164,24 @@ impl Run<'_> {
                         .saturating_add(512),
                 )?;
                 let predicate = format!("$external:{uri}#{fragment}");
-                self.unknown_schema(
+                let first_new = self.atoms.len();
+                let state = self.unknown_schema(
                     Class::External,
                     usize::MAX,
                     &predicate,
                     value,
                     context,
                     Some(uri.clone()),
-                )
-                .map(execution::Reference::Ready)
+                )?;
+                // Effect keys still identify the missing predicate across
+                // referrers. Its diagnostics retain the first real reference
+                // location, including any new annotation choices.
+                for atom in &mut self.atoms[first_new..] {
+                    atom.node = node;
+                    atom.keyword.clear();
+                    atom.keyword.push_str(keyword);
+                }
+                Ok(execution::Reference::Ready(state))
             }
             Err(
                 QueryFailure::IdentityConflict
@@ -1326,7 +1335,10 @@ impl Run<'_> {
         let mut pointer = Vec::with_capacity(bytes.saturating_add(32));
         pointer.extend(original.pointer.utf16_units());
         if atom.keyword == "pattern"
-            || matches!(atom.keyword.as_str(), "$id" | "$ref" | "$dynamicRef")
+            || matches!(
+                atom.keyword.as_str(),
+                "$id" | "$ref" | "$dynamicRef" | "$recursiveRef"
+            )
         {
             pointer.push(b'/' as u16);
             pointer.extend(atom.keyword.encode_utf16());

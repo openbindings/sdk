@@ -934,7 +934,22 @@ impl SchemaSpace {
             complete: true,
             limitation: None,
         };
-        for (id, node) in self.local.nodes().filter(|(_, n)| n.source == 0) {
+        let mut pending = VecDeque::new();
+        let mut supplied = HashMap::<usize, Vec<usize>>::new();
+        for (id, node) in self.local.nodes() {
+            if let Err(reason) = control.check() {
+                report.complete = false;
+                report.limitation = Some(reason);
+                return report;
+            }
+            if node.source == 0 {
+                pending.push_back(id);
+            } else if self.resource(node.resource).origin == ResourceOrigin::Supplied {
+                supplied.entry(node.source).or_default().push(id);
+            }
+        }
+        while let Some(id) = pending.pop_front() {
+            let node = self.node(id);
             if let Err(reason) = control.check() {
                 report.complete = false;
                 report.limitation = Some(reason);
@@ -967,11 +982,18 @@ impl SchemaSpace {
                         })
                         .and_then(|s| self.resolve(id, s));
                     let resolution = match target {
-                        Ok(target) => ReferenceResolution::Located {
-                            target: self.location(target.node),
-                            dynamic_lookup: keyword == "$dynamicRef"
-                                && target.dynamic_name.is_some(),
-                        },
+                        Ok(target) => {
+                            // Visit a supplied source and its nested resources
+                            // once, even when references cycle or share targets.
+                            if let Some(nodes) = supplied.remove(&self.node(target.node).source) {
+                                pending.extend(nodes);
+                            }
+                            ReferenceResolution::Located {
+                                target: self.location(target.node),
+                                dynamic_lookup: keyword == "$dynamicRef"
+                                    && target.dynamic_name.is_some(),
+                            }
+                        }
                         Err(detail) => ReferenceResolution::Unresolved { detail },
                     };
                     let mut location = self.location(id);

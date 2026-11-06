@@ -118,6 +118,7 @@ impl Direction {
 }
 struct State {
     input: VecDeque<JsonValue>,
+    undelivered_inputs: usize,
     output: VecDeque<JsonValue>,
     caller_closed: bool,
     provider_closed: bool,
@@ -155,6 +156,7 @@ impl Shared {
         Arc::new(Self {
             state: Mutex::new(State {
                 input: VecDeque::new(),
+                undelivered_inputs: 0,
                 output: VecDeque::new(),
                 caller_closed: false,
                 provider_closed: false,
@@ -457,6 +459,14 @@ impl InvocationControl {
     pub fn outcome(&self) -> Option<Outcome> {
         self.shared.outcome()
     }
+    /// Accepted input values that were never returned to the provider by a
+    /// receive operation. `None` until the invocation ends; then a stable count,
+    /// including values released by provider closure, failure or cancellation.
+    /// Delivery does not establish that the provider processed a value.
+    pub fn undelivered_inputs(&self) -> Option<usize> {
+        let state = self.shared.state.lock().unwrap();
+        state.terminal.as_ref().map(|_| state.undelivered_inputs)
+    }
     /// Local value-free admission or provider boundary evidence.
     pub fn boundary_failure(&self) -> Option<BoundaryFailure> {
         self.shared.state.lock().unwrap().finding
@@ -479,6 +489,8 @@ impl fmt::Debug for InvocationInput {
 impl InvocationInput {
     /// Accept one exact value into the bounded queue; this is not dispatch acknowledgement.
     /// Dropping a pending send accepts no value. Poll output concurrently to drive work.
+    /// After termination, [`InvocationControl::undelivered_inputs`] counts
+    /// accepted values that were never returned to the provider by a receive.
     ///
     /// # Errors
     /// Returns Closed after either input half closes, or ValueTooLarge for an
@@ -504,6 +516,7 @@ impl InvocationInput {
                     state
                         .input
                         .push_back(value.take().expect("uncompleted send"));
+                    state.undelivered_inputs += 1;
                     Poll::Ready(Ok(()))
                 } else {
                     Poll::Pending
@@ -740,6 +753,9 @@ impl ProviderInput {
                         let value = state.slots[0]
                             .as_mut()
                             .and_then(|slot| slot.take_accepted(id));
+                        if value.is_some() {
+                            state.undelivered_inputs -= 1;
+                        }
                         self.request = None;
                         Poll::Ready(value)
                     } else {
@@ -771,6 +787,7 @@ impl ProviderInput {
                         }
                         Poll::Pending
                     } else {
+                        state.undelivered_inputs -= 1;
                         Poll::Ready(Some(value))
                     }
                 }

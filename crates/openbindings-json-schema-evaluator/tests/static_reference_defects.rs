@@ -186,7 +186,13 @@ fn values_reaching_a_missing_resource_give_no_verdict_naming_it() {
     };
     assert_eq!(detail.reason, NoVerdictReason::ResourceUnavailable);
     assert_eq!(detail.code, "resource-unavailable");
-    assert!(detail.location.is_none());
+    assert_eq!(
+        detail.location,
+        Some(SchemaOrigin::new(
+            None,
+            "/operations/op/input/properties/b/$ref".parse().unwrap(),
+        ))
+    );
     // A missing fragment is retained as a per-value external dependency too.
     let parsed = Document::parse(document(
         r#"{"b":{"$ref":"https://missing.test/b#/$defs/x"}}"#,
@@ -214,5 +220,11 @@ fn values_reaching_a_missing_resource_give_no_verdict_naming_it() {
         panic!("external fragment is unavailable");
     };
     assert_eq!(detail.reason, NoVerdictReason::ResourceUnavailable);
-    assert!(detail.location.is_none());
+    assert_eq!(
+        detail.location,
+        Some(SchemaOrigin::new(
+            None,
+            "/operations/op/input/properties/b/$ref".parse().unwrap(),
+        ))
+    );
 }

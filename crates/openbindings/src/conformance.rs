@@ -82,7 +82,7 @@ pub enum Conformance {
     Undetermined,
 }
 #[derive(Clone, PartialEq, Eq, Serialize)]
-/// One explanatory normative-rule finding. Findings may be bounded; the report's independent rule evidence determines its conclusion. Serializes as JSON text; a pointer through a member name with an unpaired UTF-16 unit has no `serde_json::Value` form, so `serde_json::to_value` refuses such a record and `json!` panics: use `serde_json::to_string` or `to_writer`.
+/// One explanatory normative-rule finding. Findings may be bounded; the report's independent rule evidence determines its conclusion. Serializes pointer fields as ordinary JSON strings, replacing unpaired UTF-16 units with U+FFFD; the stored [`Pointer`] stays exact for locating and editing.
 ///
 /// Only validation builds findings. Later versions may add fields: read them by
 /// name and match with `..`.
@@ -170,7 +170,7 @@ impl std::fmt::Debug for Finding {
 }
 
 #[derive(Clone, PartialEq, Eq, Serialize)]
-/// Assessment of all normative document rules at the pinned specification revision. At most 4096 findings and 8 MiB of aggregate generated-pointer bytes (UTF-8, or two per UTF-16 unit for a pointer through a name with an unpaired surrogate) are retained. Omitted findings set `findings_truncated`; rule evidence and the conclusion remain independent of presentation caps. Retained coordinates always refer to original source. Serializes as JSON text; a pointer through a member name with an unpaired UTF-16 unit has no `serde_json::Value` form, so `serde_json::to_value` refuses such a record and `json!` panics: use `serde_json::to_string` or `to_writer`.
+/// Assessment of all normative document rules at the pinned specification revision. At most 4096 findings and 8 MiB of aggregate generated-pointer bytes (UTF-8, or two per UTF-16 unit for a pointer through a name with an unpaired surrogate) are retained. Omitted findings set `findings_truncated`; rule evidence and the conclusion remain independent of presentation caps. Retained coordinates always refer to original source. Serializes pointer fields as ordinary JSON strings, replacing unpaired UTF-16 units with U+FFFD; the stored [`Pointer`] stays exact for locating and editing.
 ///
 /// Only validation builds reports. Later versions may add fields: read them by
 /// name and match with `..`.

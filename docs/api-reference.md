@@ -122,6 +122,13 @@ inventory and resolution through `SchemaEnvironment`; vendor projection is priva
 to the evaluator. Explicit `ExternalSchemas` supplies immutable resources without I/O.
 Changing resources requires a new preparation.
 
+`references_with_resources` inspects document references and transitively reached
+supplied resources within its existing traversal limits. A complete report can
+contain unresolved entries. For unavailable resources, the refusal's `resource_uri`
+(TypeScript `resourceUri`) gives the resolved missing identity. Preparation can
+still succeed; evaluation reports `NoVerdict(ResourceUnavailable)` when it cannot
+decide without that content, with the original reference location when known.
+
 ## Editing, admission and diagnostics
 
 Author with exact JSON and path edits. Set a whole namespace if its parent does not
@@ -147,6 +154,10 @@ Findings name original source occurrences. `SourceLocation` has a zero-based UTF
 byte offset and one-based line and byte column. Equal pointers at duplicate names
 can have different offsets. `Pointer` preserves exact UTF-16 segments; quote it for
 safe display and convert byte columns against original text for editor coordinates.
+Rust serialization replaces each unpaired pointer unit with U+FFFD, so diagnostic
+records work with `serde_json::to_value`, `json!`, `to_string` and `to_writer`.
+Stored pointers keep their exact units for locating and editing. TypeScript's
+bridge preserves exact UTF-16 pointers in JavaScript strings.
 
 Value problems have an instance pointer relative to the evaluated value and a
 `SchemaOrigin` with `source_uri` (TypeScript `sourceUri`) plus an original schema

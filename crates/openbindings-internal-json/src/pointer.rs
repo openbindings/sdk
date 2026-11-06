@@ -12,14 +12,10 @@ use std::{fmt, str::FromStr};
 ///
 /// `Display` writes the escaped pointer, with each unpaired unit as `\uXXXX` in
 /// lowercase hexadecimal; this presentation is not reversible. Serialization
-/// writes a JSON string, using a `\uXXXX` escape for each unpaired unit, so a
-/// consumer that keeps UTF-16 strings (such as JavaScript) receives the exact
-/// pointer. A `serde_json::Value` cannot hold such a string, as for an exact
-/// [`crate::JsonValue`] with one, so serialize records that may carry one to
-/// JSON text (`serde_json::to_string`, `to_writer`); `to_value` refuses it and
-/// `json!` panics. Another serializer receives that string token as
-/// `serde_json`'s raw-value newtype, as for an exact value. `Debug` shows no
-/// segment.
+/// always writes an ordinary string, replacing each unpaired unit with U+FFFD,
+/// as `String::from_utf16_lossy` does. This works with `serde_json::to_value`,
+/// `json!`, `to_string` and `to_writer`. The pointer itself keeps its exact units
+/// for locating and editing. `Debug` shows no segment.
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Pointer(Repr);
 #[derive(Clone, PartialEq, Eq, Hash)]
@@ -211,34 +207,7 @@ impl Serialize for Pointer {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         match &self.0 {
             Repr::Text(text) => serializer.serialize_str(text),
-            Repr::Units(units) => {
-                // JSON text can denote an unpaired unit with an escape, which no
-                // Rust string holds; write the exact string token. Every run of
-                // scalar text takes serde_json's own escapes.
-                let mut token = String::with_capacity(units.len() + 2);
-                let mut run = String::new();
-                let flush = |token: &mut String, run: &mut String| {
-                    let quoted = serde_json::to_string(run.as_str()).expect("text serializes");
-                    token.push_str(&quoted[1..quoted.len() - 1]);
-                    run.clear();
-                };
-                token.push('"');
-                for unit in char::decode_utf16(units.iter().copied()) {
-                    match unit {
-                        Ok(c) => run.push(c),
-                        Err(unit) => {
-                            flush(&mut token, &mut run);
-                            use std::fmt::Write;
-                            let _ = write!(token, "\\u{:04x}", unit.unpaired_surrogate());
-                        }
-                    }
-                }
-                flush(&mut token, &mut run);
-                token.push('"');
-                serde_json::value::RawValue::from_string(token)
-                    .map_err(serde::ser::Error::custom)?
-                    .serialize(serializer)
-            }
+            Repr::Units(units) => serializer.serialize_str(&String::from_utf16_lossy(units)),
         }
     }
 }
@@ -270,7 +239,7 @@ mod tests {
     }
 
     #[test]
-    fn unpaired_units_are_kept_and_written_as_escapes() {
+    fn unpaired_units_stay_exact_but_serialize_as_replacement_characters() {
         let mut exact = units("/a\"\\\n/");
         exact.push(0xd800);
         exact.extend(units("~0x"));
@@ -281,7 +250,7 @@ mod tests {
         assert_eq!(pointer.to_string(), "/a\"\\\n/\\ud800~0x");
         assert_eq!(
             serde_json::to_string(&pointer).unwrap(),
-            r#""/a\"\\\n/\ud800~0x""#
+            r#""/a\"\\\n/�~0x""#
         );
         // A character takes the same escape in either form.
         let scalar: Pointer = "/a\"\\\n/x".parse().unwrap();
@@ -299,5 +268,27 @@ mod tests {
         assert_eq!(paired.as_str(), Some("/😀"));
         assert_eq!(Pointer::from_utf16(&[0xd800]), Err(PointerError));
         assert_eq!(Pointer::from_utf16(&units("/~2")), Err(PointerError));
+    }
+
+    #[test]
+    fn all_json_serialization_paths_replace_each_unpaired_unit() {
+        let exact = [47, 0xd800, 0xd801, 0xdc00, 0xdc00, 34, 92, 10];
+        let pointer = Pointer::from_utf16(&exact).unwrap();
+        let expected = String::from_utf16_lossy(&exact);
+        let value = serde_json::to_value(&pointer).unwrap();
+        assert_eq!(value.as_str(), Some(expected.as_str()));
+        assert_eq!(serde_json::json!({"pointer": &pointer})["pointer"], value);
+        let text = serde_json::to_string(&pointer).unwrap();
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&text).unwrap(),
+            value
+        );
+        let mut bytes = Vec::new();
+        serde_json::to_writer(&mut bytes, &pointer).unwrap();
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&bytes).unwrap(),
+            value
+        );
+        assert_eq!(pointer.utf16_units().collect::<Vec<_>>(), exact);
     }
 }

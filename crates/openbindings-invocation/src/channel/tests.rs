@@ -16,6 +16,101 @@ fn poll<F: Future>(future: Pin<&mut F>) -> Poll<F::Output> {
 }
 
 #[test]
+fn ended_control_counts_only_accepted_inputs_not_delivered_to_the_provider() {
+    for gated in [false, true] {
+        for terminal in [Ok(()), Err(InvocationError::execution_failed())] {
+            for deliver in [false, true] {
+                let shared = Shared::new(InvocationLimits::default(), [gated, false]);
+                let mut io = ProviderIo::new(shared.clone());
+                let (mut input, output) =
+                    Invocation::from_parts(shared.clone(), pending::<Outcome>()).split();
+                let control = output.control();
+                assert_eq!(control.undelivered_inputs(), None);
+                assert_eq!(poll(pin!(input.send(json("1")))), Poll::Ready(Ok(())));
+                if deliver {
+                    if gated {
+                        assert!(poll(pin!(io.next())).is_pending());
+                        let check = shared.pending_check(Direction::Input).unwrap();
+                        shared.checked(check, Ok(()));
+                    }
+                    assert!(matches!(poll(pin!(io.next())), Poll::Ready(Some(_))));
+                }
+                // Provider closure may release input before the terminal.
+                io.close_input();
+                assert_eq!(control.undelivered_inputs(), None);
+                shared.settle(terminal.clone());
+                assert_eq!(control.undelivered_inputs(), Some(usize::from(!deliver)));
+                assert_eq!(control.outcome().unwrap().is_ok(), terminal.is_ok());
+                drop(output);
+                control.cancel();
+                assert_eq!(control.undelivered_inputs(), Some(usize::from(!deliver)));
+            }
+        }
+    }
+}
+
+#[test]
+fn cancellation_counts_queued_and_in_flight_validation_inputs() {
+    for checked in [false, true] {
+        let shared = Shared::new(InvocationLimits::default(), [true, false]);
+        let mut io = ProviderIo::new(shared.clone());
+        let (mut input, output) =
+            Invocation::from_parts(shared.clone(), pending::<Outcome>()).split();
+        let control = output.control();
+        assert_eq!(poll(pin!(input.send(json("1")))), Poll::Ready(Ok(())));
+        assert!(poll(pin!(io.next())).is_pending());
+        let check = shared.pending_check(Direction::Input).unwrap();
+        if checked {
+            shared.checked(check, Ok(()));
+        }
+        assert_eq!(poll(pin!(input.send(json("2")))), Poll::Ready(Ok(())));
+        assert!(poll(pin!(input.send(json("3")))).is_pending());
+        control.cancel();
+        assert_eq!(control.undelivered_inputs(), Some(2));
+        assert_eq!(
+            control.outcome().unwrap().unwrap_err().code(),
+            "ERR_CANCELLED"
+        );
+        assert_eq!(
+            poll(pin!(input.send(json("4")))),
+            Poll::Ready(Err(WriteError::Closed))
+        );
+        assert_eq!(control.undelivered_inputs(), Some(2));
+    }
+}
+
+#[test]
+fn a_provider_completing_after_one_receive_reports_the_second_accepted_input() {
+    let call = Invocation::new(
+        InvocationLimits {
+            input_capacity: 2,
+            ..Default::default()
+        },
+        CancellationToken::new(),
+        |mut io, _| async move {
+            let first = io.next().await.unwrap();
+            io.close_input();
+            io.send(first).await
+        },
+    )
+    .unwrap();
+    let (mut input, mut output) = call.split();
+    let control = output.control();
+    assert_eq!(poll(pin!(input.send(json("1")))), Poll::Ready(Ok(())));
+    assert_eq!(poll(pin!(input.send(json("2")))), Poll::Ready(Ok(())));
+    let Poll::Ready(Some(OutputEvent::Output(value))) = poll(pin!(output.next())) else {
+        panic!("first output")
+    };
+    assert_eq!(value.text(), "1");
+    assert!(matches!(
+        poll(pin!(output.next())),
+        Poll::Ready(Some(OutputEvent::Complete))
+    ));
+    assert_eq!(control.undelivered_inputs(), Some(1));
+    assert!(control.outcome().unwrap().is_ok());
+}
+
+#[test]
 fn only_output_drives_and_committed_values_precede_the_terminal() {
     let shared = Shared::new(InvocationLimits::default(), [false, false]);
     let mut io = ProviderIo::new(shared.clone());

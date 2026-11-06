@@ -90,14 +90,20 @@ test("source editor requires conformance and retains prepared partial snapshots"
     const negated = editor.update(negatedText);
     assert.equal(negated.status, "updated");
     assert.equal(negated.result.status, "no-verdict");
-    assert.equal(negated.result.detail.location, null);
+    assert.deepEqual(negated.result.detail.location, {
+      sourceUri: null,
+      pointer: "/operations/lookup/input/not/$ref",
+    });
     const fragmentText =
       '{"openbindings":"0.2.0","operations":{"lookup":{"aliases":["find"],"input":{"$ref":"https://schema.example/missing#/$defs/name"}}}}';
     const fragment = editor.update(fragmentText);
     assert.equal(fragment.status, "updated");
     assert.equal(fragment.result.status, "no-verdict");
     assert.equal(fragment.result.detail.reason, "resource-unavailable");
-    assert.equal(fragment.result.detail.location, null);
+    assert.deepEqual(fragment.result.detail.location, {
+      sourceUri: null,
+      pointer: "/operations/lookup/input/$ref",
+    });
     assert.match(formatEditorResult(fragment), /resource-unavailable/);
     const current = editor.snapshot();
     try {

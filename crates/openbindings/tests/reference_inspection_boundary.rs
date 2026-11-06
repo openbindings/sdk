@@ -61,3 +61,107 @@ fn nonconformant_drafts_still_supply_original_reference_diagnostics() {
     };
     assert_eq!(detail.reason, ReferenceRefusalReason::ResourceUnavailable);
 }
+
+#[test]
+fn supplied_resource_references_are_reported_transitively_once() {
+    let draft = Document::parse(r#"{"openbindings":"0.2.0","operations":{"op":{"input":{"$ref":"https://example.test/a"}}}}"#).unwrap();
+    let resources = ExternalSchemas::new(
+        [
+            ("https://example.test/a", r#"{"$ref":"b"}"#),
+            (
+                "https://example.test/b",
+                r#"{"allOf":[{"$ref":"a"},{"$ref":"missing"}],"const":{"$ref":"opaque"}}"#,
+            ),
+            ("https://example.test/unused", r#"{"$ref":"also-missing"}"#),
+        ]
+        .map(|(uri, text)| ExternalSchema {
+            uri: uri.into(),
+            document: JsonValue::parse(text).unwrap(),
+        }),
+    )
+    .unwrap();
+    let proof = draft.validate().unwrap().conformant().unwrap();
+    let cancelled = AtomicBool::new(false);
+    let report = draft.references_with_resources(resources.clone(), &cancelled);
+    assert_eq!(
+        report,
+        proof.references_with_resources(resources, &cancelled)
+    );
+    assert!(report.complete);
+    assert!(report.limitation.is_none());
+    assert_eq!(report.references.len(), 4);
+    assert!(
+        report.references[..3]
+            .iter()
+            .all(|r| matches!(r.resolution, ReferenceResolution::Located { .. }))
+    );
+    let missing = &report.references[3];
+    assert_eq!(
+        missing.location.source_uri.as_deref(),
+        Some("https://example.test/b")
+    );
+    assert_eq!(missing.location.pointer, "/allOf/1/$ref");
+    assert_eq!(missing.spelling.as_deref(), Some("missing"));
+    let ReferenceResolution::Unresolved { detail } = &missing.resolution else {
+        panic!("missing resource")
+    };
+    assert_eq!(detail.reason, ReferenceRefusalReason::ResourceUnavailable);
+    assert_eq!(
+        detail.resource_uri.as_deref(),
+        Some("https://example.test/missing")
+    );
+}
+
+#[test]
+fn reached_supplied_schemas_keep_the_existing_depth_limit() {
+    let draft = Document::parse(r#"{"openbindings":"0.2.0","operations":{"op":{"input":{"$ref":"https://example.test/a"}}}}"#).unwrap();
+    let text = format!(
+        "{}{{\"$ref\":\"https://example.test/missing\"}}{}",
+        "{\"not\":".repeat(257),
+        "}".repeat(257)
+    );
+    let resources = ExternalSchemas::new([ExternalSchema {
+        uri: "https://example.test/a".into(),
+        document: JsonValue::parse(text).unwrap(),
+    }])
+    .unwrap();
+    let report = draft.references_with_resources(resources, &AtomicBool::new(false));
+    assert!(!report.complete);
+    assert_eq!(report.references.len(), 1);
+    let limitation = report.limitation.unwrap();
+    assert_eq!(limitation.reason, ReferenceRefusalReason::LimitExceeded);
+    assert_eq!(limitation.code, "schema-depth");
+    assert_eq!(
+        limitation.location.unwrap().source_uri.as_deref(),
+        Some("https://example.test/a")
+    );
+}
+
+#[test]
+fn reached_supplied_sources_include_nested_identifier_scopes() {
+    let document = Document::parse(r#"{"openbindings":"0.2.0","operations":{"op":{"input":{"$ref":"https://example.test/a"}}}}"#).unwrap();
+    let resources = ExternalSchemas::new([ExternalSchema {
+        uri: "https://example.test/a".into(),
+        document: JsonValue::parse(
+            r#"{"properties":{"p":{"$id":"https://nested.test/base/","$ref":"missing"}}}"#,
+        )
+        .unwrap(),
+    }])
+    .unwrap();
+    let report = document.references_with_resources(resources, &AtomicBool::new(false));
+    assert!(report.complete);
+    assert_eq!(report.references.len(), 2);
+    let reference = &report.references[1];
+    assert_eq!(
+        reference.location.source_uri.as_deref(),
+        Some("https://example.test/a")
+    );
+    assert_eq!(reference.location.pointer, "/properties/p/$ref");
+    let ReferenceResolution::Unresolved { detail } = &reference.resolution else {
+        panic!("missing resource")
+    };
+    assert_eq!(
+        detail.resource_uri.as_deref(),
+        Some("https://nested.test/base/missing")
+    );
+}

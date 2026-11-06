@@ -1595,6 +1595,15 @@ mod tests {
                 );
                 let serialized = serde_json::to_string(&pointer).unwrap();
                 let token = crate::JsonValue::parse(serialized).unwrap();
+                let lossy = String::from_utf16_lossy(&pointer.utf16_units().collect::<Vec<_>>());
+                assert_eq!(string_pointer(token.view()).unwrap(), lossy);
+                // Exact lookup still round-trips every original UTF-16 unit;
+                // ordinary serialization is a scalar-text presentation.
+                let exact = pointer
+                    .utf16_units()
+                    .map(|unit| format!("\\u{unit:04x}"))
+                    .collect::<String>();
+                let token = crate::JsonValue::parse(format!("\"{exact}\"")).unwrap();
                 assert_eq!(string_pointer(token.view()).unwrap(), pointer);
                 if let Some(items) = current.elements() {
                     pending.extend(items);
