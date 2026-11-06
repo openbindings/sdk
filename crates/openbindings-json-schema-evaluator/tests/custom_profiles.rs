@@ -468,3 +468,48 @@ fn local_meta_checks_do_not_hide_invalid_unused_original_positions() {
         verdict(&prepared, "false", false);
     }
 }
+
+#[test]
+fn preparation_display_identifies_invalid_supplied_resources_without_schema_text() {
+    let schema = Document::parse(
+        r#"{"openbindings":"0.2.0","operations":{},"schemas":{"entry":{"$ref":"https://invalid.test/schema"}}}"#,
+    ).unwrap().validate().unwrap().conformant().unwrap().schema("entry").unwrap();
+    let resources = ExternalSchemas::new([ExternalSchema {
+        uri: "https://invalid.test/schema".into(),
+        document: JsonValue::parse(r#"{"type":7,"x-private":"SECRET-SCHEMA"}"#).unwrap(),
+    }])
+    .unwrap();
+    let failure = schema
+        .prepare(
+            &DefaultEvaluator::new(),
+            &resources,
+            &PreparationLimits::default(),
+        )
+        .unwrap_err();
+    assert_eq!(failure.kind, PreparationFailureKind::InvalidExternalSchema);
+    assert_eq!(
+        failure.origin.as_ref().unwrap().source_uri.as_deref(),
+        Some("https://invalid.test/schema")
+    );
+    assert!(
+        failure
+            .to_string()
+            .contains("invalid external schema in resource \"https://invalid.test/schema\"")
+    );
+    assert!(!failure.to_string().contains("SECRET-SCHEMA"));
+    assert!(!format!("{failure:?}").contains("invalid.test"));
+
+    let failure = prepare(
+        VOCABULARIES,
+        r#""required":["marker"]"#,
+        r#""type":"integer""#,
+        &[],
+    )
+    .unwrap_err();
+    assert_eq!(failure.kind, PreparationFailureKind::InvalidExternalSchema);
+    assert_eq!(
+        failure.origin.as_ref().unwrap().source_uri.as_deref(),
+        Some(SCHEMA)
+    );
+    assert!(failure.to_string().contains(SCHEMA));
+}

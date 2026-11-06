@@ -301,3 +301,44 @@ fn send_futures_can_borrow_non_static_providers_in_each_ownership_form() {
     drive(&Arc::new(Borrowed(&calls)));
     assert_eq!(calls.load(Ordering::Relaxed), 4);
 }
+
+#[test]
+fn pull_display_and_sources_retain_native_and_validation_causes() {
+    use std::error::Error;
+    let error = PullError::Provider(PullFailure::Operational(std::io::Error::other(
+        "connection reset",
+    )));
+    assert_eq!(
+        error.to_string(),
+        "source pull failed: source pulling could not complete: connection reset"
+    );
+    assert_eq!(format!("{error:?}"), "Provider(Operational { .. })");
+    let provider = error.source().unwrap();
+    assert!(
+        provider
+            .downcast_ref::<PullFailure<std::io::Error>>()
+            .is_some()
+    );
+    assert!(
+        provider
+            .source()
+            .unwrap()
+            .downcast_ref::<std::io::Error>()
+            .is_some()
+    );
+    let validation = PullError::<std::io::Error>::Validation(PullValidationError::MissingSource);
+    assert!(
+        validation
+            .source()
+            .unwrap()
+            .downcast_ref::<PullValidationError>()
+            .is_some()
+    );
+    assert!(validation.to_string().contains("MissingSource"));
+    assert!(PullError::<std::io::Error>::Cancelled.source().is_none());
+    assert!(PullFailure::<std::io::Error>::Cancelled.source().is_none());
+    assert_eq!(
+        PullFailure::<std::io::Error>::Cancelled.to_string(),
+        "source pulling was cancelled"
+    );
+}

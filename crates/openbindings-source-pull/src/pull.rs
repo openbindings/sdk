@@ -23,6 +23,23 @@ impl<E> fmt::Debug for PullFailure<E> {
         })
     }
 }
+impl<E: fmt::Display> fmt::Display for PullFailure<E> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::ContextRequired(_) => f.write_str("source pulling requires context"),
+            Self::Operational(error) => write!(f, "source pulling could not complete: {error}"),
+            Self::Cancelled => f.write_str("source pulling was cancelled"),
+        }
+    }
+}
+impl<E: std::error::Error + 'static> std::error::Error for PullFailure<E> {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Operational(error) => Some(error),
+            _ => None,
+        }
+    }
+}
 /// Explicit kind-owned source observation and projection; no source operation is invoked.
 pub trait SourcePuller {
     /// Native operational error, including inability to produce a truthful report.
@@ -70,12 +87,24 @@ impl<E> fmt::Debug for PullError<E> {
         }
     }
 }
-impl<E> fmt::Display for PullError<E> {
+impl<E: fmt::Display> fmt::Display for PullError<E> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "source pull failed: {self:?}")
+        match self {
+            Self::Provider(error) => write!(f, "source pull failed: {error}"),
+            Self::Validation(error) => write!(f, "source pull failed: {error}"),
+            Self::Cancelled => f.write_str("source pull was cancelled"),
+        }
     }
 }
-impl<E> std::error::Error for PullError<E> {}
+impl<E: std::error::Error + 'static> std::error::Error for PullError<E> {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Provider(error) => Some(error),
+            Self::Validation(error) => Some(error),
+            Self::Cancelled => None,
+        }
+    }
+}
 impl<E> From<PullValidationError> for PullError<E> {
     fn from(value: PullValidationError) -> Self {
         match value {

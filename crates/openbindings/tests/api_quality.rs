@@ -125,8 +125,8 @@ fn serde_profile_preserves_numbers_enums_unicode_and_refuses_loss() {
     assert_eq!(e.kind(), ValueConversionErrorKind::NonStringKey);
     let exact = JsonValue::parse("1e999999999999999999999999").unwrap();
     assert_eq!(
-        JsonValue::from_serializable(&exact).unwrap_err().kind(),
-        ValueConversionErrorKind::UnsupportedRepresentation
+        JsonValue::from_serializable(&exact).unwrap().text(),
+        exact.text()
     );
     assert_eq!(exact.text(), "1e999999999999999999999999");
     let mut draft = Document::new();
@@ -479,10 +479,7 @@ fn serde_json_numbers_preserve_tokens_and_protocol_cannot_inject_json() {
     .unwrap_err();
     assert_eq!(e.kind(), ValueConversionErrorKind::Limit);
     let raw: Box<serde_json::value::RawValue> = serde_json::from_str("7").unwrap();
-    assert_eq!(
-        JsonValue::from_serializable(&raw).unwrap_err().kind(),
-        ValueConversionErrorKind::UnsupportedRepresentation
-    );
+    assert_eq!(JsonValue::from_serializable(&raw).unwrap().text(), "7");
 }
 
 #[test]
@@ -732,4 +729,155 @@ fn outcome_and_report_records_compare_by_value() {
     assert_ne!(refusal, changed);
     assert_eq!(problem, problem.clone());
     assert_eq!(undefined, undefined.clone());
+}
+
+#[test]
+fn nested_exact_values_preserve_tokens_units_and_conversion_limits() {
+    #[derive(Serialize)]
+    struct Envelope {
+        payload: JsonValue,
+        tail: bool,
+    }
+    let text =
+        r#"{ "\ud800": [123456789012345678901234567890, 1e999999999999999999, -0.00, "\udfff"] }"#;
+    let envelope = Envelope {
+        payload: JsonValue::parse(text).unwrap(),
+        tail: true,
+    };
+    let value = JsonValue::from_serializable(&envelope).unwrap();
+    assert_eq!(value.get("payload").unwrap().text(), text);
+    assert_eq!(value.text(), format!(r#"{{"payload":{text},"tail":true}}"#));
+    assert_eq!(
+        value
+            .get("payload")
+            .unwrap()
+            .to_owned()
+            .semantic_eq(&envelope.payload),
+        Some(true)
+    );
+    // Root + two names + tail + the complete embedded subtree.
+    let nodes = 4 + openbindings_internal_json::backend::node_count(envelope.payload.view());
+    let limits = JsonLimits {
+        max_bytes: value.text().len(),
+        max_nodes: nodes,
+        max_depth: 3,
+    };
+    assert_eq!(
+        JsonValue::from_serializable_with_limits(&envelope, limits)
+            .unwrap()
+            .text(),
+        value.text()
+    );
+    for limits in [
+        JsonLimits {
+            max_bytes: limits.max_bytes - 1,
+            ..limits
+        },
+        JsonLimits {
+            max_nodes: nodes - 1,
+            ..limits
+        },
+        JsonLimits {
+            max_depth: 2,
+            ..limits
+        },
+    ] {
+        assert_eq!(
+            JsonValue::from_serializable_with_limits(&envelope, limits)
+                .unwrap_err()
+                .kind(),
+            ValueConversionErrorKind::Limit
+        );
+    }
+    let duplicate = Envelope {
+        payload: JsonValue::parse(r#"{"a":1,"\u0061":2}"#).unwrap(),
+        tail: false,
+    };
+    let error = JsonValue::from_serializable(&duplicate).unwrap_err();
+    assert_eq!(error.kind(), ValueConversionErrorKind::DuplicateKey);
+    assert_eq!(error.pointer(), Some("/payload"));
+    let deep = JsonValue::parse(format!("{}0{}", "[".repeat(129), "]".repeat(129))).unwrap();
+    assert_eq!(
+        JsonValue::from_serializable(&deep).unwrap_err().kind(),
+        ValueConversionErrorKind::Limit
+    );
+}
+
+#[test]
+fn raw_json_protocol_is_checked_and_cannot_hide_a_refusal() {
+    struct Raw<'a> {
+        field: &'static str,
+        text: &'a str,
+        count: usize,
+        swallow: bool,
+    }
+    impl Serialize for Raw<'_> {
+        fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+            use serde::ser::SerializeStruct;
+            let mut raw = s.serialize_struct("$serde_json::private::RawValue", self.count)?;
+            for _ in 0..self.count {
+                let result = raw.serialize_field(self.field, self.text);
+                if !self.swallow {
+                    result?;
+                }
+            }
+            raw.end()
+        }
+    }
+    let token = "$serde_json::private::RawValue";
+    for (field, text, count) in [
+        (token, "1,2", 1),
+        ("wrong", "1", 1),
+        (token, "1", 0),
+        (token, "1", 2),
+    ] {
+        for swallow in [false, true] {
+            let error = JsonValue::from_serializable(&Raw {
+                field,
+                text,
+                count,
+                swallow,
+            })
+            .unwrap_err();
+            assert_eq!(
+                error.kind(),
+                ValueConversionErrorKind::UnsupportedRepresentation
+            );
+        }
+    }
+}
+
+#[test]
+fn preparation_display_names_causes_without_changing_debug_redaction() {
+    let invalid = PreparationFailure::new(PreparationFailureKind::InvalidExternalSchema)
+        .with_origin(SchemaOrigin::new(
+            Some("https://example.test/schema".into()),
+            "/$defs/bad".parse().unwrap(),
+        ));
+    assert_eq!(
+        invalid.to_string(),
+        "schema preparation failed: invalid external schema in resource \"https://example.test/schema\" at pointer \"/$defs/bad\""
+    );
+    assert_eq!(format!("{invalid:?}"), "PreparationFailure { .. }");
+    let limit = PreparationFailure::new(PreparationFailureKind::Limit {
+        resource: "schema-nodes".into(),
+    });
+    assert!(limit.to_string().contains("limit reached \"schema-nodes\""));
+    let missing = PreparationFailure::new(PreparationFailureKind::Resolution {
+        cause: ResolutionFailureKind::ResourceUnavailable {
+            uri: "https://example.test/missing".into(),
+        },
+    });
+    assert!(
+        missing
+            .to_string()
+            .contains("resource unavailable \"https://example.test/missing\"")
+    );
+    let private = PreparationFailure::new(PreparationFailureKind::Implementation {
+        message: "PRIVATE SCHEMA".into(),
+    });
+    assert_eq!(
+        private.to_string(),
+        "schema preparation failed: implementation failure"
+    );
 }

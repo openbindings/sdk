@@ -12,7 +12,7 @@ SNIPPETS = [
     (ROOT / 'docs/rust-first-use.md', 'rust_first_use'),
     (ROOT / 'crates/openbindings-json-schema-evaluator/README.md', 'evaluator_readme'),
 ]
-CRATES = ['openbindings', 'openbindings_json_schema_evaluator', 'openbindings_invocation', 'serde_json', 'tokio']
+CRATES = ['openbindings', 'openbindings_json_schema_evaluator', 'openbindings_invocation', 'serde', 'serde_json', 'tokio']
 
 
 def read_snippet(path):
@@ -57,7 +57,7 @@ def main():
     sources = [(path, name, read_snippet(path)) for path, name in SNIPPETS]
     # Reuse the locked Cargo graph rather than resolve a separate consumer manifest.
     build = run([
-        'cargo', 'build', '--locked', '--tests', '-p', 'openbindings-invocation',
+        'cargo', 'build', '--offline', '--locked', '--tests', '-p', 'openbindings-invocation',
         '-p', 'openbindings-json-schema-evaluator',
         '--message-format=json-render-diagnostics',
     ], stdout=subprocess.PIPE, text=True)
@@ -74,7 +74,7 @@ def main():
         raise RuntimeError(f'Cargo did not report snippet dependencies: {libraries}')
     # Repository prose is not included from outside an archived crate. Test it
     # here with the same locked dependencies, including every Rust fence.
-    for document in ['README.md', 'docs/rust-first-use.md', 'docs/invocation.md']:
+    for document in ['README.md', 'docs/rust-first-use.md', 'docs/invocation.md', 'docs/schema-evaluators.md']:
         args = [os.environ.get('RUSTDOC', 'rustdoc'), '--test', '--edition=2024', ROOT / document]
         for crate, library in libraries.items():
             args += ['--extern', f'{crate}={library}', '-L', f'dependency={library.parent}']

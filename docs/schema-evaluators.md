@@ -27,6 +27,23 @@ owns its validators and does not retain a provider or evaluator. See the
 The TypeScript facade bundles
 the default evaluator; it does not expose custom evaluator callbacks.
 
+## Read an explanation
+
+`prepared.explain(&value)` uses the same verdict as `evaluate`, then collects
+established failures at original instance and schema locations. The default
+evaluator returns at most 100 problems. Check `problems_complete`: false means
+some reportable evidence may be missing because of this cap, a work/storage limit,
+cancellation, or an unavailable original witness. It does not weaken the verdict.
+The cheap `evaluate` call returns no problems and sets this flag to false.
+
+For `allOf`, problems come from the branches established to fail. For failed
+`anyOf`, `oneOf` or `not`, the problem names that applicator; it does not list
+branch assertions as independent failures. The default evaluator does not include
+schema facts in `details`, including missing required names, expected types,
+bounds or enum choices. Codes and locations identify assertions; messages are
+advisory. A custom evaluator can supply facts, subject to the application's
+disclosure policy.
+
 ## Bring your own
 
 Implement `SchemaEvaluator::prepare` and return an owned `SchemaValidator`.

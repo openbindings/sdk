@@ -174,9 +174,13 @@ fn malformed_provider_outputs_remain_operational_failures_and_never_kind_rejecti
         KindError::Provider(CheckFailure::Operational(CarrierError::UnexpectedMember))
     ));
     assert!(!caller.is_cancelled());
-    // Diagnostic formatting never prints native provider details implicitly.
+    // Debug remains redacted; Display deliberately presents the provider's message.
     let secret = CheckFailure::Operational("private endpoint or credential");
-    assert!(!format!("{secret}: {secret:?}").contains("private"));
+    assert!(!format!("{secret:?}").contains("private"));
+    assert_eq!(
+        secret.to_string(),
+        "source checking could not complete: private endpoint or credential"
+    );
     assert!(std::error::Error::source(&error).is_some());
 }
 
@@ -210,4 +214,27 @@ fn check_failures_keep_exact_payloads_and_are_subject_to_carrier_handoff_bounds(
         ));
         assert!(!caller.is_cancelled());
     }
+}
+
+#[test]
+fn provider_display_and_sources_retain_the_native_cause() {
+    use std::error::Error;
+    let error = KindError::Provider(CheckFailure::Operational(std::io::Error::other(
+        "connection reset",
+    )));
+    assert!(error.to_string().contains("connection reset"));
+    let check = error.source().unwrap();
+    assert!(
+        check
+            .downcast_ref::<CheckFailure<std::io::Error>>()
+            .is_some()
+    );
+    assert!(
+        check
+            .source()
+            .unwrap()
+            .downcast_ref::<std::io::Error>()
+            .is_some()
+    );
+    assert!(!format!("{error:?}").contains("connection reset"));
 }

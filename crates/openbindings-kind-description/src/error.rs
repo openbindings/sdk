@@ -74,14 +74,19 @@ impl<E> fmt::Debug for CheckFailure<E> {
         })
     }
 }
-impl<E> fmt::Display for CheckFailure<E> {
+impl<E: fmt::Display> fmt::Display for CheckFailure<E> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
-            Self::ContextRequired(_) => "source checking requires context",
-            Self::Rejected(_) => "the kind rejected the proposed source",
-            Self::Cancelled => "source checking was cancelled",
-            Self::Operational(_) => "source checking could not complete",
-        })
+        match self {
+            Self::ContextRequired(_) => f.write_str("source checking requires context"),
+            Self::Rejected(rejection) => write!(
+                f,
+                "the kind rejected the proposed source ({}): {}",
+                rejection.code().json().text(),
+                rejection.message().json().text()
+            ),
+            Self::Cancelled => f.write_str("source checking was cancelled"),
+            Self::Operational(error) => write!(f, "source checking could not complete: {error}"),
+        }
     }
 }
 impl<E: std::error::Error + 'static> std::error::Error for CheckFailure<E> {
@@ -118,14 +123,20 @@ impl<E> fmt::Debug for KindError<E> {
         }
     }
 }
-impl<E> fmt::Display for KindError<E> {
+impl<E: fmt::Display> fmt::Display for KindError<E> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
-            Self::Provider(_) => "the provider did not complete the request successfully",
-            Self::Cancelled => "the caller cancelled the request",
-            Self::KindMismatch => "the response names a different kind",
-            Self::LimitExceeded(_) => "the carrier exceeds the configured handoff limit",
-        })
+        match self {
+            Self::Provider(error) => write!(
+                f,
+                "the provider did not complete the request successfully: {error}"
+            ),
+            Self::Cancelled => f.write_str("the caller cancelled the request"),
+            Self::KindMismatch => f.write_str("the response names a different kind"),
+            Self::LimitExceeded(resource) => write!(
+                f,
+                "the carrier exceeds the configured handoff limit {resource:?}"
+            ),
+        }
     }
 }
 impl<E: std::error::Error + 'static> std::error::Error for KindError<E> {

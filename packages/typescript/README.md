@@ -259,10 +259,15 @@ retains an arithmetic capability bound. Exact equality preserves unpaired UTF-16
 units, while unsupported Unicode-text operations return a typed inability.
 
 `evaluate` requests the outcome. An established failure has no problems and
-`problemsComplete: false`. `explain` requests available bounded failure evidence
-at original locations, with additional allocation and work. Missing witnesses or
-exhausted diagnostic limits leave the failure established with incomplete
-problems. A problem's `instance` is relative to the exact value passed;
+`problemsComplete: false`. `explain` collects established failing assertions
+at original locations, with additional allocation and work, up to 100 problems.
+`problemsComplete` is true only when all reportable failures were collected;
+missing witnesses, cancellation or exhausted diagnostic limits leave it false
+without changing the failure verdict. `allOf` collects problems from its failing
+branches. Failed `anyOf`, `oneOf` and `not` report the applicator itself, without
+listing branch assertions as independent problems. Schema facts such as required
+member names, expected types, bounds and enum choices are not included; `details`
+is absent. A problem's `instance` is relative to the exact value passed;
 `schema.sourceUri` and `schema.pointer` identify the original schema source.
 `value.locate(problem.instance)`, `ConformantDocument.locate(problem.schema)` and
 `ExternalSchemas.locate(problem.schema)` compute source coordinates on demand.

@@ -25,7 +25,12 @@ Providers own admission of their outputs. A transport, decoding or admission
 failure remains `CheckFailure::Operational`; a kind's rejection carries its own
 code, readable message and optional exact data. `ContextRequired` carries the
 shared context challenge. The SDK never acquires context or retries a check.
-Native errors are not serialized or measured as JSON carriers.
+Native errors are not serialized or measured as JSON carriers. `Display` includes
+the provider's own error message, or a rejection's code and message; `Debug` keeps
+payloads hidden. For native errors implementing `std::error::Error + 'static`,
+`KindError::source()` and `CheckFailure::source()` retain the underlying cause.
+Choose where to display these messages according to the application's disclosure
+policy.
 
 ```rust
 use openbindings::JsonValue;
@@ -51,8 +56,10 @@ before dispatch prevents it. While a call is pending, caller cancellation reache
 the provider's attempt token and wakes the caller. Dropping work cancels that
 attempt before releasing the provider future; it never cancels the caller token.
 Cancellation during provider cleanup takes precedence over handing off a result.
-The provider must cooperate to stop external work; the SDK does not claim to undo
-an effect the provider has already performed.
+On cancellation the provider future is dropped and never polled again, so async
+cleanup cannot run inside it afterward. Synchronous `Drop` can release held
+resources. The attempt token is useful for detached work and synchronous loops
+that stop cooperatively. The SDK does not undo effects already performed.
 
 This unpublished companion applies interface version `0.1.0` at revision
 `5815fb106bddd2c85ff4e93e0077570b3f6b9e74`, alongside the OpenBindings 0.2 document

@@ -217,10 +217,7 @@ mod tests {
             assert_eq!(decoded.text(), token);
             let raw: Box<serde_json::value::RawValue> = serde_json::from_str(token).unwrap();
             assert_eq!(serde_json::to_string(&raw).unwrap(), token);
-            assert_eq!(
-                JsonValue::from_serializable(&raw).unwrap_err().kind(),
-                openbindings::ValueConversionErrorKind::UnsupportedRepresentation
-            );
+            assert_eq!(JsonValue::from_serializable(&raw).unwrap().text(), token);
             // Consumer-enabled AP uses the same identity. Preserve its emitted
             // Number protocol; spelling already normalized by serde is not recovered.
             #[cfg(feature = "ap")]

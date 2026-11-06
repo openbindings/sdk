@@ -47,7 +47,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let input = operation
         .input()
         .ok_or("operation has no input schema")?
-        .prepare(&DefaultEvaluator::new(), &ExternalSchemas::default(), &PreparationLimits::default())?;
+        .prepare(&DefaultEvaluator::new(), &ExternalSchemas::default(), &PreparationLimits::default())
+        .map_err(|failure| failure.to_string())?;
     println!("value outcome: {:?}", input.evaluate_json("7")?);
     // The cheap check says whether a value fails; explaining it says why.
     let seven = openbindings::JsonValue::parse(r#""seven""#)?;
@@ -97,10 +98,39 @@ their exact meaning. `explain(&value)` requests diagnostics without changing the
 semantic result.
 
 Use `JsonValue::parse_with_limits` and `prepared.evaluate(&value)` for custom
-admission limits or repeated checks. `JsonValue::from_serializable` checks ordinary
-Rust data but cannot recover precision already lost by application code. Retain
-exact wrappers on the parse/clone route rather than serializing them through a
-host value representation.
+admission limits or repeated checks. `JsonValue::from_serializable` checks Rust
+data, including nested `JsonValue` fields, but cannot recover precision already lost by application code. It preserves
+embedded number tokens and string units, and refuses duplicate object members.
+
+Exact values can hold an unpaired UTF-16 surrogate or a number outside
+`serde_json::Value`'s range. Passing one to `serde_json::json!` can panic;
+conversion through a host value can also lose number precision. Compose values
+with `JsonValue::from_serializable` instead:
+
+```rust,edition2024
+use openbindings::JsonValue;
+use serde::Serialize;
+
+#[derive(Serialize)]
+struct Envelope { payload: JsonValue }
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let payload = JsonValue::parse(r#"[1e9999, "\ud800"]"#)?;
+    let value = JsonValue::from_serializable(&Envelope { payload })?;
+    assert_eq!(value.text(), r#"{"payload":[1e9999, "\ud800"]}"#);
+    // Serialize to JSON text when sending exact values over the wire.
+    let bytes = serde_json::to_vec(&value)?;
+    assert_eq!(JsonValue::parse(bytes)?.text(), value.text());
+    Ok(())
+}
+```
+
+Conversion keeps its 128-container ceiling and the selected byte/node limits,
+including inside exact fields. Parse or clone an already complete exact value
+when composition is unnecessary. Preparation errors have readable `Display`
+text; Rust's `Result`-returning `main` prints `Debug`, which deliberately hides
+these details. The first example converts the preparation failure to display
+text before returning it.
 
 Each preparation is independent. The default validator shares compiled state when
 cloned; custom validators choose their own ownership and thread-safety properties.
@@ -151,7 +181,9 @@ byte preflight happens before replacement allocation.
 Construct operations, bindings, sources, dependencies and examples through exact
 JSON path edits. Set complete maps when namespaces are absent; edits do not create
 missing parents. Validate the resulting snapshot separately. Canonical domain
-entries come from that proof, not from detached authoring structures.
+entries come from that proof, not from detached authoring structures. Use
+`openbindings::is_valid_name(name)` to check a proposed entry key or alias before
+editing; validating the document still checks namespace collisions and relationships.
 
 `ConformantDocument` has no setters or mutable borrow. `document()` borrows
 plain reads, and `into_inner()` consumes proof to return the immutable document snapshot.
@@ -179,8 +211,19 @@ for program logic and messages for explanation.
 
 Value problems name the failing instance and original schema coordinate.
 `JsonValue::locate`, `ConformantDocument::locate` and `ExternalSchemas::locate` compute
-line and byte positions on demand. Explanations may be incomplete; inspect
-`problems_complete`. Optional details can disclose schema facts, so choose their
-disclosure policy in the application. See the [API reference](api-reference.md),
+line and byte positions on demand. The default evaluator's `explain` reports
+established failing assertions at these locations, with at most 100 problems. `problems_complete` is true only when
+all reportable failures were collected; a limit, missing witness or interrupted
+diagnostic work leaves it false without changing the failure verdict. `allOf`
+collects failures from its failing branches. Failed `anyOf`, `oneOf` and `not`
+report the applicator itself, without treating their branch failures as independent
+problems. Schema facts such as required member names, bounds and enum choices
+are not included: the default evaluator leaves `details` absent. Custom evaluators
+may include those facts, so choose their disclosure policy in the application.
+
+Serialized problem and schema-origin pointers replace unpaired UTF-16 units with
+U+FFFD so they can be ordinary JSON strings. Keep the original `Pointer` for exact
+lookup or editing; the serialized spelling cannot identify such names exactly.
+See the [API reference](api-reference.md),
 [evaluator guide](../crates/openbindings-json-schema-evaluator/README.md) and
 [host support](support.md).

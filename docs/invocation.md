@@ -24,28 +24,48 @@ without serialization. The full handle and its input/output/control split are re
 ## Call an operation
 
 ```rust
-use openbindings::{ConformantDocument, ExternalSchemas, JsonValue};
+use openbindings::{ConformantDocument, Detail, ExternalSchemas, JsonValue};
 use openbindings_invocation::{BindingInvoker, CancellationToken, InvocationSupport,
-    DefaultOperationInvoker, OperationRequest, OutputEvent};
+    DefaultOperationInvoker, OperationRequest, OutputEvent,
+    operation::ValidationEvidence};
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 
 async fn call<P: BindingInvoker + InvocationSupport>(
     interface: ConformantDocument, provider: P, value: JsonValue,
 ) -> Result<Vec<JsonValue>, Box<dyn std::error::Error>> {
-    let invoker = DefaultOperationInvoker::new(provider, DefaultEvaluator::default(), ExternalSchemas::default());
+    let invoker = DefaultOperationInvoker::new(provider, DefaultEvaluator::default(), ExternalSchemas::default())
+        .with_validation_detail(Detail::Explain);
     let request = OperationRequest::binding(interface, "echo.binding");
     let (mut input, mut output) = invoker.invoke(request, CancellationToken::new())?.split();
     // A single value fits the default input queue. Streaming writers and readers
     // must be polled concurrently in the application's runtime.
     input.send(value).await?;
     input.close();
+    let control = output.control();
     let mut values = Vec::new();
     while let Some(event) = output.next().await {
         match event {
             OutputEvent::Output(value) => values.push(value),
             OutputEvent::InputClosed => (),
-            OutputEvent::Complete => return Ok(values),
-            OutputEvent::Error(error) => return Err(error.into()),
+            OutputEvent::Complete => {
+                // Even success may leave accepted input undelivered.
+                println!("undelivered inputs: {}", control.undelivered_inputs().unwrap());
+                return Ok(values);
+            }
+            OutputEvent::Error(error) => {
+                if let Some(failure) = control.validation_failure() {
+                    println!("validation failed at {}", failure.direction().as_str());
+                    match failure.evidence() {
+                        ValidationEvidence::Preparation(cause) => eprintln!("{cause}"),
+                        ValidationEvidence::Evaluation(outcome) => {
+                            if let openbindings::ValueOutcome::Fails { problems, problems_complete, .. } = outcome {
+                                println!("{} problems; complete: {problems_complete}", problems.len());
+                            }
+                        }
+                    }
+                }
+                return Err(error.into());
+            }
             _ => (),
         }
     }
@@ -80,7 +100,9 @@ Keep `let control = call.control()` before splitting, or use `output.control()`.
 After the invocation ends, `control.undelivered_inputs()` returns `Some(count)`
 for accepted values never returned by a provider receive, including on `Complete`,
 error or cancellation. It returns `None` while the invocation is unsettled.
-Delivery alone does not establish processing or effects.
+For example, if two sends succeed and the provider receives only the first
+before completing, the count is `Some(1)`. The call example above checks it even
+on success. Delivery alone does not establish processing or effects.
 
 Caller input closure drains previously accepted values. Provider input closure
 declines further values and may emit `InputClosed` while output continues. Terminal
@@ -95,7 +117,13 @@ establishes success. After `Complete` or `Error`, subsequent reads return `None`
 `InvocationControl` observes the winning terminal and local evidence without
 retaining or polling provider work. Local cancellation affects only that attempt;
 external cancellation synchronously revokes its shared handoffs. Dropping output
-cancels and releases its future. None of these operations promises rollback.
+cancels and releases its future. On cancellation the provider future is dropped
+and is never polled again. An adapter cannot await cancellation in that future
+and then run async cleanup. Synchronous `Drop` cleanup can release resources;
+work requiring async cleanup must be owned separately. The cancellation token is
+useful for detached work and for synchronous loops that check it cooperatively.
+Checked finite source-pull and kind-description calls use the same drop model.
+None of these operations promises rollback.
 
 `InvocationLimits` bounds input/output queue capacity and terminal encoding bytes.
 `max_value_bytes` is optional and defaults to `None`: invocation adds no size cap
@@ -123,6 +151,15 @@ verdict from preparation. Evidence stays local and is available only for the
 winning validation terminal. Error data and context challenges are never checked
 against the operation's output schema.
 
+Call `invoker.with_validation_detail(Detail::Explain)` before invoking or preparing
+to request problems. The default is `Detail::Outcome`, which reports the verdict
+without problems. Retain `call.control()` or `output.control()` and read
+`validation_failure()` after a validation terminal. It returns the withheld
+`direction()` and `evidence()`: either a preparation failure or the value outcome.
+It is `None` when another terminal won, and never adds evidence to portable error
+data. Explanation limits and `problems_complete` still apply; see
+[reading explanations](schema-evaluators.md#read-an-explanation).
+
 For reuse, call `invoker.prepare(interface, name, &control)`. The resulting
 `PreparedOperation<V>` owns the original document, canonical operation key and
 optional validators. It retains no provider, evaluator or invoker lifetime, and can
@@ -138,6 +175,50 @@ attempt owns V, so a Send-but-not-Sync validator can yield a Send future with a 
 provider and Send provider future. Local Rc evaluators/validators also work.
 Prepared schemas can move into spawned host tasks alongside an Arc provider;
 no leaked or global invoker is required.
+
+## Keep a stream in a long-lived task
+
+An `Invocation` borrows its invoker. A function cannot create a local invoker
+(or local `Arc`) and return that invocation. Move an `Arc` into a task and create
+the invocation inside it, so the invoker lives for the whole stream. This Tokio
+example submits one request value, closes input, and streams outputs and the
+terminal event to `on_event`. Enable Tokio's `rt` feature.
+
+```rust
+use std::{error::Error, sync::Arc};
+use openbindings::JsonValue;
+use openbindings_invocation::{BindingInvoker, CancellationToken,
+    DefaultOperationInvoker, InvocationSupport, OperationRequest, OutputEvent};
+use openbindings_json_schema_evaluator::DefaultEvaluator;
+
+fn spawn_stream<P>(
+    invoker: Arc<DefaultOperationInvoker<P, DefaultEvaluator>>,
+    request: OperationRequest,
+    value: JsonValue,
+    mut on_event: impl FnMut(OutputEvent) + Send + 'static,
+) -> tokio::task::JoinHandle<Result<(), Box<dyn Error + Send + Sync>>>
+where
+    P: BindingInvoker + InvocationSupport + Send + Sync + 'static,
+    for<'a> P::Invoke<'a>: Send,
+{
+    tokio::spawn(async move {
+        let (mut input, mut output) = invoker.invoke(request, CancellationToken::new())?.split();
+        input.send(value).await?;
+        input.close();
+        while let Some(event) = output.next().await {
+            on_event(event);
+        }
+        Ok(())
+    })
+}
+```
+
+One value fits the default input queue before output is polled. Keep the returned
+task handle to observe admission/send errors and task panics. The
+callback should not block; a transport can forward events to its own bounded
+channel. Bidirectional streams also need concurrent input submission and output
+consumption inside the task. Providers whose futures are not `Send` need a local
+task on their runtime instead of `tokio::spawn`.
 
 ## Context and advisory preflight
 

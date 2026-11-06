@@ -59,9 +59,20 @@ pub(super) fn validate(
                 match status.get(&resource) {
                     Some(Status::Valid) => continue,
                     Some(Status::Invalid) => {
-                        return Err(PreparationFailure::new(
-                            PreparationFailureKind::InvalidExternalSchema,
-                        ));
+                        let failure = root
+                            .environment
+                            .space()
+                            .resource(resource)
+                            .root
+                            .map_or_else(
+                                || {
+                                    PreparationFailure::new(
+                                        PreparationFailureKind::InvalidExternalSchema,
+                                    )
+                                },
+                                |node| preparation::invalid_schema(construction, node),
+                            );
+                        return Err(failure);
                     }
                     // Checking never grants validity. A dependency cycle among
                     // admission obligations remains a capability refusal.
@@ -126,9 +137,7 @@ pub(super) fn validate(
                     }
                     ValueOutcome::Fails { .. } => {
                         status.insert(resource, Status::Invalid);
-                        return Err(PreparationFailure::new(
-                            PreparationFailureKind::InvalidExternalSchema,
-                        ));
+                        return Err(preparation::invalid_schema(construction, original));
                     }
                     ValueOutcome::Undefined { .. } => {
                         return Err(unsupported("custom-meta-undefined"));

@@ -18,6 +18,26 @@ pub(super) struct Checked {
     pub fields: HashMap<usize, readings::Fields>,
 }
 
+// Keep refusal coordinates within the existing 64 KiB diagnostic allowance.
+// The origin identifies the original resource; no schema text is retained here.
+pub(super) fn invalid_schema(construction: &Construction<'_>, node: usize) -> PreparationFailure {
+    let space = construction.environment().space();
+    let original = space.node(node);
+    let mut failure = PreparationFailure::new(PreparationFailureKind::InvalidExternalSchema);
+    let bytes = space
+        .source(original.source)
+        .uri
+        .as_ref()
+        .map_or(0, String::len);
+    if let Some(remaining) = (64usize * 1024).checked_sub(bytes)
+        && backend::location_pointer_size(original.value.view(), remaining).is_some()
+    {
+        let at = space.location(node);
+        failure.origin = Some(SchemaOrigin::new(at.resource, at.pointer));
+    }
+    failure
+}
+
 /// Syntax admission traverses every declared schema position, including unused
 /// definitions, content schemas and orphan conditionals. Evaluation reachability
 /// below deliberately omits those positions, so it cannot certify this fact.
@@ -50,9 +70,7 @@ pub(super) fn meta_syntax(
         if !profile.is_custom() {
             let valid = construction.check_standard(node)?;
             if !valid {
-                return Err(PreparationFailure::new(
-                    PreparationFailureKind::InvalidExternalSchema,
-                ));
+                return Err(invalid_schema(construction, node));
             }
         }
         let value = original.value.view();
@@ -175,9 +193,7 @@ pub(super) fn check_from(
         {
             let valid = construction.check_standard(node)?;
             if !valid {
-                return Err(PreparationFailure::new(
-                    PreparationFailureKind::InvalidExternalSchema,
-                ));
+                return Err(invalid_schema(construction, node));
             }
         }
         let schema = Interpreted {
@@ -273,21 +289,7 @@ pub(super) fn check_from(
                         count_resources(resources.len(), missing.len(), limits)?;
                     }
                     Err(QueryFailure::IdentityConflict) => {
-                        let mut failure =
-                            PreparationFailure::new(PreparationFailureKind::InvalidExternalSchema);
-                        let bytes = space
-                            .source(original.source)
-                            .uri
-                            .as_ref()
-                            .map_or(0, String::len);
-                        if let Some(remaining) = (64usize * 1024).checked_sub(bytes)
-                            && backend::location_pointer_size(original.value.view(), remaining)
-                                .is_some()
-                        {
-                            let at = space.location(node);
-                            failure.origin = Some(SchemaOrigin::new(at.resource, at.pointer));
-                        }
-                        return Err(failure);
+                        return Err(invalid_schema(construction, node));
                     }
                     // A defect has no invented target. Its per-value effect is
                     // analyzed later; other original branches are still counted.

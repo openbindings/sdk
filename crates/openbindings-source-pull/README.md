@@ -40,7 +40,16 @@ async fn inspect<P: SourcePuller>(provider: P, document: ConformantDocument)
 does not independently verify that the source was read. A context challenge is
 returned to the caller; no context collection, source check, retry or source
 operation is performed automatically. Dropping pending work cancels its child
-token before dropping the provider's future.
+token before dropping the provider's future. On cancellation that future is
+never polled again, so it cannot perform async cleanup afterward. The token lets
+detached work and synchronous loops stop cooperatively; synchronous `Drop` can
+release resources held by the future.
+
+`Display` includes a native provider error's own `Display` message. When the
+native error implements `std::error::Error + 'static`, `PullError::source()` leads
+to `PullFailure`, then to that native error. Validation failures are sources too.
+`Debug` continues to hide provider payloads; choose where to display native errors
+according to the application's disclosure policy.
 
 `PullResult::validate_for` also checks an already supplied result and returns the
 prospective conformant document. That establishes core conformance, not offered
