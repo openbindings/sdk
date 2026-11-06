@@ -1,5 +1,26 @@
 # OpenBindings source pulling
 
+Use `PullResult::keep` to adopt selected added bindings as a validated document:
+
+```rust
+use openbindings::{ConformantDocument, WorkControl};
+use openbindings_source_pull::{PullLimits, PullRequest, PullResult, PullValidationError};
+
+fn adopt(result: &PullResult, request: &PullRequest, control: &dyn WorkControl)
+    -> Result<ConformantDocument, PullValidationError>
+{
+    result.keep(request, ["getUser.api"], &PullLimits::default(), control)
+}
+```
+
+Keeping a binding keeps its added operation and `uses`, follows schema references
+through added and existing entries, and repeats these rules for each reached
+addition until nothing new is reached.
+The original stays unchanged, unrelated and proposal-only additions stay out,
+and stale proposals are not applied. Keys name entries in the report's `added`;
+an unknown or existing binding key returns `RelationshipError::KeptBinding`.
+Repeated keys are harmless, and an empty selection returns the original unchanged.
+
 For a complete protocol implementation walkthrough, read
 [writing a binding kind adapter](https://github.com/openbindings/sdk/blob/main/docs/writing-a-kind.md).
 
@@ -58,20 +79,23 @@ according to the application's disclosure policy.
 `PullResult::validate_for` also checks an already supplied result and returns the
 prospective conformant document. That establishes core conformance, not offered
 schema identity behind a reuse claim, faithful execution, live availability,
-change judgments or needs hidden in binding data. To keep part of a pull, a
-caller inserts the chosen bindings, their operations when added, and what their
-`uses` names. Follow schema references to further additions, including references
-through existing entries. Each reached added binding brings its own operation
-and `uses`. Repeat until nothing new comes in, then validate the edited snapshot.
+change judgments or needs hidden in binding data. `keep` performs those same
+checks before selecting additions, resolves references once in the full result
+(including `$id` and anchors), then validates the selected document. A reference
+into an added schema or operation keeps that whole entry. Its iterative walk
+visits each reached node and edge once, including cycles.
 Apply permitted proposal fields through explicit edits and follow their schema
-references and binding data `uses` the same way.
+references and binding data `uses` by hand; `keep` covers added entries only.
 
 `PullLimits` defaults to 32 MiB request/response handoffs, 100,000 indexed entries
 and uses labels, 64 million relationship work units and 64 MiB cumulative
 relationship-index/edit-metadata reservations. They exclude provider work and
-already admitted carriers. Core prospective rebuilding/validation uses the
-original document's JSON limits and core finding limits, not the relationship
-ledger; cancellation is checked before and after those synchronous calls.
+already admitted carriers. Core rebuilding, validation and reference inspection
+make a fixed number of passes within their own limits, not the relationship
+ledger; cancellation is checked between passes and during inspection. Graph
+storage and traversal spend the relationship ledger. Incomplete inspection returns
+`LimitExceeded("reference-inspection")`. Edited documents retain the original
+document's JSON limits.
 Requests read through `from_json` are admitted before caller limits, so byte
 consumers should first choose explicit JSON parsing limits. Native operational
 errors are not measured as JSON; exact context challenges are.

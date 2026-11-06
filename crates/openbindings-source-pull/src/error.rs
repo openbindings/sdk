@@ -51,6 +51,8 @@ pub enum RelationshipError {
     DuplicateTarget,
     /// A uses label is malformed, repeated, names no addition, or names its own binding.
     Uses,
+    /// A selected key names no binding in the report's added entries.
+    KeptBinding,
 }
 /// Failure of local result validation, distinct from a provider's operational error.
 pub enum PullValidationError {
@@ -64,7 +66,7 @@ pub enum PullValidationError {
     Cancelled,
     /// Core could not build the prospective document under the original JSON limits.
     Edit(EditError),
-    /// Adding all declared additions did not obtain core conformance.
+    /// The document with the chosen additions did not obtain core conformance.
     Prospective(DocumentValidation),
     /// Core refused the prospective document's specification version.
     Version(VersionRefusal),

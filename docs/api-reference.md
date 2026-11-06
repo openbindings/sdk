@@ -31,9 +31,14 @@ APIs; the TypeScript facade does not expose their provider protocols.
 For source pulling, `AddedEntry::uses` and `BindingProposal::uses` expose only
 additions needed by binding data. `SchemaProposal` exposes the replacement
 `schema`; an additional `uses` member is retained as unknown metadata. The
-checked pull validates labels and all additions together. A caller keeping part
-of a pull follows schema references and each reached added binding's operation
-and `uses`, as the [adapter guide](writing-a-kind.md#what-goes-in-uses) explains.
+checked pull validates labels and all additions together. For selective adoption,
+`PullResult::keep(&request, ["getUser.api"], &limits, &control)` performs the same
+checks as `validate_for`, follows schema references and reached bindings'
+operations and `uses`, and returns a `ConformantDocument` containing the original
+plus the reached additions. It leaves proposals unapplied and the original
+unchanged. Unknown or existing binding keys fail with
+`RelationshipError::KeptBinding`; empty and repeated selections are supported.
+See the [adapter guide](writing-a-kind.md#what-goes-in-uses).
 
 ## Exact documents and conformance
 

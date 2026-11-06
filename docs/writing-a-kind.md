@@ -698,21 +698,17 @@ out of `uses`. Their references already show the targets. A schema proposal is
 `{schema}` and has no list of needs. An addition may exist for a proposal even
 when no added binding needs it.
 
-To keep part of a pull:
-
-1. Choose the `added` entries to keep and insert their bindings.
-2. Insert each binding's operation when it is an addition, and the additions
-   its `uses` names.
-3. Follow schema references from what you keep. Insert each target that is an
-   addition. Follow references through existing entries too.
-4. For every added binding reached along the way, insert its operation when
-   added and what its own `uses` names. Repeat until nothing new comes in.
-5. Validate the edited document before adopting it.
+Callers use `PullResult::keep` with the chosen added binding keys. It follows
+schema references and reached bindings' operations and `uses`, then returns a
+validated document, as the draft's
+[Using the result](https://github.com/openbindings/interfaces/blob/3e3dc453a93b611a8e9ea1813ec63a2216830f45/source-puller/README.md#using-the-result)
+describes.
 
 When applying a proposal, copy its permitted fields and remove what `remove`
-names. Start the same steps from its proposed schemas and, for a binding
-proposal, what its `uses` names. Retaining unknown proposal metadata gives it no
-edit authority.
+names. Follow schema references from its proposed schemas and, for a binding
+proposal, the additions its `uses` names; repeat for each reached addition and
+validate the edited document. This remains a manual edit; `keep` does not apply
+proposals. Retaining unknown proposal metadata gives it no edit authority.
 
 Existing binding entries use `references` to name what their data refers to in
 the input document. That list also leaves out what schema references show in
@@ -735,10 +731,12 @@ conformance alone does not establish those kind-owned claims.
 
 `PullResult::validate_for` performs the same validation for a supplied result
 without dispatching a pull. It returns the prospective conformant document,
-which the application may explicitly adopt. For partial adoption, insert only
-the selected entries and their required additions. Apply proposal fields through
-explicit document edits, then revalidate. Do not copy the entire proposal as a
-binding or overwrite unrelated author fields.
+which the application may explicitly adopt. For partial adoption, `PullResult::keep`
+performs the same checks, follows the selected bindings' needs and validates the
+selected document. It refuses keys absent from `added` with
+`RelationshipError::KeptBinding`. Apply proposal fields through explicit document
+edits, then revalidate. Do not copy the entire proposal as a binding or overwrite
+unrelated author fields.
 
 ## Run the application and tests
 

@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-11-06 selective pull adoption (unreleased)
+
+- Add `PullResult::keep` to validate and retain selected added bindings with their
+  added operations, binding data `uses` and transitive schema-reference targets.
+  Resolve `$id`, anchors and references through existing entries in one full
+  result inspection; visit each reached node and edge once, including cycles.
+- Add `RelationshipError::KeptBinding` for keys absent from the report's `added`.
+  Keep the original immutable, leave proposals unapplied and omit additions
+  needed only by proposals. Share edit construction with `validate_for`.
+- Cover selective adoption, the pinned report fixtures and default-limit keeps
+  of a near-30-MiB result and 5,000 operations. Update the consumer and guides.
+  No dependency, default limit or TypeScript API changes.
+
 ## 2026-11-06 binding data needs (unreleased)
 
 - Apply interfaces `3e3dc453a93b611a8e9ea1813ec63a2216830f45`; retain specification

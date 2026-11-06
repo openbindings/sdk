@@ -2,7 +2,7 @@ use crate::{
     PullLimits, PullRequest, PullResult, PullValidationError as Failure, budget::Attempt,
     relationships,
 };
-use openbindings::{ConformantDocument, Edit, WorkControl};
+use openbindings::{ConformantDocument, Document, Edit, JsonRef, WorkControl};
 
 impl PullResult {
     /// Check request/result relationships and validate a new snapshot containing
@@ -32,18 +32,29 @@ pub(crate) fn validate(
 ) -> Result<ConformantDocument, Failure> {
     attempt.response(result.value().value().text().len())?;
     relationships::check(request, result, attempt)?;
-    let root = request.interface().value();
     let additions = result
         .value()
         .value()
         .get("additions")
         .expect("admitted additions");
+    insert(request, additions, None, attempt)
+}
+
+// Selection follows map/member order. None retains every map, including empty
+// maps, as validate_for has always done. A subset creates only nonempty maps.
+pub(crate) fn insert(
+    request: &PullRequest,
+    additions: JsonRef<'_>,
+    selection: Option<&[bool]>,
+    attempt: &mut Attempt<'_>,
+) -> Result<ConformantDocument, Failure> {
+    let root = request.interface().value();
     // Reserve exactly the maximum edit count before assembling any owned paths.
     let mut count = 0usize;
-    for role in ["operations", "schemas", "bindings"] {
-        if let Some(map) = additions.get(role) {
+    for section in ["operations", "schemas", "bindings"] {
+        if let Some(map) = additions.get(section) {
             count = count
-                .checked_add(if root.get(role).is_some() {
+                .checked_add(if root.get(section).is_some() {
                     map.len().expect("map")
                 } else {
                     1
@@ -52,20 +63,27 @@ pub(crate) fn validate(
         }
     }
     let mut edits = attempt.vector::<Edit>(count)?;
-    for role in ["operations", "schemas", "bindings"] {
-        if let Some(map) = additions.get(role) {
-            if root.get(role).is_none() {
+    let mut offset = 0;
+    for section in ["operations", "schemas", "bindings"] {
+        if let Some(map) = additions.get(section) {
+            let count = map.len().expect("map");
+            let selected = selection.map(|bits| &bits[offset..offset + count]);
+            offset += count;
+            if selected.is_some_and(|bits| !bits.iter().any(|bit| *bit)) {
+                continue;
+            }
+            if root.get(section).is_none() {
+                let value = selected_map(map, selected, attempt)?;
                 attempt.allocate(64)?;
-                edits.push(Edit::set(&[role], map.to_owned()));
+                edits.push(Edit::set(&[section], value));
             } else {
-                for entry in map.members().expect("admitted map") {
+                for (at, entry) in map.members().expect("admitted map").enumerate() {
+                    if selected.is_some_and(|bits| !bits[at]) {
+                        continue;
+                    }
                     let name = entry.name.as_str().expect("relationship-admitted key");
-                    attempt.work(name.len().saturating_add(1))?;
-                    // Edit::set grows a String. Final capacity can approach twice
-                    // the required bytes; cumulative allocations approach twice
-                    // that capacity. Each name byte can need two escaped bytes.
-                    attempt.allocate(name.len().saturating_mul(8).saturating_add(128))?;
-                    edits.push(Edit::set(&[role, name], entry.value.to_owned()));
+                    edit_path(name, attempt)?;
+                    edits.push(Edit::set(&[section, name], entry.value.to_owned()));
                 }
             }
         }
@@ -84,4 +102,34 @@ pub(crate) fn validate(
         .conformant()
         .ok_or(Failure::Prospective(validation))?;
     Ok(prospective)
+}
+
+fn edit_path(name: &str, attempt: &mut Attempt<'_>) -> Result<(), Failure> {
+    attempt.work(name.len().saturating_add(1))?;
+    // String growth and pointer escaping can cumulatively allocate up to eight
+    // bytes per name byte. Include the fixed section and edit path overhead.
+    attempt.allocate(name.len().saturating_mul(8).saturating_add(128))
+}
+
+fn selected_map(
+    map: JsonRef<'_>,
+    selected: Option<&[bool]>,
+    attempt: &mut Attempt<'_>,
+) -> Result<openbindings::JsonValue, Failure> {
+    let Some(bits) = selected.filter(|bits| bits.iter().any(|bit| !bit)) else {
+        return Ok(map.to_owned());
+    };
+    let mut removals = attempt.vector(bits.iter().filter(|bit| !**bit).count())?;
+    for (entry, keep) in map.members().expect("map").zip(bits) {
+        if !keep {
+            let name = entry.name.as_str().expect("relationship-admitted key");
+            edit_path(name, attempt)?;
+            removals.push(Edit::remove(&[name]));
+        }
+    }
+    // Core builds a map from exact retained values without serializing them
+    // through another JSON model. At most three such passes occur per keep.
+    let selected = Document::from_json(map.to_owned()).edit(&removals);
+    attempt.check()?;
+    Ok(selected.map_err(Failure::Edit)?.value().to_owned())
 }

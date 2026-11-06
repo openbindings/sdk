@@ -2,7 +2,6 @@ use openbindings::{ConformantDocument, Document, Edit, JsonRef, JsonValue};
 use openbindings_source_pull::*;
 use source_pull_consumer::{Embedded, Fixed};
 use std::{
-    collections::BTreeMap,
     future::Future,
     sync::atomic::AtomicBool,
     task::{Context as TaskContext, Poll, Waker},
@@ -10,19 +9,6 @@ use std::{
 
 fn json(text: &str) -> JsonValue {
     JsonValue::parse(text).unwrap()
-}
-fn quote(text: &str) -> String {
-    serde_json::to_string(text).unwrap()
-}
-fn object(fields: BTreeMap<String, JsonValue>) -> JsonValue {
-    json(&format!(
-        "{{{}}}",
-        fields
-            .into_iter()
-            .map(|(k, v)| format!("{}:{}", quote(&k), v.text()))
-            .collect::<Vec<_>>()
-            .join(",")
-    ))
 }
 fn field(value: JsonRef<'_>, key: &str) -> JsonValue {
     value.get(key).unwrap().to_owned()
@@ -318,7 +304,7 @@ fn a_caller_can_keep_part_of_a_pull_by_following_schema_references() {
         .get("a")
         .unwrap()
         .to_owned();
-    // Follow a's input reference to the schema addition before inserting it.
+    // keep follows this input reference without requiring a uses label.
     assert_eq!(
         operation
             .get("input")
@@ -328,34 +314,13 @@ fn a_caller_can_keep_part_of_a_pull_by_following_schema_references() {
             .as_str(),
         Some("#/schemas/S")
     );
-    let schema = additions
-        .schemas()
-        .unwrap()
-        .value()
-        .get("S")
-        .unwrap()
-        .to_owned();
-    let binding = additions
-        .bindings()
-        .unwrap()
-        .value()
-        .get("a")
-        .unwrap()
-        .to_owned();
-    let selected = original
-        .document()
-        .edit(&[
-            Edit::set(&["operations", "a"], operation.clone()),
-            Edit::set(&["schemas"], object(BTreeMap::from([("S".into(), schema)]))),
-            Edit::set(
-                &["bindings"],
-                object(BTreeMap::from([("a".into(), binding)])),
-            ),
-        ])
-        .unwrap()
-        .validate()
-        .unwrap()
-        .conformant()
+    let selected = result
+        .keep(
+            &request,
+            ["a"],
+            &PullLimits::default(),
+            &AtomicBool::new(false),
+        )
         .unwrap();
     assert!(
         selected

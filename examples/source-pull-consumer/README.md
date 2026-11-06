@@ -30,11 +30,13 @@ The consumer explicitly adopts additions or applies proposals and revalidates.
 Its binding data selects source items and needs no other additions, so the
 reconciler emits no `uses`. Schema references show their own targets.
 
-To keep part of a pull, choose added bindings, insert their operations when added
-and what their `uses` names, then follow schema references to further additions.
-Each reached added binding brings its own operation and `uses`. Repeat until
-nothing new comes in and validate the edited document. The selective-adoption
-test follows an operation's input reference without a hand-written `uses` list.
+To keep part of a pull, call
+`result.keep(&request, ["a"], &PullLimits::default(), &control)` with added binding
+keys. It keeps their added operations and `uses`, follows schema references and
+reached bindings' needs, and returns a validated document. The selective-adoption
+test uses this helper to follow an operation's input reference without a
+hand-written `uses` list. The original stays unchanged; applying proposals
+remains an explicit manual edit.
 
 Run `python3 tools/verify-source-pull.py` from the SDK root; add `--archives --wasm`
 to qualify extracted dependencies and the local TypeScript/Node async Wasm bridge.
