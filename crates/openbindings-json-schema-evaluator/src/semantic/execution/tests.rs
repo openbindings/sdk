@@ -197,7 +197,7 @@ fn frame_backing_growth_has_an_exact_requested_byte_gate() {
     );
     assert!(size_of::<State>() <= 256, "State::copied base reserve");
     assert_eq!(
-        size_of::<Option<Arc<explain::WitnessSeed>>>(),
+        size_of::<Option<Arc<explain::Witnesses>>>(),
         size_of::<usize>()
     );
 }

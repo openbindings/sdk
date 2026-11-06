@@ -24,17 +24,20 @@ export function diagnosticBudgetCases(sdk) {
           "fixed explanation",
         );
         check(
-          !result.problemsComplete,
-          "one witness never claims completeness",
+          result.problemsComplete === (call === "explain"),
+          "diagnostic completeness",
         );
         check(
-          result.problems.length === (call === "explain" ? 1 : 0),
+          result.problems.length === (call === "explain" ? 2 : 0),
           "call selects detail",
         );
         if (call === "explain")
           check(
-            result.problems[0].code === "type",
-            "original assertion witness",
+            result.problems[0].code === "type" &&
+              result.problems[1].code === "falseSchema" &&
+              result.problems[1].schema.pointer ===
+                "/operations/op/input/allOf/1",
+            "all original assertion failures",
           );
       }
     } finally {

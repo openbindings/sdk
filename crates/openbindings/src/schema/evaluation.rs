@@ -695,10 +695,11 @@ impl<V: SchemaValidator> PreparedSchema<V> {
     ///
     /// Explanation costs more than the cheap check, and its cost is bounded
     /// by the evaluator, not the SDK. The default evaluator retains a bounded
-    /// proof witness and materializes its original schema and instance locations
-    /// after establishing failure. Messages use fixed SDK text. Exhausting the
-    /// remaining work or storage allowance keeps the failure but may omit its
-    /// problem. Use [`Self::evaluate`] when no explanation is needed.
+    /// collection of failures and materializes their original schema and instance
+    /// locations after establishing failure, ordered by instance then schema.
+    /// Messages use fixed SDK text; the default evaluator omits schema facts.
+    /// Exhausting the remaining work or storage allowance keeps the failure but
+    /// may omit problems. Use [`Self::evaluate`] when no explanation is needed.
     /// Failure diagnostics can be incomplete; inspect `problems_complete` rather
     /// than assuming every failed keyword is reported.
     pub fn explain(&self, value: &JsonValue) -> ValueOutcome {

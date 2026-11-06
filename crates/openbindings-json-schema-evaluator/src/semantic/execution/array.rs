@@ -39,7 +39,7 @@ pub(super) fn advance<'v>(
             if waiting {
                 let result = returned.expect("item result");
                 frame.state.valid = run.graph.and(frame.state.valid, result.valid)?;
-                frame.state.inherit_failure(&result, TRUE);
+                run.inherit_failure(&mut frame.state, &result, TRUE)?;
                 if run.plan.annotations.items {
                     run.graph.charge(96)?;
                     frame.state.items.insert(index, TRUE);
@@ -116,6 +116,7 @@ pub(super) fn advance<'v>(
                 let maximum = count(1, "maxContains", u64::MAX)?;
                 let valid = counts.within(minimum, maximum, &mut run.graph)?;
                 frame.state.valid = run.graph.and(frame.state.valid, valid)?;
+                run.uncertain_failure(&mut frame.state, valid)?;
                 if valid == FALSE {
                     run.record_failure(
                         &mut frame.state,
@@ -141,7 +142,9 @@ pub(super) fn advance<'v>(
                 let valid = run.graph.or(evaluated, result.valid)?;
                 frame.state.valid = run.graph.and(frame.state.valid, valid)?;
                 if evaluated == FALSE {
-                    frame.state.inherit_failure(&result, TRUE);
+                    run.inherit_failure(&mut frame.state, &result, TRUE)?;
+                } else {
+                    run.uncertain_failure(&mut frame.state, valid)?;
                 }
                 run.graph.charge(96)?;
                 frame.state.items.insert(index, TRUE);

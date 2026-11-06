@@ -59,7 +59,7 @@ pub(super) fn advance<'v>(
                     run.graph.or(combined.valid, result.valid)?
                 };
                 if operator == 0 {
-                    combined.inherit_failure(&result, TRUE);
+                    run.inherit_failure(&mut combined, &result, TRUE)?;
                 }
                 if operator == 2 {
                     let chosen = run.graph.and(zero, result.valid)?;
@@ -108,6 +108,7 @@ pub(super) fn advance<'v>(
                 let result = returned.expect("not result");
                 let not = run.graph.not(result.valid)?;
                 frame.state.valid = run.graph.and(frame.state.valid, not)?;
+                run.uncertain_failure(&mut frame.state, not)?;
                 if not == FALSE {
                     run.record_failure(
                         &mut frame.state,
@@ -177,9 +178,11 @@ fn finish(
     let selected = run.graph.choose(condition.valid, yes.valid, no.valid)?;
     frame.state.valid = run.graph.and(frame.state.valid, selected)?;
     if condition.valid == TRUE {
-        frame.state.inherit_failure(yes, TRUE);
+        run.inherit_failure(&mut frame.state, yes, TRUE)?;
     } else if condition.valid == FALSE {
-        frame.state.inherit_failure(no, TRUE);
+        run.inherit_failure(&mut frame.state, no, TRUE)?;
+    } else if selected != TRUE {
+        run.uncertain_failure(&mut frame.state, condition.valid)?;
     }
     run.annotations(&mut frame.state, condition, TRUE)?;
     run.annotations(&mut frame.state, yes, condition.valid)?;

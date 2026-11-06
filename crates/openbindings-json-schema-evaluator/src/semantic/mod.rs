@@ -368,11 +368,14 @@ impl Plan {
         };
         let (mut outcome, witness) = run.evaluate_root(value, unavailable);
         if record_witnesses
-            && let ValueOutcome::Fails { problems, .. } = &mut outcome
-            && let Some(seed) = witness
-            && let Ok(Some(problem)) = run.materialize(&seed, value)
+            && let ValueOutcome::Fails {
+                problems,
+                problems_complete,
+                ..
+            } = &mut outcome
+            && let Some(witnesses) = witness
         {
-            *problems = vec![problem];
+            (*problems, *problems_complete) = run.materialize_all(&witnesses, value);
         }
         Completed {
             outcome,
@@ -389,7 +392,7 @@ impl Run<'_> {
         &mut self,
         value: &JsonValue,
         unavailable: &mut Option<String>,
-    ) -> (ValueOutcome, Option<Arc<explain::WitnessSeed>>) {
+    ) -> (ValueOutcome, Option<Arc<explain::Witnesses>>) {
         loop {
             let result = self.execute(self.plan.entry, value.view());
             if matches!(&result, Ok(execution::Attempt::Abort)) {
@@ -417,7 +420,12 @@ impl Run<'_> {
                 if self.pending_cycles.is_empty()
                     || independent(state.valid, &mut self.graph, &self.cuts)?
                 {
-                    debug_assert!(state.witness.is_none() || state.valid == FALSE);
+                    debug_assert!(
+                        state
+                            .witness
+                            .as_ref()
+                            .is_none_or(|w| w.valid_for(state.valid))
+                    );
                     return self
                         .conclude(state.valid, unavailable)
                         .map(|outcome| Some((outcome, state.witness)));
@@ -535,13 +543,17 @@ struct Atom {
 #[derive(Clone)]
 struct State {
     valid: Formula,
-    witness: Option<Arc<explain::WitnessSeed>>,
+    witness: Option<Arc<explain::Witnesses>>,
     properties: BTreeMap<Vec<u16>, Formula>,
     items: BTreeMap<usize, Formula>,
 }
 impl State {
     fn copied(&self, graph: &mut Graph<'_>) -> Result<Self, NoVerdict> {
-        debug_assert!(self.witness.is_none() || self.valid == FALSE);
+        debug_assert!(
+            self.witness
+                .as_ref()
+                .is_none_or(|w| w.valid_for(self.valid))
+        );
         graph.work(
             self.items
                 .len()
@@ -934,7 +946,7 @@ impl Run<'_> {
     }
     fn conjunction(&mut self, target: &mut State, other: &State) -> Result<(), NoVerdict> {
         target.valid = self.graph.and(target.valid, other.valid)?;
-        target.inherit_failure(other, TRUE);
+        self.inherit_failure(target, other, TRUE)?;
         self.annotations(target, other, TRUE)
     }
     fn alias(

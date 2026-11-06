@@ -172,6 +172,33 @@ diagnostic policy, work limits or cancellation; inspect `problems_complete`
 contain application secrets. Debug output is redacted, while explicit fields,
 serialization and display are subject to the application's disclosure policy.
 
+The default evaluator explains only after establishing failure. It uses the
+remaining evaluation work and storage allowance to retain up to 100 distinct
+assertions (`MAX_EXPLANATION_PROBLEMS` internally). Problems sort lexically by
+exact UTF-16 instance pointer, then schema source URI and exact schema pointer.
+Repeated applications of the same assertion to the same occurrence are one
+problem. Each missing required member
+is a separate problem at the existing parent instance. The current default
+evaluator leaves schema `details` absent; asking for an explanation does not
+currently opt into disclosure of schema operands or member names.
+
+Conjunctions, references, properties, items, and active dependencies report all
+their applicable failures. A concrete `if` selects only the failing `then` or
+`else` branch. Failed `anyOf`, `oneOf`, and `not` each report one problem at the
+applicator itself: respectively no alternative satisfies, the match count is
+not exactly one, or the negated schema satisfies. Their branch failures are not
+separate problems. Likewise `contains` reports its failed match-count assertion
+at the array, and `propertyNames` reports at the object because a member name
+is not an addressable instance value. An applied Boolean false schema, including
+`additionalProperties: false` and `unevaluatedProperties: false`, uses
+`falseSchema` at that original schema and the rejected member's instance pointer.
+
+`problems_complete` means every failure under these reporting rules was retained.
+It is false when a problem cap, work/storage limit, cancellation, unavailable
+location, or unresolved applicability prevents that claim. A fully established
+applicator failure can be complete even if an irrelevant branch is unavailable.
+Passing values and cheap checks perform no explanation work.
+
 Cancellation is cooperative. A same-thread `AbortSignal` cannot run while synchronous
 Wasm occupies that thread. HTTP acquisition has separate asynchronous cancellation,
 redirect and deadline policy; see [HTTP discovery](../crates/openbindings-http-discovery/README.md).

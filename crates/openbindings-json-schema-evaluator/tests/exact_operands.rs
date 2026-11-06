@@ -114,7 +114,7 @@ fn every_numeric_family_uses_exact_values_in_both_detail_modes() {
                     ..
                 } => {
                     assert!(!expected, "{schema}: {input}");
-                    assert!(!problems_complete);
+                    assert_eq!(*problems_complete, mode == Detail::Explain);
                     if mode == Detail::Outcome {
                         assert!(problems.is_empty());
                     }

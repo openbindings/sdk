@@ -127,7 +127,7 @@ fn deep_literal_and_opaque_data_do_not_inherit_compiler_tree_depth() {
             else {
                 panic!("{depth}: {result:?}")
             };
-            assert!(!problems_complete);
+            assert!(problems_complete);
             assert_eq!(problems[0].instance, "");
             assert!(matches!(problems[0].code.as_str(), "const" | "enum"));
         }
@@ -498,7 +498,7 @@ fn diagnostics_have_a_separate_bounded_pass_and_healthy_reuse() {
         matches!(prepared.explain(&value("0")), ValueOutcome::Fails { problems, problems_complete:false, .. } if problems.is_empty())
     );
     assert!(
-        matches!(prepare(&expensive).explain(&value("0")), ValueOutcome::Fails { problems, .. } if problems.len() == 1)
+        matches!(prepare(&expensive).explain(&value("0")), ValueOutcome::Fails { problems, problems_complete: false, .. } if problems.len() == 100)
     );
     assert!(matches!(
         prepare("true").evaluate(&value("0")),
@@ -534,7 +534,12 @@ fn diagnostics_are_original_and_do_not_expose_instance_values() {
         panic!("{result:?}");
     };
     assert!(problems.iter().any(|p| p.instance == "/a~1b"));
-    assert_eq!(problems.len(), 1);
+    assert_eq!(problems.len(), 2);
+    assert_eq!(problems[1].instance, "/secret");
+    assert_eq!(
+        problems[1].schema.pointer,
+        "/operations/op/input/unevaluatedProperties"
+    );
 }
 #[test]
 fn property_escape_matching_is_lazy_and_does_not_poison_thread_state() {

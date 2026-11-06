@@ -86,14 +86,26 @@ fn pattern_subschema_failures_name_the_original_child_assertion() {
         )
         .unwrap();
     let value = JsonValue::parse(r#"{"o":{"a":"x"}}"#).unwrap();
-    let ValueOutcome::Fails { problems, .. } = contract.explain(&value) else {
+    let ValueOutcome::Fails {
+        problems,
+        problems_complete,
+        ..
+    } = contract.explain(&value)
+    else {
         panic!("the member fails its pattern's schema")
     };
-    assert_eq!(problems.len(), 1);
-    assert_eq!(problems[0].code, "type");
+    assert!(problems_complete);
+    assert_eq!(problems.len(), 2);
+    assert_eq!(problems[0].code, "falseSchema");
     assert_eq!(problems[0].instance, "/o/a");
     assert_eq!(
-        problems[0].schema,
+        problems[0].schema.pointer,
+        "/operations/op/input/properties/o/unevaluatedProperties"
+    );
+    assert_eq!(problems[1].code, "type");
+    assert_eq!(problems[1].instance, "/o/a");
+    assert_eq!(
+        problems[1].schema,
         SchemaOrigin::new(
             None,
             "/schemas/p/patternProperties/^a/type".parse().unwrap()

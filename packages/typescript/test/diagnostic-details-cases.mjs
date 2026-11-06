@@ -60,7 +60,10 @@ export function diagnosticDetailsCases(sdk) {
     for (const call of ["evaluate", "explain"]) {
       const result = run(`{"exclusiveMinimum":${token}}`, token, call);
       check(result.status === "fails", "exact exclusive bound");
-      check(!result.problemsComplete, "truthful first-error completeness");
+      check(
+        result.problemsComplete === (call === "explain"),
+        "diagnostic completeness",
+      );
       if (call === "evaluate")
         check(result.problems.length === 0, "cheap check omits payloads");
       else {
@@ -93,7 +96,7 @@ export function diagnosticDetailsCases(sdk) {
     );
     const problem = detailed.problems[0];
     check(
-      !detailed.problemsComplete &&
+      detailed.problemsComplete &&
         problem.details === undefined &&
         problem.code === keyword &&
         problem.schema.pointer === "/operations/op/input/" + keyword &&

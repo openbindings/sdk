@@ -47,6 +47,352 @@ fn category(outcome: &ValueOutcome) -> &'static str {
 }
 
 #[test]
+fn multiple_failures_reproduction() {
+    let (plan, _) = prepare(JsonValue::parse(r#"{"type":"object","properties":{"a":{"type":"string"},"b":{"type":"integer"}},"required":["a","b","c"],"additionalProperties":false}"#).unwrap(), None);
+    let value = JsonValue::parse(r#"{"a":1,"b":"x","z":true}"#).unwrap();
+    let result = plan.evaluate(&value, Detail::Explain, &AtomicBool::new(false));
+    println!("{}", serde_json::to_string_pretty(&result).unwrap());
+    let ValueOutcome::Fails {
+        problems,
+        problems_complete,
+        ..
+    } = result
+    else {
+        panic!("expected failure")
+    };
+    assert!(problems_complete);
+    assert_eq!(
+        problems
+            .iter()
+            .map(|p| (
+                p.instance.as_str().unwrap(),
+                p.schema.pointer.as_str().unwrap(),
+                p.code.as_str()
+            ))
+            .collect::<Vec<_>>(),
+        [
+            ("", "/required", "required"),
+            ("/a", "/properties/a/type", "type"),
+            ("/b", "/properties/b/type", "type"),
+            ("/z", "/additionalProperties", "falseSchema"),
+        ]
+    );
+}
+
+fn explain(schema: &str, value: &str) -> (Vec<ValueProblem>, bool) {
+    let (plan, _) = prepare(JsonValue::parse(schema).unwrap(), None);
+    let value = JsonValue::parse(value).unwrap();
+    let ordinary = plan.evaluate(&value, Detail::Outcome, &AtomicBool::new(false));
+    let explained = plan.evaluate(&value, Detail::Explain, &AtomicBool::new(false));
+    assert_eq!(category(&ordinary), category(&explained));
+    let ValueOutcome::Fails {
+        problems,
+        problems_complete,
+        ..
+    } = explained
+    else {
+        panic!("expected failure")
+    };
+    (problems, problems_complete)
+}
+
+#[test]
+fn every_assertion_family_has_original_locations() {
+    for (schema, value, keyword) in [
+        (r#"{"type":["string","null"]}"#, "1", "type"),
+        (r#"{"const":{"x":1}}"#, "{}", "const"),
+        (r#"{"enum":[1e999,{"x":1},null]}"#, "false", "enum"),
+        (r#"{"minimum":1e1000}"#, "1e999", "minimum"),
+        (r#"{"maximum":0}"#, "1", "maximum"),
+        (r#"{"exclusiveMinimum":1}"#, "1", "exclusiveMinimum"),
+        (r#"{"exclusiveMaximum":1}"#, "1", "exclusiveMaximum"),
+        (r#"{"multipleOf":2}"#, "3", "multipleOf"),
+        (r#"{"minLength":2}"#, r#""x""#, "minLength"),
+        (r#"{"maxLength":0}"#, r#""x""#, "maxLength"),
+        (r#"{"minItems":2}"#, "[1]", "minItems"),
+        (r#"{"maxItems":0}"#, "[1]", "maxItems"),
+        (r#"{"minProperties":2}"#, r#"{"x":1}"#, "minProperties"),
+        (r#"{"maxProperties":0}"#, r#"{"x":1}"#, "maxProperties"),
+        (r#"{"uniqueItems":true}"#, "[1,1]", "uniqueItems"),
+        (r#"{"pattern":"^x$"}"#, r#""y""#, "pattern"),
+        (r#"{"required":["missing"]}"#, "{}", "required"),
+    ] {
+        let (problems, complete) = explain(schema, value);
+        assert!(complete, "{schema}");
+        assert_eq!(problems.len(), 1, "{schema}");
+        assert_eq!(problems[0].code, keyword);
+        assert_eq!(
+            problems[0].schema.pointer.as_str(),
+            Some(format!("/{keyword}").as_str())
+        );
+        assert_eq!(problems[0].instance, "");
+    }
+}
+
+#[test]
+fn multiple_local_assertions_and_missing_members_are_all_retained() {
+    let (problems, complete) = explain(
+        r#"{"minimum":10,"maximum":0,"multipleOf":2,"enum":[42],"const":6}"#,
+        "5",
+    );
+    assert!(complete);
+    assert_eq!(
+        problems.iter().map(|p| p.code.as_str()).collect::<Vec<_>>(),
+        ["const", "enum", "maximum", "minimum", "multipleOf"]
+    );
+    let (problems, complete) = explain(
+        r#"{"required":["title","a","b"],"dependentRequired":{"title":["c","d"]}}"#,
+        r#"{"title":"present"}"#,
+    );
+    assert!(complete);
+    assert_eq!(
+        problems
+            .iter()
+            .map(|p| p.schema.pointer.as_str().unwrap())
+            .collect::<Vec<_>>(),
+        [
+            "/dependentRequired",
+            "/dependentRequired",
+            "/required",
+            "/required"
+        ]
+    );
+}
+
+#[test]
+fn nested_occurrences_sort_by_instance_then_original_schema() {
+    let schema = r#"{"properties":{"rows":{"items":{"properties":{"~/":{"allOf":[{"minimum":5},{"const":8}]}}}}}}"#;
+    let (problems, complete) = explain(schema, r#"{"rows":[{"~/":1},{"~/":2}]}"#);
+    assert!(complete);
+    let coordinates = problems
+        .iter()
+        .map(|p| {
+            (
+                p.instance.as_str().unwrap(),
+                p.schema.pointer.as_str().unwrap(),
+            )
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        coordinates,
+        [
+            (
+                "/rows/0/~0~1",
+                "/properties/rows/items/properties/~0~1/allOf/0/minimum"
+            ),
+            (
+                "/rows/0/~0~1",
+                "/properties/rows/items/properties/~0~1/allOf/1/const"
+            ),
+            (
+                "/rows/1/~0~1",
+                "/properties/rows/items/properties/~0~1/allOf/0/minimum"
+            ),
+            (
+                "/rows/1/~0~1",
+                "/properties/rows/items/properties/~0~1/allOf/1/const"
+            ),
+        ]
+    );
+    let schema = r#"{"additionalProperties":{"allOf":[{"type":"string"},{"const":null}]}}"#;
+    let (expected, _) = explain(schema, r#"{"z":1,"a":2}"#);
+    for _ in 0..5 {
+        assert_eq!(explain(schema, r#"{"a":2,"z":1}"#).0, expected);
+    }
+}
+
+#[test]
+fn applicators_report_only_the_failures_that_apply() {
+    for (schema, value, expected) in [
+        (
+            r#"{"allOf":[{"type":"string"},false]}"#,
+            "1",
+            vec![
+                ("", "/allOf/0/type", "type"),
+                ("", "/allOf/1", "falseSchema"),
+            ],
+        ),
+        (
+            r#"{"anyOf":[{"type":"string"},{"type":"boolean"}]}"#,
+            "1",
+            vec![("", "/anyOf", "anyOf")],
+        ),
+        (
+            r#"{"oneOf":[{"type":"string"},false]}"#,
+            "1",
+            vec![("", "/oneOf", "oneOf")],
+        ),
+        (
+            r#"{"oneOf":[true,true,false]}"#,
+            "1",
+            vec![("", "/oneOf", "oneOf")],
+        ),
+        (
+            r#"{"not":{"type":"integer"}}"#,
+            "1",
+            vec![("", "/not", "not")],
+        ),
+        (
+            r#"{"anyOf":[false,true],"not":false,"const":2}"#,
+            "1",
+            vec![("", "/const", "const")],
+        ),
+        (
+            r#"{"if":true,"then":{"minimum":2,"const":3},"else":false}"#,
+            "1",
+            vec![
+                ("", "/then/const", "const"),
+                ("", "/then/minimum", "minimum"),
+            ],
+        ),
+        (
+            r#"{"if":false,"then":false,"else":{"minimum":2,"const":3}}"#,
+            "1",
+            vec![
+                ("", "/else/const", "const"),
+                ("", "/else/minimum", "minimum"),
+            ],
+        ),
+        (
+            r#"{"contains":{"type":"string"},"minContains":2}"#,
+            "[1]",
+            vec![("", "/contains", "contains")],
+        ),
+        (
+            r#"{"propertyNames":{"pattern":"^x$"}}"#,
+            r#"{"y":1,"z":2}"#,
+            vec![("", "/propertyNames", "propertyNames")],
+        ),
+        (
+            r#"{"properties":{"a":true},"additionalProperties":false}"#,
+            r#"{"z":1,"a":2,"b":3}"#,
+            vec![
+                ("/b", "/additionalProperties", "falseSchema"),
+                ("/z", "/additionalProperties", "falseSchema"),
+            ],
+        ),
+        (
+            r#"{"allOf":[{"properties":{"a":true}}],"unevaluatedProperties":false}"#,
+            r#"{"z":1,"a":2,"b":3}"#,
+            vec![
+                ("/b", "/unevaluatedProperties", "falseSchema"),
+                ("/z", "/unevaluatedProperties", "falseSchema"),
+            ],
+        ),
+        (
+            r#"{"prefixItems":[true],"unevaluatedItems":false}"#,
+            "[1,2,3]",
+            vec![
+                ("/1", "/unevaluatedItems", "falseSchema"),
+                ("/2", "/unevaluatedItems", "falseSchema"),
+            ],
+        ),
+    ] {
+        let (problems, complete) = explain(schema, value);
+        assert!(complete, "{schema}");
+        assert_eq!(
+            problems
+                .iter()
+                .map(|p| (
+                    p.instance.as_str().unwrap(),
+                    p.schema.pointer.as_str().unwrap(),
+                    p.code.as_str()
+                ))
+                .collect::<Vec<_>>(),
+            expected,
+            "{schema}"
+        );
+    }
+}
+
+#[test]
+fn problem_limit_distinguishes_exactly_full_from_truncated() {
+    for count in [
+        MAX_EXPLANATION_PROBLEMS - 1,
+        MAX_EXPLANATION_PROBLEMS,
+        MAX_EXPLANATION_PROBLEMS + 1,
+    ] {
+        let required = (0..count).map(|n| format!("field{n}")).collect::<Vec<_>>();
+        let (problems, complete) =
+            explain(&serde_json::json!({"required":required}).to_string(), "{}");
+        assert_eq!(problems.len(), count.min(MAX_EXPLANATION_PROBLEMS));
+        assert_eq!(complete, count <= MAX_EXPLANATION_PROBLEMS);
+        let (problems, complete) = explain(
+            r#"{"items":{"type":"string"}}"#,
+            &serde_json::to_string(&vec![1; count]).unwrap(),
+        );
+        assert_eq!(problems.len(), count.min(MAX_EXPLANATION_PROBLEMS));
+        assert_eq!(complete, count <= MAX_EXPLANATION_PROBLEMS);
+        assert!(problems.windows(2).all(|p| {
+            p[0].instance
+                .utf16_units()
+                .cmp(p[1].instance.utf16_units())
+                .is_le()
+        }));
+    }
+}
+
+#[test]
+fn unresolved_assertions_or_guards_never_claim_completeness() {
+    for schema in [
+        r#"{"required":["missing"],"$ref":"https://example.test/missing"}"#,
+        r#"{"required":["missing"],"patternProperties":{"(?i)x":false},"additionalProperties":false}"#,
+        r#"{"required":["missing"],"if":{"$ref":"https://example.test/missing"},"then":false,"else":false}"#,
+    ] {
+        let (problems, complete) = explain(schema, r#"{"a":1}"#);
+        assert!(!complete, "{schema}");
+        assert_eq!(problems.len(), 1, "{schema}");
+        assert_eq!(problems[0].code, "required");
+    }
+}
+
+#[test]
+fn required_format_assertion_is_reported_alongside_pattern() {
+    let extras = JsonValue::parse(r#"{"https://explain.invalid/format-meta":{"$schema":"https://json-schema.org/draft/2020-12/schema","$vocabulary":{"https://json-schema.org/draft/2020-12/vocab/core":true,"https://json-schema.org/draft/2020-12/vocab/validation":true,"https://json-schema.org/draft/2020-12/vocab/format-assertion":true},"type":["object","boolean"]}}"#).unwrap();
+    let (plan, _) = prepare(
+        JsonValue::parse(
+            r#"{"$schema":"https://explain.invalid/format-meta","format":"email","pattern":"^z"}"#,
+        )
+        .unwrap(),
+        Some(extras.view()),
+    );
+    let result = plan.evaluate(
+        &JsonValue::parse(r#""bad""#).unwrap(),
+        Detail::Explain,
+        &AtomicBool::new(false),
+    );
+    let ValueOutcome::Fails {
+        problems,
+        problems_complete,
+        ..
+    } = result
+    else {
+        panic!("expected failure")
+    };
+    assert!(problems_complete);
+    assert_eq!(
+        problems.iter().map(|p| p.code.as_str()).collect::<Vec<_>>(),
+        ["format", "pattern"]
+    );
+}
+
+#[test]
+fn repeated_references_share_evidence_without_duplicating_problems() {
+    let (problems, complete) = explain(
+        r##"{"$id":"https://explain.invalid/root","$defs":{"bad":{"minimum":5,"const":6}},"allOf":[{"$ref":"#/$defs/bad"},{"$ref":"#/$defs/bad"}]}"##,
+        "1",
+    );
+    assert!(complete);
+    assert_eq!(
+        problems
+            .iter()
+            .map(|p| p.schema.pointer.as_str().unwrap())
+            .collect::<Vec<_>>(),
+        ["/$defs/bad/const", "/$defs/bad/minimum"]
+    );
+}
+
+#[test]
 fn independent_original_explanation_controls_preserve_proof_and_exact_locations() {
     // The control file itself contains exact lone-unit pointer expectations.
     let controls = JsonValue::parse(include_str!("controls.json")).unwrap();
@@ -98,8 +444,12 @@ fn independent_original_explanation_controls_preserve_proof_and_exact_locations(
             ..
         } = explained
         {
-            assert!(!problems_complete, "{id}");
-            assert!(problems.len() <= 1, "{id}");
+            assert_eq!(
+                problems_complete,
+                case.get("problems_complete").unwrap().as_bool().unwrap(),
+                "{id}"
+            );
+            assert_eq!(problems.len(), usize::from(must_report), "{id}");
             if must_report {
                 assert_eq!(problems.len(), 1, "{id}");
             }

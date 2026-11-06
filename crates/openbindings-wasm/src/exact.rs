@@ -155,3 +155,113 @@ impl Exact for ValueOutcome {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn agrees(value: &(impl Exact + serde::Serialize)) {
+        assert_eq!(value.exact(), serde_json::to_string(value).unwrap());
+    }
+
+    #[test]
+    fn every_record_matches_serde_with_populated_optional_fields() {
+        let value = JsonValue::parse(r#"{"a/~\"\n😀":1}"#).unwrap();
+        let location = value.get("a/~\"\n😀").unwrap().location();
+        agrees(&location.pointer);
+        agrees(&location);
+        let origin = SchemaOrigin::new(
+            Some("https://example.test/schema".into()),
+            location.pointer.clone().unwrap(),
+        );
+        agrees(&origin);
+
+        let mut report = validate_document(r#"{"openbindings":"0.2.0","operations":[]}"#)
+            .unwrap()
+            .report()
+            .clone();
+        assert!(!report.findings.is_empty());
+        report.findings[0].location = Some(location);
+        agrees(&report.findings[0]);
+        agrees(&report);
+
+        let document = Document::parse(r#"{"openbindings":"0.2.0","operations":{"op":{"input":{"$ref":"https://example.test/missing"}}}}"#).unwrap();
+        let mut references = document.references();
+        let ReferenceResolution::Unresolved { detail } = &references.references[0].resolution
+        else {
+            panic!("missing resource")
+        };
+        assert!(detail.location.is_some());
+        assert!(detail.resource_uri.is_some());
+        agrees(detail);
+        agrees(&references.references[0]);
+        agrees(&references.references[0].resolution);
+        references.limitation = Some(detail.clone());
+        references.complete = false;
+        agrees(&references);
+        references.references[0].resolution = ReferenceResolution::Located {
+            target: origin.clone(),
+            dynamic_lookup: true,
+        };
+        agrees(&references.references[0].resolution);
+        agrees(&references.references[0]);
+
+        let refusal = NoVerdict::new(NoVerdictReason::LimitExceeded, "limit", "bounded work")
+            .with_location(origin.clone());
+        let undefined =
+            UndefinedResult::new("undefined", "undefined assertion").with_location(origin.clone());
+        agrees(&refusal);
+        agrees(&undefined);
+        for kind in [
+            PreparationFailureKind::Resolution {
+                cause: ResolutionFailureKind::InvalidExternalSchema,
+            },
+            PreparationFailureKind::UnsupportedCapability {
+                capability: "capability".into(),
+            },
+            PreparationFailureKind::Limit {
+                resource: "work".into(),
+            },
+            PreparationFailureKind::Cancelled,
+            PreparationFailureKind::InvalidExternalSchema,
+            PreparationFailureKind::Implementation {
+                message: "implementation".into(),
+            },
+        ] {
+            agrees(&PreparationFailure::new(kind).with_origin(origin.clone()));
+        }
+        let mut problem = ValueProblem::new(
+            "/instance".parse().unwrap(),
+            origin,
+            "type",
+            "assertion failed",
+        );
+        agrees(&problem);
+        for details in [
+            ValueProblemDetails::Type {
+                expected: vec!["integer".into(), "null".into()],
+            },
+            ValueProblemDetails::Required {
+                member: "a/\"😀".into(),
+            },
+            ValueProblemDetails::NumericBound {
+                bound: "1e1000".into(),
+            },
+            ValueProblemDetails::SizeBound { bound: "2".into() },
+            ValueProblemDetails::Enum {
+                choices: vec!["null".into(), r#"{"a":1}"#.into()],
+            },
+        ] {
+            problem.details = Some(details);
+            agrees(&problem);
+            agrees(&ValueOutcome::Fails {
+                message: "failure".into(),
+                problems: vec![problem.clone()],
+                problems_complete: true,
+            });
+        }
+        agrees(&ValueOutcome::Satisfies);
+        agrees(&ValueOutcome::Undefined { detail: undefined });
+        agrees(&ValueOutcome::NoVerdict { detail: refusal });
+    }
+}

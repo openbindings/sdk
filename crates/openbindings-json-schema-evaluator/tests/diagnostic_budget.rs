@@ -47,7 +47,7 @@ fn prepare_input(
         )
 }
 #[test]
-fn cheap_checks_are_value_free_and_explanations_are_one_first_error() {
+fn cheap_checks_are_value_free_and_explanations_include_all_failures() {
     let schema = json!({"allOf":[{"type":"string"},false]});
     let value = JsonValue::parse("42").unwrap();
     let contract = prepared(
@@ -82,13 +82,15 @@ fn cheap_checks_are_value_free_and_explanations_are_one_first_error() {
     else {
         panic!()
     };
-    assert_eq!(problems.len(), 1);
+    assert_eq!(problems.len(), 2);
     assert_eq!(problems[0].code, "type");
     assert_eq!(
         problems[0].schema.pointer,
         "/operations/op/input/allOf/0/type"
     );
-    assert!(!problems_complete);
+    assert_eq!(problems[1].code, "falseSchema");
+    assert_eq!(problems[1].schema.pointer, "/operations/op/input/allOf/1");
+    assert!(problems_complete);
 }
 #[test]
 fn removed_limits_and_evaluator_detail_settings_are_rejected() {

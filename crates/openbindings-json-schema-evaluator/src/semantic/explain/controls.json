@@ -17,7 +17,8 @@
       "forbidden_keywords": [],
       "keyword": "$false",
       "instance_pointer": "",
-      "schema_pointer": ""
+      "schema_pointer": "",
+      "problems_complete": true
     },
     {
       "id": "EW02-type",
@@ -30,7 +31,8 @@
       "forbidden_keywords": [],
       "keyword": "type",
       "instance_pointer": "",
-      "schema_pointer": "/type"
+      "schema_pointer": "/type",
+      "problems_complete": true
     },
     {
       "id": "EW03-required",
@@ -45,7 +47,8 @@
       "forbidden_keywords": [],
       "keyword": "required",
       "instance_pointer": "",
-      "schema_pointer": "/required"
+      "schema_pointer": "/required",
+      "problems_complete": true
     },
     {
       "id": "EW04-number",
@@ -58,7 +61,8 @@
       "forbidden_keywords": [],
       "keyword": "minimum",
       "instance_pointer": "",
-      "schema_pointer": "/minimum"
+      "schema_pointer": "/minimum",
+      "problems_complete": true
     },
     {
       "id": "EW05-array-child",
@@ -79,7 +83,8 @@
       "forbidden_keywords": [],
       "keyword": "type",
       "instance_pointer": "/1",
-      "schema_pointer": "/prefixItems/1/type"
+      "schema_pointer": "/prefixItems/1/type",
+      "problems_complete": true
     },
     {
       "id": "EW06-property-child",
@@ -98,7 +103,8 @@
       "forbidden_keywords": [],
       "keyword": "type",
       "instance_pointer": "/a",
-      "schema_pointer": "/properties/a/type"
+      "schema_pointer": "/properties/a/type",
+      "problems_complete": true
     },
     {
       "id": "EW07-allof",
@@ -116,7 +122,8 @@
       "forbidden_keywords": [],
       "keyword": "maxLength",
       "instance_pointer": "",
-      "schema_pointer": "/allOf/1/maxLength"
+      "schema_pointer": "/allOf/1/maxLength",
+      "problems_complete": true
     },
     {
       "id": "EW08-anyof-all-false",
@@ -138,7 +145,8 @@
       ],
       "keyword": "anyOf",
       "instance_pointer": "",
-      "schema_pointer": "/anyOf"
+      "schema_pointer": "/anyOf",
+      "problems_complete": true
     },
     {
       "id": "EW09-oneof-zero",
@@ -160,7 +168,8 @@
       ],
       "keyword": "oneOf",
       "instance_pointer": "",
-      "schema_pointer": "/oneOf"
+      "schema_pointer": "/oneOf",
+      "problems_complete": true
     },
     {
       "id": "EW10-oneof-two",
@@ -176,7 +185,8 @@
       "forbidden_keywords": [],
       "keyword": "oneOf",
       "instance_pointer": "",
-      "schema_pointer": "/oneOf"
+      "schema_pointer": "/oneOf",
+      "problems_complete": true
     },
     {
       "id": "EW11-not",
@@ -189,7 +199,8 @@
       "forbidden_keywords": [],
       "keyword": "not",
       "instance_pointer": "",
-      "schema_pointer": "/not"
+      "schema_pointer": "/not",
+      "problems_complete": true
     },
     {
       "id": "EW12-anyof-masked",
@@ -213,7 +224,8 @@
       ],
       "keyword": "required",
       "instance_pointer": "",
-      "schema_pointer": "/required"
+      "schema_pointer": "/required",
+      "problems_complete": true
     },
     {
       "id": "EW13-not-masked",
@@ -232,7 +244,8 @@
       ],
       "keyword": "required",
       "instance_pointer": "",
-      "schema_pointer": "/required"
+      "schema_pointer": "/required",
+      "problems_complete": true
     },
     {
       "id": "EW14-if-selected-then",
@@ -252,7 +265,8 @@
       ],
       "keyword": "type",
       "instance_pointer": "",
-      "schema_pointer": "/then/type"
+      "schema_pointer": "/then/type",
+      "problems_complete": true
     },
     {
       "id": "EW15-if-selected-else",
@@ -272,7 +286,8 @@
       ],
       "keyword": "type",
       "instance_pointer": "",
-      "schema_pointer": "/else/type"
+      "schema_pointer": "/else/type",
+      "problems_complete": true
     },
     {
       "id": "EW16-if-failure-not-assertion",
@@ -296,7 +311,8 @@
       ],
       "keyword": "required",
       "instance_pointer": "",
-      "schema_pointer": "/required"
+      "schema_pointer": "/required",
+      "problems_complete": true
     },
     {
       "id": "EW17-propertynames",
@@ -316,7 +332,8 @@
       "keyword": "propertyNames",
       "instance_pointer": "",
       "schema_pointer": "/propertyNames",
-      "reason": "The property name token has no value pointer; report its parent object."
+      "reason": "The property name token has no value pointer; report its parent object.",
+      "problems_complete": true
     },
     {
       "id": "EW18-contains-too-few",
@@ -337,7 +354,8 @@
       ],
       "keyword": "contains",
       "instance_pointer": "",
-      "schema_pointer": "/contains"
+      "schema_pointer": "/contains",
+      "problems_complete": true
     },
     {
       "id": "EW19-contains-too-many",
@@ -355,7 +373,8 @@
       "forbidden_keywords": [],
       "keyword": "contains",
       "instance_pointer": "",
-      "schema_pointer": "/contains"
+      "schema_pointer": "/contains",
+      "problems_complete": true
     },
     {
       "id": "EW20-contains-zero",
@@ -390,7 +409,8 @@
       ],
       "keyword": "required",
       "instance_pointer": "",
-      "schema_pointer": "/required"
+      "schema_pointer": "/required",
+      "problems_complete": true
     },
     {
       "id": "EW22-additional-active",
@@ -407,7 +427,8 @@
       "forbidden_keywords": [],
       "keyword": "type",
       "instance_pointer": "/a",
-      "schema_pointer": "/additionalProperties/type"
+      "schema_pointer": "/additionalProperties/type",
+      "problems_complete": true
     },
     {
       "id": "EW23-pattern-masked",
@@ -430,7 +451,8 @@
       ],
       "keyword": "required",
       "instance_pointer": "",
-      "schema_pointer": "/required"
+      "schema_pointer": "/required",
+      "problems_complete": true
     },
     {
       "id": "EW24-pattern-active",
@@ -449,7 +471,8 @@
       "forbidden_keywords": [],
       "keyword": "type",
       "instance_pointer": "/a",
-      "schema_pointer": "/patternProperties/^a$/type"
+      "schema_pointer": "/patternProperties/^a$/type",
+      "problems_complete": true
     },
     {
       "id": "EW25-uneval-masked",
@@ -473,7 +496,8 @@
       ],
       "keyword": "required",
       "instance_pointer": "",
-      "schema_pointer": "/required"
+      "schema_pointer": "/required",
+      "problems_complete": true
     },
     {
       "id": "EW26-uneval-active",
@@ -490,7 +514,8 @@
       "forbidden_keywords": [],
       "keyword": "type",
       "instance_pointer": "/a",
-      "schema_pointer": "/unevaluatedProperties/type"
+      "schema_pointer": "/unevaluatedProperties/type",
+      "problems_complete": true
     },
     {
       "id": "EW27-items-masked",
@@ -512,7 +537,8 @@
       ],
       "keyword": "maxItems",
       "instance_pointer": "",
-      "schema_pointer": "/maxItems"
+      "schema_pointer": "/maxItems",
+      "problems_complete": true
     },
     {
       "id": "EW28-dependent",
@@ -533,7 +559,8 @@
       "forbidden_keywords": [],
       "keyword": "required",
       "instance_pointer": "",
-      "schema_pointer": "/dependentSchemas/a/required"
+      "schema_pointer": "/dependentSchemas/a/required",
+      "problems_complete": true
     },
     {
       "id": "EW29-escaped-name",
@@ -552,7 +579,8 @@
       "forbidden_keywords": [],
       "keyword": "type",
       "instance_pointer": "/~0a~1b",
-      "schema_pointer": "/properties/~0a~1b/type"
+      "schema_pointer": "/properties/~0a~1b/type",
+      "problems_complete": true
     },
     {
       "id": "EW30-reference",
@@ -577,7 +605,8 @@
       "forbidden_keywords": [],
       "keyword": "type",
       "instance_pointer": "/a",
-      "schema_pointer": "/$defs/T/type"
+      "schema_pointer": "/$defs/T/type",
+      "problems_complete": true
     },
     {
       "id": "EW31-equal-value-occurrences",
@@ -612,7 +641,8 @@
       "keyword": "type",
       "instance_pointer": "/b",
       "schema_pointer": "/$defs/T/type",
-      "reason": "Equal-value effect interning must not reuse /a diagnostic identity for /b."
+      "reason": "Equal-value effect interning must not reuse /a diagnostic identity for /b.",
+      "problems_complete": true
     },
     {
       "id": "EW32-symbolic-contradiction",
@@ -638,7 +668,8 @@
       "required_outcome": "fails",
       "must_report_problem_when_funded": false,
       "forbidden_keywords": [],
-      "reason": "Known D and its complement establish F; no concrete predicate failed. An empty incomplete explanation is permitted."
+      "reason": "Known D and its complement establish F; no concrete predicate failed. An empty incomplete explanation is permitted.",
+      "problems_complete": false
     },
     {
       "id": "EW33-uncertain-guard",
@@ -661,7 +692,8 @@
       ],
       "keyword": "required",
       "instance_pointer": "",
-      "schema_pointer": "/required"
+      "schema_pointer": "/required",
+      "problems_complete": false
     },
     {
       "id": "EW34-recursion-decisive",
@@ -689,7 +721,8 @@
       "forbidden_keywords": [],
       "keyword": "required",
       "instance_pointer": "",
-      "schema_pointer": "/$defs/A/allOf/1/required"
+      "schema_pointer": "/$defs/A/allOf/1/required",
+      "problems_complete": false
     },
     {
       "id": "EW35-dynamic",
@@ -715,7 +748,8 @@
       "forbidden_keywords": [],
       "keyword": "type",
       "instance_pointer": "/a",
-      "schema_pointer": "/$defs/T/type"
+      "schema_pointer": "/$defs/T/type",
+      "problems_complete": true
     },
     {
       "id": "EW36-undefined-no-problem",
@@ -746,7 +780,8 @@
       "instance_pointer": "",
       "schema_pointer": "/minimum",
       "schema_text": "{\"minimum\":1e1000}",
-      "value_text": "1e999"
+      "value_text": "1e999",
+      "problems_complete": true
     },
     {
       "id": "EW39-lone-name",
@@ -757,7 +792,8 @@
       "instance_pointer": "/\ud800",
       "schema_pointer": "/properties/\ud800/type",
       "schema_text": "{\"properties\":{\"\\ud800\":{\"type\":\"integer\"}}}",
-      "value_text": "{\"\\ud800\":\"x\"}"
+      "value_text": "{\"\\ud800\":\"x\"}",
+      "problems_complete": true
     },
     {
       "id": "EW40-subtree",
@@ -780,7 +816,8 @@
       "keyword": "type",
       "instance_pointer": "/~0a~1b",
       "schema_pointer": "/properties/~0a~1b/type",
-      "evaluate_subtree": "/payload"
+      "evaluate_subtree": "/payload",
+      "problems_complete": true
     },
     {
       "id": "EW41-external",
@@ -800,7 +837,8 @@
           "type": "integer"
         }
       },
-      "schema_source_uri": "https://explain.invalid/external"
+      "schema_source_uri": "https://explain.invalid/external",
+      "problems_complete": true
     },
     {
       "id": "EW42-recursive-undefined",

@@ -70,10 +70,14 @@ export function originalExplainCases(sdk, controls, testing) {
           check(outcome.problems.length === 0, "Outcome created problems");
         if (explained.status === "fails") {
           check(
-            !explained.problemsComplete,
-            "partial evidence claims completeness",
+            explained.problemsComplete === row.problems_complete,
+            "diagnostic completeness",
           );
-          check(explained.problems.length <= 1, "unexpected problem count");
+          check(
+            explained.problems.length ===
+              Number(row.must_report_problem_when_funded),
+            "unexpected problem count",
+          );
           if (row.must_report_problem_when_funded)
             check(explained.problems.length === 1, "missing funded witness");
           for (const problem of explained.problems) {

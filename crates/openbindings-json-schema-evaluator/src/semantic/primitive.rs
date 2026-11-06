@@ -167,11 +167,20 @@ impl Run<'_> {
         value: JsonRef<'_>,
     ) -> Result<Option<&'static str>, NoVerdict> {
         let mut failed = None;
-        let mut record = |valid: bool, keyword: &'static str| {
+        self.visit_primitives(node, schema, value, |valid, keyword| {
             if !valid && failed.is_none() {
                 failed = Some(keyword);
             }
-        };
+        })?;
+        Ok(failed)
+    }
+    pub(super) fn visit_primitives(
+        &mut self,
+        node: usize,
+        schema: &Interpreted<'_>,
+        value: JsonRef<'_>,
+        mut record: impl FnMut(bool, &'static str),
+    ) -> Result<(), NoVerdict> {
         if let Some(types) = schema.get("type") {
             if let Some(names) = types.elements() {
                 let mut any = false;
@@ -280,6 +289,6 @@ impl Run<'_> {
                 );
             }
         }
-        Ok(failed)
+        Ok(())
     }
 }

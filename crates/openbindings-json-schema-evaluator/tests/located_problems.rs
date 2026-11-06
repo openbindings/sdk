@@ -158,9 +158,8 @@ fn member_names_holding_the_views_marker_are_named_as_the_caller_spells_them() {
 
 #[test]
 fn failures_beneath_unpaired_names_never_report_a_library_spelling() {
-    // Reaching a name with an unpaired unit leaves the evaluator no truthful
-    // reading of it: a failure beneath one is established with no problem,
-    // and problems elsewhere name their nodes exactly.
+    // Exact pointers locate failures beneath unpaired names without replacing
+    // those units with a library spelling or losing diagnostic completeness.
     for (schema, text, expected) in [
         (
             r#"{"additionalProperties": {"type": "integer"}}"#,
@@ -188,7 +187,7 @@ fn failures_beneath_unpaired_names_never_report_a_library_spelling() {
         let value = JsonValue::parse(text).unwrap();
         let ValueOutcome::Fails {
             problems,
-            problems_complete: false,
+            problems_complete: true,
             ..
         } = contract.explain(&value)
         else {

@@ -465,12 +465,14 @@ impl Run<'_> {
         // assertion about this instance. A malformed identifier matters when
         // a reference actually depends on that context; reference() retains
         // the original query failure instead of inventing a validity atom.
-        match self.primitives(node, &schema, value) {
+        let primitive = if self.record_witnesses {
+            self.explain_primitives(&mut state, node, &schema, value)
+        } else {
+            self.primitives(node, &schema, value)
+        };
+        match primitive {
             Ok(None) => {}
-            Ok(Some(keyword)) => {
-                state.valid = FALSE;
-                self.record_failure(&mut state, node, value, Some(keyword))?;
-            }
+            Ok(Some(_)) => state.valid = FALSE,
             Err(detail)
                 if matches!(
                     detail.reason,
@@ -514,6 +516,7 @@ impl Run<'_> {
         {
             let matched = self.pattern(node, "pattern", pattern, value, context)?;
             state.valid = self.graph.and(state.valid, matched)?;
+            self.uncertain_failure(&mut state, matched)?;
             if matched == FALSE {
                 self.record_failure(&mut state, node, value, Some("pattern"))?;
             }

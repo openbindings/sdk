@@ -296,7 +296,7 @@ fn every_keyword_is_explained_at_its_original_location() {
     ] {
         let result = run(schema, input, true);
         let (problems, complete) = failure(&result);
-        assert!(!complete, "{schema}");
+        assert!(complete, "{schema}");
         assert_eq!(problems.len(), 1, "{schema}");
         let problem = &problems[0];
         assert_eq!(problem.code, code, "{schema}");

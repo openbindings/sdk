@@ -287,7 +287,7 @@ fn an_independent_one_of_witness_survives_a_missing_resource() {
             problems_complete,
             ..
         } => {
-            assert!(!problems_complete);
+            assert!(problems_complete);
             assert_eq!(problems.len(), 1);
             assert_eq!(problems[0].code, "oneOf");
             assert_eq!(problems[0].schema.pointer, "/operations/op/input/oneOf");

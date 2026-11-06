@@ -189,7 +189,9 @@ custom meta-schema admission and the structural and cooperative resource limits.
 `evaluate` is the cheap check: failure has no problems and marks diagnostics
 incomplete. `explain` preserves the same result and reports available bounded
 problems at original source locations. Some semantic failures currently have no
-specific diagnostic witness and retain `problems_complete = false`. Optional
+specific diagnostic evidence and retain `problems_complete = false`. The
+[API reference](../../docs/api-reference.md) describes the 100-problem cap, ordering,
+and applicator reporting rules. Optional
 detail work never retracts an established result. Oversized origins are omitted
 before copying them, pattern diagnostics do not echo authored regex text, and an
 unavailable resource has no invented source coordinate.
