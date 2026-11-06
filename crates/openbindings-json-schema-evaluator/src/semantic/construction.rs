@@ -19,7 +19,7 @@ impl<'a> Construction<'a> {
     pub(super) fn compiled_reading(
         &self,
         source: &str,
-    ) -> Result<Option<crate::pattern::Linear>, PreparationFailure> {
+    ) -> Result<Option<crate::pattern::Shared>, PreparationFailure> {
         self.programs
             .compiled_reading(source, &self.limits, self.control)
     }

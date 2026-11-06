@@ -2,7 +2,7 @@
 //! memory admission. This module does not read sources or define another syntax.
 pub(crate) use crate::pattern::{Simple, exact};
 
-pub(crate) type Reading = crate::pattern::Linear;
+pub(crate) type Reading = crate::pattern::Shared;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Unsupported {
     Size,

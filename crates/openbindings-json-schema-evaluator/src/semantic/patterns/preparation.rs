@@ -15,8 +15,8 @@ use std::{
 
 const MAXIMUM_FOOTPRINT: usize = 64 * 1024 * 1024;
 
-struct Form {
-    text: String,
+struct Form<T = Arc<str>> {
+    text: T,
     program: Arc<Program>,
 }
 // Authored source plus the Reader policy. Normalized programs can be shared by
@@ -31,7 +31,7 @@ pub(in super::super) struct Programs {
     // Fixed-size ordered keys keep unrelated long forms out of each other's
     // comparison budgets. Hash collisions always compare exact normalized text.
     forms: RefCell<BTreeMap<NormalizedKey, Vec<Form>>>,
-    sources: RefCell<BTreeMap<SourceKey, Vec<Form>>>,
+    sources: RefCell<BTreeMap<SourceKey, Vec<Form<String>>>>,
     #[cfg(test)]
     forced_hash: Cell<Option<u64>>,
     form_bytes: Cell<usize>,
@@ -51,7 +51,7 @@ impl Programs {
         source: &str,
         limits: &Limits,
         control: &dyn Control,
-    ) -> Result<Option<pattern::Linear>, PreparationFailure> {
+    ) -> Result<Option<pattern::Shared>, PreparationFailure> {
         self.check(control)?;
         control.charge_work(source.len().saturating_add(1))?;
         if pattern::anchored_literal(source).is_some() {
@@ -60,12 +60,28 @@ impl Programs {
             };
             control.charge_work(work)?;
             control.charge_allocation(allocation)?;
-            return Ok(
-                match pattern::read(source, limits.pattern_depth, limits.pattern_bytes) {
-                    Ok(Reading::Linear(linear)) => Some(linear),
-                    _ => None,
-                },
-            );
+            // Literal source and normalized form are identical. Reuse the
+            // completed owner from that index under the same Reader allowance.
+            let mut hasher = DefaultHasher::new();
+            hasher.write(source.as_bytes());
+            let hash = hasher.finish();
+            #[cfg(test)]
+            let hash = self.forced_hash.get().unwrap_or(hash);
+            let forms = self.forms.borrow();
+            let Some(form) = forms
+                .get(&(source.len(), hash))
+                .and_then(|bucket| bucket.iter().find(|form| form.text.as_ref() == source))
+                .filter(|_| source.len() <= limits.pattern_bytes)
+            else {
+                return Ok(None);
+            };
+            let Program::Simple { matcher, .. } = form.program.as_ref() else {
+                return Ok(None);
+            };
+            return Ok(Some(pattern::Shared {
+                form: form.text.clone(),
+                simple: Some(matcher.clone()),
+            }));
         }
         let mut hasher = DefaultHasher::new();
         hasher.write(source.as_bytes());
@@ -124,7 +140,7 @@ impl Programs {
             .clone();
         let simple = simple.cloned();
         self.check(control)?;
-        Ok(Some(pattern::Linear { form, simple }))
+        Ok(Some(pattern::Shared { form, simple }))
     }
     pub(in super::super) fn check(&self, control: &dyn Control) -> Result<(), PreparationFailure> {
         if let Some(resource) = self.failure.get() {
@@ -220,10 +236,10 @@ impl Programs {
         let requested = if length == capacity {
             let bytes = capacity
                 .checked_mul(2)
-                .and_then(|n| n.max(4).checked_mul(size_of::<Form>()))
+                .and_then(|n| n.max(4).checked_mul(size_of::<Form<String>>()))
                 .ok_or_else(|| self.refuse("pattern-index-memory-limit"))?;
             control.charge_allocation(bytes)?;
-            Some(bytes / size_of::<Form>())
+            Some(bytes / size_of::<Form<String>>())
         } else {
             None
         };
@@ -323,7 +339,7 @@ impl Programs {
                     .retain(Program::Unsupported(why), limits, control)
                     .map(|p| (p, None));
             }
-            Ok(Reading::Linear(linear)) => linear,
+            Ok(Reading::Linear(linear)) => pattern::Shared::from(linear),
         };
         // The fixed policy belongs to Construction. Every hit has still passed
         // source extent, authored depth and Reader admission in this attempt.
@@ -395,7 +411,8 @@ impl Programs {
         };
         budget.check(control)?;
         // Reserve fixed-key tree growth and collision-bucket replacement
-        // backing before publication. The completed form moves into the index.
+        // backing before publication. Keep the original String-sized reservation
+        // even though the index now shares its completed form with the compiler.
         // Insertion lookup and a possible rollback lookup/scan are charged
         // before publication; rollback cannot call user control while borrowed.
         control.charge_work(
@@ -412,10 +429,10 @@ impl Programs {
         let requested = if length == capacity {
             let capacity = capacity
                 .checked_mul(2)
-                .and_then(|n| n.max(4).checked_mul(size_of::<Form>()))
+                .and_then(|n| n.max(4).checked_mul(size_of::<Form<String>>()))
                 .ok_or_else(|| self.refuse("pattern-index-memory-limit"))?;
             control.charge_allocation(capacity)?;
-            Some(capacity / size_of::<Form>())
+            Some(capacity / size_of::<Form<String>>())
         } else {
             None
         };

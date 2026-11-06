@@ -24,7 +24,7 @@
 //! string with an unpaired surrogate is refused before any pattern reads it. A
 //! pattern can still name a lone surrogate with an escape; such an atom matches
 //! nothing those strings hold, and a class gains nothing from it.
-use std::{collections::BTreeSet, fmt::Write};
+use std::{collections::BTreeSet, fmt::Write, sync::Arc};
 
 /// What the evaluator can do with a valid pattern.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -43,6 +43,21 @@ pub(crate) struct Linear {
     /// A matcher that needs no compiled automaton, for the patterns that are
     /// one anchored sequence of single-character runs.
     pub(crate) simple: Option<Simple>,
+}
+/// Completed construction facts. Both lanes share the matcher, while temporary
+/// preparation indices share the normalized form until construction finishes.
+#[derive(Clone)]
+pub(crate) struct Shared {
+    pub(crate) form: Arc<str>,
+    pub(crate) simple: Option<Arc<Simple>>,
+}
+impl From<Linear> for Shared {
+    fn from(linear: Linear) -> Self {
+        Self {
+            form: linear.form.into(),
+            simple: linear.simple.map(Arc::new),
+        }
+    }
 }
 /// Why a pattern is not matched.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -1,5 +1,107 @@
 use super::*;
 use openbindings_internal_schema::preparation::Attempt;
+
+#[test]
+fn compiled_handoff_shares_completed_matchers_and_forms() {
+    let programs = Programs::default();
+    let budget = compiler::profile::Budget::default();
+    let limits = Limits::default();
+    for source in [format!("^{}$", "a".repeat(10_000)), "^ab[0-9]{2}$".into()] {
+        let program = programs.add(&source, &limits, &budget, &|| false).unwrap();
+        let Program::Simple { matcher, .. } = program.as_ref() else {
+            panic!("simple matcher expected")
+        };
+        let reading = programs
+            .compiled_reading(&source, &limits, &|| false)
+            .unwrap()
+            .unwrap();
+        assert!(Arc::ptr_eq(matcher, reading.simple.as_ref().unwrap()));
+        let forms = programs.forms.borrow();
+        let form = forms
+            .values()
+            .flatten()
+            .find(|f| Arc::ptr_eq(&f.program, &program))
+            .unwrap();
+        assert!(Arc::ptr_eq(&form.text, &reading.form));
+    }
+    let alias = programs
+        .add(r"^\x61b[0-9]{2}$", &limits, &budget, &|| false)
+        .unwrap();
+    let first = programs
+        .compiled_reading("^ab[0-9]{2}$", &limits, &|| false)
+        .unwrap()
+        .unwrap();
+    let second = programs
+        .compiled_reading(r"^\x61b[0-9]{2}$", &limits, &|| false)
+        .unwrap()
+        .unwrap();
+    assert!(Arc::ptr_eq(&first.form, &second.form));
+    assert!(Arc::ptr_eq(
+        first.simple.as_ref().unwrap(),
+        second.simple.as_ref().unwrap()
+    ));
+    drop(alias);
+    drop(programs);
+    assert!(second.simple.unwrap().is_match("ab42"));
+}
+
+#[test]
+fn literal_handoff_keeps_exact_budgets_cancellation_and_collision_identity() {
+    use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
+    let programs = Programs::default();
+    programs.forced_hash.set(Some(0));
+    let budget = compiler::profile::Budget::default();
+    let limits = Limits::default();
+    for source in ["^a$", "^b$"] {
+        let program = programs.add(source, &limits, &budget, &|| false).unwrap();
+        // The established literal handoff charges its scan, Reader reservation
+        // and the two Attempt checks, even though it now shares the result.
+        let work = 4 * source.len() + 515;
+        let allocation = 2 * source.len() + 512;
+        let read = |work, allocation| {
+            Attempt::run(work, allocation, &|| false, |a| {
+                programs.compiled_reading(source, &limits, a)
+            })
+        };
+        let reading = read(work, allocation).unwrap().unwrap().unwrap();
+        let Program::Simple { matcher, .. } = program.as_ref() else {
+            panic!("simple matcher expected")
+        };
+        assert!(Arc::ptr_eq(matcher, reading.simple.as_ref().unwrap()));
+        assert_eq!(
+            read(work - 1, allocation).err().unwrap().code,
+            "preparation-sdk-work-units"
+        );
+        assert_eq!(
+            read(work, allocation - 1).err().unwrap().code,
+            "preparation-sdk-reservation-bytes"
+        );
+        let calls = AtomicUsize::new(0);
+        programs
+            .compiled_reading(source, &limits, &|| {
+                calls.fetch_add(1, Relaxed);
+                false
+            })
+            .unwrap();
+        let total = calls.load(Relaxed);
+        for at in 0..total {
+            calls.store(0, Relaxed);
+            assert!(matches!(
+                programs.compiled_reading(source, &limits, &|| calls.fetch_add(1, Relaxed) >= at),
+                Err(PreparationFailure {
+                    kind: PreparationFailureKind::Cancelled,
+                    ..
+                })
+            ));
+        }
+        let retry = programs
+            .compiled_reading(source, &limits, &|| false)
+            .unwrap()
+            .unwrap();
+        assert!(Arc::ptr_eq(matcher, retry.simple.as_ref().unwrap()));
+    }
+}
+
 #[test]
 fn short_unicode_properties_reserve_their_expansion_before_reading() {
     let failed = Attempt::run(1_000_000, 2048, &|| false, |a| {

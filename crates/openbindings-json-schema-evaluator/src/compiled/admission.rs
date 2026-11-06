@@ -19,7 +19,7 @@ pub(super) struct Features {
     pub advancing: bool,
     pub recursive: bool,
     pub recursive_allocation_free: bool,
-    pub readings: HashMap<String, pattern::Reading>,
+    pub readings: HashMap<Arc<str>, pattern::Reading>,
 }
 
 pub(super) struct Admitted {
@@ -35,7 +35,7 @@ pub(super) fn select(
     limits: &crate::Limits,
     preparation: &PreparationLimits,
     attempt: &dyn Control,
-    reading: &dyn Fn(&str) -> Result<Option<crate::pattern::Linear>, PreparationFailure>,
+    reading: &dyn Fn(&str) -> Result<Option<crate::pattern::Shared>, PreparationFailure>,
 ) -> Result<Selection, PreparationFailure> {
     attempt.check().map_err(PreparationFailure::from)?;
     let default = crate::Limits::default();
@@ -409,8 +409,8 @@ pub(super) fn select(
 fn read_pattern(
     source: &str,
     attempt: &dyn Control,
-    readings: &mut HashMap<String, pattern::Reading>,
-    reading: &dyn Fn(&str) -> Result<Option<crate::pattern::Linear>, PreparationFailure>,
+    readings: &mut HashMap<Arc<str>, pattern::Reading>,
+    reading: &dyn Fn(&str) -> Result<Option<crate::pattern::Shared>, PreparationFailure>,
     property_name: bool,
 ) -> Result<bool, PreparationFailure> {
     attempt
@@ -436,7 +436,12 @@ fn read_pattern(
     if linear.simple.is_none() && source.contains('{') {
         return Ok(false);
     }
-    readings.insert(source.to_owned(), linear);
+    let source = if source == linear.form.as_ref() {
+        linear.form.clone()
+    } else {
+        Arc::from(source)
+    };
+    readings.insert(source, linear);
     attempt.check().map_err(PreparationFailure::from)?;
     Ok(true)
 }

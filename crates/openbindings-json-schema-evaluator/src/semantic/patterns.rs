@@ -12,10 +12,10 @@ use regex_automata::nfa::thompson::{
 };
 
 #[derive(Debug)]
-pub(super) enum Program {
+pub(super) enum Program<M = Arc<Simple>> {
     Undefined,
     Unsupported(Unsupported),
-    Simple { matcher: Simple, work: usize },
+    Simple { matcher: M, work: usize },
     Vm { engine: PikeVM, work: usize },
     Limited(&'static str),
 }
@@ -34,8 +34,10 @@ impl Program {
         Self::owner_bytes().checked_add(backing)
     }
     fn owner_bytes() -> usize {
+        // Keep the inline matcher footprint for admission, so shared ownership
+        // does not change the existing pattern memory or reservation limits.
         std::alloc::Layout::new::<[usize; 2]>()
-            .extend(std::alloc::Layout::new::<Self>())
+            .extend(std::alloc::Layout::new::<Program<Simple>>())
             .expect("fixed program owner layout")
             .0
             .pad_to_align()

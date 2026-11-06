@@ -97,8 +97,10 @@ pub(crate) fn run_matcher_bytes(matcher: &crate::compiled::pattern::Simple) -> u
     MATCHER + matcher.heap_bytes()
 }
 /// How the SDK's `pattern` keyword matches one pattern.
+// An explicit tag preserves the counted slot layout when Simple is shared.
+#[repr(C)]
 enum Matcher {
-    Simple(crate::compiled::pattern::Simple),
+    Simple(Arc<crate::compiled::pattern::Simple>),
     // Completed under the shared preparation control before publication.
     Regex {
         form: Arc<str>,
@@ -230,12 +232,19 @@ impl Patterns {
         }
     }
 }
-// One admitted pattern, sharing its completed matchers.
-struct Pattern(Arc<Patterns>, usize);
+// A simple keyword owns its shared matcher directly, so it does not keep the
+// construction table alive. Regex keywords retain the completed table as before.
+enum Pattern {
+    Simple(Arc<crate::compiled::pattern::Simple>),
+    Regex(Arc<Patterns>, usize),
+}
 impl<'i> Keyword<'i, FlatJson> for Pattern {
     fn is_valid(&self, instance: View<'i>) -> bool {
         match instance.as_string() {
-            Some(text) => self.0.is_match(self.1, &text),
+            Some(text) => match self {
+                Self::Simple(simple) => simple.is_match(&text),
+                Self::Regex(patterns, index) => patterns.is_match(*index, &text),
+            },
             None => true,
         }
     }
@@ -441,11 +450,11 @@ impl Operands {
     /// of its matcher, which the SDK's keyword finds by it. Patterns with the
     /// same form share one matcher.
     pub(crate) fn pattern(&mut self, reading: crate::compiled::pattern::Reading) -> String {
-        let key = reading.form.as_str();
+        let key = reading.form.as_ref();
         let index = match self.indices.get(key) {
             Some(&index) => index,
             None => {
-                let key: Arc<str> = Arc::from(key);
+                let key = reading.form;
                 let matcher = match reading.simple {
                     Some(simple) => Matcher::Simple(simple),
                     None => Matcher::Regex {
@@ -521,7 +530,11 @@ impl Keywords {
                     .and_then(|key| key.parse::<usize>().ok())
                     .filter(|&index| index < keyword.matchers.len())
                     .ok_or_else(|| ValidationError::custom("invalid internal pattern reference"))?;
-                Ok(Box::new(Pattern(keyword.clone(), index)))
+                let pattern = match &keyword.matchers[index] {
+                    Matcher::Simple(simple) => Pattern::Simple(simple.clone()),
+                    Matcher::Regex { .. } => Pattern::Regex(keyword.clone(), index),
+                };
+                Ok(Box::new(pattern))
             });
         }
         for (keyword, _) in numeric::KEYWORDS
@@ -637,6 +650,38 @@ fn direct(value: JsonRef<'_>) -> Option<Value> {
 }
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    #[test]
+    fn simple_keywords_release_the_construction_table() {
+        let (validator, table) = {
+            let crate::pattern::Reading::Linear(reading) =
+                crate::pattern::read("^ab$", 32, 1024).unwrap()
+            else {
+                panic!("simple reading expected")
+            };
+            let matched = run_matcher_bytes(reading.simple.as_ref().unwrap());
+            let mut operands = Operands::default();
+            let key = operands.pattern(reading.into());
+            let keywords = operands.keywords(Memory::new(64 * 1024 * 1024, 0, matched));
+            keywords
+                .patterns()
+                .complete(&std::sync::atomic::AtomicBool::new(false))
+                .unwrap();
+            let table = Arc::downgrade(keywords.patterns());
+            let options = keywords.register(jsonschema::options_for::<FlatJson>());
+            (
+                options.build(&serde_json::json!({"pattern": key})).unwrap(),
+                table,
+            )
+        };
+        assert!(table.upgrade().is_none());
+        for (text, expected) in [(r#""ab""#, true), (r#""abc""#, false)] {
+            let value = JsonValue::parse(text).unwrap();
+            assert_eq!(validator.is_valid(backend::view(&value)), expected);
+        }
+    }
+
     // A run matcher's place is counted as 64-bit hosts lay it out; no host
     // takes more.
     #[test]

@@ -50,7 +50,7 @@ impl Default for Limits {
 }
 struct Compiler {
     limits: Limits,
-    readings: HashMap<String, pattern::Reading>,
+    readings: HashMap<Arc<str>, pattern::Reading>,
 }
 struct ConstructionControl<'a> {
     caller: &'a dyn WorkControl,
@@ -165,7 +165,7 @@ impl Lane {
         preparation: &PreparationLimits,
         control: &dyn WorkControl,
         attempt: &dyn openbindings_internal_schema::Control,
-        reading: &dyn Fn(&str) -> Result<Option<crate::pattern::Linear>, PreparationFailure>,
+        reading: &dyn Fn(&str) -> Result<Option<crate::pattern::Shared>, PreparationFailure>,
     ) -> Result<Self, PreparationFailure> {
         use openbindings_internal_schema::OriginalEnvironment;
         let (mut features, reach) =
@@ -449,7 +449,7 @@ fn patterns<'a>(
     schema: &mut Value,
     source: Option<std::borrow::Cow<'a, str>>,
     limits: &Limits,
-    readings: &HashMap<String, pattern::Reading>,
+    readings: &HashMap<Arc<str>, pattern::Reading>,
     operands: &mut operands::Operands,
     kept: &mut Kept<'a>,
 ) -> Result<(), (&'static str, NoVerdict)> {
@@ -508,7 +508,7 @@ fn patterns<'a>(
                 // Patterns with the same form share one matcher, which keeps
                 // the form and compiles it unless the run matcher matches it.
                 if !operands.has_pattern(&reading.form) {
-                    count("pattern", &reading.form, reading.simple.as_ref())?;
+                    count("pattern", &reading.form, reading.simple.as_deref())?;
                 }
                 let key = operands.pattern(reading);
                 kept.read.insert(source, key.clone());
@@ -527,7 +527,7 @@ fn patterns<'a>(
                 .ok_or_else(program_failure)
                 .map_err(refuse)?
                 .form
-                .clone();
+                .to_string();
             // Two names may share a form; an empty group keeps them apart.
             while names.contains_key(&form) {
                 form.push_str("(?:)");

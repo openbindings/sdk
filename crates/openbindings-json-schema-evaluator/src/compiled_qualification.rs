@@ -131,6 +131,37 @@ fn compare(
     )
 }
 #[test]
+fn shared_long_literal_and_run_matchers_keep_compiled_outcomes_and_diagnostics() {
+    let body = "a".repeat(10_000);
+    let schema = json!({"properties": {
+        "literal": {"pattern": format!("^{body}$")},
+        "alias": {"pattern": format!(r"^\x61{}$", &body[1..])},
+        "runs": {"pattern": "^ab[0-9]{2}$"}
+    }});
+    let (selected, original) = owners(
+        &schema.to_string(),
+        &ExternalSchemas::default(),
+        Limits::default(),
+        PreparationLimits::default(),
+    );
+    assert!(matches!(selected.compiled, compiled::Lane::Compiled(_)));
+    for value in [
+        json!({"literal": body, "alias": body, "runs": "ab42"}),
+        json!({"literal": "a", "alias": "a", "runs": "abx2"}),
+    ] {
+        let value = JsonValue::parse(value.to_string()).unwrap();
+        assert_eq!(compare(&selected, &original, &value).0, "compiled");
+        for detail in [Detail::Outcome, Detail::Explain] {
+            let cancelled = AtomicBool::new(true);
+            assert_eq!(
+                serialized(selected.evaluate(&value, detail, &cancelled)),
+                serialized(original.evaluate(&value, detail, &cancelled)),
+            );
+        }
+    }
+}
+
+#[test]
 fn compiled_decision_complete_kit_agreement_and_routes() {
     let original = run(&Original(Limits::default()));
     let selected = run(&DefaultEvaluator::new());
@@ -532,7 +563,7 @@ fn compiled_decision_shared_preparation_failure_blocks_later_builds() {
                 let plan=semantic::Plan::new(environment,Limits::default(),*limits,attempt)?;
                 let poison=Poison{attempt,calls:AtomicUsize::new(0),boundary:self.boundary,at:std::sync::Mutex::new(None)};
                 compiled::entries::take();
-                let result=compiled::Lane::prepare(&plan,&Limits::default(),limits,&poison,attempt,&|source|Ok(match pattern::read(source,32,1<<20) {Ok(pattern::Reading::Linear(linear))=>Some(linear),_=>None}));
+                let result=compiled::Lane::prepare(&plan,&Limits::default(),limits,&poison,attempt,&|source|Ok(match pattern::read(source,32,1<<20) {Ok(pattern::Reading::Linear(linear))=>Some(linear.into()),_=>None}));
                 let counts=compiled::entries::take();
                 if let Some(at)=*poison.at.lock().unwrap() {
                     assert_eq!(counts[1],at[1],"no build may begin after ignored nested reservation failure");
