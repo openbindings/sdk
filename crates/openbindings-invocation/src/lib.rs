@@ -11,7 +11,7 @@ mod error;
 pub mod operation;
 mod value;
 
-pub use binding::{BindingClient, BindingInvoker, InvocationSupport, PreflightOutcome};
+pub use binding::{BindingInvoker, BindingInvokerExt, InvocationSupport, PreflightOutcome};
 pub use boundary::{BoundaryFailure, BoundaryFailureKind};
 pub use channel::{
     Invocation, InvocationControl, InvocationInput, InvocationLimits, InvocationOutput, LimitError,
@@ -19,7 +19,9 @@ pub use channel::{
 };
 pub use error::InvocationError;
 pub use openbindings_context::{Context, ContextChallenge};
-pub use operation::{OperationAddress, OperationClient, OperationRequest};
+pub use operation::{
+    DefaultOperationInvoker, OperationAddress, OperationInvoker, OperationRequest,
+};
 pub use value::BindingRequest;
 
 /// Version of the binding and operation invocation interfaces, separate from core.

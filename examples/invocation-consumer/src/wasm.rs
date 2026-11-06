@@ -2,7 +2,7 @@ use super::Catalog;
 use openbindings::{Document, ExternalSchemas, JsonValue};
 use openbindings_invocation::*;
 use openbindings_json_schema_evaluator::DefaultEvaluator;
-use openbindings_source_pull::{PullClient, PullLimits, PullRequest};
+use openbindings_source_pull::{PullLimits, PullRequest, SourcePullerExt};
 use source_pull_consumer::Fixed;
 use std::future::Future;
 use wasm_bindgen::prelude::*;
@@ -14,8 +14,8 @@ fn failure(error: impl std::fmt::Display) -> JsValue {
 /// Exercise actual kind descriptions for the host's independent Unicode controls.
 #[wasm_bindgen(js_name = describeLocalKinds)]
 pub async fn describe_local_kinds() -> Result<String, JsValue> {
-    use openbindings_kind_description::{DescribeKindRequest, KindClient};
-    let client = KindClient::new(source_pull_consumer::KindCatalog::default());
+    use openbindings_kind_description::{DescribeKindRequest, KindDescriptorExt};
+    let client = source_pull_consumer::KindCatalog::default();
     let listed = client
         .list_kinds(CancellationToken::new())
         .await
@@ -70,12 +70,12 @@ async fn exchange<F: Future<Output = Result<(), InvocationError>>>(
     Ok(received)
 }
 
-/// The host explicitly chooses whether to apply operation value contracts.
+/// The host explicitly chooses whether to apply operation value schemas.
 #[wasm_bindgen(js_name = pullAdoptAndEcho)]
 pub async fn pull_adopt_and_echo(text: String, operation: bool) -> Result<String, JsValue> {
     let original = Document::parse(r#"{"openbindings":"0.2.0","operations":{},"sources":{"fixed":{"kind":"example.fixed@1"}}}"#).map_err(failure)?.validate().map_err(failure)?.conformant().unwrap();
     let request = PullRequest::new(original, "fixed");
-    let result = PullClient::new(Fixed)
+    let result = (Fixed)
         .pull_source(request.clone(), CancellationToken::new())
         .await
         .map_err(failure)?;
@@ -84,7 +84,7 @@ pub async fn pull_adopt_and_echo(text: String, operation: bool) -> Result<String
         .map_err(failure)?;
     let value = JsonValue::parse(&text).map_err(failure)?;
     if operation {
-        let client = OperationClient::new(
+        let client = DefaultOperationInvoker::new(
             Catalog::default(),
             DefaultEvaluator::new(),
             ExternalSchemas::default(),
@@ -100,7 +100,7 @@ pub async fn pull_adopt_and_echo(text: String, operation: bool) -> Result<String
         )
         .await
     } else {
-        let client = BindingClient::new(Catalog::default());
+        let client = Catalog::default();
         exchange(
             client
                 .invoke(

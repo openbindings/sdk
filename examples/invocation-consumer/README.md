@@ -16,7 +16,7 @@ invokes through the operation's original schemas, including an actual reference.
 Preflight is advisory and separate from execution. A configured context requirement
 is returned before input consumption and output; only the caller supplies a later
 attempt's context. Wrong input never reaches the realization. Context is not stored
-in the authored source. The provider uses no SDK registry or implicit executor.
+in the authored source. The provider uses no SDK registry or implicit async runtime.
 These witnesses establish this fixture's effects and capability claims; they do
 not certify arbitrary providers or implement a published protocol kind.
 

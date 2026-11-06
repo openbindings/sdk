@@ -77,7 +77,7 @@ impl KindDescriptor for Provider {
     type Error = CarrierError;
     type List<'a> = Finished<Result<Vec<KindSummary>, Self::Error>>;
     type Describe<'a> = Finished<Result<KindDescription, Self::Error>>;
-    fn list_kinds(&self, control: CancellationToken) -> Self::List<'_> {
+    fn handle_list_kinds(&self, control: CancellationToken) -> Self::List<'_> {
         self.finish(
             if self.mode == 0 {
                 Ok(vec![])
@@ -87,7 +87,7 @@ impl KindDescriptor for Provider {
             control,
         )
     }
-    fn describe_kind(
+    fn handle_describe_kind(
         &self,
         _: DescribeKindRequest,
         control: CancellationToken,
@@ -107,7 +107,11 @@ impl KindDescriptor for Provider {
 impl SourceChecker for Provider {
     type Error = CarrierError;
     type Check<'a> = Finished<Result<CheckedSource, CheckFailure<Self::Error>>>;
-    fn check_source(&self, _: CheckSourceRequest, control: CancellationToken) -> Self::Check<'_> {
+    fn handle_check_source(
+        &self,
+        _: CheckSourceRequest,
+        control: CancellationToken,
+    ) -> Self::Check<'_> {
         let outcome = match self.mode {
             0 => CheckedSource::from_json(json(r#"{"kind":"k"}"#)).map_err(CheckFailure::Operational),
             1 => Err(CheckFailure::Rejected(CheckRejection::from_json(json(
@@ -136,19 +140,19 @@ fn cancellation_precedes_every_success_and_failure_after_provider_cleanup() {
                 };
                 match operation {
                     0 => assert!(matches!(
-                        complete(KindClient::new(&provider).list_kinds(caller)),
-                        Err(ClientError::Cancelled)
+                        complete(provider.list_kinds(caller)),
+                        Err(KindError::Cancelled)
                     )),
                     1 => assert!(matches!(
-                        complete(KindClient::new(&provider).describe_kind(
+                        complete(provider.describe_kind(
                             DescribeKindRequest::from_json(json(r#"{"kind":"k"}"#)).unwrap(),
                             caller
                         )),
-                        Err(ClientError::Cancelled)
+                        Err(KindError::Cancelled)
                     )),
                     _ => assert!(matches!(
-                        complete(SourceCheckClient::new(&provider).check_source(request(), caller)),
-                        Err(ClientError::Cancelled)
+                        complete(provider.check_source(request(), caller)),
+                        Err(KindError::Cancelled)
                     )),
                 }
             }
@@ -164,11 +168,10 @@ fn malformed_provider_outputs_remain_operational_failures_and_never_kind_rejecti
         boundary: Boundary::None,
         mode: 3,
     };
-    let error = complete(SourceCheckClient::new(provider).check_source(request(), caller.clone()))
-        .unwrap_err();
+    let error = complete((provider).check_source(request(), caller.clone())).unwrap_err();
     assert!(matches!(
         error,
-        ClientError::Provider(CheckFailure::Operational(CarrierError::UnexpectedMember))
+        KindError::Provider(CheckFailure::Operational(CarrierError::UnexpectedMember))
     ));
     assert!(!caller.is_cancelled());
     // Diagnostic formatting never prints native provider details implicitly.
@@ -186,28 +189,24 @@ fn check_failures_keep_exact_payloads_and_are_subject_to_carrier_handoff_bounds(
             boundary: Boundary::None,
             mode,
         };
-        let error =
-            complete(SourceCheckClient::new(&provider).check_source(request(), caller.clone()))
-                .unwrap_err();
+        let error = complete(provider.check_source(request(), caller.clone())).unwrap_err();
         match error {
-            ClientError::Provider(CheckFailure::Rejected(value)) => {
+            KindError::Provider(CheckFailure::Rejected(value)) => {
                 assert_eq!(value.data().unwrap().text(), "9007199254740993")
             }
-            ClientError::Provider(CheckFailure::ContextRequired(value)) => {
+            KindError::Provider(CheckFailure::ContextRequired(value)) => {
                 assert!(value.value().value().get("schema").is_some())
             }
             other => panic!("unexpected error: {other:?}"),
         }
-        let limited = SourceCheckClient::with_limits(
-            &provider,
-            DescriptionLimits {
-                max_response_bytes: 1,
-                ..Default::default()
-            },
-        );
+        let limited = &provider;
+        let limited_limits = DescriptionLimits {
+            max_response_bytes: 1,
+            ..Default::default()
+        };
         assert!(matches!(
-            complete(limited.check_source(request(), caller.clone())),
-            Err(ClientError::LimitExceeded("response-bytes"))
+            complete(limited.check_source_with_limits(request(), caller.clone(), limited_limits)),
+            Err(KindError::LimitExceeded("response-bytes"))
         ));
         assert!(!caller.is_cancelled());
     }

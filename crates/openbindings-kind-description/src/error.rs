@@ -50,11 +50,11 @@ impl fmt::Debug for CheckRejection {
     }
 }
 
-/// An unsuccessful source check, distinct from local client admission or limits.
+/// An unsuccessful source check, distinct from local caller admission or limits.
 #[derive(Clone)]
 #[non_exhaustive]
 pub enum CheckFailure<E = std::convert::Infallible> {
-    /// The kind requires caller-provided context; the client never acquires or retries it.
+    /// The kind requires caller-provided context; the caller never acquires or retries it.
     ContextRequired(ContextChallenge),
     /// The kind rejected the entry with a code and a human-readable message.
     Rejected(CheckRejection),
@@ -93,9 +93,9 @@ impl<E: std::error::Error + 'static> std::error::Error for CheckFailure<E> {
     }
 }
 
-/// Local client failures are distinct from the provider's own failure type.
+/// Local caller failures are distinct from the provider's own failure type.
 #[non_exhaustive]
-pub enum ClientError<E> {
+pub enum KindError<E> {
     /// The provider's unsuccessful result, without converting it to a verdict.
     Provider(E),
     /// The caller cancelled the attempt.
@@ -105,20 +105,20 @@ pub enum ClientError<E> {
     /// A configured carrier handoff bound was reached.
     LimitExceeded(&'static str),
 }
-impl<E> fmt::Debug for ClientError<E> {
+impl<E> fmt::Debug for KindError<E> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Provider(_) => f.write_str("ClientError::Provider { .. }"),
-            Self::Cancelled => f.write_str("ClientError::Cancelled"),
-            Self::KindMismatch => f.write_str("ClientError::KindMismatch"),
+            Self::Provider(_) => f.write_str("KindError::Provider { .. }"),
+            Self::Cancelled => f.write_str("KindError::Cancelled"),
+            Self::KindMismatch => f.write_str("KindError::KindMismatch"),
             Self::LimitExceeded(resource) => f
-                .debug_tuple("ClientError::LimitExceeded")
+                .debug_tuple("KindError::LimitExceeded")
                 .field(resource)
                 .finish(),
         }
     }
 }
-impl<E> fmt::Display for ClientError<E> {
+impl<E> fmt::Display for KindError<E> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
             Self::Provider(_) => "the provider did not complete the request successfully",
@@ -128,7 +128,7 @@ impl<E> fmt::Display for ClientError<E> {
         })
     }
 }
-impl<E: std::error::Error + 'static> std::error::Error for ClientError<E> {
+impl<E: std::error::Error + 'static> std::error::Error for KindError<E> {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::Provider(error) => Some(error),

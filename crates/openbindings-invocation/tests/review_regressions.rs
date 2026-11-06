@@ -7,9 +7,9 @@ mod tests {
         SchemaValidator, ValueOutcome, WorkControl,
     };
     use openbindings_invocation::{
-        BindingInvoker, BindingRequest, CancellationToken, InvocationError, InvocationSupport,
-        OperationClient, OperationRequest, OutputEvent, PreflightOutcome, ProviderInput,
-        ProviderIo, ProviderOutput,
+        BindingInvoker, BindingRequest, CancellationToken, DefaultOperationInvoker,
+        InvocationError, InvocationSupport, OperationRequest, OutputEvent, PreflightOutcome,
+        ProviderInput, ProviderIo, ProviderOutput,
     };
     use std::{
         cell::Cell,
@@ -66,7 +66,7 @@ mod tests {
         type Invoke<'a> = Pin<Box<dyn Future<Output = Result<(), InvocationError>> + Send + 'a>>;
         type Preflight<'a> =
             Pin<Box<dyn Future<Output = Result<PreflightOutcome, InvocationError>> + Send + 'a>>;
-        fn invoke<'a>(
+        fn handle_invoke<'a>(
             &'a self,
             _: BindingRequest,
             mut io: ProviderIo,
@@ -98,7 +98,7 @@ mod tests {
                 }
             })
         }
-        fn preflight<'a>(
+        fn handle_preflight<'a>(
             &'a self,
             _: BindingRequest,
             control: CancellationToken,
@@ -204,7 +204,7 @@ mod tests {
         let p = P::new(Mode::PublishOutput);
         let external = CancellationToken::new();
         let e = evaluator(EvalMode::Satisfy, &external, p.reader.clone());
-        let client = OperationClient::new(&p, e, ExternalSchemas::default());
+        let client = DefaultOperationInvoker::new(&p, e, ExternalSchemas::default());
         let (_input, mut output) = client
             .invoke(
                 OperationRequest::binding(doc(r#"{"output":true}"#), "b"),
@@ -230,7 +230,7 @@ mod tests {
         let p = P::new(Mode::PublishInput);
         let external = CancellationToken::new();
         let e = evaluator(EvalMode::Satisfy, &external, p.reader.clone());
-        let client = OperationClient::new(&p, e, ExternalSchemas::default());
+        let client = DefaultOperationInvoker::new(&p, e, ExternalSchemas::default());
         let (mut input, mut output) = client
             .invoke(
                 OperationRequest::binding(doc(r#"{"input":true}"#), "b"),
@@ -263,7 +263,7 @@ mod tests {
             let external = CancellationToken::new();
             let e = evaluator(mode, &external, p.reader.clone());
             let drops = e.drops.clone();
-            let client = OperationClient::new(&p, e, ExternalSchemas::default());
+            let client = DefaultOperationInvoker::new(&p, e, ExternalSchemas::default());
             let (mut input, mut output) = client
                 .invoke(
                     OperationRequest::binding(doc(r#"{"input":true}"#), "b"),
@@ -283,7 +283,7 @@ mod tests {
             let p = P::new(Mode::PublishInput);
             let external = CancellationToken::new();
             let e = evaluator(mode, &external, p.reader.clone());
-            let client = OperationClient::new(&p, e, ExternalSchemas::default());
+            let client = DefaultOperationInvoker::new(&p, e, ExternalSchemas::default());
             let (mut input, mut output) = client
                 .invoke(
                     OperationRequest::binding(doc(r#"{"input":true}"#), "b"),
@@ -316,7 +316,7 @@ mod tests {
         let p = P::new(Mode::Park);
         let external = CancellationToken::new();
         let e = evaluator(EvalMode::Satisfy, &external, p.reader.clone());
-        let client = OperationClient::new(&p, e, ExternalSchemas::default());
+        let client = DefaultOperationInvoker::new(&p, e, ExternalSchemas::default());
         let call = client
             .invoke(
                 OperationRequest::binding(doc(r#"{"input":true}"#), "b"),

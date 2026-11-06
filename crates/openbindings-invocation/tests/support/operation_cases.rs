@@ -5,9 +5,9 @@ use openbindings::{
     SchemaValidator, ValueOutcome, WorkControl,
 };
 use openbindings_invocation::{
-    BindingClient, BindingInvoker, BindingRequest, BoundaryFailureKind, CancellationToken, Context,
-    ContextChallenge, InvocationError, InvocationSupport, OperationClient, OperationRequest,
-    OutputEvent, PreflightOutcome, ProviderIo,
+    BindingInvoker, BindingInvokerExt, BindingRequest, BoundaryFailureKind, CancellationToken,
+    Context, ContextChallenge, DefaultOperationInvoker, InvocationError, InvocationSupport,
+    OperationRequest, OutputEvent, PreflightOutcome, ProviderIo,
     operation::{Direction, ValidationEvidence},
 };
 use openbindings_json_schema_evaluator::DefaultEvaluator;
@@ -77,7 +77,7 @@ impl InvocationSupport for Provider {
 impl BindingInvoker for Provider {
     type Invoke<'a> = Pin<Box<dyn Future<Output = Result<(), InvocationError>> + Send + 'a>>;
     type Preflight<'a> = Ready<Result<PreflightOutcome, InvocationError>>;
-    fn invoke<'a>(
+    fn handle_invoke<'a>(
         &'a self,
         request: BindingRequest,
         io: ProviderIo,
@@ -118,7 +118,7 @@ impl BindingInvoker for Provider {
             Ok(())
         })
     }
-    fn preflight<'a>(
+    fn handle_preflight<'a>(
         &'a self,
         request: BindingRequest,
         _: CancellationToken,
@@ -144,7 +144,7 @@ fn code(event: Option<OutputEvent>) -> String {
 #[tokio::test]
 async fn binding_is_lazy_owned_exact_and_descriptorless() {
     let provider = Provider::new(Mode::Echo);
-    let client = BindingClient::new(&provider);
+    let client = &provider;
     let context = Context::try_from(json(
         r#"{"opaque":{"x":1,"x":2},"number":1e9999,"text":"\ud800"}"#,
     ))
@@ -179,7 +179,7 @@ async fn binding_is_lazy_owned_exact_and_descriptorless() {
 #[tokio::test]
 async fn missing_binding_is_terminal_but_empty_key_is_local() {
     let provider = Provider::new(Mode::Empty);
-    let client = BindingClient::new(&provider);
+    let client = &provider;
     assert_eq!(
         client
             .invoke(BindingRequest::new(document("{}"), ""), control())
@@ -198,7 +198,7 @@ async fn missing_binding_is_terminal_but_empty_key_is_local() {
 async fn explicit_operation_binding_bypasses_selection_support() {
     let mut provider = Provider::new(Mode::Empty);
     provider.supported = false;
-    let client = OperationClient::new(
+    let client = DefaultOperationInvoker::new(
         &provider,
         DefaultEvaluator::default(),
         ExternalSchemas::default(),
@@ -213,7 +213,7 @@ async fn explicit_operation_binding_bypasses_selection_support() {
 #[tokio::test]
 async fn all_selection_keys_are_checked_before_any_support_query() {
     let provider = Provider::new(Mode::Empty);
-    let client = OperationClient::new(
+    let client = DefaultOperationInvoker::new(
         &provider,
         DefaultEvaluator::default(),
         ExternalSchemas::default(),
@@ -230,7 +230,7 @@ async fn all_selection_keys_are_checked_before_any_support_query() {
 #[tokio::test]
 async fn aliases_ordered_selection_and_ambiguity_follow_caller_policy() {
     let provider = Provider::new(Mode::Empty);
-    let client = OperationClient::new(
+    let client = DefaultOperationInvoker::new(
         &provider,
         DefaultEvaluator::default(),
         ExternalSchemas::default(),
@@ -278,7 +278,7 @@ async fn aliases_ordered_selection_and_ambiguity_follow_caller_policy() {
 #[tokio::test]
 async fn input_is_checked_before_delivery_and_rejection_is_not_eof() {
     let provider = Provider::new(Mode::Echo);
-    let client = OperationClient::new(
+    let client = DefaultOperationInvoker::new(
         &provider,
         DefaultEvaluator::default(),
         ExternalSchemas::default(),
@@ -306,7 +306,7 @@ async fn input_is_checked_before_delivery_and_rejection_is_not_eof() {
 #[tokio::test]
 async fn valid_output_precedes_rejected_output_terminal() {
     let provider = Provider::new(Mode::Outputs);
-    let client = OperationClient::new(
+    let client = DefaultOperationInvoker::new(
         &provider,
         DefaultEvaluator::default(),
         ExternalSchemas::default(),
@@ -372,7 +372,7 @@ fn evaluator(refusal: bool) -> (LocalEvaluator, Rc<Cell<usize>>, Rc<Cell<usize>>
 async fn local_typed_validators_prepare_once_per_declared_direction() {
     let provider = Provider::new(Mode::Echo);
     let (eval, preparations, evaluations) = evaluator(false);
-    let client = OperationClient::new(&provider, eval, ExternalSchemas::default());
+    let client = DefaultOperationInvoker::new(&provider, eval, ExternalSchemas::default());
     for attempt in 1..=2 {
         let (mut input, mut output) = client
             .invoke(
@@ -407,7 +407,7 @@ async fn local_typed_validators_prepare_once_per_declared_direction() {
 async fn preparation_refusal_keeps_preparation_evidence_without_value_verdict() {
     let provider = Provider::new(Mode::Echo);
     let (eval, preparations, evaluations) = evaluator(true);
-    let client = OperationClient::new(&provider, eval, ExternalSchemas::default());
+    let client = DefaultOperationInvoker::new(&provider, eval, ExternalSchemas::default());
     let call = client
         .invoke(
             OperationRequest::binding(document(r#"{"input":true}"#), "a"),
@@ -430,7 +430,7 @@ fn require_send<T: Send>(_: &T) {}
 async fn preflight_is_send_with_a_non_send_evaluator_and_never_prepares() {
     let provider = Provider::new(Mode::Challenge);
     let (eval, preparations, evaluations) = evaluator(true);
-    let client = OperationClient::new(&provider, eval, ExternalSchemas::default());
+    let client = DefaultOperationInvoker::new(&provider, eval, ExternalSchemas::default());
     let future = client
         .preflight(
             OperationRequest::binding(document(r#"{"input":false,"output":false}"#), "a"),
@@ -451,7 +451,7 @@ async fn absent_contracts_and_error_data_are_not_validated() {
     for mode in [Mode::Echo, Mode::Error, Mode::Challenge] {
         let provider = Provider::new(mode);
         let (eval, preparations, evaluations) = evaluator(true);
-        let client = OperationClient::new(&provider, eval, ExternalSchemas::default());
+        let client = DefaultOperationInvoker::new(&provider, eval, ExternalSchemas::default());
         let doc = if matches!(mode, Mode::Echo) {
             document("{}")
         } else {
@@ -496,7 +496,7 @@ async fn absent_contracts_and_error_data_are_not_validated() {
 #[test]
 fn thread_safe_composition_yields_send_driver_and_provider_handles() {
     let provider = Provider::new(Mode::Park);
-    let client = OperationClient::new(
+    let client = DefaultOperationInvoker::new(
         provider,
         DefaultEvaluator::default(),
         ExternalSchemas::default(),
@@ -515,7 +515,7 @@ fn thread_safe_composition_yields_send_driver_and_provider_handles() {
 #[tokio::test]
 async fn cancelled_before_first_poll_never_constructs_provider_work() {
     let provider = Provider::new(Mode::Park);
-    let client = BindingClient::new(&provider);
+    let client = &provider;
     let cancel = control();
     let (_, mut output) = client
         .invoke(BindingRequest::new(document("{}"), "a"), cancel.clone())
@@ -528,7 +528,7 @@ async fn cancelled_before_first_poll_never_constructs_provider_work() {
 #[test]
 fn dropping_output_cancels_parked_provider_and_input_cannot_drive() {
     let provider = Provider::new(Mode::Park);
-    let client = BindingClient::new(&provider);
+    let client = &provider;
     let call = client
         .invoke(BindingRequest::new(document("{}"), "a"), control())
         .unwrap();
@@ -593,7 +593,8 @@ async fn prepared_local_validators_are_reused_without_requiring_provider_clone()
     use openbindings_invocation::operation::BindingChoice;
     let (eval, preparations, evaluations) = evaluator(false);
     // Provider itself is deliberately not Clone; only the owned validator is.
-    let client = OperationClient::new(Provider::new(Mode::Echo), eval, ExternalSchemas::default());
+    let client =
+        DefaultOperationInvoker::new(Provider::new(Mode::Echo), eval, ExternalSchemas::default());
     let prepared = client
         .prepare(
             document(r#"{"input":true,"output":true,"aliases":["alias"]}"#),
@@ -650,7 +651,7 @@ impl SchemaEvaluator for LocalCompiler {
 #[tokio::test]
 async fn prepared_driver_is_send_without_sync_validator_or_send_evaluator() {
     use openbindings_invocation::operation::BindingChoice;
-    let client = OperationClient::new(
+    let client = DefaultOperationInvoker::new(
         Provider::new(Mode::Echo),
         LocalCompiler(Rc::new(Cell::new(0))),
         ExternalSchemas::default(),
@@ -684,7 +685,7 @@ async fn prepared_driver_is_send_without_sync_validator_or_send_evaluator() {
 async fn prepared_snapshot_and_operation_membership_are_stable() {
     use openbindings_invocation::operation::BindingChoice;
     let provider = Provider::new(Mode::Echo);
-    let client = OperationClient::new(
+    let client = DefaultOperationInvoker::new(
         &provider,
         DefaultEvaluator::default(),
         ExternalSchemas::default(),
@@ -745,7 +746,7 @@ fn preparation_cancellation_has_a_direction_only_when_a_schema_was_being_prepare
     use openbindings_invocation::operation::OperationPreparationFailure;
     let cancel = control();
     cancel.cancel();
-    let client = OperationClient::new(
+    let client = DefaultOperationInvoker::new(
         Provider::new(Mode::Empty),
         DefaultEvaluator::default(),
         ExternalSchemas::default(),
@@ -755,7 +756,7 @@ fn preparation_cancellation_has_a_direction_only_when_a_schema_was_being_prepare
         Err(OperationPreparationFailure::Cancelled)
     ));
     let cancel = control();
-    let client = OperationClient::new(
+    let client = DefaultOperationInvoker::new(
         Provider::new(Mode::Empty),
         CancelDuringPreparation(cancel.clone()),
         ExternalSchemas::default(),
@@ -859,7 +860,7 @@ fn unpaired_metadata_is_rejected_before_invoker_construction() {
 #[tokio::test]
 async fn late_input_mismatch_preserves_prior_output_without_a_clean_eof() {
     let provider = Provider::new(Mode::Echo);
-    let client = OperationClient::new(
+    let client = DefaultOperationInvoker::new(
         &provider,
         DefaultEvaluator::default(),
         ExternalSchemas::default(),
@@ -930,7 +931,7 @@ async fn undefined_and_no_verdict_withhold_both_directions_and_keep_exact_eviden
                 Mode::Outputs
             };
             let provider = Provider::new(mode);
-            let client = OperationClient::new(
+            let client = DefaultOperationInvoker::new(
                 &provider,
                 SemanticEvaluator(undefined),
                 ExternalSchemas::default(),
@@ -1009,7 +1010,7 @@ fn historical_contained_reference_defects_remain_obi12_negatives() {
 async fn declared_schemas_without_values_do_not_prepare_even_when_unresolvable() {
     let provider = Provider::new(Mode::Empty);
     let (eval, preps, evaluations) = evaluator(true);
-    let client = OperationClient::new(&provider, eval, ExternalSchemas::default());
+    let client = DefaultOperationInvoker::new(&provider, eval, ExternalSchemas::default());
     let (_, mut output) = client
         .invoke(
             OperationRequest::binding(
@@ -1048,7 +1049,7 @@ fn duplicate_alias_documents_remain_obi05_admission_negatives() {
 #[tokio::test]
 async fn absent_schema_operation_forwards_all_exact_values_context_and_original_document() {
     let provider = Provider::new(Mode::Echo);
-    let client = OperationClient::new(
+    let client = DefaultOperationInvoker::new(
         &provider,
         DefaultEvaluator::default(),
         ExternalSchemas::default(),
@@ -1137,7 +1138,8 @@ fn second_direction_failure_or_late_cancel_releases_partial_preparation_and_allo
             cancel: cancel_late.then(|| cancellation.clone()),
         });
         let provider = Provider::new(Mode::Empty);
-        let client = OperationClient::new(&provider, probe.clone(), ExternalSchemas::default());
+        let client =
+            DefaultOperationInvoker::new(&provider, probe.clone(), ExternalSchemas::default());
         let interface = document(r#"{"input":true,"output":true}"#);
         let stopped = control();
         stopped.cancel();
@@ -1175,7 +1177,7 @@ fn explicit_preparation_distinguishes_absence_missing_name_and_declared_refusal(
     use openbindings_invocation::operation::OperationPreparationFailure;
     let provider = Provider::new(Mode::Empty);
     let (eval, preps, evaluations) = evaluator(true);
-    let client = OperationClient::new(&provider, eval, ExternalSchemas::default());
+    let client = DefaultOperationInvoker::new(&provider, eval, ExternalSchemas::default());
     let interface = document(r#"{"aliases":["say"]}"#);
     assert!(client.prepare(interface.clone(), "say", &control()).is_ok());
     assert!(
@@ -1201,7 +1203,7 @@ fn explicit_preparation_distinguishes_absence_missing_name_and_declared_refusal(
 async fn prepared_choice_admission_and_complete_membership_checks_precede_support() {
     use openbindings_invocation::operation::BindingChoice;
     let provider = Provider::new(Mode::Empty);
-    let client = OperationClient::new(
+    let client = DefaultOperationInvoker::new(
         &provider,
         DefaultEvaluator::default(),
         ExternalSchemas::default(),
@@ -1238,7 +1240,7 @@ async fn prepared_choice_admission_and_complete_membership_checks_precede_suppor
 async fn concurrent_prepared_clones_keep_selection_context_cancellation_and_evidence_separate() {
     use openbindings_invocation::operation::BindingChoice;
     let provider = Provider::new(Mode::Echo);
-    let client = OperationClient::new(
+    let client = DefaultOperationInvoker::new(
         &provider,
         DefaultEvaluator::default(),
         ExternalSchemas::default(),

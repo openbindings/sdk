@@ -31,6 +31,8 @@ impl std::error::Error for BoundaryFailure {}
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum BoundaryFailureKind {
+    /// Caller-selected invocation limits cannot form a valid handoff.
+    InvalidLimits,
     /// An interpreted object contains an unknown member.
     UnexpectedMember,
     /// A required field is missing.
@@ -150,4 +152,10 @@ pub(crate) fn encode<T: Serialize>(
         .map_err(|_| failure(BoundaryFailureKind::EncodingLimit, ""))?;
     JsonValue::parse_owned_with_limits(output.bytes, limits)
         .map_err(|_| failure(BoundaryFailureKind::EncodingLimit, ""))
+}
+
+impl From<crate::LimitError> for BoundaryFailure {
+    fn from(_: crate::LimitError) -> Self {
+        failure(BoundaryFailureKind::InvalidLimits, "/limits")
+    }
 }

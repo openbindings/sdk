@@ -2,7 +2,7 @@ use invocation_consumer::Catalog;
 use openbindings::{ConformantDocument, Document, Edit, ExternalSchemas, JsonValue};
 use openbindings_invocation::*;
 use openbindings_json_schema_evaluator::DefaultEvaluator;
-use openbindings_source_pull::{PullClient, PullLimits, PullRequest};
+use openbindings_source_pull::{PullLimits, PullRequest, SourcePullerExt};
 use source_pull_consumer::Fixed;
 use std::{future::Future, sync::Arc};
 
@@ -12,7 +12,7 @@ fn json(text: &str) -> JsonValue {
 async fn authored() -> ConformantDocument {
     let original = Document::parse(r#"{"openbindings":"0.2.0","operations":{},"sources":{"fixed":{"kind":"example.fixed@1"}}}"#).unwrap().validate().unwrap().conformant().unwrap();
     let request = PullRequest::new(original.clone(), "fixed");
-    let result = PullClient::new(Fixed)
+    let result = (Fixed)
         .pull_source(request.clone(), CancellationToken::new())
         .await
         .unwrap();
@@ -59,7 +59,7 @@ async fn exchange<F: Future<Output = Result<(), InvocationError>>>(
 async fn pull_adopt_then_explicit_binding_echo_preserves_exact_values_and_queue_progress() {
     let original = authored().await;
     let provider = Arc::new(Catalog::default());
-    let client = BindingClient::new(provider.clone());
+    let client = provider.clone();
     let mut values = vec![
         json("9007199254740993"),
         json("1e99999"),
@@ -104,7 +104,7 @@ async fn operation_alias_and_contracts_use_the_adopted_original_document() {
         .conformant()
         .unwrap();
     let provider = Arc::new(Catalog::default());
-    let client = OperationClient::new(
+    let client = DefaultOperationInvoker::new(
         provider.clone(),
         DefaultEvaluator::new(),
         ExternalSchemas::default(),
@@ -140,7 +140,7 @@ async fn operation_alias_and_contracts_use_the_adopted_original_document() {
 async fn preflight_and_context_require_a_separate_explicit_attempt() {
     let document = authored().await;
     let provider = Arc::new(Catalog::requiring_context());
-    let client = BindingClient::new(provider.clone());
+    let client = provider.clone();
     let request = BindingRequest::new(document, "echo.fixed");
     let prediction = client
         .preflight(request.clone(), CancellationToken::new())
@@ -177,7 +177,7 @@ async fn preflight_and_context_require_a_separate_explicit_attempt() {
 async fn invalid_selection_and_missing_binding_produce_no_operation_effects() {
     let original = authored().await;
     let provider = Arc::new(Catalog::default());
-    let client = OperationClient::new(
+    let client = DefaultOperationInvoker::new(
         provider.clone(),
         DefaultEvaluator::new(),
         ExternalSchemas::default(),

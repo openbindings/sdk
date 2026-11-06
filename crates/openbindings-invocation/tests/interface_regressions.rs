@@ -1,8 +1,8 @@
 //! Current-interface regressions preserve behavior while replacing obsolete APIs.
 use openbindings::{ConformantDocument, Document, ExternalSchemas, JsonValue};
 use openbindings_invocation::{
-    BindingClient, BindingInvoker, BindingRequest, CancellationToken, ContextChallenge,
-    InvocationError, InvocationSupport, OperationClient, OperationRequest, OutputEvent,
+    BindingInvoker, BindingInvokerExt, BindingRequest, CancellationToken, ContextChallenge,
+    DefaultOperationInvoker, InvocationError, InvocationSupport, OperationRequest, OutputEvent,
     PreflightOutcome, ProviderIo, ProviderOutput,
 };
 use openbindings_json_schema_evaluator::DefaultEvaluator;
@@ -53,7 +53,7 @@ impl BindingInvoker for Provider<'_> {
         = Ready<Result<PreflightOutcome, InvocationError>>
     where
         Self: 'a;
-    fn invoke<'a>(
+    fn handle_invoke<'a>(
         &'a self,
         _: BindingRequest,
         io: ProviderIo,
@@ -66,7 +66,11 @@ impl BindingInvoker for Provider<'_> {
             Err(InvocationError::new(code, None).unwrap())
         }))
     }
-    fn preflight<'a>(&'a self, _: BindingRequest, _: CancellationToken) -> Self::Preflight<'a> {
+    fn handle_preflight<'a>(
+        &'a self,
+        _: BindingRequest,
+        _: CancellationToken,
+    ) -> Self::Preflight<'a> {
         self.hooks.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         ready(
             self.code.map_or(
@@ -85,7 +89,7 @@ impl InvocationSupport for Provider<'_> {
     }
 }
 fn send_preflight<'a, P: BindingInvoker + Sync>(
-    client: &'a BindingClient<P>,
+    client: &'a P,
     request: BindingRequest,
 ) -> impl Future<Output = Result<PreflightOutcome, InvocationError>> + Send + 'a
 where
@@ -94,7 +98,7 @@ where
     client.preflight(request, cancel()).unwrap()
 }
 fn send_invocation<'a, P: BindingInvoker + Sync>(
-    client: &'a BindingClient<P>,
+    client: &'a P,
     request: BindingRequest,
 ) -> openbindings_invocation::Invocation<
     impl Future<Output = Result<(), InvocationError>> + Send + 'a,
@@ -107,7 +111,7 @@ where
 #[tokio::test]
 async fn borrowed_generic_provider_futures_are_send_without_static_configuration() {
     let configured_code = String::from("example.borrowed");
-    let client = BindingClient::new(Provider::new(Some(&configured_code)));
+    let client = Provider::new(Some(&configured_code));
     assert_eq!(
         send_preflight(&client, request()).await.unwrap_err().code(),
         configured_code
@@ -120,7 +124,7 @@ async fn check_forwarding<P: BindingInvoker + InvocationSupport>(
     hooks: Arc<std::sync::atomic::AtomicUsize>,
 ) {
     let expected = r#"{"message":"Context needed","schema":{}}"#;
-    let binding = BindingClient::new(&provider);
+    let binding = &provider;
     let PreflightOutcome::Challenge(challenge) = binding
         .preflight(request(), cancel())
         .unwrap()
@@ -133,7 +137,7 @@ async fn check_forwarding<P: BindingInvoker + InvocationSupport>(
     let (_, mut output) = binding.invoke(request(), cancel()).unwrap().split();
     assert!(matches!(output.next().await, Some(OutputEvent::Complete)));
     drop(output);
-    let operation = OperationClient::new(
+    let operation = DefaultOperationInvoker::new(
         provider,
         DefaultEvaluator::default(),
         ExternalSchemas::default(),
@@ -172,7 +176,7 @@ async fn pointer_forwarding_preserves_separate_preflight_hooks() {
 #[tokio::test]
 async fn unsupported_ordered_selection_is_not_found_but_explicit_binding_is_attempted() {
     let provider = Provider::new(None);
-    let client = OperationClient::new(
+    let client = DefaultOperationInvoker::new(
         &provider,
         DefaultEvaluator::default(),
         ExternalSchemas::default(),
@@ -197,7 +201,7 @@ async fn unsupported_ordered_selection_is_not_found_but_explicit_binding_is_atte
 #[tokio::test]
 async fn independent_provider_output_after_settlement_reports_the_terminal() {
     let provider = Provider::new(Some("ERR_REFUSED"));
-    let client = BindingClient::new(&provider);
+    let client = &provider;
     let (_, mut output) = client.invoke(request(), cancel()).unwrap().split();
     assert_eq!(terminal(output.next().await).code(), "ERR_REFUSED");
     let mut sender = provider.output.lock().unwrap().take().unwrap();
@@ -215,8 +219,8 @@ async fn only_current_operation_owned_codes_are_reserved_at_provider_boundary() 
         "ERR_SCHEMA_UNRESOLVED",
     ] {
         let provider = Provider::new(Some(code));
-        let binding = BindingClient::new(&provider);
-        let operation = OperationClient::new(
+        let binding = &provider;
+        let operation = DefaultOperationInvoker::new(
             &provider,
             DefaultEvaluator::default(),
             ExternalSchemas::default(),
@@ -258,7 +262,7 @@ async fn only_current_operation_owned_codes_are_reserved_at_provider_boundary() 
         "ERR_UNKNOWN_SOURCE",
         "example.application",
     ] {
-        let client = BindingClient::new(Provider::new(Some(code)));
+        let client = Provider::new(Some(code));
         let (_, mut output) = client.invoke(request(), cancel()).unwrap().split();
         assert_eq!(terminal(output.next().await).code(), code);
         assert_eq!(
@@ -333,7 +337,7 @@ async fn explain_detail_covers_both_directions_and_names_value_members() {
     impl BindingInvoker for EmitMember {
         type Invoke<'a> = std::pin::Pin<Box<dyn Future<Output = Result<(), InvocationError>> + 'a>>;
         type Preflight<'a> = Ready<Result<PreflightOutcome, InvocationError>>;
-        fn invoke<'a>(
+        fn handle_invoke<'a>(
             &'a self,
             _: BindingRequest,
             mut io: ProviderIo,
@@ -344,7 +348,11 @@ async fn explain_detail_covers_both_directions_and_names_value_members() {
                 io.send(json(r#"{"provider-member":7}"#)).await
             })
         }
-        fn preflight<'a>(&'a self, _: BindingRequest, _: CancellationToken) -> Self::Preflight<'a> {
+        fn handle_preflight<'a>(
+            &'a self,
+            _: BindingRequest,
+            _: CancellationToken,
+        ) -> Self::Preflight<'a> {
             ready(Ok(PreflightOutcome::NoPrediction))
         }
     }
@@ -362,7 +370,7 @@ async fn explain_detail_covers_both_directions_and_names_value_members() {
                 "/provider-member",
             ),
         ] {
-            let client = OperationClient::new(
+            let client = DefaultOperationInvoker::new(
                 EmitMember,
                 DefaultEvaluator::default(),
                 ExternalSchemas::default(),
@@ -408,7 +416,7 @@ impl InvocationSupport for HoldOutput {
 impl BindingInvoker for HoldOutput {
     type Invoke<'a> = std::pin::Pin<Box<dyn Future<Output = Result<(), InvocationError>> + 'a>>;
     type Preflight<'a> = Ready<Result<PreflightOutcome, InvocationError>>;
-    fn invoke<'a>(
+    fn handle_invoke<'a>(
         &'a self,
         _: BindingRequest,
         io: ProviderIo,
@@ -421,7 +429,11 @@ impl BindingInvoker for HoldOutput {
             std::future::pending().await
         })
     }
-    fn preflight<'a>(&'a self, _: BindingRequest, _: CancellationToken) -> Self::Preflight<'a> {
+    fn handle_preflight<'a>(
+        &'a self,
+        _: BindingRequest,
+        _: CancellationToken,
+    ) -> Self::Preflight<'a> {
         ready(Ok(PreflightOutcome::NoPrediction))
     }
 }
@@ -462,7 +474,7 @@ fn post_terminal_precedence<F: Future<Output = Result<(), InvocationError>>>(
 #[test]
 fn established_validation_or_size_failure_wins_over_later_oversized_output() {
     let published = Arc::new(Mutex::new(None));
-    let client = OperationClient::new(
+    let client = DefaultOperationInvoker::new(
         HoldOutput(published.clone()),
         DefaultEvaluator::default(),
         ExternalSchemas::default(),
@@ -484,14 +496,15 @@ fn established_validation_or_size_failure_wins_over_later_oversized_output() {
         "ERR_OPERATION_VALIDATION_FAILED",
     );
     let published = Arc::new(Mutex::new(None));
-    let client = BindingClient::new(HoldOutput(published.clone()))
-        .with_limits(openbindings_invocation::InvocationLimits {
-            max_value_bytes: Some(1),
-            ..Default::default()
-        })
-        .unwrap();
+    let client = HoldOutput(published.clone());
+    let client_limits = openbindings_invocation::InvocationLimits {
+        max_value_bytes: Some(1),
+        ..Default::default()
+    };
     post_terminal_precedence(
-        client.invoke(request(), cancel()).unwrap(),
+        client
+            .invoke_with_limits(request(), cancel(), client_limits)
+            .unwrap(),
         &published,
         json("null"),
         "ERR_EXECUTION_FAILED",

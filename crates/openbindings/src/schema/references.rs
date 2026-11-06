@@ -261,7 +261,7 @@ impl Document {
         self.references_with_resources(ExternalSchemas::default(), &crate::control::NeverCancelled)
     }
     /// Inspect the draft plus an immutable supplied resource set. The report is
-    /// diagnostic evidence, not a canonical domain view or a prepared contract.
+    /// diagnostic evidence, not a canonical domain view or a prepared schema.
     pub fn references_with_resources(
         &self,
         resources: ExternalSchemas,

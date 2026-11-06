@@ -65,12 +65,12 @@ priority over supplied names; packaged standards are the final fallback. Supplie
 retrieval aliases and declared IDs compete equally when no contained ID owns the
 name. A reached carrier must itself own its canonical ID: aliases, pointers and
 direct applicators into a competing carrier conservatively refuse preparation.
-Unused conflicts do not poison other contracts, and an independently named nested
+Unused conflicts do not poison other schemas, and an independently named nested
 resource retains its original base and dialect. No schema-body comparison, alias
 transfer or missing-fragment fallback occurs. `EvaluationRequest::supplied_resources()`
 retains the original catalog. `SchemaOrigin.resource` records original retrieval
 provenance, which need not be the winning lookup association for that URI. Replacing
-resources requires a new immutable set and preparation; retained contracts keep their inputs.
+resources requires a new immutable set and preparation; retained schemas keep their inputs.
 OBI-13 retains exact identifier comparison; ordinary JSON Schema resolution uses
 the library normalization policy.
 

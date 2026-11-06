@@ -58,8 +58,7 @@ fn default_checked_pull_completes_a_ten_thousand_item_catalog() {
     ));
     let request = PullRequest::new(original.clone(), "catalog");
     let result =
-        complete(PullClient::new(Embedded).pull_source(request.clone(), CancellationToken::new()))
-            .unwrap();
+        complete((Embedded).pull_source(request.clone(), CancellationToken::new())).unwrap();
     assert_eq!(result.report().added().len(), 10_000);
     assert!(result.report().is_complete());
     let adopted = result
@@ -101,7 +100,7 @@ fn stale_schema_annotations_are_not_erased_by_the_operation_reuse_profile() {
         let original = document(&format!(
             r#"{{"openbindings":"0.2.0","operations":{{"a":{{"input":{current}}}}},"sources":{{"catalog":{{"kind":"example.embedded@1","data":{{"items":[{{"key":"a","operation":{{"input":{offered}}},"data":{{"item":"a"}}}}]}}}}}},"bindings":{{"a":{{"operation":"a","source":"catalog","data":{{"item":"a"}}}}}}}}"#
         ));
-        let result = complete(PullClient::new(Embedded).pull_source(
+        let result = complete((Embedded).pull_source(
             PullRequest::new(original, "catalog"),
             CancellationToken::new(),
         ))
@@ -122,7 +121,7 @@ fn stale_schema_annotations_are_not_erased_by_the_operation_reuse_profile() {
 
 #[test]
 fn no_data_kind_projects_before_destination_identity_and_does_not_adapt_to_conflicts() {
-    let client = PullClient::new(Fixed);
+    let client = Fixed;
     for (operations, expected, complete_pull) in [
         ("{}", "new", true),
         (
@@ -224,8 +223,7 @@ fn embedded_kind_reports_stale_current_unmatched_and_partial_without_overwriting
     );
     let request = PullRequest::new(original.clone(), "catalog");
     let result =
-        complete(PullClient::new(Embedded).pull_source(request.clone(), CancellationToken::new()))
-            .unwrap();
+        complete((Embedded).pull_source(request.clone(), CancellationToken::new())).unwrap();
     assert!(!result.report().is_complete());
     let entries = result.report().existing().unwrap().collect::<Vec<_>>();
     assert_eq!(
@@ -367,7 +365,7 @@ fn a_caller_can_discard_or_explicitly_adopt_one_dependency_closed_subset() {
 
 #[test]
 fn comparison_failure_and_removal_only_drift_are_operational_inability() {
-    let client = PullClient::new(Embedded);
+    let client = Embedded;
     let comparison = document(
         r##"{"openbindings":"0.2.0","operations":{"a":{"input":true}},"sources":{"catalog":{"kind":"example.embedded@1","data":{"items":[{"key":"a","operation":{"input":{"$ref":"#/missing"}},"data":{"item":"a"}}]}}}}"##,
     );
@@ -378,7 +376,7 @@ fn comparison_failure_and_removal_only_drift_are_operational_inability() {
     .unwrap_err();
     assert!(matches!(
         error,
-        ClientError::Provider(PullFailure::Operational(CatalogError::Comparison(
+        PullError::Provider(PullFailure::Operational(CatalogError::Comparison(
             ComparisonFailure::MissingReference
         )))
     ));
@@ -392,7 +390,7 @@ fn comparison_failure_and_removal_only_drift_are_operational_inability() {
     .unwrap_err();
     assert!(matches!(
         error,
-        ClientError::Provider(PullFailure::Operational(
+        PullError::Provider(PullFailure::Operational(
             CatalogError::RemovalNotRepresentable
         ))
     ));

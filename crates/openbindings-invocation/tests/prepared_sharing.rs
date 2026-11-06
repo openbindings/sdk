@@ -1,8 +1,8 @@
-//! Prepared contracts outlive their compiler and enter caller-owned spawned tasks.
+//! Prepared schemas outlive their compiler and enter caller-owned spawned tasks.
 use openbindings::{Document, ExternalSchemas, JsonValue, SchemaValidator};
 use openbindings_invocation::{
-    BindingInvoker, BindingRequest, CancellationToken, InvocationError, InvocationSupport,
-    OperationClient, OutputEvent, PreflightOutcome, ProviderIo,
+    BindingInvoker, BindingRequest, CancellationToken, DefaultOperationInvoker, InvocationError,
+    InvocationSupport, OutputEvent, PreflightOutcome, ProviderIo,
     operation::{BindingChoice, PreparedOperation},
 };
 use openbindings_json_schema_evaluator::DefaultEvaluator;
@@ -20,7 +20,7 @@ impl InvocationSupport for Echo {
 impl BindingInvoker for Echo {
     type Invoke<'a> = Pin<Box<dyn Future<Output = Result<(), InvocationError>> + Send + 'a>>;
     type Preflight<'a> = Ready<Result<PreflightOutcome, InvocationError>>;
-    fn invoke<'a>(
+    fn handle_invoke<'a>(
         &'a self,
         _: BindingRequest,
         mut io: ProviderIo,
@@ -33,7 +33,11 @@ impl BindingInvoker for Echo {
             Ok(())
         })
     }
-    fn preflight<'a>(&'a self, _: BindingRequest, _: CancellationToken) -> Self::Preflight<'a> {
+    fn handle_preflight<'a>(
+        &'a self,
+        _: BindingRequest,
+        _: CancellationToken,
+    ) -> Self::Preflight<'a> {
         ready(Ok(PreflightOutcome::NoPrediction))
     }
 }
@@ -85,9 +89,9 @@ where
         .collect()
 }
 #[tokio::test]
-async fn prepared_operation_moves_into_spawned_tasks_and_outlives_its_client() {
+async fn prepared_operation_moves_into_spawned_tasks_and_outlives_its_invoker() {
     let document=Document::parse(r#"{"openbindings":"0.2.0","operations":{"echo":{"input":{"type":"integer"},"output":{"type":"integer"}}},"sources":{"s":{"kind":"example.echo"}},"bindings":{"b":{"operation":"echo","source":"s"}}}"#).unwrap().validate().unwrap().conformant().unwrap();
-    let client = OperationClient::new(
+    let client = DefaultOperationInvoker::new(
         Echo,
         DefaultEvaluator::default(),
         ExternalSchemas::default(),

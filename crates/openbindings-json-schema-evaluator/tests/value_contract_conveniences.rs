@@ -13,7 +13,7 @@ fn document(schema: &str) -> ConformantDocument {
     .expect("conformant fixture")
 }
 
-/// Prepare the input contract selected by its alias with the default evaluator.
+/// Prepare the input schema selected by its alias with the default evaluator.
 fn prepare(schema: &str) -> PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator> {
     document(schema)
         .resolve_operation("find")

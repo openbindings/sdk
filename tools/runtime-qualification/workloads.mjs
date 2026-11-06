@@ -14,15 +14,15 @@ function conformant(document) {
   check(result.status === "conformant", JSON.stringify(result));
   return result.document;
 }
-// Prepare one operation's input contract; the operation view and unprepared
-// contract are released, and the prepared value contract survives them.
+// Prepare one operation's input schema; the operation view and unprepared
+// schema are released, and the prepared value schema survives them.
 function prepareInput(proof, name, options) {
   const operation = proof.resolveOperation(name);
   check(operation, "missing operation " + name);
   let contract;
   try {
     contract = operation.input();
-    check(contract, "absent input contract " + name);
+    check(contract, "absent input schema " + name);
     const result = contract.prepare(options);
     check(result.status === "ready", JSON.stringify(result));
     return result.schema;

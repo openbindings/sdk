@@ -39,7 +39,7 @@ fn conformant(doc: &Document) -> ConformantDocument {
         .conformant()
         .expect("conformant document")
 }
-/// Prepare the input contract of the named operation.
+/// Prepare the input schema of the named operation.
 fn prepare_with(
     proof: &ConformantDocument,
     supplied: &ExternalSchemas,

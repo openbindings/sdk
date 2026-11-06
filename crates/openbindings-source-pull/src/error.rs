@@ -47,7 +47,7 @@ pub enum RelationshipError {
     ExistingCoverage,
     /// An existing target is absent or belongs to a different source.
     ExistingTarget,
-    /// An existing report repeats the same role and key.
+    /// An existing report repeats the same entry type and key.
     DuplicateTarget,
     /// A uses label is malformed, names no addition, or names its own binding.
     Uses,

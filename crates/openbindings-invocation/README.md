@@ -1,9 +1,17 @@
 # OpenBindings invocation
 
-`BindingClient<P>` runs one binding of an owned conformant document.
-`OperationClient<P,E>` adds operation/alias resolution, caller-directed binding
-selection, and validation of each declared input/output contract. The SDK chooses
-no executor, registry, transport, credential store or retry policy.
+`BindingInvoker` runs one binding of an owned conformant document.
+`OperationInvoker` resolves operations, selects bindings and validates values.
+`DefaultOperationInvoker<P,E>` supplies that implementation using a binding invoker,
+an evaluator and external schemas. The SDK chooses
+no async runtime, registry, transport, credential store or retry policy.
+
+Implement `handle_invoke` and `handle_preflight`, then import `BindingInvokerExt`
+to call the checked `invoke` and `preflight` methods directly on your adapter.
+These SDK-owned methods perform admission, cancellation and result checks;
+calling a `handle_*` method explicitly bypasses those checks. Custom handoff
+limits are arguments to `invoke_with_limits` and `preflight_with_limits`.
+Invalid limits return `BoundaryFailureKind::InvalidLimits` before provider work.
 
 This implementation targets the binding-invoker and operation-invoker **0.1**
 interfaces at revision `5815fb106bddd2c85ff4e93e0077570b3f6b9e74`, independently of
@@ -11,7 +19,7 @@ OpenBindings core **0.2** and the package version.
 
 ```rust
 use openbindings::{Document, JsonValue};
-use openbindings_invocation::{BindingClient, BindingInvoker, BindingRequest,
+use openbindings_invocation::{BindingInvokerExt, BindingInvoker, BindingRequest,
     CancellationToken, InvocationError, OutputEvent, PreflightOutcome, ProviderIo};
 use std::{future::{Future, Ready, ready}, pin::Pin};
 
@@ -19,7 +27,7 @@ struct Echo;
 impl BindingInvoker for Echo {
     type Invoke<'a> = Pin<Box<dyn Future<Output=Result<(), InvocationError>> + Send + 'a>>;
     type Preflight<'a> = Ready<Result<PreflightOutcome, InvocationError>>;
-    fn invoke<'a>(&'a self, request: BindingRequest, mut io: ProviderIo,
+    fn handle_invoke<'a>(&'a self, request: BindingRequest, mut io: ProviderIo,
         _: CancellationToken) -> Self::Invoke<'a> {
         Box::pin(async move {
             // This example's kind echoes values. Real providers read the named
@@ -29,7 +37,7 @@ impl BindingInvoker for Echo {
             Ok(())
         })
     }
-    fn preflight<'a>(&'a self, _: BindingRequest, _: CancellationToken) -> Self::Preflight<'a> {
+    fn handle_preflight<'a>(&'a self, _: BindingRequest, _: CancellationToken) -> Self::Preflight<'a> {
         ready(Ok(PreflightOutcome::NoPrediction))
     }
 }
@@ -39,8 +47,8 @@ let interface = Document::parse(r#"{
   "sources":{"s":{"kind":"example.echo"}},
   "bindings":{"b":{"operation":"echo","source":"s"}}
 }"#)?.validate()?.conformant().unwrap();
-let client = BindingClient::new(Echo);
-let call = client.invoke(BindingRequest::new(interface, "b"), CancellationToken::new())?;
+let invoker = Echo;
+let call = invoker.invoke(BindingRequest::new(interface, "b"), CancellationToken::new())?;
 let (mut input, mut output) = call.split();
 let sending = async {
     input.send(JsonValue::parse("9007199254740993").unwrap()).await?;
@@ -96,7 +104,7 @@ No preference, deprecation flag, key order or registration order silently choose
 among multiple candidates. This routing facet is not a portable kind-description
 operation; a `BindingInvoker` needs no descriptor to run an explicit binding.
 
-`OperationClient` requires an explicit `SchemaEvaluator` and `ExternalSchemas`.
+`DefaultOperationInvoker` requires an explicit `SchemaEvaluator` and `ExternalSchemas`.
 Lazy invocation prepares each declared direction when its first value reaches the
 boundary. `prepare` returns a `PreparedOperation` owning concrete validators and
 retaining no provider or evaluator. Supply a provider when consuming it into an
@@ -106,6 +114,20 @@ A thread-safe composition retains conditional Send; no global Send/Sync trait
 bounds or evaluator erasure are imposed. `ValidationEvidence` distinguishes a
 preparation refusal from the original per-value outcome. This evidence stays local;
 portable validation errors have code only.
+
+Applications can route to several binding invokers by implementing the two
+`handle_*` methods and forwarding the same `ProviderIo` to the chosen adapter.
+Use the child's `handle_*` methods there so a second invocation is not created.
+Implement `InvocationSupport` when supplying that router to `DefaultOperationInvoker`.
+The SDK provides no aggregate or registry.
+
+Third parties can implement `OperationInvoker` directly. `Invocation::new` builds
+the full lazy lifecycle from limits, cancellation and a closure receiving I/O;
+it permits operation-owned error codes. It does not resolve requests or validate
+values. The implementation must do so, and can use `OperationRequest::admit` for
+the SDK's local address checks. `DefaultOperationInvoker` retains inherent methods
+and explicit preparation/validation settings. Generic calls through the
+`OperationInvoker` trait do not promise `Send`; concrete return types can be `Send`.
 
 Preflight has its own associated future and returns `NoPrediction` or the shared
 `{message, schema}` challenge as a successful result. It selects as invocation does,

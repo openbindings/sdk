@@ -15,7 +15,7 @@
       "names": [
         "patterns_at_the_default_depth_prepare_and_check_on_a_small_stack"
       ],
-      "reason": "Prepares value contracts whose patterns nest to the default pattern_depth, and checks values against them, on a 256 KiB thread stack. Release builds need at most 96 KiB; unoptimized pattern compilation needs up to 1 MiB, so debug runs ignore it on every host and tools/verify.py runs it in release builds."
+      "reason": "Prepares value schemas whose patterns nest to the default pattern_depth, and checks values against them, on a 256 KiB thread stack. Release builds need at most 96 KiB; unoptimized pattern compilation needs up to 1 MiB, so debug runs ignore it on every host and tools/verify.py runs it in release builds."
     },
     {
       "source": "crates/openbindings-json-schema-evaluator/tests/evaluation_stack.rs",

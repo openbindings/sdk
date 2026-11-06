@@ -1,24 +1,40 @@
 # Invocation lifecycle
 
-`BindingClient<P>` runs an explicitly named binding from an owned conformant
-interface. `OperationClient<P,E>` also resolves operation keys/aliases, applies the
+`BindingInvoker` runs an explicitly named binding from an owned conformant
+interface. Import `BindingInvokerExt` to call its checked methods directly.
+`OperationInvoker` describes operation invocation; `DefaultOperationInvoker<P,E>`
+provides the SDK implementation. It resolves operation keys/aliases, applies the
 caller's binding choice, and evaluates values against each declared input/output schema. Both return
 an invocation with separate input, output and control handles.
+
+Binding adapters implement `handle_invoke` and `handle_preflight`. The checked
+methods belong to a blanket implementation and cannot be overridden. Calling the
+public hooks explicitly bypasses those checks. Routers forward hooks to their
+selected adapters with the same I/O, so checks and channels are not duplicated.
+Custom binding limits are supplied to `invoke_with_limits` or `preflight_with_limits`;
+invalid limits are local `BoundaryFailureKind::InvalidLimits` failures.
+
+Third-party `OperationInvoker` implementations can construct an `Invocation` with
+`Invocation::new(limits, control, start)`. The closure receives connected `ProviderIo`
+and local cancellation only when output is first polled. The constructor handles
+streaming lifecycle, not operation resolution or schema validation; those remain
+the implementation's responsibility. `OperationRequest::admit` checks address shape
+without serialization. The full handle and its input/output/control split are retained.
 
 ## Call an operation
 
 ```rust
 use openbindings::{ConformantDocument, ExternalSchemas, JsonValue};
 use openbindings_invocation::{BindingInvoker, CancellationToken, InvocationSupport,
-    OperationClient, OperationRequest, OutputEvent};
+    DefaultOperationInvoker, OperationRequest, OutputEvent};
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 
 async fn call<P: BindingInvoker + InvocationSupport>(
     interface: ConformantDocument, provider: P, value: JsonValue,
 ) -> Result<Vec<JsonValue>, Box<dyn std::error::Error>> {
-    let client = OperationClient::new(provider, DefaultEvaluator::default(), ExternalSchemas::default());
+    let invoker = DefaultOperationInvoker::new(provider, DefaultEvaluator::default(), ExternalSchemas::default());
     let request = OperationRequest::binding(interface, "echo.binding");
-    let (mut input, mut output) = client.invoke(request, CancellationToken::new())?.split();
+    let (mut input, mut output) = invoker.invoke(request, CancellationToken::new())?.split();
     // A single value fits the default input queue. Streaming writers and readers
     // must be polled concurrently in the application's runtime.
     input.send(value).await?;
@@ -100,10 +116,10 @@ verdict from preparation. Evidence stays local and is available only for the
 winning validation terminal. Error data and context challenges are never checked
 against the operation's output schema.
 
-For reuse, call `client.prepare(interface, name, &control)`. The resulting
+For reuse, call `invoker.prepare(interface, name, &control)`. The resulting
 `PreparedOperation<V>` owns the original document, canonical operation key and
-optional validators. It retains no provider, evaluator or client lifetime, and can
-outlive the whole originating client. Failed or cancelled preparation releases
+optional validators. It retains no provider, evaluator or invoker lifetime, and can
+outlive the whole originating invoker. Failed or cancelled preparation releases
 partial validators; retry with healthy control and unchanged inputs is supported.
 
 Consume a prepared owner using
@@ -113,7 +129,7 @@ operation's binding fails before provider work. Clone the prepared owner when V
 supports cloning; callers decide whether V copies or shares compiled state. Each
 attempt owns V, so a Send-but-not-Sync validator can yield a Send future with a Sync
 provider and Send provider future. Local Rc evaluators/validators also work.
-Prepared contracts can move into spawned host tasks alongside an Arc provider;
+Prepared schemas can move into spawned host tasks alongside an Arc provider;
 no leaked or global invoker is required.
 
 ## Context and advisory preflight
@@ -127,7 +143,7 @@ Acquisition, approval, credential storage and retry policy belong to the host.
 `BindingInvoker` declares separate `Invoke` and `Preflight` future types. A provider
 with no prediction returns `Ok(PreflightOutcome::NoPrediction)`; a known requirement
 returns `Ok(PreflightOutcome::Challenge(challenge))`. An error carries no prediction.
-Both clients synchronously admit preflight requests, then return the advisory
+Both checked invocation entry points synchronously admit preflight requests, then return the advisory
 future. Operation preflight selects exactly as invocation does, but never prepares
 schemas, consumes values, dispatches the operation or reserves a later choice.
 Its future captures no evaluator, so a local evaluator does not prevent a Send

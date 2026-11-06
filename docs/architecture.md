@@ -2,7 +2,7 @@
 
 The SDK follows the pinned OpenBindings document model and the independently
 published interfaces. Core defines document semantics. Optional companions define
-schema evaluation, discovery, comparison and interface roles. Core depends on none
+schema evaluation, discovery, comparison and interfaces. Core depends on none
 of those companions, and no source kind becomes part of core.
 
 ## Documents and original schemas
@@ -72,8 +72,8 @@ carriers and distinguish rejection, context challenge and operational failure.
 Describing a kind never triggers a source check.
 
 `openbindings-source-pull` owns exact additions/reports, original-document requests,
-borrowed providers and `PullClient`. A provider projects the selected source
-according to its kind. The client checks mechanical relationships and prospective
+borrowed `SourcePuller` implementations and checked calls. A provider projects the selected source
+according to its kind. The checked entry point checks mechanical relationships and prospective
 document conformance. The caller chooses and applies changes; proposals remain
 unapplied. Generic checks cannot certify a provider's fidelity or opaque data's
 complete dependencies.
@@ -84,8 +84,8 @@ equivalence and directional compatibility. A comparison failure is not a negativ
 answer. Existing-binding drift uses the kind's would-write comparison, which may
 include annotations the identity profile ignores.
 
-`openbindings-invocation` provides `BindingInvoker`, `BindingClient` and
-`OperationClient`. Checked invocation retains the original document and selected
+`openbindings-invocation` provides `BindingInvoker`, `OperationInvoker` and
+`DefaultOperationInvoker`. Checked invocation retains the original document and selected
 keys. Operation invocation adds selection and per-value schema gates through the
 caller's evaluator and resources. Caller polling drives bounded streaming I/O;
 providers own realization effects. Preflight is separate and advisory. Context
@@ -113,7 +113,7 @@ discovery. There is no second JavaScript schema engine or compatibility barrel.
 Initialization is explicit and asynchronous; CPU calls are synchronous. Workers
 provide interruption for bulk work. workerd initialization occurs in an active
 request and can then be reused. Rust interface companions are not exposed as
-TypeScript role callbacks. External source/archive consumers and actual host
+TypeScript interface callbacks. External source/archive consumers and actual host
 probes qualify their stated scope; fixture bridges are not new public SDK APIs.
 
 Kind-specific adapters, protocol clients and applications remain independent.

@@ -21,7 +21,7 @@ fn only_output_drives_and_committed_values_precede_the_terminal() {
     let mut io = ProviderIo::new(shared.clone());
     let calls = Rc::new(Cell::new(0));
     let called = calls.clone();
-    let session = Invocation::new(shared, async move {
+    let session = Invocation::from_parts(shared, async move {
         called.set(called.get() + 1);
         let value = io.next().await.expect("one input");
         io.send(value).await?;
@@ -46,7 +46,8 @@ fn only_output_drives_and_committed_values_precede_the_terminal() {
 fn caller_close_drains_but_provider_close_discards_and_notifies_once() {
     let shared = Shared::new(InvocationLimits::default(), [false, false]);
     let (mut reader, _writer) = ProviderIo::new(shared.clone()).split();
-    let (mut input, mut output) = Invocation::new(shared.clone(), pending::<Outcome>()).split();
+    let (mut input, mut output) =
+        Invocation::from_parts(shared.clone(), pending::<Outcome>()).split();
     assert!(poll(pin!(input.send(json("1")))).is_ready());
     input.close();
     assert!(matches!(poll(pin!(reader.next())), Poll::Ready(Some(_))));
@@ -69,7 +70,7 @@ fn caller_close_drains_but_provider_close_discards_and_notifies_once() {
 fn terminal_suppresses_an_undelivered_input_closed_notification() {
     let shared = Shared::new(InvocationLimits::default(), [false, false]);
     let (mut reader, _writer) = ProviderIo::new(shared.clone()).split();
-    let (_input, mut output) = Invocation::new(shared.clone(), pending::<Outcome>()).split();
+    let (_input, mut output) = Invocation::from_parts(shared.clone(), pending::<Outcome>()).split();
     reader.close();
     shared.settle(Ok(()));
     assert!(matches!(
@@ -230,7 +231,7 @@ fn epoch_guard_clears_active_state_on_unwind() {
 fn scoped_output_read_releases_callers_waker_while_provider_stays_pending() {
     let shared = Shared::new(InvocationLimits::default(), [false, false]);
     let mut io = ProviderIo::new(shared.clone());
-    let (_input, mut output) = Invocation::new(shared, async move {
+    let (_input, mut output) = Invocation::from_parts(shared, async move {
         let _ = io.next().await;
         Ok(())
     })

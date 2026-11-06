@@ -65,7 +65,11 @@ impl Provider {
 impl SourcePuller for Provider {
     type Error = Rc<str>;
     type Pull<'a> = Ready<Result<PullResult, PullFailure<Self::Error>>>;
-    fn pull_source(&self, request: PullRequest, control: CancellationToken) -> Self::Pull<'_> {
+    fn handle_pull_source(
+        &self,
+        request: PullRequest,
+        control: CancellationToken,
+    ) -> Self::Pull<'_> {
         self.calls.set(self.calls.get() + 1);
         *self.seen.borrow_mut() = Some(request);
         *self.child.borrow_mut() = Some(control);
@@ -81,7 +85,7 @@ impl SourcePuller for Provider {
 #[test]
 fn dispatch_is_lazy_and_preconditions_do_not_construct_provider_work() {
     let provider = Provider::new(Reply::Result);
-    let client = PullClient::new(&provider);
+    let client = &provider;
     let pending = client.pull_source(request(), CancellationToken::new());
     assert_eq!(provider.calls.get(), 0);
     drop(pending);
@@ -89,23 +93,25 @@ fn dispatch_is_lazy_and_preconditions_do_not_construct_provider_work() {
     cancelled.cancel();
     assert!(matches!(
         complete(client.pull_source(request(), cancelled)),
-        Err(ClientError::Cancelled)
+        Err(PullError::Cancelled)
     ));
     let missing = PullRequest::new(request().interface().clone(), "missing");
     assert!(matches!(
         complete(client.pull_source(missing, CancellationToken::new())),
-        Err(ClientError::Validation(PullValidationError::MissingSource))
+        Err(PullError::Validation(PullValidationError::MissingSource))
     ));
-    let client = PullClient::with_limits(
-        &provider,
-        PullLimits {
-            max_request_bytes: 0,
-            ..PullLimits::default()
-        },
-    );
+    let client = &provider;
+    let client_limits = PullLimits {
+        max_request_bytes: 0,
+        ..PullLimits::default()
+    };
     assert!(matches!(
-        complete(client.pull_source(request(), CancellationToken::new())),
-        Err(ClientError::Validation(PullValidationError::LimitExceeded(
+        complete(client.pull_source_with_limits(
+            request(),
+            CancellationToken::new(),
+            client_limits
+        )),
+        Err(PullError::Validation(PullValidationError::LimitExceeded(
             "request-bytes"
         )))
     ));
@@ -115,7 +121,7 @@ fn dispatch_is_lazy_and_preconditions_do_not_construct_provider_work() {
 #[test]
 fn original_owner_context_and_native_local_errors_are_preserved_without_retry() {
     let provider = Rc::new(Provider::new(Reply::Result));
-    let client = PullClient::new(provider.clone());
+    let client = provider.clone();
     let context = Context::try_from(json(
         r#"{"token":9007199254740993,"opaque":"\ud800","same":1,"same":2}"#,
     ))
@@ -137,15 +143,18 @@ fn original_owner_context_and_native_local_errors_are_preserved_without_retry() 
     assert_eq!(provider.calls.get(), 1);
     let native: Rc<str> = Rc::from("native transport detail");
     let provider = Provider::new(Reply::Operational(native.clone()));
-    let client = PullClient::with_limits(
-        &provider,
-        PullLimits {
-            max_response_bytes: 0,
-            ..PullLimits::default()
-        },
-    );
-    let error = complete(client.pull_source(request(), CancellationToken::new())).unwrap_err();
-    let ClientError::Provider(PullFailure::Operational(returned)) = error else {
+    let client = &provider;
+    let client_limits = PullLimits {
+        max_response_bytes: 0,
+        ..PullLimits::default()
+    };
+    let error = complete(client.pull_source_with_limits(
+        request(),
+        CancellationToken::new(),
+        client_limits,
+    ))
+    .unwrap_err();
+    let PullError::Provider(PullFailure::Operational(returned)) = error else {
         panic!("native failure")
     };
     assert!(Rc::ptr_eq(&native, &returned));
@@ -155,9 +164,9 @@ fn original_owner_context_and_native_local_errors_are_preserved_without_retry() 
 #[test]
 fn challenges_are_exact_bounded_and_never_automatically_satisfied() {
     let provider = Provider::new(Reply::Challenge);
-    let client = PullClient::new(&provider);
+    let client = &provider;
     let error = complete(client.pull_source(request(), CancellationToken::new())).unwrap_err();
-    let ClientError::Provider(PullFailure::ContextRequired(challenge)) = error else {
+    let PullError::Provider(PullFailure::ContextRequired(challenge)) = error else {
         panic!("challenge")
     };
     assert_eq!(
@@ -170,24 +179,26 @@ fn challenges_are_exact_bounded_and_never_automatically_satisfied() {
         Some("9007199254740993")
     );
     assert_eq!(provider.calls.get(), 1);
-    let client = PullClient::with_limits(
-        &provider,
-        PullLimits {
-            max_response_bytes: 0,
-            ..PullLimits::default()
-        },
-    );
+    let client = &provider;
+    let client_limits = PullLimits {
+        max_response_bytes: 0,
+        ..PullLimits::default()
+    };
     assert!(matches!(
-        complete(client.pull_source(request(), CancellationToken::new())),
-        Err(ClientError::Validation(PullValidationError::LimitExceeded(
+        complete(client.pull_source_with_limits(
+            request(),
+            CancellationToken::new(),
+            client_limits
+        )),
+        Err(PullError::Validation(PullValidationError::LimitExceeded(
             "response-bytes"
         )))
     ));
     assert_eq!(provider.calls.get(), 2);
     let provider = Provider::new(Reply::Cancelled);
     assert!(matches!(
-        complete(PullClient::new(provider).pull_source(request(), CancellationToken::new())),
-        Err(ClientError::Cancelled)
+        complete((provider).pull_source(request(), CancellationToken::new())),
+        Err(PullError::Cancelled)
     ));
 }
 
@@ -221,7 +232,7 @@ impl Drop for Pending<'_> {
 impl SourcePuller for PendingProvider {
     type Error = ();
     type Pull<'a> = Pending<'a>;
-    fn pull_source(&self, _: PullRequest, control: CancellationToken) -> Self::Pull<'_> {
+    fn handle_pull_source(&self, _: PullRequest, control: CancellationToken) -> Self::Pull<'_> {
         *self.child.borrow_mut() = Some(control);
         Pending(self)
     }
@@ -236,12 +247,12 @@ fn pending_drop_and_ready_destructor_cancellation_preserve_cleanup_order() {
             external: ready.then(|| external.clone()),
             ready,
         };
-        let client = PullClient::new(&provider);
+        let client = &provider;
         let mut work = Box::pin(client.pull_source(request(), external.clone()));
         if ready {
             assert!(matches!(
                 poll(work.as_mut()),
-                Poll::Ready(Err(ClientError::Cancelled))
+                Poll::Ready(Err(PullError::Cancelled))
             ));
         } else {
             assert!(poll(work.as_mut()).is_pending());
@@ -266,14 +277,14 @@ fn send_futures_can_borrow_non_static_providers_in_each_ownership_form() {
             Pin<Box<dyn Future<Output = Result<PullResult, PullFailure<Self::Error>>> + Send + 'a>>
         where
             Self: 'a;
-        fn pull_source(&self, _: PullRequest, _: CancellationToken) -> Self::Pull<'_> {
+        fn handle_pull_source(&self, _: PullRequest, _: CancellationToken) -> Self::Pull<'_> {
             Box::pin(async move {
                 self.0.fetch_add(1, Ordering::Relaxed);
                 Ok(result())
             })
         }
     }
-    fn drive<'a, P: SourcePuller + Sync + 'a>(client: &'a PullClient<P>)
+    fn drive<'a, P: SourcePuller + Sync + 'a>(client: &'a P)
     where
         P::Pull<'a>: Send,
     {
@@ -284,9 +295,9 @@ fn send_futures_can_borrow_non_static_providers_in_each_ownership_form() {
     }
     let calls = AtomicUsize::new(0);
     let provider = Borrowed(&calls);
-    drive(&PullClient::new(&provider));
-    drive(&PullClient::new(Borrowed(&calls)));
-    drive(&PullClient::new(Box::new(Borrowed(&calls))));
-    drive(&PullClient::new(Arc::new(Borrowed(&calls))));
+    drive(&&provider);
+    drive(&Borrowed(&calls));
+    drive(&Box::new(Borrowed(&calls)));
+    drive(&Arc::new(Borrowed(&calls)));
     assert_eq!(calls.load(Ordering::Relaxed), 4);
 }

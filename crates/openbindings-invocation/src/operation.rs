@@ -22,7 +22,7 @@ use std::{
     task::Poll,
 };
 
-/// The operation contract governing a caller-facing value.
+/// The operation schema governing a caller-facing value.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Direction {
     /// Input checked before provider delivery.
@@ -42,7 +42,7 @@ impl Direction {
 /// Original typed evidence; preparation does not fabricate a per-value outcome.
 #[derive(Debug)]
 pub enum ValidationEvidence {
-    /// The declared contract could not be prepared.
+    /// The declared schema could not be prepared.
     Preparation(PreparationFailure),
     /// Evaluating this value did not establish satisfaction.
     Evaluation(ValueOutcome),
@@ -78,8 +78,8 @@ impl fmt::Debug for ValidationFailure {
 }
 type CheckResult = Result<(), (InvocationError, Option<Arc<ValidationFailure>>)>;
 
-/// Explicit provider, evaluator and external resources. No global cache or executor.
-pub struct OperationClient<P, E> {
+/// Explicit provider, evaluator and external resources. No global cache or async runtime.
+pub struct DefaultOperationInvoker<P, E> {
     provider: P,
     evaluator: E,
     external: ExternalSchemas,
@@ -87,12 +87,13 @@ pub struct OperationClient<P, E> {
     preparation: PreparationLimits,
     detail: Detail,
 }
-impl<P, E> fmt::Debug for OperationClient<P, E> {
+impl<P, E> fmt::Debug for DefaultOperationInvoker<P, E> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("OperationClient").finish_non_exhaustive()
+        f.debug_struct("DefaultOperationInvoker")
+            .finish_non_exhaustive()
     }
 }
-impl<P: BindingInvoker + InvocationSupport, E: SchemaEvaluator> OperationClient<P, E> {
+impl<P: BindingInvoker + InvocationSupport, E: SchemaEvaluator> DefaultOperationInvoker<P, E> {
     /// Retain explicit dependencies. This does not prepare or judge any schema.
     pub fn new(provider: P, evaluator: E, external: ExternalSchemas) -> Self {
         Self {
@@ -137,12 +138,12 @@ impl<P: BindingInvoker + InvocationSupport, E: SchemaEvaluator> OperationClient<
     > {
         request.admit()?;
         let selected = resolve(&self.provider, request);
-        let contracts = selected
+        let schemas = selected
             .as_ref()
             .map(|(_, operation)| [operation.input(), operation.output()])
             .unwrap_or([None, None]);
-        let shared = Shared::new(self.limits, contracts.each_ref().map(Option::is_some));
-        let mut gates = contracts.map(|schema| {
+        let shared = Shared::new(self.limits, schemas.each_ref().map(Option::is_some));
+        let mut gates = schemas.map(|schema| {
             schema.map(|schema| Gate {
                 schema,
                 evaluator: &self.evaluator,
@@ -158,7 +159,7 @@ impl<P: BindingInvoker + InvocationSupport, E: SchemaEvaluator> OperationClient<
         let future = drive(
             move || {
                 let (request, _) = selected?;
-                Ok(provider.invoke(request, io, local))
+                Ok(provider.handle_invoke(request, io, local))
             },
             move |direction, value, control| {
                 let index = match direction {
@@ -173,7 +174,7 @@ impl<P: BindingInvoker + InvocationSupport, E: SchemaEvaluator> OperationClient<
             control,
             shared.clone(),
         );
-        Ok(Invocation::new(shared, future))
+        Ok(Invocation::from_parts(shared, future))
     }
     /// Resolve and select exactly as invocation, then run advisory work only.
     /// This future borrows P, never E: local evaluators do not constrain its Send.
@@ -400,3 +401,61 @@ async fn drive<F: Future<Output = Result<(), InvocationError>>>(
     })
     .await
 }
+
+/// Invoke an operation with resolution, selection and schema validation.
+/// Implementers return the full lazy invocation and own these interface semantics.
+/// [`Invocation::new`] supplies lifecycle/framing for third-party implementations;
+/// [`DefaultOperationInvoker`] supplies the SDK implementation over a binding invoker.
+/// Futures may borrow local state and need not be Send. Concrete implementations
+/// can preserve conditional Send; this trait promises no blanket Send bound.
+pub trait OperationInvoker {
+    /// Admit an operation request and construct a lazy invocation.
+    /// # Errors
+    /// Returns local admission failure separately from terminal invocation errors.
+    fn invoke(
+        &self,
+        request: OperationRequest,
+        control: CancellationToken,
+    ) -> Result<Invocation<impl Future<Output = Result<(), InvocationError>>>, BoundaryFailure>;
+    /// Resolve/select and perform advisory preflight without invoking the operation.
+    /// # Errors
+    /// Returns local admission failure before advisory work.
+    fn preflight(
+        &self,
+        request: OperationRequest,
+        control: CancellationToken,
+    ) -> Result<impl Future<Output = Result<PreflightOutcome, InvocationError>>, BoundaryFailure>;
+}
+impl<P: BindingInvoker + InvocationSupport, E: SchemaEvaluator> OperationInvoker
+    for DefaultOperationInvoker<P, E>
+{
+    fn invoke(
+        &self,
+        request: OperationRequest,
+        control: CancellationToken,
+    ) -> Result<Invocation<impl Future<Output = Result<(), InvocationError>>>, BoundaryFailure>
+    {
+        DefaultOperationInvoker::invoke(self, request, control)
+    }
+    fn preflight(
+        &self,
+        request: OperationRequest,
+        control: CancellationToken,
+    ) -> Result<impl Future<Output = Result<PreflightOutcome, InvocationError>>, BoundaryFailure>
+    {
+        DefaultOperationInvoker::preflight(self, request, control)
+    }
+}
+macro_rules! forward_operation { ($($wrapper:ty),+) => { $(
+    impl<P: OperationInvoker + ?Sized> OperationInvoker for $wrapper {
+        fn invoke(&self, request: OperationRequest, control: CancellationToken)
+            -> Result<Invocation<impl Future<Output=Result<(),InvocationError>>>, BoundaryFailure> {
+            (**self).invoke(request,control)
+        }
+        fn preflight(&self, request: OperationRequest, control: CancellationToken)
+            -> Result<impl Future<Output=Result<PreflightOutcome,InvocationError>>, BoundaryFailure> {
+            (**self).preflight(request,control)
+        }
+    }
+)+ }; }
+forward_operation!(&P, Box<P>, Arc<P>, std::rc::Rc<P>);

@@ -25,10 +25,14 @@ impl SourcePuller for Borrowed<'_> {
         = Pin<Box<dyn Future<Output = Result<PullResult, PullFailure<Self::Error>>> + Send + 'a>>
     where
         Self: 'a;
-    fn pull_source(&self, request: PullRequest, control: CancellationToken) -> Self::Pull<'_> {
+    fn handle_pull_source(
+        &self,
+        request: PullRequest,
+        control: CancellationToken,
+    ) -> Self::Pull<'_> {
         Box::pin(async move {
             self.0.fetch_add(1, Ordering::Relaxed);
-            Embedded.pull_source(request, control).await
+            Embedded.handle_pull_source(request, control).await
         })
     }
 }
@@ -38,7 +42,7 @@ fn borrowed_provider_suspends_and_retained_result_outlives_every_originating_own
     let calls = AtomicUsize::new(0);
     let result = {
         let provider = Borrowed(&calls);
-        let client = PullClient::new(&provider);
+        let client = &provider;
         let mut future = Box::pin(client.pull_source(request(), CancellationToken::new()));
         fn send<T: Send>(_: &T) {}
         send(&future);
@@ -71,7 +75,7 @@ fn borrowed_provider_suspends_and_retained_result_outlives_every_originating_own
 #[test]
 fn shared_provider_and_local_native_errors_need_no_shared_legacy_interface_types() {
     let provider = Arc::new(Embedded);
-    let client = PullClient::new(provider.clone());
+    let client = provider.clone();
     let mut future = Box::pin(client.pull_source(request(), CancellationToken::new()));
     assert!(poll(future.as_mut()).is_pending());
     assert!(matches!(poll(future.as_mut()), Poll::Ready(Ok(_))));
@@ -79,14 +83,14 @@ fn shared_provider_and_local_native_errors_need_no_shared_legacy_interface_types
     impl SourcePuller for Local {
         type Error = Rc<JsonValue>;
         type Pull<'a> = Ready<Result<PullResult, PullFailure<Self::Error>>>;
-        fn pull_source(&self, _: PullRequest, _: CancellationToken) -> Self::Pull<'_> {
+        fn handle_pull_source(&self, _: PullRequest, _: CancellationToken) -> Self::Pull<'_> {
             ready(Err(PullFailure::Operational(self.0.clone())))
         }
     }
     let native = Rc::new(JsonValue::parse(r#"{"native":9007199254740993}"#).unwrap());
-    let client = PullClient::new(Rc::new(Local(native.clone())));
+    let client = Rc::new(Local(native.clone()));
     let mut future = Box::pin(client.pull_source(request(), CancellationToken::new()));
-    let Poll::Ready(Err(ClientError::Provider(PullFailure::Operational(returned)))) =
+    let Poll::Ready(Err(PullError::Provider(PullFailure::Operational(returned)))) =
         poll(future.as_mut())
     else {
         panic!("native error")

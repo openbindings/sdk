@@ -34,7 +34,7 @@ impl std::fmt::Debug for Case {
 }
 
 #[derive(Clone, Deserialize)]
-/// Related cases sharing one original document, operation `op` input contract and supplied resource set.
+/// Related cases sharing one original document, operation `op` input schema and supplied resource set.
 /// Later versions may add fields: read them by name and match with `..`.
 #[non_exhaustive]
 pub struct Group {
@@ -198,7 +198,7 @@ impl Report {
     }
 }
 /// Apply the kit through the public conformant-operation route: each group's
-/// input contract is prepared once with the borrowed evaluator and its supplied
+/// input schema is prepared once with the borrowed evaluator and its supplied
 /// resources, then every value is both checked and explained. Implementations
 /// must keep preparations independent, preserve borrowed input snapshots, and
 /// return honest unsupported/limit outcomes. Both calls must reach the same

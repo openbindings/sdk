@@ -1,5 +1,5 @@
 //! Illustrative kind-owned implementations, not new SDK projection abstractions.
-//! The two source readers receive no destination document or operation contracts.
+//! The two source readers receive no destination document or operation schemas.
 use openbindings::{ConformantDocument, Document, Edit, JsonRef, JsonValue};
 use openbindings_schema_comparison::{
     ComparisonFailure, ComparisonLimits, Identity, SchemaInput, identical,
@@ -180,7 +180,7 @@ fn reconcile(request: &PullRequest, observed: Observation) -> Result<PullResult,
         }
         let reused = if let Some(operation) = operations.get(&offer.key) {
             if slots(offer, &observed, operation, original)? != [Identity::Equal; 2] {
-                omitted.push(json(&format!(r#"{{"status":"conflict","reasonCode":"offered-contract-differs","message":"The offered input or output differs from the existing operation.","details":{{"operation":{}}}}}"#, quote(&offer.key))));
+                omitted.push(json(&format!(r#"{{"status":"conflict","reasonCode":"offered-schema-differs","message":"The offered input or output differs from the existing operation.","details":{{"operation":{}}}}}"#, quote(&offer.key))));
                 continue;
             }
             true
@@ -304,7 +304,7 @@ fn stale_schema_annotations_are_not_erased_by_the_operation_reuse_profile() {
         let original = document(&format!(
             r#"{{"openbindings":"0.2.0","operations":{{"a":{{"input":{current}}}}},"sources":{{"catalog":{{"kind":"example.embedded@1","data":{{"items":[{{"key":"a","operation":{{"input":{offered}}},"data":{{"item":"a"}}}}]}}}}}},"bindings":{{"a":{{"operation":"a","source":"catalog","data":{{"item":"a"}}}}}}}}"#
         ));
-        let result = complete(PullClient::new(Embedded).pull_source(
+        let result = complete((Embedded).pull_source(
             PullRequest::new(original, "catalog"),
             CancellationToken::new(),
         ))
@@ -330,7 +330,7 @@ macro_rules! provider {
         impl SourcePuller for $name {
             type Error = ObservationError;
             type Pull<'a> = Ready<Result<PullResult, PullFailure<Self::Error>>>;
-            fn pull_source(
+            fn handle_pull_source(
                 &self,
                 request: PullRequest,
                 control: CancellationToken,
@@ -359,7 +359,7 @@ provider!(Embedded, embedded);
 
 #[test]
 fn no_data_kind_projects_before_destination_identity_and_does_not_adapt_to_conflicts() {
-    let client = PullClient::new(Fixed);
+    let client = Fixed;
     for (operations, expected, complete_pull) in [
         ("{}", "new", true),
         (
@@ -456,7 +456,7 @@ fn no_data_kind_projects_before_destination_identity_and_does_not_adapt_to_confl
 
 #[test]
 fn two_sources_of_the_same_kind_reuse_one_operation_without_cross_source_suppression() {
-    let client = PullClient::new(Fixed);
+    let client = Fixed;
     let original = document(
         r#"{"openbindings":"0.2.0","operations":{},"sources":{"first":{"kind":"example.fixed@1"},"second":{"kind":"example.fixed@1"}}}"#,
     );
@@ -526,8 +526,7 @@ fn embedded_kind_reports_stale_current_unmatched_and_partial_without_overwriting
     );
     let request = PullRequest::new(original.clone(), "catalog");
     let result =
-        complete(PullClient::new(Embedded).pull_source(request.clone(), CancellationToken::new()))
-            .unwrap();
+        complete((Embedded).pull_source(request.clone(), CancellationToken::new())).unwrap();
     assert!(!result.report().is_complete());
     let entries = result.report().existing().unwrap().collect::<Vec<_>>();
     assert_eq!(
@@ -669,7 +668,7 @@ fn a_caller_can_discard_or_explicitly_adopt_one_dependency_closed_subset() {
 
 #[test]
 fn comparison_failure_and_removal_only_drift_are_operational_inability() {
-    let client = PullClient::new(Embedded);
+    let client = Embedded;
     let comparison = document(
         r##"{"openbindings":"0.2.0","operations":{"a":{"input":true}},"sources":{"catalog":{"kind":"example.embedded@1","data":{"items":[{"key":"a","operation":{"input":{"$ref":"#/missing"}},"data":{"item":"a"}}]}}}}"##,
     );
@@ -680,7 +679,7 @@ fn comparison_failure_and_removal_only_drift_are_operational_inability() {
     .unwrap_err();
     assert!(matches!(
         error,
-        ClientError::Provider(PullFailure::Operational(ObservationError::Comparison(
+        PullError::Provider(PullFailure::Operational(ObservationError::Comparison(
             ComparisonFailure::MissingReference
         )))
     ));
@@ -694,7 +693,7 @@ fn comparison_failure_and_removal_only_drift_are_operational_inability() {
     .unwrap_err();
     assert!(matches!(
         error,
-        ClientError::Provider(PullFailure::Operational(
+        PullError::Provider(PullFailure::Operational(
             ObservationError::RemovalNotRepresentable
         ))
     ));

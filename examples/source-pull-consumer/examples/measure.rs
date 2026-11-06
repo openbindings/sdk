@@ -1,7 +1,7 @@
 //! Current source-pull scale observations, not an old synthesis timing oracle.
 use openbindings::Document;
 use openbindings_source_pull::{
-    CancellationToken, PullClient, PullLimits, PullRequest, SourcePuller,
+    CancellationToken, PullLimits, PullRequest, SourcePuller, SourcePullerExt,
 };
 use source_pull_consumer::Embedded;
 use std::{hint::black_box, time::Instant};
@@ -38,7 +38,7 @@ async fn main() {
         let provider = Embedded;
         let control = CancellationToken::new();
         let seed = provider
-            .pull_source(request.clone(), control.clone())
+            .handle_pull_source(request.clone(), control.clone())
             .await
             .unwrap();
         assert_eq!(seed.report().added().len(), size);
@@ -53,7 +53,7 @@ async fn main() {
         assert_eq!(adopted.operations().len(), size);
         assert_eq!(adopted.value().get("bindings").unwrap().len(), Some(size));
         assert!(original.value().get("bindings").is_none());
-        let client = PullClient::new(&provider);
+        let client = &provider;
         let mut projection = Vec::new();
         let mut checked = Vec::new();
         let mut validation = Vec::new();
@@ -63,7 +63,7 @@ async fn main() {
         for _ in 0..REPS {
             let start = Instant::now();
             let result = provider
-                .pull_source(request.clone(), control.clone())
+                .handle_pull_source(request.clone(), control.clone())
                 .await
                 .unwrap();
             projection.push(start.elapsed().as_nanos());

@@ -2,7 +2,7 @@
 
 This standalone, unpublished public API consumer measures the same pure exact
 echo/empty fixture directly and through the checked invocation lifecycle. It
-uses one thread, a small safe executor, the shared Cargo target, and no network.
+uses one thread, a small safe async runtime, the shared Cargo target, and no network.
 The SDK retains its unsafe-code prohibition. Only this isolated measurement
 executable implements `GlobalAlloc`, forwarding every allocation unchanged to
 `System` with audited, allocation-free atomic accounting.
@@ -24,7 +24,7 @@ synthetic host and toolchain; no performance parity is asserted.
 
 Measurements cover handle construction/release, zero outputs, unary and 64-value
 streams at 1 byte and 64 KiB, a 1-byte selected subtree backed by a 1-MiB owner,
-and cancellation/release. Constructing and releasing an operation client with
+and cancellation/release. Constructing and releasing an operation invoker with
 already supplied dependencies must allocate nothing. Resource-set and original
 document construction are setup, measured separately from retaining those owners.
 A 1-MiB source is retained unchanged in the original document for all checked
@@ -42,7 +42,7 @@ once with `ERR_CANCELLED`.
 Counters report successful `System` allocation/reallocation requests. A realloc
 counts the full new reservation as allocated and the old reservation as freed;
 it is not a measured byte-copy count. Timings include counter atomics, guard
-atomics, the checked provider's boxed future and the safe executor. Setup and
+atomics, the checked provider's boxed future and the safe async runtime. Setup and
 receipt encoding are excluded. Logical bytes and retained parent bytes are
 reported separately: queue byte caps are not total-memory bounds, and allocator
 counts are not browser/process RSS measurements.

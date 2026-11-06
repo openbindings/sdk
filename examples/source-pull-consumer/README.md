@@ -23,12 +23,12 @@ source checking rejects non-scalar keys.
 
 Projection reads source alone. Reuse uses the pinned comparison profile; existing
 entry drift compares the exact semantic values the kind would write. Each provider
-really suspends once, exercising caller-owned async work without an SDK executor.
+really suspends once, exercising caller-owned async work without an SDK async runtime.
 The consumer explicitly adopts additions or applies proposals and revalidates.
 
 Run `python3 tools/verify-source-pull.py` from the SDK root; add `--archives --wasm`
 to qualify extracted dependencies and the local TypeScript/Node async Wasm bridge.
-This fixture's bridge is not a TypeScript SDK role API.
+This fixture's bridge is not a TypeScript SDK interface API.
 
 A compatibility run may use `--no-clippy` when that older toolchain has no matching
 Clippy component. Its receipt records the omitted lint step; strict lint is still

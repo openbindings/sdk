@@ -1,7 +1,7 @@
 //! Shared lifecycle witnesses through inherent receive and Stream receive adapters.
 use openbindings::{Document, JsonValue};
 use openbindings_invocation::{
-    BindingClient, BindingInvoker, BindingRequest, BoundaryFailureKind, CancellationToken,
+    BindingInvoker, BindingInvokerExt, BindingRequest, BoundaryFailureKind, CancellationToken,
     Context as InvocationContext, ContextChallenge, InvocationError, InvocationLimits,
     InvocationOutput, OutputEvent, PreflightOutcome, ProviderIo, WriteError,
 };
@@ -87,10 +87,14 @@ impl BindingInvoker for Fixture<'_> {
         = std::future::Ready<Result<PreflightOutcome, InvocationError>>
     where
         Self: 'a;
-    fn preflight<'a>(&'a self, _: BindingRequest, _: CancellationToken) -> Self::Preflight<'a> {
+    fn handle_preflight<'a>(
+        &'a self,
+        _: BindingRequest,
+        _: CancellationToken,
+    ) -> Self::Preflight<'a> {
         std::future::ready(Ok(PreflightOutcome::NoPrediction))
     }
-    fn invoke<'a>(
+    fn handle_invoke<'a>(
         &'a self,
         _r: BindingRequest,
         io: ProviderIo,
@@ -204,7 +208,7 @@ async fn collect<F: Future<Output = Result<(), InvocationError>>>(
 #[tokio::test]
 async fn lazy_admission_and_advisory_no_prediction_do_no_provider_work() {
     let provider = Fixture::new(Mode::Empty);
-    let client = BindingClient::new(&provider);
+    let client = &provider;
     assert!(matches!(
         client
             .preflight(request(), cancel())
@@ -223,7 +227,7 @@ async fn lazy_admission_and_advisory_no_prediction_do_no_provider_work() {
 async fn zero_null_and_output_then_failure_require_terminal_observation() {
     for mode in [Mode::Empty, Mode::Null, Mode::OutputError] {
         let provider = Fixture::new(mode);
-        let client = BindingClient::new(&provider);
+        let client = &provider;
         let call = client.invoke(request(), cancel()).unwrap();
         let control = call.control();
         let (_, mut output) = call.split();
@@ -268,7 +272,7 @@ async fn zero_null_and_output_then_failure_require_terminal_observation() {
 async fn all_cardinalities_share_output_driving_and_bounded_bidi_handoffs() {
     for mode in [Mode::Echo, Mode::Count, Mode::Duplex] {
         let provider = Fixture::new(mode);
-        let client = BindingClient::new(&provider);
+        let client = &provider;
         let (mut input, mut output) = client.invoke(request(), cancel()).unwrap().split();
         let writing = async {
             for i in 0..37 {
@@ -285,7 +289,7 @@ async fn all_cardinalities_share_output_driving_and_bounded_bidi_handoffs() {
         }
     }
     let provider = Fixture::new(Mode::Server(23));
-    let client = BindingClient::new(&provider);
+    let client = &provider;
     let (input, mut output) = client.invoke(request(), cancel()).unwrap().split();
     drop(input);
     assert_eq!(
@@ -296,7 +300,7 @@ async fn all_cardinalities_share_output_driving_and_bounded_bidi_handoffs() {
 #[tokio::test]
 async fn accepted_input_drains_on_half_close_and_early_close_keeps_output_open() {
     let provider = Fixture::new(Mode::GateEcho);
-    let client = BindingClient::new(&provider);
+    let client = &provider;
     let (mut input, mut output) = client.invoke(request(), cancel()).unwrap().split();
     input.send(json("9007199254740993")).await.unwrap();
     input.close();
@@ -305,7 +309,7 @@ async fn accepted_input_drains_on_half_close_and_early_close_keeps_output_open()
     provider.gate.cancel();
     assert_eq!(collect(&mut output).await.unwrap(), ["9007199254740993"]);
     let provider = Fixture::new(Mode::EarlyClose);
-    let client = BindingClient::new(&provider);
+    let client = &provider;
     let (mut input, mut output) = client.invoke(request(), cancel()).unwrap().split();
     assert!(matches!(
         output.next().await,
@@ -321,7 +325,7 @@ async fn accepted_input_drains_on_half_close_and_early_close_keeps_output_open()
 #[tokio::test]
 async fn pending_write_drop_and_pending_read_drop_do_not_consume_or_duplicate() {
     let provider = Fixture::new(Mode::GateEcho);
-    let client = BindingClient::new(&provider);
+    let client = &provider;
     let (mut input, mut output) = client.invoke(request(), cancel()).unwrap().split();
     input.send(json("1")).await.unwrap();
     {
@@ -339,7 +343,7 @@ async fn pending_write_drop_and_pending_read_drop_do_not_consume_or_duplicate() 
 #[tokio::test]
 async fn cancellation_full_queues_preserves_committed_output_order_and_releases_job() {
     let provider = Fixture::new(Mode::Server(23));
-    let client = BindingClient::new(&provider);
+    let client = &provider;
     let call = client.invoke(request(), cancel()).unwrap();
     let control = call.control();
     let (_, mut output) = call.split();
@@ -361,7 +365,7 @@ async fn cancellation_full_queues_preserves_committed_output_order_and_releases_
 #[tokio::test]
 async fn pre_cancel_external_control_and_output_abandonment_do_not_cancel_siblings() {
     let provider = Fixture::new(Mode::Park);
-    let client = BindingClient::new(&provider);
+    let client = &provider;
     let cancelled = cancel();
     cancelled.cancel();
     let (_, mut output) = client.invoke(request(), cancelled).unwrap().split();
@@ -385,7 +389,7 @@ async fn pre_cancel_external_control_and_output_abandonment_do_not_cancel_siblin
 async fn challenge_boundary_is_checked_without_inventing_retry_or_effect_guarantees() {
     for mode in [Mode::Challenge, Mode::OutputChallenge, Mode::AuthFailure] {
         let provider = Fixture::new(mode);
-        let client = BindingClient::new(&provider);
+        let client = &provider;
         let call = client.invoke(request(), cancel()).unwrap();
         let control = call.control();
         let (_, mut output) = call.split();
@@ -429,7 +433,7 @@ async fn native_borrowed_nonclone_provider_is_send_and_retained_output_survives(
         let name = String::from("borrowed");
         let mut provider = Fixture::new(Mode::Null);
         provider.name = &name;
-        let client = BindingClient::new(Arc::new(provider));
+        let client = Arc::new(provider);
         let call = client.invoke(request(), cancel()).unwrap();
         send(&call);
         let (_, mut output) = call.split();
@@ -444,7 +448,7 @@ async fn native_borrowed_nonclone_provider_is_send_and_retained_output_survives(
 #[tokio::test]
 async fn default_delivery_accepts_values_above_the_retired_one_mib_cap() {
     let provider = Fixture::new(Mode::Echo);
-    let client = BindingClient::new(&provider);
+    let client = &provider;
     let (mut input, mut output) = client.invoke(request(), cancel()).unwrap().split();
     let value = JsonValue::string(&"x".repeat(1024 * 1024)).unwrap();
     input.send(value.clone()).await.unwrap();
@@ -459,13 +463,15 @@ async fn default_delivery_accepts_values_above_the_retired_one_mib_cap() {
 #[tokio::test]
 async fn an_explicit_zero_value_allowance_refuses_all_values() {
     let provider = Fixture::new(Mode::Echo);
-    let client = BindingClient::new(&provider)
-        .with_limits(InvocationLimits {
-            max_value_bytes: Some(0),
-            ..Default::default()
-        })
-        .unwrap();
-    let (mut input, _output) = client.invoke(request(), cancel()).unwrap().split();
+    let client = &provider;
+    let client_limits = InvocationLimits {
+        max_value_bytes: Some(0),
+        ..Default::default()
+    };
+    let (mut input, _output) = client
+        .invoke_with_limits(request(), cancel(), client_limits)
+        .unwrap()
+        .split();
     assert_eq!(input.send(json("0")).await, Err(WriteError::ValueTooLarge));
     assert_eq!(provider.calls.load(Ordering::SeqCst), 0);
 }
@@ -473,13 +479,15 @@ async fn an_explicit_zero_value_allowance_refuses_all_values() {
 #[tokio::test]
 async fn delivery_limits_are_local_on_input_and_terminal_on_bad_provider_output() {
     let provider = Fixture::new(Mode::Echo);
-    let client = BindingClient::new(&provider)
-        .with_limits(InvocationLimits {
-            max_value_bytes: Some(1),
-            ..Default::default()
-        })
-        .unwrap();
-    let (mut input, mut output) = client.invoke(request(), cancel()).unwrap().split();
+    let client = &provider;
+    let client_limits = InvocationLimits {
+        max_value_bytes: Some(1),
+        ..Default::default()
+    };
+    let (mut input, mut output) = client
+        .invoke_with_limits(request(), cancel(), client_limits)
+        .unwrap()
+        .split();
     assert_eq!(
         input.send(json("123")).await,
         Err(WriteError::ValueTooLarge)
@@ -489,13 +497,14 @@ async fn delivery_limits_are_local_on_input_and_terminal_on_bad_provider_output(
     input.close();
     assert_eq!(collect(&mut output).await.unwrap(), ["7"]);
     let provider = Fixture::new(Mode::Null);
-    let client = BindingClient::new(&provider)
-        .with_limits(InvocationLimits {
-            max_value_bytes: Some(1),
-            ..Default::default()
-        })
+    let client = &provider;
+    let client_limits = InvocationLimits {
+        max_value_bytes: Some(1),
+        ..Default::default()
+    };
+    let call = client
+        .invoke_with_limits(request(), cancel(), client_limits)
         .unwrap();
-    let call = client.invoke(request(), cancel()).unwrap();
     let control = call.control();
     let (_, mut output) = call.split();
     assert_eq!(code(output.next().await), "ERR_EXECUTION_FAILED");
@@ -504,18 +513,22 @@ async fn delivery_limits_are_local_on_input_and_terminal_on_bad_provider_output(
         BoundaryFailureKind::OutputResourceLimit
     );
     assert!(
-        BindingClient::new(&provider)
-            .with_limits(InvocationLimits {
-                input_capacity: 0,
-                ..Default::default()
-            })
+        provider
+            .invoke_with_limits(
+                request(),
+                cancel(),
+                InvocationLimits {
+                    input_capacity: 0,
+                    ..Default::default()
+                }
+            )
             .is_err()
     );
 }
 #[test]
 fn no_busy_self_wake_when_provider_is_pending() {
     let provider = Fixture::new(Mode::Park);
-    let client = BindingClient::new(&provider);
+    let client = &provider;
     let (_, mut output) = client.invoke(request(), cancel()).unwrap().split();
     let counter = Arc::new(Counter::default());
     let waker = Waker::from(counter.clone());
@@ -532,7 +545,7 @@ fn no_busy_self_wake_when_provider_is_pending() {
 #[test]
 fn dropped_pending_read_does_not_keep_its_waker_alive() {
     let provider = Fixture::new(Mode::Echo);
-    let client = BindingClient::new(&provider);
+    let client = &provider;
     let (_input, mut output) = client.invoke(request(), cancel()).unwrap().split();
     let owner = Arc::new(Counter::default());
     let weak = Arc::downgrade(&owner);
@@ -551,7 +564,7 @@ fn dropped_pending_read_does_not_keep_its_waker_alive() {
 #[tokio::test]
 async fn supplied_unusable_context_can_receive_a_safe_renewed_challenge() {
     let provider = Fixture::new(Mode::Challenge);
-    let client = BindingClient::new(&provider);
+    let client = &provider;
     let request = request()
         .with_context(InvocationContext::try_from(json(r#"{"token":"expired"}"#)).unwrap());
     let (_, mut output) = client.invoke(request, cancel()).unwrap().split();
@@ -564,7 +577,7 @@ async fn supplied_unusable_context_can_receive_a_safe_renewed_challenge() {
 #[tokio::test]
 async fn per_handle_cancel_before_first_poll_does_no_provider_work() {
     let provider = Fixture::new(Mode::Empty);
-    let client = BindingClient::new(&provider);
+    let client = &provider;
     let call = client.invoke(request(), cancel()).unwrap();
     call.control().cancel();
     let (_, mut output) = call.split();
@@ -579,7 +592,7 @@ struct Prediction {
 impl BindingInvoker for Prediction {
     type Invoke<'a> = std::future::Ready<Result<(), InvocationError>>;
     type Preflight<'a> = std::future::Ready<Result<PreflightOutcome, InvocationError>>;
-    fn invoke<'a>(
+    fn handle_invoke<'a>(
         &'a self,
         _: BindingRequest,
         _: ProviderIo,
@@ -588,7 +601,11 @@ impl BindingInvoker for Prediction {
         self.calls.fetch_add(1, Ordering::SeqCst);
         std::future::ready(self.terminal.clone())
     }
-    fn preflight<'a>(&'a self, _: BindingRequest, _: CancellationToken) -> Self::Preflight<'a> {
+    fn handle_preflight<'a>(
+        &'a self,
+        _: BindingRequest,
+        _: CancellationToken,
+    ) -> Self::Preflight<'a> {
         std::future::ready(self.answer.clone())
     }
 }
@@ -605,7 +622,7 @@ async fn advisory_preflight_can_challenge_or_fail_without_becoming_an_invocation
             terminal: Ok(()),
             calls: AtomicUsize::new(0),
         };
-        let client = BindingClient::new(&provider);
+        let client = &provider;
         let result = client.preflight(request(), cancel()).unwrap().await;
         match (&answer, result) {
             (Ok(PreflightOutcome::NoPrediction), Ok(PreflightOutcome::NoPrediction)) => (),
@@ -628,7 +645,7 @@ async fn no_preflight_prediction_does_not_suppress_a_live_context_challenge() {
         terminal: Err(InvocationError::challenge(challenge.clone())),
         calls: AtomicUsize::new(0),
     };
-    let client = BindingClient::new(&provider);
+    let client = &provider;
     assert!(matches!(
         client.preflight(request(), cancel()).unwrap().await,
         Ok(PreflightOutcome::NoPrediction)
@@ -667,20 +684,21 @@ async fn oversized_terminal_and_preflight_answers_fall_back_without_data_or_retr
             terminal: Err(error.clone()),
             calls: AtomicUsize::new(0),
         };
-        let client = BindingClient::new(&provider)
-            .with_limits(InvocationLimits {
-                max_error_bytes: 256,
-                ..Default::default()
-            })
-            .unwrap();
+        let client = &provider;
+        let client_limits = InvocationLimits {
+            max_error_bytes: 256,
+            ..Default::default()
+        };
         let failure = client
-            .preflight(request(), cancel())
+            .preflight_with_limits(request(), cancel(), client_limits)
             .unwrap()
             .await
             .unwrap_err();
         assert_eq!(failure.code(), "ERR_EXECUTION_FAILED");
         assert!(failure.data().is_none());
-        let call = client.invoke(request(), cancel()).unwrap();
+        let call = client
+            .invoke_with_limits(request(), cancel(), client_limits)
+            .unwrap();
         let control = call.control();
         let (_, mut output) = call.split();
         let Some(OutputEvent::Error(failure)) = output.next().await else {
@@ -698,7 +716,7 @@ async fn oversized_terminal_and_preflight_answers_fall_back_without_data_or_retr
 #[tokio::test]
 async fn cancelled_full_input_wakes_pending_submission_before_output_is_repolled() {
     let provider = Fixture::new(Mode::GateEcho);
-    let client = BindingClient::new(&provider);
+    let client = &provider;
     let call = client.invoke(request(), cancel()).unwrap();
     let control = call.control();
     let (mut input, mut output) = call.split();
@@ -729,7 +747,7 @@ async fn dropped_and_cancelled_attempts_preserve_live_siblings_and_other_parents
     let external = cancel();
     let unrelated = cancel();
     let provider = Fixture::new(Mode::GateEcho);
-    let client = BindingClient::new(&provider);
+    let client = &provider;
     let (mut ai, mut a) = client.invoke(request(), external.clone()).unwrap().split();
     let (mut bi, mut b) = client.invoke(request(), external.clone()).unwrap().split();
     let (mut ci, mut c) = client.invoke(request(), unrelated.clone()).unwrap().split();
@@ -746,7 +764,7 @@ async fn dropped_and_cancelled_attempts_preserve_live_siblings_and_other_parents
     assert!(matches!(c.next().await, Some(OutputEvent::Complete)));
     assert_eq!(provider.live.load(Ordering::SeqCst), 0);
     let provider = Fixture::new(Mode::Park);
-    let client = BindingClient::new(&provider);
+    let client = &provider;
     let (_, mut a) = client.invoke(request(), external.clone()).unwrap().split();
     let (_, mut b) = client.invoke(request(), external.clone()).unwrap().split();
     let (_, mut c) = client.invoke(request(), unrelated.clone()).unwrap().split();

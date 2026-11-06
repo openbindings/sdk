@@ -27,7 +27,7 @@ package carries it as `licenses/JSON-SCHEMA-SPEC-LICENSE`).
 These files were originally copied from the distribution carried by
 `github.com/santhosh-tekuri/jsonschema/v6` v6.0.3. The acquisition history is
 retained here with `LICENSE-jsonschema-go`. Core embeds the meta-schemas in a
-value contract's bundle when a schema references one the document and its
+value schema's bundle when a schema references one the document and its
 resources do not declare.
 
 | Bundled file | Published URL |

@@ -72,7 +72,11 @@ impl OperationRequest {
         self.context = Some(context);
         self
     }
-    pub(crate) fn admit(&self) -> Result<(), BoundaryFailure> {
+    /// Check local address shape without serialization, resolution or provider work.
+    /// Third-party operation invokers can share the SDK's admission checks.
+    /// # Errors
+    /// Rejects empty names and malformed ordered selections.
+    pub fn admit(&self) -> Result<(), BoundaryFailure> {
         match &self.address {
             OperationAddress::Binding(key) => nonempty(key, "/binding"),
             OperationAddress::Operation { name, selection } => {

@@ -1,5 +1,6 @@
 //! Bounded channels with a single caller-owned output driver. Provider handles
 //! carry values and request identities, never evaluator types or callbacks.
+pub(crate) mod driver;
 mod signal;
 #[cfg(test)]
 mod tests;
@@ -386,7 +387,7 @@ impl<F: Future<Output = Outcome>> fmt::Debug for Invocation<F> {
     }
 }
 impl<F: Future<Output = Outcome>> Invocation<F> {
-    pub(crate) fn new(shared: Arc<Shared>, future: F) -> Self {
+    pub(crate) fn from_parts(shared: Arc<Shared>, future: F) -> Self {
         Self {
             input: InvocationInput {
                 shared: shared.clone(),
@@ -398,6 +399,33 @@ impl<F: Future<Output = Outcome>> Invocation<F> {
                 exhausted: false,
             },
         }
+    }
+    /// Build a lazy invocation from caller-selected limits and provider work.
+    /// The closure is called only when output is polled, with connected I/O and
+    /// an attempt-local cancellation token. Cancellation, drop, backpressure and
+    /// terminal framing use the SDK lifecycle. No async runtime is started.
+    ///
+    /// This constructor does not resolve bindings or validate operation values.
+    /// An operation-invoker implementation owns those responsibilities and must
+    /// check input before effects and output before sending. Operation-owned
+    /// error codes are permitted here; binding hooks have stricter checks.
+    /// # Errors
+    /// Rejects invalid handoff limits before constructing provider work.
+    pub fn new(
+        limits: InvocationLimits,
+        control: CancellationToken,
+        start: impl FnOnce(ProviderIo, CancellationToken) -> F,
+    ) -> Result<Invocation<impl Future<Output = Outcome>>, LimitError> {
+        let shared = Shared::new(limits.validate()?, [false; 2]);
+        let local = shared.control();
+        let io = ProviderIo::new(shared.clone());
+        let future = driver::drive(
+            move || Ok(start(io, local)),
+            control,
+            shared.clone(),
+            |result, _| result,
+        );
+        Ok(Invocation::from_parts(shared, future))
     }
     /// Split the bounded input owner from the provider-driving output owner.
     /// Poll both halves concurrently in the caller's chosen runtime.

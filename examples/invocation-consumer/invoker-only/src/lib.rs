@@ -1,4 +1,4 @@
-//! An invoker needs no puller, descriptor, evaluator or executor dependency.
+//! An invoker needs no puller, descriptor, evaluator or async runtime dependency.
 use openbindings_invocation::*;
 use std::{
     future::{Future, Ready, ready},
@@ -9,7 +9,7 @@ pub struct Echo;
 impl BindingInvoker for Echo {
     type Invoke<'a> = Pin<Box<dyn Future<Output = Result<(), InvocationError>> + 'a>>;
     type Preflight<'a> = Ready<Result<PreflightOutcome, InvocationError>>;
-    fn invoke<'a>(
+    fn handle_invoke<'a>(
         &'a self,
         _: BindingRequest,
         mut io: ProviderIo,
@@ -22,7 +22,7 @@ impl BindingInvoker for Echo {
             Ok(())
         })
     }
-    fn preflight<'a>(&'a self, _: BindingRequest, _: CancellationToken) -> Self::Preflight<'a> {
+    fn handle_preflight<'a>(&'a self, _: BindingRequest, _: CancellationToken) -> Self::Preflight<'a> {
         ready(Ok(PreflightOutcome::NoPrediction))
     }
 }
@@ -42,9 +42,9 @@ mod tests {
         }
     }
     #[test]
-    fn explicit_binding_invocation_with_no_other_role_or_runtime() {
+    fn explicit_binding_invocation_with_no_other_interface_or_runtime() {
         let document = Document::parse(r#"{"openbindings":"0.2.0","operations":{"echo":{}},"sources":{"s":{"kind":"example.echo"}},"bindings":{"b":{"source":"s","operation":"echo"}}}"#).unwrap().validate().unwrap().conformant().unwrap();
-        let client = BindingClient::new(Echo);
+        let client = Echo;
         let (mut input, mut output) = client
             .invoke(BindingRequest::new(document, "b"), CancellationToken::new())
             .unwrap()

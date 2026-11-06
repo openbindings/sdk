@@ -7,7 +7,7 @@ use openbindings_invocation::CancellationToken;
 use openbindings_invocation::{
     BindingRequest, InvocationError, InvocationLimits, OutputEvent, PreflightOutcome, ProviderIo,
     WriteError,
-    binding::{BindingClient, BindingInvoker},
+    binding::{BindingInvoker, BindingInvokerExt},
 };
 use std::{
     collections::HashSet,
@@ -250,10 +250,14 @@ impl Fixture {
 impl BindingInvoker for Fixture {
     type Invoke<'a> = Pin<Box<dyn Future<Output = Result<(), InvocationError>> + 'a>>;
     type Preflight<'a> = std::future::Ready<Result<PreflightOutcome, InvocationError>>;
-    fn preflight<'a>(&'a self, _: BindingRequest, _: CancellationToken) -> Self::Preflight<'a> {
+    fn handle_preflight<'a>(
+        &'a self,
+        _: BindingRequest,
+        _: CancellationToken,
+    ) -> Self::Preflight<'a> {
         std::future::ready(Ok(PreflightOutcome::NoPrediction))
     }
-    fn invoke<'a>(
+    fn handle_invoke<'a>(
         &'a self,
         _request: BindingRequest,
         mut io: ProviderIo,
@@ -314,7 +318,7 @@ async fn start_native(frame: &JsonValue, provider: &Fixture) -> Result<(), Invoc
     let Action::Open(request) = Ingress::default().receive(frame)? else {
         unreachable!()
     };
-    let client = BindingClient::new(provider);
+    let client = provider;
     let (mut input, mut output) = client
         .invoke(*request, CancellationToken::new())
         .map_err(|_| InvocationError::refused())?
@@ -533,7 +537,7 @@ async fn echo_frames_correspond_to_native_half_close_exact_values_and_complete()
     let provider = Fixture::new(Mode::Echo);
     let mut ingress = Ingress::default();
     let request = opened(&mut ingress);
-    let client = BindingClient::new(&provider);
+    let client = &provider;
     let (mut input, mut output) = client
         .invoke(request, CancellationToken::new())
         .unwrap()
@@ -581,7 +585,7 @@ async fn provider_input_closure_needs_no_caller_close_and_keeps_output_open() {
     let provider = Fixture::new(Mode::NoInput);
     let mut ingress = Ingress::default();
     let request = opened(&mut ingress);
-    let client = BindingClient::new(&provider);
+    let client = &provider;
     let (mut input, mut output) = client
         .invoke(request, CancellationToken::new())
         .unwrap()
@@ -629,7 +633,7 @@ async fn native_empty_completion_and_output_then_failure_have_distinct_terminal_
     ] {
         let provider = Fixture::new(mode);
         let request = opened(&mut Ingress::default());
-        let client = BindingClient::new(&provider);
+        let client = &provider;
         let (_, mut output) = client
             .invoke(request, CancellationToken::new())
             .unwrap()
@@ -654,13 +658,14 @@ async fn native_empty_completion_and_output_then_failure_have_distinct_terminal_
 async fn cancellation_drains_committed_outputs_before_one_terminal_frame() {
     let provider = Fixture::new(Mode::QueuedBeforeCancel);
     let request = opened(&mut Ingress::default());
-    let client = BindingClient::new(&provider)
-        .with_limits(InvocationLimits {
-            output_capacity: 2,
-            ..Default::default()
-        })
+    let client = &provider;
+    let client_limits = InvocationLimits {
+        output_capacity: 2,
+        ..Default::default()
+    };
+    let call = client
+        .invoke_with_limits(request, CancellationToken::new(), client_limits)
         .unwrap();
-    let call = client.invoke(request, CancellationToken::new()).unwrap();
     let control = call.control();
     let (_, mut output) = call.split();
     let mut egress = Egress::default();

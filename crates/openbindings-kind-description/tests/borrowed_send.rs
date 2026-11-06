@@ -22,7 +22,7 @@ impl KindDescriptor for Borrowed<'_> {
         = Query<'a, KindDescription>
     where
         Self: 'a;
-    fn list_kinds(&self, _: CancellationToken) -> Self::List<'_> {
+    fn handle_list_kinds(&self, _: CancellationToken) -> Self::List<'_> {
         Box::pin(async move {
             self.0.fetch_add(1, Ordering::Relaxed);
             Ok(vec![
@@ -33,7 +33,11 @@ impl KindDescriptor for Borrowed<'_> {
             ])
         })
     }
-    fn describe_kind(&self, _: DescribeKindRequest, _: CancellationToken) -> Self::Describe<'_> {
+    fn handle_describe_kind(
+        &self,
+        _: DescribeKindRequest,
+        _: CancellationToken,
+    ) -> Self::Describe<'_> {
         Box::pin(async move {
             self.0.fetch_add(1, Ordering::Relaxed);
             Ok(KindDescription::from_json(
@@ -51,7 +55,7 @@ impl SourceChecker for Borrowed<'_> {
         Pin<Box<dyn Future<Output = Result<CheckedSource, CheckFailure<Self::Error>>> + Send + 'a>>
     where
         Self: 'a;
-    fn check_source(&self, _: CheckSourceRequest, _: CancellationToken) -> Self::Check<'_> {
+    fn handle_check_source(&self, _: CheckSourceRequest, _: CancellationToken) -> Self::Check<'_> {
         Box::pin(async move {
             self.0.fetch_add(1, Ordering::Relaxed);
             Ok(
@@ -71,7 +75,7 @@ fn complete<F: Future>(future: F) -> F::Output {
         Poll::Pending => panic!("ready local provider"),
     }
 }
-fn queries<'a, P: KindDescriptor + Sync + 'a>(client: &'a KindClient<P>)
+fn queries<'a, P: KindDescriptor + Sync + 'a>(client: &'a P)
 where
     P::List<'a>: Send,
     P::Describe<'a>: Send,
@@ -86,7 +90,7 @@ where
     send(&describe);
     assert!(complete(describe).is_ok());
 }
-fn checks<'a, P: SourceChecker + Sync + 'a>(client: &'a SourceCheckClient<P>)
+fn checks<'a, P: SourceChecker + Sync + 'a>(client: &'a P)
 where
     P::Check<'a>: Send,
     P::Error: Send,
@@ -98,16 +102,16 @@ where
     assert!(complete(check).is_ok());
 }
 #[test]
-fn all_three_clients_accept_non_static_send_futures_for_each_provider_ownership() {
+fn all_three_interfaces_accept_non_static_send_futures_for_each_provider_ownership() {
     let calls = AtomicUsize::new(0);
     let provider = Borrowed(&calls);
-    queries(&KindClient::new(&provider));
-    queries(&KindClient::new(Borrowed(&calls)));
-    queries(&KindClient::new(Box::new(Borrowed(&calls))));
-    queries(&KindClient::new(Arc::new(Borrowed(&calls))));
-    checks(&SourceCheckClient::new(&provider));
-    checks(&SourceCheckClient::new(Borrowed(&calls)));
-    checks(&SourceCheckClient::new(Box::new(Borrowed(&calls))));
-    checks(&SourceCheckClient::new(Arc::new(Borrowed(&calls))));
+    queries(&&provider);
+    queries(&Borrowed(&calls));
+    queries(&Box::new(Borrowed(&calls)));
+    queries(&Arc::new(Borrowed(&calls)));
+    checks(&&provider);
+    checks(&Borrowed(&calls));
+    checks(&Box::new(Borrowed(&calls)));
+    checks(&Arc::new(Borrowed(&calls)));
     assert_eq!(calls.load(Ordering::Relaxed), 12);
 }

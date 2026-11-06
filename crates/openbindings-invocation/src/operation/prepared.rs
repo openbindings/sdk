@@ -51,7 +51,7 @@ impl std::error::Error for OperationPreparationFailure {}
 pub struct PreparedOperation<V: SchemaValidator> {
     interface: ConformantDocument,
     operation: String,
-    contracts: [Option<PreparedSchema<V>>; 2],
+    schemas: [Option<PreparedSchema<V>>; 2],
     limits: InvocationLimits,
     detail: Detail,
 }
@@ -65,13 +65,13 @@ impl<V: SchemaValidator + Clone> Clone for PreparedOperation<V> {
         Self {
             interface: self.interface.clone(),
             operation: self.operation.clone(),
-            contracts: self.contracts.clone(),
+            schemas: self.schemas.clone(),
             limits: self.limits,
             detail: self.detail,
         }
     }
 }
-impl<P: BindingInvoker + InvocationSupport, E: SchemaEvaluator> OperationClient<P, E> {
+impl<P: BindingInvoker + InvocationSupport, E: SchemaEvaluator> DefaultOperationInvoker<P, E> {
     /// Resolve one operation key or alias and prepare its declared directions.
     /// The returned owner retains no provider, evaluator or borrowed configuration.
     /// No binding is selected and no provider work starts.
@@ -92,13 +92,13 @@ impl<P: BindingInvoker + InvocationSupport, E: SchemaEvaluator> OperationClient<
             OperationPreparationFailure::Resolution(error("ERR_OPERATION_NOT_FOUND"))
         })?;
         let schemas = [operation.input(), operation.output()];
-        let mut contracts = [None, None];
+        let mut prepared = [None, None];
         for (index, direction) in [Direction::Input, Direction::Output]
             .into_iter()
             .enumerate()
         {
             if let Some(schema) = &schemas[index] {
-                contracts[index] = Some(
+                prepared[index] = Some(
                     schema
                         .prepare_with_control(
                             &self.evaluator,
@@ -121,7 +121,7 @@ impl<P: BindingInvoker + InvocationSupport, E: SchemaEvaluator> OperationClient<
         Ok(PreparedOperation {
             interface,
             operation: operation.key().to_owned(),
-            contracts,
+            schemas: prepared,
             limits: self.limits,
             detail: self.detail,
         })
@@ -178,20 +178,20 @@ impl<V: SchemaValidator> PreparedOperation<V> {
                 Err(error("ERR_BINDING_NOT_FOUND"))
             }
         });
-        let contracts = self.contracts;
+        let schemas = self.schemas;
         let detail = self.detail;
-        let shared = Shared::new(self.limits, contracts.each_ref().map(Option::is_some));
+        let shared = Shared::new(self.limits, schemas.each_ref().map(Option::is_some));
         let io = ProviderIo::new(shared.clone());
         let local = shared.control();
         let future = drive(
-            move || Ok(provider.invoke(selected?, io, local)),
+            move || Ok(provider.handle_invoke(selected?, io, local)),
             move |direction, value, control| {
                 let index = match direction {
                     Direction::Input => 0,
                     Direction::Output => 1,
                 };
                 evaluate(
-                    contracts[index].as_ref().expect("declared direction"),
+                    schemas[index].as_ref().expect("declared direction"),
                     direction,
                     value,
                     detail,
@@ -201,6 +201,6 @@ impl<V: SchemaValidator> PreparedOperation<V> {
             control,
             shared.clone(),
         );
-        Ok(Invocation::new(shared, future))
+        Ok(Invocation::from_parts(shared, future))
     }
 }

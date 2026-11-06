@@ -16,14 +16,14 @@ Preparing a `Schema` requires an explicit evaluator. There is
 no fallback value evaluator in core. A stated `true`, `false` or `{}` schema
 still requires an evaluator. Absence alone means no schema is stated.
 
-`OperationClient::new(provider, evaluator, external_schemas)` makes the invocation
+`DefaultOperationInvoker::new(provider, evaluator, external_schemas)` makes the invocation
 dependencies explicit. Lazy invocation prepares a declared direction when its
 first value crosses that boundary. An absent schema invokes no evaluator and
 makes no validation claim. Provider effects can precede an output refusal.
-Use `client.prepare(interface, name, &control)` when the application requires both
+Use `invoker.prepare(interface, name, &control)` when the application requires both
 stated schemas to prepare before invocation. The resulting `PreparedOperation`
 owns its validators and does not retain a provider or evaluator. See the
-[invocation contract](invocation.md) for binding selection and prepared reuse.
+[invocation lifecycle](invocation.md) for binding selection and prepared reuse.
 The TypeScript facade bundles
 the default evaluator; it does not expose custom evaluator callbacks.
 

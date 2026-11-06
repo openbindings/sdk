@@ -11,7 +11,7 @@ pub struct PullRequest {
     context: Option<Context>,
 }
 impl PullRequest {
-    /// Retain an original document and an exact source key. The checked client
+    /// Retain an original document and an exact source key. The checked caller
     /// establishes that the source exists before constructing provider work.
     pub fn new(interface: ConformantDocument, source: impl Into<Arc<str>>) -> Self {
         Self {
@@ -39,9 +39,9 @@ impl PullRequest {
         self.context.as_ref()
     }
     /// Read the closed published request and require core document conformance.
-    /// Parsing and this admission precede the client's handoff limits; callers
+    /// Parsing and this admission precede the caller's handoff limits; callers
     /// accepting bytes should first use explicit exact-JSON admission limits.
-    /// A missing selected source is refused by the checked client before dispatch.
+    /// A missing selected source is refused by the checked caller before dispatch.
     pub fn from_json(value: &JsonValue) -> Result<Self, RequestError> {
         let mut seen = [false; 3];
         for member in value

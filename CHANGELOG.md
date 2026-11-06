@@ -32,7 +32,7 @@ and remaining work. Earlier development APIs have no compatibility guarantee.
   source and instance locations. Verdict and optional explanation consume one
   cumulative allowance. Diagnostic interruption preserves an established
   verdict; explanations remain explicitly incomplete.
-- Optional Rust binding and operation invocation clients over explicit borrowed
+- Optional Rust binding and operation invocation interfaces over explicit borrowed
   providers. Binding invocation neither selects a binding nor validates operation
   values. Operation invocation resolves keys/aliases, applies caller selection
   and checks each value against its declared schema before forwarding it.
@@ -41,7 +41,7 @@ and remaining work. Earlier development APIs have no compatibility guarantee.
   Streaming invocation preserves prior output when a later failure occurs;
   cancellation promises neither rollback nor that external effects have stopped.
   Applications own provider choice, context acquisition, approval and retry.
-- Optional kind-description and source-checking clients. Capability claims remain
+- Optional kind-description and source-checking interfaces. Capability claims remain
   per operation, kind identity is exact, and checking requires an explicit call.
   Kind-owned data and native provider failures retain their separate meanings.
 - Optional source pulling with original-document requests, additions, reports,
@@ -58,14 +58,20 @@ and remaining work. Earlier development APIs have no compatibility guarantee.
   conformant snapshot. Authentication and deployment policy remain with the host.
 - A TypeScript facade over the shared Rust/Wasm engine, organized around exact
   values, documents, schema preparation/evaluation and Fetch discovery. Disposable
-  owners and derived views preserve their lifetimes. Rust role APIs are not
-  exposed as TypeScript role clients.
+  owners and derived views preserve their lifetimes. Rust interface APIs are not
+  exposed as TypeScript interface APIs.
 - Source and packaged consumer checks, current Rust API references, required
   conformance/evaluator corpora, actual browser probes and reproducible Wasm
   builds. Cargo and npm publication guards remain enabled.
 
 ### Changed
 
+- Call binding invocation, source pulling and kind queries directly on their
+  implementers through SDK-owned checked extension methods. Adapters implement
+  `handle_*` hooks; custom limits are call arguments. `OperationInvoker` defines
+  operation invocation and `DefaultOperationInvoker` supplies resolution, binding
+  selection, validation and prepared reuse. `Invocation::new` supports third-party
+  implementations. Source pulling and kind queries expose `PullError` and `KindError`.
 - Name preparation's cooperative counters `max_sdk_work_units` and
   `max_sdk_reservation_bytes`, with matching `preparation-sdk-*` limit codes.
   Their scope is explicit SDK work/storage sites, not every dependency operation
@@ -76,7 +82,7 @@ and remaining work. Earlier development APIs have no compatibility guarantee.
   qualification inputs move together with those pins.
 - Align public vocabulary and organization with schemas, document conformance,
   context, invocation, kind description and source pulling. Replace old value
-  contract and detached inspection/synthesis APIs with those domain boundaries.
+  schema and detached inspection/synthesis APIs with those domain boundaries.
 - Rust `NoVerdict` code/message fields use `Cow<'static, str>`. Fixed SDK
   limit/cancellation text and clones require no heap allocation; dynamic owned
   strings move into the record. Serialized fields remain strings.

@@ -4,15 +4,16 @@ use openbindings::{
     ConformantDocument, Document, Edit, ExternalSchemas, JsonValue, PreparationLimits, ValueOutcome,
 };
 use openbindings_invocation::{
-    CancellationToken, Context, InvocationError, OperationClient, OperationRequest, OutputEvent,
+    CancellationToken, Context, DefaultOperationInvoker, InvocationError, OperationRequest,
+    OutputEvent,
 };
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 use openbindings_kind_description::{
-    CheckFailure, CheckSourceRequest, ClientError, DescribeKindRequest, KindClient,
-    SourceCheckClient,
+    CheckFailure, CheckSourceRequest, DescribeKindRequest, KindDescriptorExt, KindError,
+    SourceCheckerExt,
 };
 use openbindings_source_pull::{
-    ExistingStatus, Proposal, PullClient, PullLimits, PullRequest, PullResult,
+    ExistingStatus, Proposal, PullLimits, PullRequest, PullResult, SourcePullerExt,
 };
 use source_pull_consumer::{Embedded, Fixed, KindCatalog};
 use std::sync::Arc;
@@ -26,12 +27,12 @@ fn proof(document: Document) -> ConformantDocument {
 async fn pull(document: ConformantDocument, embedded: bool) -> PullResult {
     let request = PullRequest::new(document, "catalog");
     if embedded {
-        PullClient::new(Embedded)
+        (Embedded)
             .pull_source(request, CancellationToken::new())
             .await
             .unwrap()
     } else {
-        PullClient::new(Fixed)
+        (Fixed)
             .pull_source(request, CancellationToken::new())
             .await
             .unwrap()
@@ -43,7 +44,7 @@ async fn invoke(
     context: Option<Context>,
     value: JsonValue,
 ) -> (Vec<JsonValue>, Result<(), InvocationError>) {
-    let client = OperationClient::new(
+    let client = DefaultOperationInvoker::new(
         provider,
         DefaultEvaluator::new(),
         ExternalSchemas::default(),
@@ -83,10 +84,7 @@ async fn invoke(
 #[tokio::test]
 async fn two_local_kinds_cross_description_authoring_pull_drift_context_and_invocation() {
     let kinds = KindCatalog::default();
-    let listed = KindClient::new(&kinds)
-        .list_kinds(CancellationToken::new())
-        .await
-        .unwrap();
+    let listed = kinds.list_kinds(CancellationToken::new()).await.unwrap();
     assert_eq!(listed.len(), 2);
     for embedded in [false, true] {
         let kind = if embedded {
@@ -100,7 +98,7 @@ async fn two_local_kinds_cross_description_authoring_pull_drift_context_and_invo
                 .any(|entry| entry.kind().as_str() == Some(kind))
         );
         let checks = kinds.checks();
-        let description = KindClient::new(&kinds)
+        let description = kinds
             .describe_kind(
                 DescribeKindRequest::from_json(json(&format!(r#"{{"kind":"{kind}"}}"#))).unwrap(),
                 CancellationToken::new(),
@@ -131,7 +129,7 @@ async fn two_local_kinds_cross_description_authoring_pull_drift_context_and_invo
         } else {
             json(r#"{"kind":"example.fixed@1","context":{"callerOnly":true}}"#)
         };
-        let checked = SourceCheckClient::new(&kinds)
+        let checked = kinds
             .check_source(
                 CheckSourceRequest::from_json(proposed).unwrap(),
                 CancellationToken::new(),
@@ -345,7 +343,7 @@ fn accepts(schema: &JsonValue, value: &JsonValue) -> bool {
 #[tokio::test]
 async fn described_data_shapes_agree_with_the_kind_carriage_reader() {
     let kinds = KindCatalog::default();
-    let description = KindClient::new(&kinds)
+    let description = kinds
         .describe_kind(
             DescribeKindRequest::from_json(json(r#"{"kind":"example.embedded@1"}"#)).unwrap(),
             CancellationToken::new(),
@@ -378,7 +376,7 @@ async fn described_data_shapes_agree_with_the_kind_carriage_reader() {
         ),
     ] {
         assert_eq!(accepts(&schema, &json(text)), expected, "{text}");
-        let result = SourceCheckClient::new(&kinds)
+        let result = kinds
             .check_source(
                 CheckSourceRequest::from_json(json(&format!(
                     r#"{{"kind":"example.embedded@1","data":{text}}}"#
@@ -389,13 +387,13 @@ async fn described_data_shapes_agree_with_the_kind_carriage_reader() {
             .await;
         match (expected, result) {
             (true, Ok(checked)) => assert_eq!(checked.data().unwrap().text(), text),
-            (false, Err(ClientError::Provider(CheckFailure::Rejected(rejection)))) => {
+            (false, Err(KindError::Provider(CheckFailure::Rejected(rejection)))) => {
                 assert_eq!(rejection.code().as_str(), Some("example.invalid-source"))
             }
             (_, other) => panic!("description/check disagreement for {text}: {other:?}"),
         }
     }
-    let fixed = KindClient::new(&kinds)
+    let fixed = kinds
         .describe_kind(
             DescribeKindRequest::from_json(json(r#"{"kind":"example.fixed@1"}"#)).unwrap(),
             CancellationToken::new(),
@@ -418,13 +416,13 @@ async fn described_data_shapes_agree_with_the_kind_carriage_reader() {
         r#"{"kind":"example.embedded@1","data":{"items":[{"key":"\udc00","operation":{},"data":{}}]}}"#,
     ] {
         assert!(matches!(
-            SourceCheckClient::new(&kinds)
+            kinds
                 .check_source(
                     CheckSourceRequest::from_json(json(text)).unwrap(),
                     CancellationToken::new(),
                 )
                 .await,
-            Err(ClientError::Provider(CheckFailure::Rejected(_)))
+            Err(KindError::Provider(CheckFailure::Rejected(_)))
         ));
     }
 }

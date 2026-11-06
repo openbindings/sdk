@@ -8,25 +8,29 @@ A report is a producer claim, not proof of live availability or fidelity.
 
 The carriers preserve exact JSON, allowed output metadata and absence versus null.
 Proposals carry restricted edit authority; retaining unknown metadata does not
-authorize copying it into a document. No TypeScript role API is implied.
+authorize copying it into a document. No TypeScript interface API is implied.
 
 `PullRequest` retains a complete `ConformantDocument`, selected source key and
 optional shared `Context`. `SourcePuller` supplies borrowed finite work and its
-own native operational error. `PullClient` checks source existence before dispatch,
+own native operational error through `handle_pull_source`. Import `SourcePullerExt`
+to call the SDK-owned `pull_source` method directly on the implementation. It checks source existence before dispatch,
 then checks key/alias collisions, selected-source attribution, report coverage,
 canonical operation keys, uses labels and known report dependency closure. It
 validates a prospective document with all additions before returning the exact
 result. The original remains unchanged and stale proposals are never applied.
+Use `pull_source_with_limits(request, control, limits)` for caller-selected limits.
+The blanket implementation cannot be overridden by an adapter; explicit calls to
+`handle_pull_source` bypass its checks. Local checked failures are `PullError`.
 
 ```rust
 use openbindings::ConformantDocument;
-use openbindings_source_pull::{CancellationToken, ClientError, PullClient, PullRequest, SourcePuller};
+use openbindings_source_pull::{CancellationToken, PullError, SourcePullerExt, PullRequest, SourcePuller};
 
 async fn inspect<P: SourcePuller>(provider: P, document: ConformantDocument)
-    -> Result<bool, ClientError<P::Error>>
+    -> Result<bool, PullError<P::Error>>
 {
     let request = PullRequest::new(document, "catalog");
-    let result = PullClient::new(provider)
+    let result = provider
         .pull_source(request, CancellationToken::new()).await?;
     Ok(result.report().is_complete())
 }
@@ -51,7 +55,7 @@ relationship-index/edit-metadata reservations. They exclude provider work and
 already admitted carriers. Core prospective rebuilding/validation uses the
 original document's JSON limits and core finding limits, not the relationship
 ledger; cancellation is checked before and after those synchronous calls.
-Requests read through `from_json` are admitted before client limits, so byte
+Requests read through `from_json` are admitted before caller limits, so byte
 consumers should first choose explicit JSON parsing limits. Native operational
 errors are not measured as JSON; exact context challenges are.
 

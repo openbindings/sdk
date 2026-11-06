@@ -2,17 +2,19 @@
 #![warn(missing_docs)]
 #![forbid(unsafe_code)]
 
-mod client;
 mod error;
 mod model;
-pub use client::{DescriptionLimits, KindClient, KindDescriptor, SourceCheckClient, SourceChecker};
-pub use error::{CheckFailure, CheckRejection, ClientError};
+mod queries;
+pub use error::{CheckFailure, CheckRejection, KindError};
 pub use model::{
     CarrierError, CheckDescription, CheckSourceRequest, CheckedSource, DescribeKindRequest,
     KindDescription, KindSummary,
 };
 pub use openbindings_context::{Context, ContextChallenge};
 pub use openbindings_internal_cancellation::{Cancellation, CancellationToken};
+pub use queries::{
+    DescriptionLimits, KindDescriptor, KindDescriptorExt, SourceChecker, SourceCheckerExt,
+};
 
 /// Version of the adopted kind-descriptor interface, independent of SDK version.
 pub const INTERFACE_VERSION: &str = "0.1.0";

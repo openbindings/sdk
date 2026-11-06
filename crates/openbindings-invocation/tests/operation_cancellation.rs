@@ -5,8 +5,8 @@ use openbindings::{
     WorkControl,
 };
 use openbindings_invocation::{
-    BindingInvoker, BindingRequest, CancellationToken, InvocationError, InvocationSupport,
-    OperationClient, OperationRequest, OutputEvent, PreflightOutcome, ProviderIo,
+    BindingInvoker, BindingRequest, CancellationToken, DefaultOperationInvoker, InvocationError,
+    InvocationSupport, OperationRequest, OutputEvent, PreflightOutcome, ProviderIo,
 };
 use std::{
     future::{Future, poll_fn},
@@ -103,7 +103,7 @@ impl InvocationSupport for Provider {
 impl BindingInvoker for Provider {
     type Invoke<'a> = Pin<Box<dyn Future<Output = Result<(), InvocationError>> + Send + 'a>>;
     type Preflight<'a> = std::future::Ready<Result<PreflightOutcome, InvocationError>>;
-    fn invoke<'a>(
+    fn handle_invoke<'a>(
         &'a self,
         _: BindingRequest,
         mut io: ProviderIo,
@@ -126,7 +126,11 @@ impl BindingInvoker for Provider {
             Ok(())
         })
     }
-    fn preflight<'a>(&'a self, _: BindingRequest, _: CancellationToken) -> Self::Preflight<'a> {
+    fn handle_preflight<'a>(
+        &'a self,
+        _: BindingRequest,
+        _: CancellationToken,
+    ) -> Self::Preflight<'a> {
         std::future::ready(Ok(PreflightOutcome::NoPrediction))
     }
 }
@@ -134,7 +138,7 @@ fn concurrent_cancel(stage: Stage) {
     let barrier = Arc::new(Barrier::new(2));
     let saw_cancel = Arc::new(AtomicBool::new(false));
     let eof = Arc::new(AtomicBool::new(false));
-    let client = OperationClient::new(
+    let client = DefaultOperationInvoker::new(
         Provider {
             repeat_poll: false,
             eof: eof.clone(),
@@ -175,7 +179,7 @@ fn external_cancel_reaches_preparation_in_current_poll() {
 #[test]
 fn rejected_input_cannot_turn_into_eof_on_second_poll() {
     let eof = Arc::new(AtomicBool::new(false));
-    let client = OperationClient::new(
+    let client = DefaultOperationInvoker::new(
         Provider {
             repeat_poll: true,
             eof: eof.clone(),
@@ -214,7 +218,7 @@ impl BindingInvoker for CancelThenComplete {
     type Invoke<'a> = Pin<Box<dyn Future<Output = Result<(), InvocationError>> + Send + 'a>>;
     type Preflight<'a> =
         Pin<Box<dyn Future<Output = Result<PreflightOutcome, InvocationError>> + Send + 'a>>;
-    fn invoke<'a>(
+    fn handle_invoke<'a>(
         &'a self,
         _: BindingRequest,
         _: ProviderIo,
@@ -230,7 +234,11 @@ impl BindingInvoker for CancelThenComplete {
             Ok(())
         })
     }
-    fn preflight<'a>(&'a self, _: BindingRequest, local: CancellationToken) -> Self::Preflight<'a> {
+    fn handle_preflight<'a>(
+        &'a self,
+        _: BindingRequest,
+        local: CancellationToken,
+    ) -> Self::Preflight<'a> {
         if self.synchronous {
             self.external.cancel();
             assert!(local.is_cancelled());
@@ -244,7 +252,7 @@ impl BindingInvoker for CancelThenComplete {
 }
 fn cancellation_overrides_success(synchronous: bool, preflight: bool) {
     let external = CancellationToken::new();
-    let client = OperationClient::new(
+    let client = DefaultOperationInvoker::new(
         CancelThenComplete {
             external: external.clone(),
             synchronous,
@@ -290,7 +298,7 @@ fn synchronous_provider_and_preflight_start_observe_relay() {
 #[test]
 fn already_settled_validation_keeps_its_evidence_when_external_cancel_follows() {
     let external = CancellationToken::new();
-    let client = OperationClient::new(
+    let client = DefaultOperationInvoker::new(
         Provider {
             repeat_poll: false,
             eof: Arc::default(),

@@ -65,7 +65,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let value = JsonValue::null();
     let input = operation
         .input()
-        .ok_or("operation has no input contract")?
+        .ok_or("operation has no input schema")?
         .prepare(
             &BooleanEvaluator,
             &openbindings::ExternalSchemas::default(),
@@ -73,7 +73,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         )?;
     let output = operation
         .output()
-        .ok_or("operation has no output contract")?
+        .ok_or("operation has no output schema")?
         .prepare(
             &BooleanEvaluator,
             &openbindings::ExternalSchemas::default(),

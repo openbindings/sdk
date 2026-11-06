@@ -45,7 +45,7 @@ only from a `ConformantDocument`.
 The [Rust first-use guide](https://github.com/openbindings/sdk/blob/main/docs/rust-first-use.md)
 shows value validation and an exact opaque-member edit.
 
-## Value contracts and limits
+## Value schemas and limits
 
 Document validation works without a caller-supplied schema evaluator. Its fixed
 normative schema checks are part of core. Operation value validation requires an
@@ -93,5 +93,5 @@ See [support](https://github.com/openbindings/sdk/blob/main/docs/support.md) and
 ## Reference
 
 Use the crate's type and method documentation for ownership, error and limit
-contracts. The [API reference guide](https://github.com/openbindings/sdk/blob/main/docs/api-reference.md)
+interfaces. The [API reference guide](https://github.com/openbindings/sdk/blob/main/docs/api-reference.md)
 explains how to build the full reference locally.

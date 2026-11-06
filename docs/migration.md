@@ -2,7 +2,7 @@
 
 This unpublished SDK follows the pinned 0.2 specification and current interfaces.
 Earlier SDK APIs, carriers and implementation arrangements have no compatibility
-protection. There are no adapters for the retired inspection/synthesis roles or
+protection. There are no adapters for the retired inspection/synthesis interfaces or
 parallel legacy document and schema models.
 
 Use an exact source revision or verified local archives through
@@ -18,13 +18,13 @@ Build integrations around the current responsibilities:
 | Check caller-facing values | Select the original `Schema`, an evaluator and explicit external resources; retain `PreparedSchema` and distinguish preparation failure from value outcomes. |
 | Discover or publish an OBI | The optional HTTP discovery companion, with explicit transport/acquisition policy. |
 | Discover kind capabilities or check a proposed source | The kind-description companion's separate description and explicit checking operations. |
-| Pull source-derived authoring changes | `PullClient`, report inspection, prospective conformance and explicit caller adoption. Proposals do not apply themselves. |
+| Pull source-derived authoring changes | `SourcePuller::handle_pull_source` and checked `pull_source`, report inspection, prospective conformance and explicit caller adoption. Proposals do not apply themselves. |
 | Compare schemas for authoring | The optional normalized identity companion with explicit reference context for each side. |
-| Invoke a binding or operation | `BindingClient` or `OperationClient` with a caller-selected provider; operation invocation adds declared schema gates. |
+| Invoke a binding or operation | `BindingInvoker` with checked `invoke` or `DefaultOperationInvoker` with a caller-selected provider; operation invocation adds declared schema gates. |
 
 The TypeScript facade currently exposes exact documents, schema evaluation and HTTP
-discovery. Rust supplies the interface role companions. A fixture's Wasm bridge
-does not imply a public TypeScript role API.
+discovery. Rust supplies the interface interface implementations. A fixture's Wasm bridge
+does not imply a public TypeScript interface API.
 
 Start with [Rust first use](rust-first-use.md), the
 [TypeScript guide](../packages/typescript/README.md),

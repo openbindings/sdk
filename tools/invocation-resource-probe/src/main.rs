@@ -5,8 +5,8 @@
 use openbindings::{ConformantDocument, Document, ExternalSchemas, JsonValue};
 use openbindings_invocation::CancellationToken;
 use openbindings_invocation::{
-    BindingClient, BindingInvoker, BindingRequest, InvocationError, InvocationLimits,
-    InvocationSupport, OperationClient, OperationRequest, OutputEvent, PreflightOutcome,
+    BindingInvoker, BindingInvokerExt, BindingRequest, DefaultOperationInvoker, InvocationError,
+    InvocationLimits, InvocationSupport, OperationRequest, OutputEvent, PreflightOutcome,
     ProviderIo, WriteError,
 };
 use serde::Serialize;
@@ -221,10 +221,14 @@ impl Fixture {
 impl BindingInvoker for Fixture {
     type Invoke<'a> = Pin<Box<dyn Future<Output = Result<(), InvocationError>> + 'a>>;
     type Preflight<'a> = Ready<Result<PreflightOutcome, InvocationError>>;
-    fn preflight<'a>(&'a self, _: BindingRequest, _: CancellationToken) -> Self::Preflight<'a> {
+    fn handle_preflight<'a>(
+        &'a self,
+        _: BindingRequest,
+        _: CancellationToken,
+    ) -> Self::Preflight<'a> {
         ready(Ok(PreflightOutcome::NoPrediction))
     }
-    fn invoke<'a>(
+    fn handle_invoke<'a>(
         &'a self,
         request: BindingRequest,
         mut io: ProviderIo,
@@ -266,7 +270,7 @@ impl InvocationSupport for Fixture {
     }
 }
 
-// A current OperationClient requires an explicit evaluator. Absent contracts
+// A current DefaultOperationInvoker requires an explicit evaluator. Absent contracts
 // bypass it; the diagnostic lane deliberately asks an incapable evaluator.
 struct RefusingEvaluator;
 struct NeverPrepared;
@@ -301,7 +305,7 @@ fn document(data: &JsonValue) -> ConformantDocument {
         .unwrap().validate().unwrap().conformant().unwrap()
 }
 
-fn zero(invoker: &BindingClient<&Fixture>, request: BindingRequest) {
+fn zero(invoker: &Fixture, request: BindingRequest) {
     let call = invoker.invoke(request, CancellationToken::new()).unwrap();
     let (mut input, mut output) = call.split();
     input.close();
@@ -318,12 +322,7 @@ fn zero(invoker: &BindingClient<&Fixture>, request: BindingRequest) {
     });
 }
 
-fn echo(
-    invoker: &BindingClient<&Fixture>,
-    request: BindingRequest,
-    value: &JsonValue,
-    count: usize,
-) {
+fn echo(invoker: &Fixture, request: BindingRequest, value: &JsonValue, count: usize) {
     echo_call(
         invoker.invoke(request, CancellationToken::new()).unwrap(),
         value,
@@ -386,7 +385,7 @@ fn cancel_call<F: Future<Output = Result<(), InvocationError>>>(
         assert!(output.next().await.is_none());
     });
 }
-fn cancelled(invoker: &BindingClient<&Fixture>, request: BindingRequest, value: &JsonValue) {
+fn cancelled(invoker: &Fixture, request: BindingRequest, value: &JsonValue) {
     cancel_call(
         invoker.invoke(request, CancellationToken::new()).unwrap(),
         value,
@@ -478,8 +477,8 @@ fn retention() -> Retention {
         let request = BindingRequest::new(document(&parent), "b");
         let complete = Fixture::new(Mode::Echo);
         let cancel = Fixture::new(Mode::Park);
-        let complete_invoker = BindingClient::new(&complete);
-        let cancel_invoker = BindingClient::new(&cancel);
+        let complete_invoker = &complete;
+        let cancel_invoker = &cancel;
         for _ in 0..128 {
             echo(&complete_invoker, request.clone(), &subtree, 1);
             cancelled(&cancel_invoker, request.clone(), &subtree);
@@ -558,9 +557,9 @@ fn main() {
     let empty = Fixture::new(Mode::Empty);
     let fixture = Fixture::new(Mode::Echo);
     let parked = Fixture::new(Mode::Park);
-    let empty_invoker = BindingClient::new(&empty);
-    let invoker = BindingClient::new(&fixture);
-    let parked_invoker = BindingClient::new(&parked);
+    let empty_invoker = &empty;
+    let invoker = &fixture;
+    let parked_invoker = &parked;
     let mut measurements = Vec::with_capacity(14);
     measurements.push(measure("direct_zero", iterations, 0, || {
         empty.direct(None, 0)
@@ -606,9 +605,10 @@ fn main() {
     measurements.push(measure("checked_cancel_release", iterations, 0, || {
         cancelled(&parked_invoker, request.clone(), &subtree)
     }));
-    let operation = OperationClient::new(&fixture, RefusingEvaluator, ExternalSchemas::default());
+    let operation =
+        DefaultOperationInvoker::new(&fixture, RefusingEvaluator, ExternalSchemas::default());
     let operation_park =
-        OperationClient::new(&parked, RefusingEvaluator, ExternalSchemas::default());
+        DefaultOperationInvoker::new(&parked, RefusingEvaluator, ExternalSchemas::default());
     // Resource acquisition/creation is setup, as document construction is above.
     // Measure retaining already supplied dependencies, not a resource-set factory.
     let external = ExternalSchemas::default();
@@ -618,7 +618,7 @@ fn main() {
         iterations,
         0,
         || {
-            drop(black_box(OperationClient::new(
+            drop(black_box(DefaultOperationInvoker::new(
                 &fixture,
                 RefusingEvaluator,
                 external.clone(),
@@ -676,7 +676,8 @@ fn main() {
     // implicit missing-evaluator API is not a compatibility target.
     let declared = Document::parse(r#"{"openbindings":"0.2.0","operations":{"echo":{"input":true}},"bindings":{"b":{"operation":"echo","source":"s"}},"sources":{"s":{"kind":"resource.fixture","data":null}}}"#)
         .unwrap().validate().unwrap().conformant().unwrap();
-    let unresolved = OperationClient::new(&fixture, RefusingEvaluator, ExternalSchemas::default());
+    let unresolved =
+        DefaultOperationInvoker::new(&fixture, RefusingEvaluator, ExternalSchemas::default());
     measurements.push(measure(
         "operation_validation_failure_release",
         iterations,
@@ -713,7 +714,8 @@ fn main() {
     let owners_before = Snapshot::now();
     {
         let proof = document(&JsonValue::parse("null").unwrap());
-        let invoker = OperationClient::new(&fixture, RefusingEvaluator, ExternalSchemas::default());
+        let invoker =
+            DefaultOperationInvoker::new(&fixture, RefusingEvaluator, ExternalSchemas::default());
         echo_call(
             invoker
                 .invoke(

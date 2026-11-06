@@ -24,12 +24,12 @@ function prepare(document, operation, field, options) {
   }
 }
 
-/** Prepare the selected operation's input contract with the given options. */
+/** Prepare the selected operation's input schema with the given options. */
 export function prepareInput(document, operation, options) {
   return prepare(document, operation, "input", options);
 }
 
-/** Prepare the selected operation's output contract with the given options. */
+/** Prepare the selected operation's output schema with the given options. */
 export function prepareOutput(document, operation, options) {
   return prepare(document, operation, "output", options);
 }

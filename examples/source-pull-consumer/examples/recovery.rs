@@ -1,5 +1,5 @@
 use openbindings::Document;
-use openbindings_source_pull::{CancellationToken, PullClient, PullRequest};
+use openbindings_source_pull::{CancellationToken, PullRequest, SourcePullerExt};
 use source_pull_consumer::Fixed;
 use std::{
     future::Future,
@@ -9,7 +9,7 @@ use std::{
 fn main() {
     let original = Document::parse(r#"{"openbindings":"0.2.0","operations":{},"sources":{"fixed":{"kind":"example.fixed@1"}}}"#)
         .unwrap().validate().unwrap().conformant().unwrap();
-    let client = PullClient::new(Fixed);
+    let client = Fixed;
     let mut work = Box::pin(client.pull_source(
         PullRequest::new(original.clone(), "fixed"),
         CancellationToken::new(),

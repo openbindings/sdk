@@ -1,8 +1,8 @@
 //! All current pinned selection cases through lazy/prepared invocation and preflight.
 use openbindings::{Document, ExternalSchemas, JsonValue};
 use openbindings_invocation::{
-    BindingInvoker, BindingRequest, CancellationToken, InvocationError, InvocationSupport,
-    OperationClient, OperationRequest, OutputEvent, PreflightOutcome, ProviderIo,
+    BindingInvoker, BindingRequest, CancellationToken, DefaultOperationInvoker, InvocationError,
+    InvocationSupport, OperationRequest, OutputEvent, PreflightOutcome, ProviderIo,
     operation::BindingChoice,
 };
 use openbindings_json_schema_evaluator::DefaultEvaluator;
@@ -42,7 +42,7 @@ impl InvocationSupport for Corpus {
 impl BindingInvoker for Corpus {
     type Invoke<'a> = Pin<Box<dyn Future<Output = Result<(), InvocationError>> + 'a>>;
     type Preflight<'a> = Ready<Result<PreflightOutcome, InvocationError>>;
-    fn invoke<'a>(
+    fn handle_invoke<'a>(
         &'a self,
         request: BindingRequest,
         mut io: ProviderIo,
@@ -50,7 +50,11 @@ impl BindingInvoker for Corpus {
     ) -> Self::Invoke<'a> {
         Box::pin(async move { io.send(JsonValue::string(&request.binding).unwrap()).await })
     }
-    fn preflight<'a>(&'a self, _: BindingRequest, _: CancellationToken) -> Self::Preflight<'a> {
+    fn handle_preflight<'a>(
+        &'a self,
+        _: BindingRequest,
+        _: CancellationToken,
+    ) -> Self::Preflight<'a> {
         ready(Ok(PreflightOutcome::NoPrediction))
     }
 }
@@ -96,7 +100,7 @@ async fn published_selection_cases_resolve_through_invocation_preparation_and_pr
             let provider = Corpus {
                 supported: strings(&case["supported"]).into_iter().collect(),
             };
-            let client = OperationClient::new(
+            let client = DefaultOperationInvoker::new(
                 &provider,
                 DefaultEvaluator::default(),
                 ExternalSchemas::default(),

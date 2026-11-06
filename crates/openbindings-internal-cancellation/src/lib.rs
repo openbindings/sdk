@@ -15,7 +15,7 @@ use std::{
     task::{Context, Poll, Waker},
 };
 
-/// Executor-independent cooperative cancellation. Clones share permanent state.
+/// Async-runtime-independent cooperative cancellation. Clones share permanent state.
 /// Use a fresh token for each independent retry. Cancellation wakes every registered
 /// waiter synchronously, outside the registry lock; it does not schedule a task.
 /// Import this type through the async companion whose interface you use.
@@ -112,13 +112,13 @@ pub fn relay(external: &CancellationToken, local: &CancellationToken) -> Cancell
 }
 /// Drive one explicitly supplied finite provider attempt until completion or
 /// cancellation. `None` means cancellation; provider outcomes stay unchanged in
-/// `Some`. Construction is lazy, requires no executor or Send/Sync bound, and
+/// `Some`. Construction is lazy, requires no async runtime or Send/Sync bound, and
 /// receives an isolated child token. Dropping this future cancels that child
 /// before releasing provider work, without cancelling the caller's token.
 ///
 /// Provider construction and cleanup may themselves complete cancellation. The
 /// final caller check runs after provider work and the relay have been dropped.
-/// This private SDK mechanism defines no portable role error or retry behavior.
+/// This private SDK mechanism defines no portable interface error or retry behavior.
 pub async fn run_attempt<T, F: Future<Output = T>>(
     external: CancellationToken,
     start: impl FnOnce(CancellationToken) -> F,
@@ -162,7 +162,7 @@ pub async fn run_attempt<T, F: Future<Output = T>>(
 }
 
 #[must_use = "cancellation futures must be polled or awaited"]
-/// Executor-independent future that resolves on [`CancellationToken::cancel`]. Polling registers a scoped waker; dropping the future unregisters it. It owns a clone of the cancellation state, not a task or timer.
+/// Async-runtime-independent future that resolves on [`CancellationToken::cancel`]. Polling registers a scoped waker; dropping the future unregisters it. It owns a clone of the cancellation state, not a task or timer.
 pub struct Cancellation {
     control: CancellationToken,
     id: Option<usize>,

@@ -154,7 +154,7 @@ fn reconcile(request: &PullRequest, observed: Observation) -> Result<PullResult,
         }
         let reused = if let Some(operation) = operations.get(&offer.key) {
             if slots(offer, &observed, operation, original)? != [Identity::Equal; 2] {
-                omitted.push(json(&format!(r#"{{"status":"conflict","reasonCode":"offered-contract-differs","message":"The offered input or output differs from the existing operation.","details":{{"operation":{}}}}}"#, quote(&offer.key))));
+                omitted.push(json(&format!(r#"{{"status":"conflict","reasonCode":"offered-schema-differs","message":"The offered input or output differs from the existing operation.","details":{{"operation":{}}}}}"#, quote(&offer.key))));
                 continue;
             }
             true
@@ -256,7 +256,7 @@ fn reconcile(request: &PullRequest, observed: Observation) -> Result<PullResult,
     PullResult::from_json(json(&format!(r#"{{"additions":{},"report":{{"exhaustive":{}{limitation},"added":{},"existing":{},"omitted":{}}}}}"#, additions.text(), observed.exhaustive, array(&added).text(), array(&existing).text(), array(&omitted).text()))).map_err(|_| CatalogError::Source)
 }
 
-/// Illustrative source whose offered echo contract is fixed and has no source data.
+/// Illustrative source whose offered echo schema is fixed and has no source data.
 #[derive(Default)]
 pub struct Fixed;
 /// Illustrative source which projects the exact catalog embedded in source data.
@@ -269,14 +269,14 @@ macro_rules! provider {
             type Pull<'a> = Pin<
                 Box<dyn Future<Output = Result<PullResult, PullFailure<Self::Error>>> + Send + 'a>,
             >;
-            fn pull_source(
+            fn handle_pull_source(
                 &self,
                 request: PullRequest,
                 control: CancellationToken,
             ) -> Self::Pull<'_> {
                 Box::pin(async move {
                     // Real suspension exercises external future ownership without
-                    // requiring an SDK executor or a particular host runtime.
+                    // requiring an SDK async runtime or a particular host runtime.
                     let mut yielded = false;
                     std::future::poll_fn(|cx| {
                         if yielded {
@@ -315,7 +315,7 @@ pub async fn pull_catalog(text: String) -> Result<String, wasm_bindgen::JsValue>
     use wasm_bindgen::JsValue;
     let value = JsonValue::parse(&text).map_err(|e| JsValue::from_str(&e.to_string()))?;
     let request = PullRequest::from_json(&value).map_err(|e| JsValue::from_str(&e.to_string()))?;
-    let result = PullClient::new(Embedded)
+    let result = (Embedded)
         .pull_source(request, CancellationToken::new())
         .await
         .map_err(|e| JsValue::from_str(&e.to_string()))?;

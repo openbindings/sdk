@@ -87,12 +87,12 @@ impl<'i> Keyword<'i, FlatJson> for ExactBound {
         }
     }
 }
-/// The bytes a run matcher's place among a value contract's matchers takes,
+/// The bytes a run matcher's place among a value schema's matchers takes,
 /// as 64-bit hosts lay a matcher out. A 32-bit host takes less, and the
 /// pattern memory counts this on every host, so no outcome depends on it.
 const MATCHER: usize = 104;
-/// The bytes a value contract holds for a run matcher: its place among the
-/// contract's matchers and the heap bytes it holds.
+/// The bytes a value schema holds for a run matcher: its place among the
+/// schema's matchers and the heap bytes it holds.
 pub(crate) fn run_matcher_bytes(matcher: &crate::compiled::pattern::Simple) -> usize {
     MATCHER + matcher.heap_bytes()
 }
@@ -461,8 +461,8 @@ impl Operands {
         };
         index.to_string()
     }
-    /// The SDK's keywords for this value contract, and the `pattern` keyword's
-    /// matchers, which compile within the value contract's `memory`.
+    /// The SDK's keywords for this value schema, and the `pattern` keyword's
+    /// matchers, which compile within the value schema's `memory`.
     pub(crate) fn keywords(self, memory: Memory) -> Keywords {
         // Only the matchers outlive preparation; their index by form does not.
         drop(self.indices);
@@ -487,26 +487,26 @@ impl Operands {
         }
     }
 }
-/// The SDK's keywords a value contract's validators compile, which share its
+/// The SDK's keywords a value schema's validators compile, which share its
 /// literals, numeric operands and `pattern` matchers.
 pub(crate) struct Keywords {
     patterns: Arc<Patterns>,
-    // Whether the value contract holds a `pattern` matcher.
+    // Whether the value schema holds a `pattern` matcher.
     matched: bool,
     numbers: Arc<numeric::Operands>,
     numeric: [bool; numeric::KEYWORDS.len()],
     literals: Arc<Vec<Literal>>,
-    // Whether the value contract holds a `const` and an `enum` literal.
+    // Whether the value schema holds a `const` and an `enum` literal.
     held: [bool; 2],
 }
 impl Keywords {
-    /// The value contract's `pattern` matchers.
+    /// The value schema's `pattern` matchers.
     pub(crate) fn patterns(&self) -> &Arc<Patterns> {
         &self.patterns
     }
     /// The library's options with the SDK's keywords. Only the keywords the
     /// bundle can hold are registered: those `registered` names, and the
-    /// literal, numeric and `pattern` keywords this value contract's schemas
+    /// literal, numeric and `pattern` keywords the schemas reached from this value schema
     /// hold. The library compiles a keyword the bundle does not hold the same
     /// whether it is registered or not: it never meets it.
     pub(crate) fn register<'o, R>(

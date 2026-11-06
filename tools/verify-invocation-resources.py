@@ -108,7 +108,7 @@ def main():
         "gates": gates, "passed": all(gates.values()), "timing": timing,
         "limits_of_evidence": [
             "Allocator counts describe System requests in one synthetic process, not allocator usable sizes or RSS.",
-            "Both paths use the same exact-value semantic fixture; checked path includes boxed provider future, safe test executor, and SDK lifecycle.",
+            "Both paths use the same exact-value semantic fixture; checked path includes boxed provider future, safe test async runtime, and SDK lifecycle.",
             "Queue/pending maxima require separate SDK unit instrumentation; public capacities here are configuration, not observed queue maxima.",
             "Logical delivery bytes do not bound retained backing owners; a one-byte value here retains a one-MiB source.",
         ],

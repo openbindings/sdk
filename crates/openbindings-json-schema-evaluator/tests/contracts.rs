@@ -40,7 +40,7 @@ fn conformant(document: &Document) -> ConformantDocument {
         .conformant()
         .expect("conformant document")
 }
-/// Prepare the input contract of operation `op` with no supplied resources.
+/// Prepare the input schema of operation `op` with no supplied resources.
 fn prepare_op(
     document: &ConformantDocument,
     evaluator: &DefaultEvaluator,

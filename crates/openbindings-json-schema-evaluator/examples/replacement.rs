@@ -11,7 +11,7 @@ enum LoadFailure {
     Version(VersionRefusal),
     Conformance(ValidationReport),
     MissingOperation,
-    NoInputContract,
+    NoInputSchema,
     Preparation(PreparationFailure),
     MissingResources(PreparationFailure),
     UnresolvedReferences(Box<ReferenceReport>),
@@ -27,9 +27,9 @@ impl fmt::Display for LoadFailure {
                 report.conclusion, report.findings
             ),
             Self::MissingOperation => f.write_str("operation find is missing"),
-            Self::NoInputContract => f.write_str("operation find declares no input contract"),
-            Self::Preparation(detail) => write!(f, "input contract preparation: {detail:?}"),
-            Self::MissingResources(detail) => write!(f, "input contract resources: {detail:?}"),
+            Self::NoInputSchema => f.write_str("operation find declares no input schema"),
+            Self::Preparation(detail) => write!(f, "input schema preparation: {detail:?}"),
+            Self::MissingResources(detail) => write!(f, "input schema resources: {detail:?}"),
             Self::UnresolvedReferences(report) => {
                 write!(f, "unresolved reference inventory: {report:?}")
             }
@@ -66,11 +66,11 @@ fn candidate(
     {
         return Err(LoadFailure::UnresolvedReferences(Box::new(report)));
     }
-    // Retain the distinct missing-operation, no-contract and no-verdict states.
+    // Retain the distinct missing-operation, no-schema and no-verdict states.
     let operation = proof
         .resolve_operation("find")
         .ok_or(LoadFailure::MissingOperation)?;
-    let contract = operation.input().ok_or(LoadFailure::NoInputContract)?;
+    let contract = operation.input().ok_or(LoadFailure::NoInputSchema)?;
     match contract.prepare_with_control(
         &DefaultEvaluator::new(),
         &resources,

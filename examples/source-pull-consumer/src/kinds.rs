@@ -35,7 +35,7 @@ impl KindDescriptor for KindCatalog {
     type Error = CatalogError;
     type List<'a> = Ready<Result<Vec<KindSummary>, Self::Error>>;
     type Describe<'a> = Ready<Result<KindDescription, Self::Error>>;
-    fn list_kinds(&self, _: CancellationToken) -> Self::List<'_> {
+    fn handle_list_kinds(&self, _: CancellationToken) -> Self::List<'_> {
         ready(Ok(KINDS
             .iter()
             .map(|kind| {
@@ -46,7 +46,7 @@ impl KindDescriptor for KindCatalog {
             })
             .collect()))
     }
-    fn describe_kind(
+    fn handle_describe_kind(
         &self,
         request: DescribeKindRequest,
         _: CancellationToken,
@@ -72,7 +72,7 @@ impl KindDescriptor for KindCatalog {
 impl SourceChecker for KindCatalog {
     type Error = CatalogError;
     type Check<'a> = Ready<Result<CheckedSource, CheckFailure<Self::Error>>>;
-    fn check_source(
+    fn handle_check_source(
         &self,
         request: CheckSourceRequest,
         control: CancellationToken,

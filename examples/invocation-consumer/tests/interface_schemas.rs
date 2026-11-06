@@ -2,7 +2,7 @@ use invocation_consumer::Catalog;
 use openbindings::{ConformantDocument, Document, ExternalSchemas, JsonValue};
 use openbindings_invocation::*;
 use openbindings_json_schema_evaluator::DefaultEvaluator;
-use openbindings_source_pull::{PullClient, PullLimits, PullRequest};
+use openbindings_source_pull::{PullLimits, PullRequest, SourcePullerExt};
 use source_pull_consumer::{Embedded, Fixed};
 use std::{
     future::{Future, Ready},
@@ -30,7 +30,7 @@ async fn fixed() -> ConformantDocument {
         ),
         "fixed",
     );
-    let result = PullClient::new(Fixed)
+    let result = (Fixed)
         .pull_source(request.clone(), CancellationToken::new())
         .await
         .unwrap();
@@ -102,18 +102,22 @@ impl InvocationSupport for Audited {
 impl BindingInvoker for Audited {
     type Invoke<'a> = Pin<Box<dyn Future<Output = Result<(), InvocationError>> + Send + 'a>>;
     type Preflight<'a> = Ready<Result<PreflightOutcome, InvocationError>>;
-    fn invoke<'a>(
+    fn handle_invoke<'a>(
         &'a self,
         r: BindingRequest,
         io: ProviderIo,
         c: CancellationToken,
     ) -> Self::Invoke<'a> {
         self.record(&r);
-        self.catalog.invoke(r, io, c)
+        self.catalog.handle_invoke(r, io, c)
     }
-    fn preflight<'a>(&'a self, r: BindingRequest, c: CancellationToken) -> Self::Preflight<'a> {
+    fn handle_preflight<'a>(
+        &'a self,
+        r: BindingRequest,
+        c: CancellationToken,
+    ) -> Self::Preflight<'a> {
         self.record(&r);
-        self.catalog.preflight(r, c)
+        self.catalog.handle_preflight(r, c)
     }
 }
 #[tokio::test]
@@ -122,7 +126,7 @@ async fn output_mismatch_withholds_provider_value_and_retains_output_evidence() 
         r#"{"openbindings":"0.2.0","operations":{"echo":{"input":{"type":"string"},"output":{"type":"integer"}}},"sources":{"fixed":{"kind":"example.fixed@1"}},"bindings":{"b":{"source":"fixed","operation":"echo","data":{"item":"echo"}}}}"#,
     );
     let p = Arc::new(Catalog::default());
-    let c = OperationClient::new(
+    let c = DefaultOperationInvoker::new(
         p.clone(),
         DefaultEvaluator::new(),
         ExternalSchemas::default(),
@@ -149,7 +153,7 @@ async fn output_mismatch_withholds_provider_value_and_retains_output_evidence() 
 async fn operation_forwards_exact_challenge_and_context_without_implicit_preflight() {
     let d = fixed().await;
     let p = Arc::new(Audited::new(Catalog::requiring_context()));
-    let c = OperationClient::new(
+    let c = DefaultOperationInvoker::new(
         p.clone(),
         DefaultEvaluator::new(),
         ExternalSchemas::default(),
@@ -196,7 +200,7 @@ async fn selection_uses_exact_owned_codes_and_order_without_hidden_ranking() {
         r#"{"openbindings":"0.2.0","operations":{"echo":{"aliases":["say"]}},"sources":{"a":{"kind":"example.fixed@1"},"b":{"kind":"example.fixed@1"},"u":{"kind":"example.other@1"}},"bindings":{"a":{"source":"a","operation":"echo","preference":999,"data":{"item":"echo"}},"b":{"source":"b","operation":"echo","preference":-1,"data":{"item":"echo"}},"u":{"source":"u","operation":"echo","data":{"item":"echo"}}}}"#,
     );
     let p = Arc::new(Audited::new(Catalog::default()));
-    let c = OperationClient::new(
+    let c = DefaultOperationInvoker::new(
         p.clone(),
         DefaultEvaluator::new(),
         ExternalSchemas::default(),
@@ -258,7 +262,7 @@ async fn embedded_kind_pull_adopt_and_binding_echo_keeps_exact_payload() {
         r#"{"openbindings":"0.2.0","operations":{},"sources":{"catalog":{"kind":"example.embedded@1","data":{"items":[{"key":"copy","operation":{"input":true,"output":true},"data":{"item":"copy","opaque":1e99999}}]}}}}"#,
     );
     let request = PullRequest::new(original.clone(), "catalog");
-    let result = PullClient::new(Embedded)
+    let result = (Embedded)
         .pull_source(request.clone(), CancellationToken::new())
         .await
         .unwrap();
@@ -277,7 +281,7 @@ async fn embedded_kind_pull_adopt_and_binding_echo_keeps_exact_payload() {
             .text(),
         "1e99999"
     );
-    let c = BindingClient::new(Catalog::default());
+    let c = Catalog::default();
     let value = j(r#"{"name":"\ud800","n":9007199254740993}"#);
     let (out, end) = exchange(
         c.invoke(
@@ -296,7 +300,7 @@ struct Late;
 impl BindingInvoker for Late {
     type Invoke<'a> = Pin<Box<dyn Future<Output = Result<(), InvocationError>> + 'a>>;
     type Preflight<'a> = std::future::Ready<Result<PreflightOutcome, InvocationError>>;
-    fn invoke<'a>(
+    fn handle_invoke<'a>(
         &'a self,
         _: BindingRequest,
         mut io: ProviderIo,
@@ -312,7 +316,11 @@ impl BindingInvoker for Late {
             )
         })
     }
-    fn preflight<'a>(&'a self, _: BindingRequest, _: CancellationToken) -> Self::Preflight<'a> {
+    fn handle_preflight<'a>(
+        &'a self,
+        _: BindingRequest,
+        _: CancellationToken,
+    ) -> Self::Preflight<'a> {
         std::future::ready(Ok(PreflightOutcome::NoPrediction))
     }
 }
@@ -324,7 +332,7 @@ impl InvocationSupport for Late {
 #[tokio::test]
 async fn output_does_not_become_success_and_late_failure_payload_is_exact() {
     let d = fixed().await;
-    let c = OperationClient::new(Late, DefaultEvaluator::new(), ExternalSchemas::default());
+    let c = DefaultOperationInvoker::new(Late, DefaultEvaluator::new(), ExternalSchemas::default());
     let (out, end) = exchange(
         c.invoke(
             OperationRequest::operation(d, "echo"),
@@ -343,7 +351,7 @@ async fn output_does_not_become_success_and_late_failure_payload_is_exact() {
 async fn cancellation_before_dispatch_has_no_consumption_and_a_fused_terminal() {
     let d = fixed().await;
     let p = Arc::new(Catalog::default());
-    let c = BindingClient::new(p.clone());
+    let c = p.clone();
     let token = CancellationToken::new();
     let call = c
         .invoke(BindingRequest::new(d, "echo.fixed"), token.clone())
@@ -368,7 +376,7 @@ async fn unresolved_input_is_distinct_from_mismatch_and_decisive_branch_can_proc
             r#"{{"openbindings":"0.2.0","operations":{{"echo":{{"input":{schema}}}}},"sources":{{"fixed":{{"kind":"example.fixed@1"}}}},"bindings":{{"b":{{"source":"fixed","operation":"echo","data":{{"item":"echo"}}}}}}}}"#
         ));
         let p = Arc::new(Catalog::default());
-        let c = OperationClient::new(
+        let c = DefaultOperationInvoker::new(
             p.clone(),
             DefaultEvaluator::new(),
             ExternalSchemas::default(),

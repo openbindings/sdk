@@ -22,7 +22,7 @@ Definition-level Rustdoc and JSDoc specify each method's ownership, result and l
 The renderer follows actual exported declarations and inherited SDK members. It
 checks documentation and rejects public signatures that import private Wasm bindings.
 Private compiler graphs, scalar bridge records and lookup indexes are implementation
-mechanisms, not additional public document models. Current role companions are Rust
+mechanisms, not additional public document models. Current interface implementations are Rust
 APIs; the TypeScript facade does not expose their provider protocols.
 
 ## Exact documents and conformance

@@ -1,7 +1,7 @@
 //! Binding invocation and advisory preflight over an explicitly supplied provider.
 use crate::{
     BindingRequest, BoundaryFailure, CancellationToken, ContextChallenge, Invocation,
-    InvocationError, InvocationLimits, LimitError, ProviderIo, channel::Shared,
+    InvocationError, InvocationLimits, ProviderIo, channel::Shared,
 };
 use std::{
     future::{Future, poll_fn},
@@ -32,7 +32,7 @@ pub trait BindingInvoker {
         Self: 'a;
     /// Run the selected binding. CONTEXT_REQUIRED precedes every output and
     /// observable operation effect; ERR_REFUSED precedes operation effects.
-    fn invoke<'a>(
+    fn handle_invoke<'a>(
         &'a self,
         request: BindingRequest,
         io: ProviderIo,
@@ -41,7 +41,7 @@ pub trait BindingInvoker {
     /// Report a prediction without consuming input, emitting output, dispatching
     /// the requested operation or spending its approval. Ordinary errors carry
     /// no prediction; `ERR_REFUSED` predicts refusal of the same input.
-    fn preflight<'a>(
+    fn handle_preflight<'a>(
         &'a self,
         request: BindingRequest,
         control: CancellationToken,
@@ -57,10 +57,10 @@ macro_rules! forward { ($($wrapper:ty),+) => { $(
     impl<P: BindingInvoker + ?Sized> BindingInvoker for $wrapper {
         type Invoke<'a> = P::Invoke<'a> where Self: 'a;
         type Preflight<'a> = P::Preflight<'a> where Self: 'a;
-        fn invoke<'a>(&'a self, request: BindingRequest, io: ProviderIo,
-            control: CancellationToken) -> Self::Invoke<'a> { (**self).invoke(request, io, control) }
-        fn preflight<'a>(&'a self, request: BindingRequest,
-            control: CancellationToken) -> Self::Preflight<'a> { (**self).preflight(request, control) }
+        fn handle_invoke<'a>(&'a self, request: BindingRequest, io: ProviderIo,
+            control: CancellationToken) -> Self::Invoke<'a> { (**self).handle_invoke(request, io, control) }
+        fn handle_preflight<'a>(&'a self, request: BindingRequest,
+            control: CancellationToken) -> Self::Preflight<'a> { (**self).handle_preflight(request, control) }
     }
     impl<P: InvocationSupport + ?Sized> InvocationSupport for $wrapper {
         fn can_invoke(&self, kind: &str) -> bool { (**self).can_invoke(kind) }
@@ -68,73 +68,6 @@ macro_rules! forward { ($($wrapper:ty),+) => { $(
 )+ }; }
 forward!(&P, Box<P>, Arc<P>, std::rc::Rc<P>);
 
-/// Checked binding entry point without a registry, implicit executor or evaluator.
-pub struct BindingClient<P> {
-    provider: P,
-    limits: InvocationLimits,
-}
-impl<P> std::fmt::Debug for BindingClient<P> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("BindingClient").finish_non_exhaustive()
-    }
-}
-impl<P: BindingInvoker> BindingClient<P> {
-    /// Retain an explicit provider, using the default finite handoff policy.
-    pub fn new(provider: P) -> Self {
-        Self {
-            provider,
-            limits: InvocationLimits::default(),
-        }
-    }
-    /// Select finite queue and encoding bounds for subsequent attempts.
-    /// # Errors
-    /// Rejects zero capacities or insufficient terminal encoding space.
-    pub fn with_limits(mut self, limits: InvocationLimits) -> Result<Self, LimitError> {
-        self.limits = limits.validate()?;
-        Ok(self)
-    }
-    /// Admit an owned request and return a lazy attempt driven only by its output.
-    /// # Errors
-    /// A malformed request is a local failure; a missing binding becomes a terminal.
-    pub fn invoke<'a>(
-        &'a self,
-        request: BindingRequest,
-        control: CancellationToken,
-    ) -> Result<
-        Invocation<impl Future<Output = Result<(), InvocationError>> + 'a + use<'a, P>>,
-        BoundaryFailure,
-    > {
-        request.admit()?;
-        let shared = Shared::new(self.limits, [false; 2]);
-        let local = shared.control();
-        let io = ProviderIo::new(shared.clone());
-        let provider = &self.provider;
-        let future = checked(
-            move || {
-                require_binding(&request)?;
-                Ok(provider.invoke(request, io, local.clone()))
-            },
-            control,
-            shared.clone(),
-        );
-        Ok(Invocation::new(shared, future))
-    }
-    /// Admit an advisory request. The resulting future borrows only the provider;
-    /// it owns the request and cancellation and never constructs invocation I/O.
-    /// # Errors
-    /// Returns local admission failure before starting advisory work.
-    pub fn preflight<'a>(
-        &'a self,
-        request: BindingRequest,
-        control: CancellationToken,
-    ) -> Result<
-        impl Future<Output = Result<PreflightOutcome, InvocationError>> + 'a + use<'a, P>,
-        BoundaryFailure,
-    > {
-        request.admit()?;
-        Ok(preflight(&self.provider, self.limits, Ok(request), control))
-    }
-}
 pub(crate) fn require_binding(request: &BindingRequest) -> Result<(), InvocationError> {
     if request.interface.binding(&request.binding).is_some() {
         Ok(())
@@ -156,38 +89,7 @@ pub(crate) fn provider_result(
         })
     })
 }
-/// Keep the GAT projection outside the state machine to preserve conditional Send.
-pub(crate) async fn checked<F: Future<Output = Result<(), InvocationError>>>(
-    start: impl FnOnce() -> Result<F, InvocationError>,
-    external: CancellationToken,
-    shared: Arc<Shared>,
-) -> Result<(), InvocationError> {
-    let local = shared.control();
-    let _relay = invocation_relay(&external, &shared);
-    if local.is_cancelled() {
-        return Err(InvocationError::cancelled());
-    }
-    let mut cancelled = pin!(local.cancelled());
-    let mut job = pin!(start()?);
-    poll_fn(|cx| {
-        if let Some(outcome) = shared.outcome() {
-            return Poll::Ready(outcome);
-        }
-        if cancelled.as_mut().poll(cx).is_ready() {
-            return Poll::Ready(Err(InvocationError::cancelled()));
-        }
-        let result = job.as_mut().poll(cx);
-        if let Some(outcome) = shared.outcome() {
-            Poll::Ready(outcome)
-        } else if local.is_cancelled() {
-            Poll::Ready(Err(InvocationError::cancelled()))
-        } else {
-            result.map(|result| provider_result(result, &shared))
-        }
-    })
-    .await
-}
-pub(crate) fn preflight<'a, P: BindingInvoker>(
+pub(crate) fn preflight<'a, P: BindingInvoker + ?Sized>(
     provider: &'a P,
     limits: InvocationLimits,
     request: Result<BindingRequest, InvocationError>,
@@ -199,7 +101,7 @@ pub(crate) fn preflight<'a, P: BindingInvoker>(
         move || {
             let request = request?;
             require_binding(&request)?;
-            Ok(provider.preflight(request, provider_control))
+            Ok(provider.handle_preflight(request, provider_control))
         },
         limits,
         external,
@@ -291,4 +193,118 @@ pub(crate) fn invocation_relay(
         shared.settle(Err(InvocationError::cancelled()));
     }
     registration
+}
+
+/// Checked binding calls. Import this trait to call a [`BindingInvoker`].
+/// Implementers provide `handle_*` hooks; this blanket implementation owns admission,
+/// cancellation and result checks. Explicit hook calls bypass these checks.
+pub trait BindingInvokerExt: BindingInvoker {
+    /// Admit a request and return a lazy, output-driven invocation.
+    /// # Errors
+    /// Returns local request admission failure before any provider work.
+    fn invoke(
+        &self,
+        request: BindingRequest,
+        control: CancellationToken,
+    ) -> Result<Invocation<impl Future<Output = Result<(), InvocationError>>>, BoundaryFailure>;
+    /// Invoke with caller-selected handoff limits.
+    /// # Errors
+    /// Rejects invalid limits or malformed requests before any provider work.
+    fn invoke_with_limits(
+        &self,
+        request: BindingRequest,
+        control: CancellationToken,
+        limits: InvocationLimits,
+    ) -> Result<Invocation<impl Future<Output = Result<(), InvocationError>>>, BoundaryFailure>;
+    /// Admit an advisory request without constructing invocation I/O.
+    /// # Errors
+    /// Returns local request admission failure before advisory work.
+    fn preflight(
+        &self,
+        request: BindingRequest,
+        control: CancellationToken,
+    ) -> Result<impl Future<Output = Result<PreflightOutcome, InvocationError>>, BoundaryFailure>;
+    /// Preflight with caller-selected error/challenge encoding limits.
+    /// # Errors
+    /// Rejects invalid limits or malformed requests before advisory work.
+    fn preflight_with_limits(
+        &self,
+        request: BindingRequest,
+        control: CancellationToken,
+        limits: InvocationLimits,
+    ) -> Result<impl Future<Output = Result<PreflightOutcome, InvocationError>>, BoundaryFailure>;
+}
+impl<P: BindingInvoker + ?Sized> BindingInvokerExt for P {
+    fn invoke(
+        &self,
+        request: BindingRequest,
+        control: CancellationToken,
+    ) -> Result<Invocation<impl Future<Output = Result<(), InvocationError>>>, BoundaryFailure>
+    {
+        invoke(self, InvocationLimits::default(), request, control)
+    }
+    fn invoke_with_limits(
+        &self,
+        request: BindingRequest,
+        control: CancellationToken,
+        limits: InvocationLimits,
+    ) -> Result<Invocation<impl Future<Output = Result<(), InvocationError>>>, BoundaryFailure>
+    {
+        invoke(self, limits.validate()?, request, control)
+    }
+    fn preflight(
+        &self,
+        request: BindingRequest,
+        control: CancellationToken,
+    ) -> Result<impl Future<Output = Result<PreflightOutcome, InvocationError>>, BoundaryFailure>
+    {
+        preflight_call(self, InvocationLimits::default(), request, control)
+    }
+    fn preflight_with_limits(
+        &self,
+        request: BindingRequest,
+        control: CancellationToken,
+        limits: InvocationLimits,
+    ) -> Result<impl Future<Output = Result<PreflightOutcome, InvocationError>>, BoundaryFailure>
+    {
+        preflight_call(self, limits.validate()?, request, control)
+    }
+}
+
+pub(crate) fn invoke<'a, P: BindingInvoker + ?Sized>(
+    provider: &'a P,
+    limits: InvocationLimits,
+    request: BindingRequest,
+    control: CancellationToken,
+) -> Result<
+    Invocation<impl Future<Output = Result<(), InvocationError>> + 'a + use<'a, P>>,
+    BoundaryFailure,
+> {
+    request.admit()?;
+    let shared = Shared::new(limits, [false; 2]);
+    let local = shared.control();
+    let io = ProviderIo::new(shared.clone());
+    let future = crate::channel::driver::drive(
+        move || {
+            require_binding(&request)?;
+            Ok(provider.handle_invoke(request, io, local.clone()))
+        },
+        control,
+        shared.clone(),
+        provider_result,
+    );
+    Ok(Invocation::from_parts(shared, future))
+}
+
+pub(crate) fn preflight_call<'a, P: BindingInvoker + ?Sized>(
+    provider: &'a P,
+    limits: InvocationLimits,
+    request: BindingRequest,
+    control: CancellationToken,
+) -> Result<
+    impl Future<Output = Result<PreflightOutcome, InvocationError>> + 'a + use<'a, P>,
+    BoundaryFailure,
+> {
+    request.admit()?;
+    Ok(preflight(provider, limits, Ok(request), control))
 }

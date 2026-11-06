@@ -562,7 +562,7 @@ fn generated_annotation_walks_with_dynamic_meta_anchors_preserve_results() {
     }
 }
 
-// Prepare the input contract of a document admitted under `limits`.
+// Prepare the input schema of a document admitted under `limits`.
 fn prepare_admitted(
     text: &str,
     limits: JsonLimits,

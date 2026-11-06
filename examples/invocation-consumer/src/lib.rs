@@ -87,7 +87,7 @@ impl InvocationSupport for Catalog {
 impl BindingInvoker for Catalog {
     type Invoke<'a> = Pin<Box<dyn Future<Output = Result<(), InvocationError>> + Send + 'a>>;
     type Preflight<'a> = Ready<Result<PreflightOutcome, InvocationError>>;
-    fn invoke<'a>(
+    fn handle_invoke<'a>(
         &'a self,
         request: BindingRequest,
         mut io: ProviderIo,
@@ -108,7 +108,7 @@ impl BindingInvoker for Catalog {
             Ok(())
         })
     }
-    fn preflight<'a>(
+    fn handle_preflight<'a>(
         &'a self,
         request: BindingRequest,
         _: CancellationToken,

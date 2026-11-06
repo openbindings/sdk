@@ -98,7 +98,7 @@ fn opaque_output_fields_and_owned_children_keep_exact_values_after_parent_drop()
     );
 }
 #[test]
-fn proposal_authority_is_role_local_and_unknown_metadata_never_gains_edit_power() {
+fn proposal_authority_is_target_local_and_unknown_metadata_never_gains_edit_power() {
     for name in [
         "operation",
         "source",

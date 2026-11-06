@@ -385,7 +385,7 @@ fn repeated_uniqueness_checks_keep_the_same_control_allowance() {
         ExternalSchemas::default(),
     );
     // Different duplicate groups need different exact comparison work. Their
-    // keyed ordering must stay stable for this same prepared contract.
+    // keyed ordering must stay stable for this same prepared schema.
     let value =
         JsonValue::parse(r#"[0,1,2,0,2,3,4,5,6,3,[1,2],[1,2],{"x":[1,2]},{"x":[1,2]}]"#).unwrap();
     for detail in [Detail::Outcome, Detail::Explain] {

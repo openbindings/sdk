@@ -229,7 +229,7 @@ pub enum Proposal {
     /// Only source data may be replaced.
     Source(SourceProposal),
 }
-/// One role-specific existing-entry key, borrowed without normalization.
+/// One entry-specific existing-entry key, borrowed without normalization.
 #[derive(Clone, Copy)]
 pub enum ExistingTarget<'a> {
     /// An existing binding naming the selected source.
@@ -300,7 +300,7 @@ impl ExistingEntry {
         carrier::details(&object)?;
         Ok(Self(object))
     }
-    /// Read the exact role and key this observation addresses.
+    /// Read the exact entry type and key this observation addresses.
     pub fn target(&self) -> ExistingTarget<'_> {
         for (name, role) in [("binding", 0), ("schema", 1), ("source", 2)] {
             if let Some(value) = self.0.value().get(name) {
@@ -326,7 +326,7 @@ impl ExistingEntry {
             .get("change")
             .map(|v| Change::read(v).expect("admitted change"))
     }
-    /// Retain a role-specific proposal without applying it or interpreting schema members as report fields.
+    /// Retain a entry-specific proposal without applying it or interpreting schema members as report fields.
     pub fn proposal(&self) -> Option<Proposal> {
         let value = self.0.value().get("proposal")?.to_owned();
         Some(match self.target() {
@@ -360,7 +360,7 @@ carrier!(
     "The report entry for one newly added binding and its operation."
 );
 impl AddedEntry {
-    /// Admit one added report entry; correspondence with additions is a client check.
+    /// Admit one added report entry; correspondence with additions is a caller check.
     pub fn from_json(value: JsonValue) -> Result<Self, CarrierError> {
         let object = carrier::object(value)?;
         for name in ["binding", "operation"] {
@@ -534,7 +534,7 @@ carrier!(
 );
 impl PullAdditions {
     /// Admit open additions carriers. New-key and core conformance relationships
-    /// require the original document and are checked by the client.
+    /// require the original document and are checked by the caller.
     pub fn from_json(value: JsonValue) -> Result<Self, CarrierError> {
         let object = carrier::object(value)?;
         for name in ["operations", "schemas", "bindings"] {

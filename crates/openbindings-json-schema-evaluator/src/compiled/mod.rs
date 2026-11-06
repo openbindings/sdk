@@ -467,7 +467,7 @@ fn patterns<'a>(
                 no_verdict(
                     NoVerdictReason::LimitExceeded,
                     "pattern-total-byte-limit",
-                    "the forms of the value contract's patterns exceed the admitted total byte limit",
+                    "the forms of the value schema's patterns exceed the admitted total byte limit",
                 ),
             ));
         }
@@ -581,7 +581,7 @@ fn pattern_memory_limit(shortfall: pattern::Shortfall) -> NoVerdict {
             // otherwise the run matchers' bytes are part of why it refuses.
             if matched == 0 || compiled > most {
                 format!(
-                    "this value contract compiles more than {most} regular expressions, as \
+                    "this value schema compiles more than {most} regular expressions, as \
                      many as its {} total_pattern_memory holds at {first} each once their \
                      search caches take a quarter; {RAISE}",
                     bytes(total),
@@ -595,7 +595,7 @@ fn pattern_memory_limit(shortfall: pattern::Shortfall) -> NoVerdict {
                     }
                 };
                 format!(
-                    "this value contract's run matchers hold {}{compiled}, more {}than the {} \
+                    "this value schema's run matchers hold {}{compiled}, more {}than the {} \
                      its {} total_pattern_memory holds for them once search caches take a \
                      quarter; {RAISE}",
                     bytes_up(matched),
@@ -617,27 +617,27 @@ fn pattern_memory_limit(shortfall: pattern::Shortfall) -> NoVerdict {
         } => {
             let holding = match (matched, patterns) {
                 (0, 1) => format!(
-                    "this value contract's one compiled regular expression holds {first} of \
+                    "this value schema's one compiled regular expression holds {first} of \
                      its {} total_pattern_memory and {} for its search cache",
                     bytes(total),
                     bytes(cache),
                 ),
                 (0, _) => format!(
-                    "this value contract's {patterns} compiled regular expressions hold \
+                    "this value schema's {patterns} compiled regular expressions hold \
                      {first} each of its {} total_pattern_memory and {} each for their search \
                      caches",
                     bytes(total),
                     bytes(cache),
                 ),
                 (_, 1) => format!(
-                    "this value contract's run matchers hold {} of its {} total_pattern_memory, \
+                    "this value schema's run matchers hold {} of its {} total_pattern_memory, \
                      and its one compiled regular expression {first} and {} for its search cache",
                     bytes(matched),
                     bytes(total),
                     bytes(cache),
                 ),
                 _ => format!(
-                    "this value contract's run matchers hold {} of its {} total_pattern_memory, \
+                    "this value schema's run matchers hold {} of its {} total_pattern_memory, \
                      and its {patterns} compiled regular expressions {first} each and {} each \
                      for their search caches",
                     bytes(matched),

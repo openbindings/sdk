@@ -31,7 +31,7 @@ Standard draft-07, 2019-09 and 2020-12 external resources and supported custom
 2020-12 vocabulary combinations are implemented. Custom admission validates the
 consumer against the selected meta-schema's actual restrictions and references.
 Required format assertions support all 19 standard attributes; optional format
-assertion remains annotation-only. See [evaluator contracts](schema-evaluators.md)
+assertion remains annotation-only. See [schema evaluation](schema-evaluators.md)
 for the interpretation policies and remaining allocation gate.
 
 `openbindings-context` and `openbindings-invocation` implement the adopted current
@@ -42,7 +42,7 @@ companions and their shared legacy records have been removed. Source pulling
 uses original-document requests and explicit adoption, with separate checked
 report relationships and kind-owned fidelity. External consumers now exercise
 pull/adopt/invoke through source packages, Cargo archives and Node/Wasm. `openbindings-kind-description` now implements exact
-kind descriptions, check disclosures and source-check clients against the same
+kind descriptions, check disclosures and source-checking interfaces against the same
 interface pin. Queries perform no checks, context stays separate from authored
 source data, and transport/admission failures are distinct from kind rejections.
 

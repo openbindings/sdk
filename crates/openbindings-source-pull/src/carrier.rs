@@ -15,7 +15,7 @@ pub enum CarrierError {
     FieldType(&'static str),
     /// A required nonempty string is empty.
     EmptyString(&'static str),
-    /// An existing entry names zero or multiple target roles.
+    /// An existing entry names zero or multiple entry types.
     ExistingTarget,
     /// Status and its accompanying fields contradict each other.
     StatusFields,
@@ -35,7 +35,7 @@ impl fmt::Display for CarrierError {
             Self::FieldType(field) => write!(f, "the carrier field {field} has an invalid value"),
             Self::EmptyString(field) => write!(f, "the carrier field {field} must not be empty"),
             Self::ExistingTarget => {
-                f.write_str("an existing entry must name exactly one target role")
+                f.write_str("an existing entry must name exactly one entry type")
             }
             Self::StatusFields => {
                 f.write_str("the report status contradicts its accompanying fields")
