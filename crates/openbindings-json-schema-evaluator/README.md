@@ -190,7 +190,7 @@ custom meta-schema admission and the structural and cooperative resource limits.
 incomplete. `explain` preserves the same result and reports available bounded
 problems at original source locations. Some semantic failures currently have no
 specific diagnostic evidence and retain `problems_complete = false`. The
-[API reference](../../docs/api-reference.md) describes the 100-problem cap, ordering,
+[API reference](https://github.com/openbindings/sdk/blob/main/docs/api-reference.md) describes the 100-problem cap, ordering,
 and applicator reporting rules. Optional
 detail work never retracts an established result. Oversized origins are omitted
 before copying them, pattern diagnostics do not echo authored regex text, and an
