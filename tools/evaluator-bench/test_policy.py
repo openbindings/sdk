@@ -791,7 +791,7 @@ class FixtureCoverage(unittest.TestCase):
         self.assertGreaterEqual(len(json.loads(rows['explain-many']['value'])), 32)
         for name in ['explain-one', 'explain-many']:
             expected = rows[name]['expected']
-            self.assertEqual(expected['problem_count'], 1)
+            self.assertEqual(expected['problem_count'], 1 if name == 'explain-one' else 64)
             self.assertEqual(expected['first_problem']['code'], 'type')
             self.assertEqual(expected['first_problem']['instance_pointer'], '/0')
             self.assertEqual(expected['first_problem']['schema_location']['pointer'], '/items/type')

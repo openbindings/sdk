@@ -82,15 +82,16 @@ def fixtures():
         location=dict(pointer='/$ref', resource='https://benchmark.invalid/root'),
         message="the value's validity depends on a known undefined schema result"))
     rows['missing-resource']['expected']['detail'] = dict(code='resource-unavailable',
-        location=None,
+        location=dict(pointer='/$ref', resource='https://benchmark.invalid/root'),
         message='the value is not settled without external schema content', reason='resource-unavailable')
     rows['work-stop']['expected']['detail'] = dict(code='evaluation-work-limit', location=None,
         message='semantic analysis exceeded its configured resource allowance', reason='limit-exceeded')
     # The frozen evaluation_depth request has no current SDK counterpart. The
     # finite value now satisfies; the matched comparison excludes this changed
     # policy outcome from equivalent-work timing and memory decisions.
-    rows['source-diagnostics']['expected'].update(problems_complete=False, problems=[dict(
+    rows['source-diagnostics']['expected'].update(problems_complete=True, problems=[dict(
         code='maximum', instance_pointer='',
+        details=dict(bound='9223372036854775807', kind='numeric-bound'),
         message='value fails this schema assertion',
         schema_location=dict(pointer='/maximum', resource='https://benchmark.invalid/root'))])
     # Fixed text includes escaped Unicode so conformant text access does work.
@@ -151,13 +152,14 @@ def fixtures():
         ],
         findings_truncated=False)
     add('explain-one', {'type': 'array', 'items': {'type': 'integer'}}, '["bad"]',
-        'fails', modes=('explain',))['expected'].update(problem_count=1, problems_complete=False,
+        'fails', modes=('explain',))['expected'].update(problem_count=1, problems_complete=True,
         first_problem=dict(code='type', instance_pointer='/0',
+            details=dict(expected=['integer'], kind='type'),
             schema_location=dict(pointer='/items/type', resource='https://benchmark.invalid/root'),
             message='value fails this schema assertion'))
-    # Sixty-four independent violations exercise a broad failing value. The
-    # current evaluator reports its first problem only, never a fabricated list.
+    # Sixty-four independent violations exercise a broad failing value; explain
+    # reports every one of them, up to its limit of 100 problems.
     add('explain-many', {'type': 'array', 'items': {'type': 'integer'}},
         compact(['bad'] * 64), 'fails', modes=('explain',))['expected'].update(
-            rows['explain-one']['expected'])
+            rows['explain-one']['expected'], problem_count=64)
     return rows

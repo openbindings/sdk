@@ -67,8 +67,9 @@ fn explain_checks_reported_count_and_original_problem_locations() {
         let output = run(
             json!({"mode":"explain", "schema":r#"{"type":"array","items":{"type":"integer"}}"#,
             "value":serde_json::to_string(&vec!["bad"; count]).unwrap(), "iterations":2,
-            "expected":{"status":"fails", "problem_count":1, "first_problem":{
-                "code":"type", "instance_pointer":"/0", "schema_location":{
+            "expected":{"status":"fails", "problem_count":count, "first_problem":{
+                "code":"type", "instance_pointer":"/0",
+                "details":{"expected":["integer"], "kind":"type"}, "schema_location":{
                     "pointer":"/items/type", "resource":"https://benchmark.invalid/root"},
                 "message":"value fails this schema assertion"}}}),
         );
