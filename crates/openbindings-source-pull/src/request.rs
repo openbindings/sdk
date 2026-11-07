@@ -13,10 +13,10 @@ pub struct PullRequest {
 impl PullRequest {
     /// Retain an original document and an exact source key. The checked caller
     /// establishes that the source exists before constructing provider work.
-    pub fn new(interface: ConformantDocument, source: impl Into<Arc<str>>) -> Self {
+    pub fn new(interface: ConformantDocument, source: impl Into<String>) -> Self {
         Self {
             interface,
-            source: source.into(),
+            source: Arc::from(source.into()),
             context: None,
         }
     }

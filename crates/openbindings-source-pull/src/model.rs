@@ -44,9 +44,9 @@ macro_rules! finite {
         }
     };
 }
-finite!(ExistingStatus,"The producer's observation of an existing entry.","status",Current=>"current",Stale=>"stale",Unmatched=>"unmatched",Unassessed=>"unassessed");
+finite!(ExistingStatus,"The producer's observation of an existing entry.","existing/status",Current=>"current",Stale=>"stale",Unmatched=>"unmatched",Unassessed=>"unassessed");
 finite!(Change,"The kind's judgment of a stale proposal's effect, not an instruction to apply it.","change",Breaking=>"breaking",Dangerous=>"dangerous",NonBreaking=>"non-breaking");
-finite!(OmittedStatus,"Why a source offering was omitted from this pull.","status",Excluded=>"excluded",Invalid=>"invalid",ImplementationUnsupported=>"implementation-unsupported",Conflict=>"conflict");
+finite!(OmittedStatus,"Why a source offering was omitted from this pull.","omitted/status",Excluded=>"excluded",Invalid=>"invalid",ImplementationUnsupported=>"implementation-unsupported",Conflict=>"conflict");
 
 macro_rules! required_text {
     ($method:ident,$field:literal,$doc:literal) => {
@@ -106,9 +106,11 @@ impl PullLoss {
     /// Admit the open loss carrier without verifying its evidence.
     pub fn from_json(value: JsonValue) -> Result<Self, CarrierError> {
         let object = carrier::object(value)?;
-        carrier::string(carrier::field(&object, "reasonCode")?, "reasonCode", true)?;
-        carrier::string(carrier::field(&object, "message")?, "message", false)?;
-        carrier::details(&object)?;
+        let reason = carrier::labelled(&object, "reasonCode", "lossy/reasonCode")?;
+        carrier::string(reason, "lossy/reasonCode", true)?;
+        let message = carrier::labelled(&object, "message", "lossy/message")?;
+        carrier::string(message, "lossy/message", false)?;
+        carrier::details(&object, "lossy/details")?;
         Ok(Self(object))
     }
     required_text!(reason_code, "reasonCode", "Borrow the exact reason code.");
@@ -131,10 +133,10 @@ impl PullLimitation {
     /// Admit the open limitation carrier; code and message must be nonempty.
     pub fn from_json(value: JsonValue) -> Result<Self, CarrierError> {
         let object = carrier::object(value)?;
-        for name in ["code", "message"] {
-            carrier::string(carrier::field(&object, name)?, name, true)?;
-        }
-        carrier::details(&object)?;
+        carrier::string(carrier::field(&object, "code")?, "code", true)?;
+        let message = carrier::labelled(&object, "message", "limitation/message")?;
+        carrier::string(message, "limitation/message", true)?;
+        carrier::details(&object, "limitation/details")?;
         Ok(Self(object))
     }
     required_text!(code, "code", "Borrow the exact limitation code.");
@@ -306,7 +308,8 @@ impl ExistingEntry {
             }
         }
         let target = target.ok_or(CarrierError::ExistingTarget)?;
-        let status = ExistingStatus::read(carrier::field(&object, "status")?)?;
+        let status =
+            ExistingStatus::read(carrier::labelled(&object, "status", "existing/status")?)?;
         match status {
             ExistingStatus::Current => {
                 if carrier::forbidden(
@@ -318,8 +321,8 @@ impl ExistingEntry {
             }
             ExistingStatus::Unmatched | ExistingStatus::Unassessed => {
                 if status == ExistingStatus::Unassessed {
-                    carrier::field(&object, "reasonCode")?;
-                    carrier::field(&object, "message")?;
+                    carrier::labelled(&object, "reasonCode", "existing/reasonCode")?;
+                    carrier::labelled(&object, "message", "existing/message")?;
                 }
                 if carrier::forbidden(&object, &["proposal", "change"]) {
                     return Err(CarrierError::StatusFields);
@@ -345,9 +348,9 @@ impl ExistingEntry {
             return Err(CarrierError::FieldType("references"));
         }
         carrier::labels(&object, "references")?;
-        carrier::optional_string(&object, "reasonCode", true)?;
-        carrier::optional_string(&object, "message", false)?;
-        carrier::details(&object)?;
+        carrier::optional_labelled(&object, "reasonCode", "existing/reasonCode", true)?;
+        carrier::optional_labelled(&object, "message", "existing/message", false)?;
+        carrier::details(&object, "existing/details")?;
         Ok(Self(object))
     }
     labels_accessor!(
@@ -470,25 +473,28 @@ impl OmittedEntry {
     /// may retain one. Details do not become a reusable item address.
     pub fn from_json(value: JsonValue) -> Result<Self, CarrierError> {
         let object = carrier::object(value)?;
-        let status = OmittedStatus::read(carrier::field(&object, "status")?)?;
-        carrier::string(carrier::field(&object, "reasonCode")?, "reasonCode", true)?;
-        carrier::string(carrier::field(&object, "message")?, "message", false)?;
+        let status = OmittedStatus::read(carrier::labelled(&object, "status", "omitted/status")?)?;
+        let reason = carrier::labelled(&object, "reasonCode", "omitted/reasonCode")?;
+        carrier::string(reason, "omitted/reasonCode", true)?;
+        let message = carrier::labelled(&object, "message", "omitted/message")?;
+        carrier::string(message, "omitted/message", false)?;
         if status == OmittedStatus::Excluded {
             carrier::field(&object, "rule")?;
         }
-        for name in ["rule", "item", "existing", "identifier"] {
+        for name in ["rule", "item", "identifier"] {
             carrier::optional_string(&object, name, true)?;
         }
+        carrier::optional_labelled(&object, "existing", "omitted/existing", true)?;
         for name in ["alsoIdentifies", "through"] {
             carrier::labels(&object, name)?;
         }
         if status == OmittedStatus::Conflict {
-            carrier::field(&object, "existing")?;
+            carrier::labelled(&object, "existing", "omitted/existing")?;
             carrier::schema(carrier::field(&object, "offered")?, "offered")?;
         } else if carrier::forbidden(&object, &["offered", "through", "identifier"]) {
             return Err(CarrierError::StatusFields);
         }
-        carrier::details(&object)?;
+        carrier::details(&object, "omitted/details")?;
         Ok(Self(object))
     }
     /// Read the reason category, distinct from a source-check rejection.

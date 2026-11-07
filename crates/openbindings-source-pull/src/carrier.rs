@@ -9,11 +9,12 @@ pub enum CarrierError {
     ExpectedObject,
     /// The carrier repeats a decoded member name.
     DuplicateMember,
-    /// A required published field is absent.
+    /// A required published field is absent. A name several carriers share is
+    /// labelled with its carrier, as `existing/message`.
     MissingField(&'static str),
-    /// A published field has an invalid type or finite value.
+    /// A published field has an invalid type or finite value, labelled the same way.
     FieldType(&'static str),
-    /// A required nonempty string is empty.
+    /// A required nonempty string is empty, labelled the same way.
     EmptyString(&'static str),
     /// An existing entry names zero or multiple entry types.
     ExistingTarget,
@@ -74,10 +75,18 @@ pub(crate) fn field<'a>(
     object: &'a JsonObject,
     name: &'static str,
 ) -> Result<JsonRef<'a>, CarrierError> {
+    labelled(object, name, name)
+}
+// Reports a name several carriers share under its carrier, as `existing/message`.
+pub(crate) fn labelled<'a>(
+    object: &'a JsonObject,
+    name: &'static str,
+    label: &'static str,
+) -> Result<JsonRef<'a>, CarrierError> {
     object
         .value()
         .get(name)
-        .ok_or(CarrierError::MissingField(name))
+        .ok_or(CarrierError::MissingField(label))
 }
 pub(crate) fn string<'a>(
     value: JsonRef<'a>,
@@ -95,8 +104,16 @@ pub(crate) fn optional_string(
     name: &'static str,
     nonempty: bool,
 ) -> Result<(), CarrierError> {
+    optional_labelled(object, name, name, nonempty)
+}
+pub(crate) fn optional_labelled(
+    object: &JsonObject,
+    name: &'static str,
+    label: &'static str,
+    nonempty: bool,
+) -> Result<(), CarrierError> {
     if let Some(value) = object.value().get(name) {
-        string(value, name, nonempty)?;
+        string(value, label, nonempty)?;
     }
     Ok(())
 }
@@ -107,11 +124,11 @@ pub(crate) fn schema(value: JsonRef<'_>, name: &'static str) -> Result<(), Carri
         Err(CarrierError::FieldType(name))
     }
 }
-pub(crate) fn details(object: &JsonObject) -> Result<(), CarrierError> {
+pub(crate) fn details(object: &JsonObject, label: &'static str) -> Result<(), CarrierError> {
     if let Some(value) = object.value().get("details")
         && value.kind() != JsonKind::Object
     {
-        return Err(CarrierError::FieldType("details"));
+        return Err(CarrierError::FieldType(label));
     }
     Ok(())
 }

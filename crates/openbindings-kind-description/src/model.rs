@@ -13,11 +13,12 @@ pub enum CarrierError {
     DuplicateMember,
     /// A closed carrier contains a member it does not define.
     UnexpectedMember,
-    /// A required published field is absent.
+    /// A required published field is absent. A name several carriers share is
+    /// labelled with its carrier, as `check/description`.
     MissingField(&'static str),
-    /// A published field has the wrong JSON type.
+    /// A published field has the wrong JSON type, labelled the same way.
     FieldType(&'static str),
-    /// A required nonempty string is empty.
+    /// A required nonempty string is empty, labelled the same way.
     EmptyString(&'static str),
     /// The operation-key support list repeats a key.
     DuplicateSupport,
@@ -96,6 +97,26 @@ pub(crate) fn string<'a>(
         return Err(CarrierError::EmptyString(name));
     }
     Ok(text)
+}
+// Check, pull and invoke each sit at one place in a kind description, and share
+// their field names, so their errors name that place.
+fn disclosure(
+    value: JsonValue,
+    description: &'static str,
+    executes: &'static str,
+) -> Result<JsonObject, CarrierError> {
+    let object = object(value, None)?;
+    let text = object.value().get("description");
+    string(
+        text.ok_or(CarrierError::MissingField(description))?,
+        description,
+        true,
+    )?;
+    let flag = object.value().get("executes");
+    flag.ok_or(CarrierError::MissingField(executes))?
+        .as_bool()
+        .ok_or(CarrierError::FieldType(executes))?;
+    Ok(object)
 }
 fn optional_string(object: &JsonObject, name: &'static str) -> Result<(), CarrierError> {
     if let Some(value) = object.value().get(name) {
@@ -213,12 +234,7 @@ carrier!(
 impl CheckDescription {
     /// Admit the open check-disclosure carrier; this does not grant permission to execute.
     pub fn from_json(value: JsonValue) -> Result<Self, CarrierError> {
-        let object = object(value, None)?;
-        string(field(&object, "description")?, "description", true)?;
-        field(&object, "executes")?
-            .as_bool()
-            .ok_or(CarrierError::FieldType("executes"))?;
-        Ok(Self(object))
+        disclosure(value, "check/description", "check/executes").map(Self)
     }
     /// Borrow the exact nonempty disclosure.
     pub fn description(&self) -> JsonStringRef<'_> {
@@ -244,12 +260,7 @@ carrier!(
 impl PullDescription {
     /// Admit the open pull-disclosure carrier; this does not grant permission to execute.
     pub fn from_json(value: JsonValue) -> Result<Self, CarrierError> {
-        let object = object(value, None)?;
-        string(field(&object, "description")?, "description", true)?;
-        field(&object, "executes")?
-            .as_bool()
-            .ok_or(CarrierError::FieldType("executes"))?;
-        Ok(Self(object))
+        disclosure(value, "pull/description", "pull/executes").map(Self)
     }
     /// Borrow the exact nonempty disclosure.
     pub fn description(&self) -> JsonStringRef<'_> {
@@ -275,12 +286,7 @@ carrier!(
 impl InvokeDescription {
     /// Admit the open invocation-disclosure carrier; this does not grant permission to execute.
     pub fn from_json(value: JsonValue) -> Result<Self, CarrierError> {
-        let object = object(value, None)?;
-        string(field(&object, "description")?, "description", true)?;
-        field(&object, "executes")?
-            .as_bool()
-            .ok_or(CarrierError::FieldType("executes"))?;
-        Ok(Self(object))
+        disclosure(value, "invoke/description", "invoke/executes").map(Self)
     }
     /// Borrow the exact nonempty disclosure.
     pub fn description(&self) -> JsonStringRef<'_> {

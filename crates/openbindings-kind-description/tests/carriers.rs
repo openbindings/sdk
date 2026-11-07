@@ -268,3 +268,42 @@ fn pull_and_invocation_disclosures_match_exact_operation_claims() {
         }
     }
 }
+
+#[test]
+fn a_field_name_several_carriers_share_says_which_one() {
+    let missing = |field| CarrierError::MissingField(field);
+    let description = |nested: &str| {
+        format!(
+            r#"{{"kind":"example.k@1","supports":["vendor.operation"],"sourceData":true,"bindingData":true{nested}}}"#
+        )
+    };
+    let root = KindDescription::from_json(exact(&description(""))).unwrap_err();
+    let nested = KindDescription::from_json(exact(&description(
+        r#","description":"d","check":{"executes":false}"#,
+    )))
+    .unwrap_err();
+    assert_eq!(root, missing("description"));
+    assert_eq!(nested, missing("check/description"));
+    assert_eq!(nested.to_string(), "the carrier requires check/description");
+    let text = exact(r#"{"executes":false}"#);
+    assert_eq!(
+        PullDescription::from_json(text.clone()).unwrap_err(),
+        missing("pull/description")
+    );
+    assert_eq!(
+        InvokeDescription::from_json(text).unwrap_err(),
+        missing("invoke/description")
+    );
+    assert_eq!(
+        CheckDescription::from_json(exact(r#"{"description":"d"}"#)).unwrap_err(),
+        missing("check/executes")
+    );
+    assert_eq!(
+        CheckDescription::from_json(exact(r#"{"description":"","executes":false}"#)).unwrap_err(),
+        CarrierError::EmptyString("check/description")
+    );
+    assert_eq!(
+        PullDescription::from_json(exact(r#"{"description":"d","executes":1}"#)).unwrap_err(),
+        CarrierError::FieldType("pull/executes")
+    );
+}

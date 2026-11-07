@@ -340,3 +340,75 @@ fn schema_proposal_uses_is_only_retained_unknown_metadata() {
         assert_eq!(proposal.to_json().value().text(), value.text());
     }
 }
+
+#[test]
+fn a_field_name_several_carriers_share_says_which_one() {
+    let missing = |field| CarrierError::MissingField(field);
+    assert_eq!(
+        PullLoss::from_json(json(r#"{"reasonCode":"r"}"#)).unwrap_err(),
+        missing("lossy/message")
+    );
+    assert_eq!(
+        PullLimitation::from_json(json(r#"{"code":"c"}"#)).unwrap_err(),
+        missing("limitation/message")
+    );
+    assert_eq!(
+        ExistingEntry::from_json(json(r#"{"binding":"b"}"#)).unwrap_err(),
+        missing("existing/status")
+    );
+    assert_eq!(
+        ExistingEntry::from_json(json(
+            r#"{"binding":"b","status":"unassessed","reasonCode":"r"}"#
+        ))
+        .unwrap_err(),
+        missing("existing/message")
+    );
+    assert_eq!(
+        OmittedEntry::from_json(json(r#"{"status":"invalid","reasonCode":"r"}"#)).unwrap_err(),
+        missing("omitted/message")
+    );
+    assert_eq!(
+        OmittedEntry::from_json(json(r#"{"status":"nope","reasonCode":"r","message":"m"}"#))
+            .unwrap_err(),
+        CarrierError::FieldType("omitted/status")
+    );
+    assert_eq!(
+        OmittedEntry::from_json(json(
+            r#"{"status":"conflict","reasonCode":"r","message":"m","offered":true}"#
+        ))
+        .unwrap_err(),
+        missing("omitted/existing")
+    );
+    assert_eq!(
+        ExistingEntry::from_json(json(r#"{"binding":"b","status":"current","details":1}"#))
+            .unwrap_err(),
+        CarrierError::StatusFields
+    );
+    assert_eq!(
+        ExistingEntry::from_json(json(r#"{"binding":"b","status":"unmatched","details":1}"#))
+            .unwrap_err(),
+        CarrierError::FieldType("existing/details")
+    );
+    // The same message from a whole result, as an adapter's author would see it.
+    let error = PullResult::from_json(json(
+        r#"{"additions":{},"report":{"exhaustive":true,"added":[],"existing":[{"binding":"b","status":"unassessed","reasonCode":"r"}]}}"#,
+    ))
+    .unwrap_err();
+    assert_eq!(error.to_string(), "the carrier requires existing/message");
+}
+
+#[test]
+fn a_pull_request_takes_a_source_key_in_the_usual_string_forms() {
+    let document = openbindings::Document::parse(
+        r#"{"openbindings":"0.2.0","operations":{},"sources":{"s":{"kind":"example@1"}}}"#,
+    )
+    .unwrap()
+    .validate()
+    .unwrap()
+    .conformant()
+    .unwrap();
+    let key = String::from("s");
+    assert_eq!(PullRequest::new(document.clone(), &key).source(), "s");
+    assert_eq!(PullRequest::new(document.clone(), "s").source(), "s");
+    assert_eq!(PullRequest::new(document, key).source(), "s");
+}

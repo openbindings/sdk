@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-11-07 clearer carrier errors (unreleased)
+
+- Carrier errors name the carrier when several share a field name, such as
+  `check/description` and `existing/message`, so the same text no longer covers
+  different places. The error types are unchanged.
+- `PullRequest::new` takes `impl Into<String>`, as the other request constructors
+  do, so a `&String` works.
+
 ## 2026-11-06 binding data needs (unreleased)
 
 - Apply interfaces `3e3dc453a93b611a8e9ea1813ec63a2216830f45`; retain specification
