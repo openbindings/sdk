@@ -1,0 +1,112 @@
+{
+  "status": "Bounded inactive inventory PASS; no compiler activation or aggregate default qualification",
+  "sdk_parent": "5e00eb7e98dcbdf0a696cbbc691b26a3e4e738ee",
+  "spec": "c1419c9fc3ae5a00c2b83da710c11bf67dab7934",
+  "interfaces": "5815fb106bddd2c85ff4e93e0077570b3f6b9e74",
+  "source_hashes": {
+    "inventory.rs": "f51b7889e23a80065651b5a1845945d4f16558f4f3358f026218550a43427ad6",
+    "inventory/arithmetic.rs": "e2aafd25f1ed68efadf5b46d2c7af1e628cfd100fd072ac08662abb90908234f",
+    "inventory/fold.rs": "e9861024aab61a9061ff6c20e9f6e733a2108b6756308992bc5cbbd9d03a5388",
+    "inventory/tests.rs": "2c3a797eab4bfc32df1c00dd8e775afd78ee1dd52d11d41c1e9dbe80bce233fe",
+    "inventory/tests/independent.json": "a974d222e88f8f068b9ec43ab224bb95f1e32c602fccfedc55d91b550f15bba1",
+    "ast.rs": "445f87353c1cb8d7622ca76ffa234e0fe34a955d48c5b1f2c817f0ce09735b8c",
+    "normalized.rs": "94cec09ab3d96bebeee55d8ad8d8a6de39ec5ab1ff98fadb8ce2faf44d55b8ca",
+    "../compiler.rs": "85a3f4a5d0ed26d518d1eb6bd4244a7b15f784cf626a5ffcbb955df6354d1010"
+  },
+  "native": {
+    "independent": {
+      "rows": 18,
+      "identical_current_minimum_results": true,
+      "exit": 0,
+      "compared": 18,
+      "reader_noncomparisons": 0,
+      "mismatches": 0,
+      "undercharges": 0,
+      "retained": 0,
+      "seconds": 0.3242511749267578,
+      "metadata_work_total": 1173151,
+      "maximum_metadata_allocation": 2208
+    },
+    "frozen": {
+      "rows": 1186,
+      "identical_current_minimum_results": true,
+      "exit": 0,
+      "compared": 1142,
+      "reader_noncomparisons": 44,
+      "mismatches": 0,
+      "undercharges": 0,
+      "retained": 0,
+      "seconds": 0.08646798133850098,
+      "metadata_work_total": 21004402,
+      "maximum_metadata_allocation": 46368
+    },
+    "generated-ascii": {
+      "rows": 10065,
+      "identical_current_minimum_results": true,
+      "exit": 0,
+      "compared": 10065,
+      "reader_noncomparisons": 0,
+      "mismatches": 0,
+      "undercharges": 0,
+      "retained": 0,
+      "seconds": 0.9336907863616943,
+      "metadata_work_total": 296555671,
+      "maximum_metadata_allocation": 46368
+    }
+  },
+  "independent_resource_controls_per_toolchain": 181,
+  "current_library": {
+    "passed": 138,
+    "ignored_existing_release_stack_tests": 2
+  },
+  "minimum_inventory_groups_passed": 9,
+  "strict_current_all_target_clippy": "pass",
+  "wasm": [
+    {
+      "host": "node",
+      "version": "v22.23.0",
+      "rows": 11269,
+      "observed": 11225,
+      "expectedOverflows": 19,
+      "successfulSummaries": 11206,
+      "failures": [],
+      "linear_stack_bytes": 131072,
+      "wasm_sha256": "bb3beb16f93083a2cfa422a85389da84b93f7710631a0b68434daeb788becf53",
+      "inputs_sha256": "d30c1326f35810939483404f6a209e914ecec4b65fc917bc9d40edf58db82a5e"
+    },
+    {
+      "host": "chromium",
+      "version": "156.0.8078.4",
+      "rows": 11269,
+      "observed": 11225,
+      "expectedOverflows": 19,
+      "successfulSummaries": 11206,
+      "failures": [],
+      "linear_stack_bytes": 131072,
+      "wasm_sha256": "bb3beb16f93083a2cfa422a85389da84b93f7710631a0b68434daeb788becf53",
+      "inputs_sha256": "d30c1326f35810939483404f6a209e914ecec4b65fc917bc9d40edf58db82a5e"
+    },
+    {
+      "host": "webkit",
+      "version": "27.2",
+      "rows": 11269,
+      "observed": 11225,
+      "expectedOverflows": 19,
+      "successfulSummaries": 11206,
+      "failures": [],
+      "linear_stack_bytes": 131072,
+      "wasm_sha256": "bb3beb16f93083a2cfa422a85389da84b93f7710631a0b68434daeb788becf53",
+      "inputs_sha256": "d30c1326f35810939483404f6a209e914ecec4b65fc917bc9d40edf58db82a5e"
+    }
+  ],
+  "raw_generated_spelling_lane": {
+    "rows": 10065,
+    "guard_refusals": 8253,
+    "separately_admitted_summaries": 1812,
+    "normalization_manifest": "generated-ascii-input-manifest.json"
+  },
+  "frozen1024_metadata_work": 5071872,
+  "provisional_native_phase_subtotal_excluding_reader_guard_plan": 19004670,
+  "frame_native_bytes": 184,
+  "coordinator_receipts": "receipts/2026-11-02-preparation/pattern-hir-inventory"
+}

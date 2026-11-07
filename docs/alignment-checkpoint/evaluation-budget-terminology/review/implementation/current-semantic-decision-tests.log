@@ -1,0 +1,11 @@
+
+running 6 tests
+test semantic::decision::tests::coherent_repetition_and_quantifier_order_match_concrete_completions ... ok
+test semantic::decision::tests::exhausted_or_cancelled_analysis_never_produces_a_formula ... ok
+test semantic::decision::tests::private_effects_remain_independent_of_external_content_but_not_opaque_local_summaries ... ok
+test semantic::decision::tests::trivial_composition_is_not_a_symbolic_work_boundary ... ok
+test semantic::decision::tests::trivial_composition_preserves_shared_attempt_exhaustion ... ok
+test semantic::decision::tests::unknown_content_can_correlate_with_undefined_choices ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 205 filtered out; finished in 0.01s
+

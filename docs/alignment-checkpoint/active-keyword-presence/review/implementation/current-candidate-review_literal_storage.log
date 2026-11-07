@@ -1,0 +1,7 @@
+
+running 2 tests
+test review_literal_storage::large_scalar_literals_decide_with_small_proof_storage ... ok
+test review_literal_storage::long_literal_comparisons_honor_work_cancellation_and_healthy_retries ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 253 filtered out; finished in 1.16s
+

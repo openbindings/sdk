@@ -1,0 +1,102 @@
+{
+  "complete_snapshot_sha256": "16dd310d272aacd97dadf27dd9c7cc6515f58688a475fc3461ecdc7f19580d9f",
+  "qualifying_pairs": [
+    {
+      "edition": "draft2019",
+      "entry": "https://openbindings.invalid/foreign-meta/draft/2019-09/schema",
+      "resource": "https://openbindings.invalid/foreign-meta/draft/2019-09/meta/core",
+      "keyword": "$ref",
+      "constraint": {
+        "format": "uri-reference",
+        "type": "string"
+      },
+      "resolved_constraint": {
+        "format": "uri-reference",
+        "type": "string"
+      },
+      "read_contract": "StringTypeValidator/is_string/json_type; formats disabled",
+      "evaluation_activation_note": "independent of this syntax read accounting"
+    },
+    {
+      "edition": "draft2019",
+      "entry": "https://openbindings.invalid/foreign-meta/draft/2019-09/schema",
+      "resource": "https://openbindings.invalid/foreign-meta/draft/2019-09/meta/core",
+      "keyword": "$recursiveRef",
+      "constraint": {
+        "format": "uri-reference",
+        "type": "string"
+      },
+      "resolved_constraint": {
+        "format": "uri-reference",
+        "type": "string"
+      },
+      "read_contract": "StringTypeValidator/is_string/json_type; formats disabled",
+      "evaluation_activation_note": "independent of this syntax read accounting"
+    },
+    {
+      "edition": "draft2020",
+      "entry": "https://openbindings.invalid/internal-meta/schema",
+      "resource": "https://openbindings.invalid/internal-meta/meta/core",
+      "keyword": "$ref",
+      "constraint": {
+        "$ref": "#/$defs/uriReferenceString"
+      },
+      "resolved_constraint": {
+        "format": "uri-reference",
+        "type": "string"
+      },
+      "read_contract": "StringTypeValidator/is_string/json_type; formats disabled",
+      "evaluation_activation_note": "independent of this syntax read accounting"
+    },
+    {
+      "edition": "draft2020",
+      "entry": "https://openbindings.invalid/internal-meta/schema",
+      "resource": "https://openbindings.invalid/internal-meta/meta/core",
+      "keyword": "$dynamicRef",
+      "constraint": {
+        "$ref": "#/$defs/uriReferenceString"
+      },
+      "resolved_constraint": {
+        "format": "uri-reference",
+        "type": "string"
+      },
+      "read_contract": "StringTypeValidator/is_string/json_type; formats disabled",
+      "evaluation_activation_note": "independent of this syntax read accounting"
+    },
+    {
+      "edition": "draft2020",
+      "entry": "https://openbindings.invalid/internal-meta/schema",
+      "resource": "https://openbindings.invalid/internal-meta/schema",
+      "keyword": "$recursiveRef",
+      "constraint": {
+        "$comment": "\"$recursiveRef\" has been replaced by \"$dynamicRef\".",
+        "$ref": "meta/core#/$defs/uriReferenceString",
+        "deprecated": true
+      },
+      "resolved_constraint": {
+        "format": "uri-reference",
+        "type": "string"
+      },
+      "read_contract": "StringTypeValidator/is_string/json_type; formats disabled",
+      "evaluation_activation_note": "inactive legacy keyword, still constrained by fixed syntax"
+    },
+    {
+      "edition": "draft7",
+      "entry": "https://openbindings.invalid/foreign-meta/draft-07/schema#",
+      "resource": "https://openbindings.invalid/foreign-meta/draft-07/schema#",
+      "keyword": "$ref",
+      "constraint": {
+        "format": "uri-reference",
+        "type": "string"
+      },
+      "resolved_constraint": {
+        "format": "uri-reference",
+        "type": "string"
+      },
+      "read_contract": "draft7 reference-object as_str metadata shortcut",
+      "evaluation_activation_note": "independent of this syntax read accounting"
+    }
+  ],
+  "options": "fixed_schema::options should_validate_formats(false); actual original bytes still passed to validator",
+  "not_a_runtime_change": true
+}

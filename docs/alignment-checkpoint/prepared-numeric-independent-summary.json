@@ -1,0 +1,87 @@
+{
+  "source_files_unchanged": true,
+  "forced_plan_required": {
+    "cases": 1546,
+    "configuration_failures": 0,
+    "preparation_refusals": 0,
+    "judgment_failures": 0
+  },
+  "public_design_and_frozen": {
+    "controls": 62,
+    "observations": 62,
+    "failures": [],
+    "frozen_workloads": [
+      {
+        "explain": {
+          "status": "S"
+        },
+        "id": "frozen/array",
+        "memory": {
+          "allocations_per_op": 3.0,
+          "baseline_live_bytes": 3026929,
+          "ending_live_bytes": 3026929,
+          "incremental_peak_bytes": 556,
+          "peak_live_bytes": 3027485,
+          "requested_bytes_per_op": 780.0
+        },
+        "outcome": {
+          "status": "S"
+        }
+      },
+      {
+        "explain": {
+          "status": "F"
+        },
+        "id": "frozen/late-invalid",
+        "memory": {
+          "allocations_per_op": 4.0,
+          "baseline_live_bytes": 2985922,
+          "ending_live_bytes": 2985955,
+          "incremental_peak_bytes": 589,
+          "peak_live_bytes": 2986511,
+          "requested_bytes_per_op": 813.0
+        },
+        "outcome": {
+          "status": "F"
+        }
+      },
+      {
+        "explain": {
+          "status": "S"
+        },
+        "id": "frozen/large-object",
+        "memory": {
+          "allocations_per_op": 3.0,
+          "baseline_live_bytes": 9655360,
+          "ending_live_bytes": 9655360,
+          "incremental_peak_bytes": 556,
+          "peak_live_bytes": 9655916,
+          "requested_bytes_per_op": 780.0
+        },
+        "outcome": {
+          "status": "S"
+        }
+      }
+    ]
+  },
+  "boundary": {
+    "cases": 35,
+    "observations": 35,
+    "returncode": 0,
+    "failures": [],
+    "cancellation_checkpoints": 62,
+    "input_sha256": "2f9caa32762c91b9d608a1cd62a14202dd4366708b0cce0a2cc8415a3be35d55"
+  },
+  "allocation_comparisons": {
+    "cases": 10,
+    "failures": [],
+    "cached_readings_have_no_extra_clone_allocation": true
+  },
+  "allocation_caps": 56,
+  "exact_allocation_boundaries": 7,
+  "preparation_cancellation_checks": 96,
+  "evaluation_cancellation_checks": 83,
+  "concurrent_calls": 60,
+  "maximum_measured_preparation_peak": 545402,
+  "maximum_measured_preparation_requested": 731576.0
+}

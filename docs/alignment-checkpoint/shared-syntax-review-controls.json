@@ -1,0 +1,132 @@
+[
+  {
+    "id": "SF-01",
+    "status": "covered",
+    "evidence": "Independent actual miss-site instrumentation + public SF-01; helper checked once and both custom restrictions exercised."
+  },
+  {
+    "id": "SF-02",
+    "status": "covered",
+    "evidence": "Public SF-helper-unused and cached_meta_helpers private group."
+  },
+  {
+    "id": "SF-03",
+    "status": "covered",
+    "evidence": "Public SF-helper-content."
+  },
+  {
+    "id": "SF-04",
+    "status": "covered",
+    "evidence": "Public SF-helper-then."
+  },
+  {
+    "id": "SF-05",
+    "status": "covered",
+    "evidence": "Public SF-helper-else."
+  },
+  {
+    "id": "SF-06",
+    "status": "covered",
+    "evidence": "Public SF-helper-rejected and SF-helper-false, each InvalidExternalSchema."
+  },
+  {
+    "id": "SF-07",
+    "status": "covered",
+    "evidence": "Public SF-nested-False/True; private nested custom dependency group."
+  },
+  {
+    "id": "SF-08",
+    "status": "covered",
+    "evidence": "Public SF-cycle requires recursive-meta-obligation; private Checking-cycle control."
+  },
+  {
+    "id": "SF-09",
+    "status": "covered",
+    "evidence": "Corrected identical items:[true] children under common properties; private node_identity_profile group."
+  },
+  {
+    "id": "SF-10",
+    "status": "covered",
+    "evidence": "Independent x/y equal-text nodes; actual fixed-checker counter shows one check per node, not one per text."
+  },
+  {
+    "id": "SF-11",
+    "status": "covered",
+    "evidence": "Independent core-only custom consumer type:17 cannot read/write standard bit; actual custom preparation/value passes."
+  },
+  {
+    "id": "SF-12",
+    "status": "covered",
+    "evidence": "Independent opaque dialect node cannot publish; one bound owned environment/source inspection prevents cross-space calls."
+  },
+  {
+    "id": "SF-13",
+    "status": "covered",
+    "evidence": "Packaged dense numbering private group checks all actual nodes/bit identity."
+  },
+  {
+    "id": "SF-14",
+    "status": "covered",
+    "evidence": "Independent boundary lengths 0,1,W-1,W,W+1,2W,2W+1,1024W+1; exact backing plus production ceil arithmetic inspected."
+  },
+  {
+    "id": "SF-15",
+    "status": "covered",
+    "evidence": "Private usize::MAX multiplication/ignored nested error control; sticky limit."
+  },
+  {
+    "id": "SF-16",
+    "status": "covered",
+    "evidence": "Private exact/one-below shared work/allocation plus allocator backing equality; three cold fixed validators checked separately."
+  },
+  {
+    "id": "SF-17",
+    "status": "covered",
+    "evidence": "Private all miss/publication/hit cancellation; 448 public shared-meta preparation checkpoints; three constructor checkpoints and fresh retry."
+  },
+  {
+    "id": "SF-18",
+    "status": "covered",
+    "evidence": "Independent ignored smaller-child work and allocation exhaustion after construction; hit/miss cannot hide sticky failure."
+  },
+  {
+    "id": "SF-19",
+    "status": "covered",
+    "evidence": "Independent invalid node checked twice; actual checker count two and bit remains absent."
+  },
+  {
+    "id": "SF-20",
+    "status": "covered",
+    "evidence": "Fresh session must recheck same helper; parent local-positive/invalid-child failures plus new successful retry."
+  },
+  {
+    "id": "SF-21",
+    "status": "covered",
+    "evidence": "Private same-URI helper replacement invalidates prior original facts; no cross-preparation table."
+  },
+  {
+    "id": "SF-22",
+    "status": "covered",
+    "evidence": "Two selected metas share helper syntax but remain separate obligations; independent M2 not:{} still rejects."
+  },
+  {
+    "id": "SF-23",
+    "status": "covered",
+    "evidence": "Independent preseeded fact cannot hide schema_resources=0 or resource eligibility conflict; depth/size/traversal ordering inspected unchanged."
+  },
+  {
+    "id": "SF-24",
+    "status": "covered",
+    "evidence": "Independent draft-07 ref-object ignored invalid child succeeds complete syntax while modern sibling traversal rejects after local-positive hit."
+  },
+  {
+    "id": "SF-25",
+    "status": "covered",
+    "evidence": "Requested-allocation fixture table 40B, drop zero; all constructor cancellations drop zero; every warm public preparation owner drop returns baseline. Plan fields inspected for no session/control."
+  },
+  {
+    "id": "SF-26",
+    "status": "covered",
+    "evidence": "Final copied original Plan 1546 + inherited62 + 19 reference + five frozen jobs; 210 read-shape and three cold editions. Parent current/MSRV/hosts recorded separately."
+  }
+]

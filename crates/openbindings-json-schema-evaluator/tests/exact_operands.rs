@@ -1,23 +1,23 @@
 use openbindings::*;
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 
-/// A prepared value contract checked with one detail per call: the cheap check or an explanation.
+/// A prepared schema checked with one detail per call: the cheap check or an explanation.
 struct Checked {
-    contract: PreparedValueContract,
+    contract: PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator>,
     detail: Detail,
 }
 impl Checked {
-    fn validate(&self, value: &JsonValue) -> ValueOutcome {
+    fn evaluate(&self, value: &JsonValue) -> ValueOutcome {
         match self.detail {
-            Detail::Outcome => self.contract.validate(value),
+            Detail::Outcome => self.contract.evaluate(value),
             _ => self.contract.explain(value),
         }
     }
-    fn validate_json(&self, input: &str) -> Result<ValueOutcome, InputError> {
-        Ok(self.validate(&JsonValue::parse(input)?))
+    fn evaluate_json(&self, input: &str) -> Result<ValueOutcome, InputError> {
+        Ok(self.evaluate(&JsonValue::parse(input)?))
     }
 }
-fn prepare(schema: &str, mode: Detail, resources: ResourceSet) -> Checked {
+fn prepare(schema: &str, mode: Detail, resources: ExternalSchemas) -> Checked {
     let document = Document::parse(format!(
         r#"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{schema}}}}}}}"#
     ))
@@ -26,7 +26,11 @@ fn prepare(schema: &str, mode: Detail, resources: ResourceSet) -> Checked {
     let proof = validation.conformant().expect("conformant schema");
     let operation = proof.resolve_operation("op").expect("declared operation");
     let contract = operation.input().expect("declared input");
-    match contract.prepare_with(&DefaultEvaluator::new(), &resources) {
+    match contract.prepare(
+        &DefaultEvaluator::new(),
+        &resources,
+        &openbindings::PreparationLimits::default(),
+    ) {
         Ok(contract) => Checked {
             contract,
             detail: mode,
@@ -100,8 +104,8 @@ fn every_numeric_family_uses_exact_values_in_both_detail_modes() {
     ];
     for mode in [Detail::Outcome, Detail::Explain] {
         for (schema, input, expected) in cases {
-            let contract = prepare(schema, mode, ResourceSet::default());
-            let outcome = contract.validate(&JsonValue::parse(input).unwrap());
+            let contract = prepare(schema, mode, ExternalSchemas::default());
+            let outcome = contract.evaluate(&JsonValue::parse(input).unwrap());
             match &outcome {
                 ValueOutcome::Satisfies => assert!(expected, "{schema}: {input}"),
                 ValueOutcome::Fails {
@@ -110,7 +114,7 @@ fn every_numeric_family_uses_exact_values_in_both_detail_modes() {
                     ..
                 } => {
                     assert!(!expected, "{schema}: {input}");
-                    assert!(!problems_complete);
+                    assert_eq!(*problems_complete, mode == Detail::Explain);
                     if mode == Detail::Outcome {
                         assert!(problems.is_empty());
                     }
@@ -132,9 +136,9 @@ fn exact_bounds_and_choices_fail_at_their_original_keywords() {
     let huge = format!("1e{}", "9".repeat(100_000));
     for bound in ["1e400", "9007199254740993", "-0.00", huge.as_str()] {
         let schema = format!(r#"{{"exclusiveMinimum":{bound}}}"#);
-        let contract = prepare(&schema, Detail::Explain, ResourceSet::default());
+        let contract = prepare(&schema, Detail::Explain, ExternalSchemas::default());
         let ValueOutcome::Fails { problems, .. } =
-            contract.validate(&JsonValue::parse(bound).unwrap())
+            contract.evaluate(&JsonValue::parse(bound).unwrap())
         else {
             panic!()
         };
@@ -147,9 +151,9 @@ fn exact_bounds_and_choices_fail_at_their_original_keywords() {
         );
     }
     let schema = format!(r#"{{"enum":[1e400,{huge},9007199254740993,-0.00]}}"#);
-    let contract = prepare(&schema, Detail::Explain, ResourceSet::default());
+    let contract = prepare(&schema, Detail::Explain, ExternalSchemas::default());
     let ValueOutcome::Fails { problems, .. } =
-        contract.validate(&JsonValue::parse("-1e400").unwrap())
+        contract.evaluate(&JsonValue::parse("-1e400").unwrap())
     else {
         panic!()
     };
@@ -165,21 +169,21 @@ fn substituted_resource_nodes_keep_distinct_original_provenance() {
             ("https://exact.test/root#/%24defs/b", "/$defs/b/maximum"),
             ("https://exact.test/nested", "/$defs/b/maximum"),
         ] {
-            let resources = ResourceSet::new([SchemaResource {
+            let resources = ExternalSchemas::new([ExternalSchema {
                 uri: "https://exact.test/root".into(),
                 document: resource.clone(),
             }])
             .unwrap();
             let contract = prepare(&format!(r#"{{"$ref":"{reference}"}}"#), mode, resources);
             let ValueOutcome::Fails { problems, .. } =
-                contract.validate(&JsonValue::parse("3e400").unwrap())
+                contract.evaluate(&JsonValue::parse("3e400").unwrap())
             else {
                 panic!()
             };
             if mode == Detail::Explain {
                 let location = &problems[0].schema;
                 assert_eq!(
-                    location.resource.as_deref(),
+                    location.source_uri.as_deref(),
                     Some("https://exact.test/root")
                 );
                 assert_eq!(location.pointer, pointer);
@@ -205,16 +209,17 @@ fn compact_exponents_public_equality_and_arithmetic_refusal_remain_separate() {
     }
     for mode in [Detail::Outcome, Detail::Explain] {
         for token in [huge.as_str(), &"7".repeat(4097)] {
-            let contract = prepare(r#"{"multipleOf":3}"#, mode, ResourceSet::default());
+            let contract = prepare(r#"{"multipleOf":3}"#, mode, ExternalSchemas::default());
             let ValueOutcome::NoVerdict { detail } =
-                contract.validate(&JsonValue::parse(token).unwrap())
+                contract.evaluate(&JsonValue::parse(token).unwrap())
             else {
                 panic!()
             };
-            assert_eq!(detail.code, "numeric-arithmetic-limit");
-            let contract = prepare(r#"{"minimum":0}"#, mode, ResourceSet::default());
+            assert_eq!(detail.reason, NoVerdictReason::LimitExceeded);
+            assert_eq!(detail.code, "multiple-of-arithmetic-limit");
+            let contract = prepare(r#"{"minimum":0}"#, mode, ExternalSchemas::default());
             assert!(matches!(
-                contract.validate(&JsonValue::parse(token).unwrap()),
+                contract.evaluate(&JsonValue::parse(token).unwrap()),
                 ValueOutcome::Satisfies
             ));
         }
@@ -256,7 +261,7 @@ fn integer_fast_path_edges_preserve_exact_bounds_and_equality() {
                     let contract = prepare(
                         &format!(r#"{{"{keyword}":{spelling}}}"#),
                         mode,
-                        ResourceSet::default(),
+                        ExternalSchemas::default(),
                     );
                     for (j, input) in tokens.iter().enumerate() {
                         let same = i == j || (i == 5 && j == 6) || (i == 6 && j == 5);
@@ -273,7 +278,7 @@ fn integer_fast_path_edges_preserve_exact_bounds_and_equality() {
                             format!("{input}.0"),
                             format!("{input}e0"),
                         ] {
-                            let outcome = contract.validate_json(&value).unwrap();
+                            let outcome = contract.evaluate_json(&value).unwrap();
                             assert!(
                                 matches!(
                                     outcome,
@@ -307,9 +312,9 @@ fn integer_fast_path_edges_preserve_exact_bounds_and_equality() {
             let contract = prepare(
                 &format!(r#"{{"multipleOf":{divisor}}}"#),
                 mode,
-                ResourceSet::default(),
+                ExternalSchemas::default(),
             );
-            let outcome = contract.validate_json(input).unwrap();
+            let outcome = contract.evaluate_json(input).unwrap();
             assert!(matches!(
                 outcome,
                 ValueOutcome::Satisfies | ValueOutcome::Fails { .. }
@@ -320,7 +325,7 @@ fn integer_fast_path_edges_preserve_exact_bounds_and_equality() {
                 "{divisor}: {input}"
             );
         }
-        let integer = prepare(r#"{"type":"integer"}"#, mode, ResourceSet::default());
+        let integer = prepare(r#"{"type":"integer"}"#, mode, ExternalSchemas::default());
         for token in tokens.into_iter().map(str::to_owned).chain([
             "9".repeat(10_000),
             "-0".into(),
@@ -329,7 +334,7 @@ fn integer_fast_path_edges_preserve_exact_bounds_and_equality() {
         ]) {
             assert!(
                 matches!(
-                    integer.validate_json(&token).unwrap(),
+                    integer.evaluate_json(&token).unwrap(),
                     ValueOutcome::Satisfies
                 ),
                 "{token}"
@@ -337,11 +342,11 @@ fn integer_fast_path_edges_preserve_exact_bounds_and_equality() {
         }
         for token in ["1e-99999", "-0.00000000001", "9223372036854775807.1"] {
             assert!(matches!(
-                integer.validate_json(token).unwrap(),
+                integer.evaluate_json(token).unwrap(),
                 ValueOutcome::Fails { .. }
             ));
         }
-        let unique = prepare(r#"{"uniqueItems":true}"#, mode, ResourceSet::default());
+        let unique = prepare(r#"{"uniqueItems":true}"#, mode, ExternalSchemas::default());
         for (input, expected) in [
             (
                 "[-9223372036854775808,9223372036854775807,9223372036854775808]",
@@ -353,11 +358,59 @@ fn integer_fast_path_edges_preserve_exact_bounds_and_equality() {
         ] {
             assert_eq!(
                 matches!(
-                    unique.validate_json(input).unwrap(),
+                    unique.evaluate_json(input).unwrap(),
                     ValueOutcome::Satisfies
                 ),
                 expected
             );
+        }
+    }
+}
+
+#[test]
+fn repeated_uniqueness_checks_keep_the_same_control_allowance() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    struct Count {
+        seen: AtomicUsize,
+        allowed: usize,
+    }
+    impl WorkControl for Count {
+        fn is_cancelled(&self) -> bool {
+            self.seen.fetch_add(1, Ordering::Relaxed) >= self.allowed
+        }
+    }
+    let checked = prepare(
+        r#"{"uniqueItems":true}"#,
+        Detail::Explain,
+        ExternalSchemas::default(),
+    );
+    // Different duplicate groups need different exact comparison work. Their
+    // keyed ordering must stay stable for this same prepared schema.
+    let value =
+        JsonValue::parse(r#"[0,1,2,0,2,3,4,5,6,3,[1,2],[1,2],{"x":[1,2]},{"x":[1,2]}]"#).unwrap();
+    for detail in [Detail::Outcome, Detail::Explain] {
+        let evaluate = |control: &Count| match detail {
+            Detail::Outcome => checked.contract.evaluate_with_control(&value, control),
+            _ => checked.contract.explain_with_control(&value, control),
+        };
+        let initial = Count {
+            seen: AtomicUsize::new(0),
+            allowed: usize::MAX,
+        };
+        let expected = serde_json::to_value(evaluate(&initial)).unwrap();
+        let total = initial.seen.load(Ordering::Relaxed);
+        for _ in 0..24 {
+            let control = Count {
+                seen: AtomicUsize::new(0),
+                allowed: usize::MAX,
+            };
+            assert_eq!(serde_json::to_value(evaluate(&control)).unwrap(), expected);
+            assert_eq!(control.seen.load(Ordering::Relaxed), total);
+            let exact = Count {
+                seen: AtomicUsize::new(0),
+                allowed: total,
+            };
+            assert_eq!(serde_json::to_value(evaluate(&exact)).unwrap(), expected);
         }
     }
 }

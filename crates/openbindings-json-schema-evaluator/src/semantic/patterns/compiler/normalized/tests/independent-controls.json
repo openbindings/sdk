@@ -1,0 +1,376 @@
+{
+  "scope": "Independent direct normalized scanner controls; no original-pattern verdict oracle and no backend construction approval. Extra fields describe controls, not a required private API.",
+  "cases": [
+    {
+      "id": "empty",
+      "form": "",
+      "accepted": true,
+      "reason": "Every token is in the guarded normalized subset; this does not assert original ECMA syntax."
+    },
+    {
+      "id": "empty-alternatives",
+      "form": "||",
+      "accepted": true,
+      "reason": "Every token is in the guarded normalized subset; this does not assert original ECMA syntax."
+    },
+    {
+      "id": "empty-capture",
+      "form": "()",
+      "accepted": true,
+      "reason": "Every token is in the guarded normalized subset; this does not assert original ECMA syntax."
+    },
+    {
+      "id": "empty-group",
+      "form": "(?:)",
+      "accepted": true,
+      "reason": "Every token is in the guarded normalized subset; this does not assert original ECMA syntax."
+    },
+    {
+      "id": "empty-language",
+      "form": "(?:$a)",
+      "accepted": true,
+      "reason": "Every token is in the guarded normalized subset; this does not assert original ECMA syntax."
+    },
+    {
+      "id": "raw-literals",
+      "form": "aZ09_-/",
+      "accepted": true,
+      "reason": "Every token is in the guarded normalized subset; this does not assert original ECMA syntax."
+    },
+    {
+      "id": "hex-boundaries",
+      "form": "\\x{0}\\x{D7FF}\\x{E000}\\x{10FFFF}",
+      "accepted": true,
+      "reason": "Every token is in the guarded normalized subset; this does not assert original ECMA syntax."
+    },
+    {
+      "id": "boundary",
+      "form": "(?-u:\\b)",
+      "accepted": true,
+      "reason": "Every token is in the guarded normalized subset; this does not assert original ECMA syntax."
+    },
+    {
+      "id": "boundary-nested",
+      "form": "((?-u:\\b))",
+      "accepted": true,
+      "reason": "Every token is in the guarded normalized subset; this does not assert original ECMA syntax."
+    },
+    {
+      "id": "counts",
+      "form": "a{0}b{1,}c{2,3}?d*?e+?f??",
+      "accepted": true,
+      "reason": "Every token is in the guarded normalized subset; this does not assert original ECMA syntax."
+    },
+    {
+      "id": "scalar-class",
+      "form": "[\\x{0}-\\x{D7FF}\\x{E000}-\\x{10FFFF}]",
+      "accepted": true,
+      "reason": "Every token is in the guarded normalized subset; this does not assert original ECMA syntax."
+    },
+    {
+      "id": "adjacent-class",
+      "form": "[ab]",
+      "accepted": true,
+      "reason": "Every token is in the guarded normalized subset; this does not assert original ECMA syntax."
+    },
+    {
+      "id": "range-adjacent",
+      "form": "[a-bc-d]",
+      "accepted": true,
+      "reason": "Every token is in the guarded normalized subset; this does not assert original ECMA syntax."
+    },
+    {
+      "id": "nonordered-alternatives",
+      "form": "z|a",
+      "accepted": true,
+      "reason": "Every token is in the guarded normalized subset; this does not assert original ECMA syntax."
+    },
+    {
+      "id": "escaped-slash-class",
+      "form": "[\\x{2F}]",
+      "accepted": true,
+      "reason": "Every token is in the guarded normalized subset; this does not assert original ECMA syntax."
+    },
+    {
+      "id": "escaped-metacharacters",
+      "form": "\\x{28}\\x{5B}\\x{7C}",
+      "accepted": true,
+      "reason": "Every token is in the guarded normalized subset; this does not assert original ECMA syntax."
+    },
+    {
+      "id": "nested-flags-opaque",
+      "form": "(?:(?-u:\\b)a)(b)",
+      "accepted": true,
+      "reason": "Every token is in the guarded normalized subset; this does not assert original ECMA syntax."
+    },
+    {
+      "id": "long-count",
+      "form": "a{9999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999}",
+      "accepted": true,
+      "reason": "Count overflow is a later backend-representation refusal, not a scanner overflow."
+    },
+    {
+      "id": "repeated-quantifier",
+      "form": "a**",
+      "accepted": true,
+      "reason": "Lexical guard deliberately does not repeat the Reader syntax adjudication."
+    },
+    {
+      "id": "empty-class",
+      "form": "[]",
+      "accepted": false,
+      "reason": "Exclusion required before the bounded dependency parser/translator path."
+    },
+    {
+      "id": "negated",
+      "form": "[^a]",
+      "accepted": false,
+      "reason": "Exclusion required before the bounded dependency parser/translator path."
+    },
+    {
+      "id": "raw-nonascii",
+      "form": "\u00e9",
+      "accepted": false,
+      "reason": "Exclusion required before the bounded dependency parser/translator path."
+    },
+    {
+      "id": "class-nonascii",
+      "form": "[\u00e9]",
+      "accepted": false,
+      "reason": "Exclusion required before the bounded dependency parser/translator path."
+    },
+    {
+      "id": "class-raw-underscore",
+      "form": "[_]",
+      "accepted": false,
+      "reason": "Exclusion required before the bounded dependency parser/translator path."
+    },
+    {
+      "id": "class-raw-slash",
+      "form": "[/]",
+      "accepted": false,
+      "reason": "Exclusion required before the bounded dependency parser/translator path."
+    },
+    {
+      "id": "class-raw-hyphen",
+      "form": "[-]",
+      "accepted": false,
+      "reason": "Exclusion required before the bounded dependency parser/translator path."
+    },
+    {
+      "id": "reversed-range",
+      "form": "[z-a]",
+      "accepted": false,
+      "reason": "Exclusion required before the bounded dependency parser/translator path."
+    },
+    {
+      "id": "duplicate",
+      "form": "[aa]",
+      "accepted": false,
+      "reason": "Exclusion required before the bounded dependency parser/translator path."
+    },
+    {
+      "id": "overlap",
+      "form": "[a-cb-d]",
+      "accepted": false,
+      "reason": "Exclusion required before the bounded dependency parser/translator path."
+    },
+    {
+      "id": "decreasing",
+      "form": "[za]",
+      "accepted": false,
+      "reason": "Exclusion required before the bounded dependency parser/translator path."
+    },
+    {
+      "id": "gap-crossing",
+      "form": "[\\x{D7FF}-\\x{E000}]",
+      "accepted": false,
+      "reason": "Exclusion required before the bounded dependency parser/translator path."
+    },
+    {
+      "id": "high-surrogate",
+      "form": "\\x{D800}",
+      "accepted": false,
+      "reason": "Exclusion required before the bounded dependency parser/translator path."
+    },
+    {
+      "id": "low-surrogate",
+      "form": "\\x{DFFF}",
+      "accepted": false,
+      "reason": "Exclusion required before the bounded dependency parser/translator path."
+    },
+    {
+      "id": "outside-scalar",
+      "form": "\\x{110000}",
+      "accepted": false,
+      "reason": "Exclusion required before the bounded dependency parser/translator path."
+    },
+    {
+      "id": "empty-hex",
+      "form": "\\x{}",
+      "accepted": false,
+      "reason": "Exclusion required before the bounded dependency parser/translator path."
+    },
+    {
+      "id": "bad-hex",
+      "form": "\\x{G}",
+      "accepted": false,
+      "reason": "Exclusion required before the bounded dependency parser/translator path."
+    },
+    {
+      "id": "unclosed-hex",
+      "form": "\\x{41",
+      "accepted": false,
+      "reason": "Exclusion required before the bounded dependency parser/translator path."
+    },
+    {
+      "id": "unclosed-group",
+      "form": "(",
+      "accepted": false,
+      "reason": "Exclusion required before the bounded dependency parser/translator path."
+    },
+    {
+      "id": "extra-close",
+      "form": ")",
+      "accepted": false,
+      "reason": "Exclusion required before the bounded dependency parser/translator path."
+    },
+    {
+      "id": "unclosed-class",
+      "form": "[a",
+      "accepted": false,
+      "reason": "Exclusion required before the bounded dependency parser/translator path."
+    },
+    {
+      "id": "lookahead",
+      "form": "(?=a)",
+      "accepted": false,
+      "reason": "Exclusion required before the bounded dependency parser/translator path."
+    },
+    {
+      "id": "lookbehind",
+      "form": "(?<=a)",
+      "accepted": false,
+      "reason": "Exclusion required before the bounded dependency parser/translator path."
+    },
+    {
+      "id": "capture-name",
+      "form": "(?<n>a)",
+      "accepted": false,
+      "reason": "Exclusion required before the bounded dependency parser/translator path."
+    },
+    {
+      "id": "flag-only",
+      "form": "(?i)",
+      "accepted": false,
+      "reason": "Exclusion required before the bounded dependency parser/translator path."
+    },
+    {
+      "id": "flag-group",
+      "form": "(?i:a)",
+      "accepted": false,
+      "reason": "Exclusion required before the bounded dependency parser/translator path."
+    },
+    {
+      "id": "near-boundary",
+      "form": "(?-u:\\B)",
+      "accepted": false,
+      "reason": "Exclusion required before the bounded dependency parser/translator path."
+    },
+    {
+      "id": "near-boundary-tail",
+      "form": "(?-u:\\ba)",
+      "accepted": false,
+      "reason": "Exclusion required before the bounded dependency parser/translator path."
+    },
+    {
+      "id": "free-boundary",
+      "form": "\\b",
+      "accepted": false,
+      "reason": "Exclusion required before the bounded dependency parser/translator path."
+    },
+    {
+      "id": "property",
+      "form": "\\p{L}",
+      "accepted": false,
+      "reason": "Exclusion required before the bounded dependency parser/translator path."
+    },
+    {
+      "id": "shorthand",
+      "form": "\\d",
+      "accepted": false,
+      "reason": "Exclusion required before the bounded dependency parser/translator path."
+    },
+    {
+      "id": "backref",
+      "form": "\\1",
+      "accepted": false,
+      "reason": "Exclusion required before the bounded dependency parser/translator path."
+    },
+    {
+      "id": "raw-dot",
+      "form": ".",
+      "accepted": false,
+      "reason": "Exclusion required before the bounded dependency parser/translator path."
+    },
+    {
+      "id": "nested-class",
+      "form": "[[a]]",
+      "accepted": false,
+      "reason": "Exclusion required before the bounded dependency parser/translator path."
+    },
+    {
+      "id": "set-intersection",
+      "form": "[a&&b]",
+      "accepted": false,
+      "reason": "Exclusion required before the bounded dependency parser/translator path."
+    },
+    {
+      "id": "unknown-brace",
+      "form": "a{x}",
+      "accepted": false,
+      "reason": "Exclusion required before the bounded dependency parser/translator path."
+    },
+    {
+      "id": "trailing-slash",
+      "form": "\\",
+      "accepted": false,
+      "reason": "Exclusion required before the bounded dependency parser/translator path."
+    },
+    {
+      "id": "depth-exact",
+      "form": "((((((((((((((((((((((((((((((((a))))))))))))))))))))))))))))))))",
+      "accepted": true,
+      "reason": "Groups exactly meet the explicit normalized-depth limit.",
+      "maximum_depth": 32
+    },
+    {
+      "id": "depth-over",
+      "form": "(((((((((((((((((((((((((((((((((a)))))))))))))))))))))))))))))))))",
+      "accepted": false,
+      "reason": "The normalized-depth limit is independent of Reader source nesting.",
+      "maximum_depth": 32
+    },
+    {
+      "id": "boundary-adds-depth",
+      "form": "(((((((((((((((((((((((((((((((((?-u:\\b)))))))))))))))))))))))))))))))))",
+      "accepted": false,
+      "reason": "The fixed boundary group consumes a real backend group frame.",
+      "maximum_depth": 32
+    },
+    {
+      "id": "class-hex-counter-overflow",
+      "form": "[\\x{FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF}]",
+      "accepted": false,
+      "reason": "Hex value cannot silently wrap into the scalar domain."
+    }
+  ],
+  "additional_checks": [
+    "All 1142 unchanged Linear forms from the retained 1186 source-spelling inventory pass.",
+    "Zero allocator requests for success, grammar refusal, depth refusal and SDK static Control refusal.",
+    "Exact prepaid work/one below, initially cancelled, and cancellation within each long decimal/hex/class loop.",
+    "All additions and 8*len+1 overflow refuse stickily, preserving a previously observed failure cause.",
+    "Summary hand checks: (? -u boundary with no space) contributes group=1, assertion=1, flags=2; nested boundary adds one to maximum normalized depth.",
+    "Actual parser/AST guard mutation tests remain a separate next-stage requirement."
+  ]
+}

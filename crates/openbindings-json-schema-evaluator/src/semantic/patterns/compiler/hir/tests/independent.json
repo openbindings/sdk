@@ -1,0 +1,460 @@
+{
+  "status": "independent controls frozen before HIR-stage implementation",
+  "cases": [
+    {
+      "id": "hir-stage/prefix-63",
+      "kind": "profile",
+      "form": "a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?|(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)c?",
+      "maximum_prefix_calls": 63,
+      "maximum_equality_height": 3,
+      "hard_caps": {
+        "prefix_calls": 64,
+        "equality_height": 256
+      },
+      "expect": "admitted-to-translation",
+      "allowances": "explicit generously funded test attempt; not a default-job claim"
+    },
+    {
+      "id": "hir-stage/prefix-64",
+      "kind": "profile",
+      "form": "a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?|(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)c?",
+      "maximum_prefix_calls": 64,
+      "maximum_equality_height": 3,
+      "hard_caps": {
+        "prefix_calls": 64,
+        "equality_height": 256
+      },
+      "expect": "admitted-to-translation",
+      "allowances": "explicit generously funded test attempt; not a default-job claim"
+    },
+    {
+      "id": "hir-stage/prefix-65",
+      "kind": "profile",
+      "form": "a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?|(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)(?:|)c?",
+      "maximum_prefix_calls": 65,
+      "maximum_equality_height": 3,
+      "hard_caps": {
+        "prefix_calls": 64,
+        "equality_height": 256
+      },
+      "expect": "profile-refusal-before-translator",
+      "allowances": "explicit generously funded test attempt; not a default-job claim"
+    },
+    {
+      "id": "hir-stage/equality-255",
+      "kind": "profile",
+      "form": "(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(((((((((((((((((a?)))))))))))))))))b?)c?|a?d?)c?|a?d?)c?|a?d?)c?|a?d?)c?|a?d?)c?|a?d?)c?|a?d?)c?|a?d?)c?|a?d?)c?|a?d?)c?|a?d?)c?|a?d?)c?|a?d?)c?|a?d?",
+      "maximum_prefix_calls": 15,
+      "maximum_equality_height": 255,
+      "hard_caps": {
+        "prefix_calls": 64,
+        "equality_height": 256
+      },
+      "expect": "admitted-to-translation",
+      "allowances": "explicit generously funded test attempt; not a default-job claim"
+    },
+    {
+      "id": "hir-stage/equality-256",
+      "kind": "profile",
+      "form": "(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:((((((((((((((((((a?))))))))))))))))))b?)c?|a?d?)c?|a?d?)c?|a?d?)c?|a?d?)c?|a?d?)c?|a?d?)c?|a?d?)c?|a?d?)c?|a?d?)c?|a?d?)c?|a?d?)c?|a?d?)c?|a?d?)c?|a?d?",
+      "maximum_prefix_calls": 15,
+      "maximum_equality_height": 256,
+      "hard_caps": {
+        "prefix_calls": 64,
+        "equality_height": 256
+      },
+      "expect": "admitted-to-translation",
+      "allowances": "explicit generously funded test attempt; not a default-job claim"
+    },
+    {
+      "id": "hir-stage/equality-257",
+      "kind": "profile",
+      "form": "(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:((((((((((((((((((a?))))))))))))))))))?b?)c?|a?d?)c?|a?d?)c?|a?d?)c?|a?d?)c?|a?d?)c?|a?d?)c?|a?d?)c?|a?d?)c?|a?d?)c?|a?d?)c?|a?d?)c?|a?d?)c?|a?d?)c?|a?d?",
+      "maximum_prefix_calls": 15,
+      "maximum_equality_height": 257,
+      "hard_caps": {
+        "prefix_calls": 64,
+        "equality_height": 256
+      },
+      "expect": "profile-refusal-before-translator",
+      "allowances": "explicit generously funded test attempt; not a default-job claim"
+    },
+    {
+      "id": "hir-stage/depth32-capture-boundary",
+      "kind": "reader-representation",
+      "source": "((((((((((((((((((((((((((((((((\\b))))))))))))))))))))))))))))))))",
+      "authored_depth": 32,
+      "maximum_normalized_group_depth": 33,
+      "expect": "Reader Linear; normalized33 accepts; normalized32 refuses before translator; no authored-cap increase"
+    },
+    {
+      "id": "hir-stage/depth32-noncapture-boundary",
+      "kind": "reader-representation",
+      "source": "(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:\\b))))))))))))))))))))))))))))))))",
+      "authored_depth": 32,
+      "maximum_normalized_group_depth": 33,
+      "expect": "Reader Linear; normalized33 accepts; normalized32 refuses before translator; no authored-cap increase"
+    },
+    {
+      "id": "hir-stage/depth32-capture-empty-class",
+      "kind": "reader-representation",
+      "source": "(((((((((((((((((((((((((((((((([]))))))))))))))))))))))))))))))))",
+      "authored_depth": 32,
+      "maximum_normalized_group_depth": 33,
+      "expect": "Reader Linear; normalized33 accepts; normalized32 refuses before translator; no authored-cap increase"
+    },
+    {
+      "id": "hir-stage/depth32-noncapture-empty-class",
+      "kind": "reader-representation",
+      "source": "(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:[]))))))))))))))))))))))))))))))))",
+      "authored_depth": 32,
+      "maximum_normalized_group_depth": 33,
+      "expect": "Reader Linear; normalized33 accepts; normalized32 refuses before translator; no authored-cap increase"
+    },
+    {
+      "id": "hir-stage/depth32-capture-empty-property",
+      "kind": "reader-representation",
+      "source": "((((((((((((((((((((((((((((((((\\p{Cs}))))))))))))))))))))))))))))))))",
+      "authored_depth": 32,
+      "expect": "Reader Unsupported(PropertyEscape); no AST/HIR stage; earlier capability does not count as translation admission",
+      "adjudication": "The unchanged authored Cs property is valid but the locked backend table produces a shape the current Reader does not consume. Preserve input and earlier refusal; source proof of D+1 uses the supported empty-class and lone-surrogate cases."
+    },
+    {
+      "id": "hir-stage/depth32-noncapture-empty-property",
+      "kind": "reader-representation",
+      "source": "(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:\\p{Cs}))))))))))))))))))))))))))))))))",
+      "authored_depth": 32,
+      "expect": "Reader Unsupported(PropertyEscape); no AST/HIR stage; earlier capability does not count as translation admission",
+      "adjudication": "The unchanged authored Cs property is valid but the locked backend table produces a shape the current Reader does not consume. Preserve input and earlier refusal; source proof of D+1 uses the supported empty-class and lone-surrogate cases."
+    },
+    {
+      "id": "hir-stage/depth32-capture-surrogate-literal",
+      "kind": "reader-representation",
+      "source": "((((((((((((((((((((((((((((((((\\uD800))))))))))))))))))))))))))))))))",
+      "authored_depth": 32,
+      "maximum_normalized_group_depth": 33,
+      "expect": "Reader Linear; normalized33 accepts; normalized32 refuses before translator; no authored-cap increase"
+    },
+    {
+      "id": "hir-stage/depth32-noncapture-surrogate-literal",
+      "kind": "reader-representation",
+      "source": "(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:\\uD800))))))))))))))))))))))))))))))))",
+      "authored_depth": 32,
+      "maximum_normalized_group_depth": 33,
+      "expect": "Reader Linear; normalized33 accepts; normalized32 refuses before translator; no authored-cap increase"
+    },
+    {
+      "id": "hir-stage/depth32-capture-surrogate-class",
+      "kind": "reader-representation",
+      "source": "(((((((((((((((((((((((((((((((([\\uD800]))))))))))))))))))))))))))))))))",
+      "authored_depth": 32,
+      "maximum_normalized_group_depth": 33,
+      "expect": "Reader Linear; normalized33 accepts; normalized32 refuses before translator; no authored-cap increase"
+    },
+    {
+      "id": "hir-stage/depth32-noncapture-surrogate-class",
+      "kind": "reader-representation",
+      "source": "(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:(?:[\\uD800]))))))))))))))))))))))))))))))))",
+      "authored_depth": 32,
+      "maximum_normalized_group_depth": 33,
+      "expect": "Reader Linear; normalized33 accepts; normalized32 refuses before translator; no authored-cap increase"
+    },
+    {
+      "id": "hir-stage/terminal-lookahead-boundary",
+      "kind": "reader-representation",
+      "source": "(?=\\b)",
+      "authored_depth": 1,
+      "maximum_normalized_group_depth": 2,
+      "expect": "Reader Linear; preserve existence-only terminal-lookahead reading"
+    },
+    {
+      "id": "hir-stage/authored33-refusal",
+      "kind": "reader-representation",
+      "source": "(((((((((((((((((((((((((((((((((a)))))))))))))))))))))))))))))))))",
+      "authored_cap": 32,
+      "expect": "Reader depth refusal before dependency parsing or translation"
+    },
+    {
+      "id": "hir-stage/normal-depth-add-overflow",
+      "kind": "arithmetic",
+      "input": "synthetic usize::MAX internal derived-depth arithmetic, outside the public clamped source request",
+      "expect": "checked helper arithmetic refuses; no parser/translator entry; the real source request first clamps to32 and derives33"
+    },
+    {
+      "id": "hir-stage/ascii",
+      "kind": "configuration",
+      "form": "a",
+      "values": [
+        "a",
+        "A",
+        "\u00e9"
+      ],
+      "expected_exists": [
+        true,
+        false,
+        false
+      ],
+      "expect": "UTF8true; capture-free NFA later; immutable HIR independent of form/control lifetime"
+    },
+    {
+      "id": "hir-stage/anchors",
+      "kind": "configuration",
+      "form": "^a$",
+      "values": [
+        "a",
+        "a\n",
+        "\na"
+      ],
+      "expected_exists": [
+        true,
+        false,
+        false
+      ],
+      "expect": "UTF8true; capture-free NFA later; immutable HIR independent of form/control lifetime"
+    },
+    {
+      "id": "hir-stage/word-scope",
+      "kind": "configuration",
+      "form": "(?-u:\\b)[\\x{E9}]",
+      "values": [
+        "\u00e9",
+        "a\u00e9",
+        " \u00e9"
+      ],
+      "expected_exists": [
+        false,
+        true,
+        false
+      ],
+      "expect": "UTF8true; capture-free NFA later; immutable HIR independent of form/control lifetime"
+    },
+    {
+      "id": "hir-stage/astral",
+      "kind": "configuration",
+      "form": "[\\x{10000}-\\x{10FFFF}]",
+      "values": [
+        "a",
+        "\ud83d\ude00",
+        "\udbff\udfff"
+      ],
+      "expected_exists": [
+        false,
+        true,
+        true
+      ],
+      "expect": "UTF8true; capture-free NFA later; immutable HIR independent of form/control lifetime"
+    },
+    {
+      "id": "hir-stage/empty-language",
+      "kind": "configuration",
+      "form": "(?:$a)",
+      "values": [
+        "",
+        "a",
+        "aa"
+      ],
+      "expected_exists": [
+        false,
+        false,
+        false
+      ],
+      "expect": "UTF8true; capture-free NFA later; immutable HIR independent of form/control lifetime"
+    },
+    {
+      "id": "hir-stage/nullable",
+      "kind": "configuration",
+      "form": "(?:|a)*",
+      "values": [
+        "",
+        "aaa",
+        "b"
+      ],
+      "expected_exists": [
+        true,
+        true,
+        true
+      ],
+      "expect": "UTF8true; capture-free NFA later; immutable HIR independent of form/control lifetime"
+    },
+    {
+      "id": "hir-stage/reject-foreign-flags",
+      "kind": "closed-grammar",
+      "form": "(?i:a)",
+      "expect": "normalized grammar refusal before parser/translator; this is not an authored invalid-pattern oracle"
+    },
+    {
+      "id": "hir-stage/reject-unicode-disabled-byte",
+      "kind": "closed-grammar",
+      "form": "(?-u:\\x{FF})",
+      "expect": "normalized grammar refusal before parser/translator; this is not an authored invalid-pattern oracle"
+    },
+    {
+      "id": "hir-stage/reject-unicode-property",
+      "kind": "closed-grammar",
+      "form": "\\p{L}",
+      "expect": "normalized grammar refusal before parser/translator; this is not an authored invalid-pattern oracle"
+    },
+    {
+      "id": "hir-stage/reject-raw-dot",
+      "kind": "closed-grammar",
+      "form": ".",
+      "expect": "normalized grammar refusal before parser/translator; this is not an authored invalid-pattern oracle"
+    },
+    {
+      "id": "hir-stage/reject-raw-word",
+      "kind": "closed-grammar",
+      "form": "\\b",
+      "expect": "normalized grammar refusal before parser/translator; this is not an authored invalid-pattern oracle"
+    },
+    {
+      "id": "hir-stage/reject-nested-class",
+      "kind": "closed-grammar",
+      "form": "[a[b]]",
+      "expect": "normalized grammar refusal before parser/translator; this is not an authored invalid-pattern oracle"
+    },
+    {
+      "id": "hir-stage/exact-work",
+      "kind": "lifecycle",
+      "form": "a0000|b0000",
+      "expect": "successful HIR with exact cumulative recorded work across guard/AST/inventory/admission/HIR/postcheck"
+    },
+    {
+      "id": "hir-stage/one-below-work",
+      "kind": "lifecycle",
+      "form": "a0000|b0000",
+      "expect": "typed sticky work refusal; no late success"
+    },
+    {
+      "id": "hir-stage/exact-allocation",
+      "kind": "lifecycle",
+      "form": "a0000|b0000",
+      "expect": "successful HIR at exact cumulative requested-reservation bound"
+    },
+    {
+      "id": "hir-stage/one-below-allocation",
+      "kind": "lifecycle",
+      "form": "a0000|b0000",
+      "expect": "typed sticky allocation refusal"
+    },
+    {
+      "id": "hir-stage/translation-precharge-work",
+      "kind": "lifecycle",
+      "form": "a0000|b0000",
+      "expect": "counter proves translator entry0 when HIR work reservation fails"
+    },
+    {
+      "id": "hir-stage/translation-precharge-allocation",
+      "kind": "lifecycle",
+      "form": "a0000|b0000",
+      "expect": "counter proves translator entry0 when HIR allocation reservation fails"
+    },
+    {
+      "id": "hir-stage/entry-cancel",
+      "kind": "lifecycle",
+      "form": "a0000|b0000",
+      "expect": "no parser or translator entry"
+    },
+    {
+      "id": "hir-stage/profile-cancel-precedence",
+      "kind": "lifecycle",
+      "form": "a0000|b0000",
+      "expect": "shared cancellation wins if observed at profile-refusal completion"
+    },
+    {
+      "id": "hir-stage/post-translation-cancel",
+      "kind": "lifecycle",
+      "form": "a0000|b0000",
+      "expect": "translator+AST+HIR released; no certificate publication"
+    },
+    {
+      "id": "hir-stage/every-check-cancel-retry",
+      "kind": "lifecycle",
+      "form": "a0000|b0000",
+      "expect": "cancel at each observed checkpoint; exact first cause; clean retry in fresh attempt"
+    },
+    {
+      "id": "hir-stage/nested-attempt",
+      "kind": "lifecycle",
+      "form": "a0000|b0000",
+      "expect": "outer work/allocation charged cumulatively; lower child refusal sticky in outer attempt"
+    },
+    {
+      "id": "hir-stage/prior-cause-overflow",
+      "kind": "lifecycle",
+      "form": "a0000|b0000",
+      "expect": "prior allocation/work/cancel cause survives synthetic profile/schedule overflow"
+    },
+    {
+      "id": "hir-stage/scope-drop",
+      "kind": "lifecycle",
+      "form": "a0000|b0000",
+      "expect": "success retains only HIR/program data; drop source, AST, translator, control; HIR remains usable"
+    },
+    {
+      "id": "hir-stage/concurrent-owners",
+      "kind": "lifecycle",
+      "form": "a0000|b0000",
+      "expect": "independent callers share no mutable translator or construction cache"
+    },
+    {
+      "id": "hir-stage/one-translation",
+      "kind": "lifecycle",
+      "form": "a0000|b0000",
+      "expect": "future retries borrow one HIR; parser and translator entry counts1"
+    },
+    {
+      "id": "hir-stage/no-error-source-copy",
+      "kind": "lifecycle",
+      "form": "a0000|b0000",
+      "expect": "all guarded positive forms avoid every translator.error site; no diagnostic formatting or source retention"
+    },
+    {
+      "id": "hir-stage/reader-hard-larger-request",
+      "kind": "reader-contract",
+      "maximum_source_depth": 64,
+      "source": "(((((((((((((((((((((((((((((((((a)))))))))))))))))))))))))))))))))",
+      "expect": "Reader Depth; clamp before recursive descent",
+      "status": "independent copied-current-source control passed; HIR factory not yet implemented"
+    },
+    {
+      "id": "hir-stage/reader-hard-unbounded-request",
+      "kind": "reader-contract",
+      "maximum_source_depth": "usize::MAX",
+      "source": "(((((((((((((((((((((((((((((((((a)))))))))))))))))))))))))))))))))",
+      "expect": "Reader Depth; request cannot raise supported ceiling",
+      "status": "independent copied-current-source control passed; HIR factory not yet implemented"
+    },
+    {
+      "id": "hir-stage/reader-hard-stricter-request",
+      "kind": "reader-contract",
+      "maximum_source_depth": 31,
+      "source": "((((((((((((((((((((((((((((((((a))))))))))))))))))))))))))))))))",
+      "expect": "Reader Depth; lower caller limit retained",
+      "status": "independent copied-current-source control passed; HIR factory not yet implemented"
+    },
+    {
+      "id": "hir-stage/reader-hard-stricter-boundary",
+      "kind": "reader-contract",
+      "maximum_source_depth": 31,
+      "source": "(((((((((((((((((((((((((((((((\\b)))))))))))))))))))))))))))))))",
+      "expect": "Reader Linear; normalized depth32, checked caller+1",
+      "status": "independent copied-current-source control passed; HIR factory not yet implemented"
+    },
+    {
+      "id": "hir-stage/reader-hard-zero-leaf",
+      "kind": "reader-contract",
+      "maximum_source_depth": 0,
+      "source": "a",
+      "expect": "Reader Linear; no authored group",
+      "status": "independent copied-current-source control passed; HIR factory not yet implemented"
+    },
+    {
+      "id": "hir-stage/reader-hard-zero-group",
+      "kind": "reader-contract",
+      "maximum_source_depth": 0,
+      "source": "()",
+      "expect": "Reader Depth before descending into first group",
+      "status": "independent copied-current-source control passed; HIR factory not yet implemented"
+    }
+  ]
+}

@@ -1,0 +1,214 @@
+[
+  {
+    "id": "hir-stage/prefix-63",
+    "evidence": "independent corpus profile63/64/65 and equality255/256/257, boundary cancellation; actual SDK logical-boundary test"
+  },
+  {
+    "id": "hir-stage/prefix-64",
+    "evidence": "independent corpus profile63/64/65 and equality255/256/257, boundary cancellation; actual SDK logical-boundary test"
+  },
+  {
+    "id": "hir-stage/prefix-65",
+    "evidence": "independent corpus profile63/64/65 and equality255/256/257, boundary cancellation; actual SDK logical-boundary test"
+  },
+  {
+    "id": "hir-stage/equality-255",
+    "evidence": "independent corpus profile63/64/65 and equality255/256/257, boundary cancellation; actual SDK logical-boundary test"
+  },
+  {
+    "id": "hir-stage/equality-256",
+    "evidence": "independent corpus profile63/64/65 and equality255/256/257, boundary cancellation; actual SDK logical-boundary test"
+  },
+  {
+    "id": "hir-stage/equality-257",
+    "evidence": "independent corpus profile63/64/65 and equality255/256/257, boundary cancellation; actual SDK logical-boundary test"
+  },
+  {
+    "id": "hir-stage/depth32-capture-boundary",
+    "evidence": "independent design Reader1191-row recheck and SDK normalized-depth test"
+  },
+  {
+    "id": "hir-stage/depth32-noncapture-boundary",
+    "evidence": "independent design Reader1191-row recheck and SDK normalized-depth test"
+  },
+  {
+    "id": "hir-stage/depth32-capture-empty-class",
+    "evidence": "independent design Reader1191-row recheck and SDK normalized-depth test"
+  },
+  {
+    "id": "hir-stage/depth32-noncapture-empty-class",
+    "evidence": "independent design Reader1191-row recheck and SDK normalized-depth test"
+  },
+  {
+    "id": "hir-stage/depth32-capture-empty-property",
+    "evidence": "independent design Reader1191-row recheck and SDK normalized-depth test"
+  },
+  {
+    "id": "hir-stage/depth32-noncapture-empty-property",
+    "evidence": "independent design Reader1191-row recheck and SDK normalized-depth test"
+  },
+  {
+    "id": "hir-stage/depth32-capture-surrogate-literal",
+    "evidence": "independent design Reader1191-row recheck and SDK normalized-depth test"
+  },
+  {
+    "id": "hir-stage/depth32-noncapture-surrogate-literal",
+    "evidence": "independent design Reader1191-row recheck and SDK normalized-depth test"
+  },
+  {
+    "id": "hir-stage/depth32-capture-surrogate-class",
+    "evidence": "independent design Reader1191-row recheck and SDK normalized-depth test"
+  },
+  {
+    "id": "hir-stage/depth32-noncapture-surrogate-class",
+    "evidence": "independent design Reader1191-row recheck and SDK normalized-depth test"
+  },
+  {
+    "id": "hir-stage/terminal-lookahead-boundary",
+    "evidence": "independent design Reader1191-row recheck and SDK normalized-depth test"
+  },
+  {
+    "id": "hir-stage/authored33-refusal",
+    "evidence": "independent design Reader1191-row recheck and SDK normalized-depth test"
+  },
+  {
+    "id": "hir-stage/normal-depth-add-overflow",
+    "evidence": "checked fixed32.checked_add(1) source audit; public unlimited caller depth is clamped and tested, synthetic overflow is not a real factory input"
+  },
+  {
+    "id": "hir-stage/ascii",
+    "evidence": "independent baseline-HIR corpus plus six configured-program groups/18 answers; SDK configured semantics"
+  },
+  {
+    "id": "hir-stage/anchors",
+    "evidence": "independent baseline-HIR corpus plus six configured-program groups/18 answers; SDK configured semantics"
+  },
+  {
+    "id": "hir-stage/word-scope",
+    "evidence": "independent baseline-HIR corpus plus six configured-program groups/18 answers; SDK configured semantics"
+  },
+  {
+    "id": "hir-stage/astral",
+    "evidence": "independent baseline-HIR corpus plus six configured-program groups/18 answers; SDK configured semantics"
+  },
+  {
+    "id": "hir-stage/empty-language",
+    "evidence": "independent baseline-HIR corpus plus six configured-program groups/18 answers; SDK configured semantics"
+  },
+  {
+    "id": "hir-stage/nullable",
+    "evidence": "independent baseline-HIR corpus plus six configured-program groups/18 answers; SDK configured semantics"
+  },
+  {
+    "id": "hir-stage/reject-foreign-flags",
+    "evidence": "independent grammar refusal rows with translator count0; SDK excluded grammar"
+  },
+  {
+    "id": "hir-stage/reject-unicode-disabled-byte",
+    "evidence": "independent grammar refusal rows with translator count0; SDK excluded grammar"
+  },
+  {
+    "id": "hir-stage/reject-unicode-property",
+    "evidence": "independent grammar refusal rows with translator count0; SDK excluded grammar"
+  },
+  {
+    "id": "hir-stage/reject-raw-dot",
+    "evidence": "independent grammar refusal rows with translator count0; SDK excluded grammar"
+  },
+  {
+    "id": "hir-stage/reject-raw-word",
+    "evidence": "independent grammar refusal rows with translator count0; SDK excluded grammar"
+  },
+  {
+    "id": "hir-stage/reject-nested-class",
+    "evidence": "independent grammar refusal rows with translator count0; SDK excluded grammar"
+  },
+  {
+    "id": "hir-stage/exact-work",
+    "evidence": "independent3217 boundaries +12 translation precharges; actual11 SDK groups; ownership/config/source audit"
+  },
+  {
+    "id": "hir-stage/one-below-work",
+    "evidence": "independent3217 boundaries +12 translation precharges; actual11 SDK groups; ownership/config/source audit"
+  },
+  {
+    "id": "hir-stage/exact-allocation",
+    "evidence": "independent3217 boundaries +12 translation precharges; actual11 SDK groups; ownership/config/source audit"
+  },
+  {
+    "id": "hir-stage/one-below-allocation",
+    "evidence": "independent3217 boundaries +12 translation precharges; actual11 SDK groups; ownership/config/source audit"
+  },
+  {
+    "id": "hir-stage/translation-precharge-work",
+    "evidence": "independent3217 boundaries +12 translation precharges; actual11 SDK groups; ownership/config/source audit"
+  },
+  {
+    "id": "hir-stage/translation-precharge-allocation",
+    "evidence": "independent3217 boundaries +12 translation precharges; actual11 SDK groups; ownership/config/source audit"
+  },
+  {
+    "id": "hir-stage/entry-cancel",
+    "evidence": "independent3217 boundaries +12 translation precharges; actual11 SDK groups; ownership/config/source audit"
+  },
+  {
+    "id": "hir-stage/profile-cancel-precedence",
+    "evidence": "independent3217 boundaries +12 translation precharges; actual11 SDK groups; ownership/config/source audit"
+  },
+  {
+    "id": "hir-stage/post-translation-cancel",
+    "evidence": "independent3217 boundaries +12 translation precharges; actual11 SDK groups; ownership/config/source audit"
+  },
+  {
+    "id": "hir-stage/every-check-cancel-retry",
+    "evidence": "independent3217 boundaries +12 translation precharges; actual11 SDK groups; ownership/config/source audit"
+  },
+  {
+    "id": "hir-stage/nested-attempt",
+    "evidence": "independent3217 boundaries +12 translation precharges; actual11 SDK groups; ownership/config/source audit"
+  },
+  {
+    "id": "hir-stage/prior-cause-overflow",
+    "evidence": "independent3217 boundaries +12 translation precharges; actual11 SDK groups; ownership/config/source audit"
+  },
+  {
+    "id": "hir-stage/scope-drop",
+    "evidence": "independent3217 boundaries +12 translation precharges; actual11 SDK groups; ownership/config/source audit"
+  },
+  {
+    "id": "hir-stage/concurrent-owners",
+    "evidence": "independent3217 boundaries +12 translation precharges; actual11 SDK groups; ownership/config/source audit"
+  },
+  {
+    "id": "hir-stage/one-translation",
+    "evidence": "independent3217 boundaries +12 translation precharges; actual11 SDK groups; ownership/config/source audit"
+  },
+  {
+    "id": "hir-stage/no-error-source-copy",
+    "evidence": "independent3217 boundaries +12 translation precharges; actual11 SDK groups; ownership/config/source audit"
+  },
+  {
+    "id": "hir-stage/reader-hard-larger-request",
+    "evidence": "independent design Reader1191-row recheck and SDK normalized-depth test"
+  },
+  {
+    "id": "hir-stage/reader-hard-unbounded-request",
+    "evidence": "independent design Reader1191-row recheck and SDK normalized-depth test"
+  },
+  {
+    "id": "hir-stage/reader-hard-stricter-request",
+    "evidence": "independent design Reader1191-row recheck and SDK normalized-depth test"
+  },
+  {
+    "id": "hir-stage/reader-hard-stricter-boundary",
+    "evidence": "independent design Reader1191-row recheck and SDK normalized-depth test"
+  },
+  {
+    "id": "hir-stage/reader-hard-zero-leaf",
+    "evidence": "independent design Reader1191-row recheck and SDK normalized-depth test"
+  },
+  {
+    "id": "hir-stage/reader-hard-zero-group",
+    "evidence": "independent design Reader1191-row recheck and SDK normalized-depth test"
+  }
+]

@@ -1,0 +1,12 @@
+[
+  {
+    "path": "crates/openbindings-json-schema-evaluator/src/pattern.rs",
+    "reviewed_formatted_bytes_equal_final": true,
+    "sha256": "086fc21e9697d775b91d5e472e48089f5064c28cb03e94f9c3e5264f66ea03b8"
+  },
+  {
+    "path": "crates/openbindings-json-schema-evaluator/src/semantic/patterns/preparation.rs",
+    "reviewed_formatted_bytes_equal_final": true,
+    "sha256": "544b2d188c1b15f93f765a67051e9119f4c182ceda26531f3c6ead1fa24031ab"
+  }
+]

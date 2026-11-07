@@ -68,7 +68,7 @@ export async function editorPage(browser, url) {
     );
     assert.match(
       corrected,
-      /Document is conformant; the input contract is ready/,
+      /Document is conformant; the input schema is ready/,
     );
     assert.match(corrected, /Selected input satisfies/);
     const active = await owners();
@@ -80,7 +80,9 @@ export async function editorPage(browser, url) {
     assert(!privateFailure.includes("Instance "));
     await page.locator("#schema-details").check();
     const detailed = await readOutput();
-    assert.match(detailed, /inclusive lower bound/);
+    assert.match(detailed, /value fails this schema assertion/);
+    assert.match(detailed, /source document/);
+    assert(!detailed.includes("undefined"));
     assert.match(
       detailed,
       /Instance "\/id"; schema "\/operations\/lookup\/input\/properties\/id\/minimum"/,

@@ -1,0 +1,12 @@
+{
+      "openbindings":"0.2.0","name":"interface","version":"release-label","description":"document",
+      "operations":{
+        "z":{"description":"operation","deprecated":false,"tags":["second","first"],"aliases":["alias"],"input":true,"output":false,
+          "examples":{"sample":{"description":"example","input":9007199254740993,"output":0.29000000000000001,"x-exact":1.00},"null":{"input":null}}},
+        "a":{"examples":{"sample":{"output":"another"}}}
+      },
+      "sources":{"s":{"kind":"example.Kind@1","description":"source","data":null,"x-exact":1e2}},
+      "bindings":{"z":{"operation":"z","source":"s","data":{"wide":9007199254740993},"idempotent":false,"preference":-1.0,"description":"binding","deprecated":true},"a":{"operation":"z","source":"s","preference":9}},
+      "dependencies":{"d":{"operation":"z","kinds":["example.Kind@1","other"],"description":"dependency"}},
+      "schemas":{"z":false,"a":{"type":"string"}},"x-extra":{"n":1.00}
+    }

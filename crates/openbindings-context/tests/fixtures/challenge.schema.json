@@ -1,0 +1,23 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://openbindings.com/interfaces/conformance/context/challenge.schema.json",
+    "title": "Context challenge",
+    "type": "object",
+    "description": "The data of a CONTEXT_REQUIRED error or a preflight result, as the context document defines it: why the attempt could not proceed, in the producer's words, and a JSON Schema of the context object to supply on the next attempt. The schema is ordinary JSON Schema 2020-12: oneOf branches with a title each for alternatives, required for values needed together, writeOnly on secrets, and a property description for where a person obtains a value. It describes the context requested for one attempt, not permission to disclose anything else. Acquisition, trust, storage and retry decisions belong to the caller.",
+    "properties": {
+        "message": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Why the attempt could not proceed, in the producer's words, for a person to read."
+        },
+        "schema": {
+            "type": "object",
+            "description": "A JSON Schema 2020-12 schema, in object form, of the context object to supply on the next attempt. The context document defines the conventions it uses and the oauth2 annotation an application may act on."
+        }
+    },
+    "required": [
+        "message",
+        "schema"
+    ],
+    "additionalProperties": false
+}

@@ -1,0 +1,11 @@
+{
+  "lane": "current",
+  "rows": 11305,
+  "success": 11244,
+  "reader": 51,
+  "refusal": 10,
+  "failures": [],
+  "seconds": 1.0054399967193604,
+  "maximum_sdk_reserved": 46368,
+  "maximum_requested": 1957422
+}

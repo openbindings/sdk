@@ -1,0 +1,62 @@
+[
+  {
+    "id": "BC-01",
+    "status": "PASS",
+    "evidence": "Independent terminal matrix over constants, reused Undefined/Inability and complemented formulas; exact result/storage/cache/work state; existing Boolean truth-table suite."
+  },
+  {
+    "id": "BC-02",
+    "status": "PASS",
+    "evidence": "Zero ordinary callback on all terminal branches even with cancelled direct control; nontrivial wrapper versus direct unchanged apply matches results, state, work and callbacks on cold/reused calls."
+  },
+  {
+    "id": "BC-03",
+    "status": "PASS",
+    "evidence": "Actual nested Attempt: healthy exact zero, work/reservation exhaustion, ignored narrower child, arithmetic overflow and cancellation. Explicit distinct work/reservation codes. Permanent gap R-BC1 corrected and closed by static review of the test-only delta."
+  },
+  {
+    "id": "BC-04",
+    "status": "PASS",
+    "evidence": "Instrumented completion-loop iteration stops at widths 1/64; funded width4096, exact/one-below work/storage, no memo/fact publication on error; guarded completion truth table."
+  },
+  {
+    "id": "BC-05",
+    "status": "PASS",
+    "evidence": "Instrumented property-merge loop and exact-name preservation including lone UTF-16 surrogate; all observed iteration stops, exact/one-below; FALSE/TRUE/d/e guard/source/old matrix."
+  },
+  {
+    "id": "BC-06",
+    "status": "PASS",
+    "evidence": "Instrumented item-merge loop, same budget/stop controls and independent guarded truth matrix."
+  },
+  {
+    "id": "BC-07",
+    "status": "PASS",
+    "evidence": "Instrumented uncertain-slot loop; temporary next distribution unpublished on refusal. Existing concrete, repeated and complementary effect count controls pass."
+  },
+  {
+    "id": "BC-08",
+    "status": "PASS (bounded)",
+    "evidence": "Frame controls, custom profiles, recursive support, effect limits and complete public observations pass. No blanket all-engine cancellation-latency claim."
+  },
+  {
+    "id": "BC-09",
+    "status": "PASS",
+    "evidence": "All existing execution input rows retain frozen results both modes, including genuine local-limited eager contexts. Baseline/candidate full observations equal."
+  },
+  {
+    "id": "BC-10",
+    "status": "PASS (bounded)",
+    "evidence": "Exact operand, effect, recursive interruption, foreign-leaf and original Explain controls pass; no semantic/location changes among106 compared public records."
+  },
+  {
+    "id": "BC-11",
+    "status": "PASS",
+    "evidence": "798 recomputed public stops/version; existing recursive every-boundary and Explain cumulative/post-verdict tests pass, including enclosing Attempt. Old callback counts intentionally not required."
+  },
+  {
+    "id": "BC-12",
+    "status": "SEMANTIC SCOPE PASS; PERFORMANCE OPEN",
+    "evidence": "Current/minimum probes pass. Parent owns broader required-value/host lanes and matched performance selection; no G6 or overall-performance acceptance here."
+  }
+]

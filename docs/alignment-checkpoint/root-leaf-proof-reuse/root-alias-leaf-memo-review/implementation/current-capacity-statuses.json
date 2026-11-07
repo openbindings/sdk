@@ -1,0 +1,5 @@
+{
+  "ordinary_large_containers_keep_no_unused_annotation_or_leaf_states": 0,
+  "reference_free_large_composites_stream_with_bounded_frame_storage": 0,
+  "semantic::preparation::queries::tests": 0
+}

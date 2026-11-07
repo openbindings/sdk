@@ -1,6 +1,6 @@
 use openbindings::*;
 
-fn proof(text: &str) -> Conformant<Document> {
+fn proof(text: &str) -> ConformantDocument {
     let validation = validate_document(text).unwrap();
     validation
         .conformant()
@@ -8,9 +8,9 @@ fn proof(text: &str) -> Conformant<Document> {
 }
 
 #[test]
-fn decoded_text_and_exact_tokens_survive_in_retained_conformant_views() {
+fn decoded_text_and_exact_tokens_survive_in_retained_domain_entries() {
     let document = proof(
-        r#"{"openbindings":"0.2.0","name":"\ud800\udc00","version":"\uffff","description":"\ud800\udc00","operations":{"run":{"description":"\ud800\udc00","tags":["\ud800\udc00","𝄞"],"aliases":["go"],"deprecated":false,"input":true,"output":false,"examples":{"e":{"description":"\ud800\udc00","input":null}}}},"sources":{"s":{"kind":"\ud800\udc00","description":"\uffff","content":null}},"bindings":{"b":{"operation":"run","source":"s","description":"\ud800\udc00","preference":0,"idempotent":false,"deprecated":false,"content":null}},"dependencies":{"d":{"operation":"run","kinds":["\uD800\uDC00"],"description":"\ud800\udc00"}},"schemas":{"z":false,"a":{}}}"#,
+        r#"{"openbindings":"0.2.0","name":"\ud800\udc00","version":"\uffff","description":"\ud800\udc00","operations":{"run":{"description":"\ud800\udc00","tags":["\ud800\udc00","𝄞"],"aliases":["go"],"deprecated":false,"input":true,"output":false,"examples":{"e":{"description":"\ud800\udc00","input":null}}}},"sources":{"s":{"kind":"\ud800\udc00","description":"\uffff","data":null}},"bindings":{"b":{"operation":"run","source":"s","description":"\ud800\udc00","preference":0,"idempotent":false,"deprecated":false,"data":null}},"dependencies":{"d":{"operation":"run","kinds":["\uD800\uDC00"],"description":"\ud800\udc00"}},"schemas":{"z":false,"a":{}}}"#,
     );
     assert_eq!(document.openbindings(), "0.2.0");
     let name = document.name().unwrap();
@@ -33,47 +33,71 @@ fn decoded_text_and_exact_tokens_survive_in_retained_conformant_views() {
             .schemas()
             .unwrap()
             .iter()
-            .map(|(key, _)| *key)
+            .map(|(key, _)| key.as_str())
             .collect::<Vec<_>>(),
         ["a", "z"]
     );
-    assert_eq!(document.schema("z").unwrap().as_bool(), Some(false));
+    assert_eq!(
+        document.schema("z").unwrap().json().view().as_bool(),
+        Some(false)
+    );
     let operation = document.resolve_operation("go").unwrap();
     let binding = document.binding("b").unwrap();
     let source = document.source("s").unwrap();
     let dependency = document.dependency("d").unwrap();
     let example = operation.example("e").unwrap();
     assert!(dependency.accepts_kind(source.kind()));
-    assert_eq!(document.as_document().description().unwrap().unwrap(), name);
     assert_eq!(
         document
-            .as_document()
-            .source("s")
+            .document()
+            .value()
+            .get("description")
             .unwrap()
-            .unwrap()
-            .kind()
+            .as_str()
             .unwrap(),
         name
+    );
+    assert_eq!(
+        document
+            .document()
+            .value()
+            .at("/sources/s/kind")
+            .unwrap()
+            .as_str(),
+        Some(name)
     );
     let retained = exact_name.to_owned();
     drop(document);
     assert_eq!(operation.key(), "run");
-    assert_eq!(operation.bindings(), ["b"]);
+    assert_eq!(
+        operation
+            .bindings()
+            .iter()
+            .map(Binding::key)
+            .collect::<Vec<_>>(),
+        ["b"]
+    );
     assert_eq!(operation.aliases().unwrap().collect::<Vec<_>>(), ["go"]);
     assert_eq!(operation.tags().unwrap().collect::<Vec<&str>>(), ["𐀀", "𝄞"]);
     assert_eq!(operation.deprecated(), Some(false));
-    assert_eq!(operation.input().unwrap().schema().as_bool(), Some(true));
-    assert_eq!(operation.output().unwrap().schema().as_bool(), Some(false));
-    assert_eq!(binding.source(), "s");
-    assert_eq!(binding.operation(), "run");
-    assert_eq!(binding.preference().unwrap().get(), 0);
+    assert_eq!(
+        operation.input().unwrap().json().view().as_bool(),
+        Some(true)
+    );
+    assert_eq!(
+        operation.output().unwrap().json().view().as_bool(),
+        Some(false)
+    );
+    assert_eq!(binding.source().key(), "s");
+    assert_eq!(binding.operation().key(), "run");
+    assert_eq!(binding.preference().unwrap(), 0);
     assert_eq!(binding.idempotent(), Some(false));
     assert_eq!(binding.deprecated(), Some(false));
-    for value in [binding.content(), source.content(), example.input()] {
+    for value in [binding.data(), source.data(), example.input()] {
         assert_eq!(value.unwrap().kind(), JsonKind::Null);
     }
     assert!(example.output().is_none());
-    assert_eq!(dependency.operation(), "run");
+    assert_eq!(dependency.operation().key(), "run");
     assert_eq!(
         example.description().unwrap(),
         retained.view().as_str().unwrap()
@@ -85,7 +109,7 @@ fn decoded_text_and_exact_tokens_survive_in_retained_conformant_views() {
 }
 
 #[test]
-fn presence_and_field_local_editor_errors_remain_distinct() {
+fn canonical_presence_and_invalid_draft_fields_remain_distinct() {
     let absent = proof(r#"{"openbindings":"0.2.0","operations":{"run":{}}}"#);
     assert!(absent.name().is_none());
     assert!(absent.version().is_none());
@@ -111,25 +135,35 @@ fn presence_and_field_local_editor_errors_remain_distinct() {
     assert!(empty.sources().unwrap().is_empty());
     assert!(empty.dependencies().unwrap().is_empty());
     let op = empty.resolve_operation("run").unwrap();
-    assert_eq!(op.input().unwrap().schema().kind(), JsonKind::Object);
+    assert_eq!(op.input().unwrap().json().kind(), JsonKind::Object);
     assert_eq!(op.tags().unwrap().len(), 0);
     assert_eq!(op.aliases().unwrap().len(), 0);
     assert!(op.examples().unwrap().is_empty());
     let parsed = Document::parse(r#"{"openbindings":"0.2.0","name":7,"operations":{"run":{"input":null,"description":false}}}"#).unwrap();
+    assert_eq!(parsed.value().get("name").unwrap().number_text(), Some("7"));
     assert_eq!(
         parsed
-            .name()
-            .unwrap_err()
-            .source_location()
+            .value()
+            .get("name")
             .unwrap()
+            .location()
             .pointer
-            .as_ref()
-            .and_then(openbindings::Pointer::as_str),
+            .unwrap()
+            .as_str(),
         Some("/name")
     );
-    let op = parsed.operations().unwrap().remove(0);
-    assert_eq!(op.input().unwrap().kind(), JsonKind::Null);
-    assert!(op.description().is_err());
+    assert_eq!(
+        parsed.value().at("/operations/run/input").unwrap().kind(),
+        JsonKind::Null
+    );
+    assert_eq!(
+        parsed
+            .value()
+            .at("/operations/run/description")
+            .unwrap()
+            .as_bool(),
+        Some(false)
+    );
     assert!(parsed.validate().unwrap().conformant().is_none());
 }
 
@@ -251,10 +285,26 @@ fn conformant_kind_filters_compare_text_independent_of_escape_spelling() {
     let source = doc.source("s").unwrap();
     for key in ["escaped", "literal", "all"] {
         assert!(doc.dependency(key).unwrap().accepts_kind(source.kind()));
-        assert_eq!(doc.dependency_accepts_kind(key, "café𝄞"), Some(true));
+        assert_eq!(
+            doc.dependency(key)
+                .map(|dependency| dependency.accepts_kind("café𝄞")),
+            Some(true)
+        );
     }
     assert!(!doc.dependency("none").unwrap().accepts_kind(source.kind()));
-    assert_eq!(doc.dependency_accepts_kind("none", "café𝄞"), Some(false));
-    assert_eq!(doc.dependency_accepts_kind("escaped", "cafe𝄞"), Some(false));
-    assert_eq!(doc.dependency_accepts_kind("missing", "café𝄞"), None);
+    assert_eq!(
+        doc.dependency("none")
+            .map(|dependency| dependency.accepts_kind("café𝄞")),
+        Some(false)
+    );
+    assert_eq!(
+        doc.dependency("escaped")
+            .map(|dependency| dependency.accepts_kind("cafe𝄞")),
+        Some(false)
+    );
+    assert_eq!(
+        doc.dependency("missing")
+            .map(|dependency| dependency.accepts_kind("café𝄞")),
+        None
+    );
 }

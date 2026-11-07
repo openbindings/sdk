@@ -1,0 +1,87 @@
+   Compiling openbindings-internal-schema v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-internal-schema)
+   Compiling openbindings v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings)
+   Compiling openbindings-json-schema-evaluator v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-json-schema-evaluator)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 5.84s
+     Running unittests src/lib.rs (../target/msrv-1.88/debug/deps/openbindings_json_schema_evaluator-4ba1c035cc530b9c)
+
+running 78 tests
+test semantic::patterns::cache::tests::impossible_vector_layouts_refuse_without_reaching_the_dependency ... ok
+test semantic::patterns::compiler::ast::tests::grammar_depth_and_backend_representation_are_local_refusals ... ok
+test semantic::patterns::compiler::ast::tests::owns_one_complete_tree_after_guard_admission ... ok
+test semantic::patterns::compiler::ast::tests::cancellation_before_and_after_parsing_cannot_publish_ownership ... ok
+test semantic::patterns::compiler::ast::tests::refused_precharges_never_enter_the_parser ... ok
+test semantic::patterns::compiler::ast::tests::exact_shared_allowances_and_one_below ... ok
+test semantic::patterns::cache::tests::prior_reservations_cannot_wrap_into_an_unlimited_cache_budget ... ok
+test semantic::patterns::compiler::hir::tests::configured_semantics_match_independent_values ... ok
+test semantic::patterns::cache::tests::cache_work_and_cancellation_refuse_before_construction ... ok
+test semantic::patterns::compiler::hir::tests::cancellation_and_prior_failure_are_sticky_and_retry_is_fresh ... ok
+test semantic::patterns::compiler::hir::tests::exact_and_one_below_cumulative_reservations ... ok
+test semantic::patterns::compiler::hir::tests::excluded_backend_grammar_never_enters_translator ... ok
+test semantic::patterns::cache::tests::repeated_searches_keep_their_original_cache_and_matching_semantics ... ok
+test semantic::patterns::compiler::hir::tests::cancellation_at_the_profile_refusal_takes_precedence ... ok
+test semantic::patterns::compiler::hir::tests::nested_attempts_share_reservations_and_cannot_hide_a_lower_refusal ... ok
+test semantic::patterns::compiler::hir::tests::independently_fixed_logical_profile_boundaries ... ok
+test semantic::patterns::compiler::hir::tests::shared_pressure_exhaustion_refuses_before_translation ... ok
+test semantic::patterns::compiler::hir::tests::normalized_depth_accounts_for_reader_synthesized_groups ... ok
+test semantic::patterns::compiler::hir::tests::owns_hir_after_source_and_control_drop_and_supports_independent_callers ... ok
+test semantic::patterns::compiler::inventory::tests::arithmetic_refusal_is_local_but_preserves_a_prior_shared_cause ... ok
+test semantic::patterns::compiler::inventory::tests::cancellation_never_publishes_a_partial_certificate ... ok
+test semantic::patterns::compiler::inventory::tests::exact_and_one_below_allowances ... ok
+test semantic::patterns::cache::tests::broad_epsilon_closures_need_more_than_a_state_only_reservation ... ok
+test semantic::patterns::compiler::inventory::tests::lineage_survives_smart_collapses_and_later_nonconcat ... ok
+test semantic::patterns::compiler::inventory::tests::independent_shapes_and_structural_pressure_keep_frozen_meaning ... ok
+test semantic::patterns::compiler::ast::tests::bare_empty_alternations_use_their_actual_linear_node_bound ... ok
+test semantic::patterns::compiler::nfa::admission::tests::an_unreviewed_look_mode_cannot_inherit_the_closed_profile ... ok
+test semantic::patterns::compiler::nfa::admission::tests::capped_arithmetic_preserves_zero_and_never_wraps ... ok
+test semantic::patterns::compiler::nfa::admission::tests::cancellation_during_unicode_and_ancestor_work_never_publishes_scores ... ok
+test semantic::patterns::compiler::inventory::tests::wide_inputs_keep_constant_frame_storage ... ok
+test semantic::patterns::compiler::nfa::admission::tests::unicode_inventory_reuses_one_scratch_owner_and_ascii_allocates_none ... ok
+test semantic::patterns::compiler::nfa::tests::a_local_actual_hir_profile_limit_never_enters_the_backend ... ok
+test semantic::patterns::compiler::nfa::admission::tests::frozen_independent_triplets_and_profile_classification ... ok
+test semantic::patterns::compiler::nfa::tests::failed_builds_spend_shared_admission_and_exhaustion_stops_before_entry ... ok
+test semantic::patterns::compiler::nfa::tests::cancellation_at_each_boundary_prevents_publication_and_retry_is_fresh ... ok
+test semantic::patterns::compiler::nfa::tests::final_representation_check_is_separate_from_approximate_builder_limit ... ok
+test semantic::patterns::compiler::nfa::tests::independent_named_compiler_paths ... ok
+test semantic::patterns::compiler::nfa::tests::prior_shared_failure_wins_over_local_limit_and_cannot_be_hidden ... ok
+test semantic::patterns::compiler::nfa::tests::limits_are_local_and_never_retry_the_backend ... ok
+test semantic::patterns::compiler::normalized::tests::arithmetic_refusal_is_sticky_and_preserves_an_existing_cause ... ok
+test semantic::patterns::compiler::nfa::tests::synthetic_logical_boundaries_do_not_claim_source_or_physical_stack_support ... ok
+test semantic::patterns::compiler::normalized::tests::boundary_group_and_flat_class_summary ... ok
+test semantic::patterns::compiler::nfa::tests::one_forward_capture_free_program_has_independent_search_caches ... ok
+test semantic::patterns::compiler::normalized::tests::cancellation_is_checked_inside_each_long_loop ... ok
+test semantic::patterns::compiler::normalized::tests::exact_shared_work_and_one_below ... ok
+test semantic::patterns::compiler::profile::budget::tests::aggregate_arithmetic_is_checked_and_never_uses_nfa_saturation ... ok
+test semantic::patterns::compiler::normalized::tests::independent_exclusions_and_boundaries ... ok
+test semantic::patterns::compiler::profile::budget::tests::each_aggregate_is_inclusive_and_sticky ... ok
+test semantic::patterns::compiler::profile::budget::tests::earlier_sdk_failure_and_cancellation_precede_a_local_profile_refusal ... ok
+test semantic::patterns::compiler::profile::budget::tests::local_refusals_do_not_debit_or_poison_shared_construction ... ok
+test semantic::patterns::compiler::profile::budget::tests::nested_borrows_share_prior_spending_and_outer_check_catches_ignored_failure ... ok
+test semantic::patterns::compiler::profile::tests::translation_pressure_boundaries_are_inclusive_and_independent ... ok
+test semantic::patterns::compiler::tests::local_failures_and_shared_failures_keep_separate_meaning ... ok
+test semantic::patterns::compiler::tests::joined_factory_owns_one_program_after_source_budget_and_control_drop ... ok
+test semantic::patterns::compiler::tests::cancellation_at_every_factory_boundary_prevents_publication ... ok
+test semantic::patterns::preparation::tests::authored_cache_miss_and_hit_keep_exact_attempt_boundaries ... ok
+test semantic::patterns::preparation::tests::authored_hits_skip_reader_reservations_but_keep_reader_policy ... ok
+test semantic::patterns::preparation::tests::completed_normalized_programs_are_shared_without_rebuilding ... ok
+test semantic::patterns::preparation::tests::hash_collisions_preserve_exact_forms_sharing_and_interrupted_siblings ... ok
+test semantic::patterns::preparation::tests::interrupted_insertions_never_become_reusable_programs ... ok
+test semantic::patterns::preparation::tests::literal_ranges_are_charged_again_for_repeated_shorthand_unions ... ok
+test semantic::patterns::preparation::tests::interrupted_source_alias_preserves_healthy_normalized_owner_and_collision ... ok
+test semantic::patterns::preparation::tests::local_refusals_and_shared_footprint_exhaustion_have_different_owners ... ok
+test semantic::patterns::preparation::tests::reader_refusals_never_publish_partial_normalized_keys ... ok
+test semantic::patterns::preparation::tests::short_unicode_properties_reserve_their_expansion_before_reading ... ok
+test semantic::patterns::compiler::hir::tests::independent_reconstruction_boundary_refuses_before_translation ... ok
+test semantic::patterns::compiler::normalized::tests::unchanged_reader_inventory_stays_inside_the_guard ... ok
+test semantic::patterns::tests::limited_programs_are_terminal_only_when_reached ... ok
+test semantic::patterns::tests::sharing_never_merges_distinct_undefined_effects ... ok
+test semantic::patterns::tests::cancellation_and_concurrent_searches_do_not_poison_shared_programs ... ok
+test semantic::patterns::tests::values_names_and_original_occurrences_share_only_immutable_programs ... ok
+test semantic::patterns::compiler::ast::tests::unchanged_reader_forms_use_the_guarded_stage ... ok
+test semantic::patterns::compiler::ast::tests::shared_node_exhaustion_refuses_before_another_parser_entry ... ok
+test semantic::patterns::compiler::inventory::tests::original_forms_preserve_ast_and_candidate_admission ... ok
+test semantic::patterns::tests::unused_wide_pattern_keeps_its_own_sibling_reason ... ok
+test semantic::patterns::compiler::hir::tests::retained_forms_translate_once_with_matching_hir ... ok
+test semantic::patterns::compiler::ast::tests::structural_boundaries_refuse_before_parser_entry ... ok
+test semantic::patterns::tests::fixed_tiny_program_jobs_prepare_once_under_defaults ... ok
+
+test result: ok. 78 passed; 0 failed; 0 ignored; 0 measured; 104 filtered out; finished in 0.23s

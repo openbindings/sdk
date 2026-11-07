@@ -1,0 +1,91 @@
+{
+  "source_commit": "a3048ab22ddf75879b14b1946620c229b1a37b08",
+  "source_dirty": true,
+  "no_io": {
+    "status": "passed",
+    "records": [
+      {
+        "kind": "http",
+        "mode": "positive",
+        "exit": 0,
+        "hits": [
+          {
+            "kind": "http",
+            "path": "/schema"
+          }
+        ]
+      },
+      {
+        "kind": "http",
+        "mode": "sdk",
+        "exit": 0,
+        "hits": []
+      },
+      {
+        "kind": "file",
+        "mode": "positive",
+        "exit": 0,
+        "hits": [
+          {
+            "kind": "file",
+            "path": "schema.fifo"
+          }
+        ]
+      },
+      {
+        "kind": "file",
+        "mode": "sdk",
+        "exit": 0,
+        "hits": []
+      }
+    ],
+    "reader_errors": []
+  },
+  "reference_preview": {
+    "status": "local preview; not a release candidate",
+    "tree_clean": false,
+    "files": 804,
+    "link_check": {
+      "relativeTargetsChecked": 8531,
+      "scope": "Local HTML anchor target files and URL schemes; no external availability or fragment check"
+    },
+    "source_link_resolutions": [
+      {
+        "page": "rust/openbindings_json_schema_evaluator/index.html",
+        "from": "../../docs/schema-evaluators.md",
+        "to": "https://github.com/openbindings/sdk/blob/a3048ab22ddf75879b14b1946620c229b1a37b08/docs/schema-evaluators.md",
+        "source": "docs/schema-evaluators.md",
+        "count": 2
+      },
+      {
+        "page": "rust/openbindings_json_schema_evaluator/index.html",
+        "from": "examples/first_use.rs",
+        "to": "https://github.com/openbindings/sdk/blob/a3048ab22ddf75879b14b1946620c229b1a37b08/crates/openbindings-json-schema-evaluator/examples/first_use.rs",
+        "source": "crates/openbindings-json-schema-evaluator/examples/first_use.rs",
+        "count": 1
+      },
+      {
+        "page": "rust/openbindings_json_schema_evaluator/index.html",
+        "from": "examples/replacement.rs",
+        "to": "https://github.com/openbindings/sdk/blob/a3048ab22ddf75879b14b1946620c229b1a37b08/crates/openbindings-json-schema-evaluator/examples/replacement.rs",
+        "source": "crates/openbindings-json-schema-evaluator/examples/replacement.rs",
+        "count": 1
+      }
+    ],
+    "manifest_sha256": "f3a67bccfe1cc22d5346118423bf7ee35e45238bed982b21651fdd4af6359cd5"
+  },
+  "reference_tests": 4,
+  "locked_build": "pass",
+  "no_io_strict_lint": "pass",
+  "example_check": "pass",
+  "clean_reference_candidate": {
+    "status": "pass",
+    "commit": "46186957c2a4494405b92d6e1c5efdd8245347ea",
+    "files": 804,
+    "checked_local_links": 8531
+  },
+  "hosted_ci": "pending",
+  "whole_alignment": "open",
+  "independent_review": "pass",
+  "post_review_delta": "Only no-I/O test comment citation corrected from \u00a75.2 to pinned \u00a75.5."
+}

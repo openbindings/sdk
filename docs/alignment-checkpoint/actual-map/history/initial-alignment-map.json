@@ -1,0 +1,1880 @@
+{
+  "format": "openbindings-sdk-alignment-design-v1",
+  "date": "2026-11-02",
+  "status": "proposed code organization; no semantic implementation",
+  "pins": "../../plan/TARGETS.json",
+  "derivation_order": "domain-model.md and architecture.md before baseline-disposition.json",
+  "concepts": [
+    {
+      "id": "document",
+      "classification": "spec",
+      "concept": "OBI document",
+      "authority": [
+        {
+          "file": "spec/openbindings.md",
+          "line": 296,
+          "text_match": "## 5. Document model"
+        }
+      ],
+      "meaning": "One JSON document, independent of acquisition; labels are not identity",
+      "owner": "core.document",
+      "proposed_api": [
+        "Document",
+        "ConformantDocument"
+      ],
+      "required_behavior": "One JSON document, independent of acquisition; labels are not identity",
+      "witnesses": [
+        {
+          "id": "document-positive",
+          "expectation": "Minimal operations map"
+        },
+        {
+          "id": "document-negative",
+          "expectation": "Non-object and missing operations"
+        }
+      ],
+      "disposition": "design-new-from-authority",
+      "implementation_status": "not-implemented",
+      "existing_code": "assigned only after independent model and API design"
+    },
+    {
+      "id": "operation",
+      "classification": "spec",
+      "concept": "Operation",
+      "authority": [
+        {
+          "file": "spec/openbindings.md",
+          "line": 331,
+          "text_match": "### 5.1. Operations"
+        }
+      ],
+      "meaning": "Named capability with optional per-value schemas; not invocation/cardinality",
+      "owner": "core.document",
+      "proposed_api": [
+        "Operation"
+      ],
+      "required_behavior": "Named capability with optional per-value schemas; not invocation/cardinality",
+      "witnesses": [
+        {
+          "id": "operation-positive",
+          "expectation": "Alias resolves to its operation"
+        },
+        {
+          "id": "operation-negative",
+          "expectation": "Alias used as a binding operation key"
+        }
+      ],
+      "disposition": "design-new-from-authority",
+      "implementation_status": "not-implemented",
+      "existing_code": "assigned only after independent model and API design"
+    },
+    {
+      "id": "source",
+      "classification": "spec",
+      "concept": "Source",
+      "authority": [
+        {
+          "file": "spec/openbindings.md",
+          "line": 378,
+          "text_match": "### 5.2. Sources"
+        }
+      ],
+      "meaning": "Named entry has kind and optional opaque data; may be unused",
+      "owner": "core.document",
+      "proposed_api": [
+        "Source"
+      ],
+      "required_behavior": "Named entry has kind and optional opaque data; may be unused",
+      "witnesses": [
+        {
+          "id": "source-positive",
+          "expectation": "Kind-only source and two bindings sharing it"
+        },
+        {
+          "id": "source-negative",
+          "expectation": "Source data interpreted as OBI schemas"
+        }
+      ],
+      "disposition": "design-new-from-authority",
+      "implementation_status": "not-implemented",
+      "existing_code": "assigned only after independent model and API design"
+    },
+    {
+      "id": "binding",
+      "classification": "spec",
+      "concept": "Binding",
+      "authority": [
+        {
+          "file": "spec/openbindings.md",
+          "line": 396,
+          "text_match": "### 5.3. Bindings"
+        }
+      ],
+      "meaning": "Names operation and source keys and makes realization claims",
+      "owner": "core.document",
+      "proposed_api": [
+        "Binding"
+      ],
+      "required_behavior": "Names operation and source keys and makes realization claims",
+      "witnesses": [
+        {
+          "id": "binding-positive",
+          "expectation": "Multiple bindings for one operation"
+        },
+        {
+          "id": "binding-negative",
+          "expectation": "Detached source/binding carrier substitutes for document context"
+        }
+      ],
+      "disposition": "design-new-from-authority",
+      "implementation_status": "not-implemented",
+      "existing_code": "assigned only after independent model and API design"
+    },
+    {
+      "id": "dependency",
+      "classification": "spec",
+      "concept": "Dependency",
+      "authority": [
+        {
+          "file": "spec/openbindings.md",
+          "line": 425,
+          "text_match": "### 5.4. Dependencies"
+        }
+      ],
+      "meaning": "Consumption point with exact any-of kind constraint, not provider selection",
+      "owner": "core.document",
+      "proposed_api": [
+        "Dependency"
+      ],
+      "required_behavior": "Consumption point with exact any-of kind constraint, not provider selection",
+      "witnesses": [
+        {
+          "id": "dependency-positive",
+          "expectation": "Absent kinds accepts any exact kind"
+        },
+        {
+          "id": "dependency-negative",
+          "expectation": "Treating dependency as an executable binding"
+        }
+      ],
+      "disposition": "design-new-from-authority",
+      "implementation_status": "not-implemented",
+      "existing_code": "assigned only after independent model and API design"
+    },
+    {
+      "id": "example",
+      "classification": "spec",
+      "concept": "Example",
+      "authority": [
+        {
+          "file": "spec/openbindings.md",
+          "line": 368,
+          "text_match": "**Examples.**"
+        }
+      ],
+      "meaning": "Positive author claims, not conformance assertions",
+      "owner": "core.document",
+      "proposed_api": [
+        "Operation.examples"
+      ],
+      "required_behavior": "Positive author claims, not conformance assertions",
+      "witnesses": [
+        {
+          "id": "example-positive",
+          "expectation": "Out-of-schema example does not invalidate document"
+        },
+        {
+          "id": "example-negative",
+          "expectation": "Examples scanned as schemas"
+        }
+      ],
+      "disposition": "design-new-from-authority",
+      "implementation_status": "not-implemented",
+      "existing_code": "assigned only after independent model and API design"
+    },
+    {
+      "id": "kind",
+      "classification": "spec",
+      "concept": "Kind",
+      "authority": [
+        {
+          "file": "spec/openbindings.md",
+          "line": 486,
+          "text_match": "## 6. Kinds"
+        }
+      ],
+      "meaning": "Exact nonempty opaque name controls interpretation; not protocol or address",
+      "owner": "core.document",
+      "proposed_api": [
+        "Source.kind",
+        "Dependency.accepts_kind"
+      ],
+      "required_behavior": "Exact nonempty opaque name controls interpretation; not protocol or address",
+      "witnesses": [
+        {
+          "id": "kind-positive",
+          "expectation": "Unknown and URI-shaped kinds"
+        },
+        {
+          "id": "kind-negative",
+          "expectation": "Case folding or inferred compatible versions"
+        }
+      ],
+      "disposition": "design-new-from-authority",
+      "implementation_status": "not-implemented",
+      "existing_code": "assigned only after independent model and API design"
+    },
+    {
+      "id": "presence",
+      "classification": "spec",
+      "concept": "Presence",
+      "authority": [
+        {
+          "file": "spec/openbindings.md",
+          "line": 320,
+          "text_match": "**Presence.**"
+        }
+      ],
+      "meaning": "Omitted is distinct from null and from empty",
+      "owner": "core.json",
+      "proposed_api": [
+        "Option<JsonValue>"
+      ],
+      "required_behavior": "Omitted is distinct from null and from empty",
+      "witnesses": [
+        {
+          "id": "presence-positive",
+          "expectation": "Source data null retained"
+        },
+        {
+          "id": "presence-negative",
+          "expectation": "Converting missing to null"
+        }
+      ],
+      "disposition": "design-new-from-authority",
+      "implementation_status": "not-implemented",
+      "existing_code": "assigned only after independent model and API design"
+    },
+    {
+      "id": "names",
+      "classification": "spec",
+      "concept": "Names and identifiers",
+      "authority": [
+        {
+          "file": "spec/openbindings.md",
+          "line": 360,
+          "text_match": "**Aliases.**"
+        }
+      ],
+      "meaning": "One flat operation key/alias namespace; other maps independent",
+      "owner": "core.document",
+      "proposed_api": [
+        "ConformantDocument.resolve_operation"
+      ],
+      "required_behavior": "One flat operation key/alias namespace; other maps independent",
+      "witnesses": [
+        {
+          "id": "names-positive",
+          "expectation": "Prototype-like key and exact alias"
+        },
+        {
+          "id": "names-negative",
+          "expectation": "Implicit namespace splitting"
+        }
+      ],
+      "disposition": "design-new-from-authority",
+      "implementation_status": "not-implemented",
+      "existing_code": "assigned only after independent model and API design"
+    },
+    {
+      "id": "claims",
+      "classification": "spec",
+      "concept": "Author claims",
+      "authority": [
+        {
+          "file": "spec/openbindings.md",
+          "line": 322,
+          "text_match": "**Author claims.**"
+        }
+      ],
+      "meaning": "Conformance cannot certify fidelity, idempotence, examples, correspondence or trust",
+      "owner": "core.document",
+      "proposed_api": [
+        "Binding",
+        "Dependency",
+        "Operation"
+      ],
+      "required_behavior": "Conformance cannot certify fidelity, idempotence, examples, correspondence or trust",
+      "witnesses": [
+        {
+          "id": "claims-positive",
+          "expectation": "False-looking claim remains conformant"
+        },
+        {
+          "id": "claims-negative",
+          "expectation": "Trusted or verified claim minted from conformance"
+        }
+      ],
+      "disposition": "design-new-from-authority",
+      "implementation_status": "not-implemented",
+      "existing_code": "assigned only after independent model and API design"
+    },
+    {
+      "id": "preference",
+      "classification": "spec",
+      "concept": "Preference and idempotence",
+      "authority": [
+        {
+          "file": "spec/openbindings.md",
+          "line": 423,
+          "text_match": "**Preference signals.**"
+        }
+      ],
+      "meaning": "Author signals distinct from ranking and retry authorization",
+      "owner": "core.document",
+      "proposed_api": [
+        "Binding.preference",
+        "Binding.idempotent"
+      ],
+      "required_behavior": "Author signals distinct from ranking and retry authorization",
+      "witnesses": [
+        {
+          "id": "preference-positive",
+          "expectation": "Equal/absent preference selects nothing"
+        },
+        {
+          "id": "preference-negative",
+          "expectation": "Selecting by preference without caller instruction"
+        }
+      ],
+      "disposition": "design-new-from-authority",
+      "implementation_status": "not-implemented",
+      "existing_code": "assigned only after independent model and API design"
+    },
+    {
+      "id": "schema",
+      "classification": "spec",
+      "concept": "Schema",
+      "authority": [
+        {
+          "file": "spec/openbindings.md",
+          "line": 443,
+          "text_match": "### 5.5. Schemas"
+        }
+      ],
+      "meaning": "Contextual schema at a model-defined location, not detached JSON",
+      "owner": "core.schema",
+      "proposed_api": [
+        "Schema"
+      ],
+      "required_behavior": "Contextual schema at a model-defined location, not detached JSON",
+      "witnesses": [
+        {
+          "id": "schema-positive",
+          "expectation": "Named and operation schemas with original context"
+        },
+        {
+          "id": "schema-negative",
+          "expectation": "Preparing a bare extracted schema with wrong base"
+        }
+      ],
+      "disposition": "design-new-from-authority",
+      "implementation_status": "not-implemented",
+      "existing_code": "assigned only after independent model and API design"
+    },
+    {
+      "id": "schema-states",
+      "classification": "spec",
+      "concept": "Input/output schema states",
+      "authority": [
+        {
+          "file": "spec/openbindings.md",
+          "line": 349,
+          "text_match": "**Schema states.**"
+        }
+      ],
+      "meaning": "Absent, true, false and null-accepting schema have distinct meanings",
+      "owner": "core.schema",
+      "proposed_api": [
+        "Operation.input",
+        "Operation.output"
+      ],
+      "required_behavior": "Absent, true, false and null-accepting schema have distinct meanings",
+      "witnesses": [
+        {
+          "id": "schema-states-positive",
+          "expectation": "False present and input omitted"
+        },
+        {
+          "id": "schema-states-negative",
+          "expectation": "Treating null as no schema"
+        }
+      ],
+      "disposition": "design-new-from-authority",
+      "implementation_status": "not-implemented",
+      "existing_code": "assigned only after independent model and API design"
+    },
+    {
+      "id": "placement",
+      "classification": "spec",
+      "concept": "Schema placement",
+      "authority": [
+        {
+          "file": "spec/openbindings.md",
+          "line": 532,
+          "text_match": "**OBI positions.**"
+        }
+      ],
+      "meaning": "Containment is fixed by schema positions and keywords, not reference reachability",
+      "owner": "core.schema.inventory",
+      "proposed_api": [
+        "Schema.references",
+        "private inventory"
+      ],
+      "required_behavior": "Containment is fixed by schema positions and keywords, not reference reachability",
+      "witnesses": [
+        {
+          "id": "placement-positive",
+          "expectation": "Unused named schemas inventoried"
+        },
+        {
+          "id": "placement-negative",
+          "expectation": "Source/const/unknown-keyword values promoted"
+        }
+      ],
+      "disposition": "design-new-from-authority",
+      "implementation_status": "not-implemented",
+      "existing_code": "assigned only after independent model and API design"
+    },
+    {
+      "id": "resources",
+      "classification": "spec",
+      "concept": "Schema resources",
+      "authority": [
+        {
+          "file": "spec/openbindings.md",
+          "line": 553,
+          "text_match": "### 7.2. The document as embedding"
+        }
+      ],
+      "meaning": "OBI positions, document resource and contained schemas are distinct sets",
+      "owner": "core.schema.resources",
+      "proposed_api": [
+        "EvaluationRequest",
+        "private resource index"
+      ],
+      "required_behavior": "OBI positions, document resource and contained schemas are distinct sets",
+      "witnesses": [
+        {
+          "id": "resources-positive",
+          "expectation": "Nested identified resource retains base"
+        },
+        {
+          "id": "resources-negative",
+          "expectation": "One flat document base assigned to every node"
+        }
+      ],
+      "disposition": "design-new-from-authority",
+      "implementation_status": "not-implemented",
+      "existing_code": "assigned only after independent model and API design"
+    },
+    {
+      "id": "references",
+      "classification": "spec",
+      "concept": "Reference resolution",
+      "authority": [
+        {
+          "file": "spec/openbindings.md",
+          "line": 566,
+          "text_match": "### 7.3. Same-document references"
+        }
+      ],
+      "meaning": "Decode once; pointers/anchors identify locations; target resource determines interpretation",
+      "owner": "core.schema.references",
+      "proposed_api": [
+        "Schema.references",
+        "ReferenceResolution"
+      ],
+      "required_behavior": "Decode once; pointers/anchors identify locations; target resource determines interpretation",
+      "witnesses": [
+        {
+          "id": "references-positive",
+          "expectation": "Pointer into identified resource"
+        },
+        {
+          "id": "references-negative",
+          "expectation": "Malformed fragment or non-schema target treated as schema"
+        }
+      ],
+      "disposition": "design-new-from-authority",
+      "implementation_status": "not-implemented",
+      "existing_code": "assigned only after independent model and API design"
+    },
+    {
+      "id": "external",
+      "classification": "spec",
+      "concept": "External schemas",
+      "authority": [
+        {
+          "file": "spec/openbindings.md",
+          "line": 581,
+          "text_match": "### 7.4. Other references"
+        }
+      ],
+      "meaning": "Explicit immutable external content; no implicit acquisition",
+      "owner": "core.schema",
+      "proposed_api": [
+        "ExternalSchemas",
+        "ExternalSchema"
+      ],
+      "required_behavior": "Explicit immutable external content; no implicit acquisition",
+      "witnesses": [
+        {
+          "id": "external-positive",
+          "expectation": "Independent external sets with same URI"
+        },
+        {
+          "id": "external-negative",
+          "expectation": "Global registry contaminates another document"
+        }
+      ],
+      "disposition": "design-new-from-authority",
+      "implementation_status": "not-implemented",
+      "existing_code": "assigned only after independent model and API design"
+    },
+    {
+      "id": "value-outcome",
+      "classification": "spec",
+      "concept": "Value validity and undefined results",
+      "authority": [
+        {
+          "file": "spec/openbindings.md",
+          "line": 457,
+          "text_match": "**Schema evaluation.**"
+        }
+      ],
+      "meaning": "Satisfies/fails/undefined are distinct from lack of evaluator capability",
+      "owner": "core.schema",
+      "proposed_api": [
+        "ValueOutcome"
+      ],
+      "required_behavior": "Satisfies/fails/undefined are distinct from lack of evaluator capability",
+      "witnesses": [
+        {
+          "id": "value-outcome-positive",
+          "expectation": "Decided branch independent of missing resource"
+        },
+        {
+          "id": "value-outcome-negative",
+          "expectation": "No-verdict converted to false"
+        }
+      ],
+      "disposition": "design-new-from-authority",
+      "implementation_status": "not-implemented",
+      "existing_code": "assigned only after independent model and API design"
+    },
+    {
+      "id": "version",
+      "classification": "spec",
+      "concept": "Version declaration and line",
+      "authority": [
+        {
+          "file": "spec/openbindings.md",
+          "line": 707,
+          "text_match": "### 8.1."
+        }
+      ],
+      "meaning": "Line/prerelease interpretation differs from package version and interface label",
+      "owner": "core.document",
+      "proposed_api": [
+        "ValidationError",
+        "version metadata"
+      ],
+      "required_behavior": "Line/prerelease interpretation differs from package version and interface label",
+      "witnesses": [
+        {
+          "id": "version-positive",
+          "expectation": "Patch/build metadata same line"
+        },
+        {
+          "id": "version-negative",
+          "expectation": "Unsupported line falsely reported nonconformant"
+        }
+      ],
+      "disposition": "design-new-from-authority",
+      "implementation_status": "not-implemented",
+      "existing_code": "assigned only after independent model and API design"
+    },
+    {
+      "id": "extensions",
+      "classification": "spec",
+      "concept": "Extension fields",
+      "authority": [
+        {
+          "file": "spec/openbindings.md",
+          "line": 849,
+          "text_match": "## 12. Extensions"
+        }
+      ],
+      "meaning": "x- fields are allowed on OBI objects; map keys are ordinary names",
+      "owner": "core.document",
+      "proposed_api": [
+        "Exact JSON editing and views"
+      ],
+      "required_behavior": "x- fields are allowed on OBI objects; map keys are ordinary names",
+      "witnesses": [
+        {
+          "id": "extensions-positive",
+          "expectation": "x- source key treated as entry"
+        },
+        {
+          "id": "extensions-negative",
+          "expectation": "Unknown unprefixed field admitted as extension"
+        }
+      ],
+      "disposition": "design-new-from-authority",
+      "implementation_status": "not-implemented",
+      "existing_code": "assigned only after independent model and API design"
+    },
+    {
+      "id": "exact",
+      "classification": "mechanism",
+      "concept": "Exact JSON ownership",
+      "authority": [
+        {
+          "file": "spec/openbindings.md",
+          "line": 314,
+          "text_match": "**Strings and numbers.**"
+        }
+      ],
+      "meaning": "Exact numbers, strings and presence survive reads/edits; ambiguous draft member access fails",
+      "owner": "core.json",
+      "proposed_api": [
+        "JsonValue",
+        "JsonObject",
+        "JsonAccessError"
+      ],
+      "required_behavior": "Exact numbers, strings and presence survive reads/edits; ambiguous draft member access fails",
+      "witnesses": [
+        {
+          "id": "exact-positive",
+          "expectation": "Adjacent large decimals remain distinct"
+        },
+        {
+          "id": "exact-negative",
+          "expectation": "Binary64 rounding decides equality"
+        }
+      ],
+      "disposition": "design-new-from-authority",
+      "implementation_status": "not-implemented",
+      "existing_code": "assigned only after independent model and API design",
+      "necessity": {
+        "why_simpler_fails": "Host primitive JSON loses large decimal distinctions and duplicate-member evidence.",
+        "visibility_rationale": "Values cross every public boundary; backing arena and arithmetic do not."
+      }
+    },
+    {
+      "id": "snapshot",
+      "classification": "mechanism",
+      "concept": "Immutable revision",
+      "authority": [
+        {
+          "file": "spec/openbindings.md",
+          "line": 296,
+          "text_match": "## 5. Document model"
+        }
+      ],
+      "meaning": "Retained views/proofs refer to one revision; editing returns a new snapshot",
+      "owner": "core.document",
+      "proposed_api": [
+        "Document.edit",
+        "Edit"
+      ],
+      "required_behavior": "Retained views/proofs refer to one revision; editing returns a new snapshot",
+      "witnesses": [
+        {
+          "id": "snapshot-positive",
+          "expectation": "Old view after edit and parent drop"
+        },
+        {
+          "id": "snapshot-negative",
+          "expectation": "Mutation invalidates a previously issued proof"
+        }
+      ],
+      "disposition": "design-new-from-authority",
+      "implementation_status": "not-implemented",
+      "existing_code": "assigned only after independent model and API design",
+      "necessity": {
+        "why_simpler_fails": "Mutable shared state makes an existing proof/view change meaning.",
+        "visibility_rationale": "Document and edits are public workflows; revision counters and storage are private."
+      }
+    },
+    {
+      "id": "proof",
+      "classification": "mechanism",
+      "concept": "Conformance proof",
+      "authority": [
+        {
+          "file": "spec/openbindings.md",
+          "line": 776,
+          "text_match": "## 10. Conformance"
+        }
+      ],
+      "meaning": "Only completed successful conformance mints a typed proof",
+      "owner": "core.conformance",
+      "proposed_api": [
+        "ConformantDocument",
+        "DocumentValidation"
+      ],
+      "required_behavior": "Only completed successful conformance mints a typed proof",
+      "witnesses": [
+        {
+          "id": "proof-positive",
+          "expectation": "Proof only on all applicable rules satisfied"
+        },
+        {
+          "id": "proof-negative",
+          "expectation": "Public constructor fabricates proof"
+        }
+      ],
+      "disposition": "design-new-from-authority",
+      "implementation_status": "not-implemented",
+      "existing_code": "assigned only after independent model and API design",
+      "necessity": {
+        "why_simpler_fails": "A parsed value alone carries no evidence of all applicable rules.",
+        "visibility_rationale": "Checked callers must distinguish drafts from validated documents; constructor is private."
+      }
+    },
+    {
+      "id": "findings",
+      "classification": "mechanism",
+      "concept": "Rule evidence and diagnostics",
+      "authority": [
+        {
+          "file": "spec/openbindings.md",
+          "line": 791,
+          "text_match": "Each rule carries an identifier"
+        }
+      ],
+      "meaning": "Rule truth is separate from bounded human detail",
+      "owner": "core.conformance",
+      "proposed_api": [
+        "ValidationReport",
+        "RuleEvidence",
+        "Finding"
+      ],
+      "required_behavior": "Rule truth is separate from bounded human detail",
+      "witnesses": [
+        {
+          "id": "findings-positive",
+          "expectation": "Truncation keeps established violations"
+        },
+        {
+          "id": "findings-negative",
+          "expectation": "Diagnostic limit turns failure into conformance"
+        }
+      ],
+      "disposition": "design-new-from-authority",
+      "implementation_status": "not-implemented",
+      "existing_code": "assigned only after independent model and API design",
+      "necessity": {
+        "why_simpler_fails": "A boolean cannot expose which independent rules were established or left undecided.",
+        "visibility_rationale": "Callers need findings and applicability; private checking stages are not public."
+      }
+    },
+    {
+      "id": "prepare",
+      "classification": "mechanism",
+      "concept": "Schema preparation",
+      "authority": [
+        {
+          "file": "spec/openbindings.md",
+          "line": 457,
+          "text_match": "**Schema evaluation.**"
+        }
+      ],
+      "meaning": "Core owns the evaluation seam and read-only resource access; the optional evaluator owns compilation and per-value judgment",
+      "owner": "core.schema; evaluator",
+      "proposed_api": [
+        "EvaluationRequest",
+        "PreparedSchema",
+        "SchemaEvaluator",
+        "SchemaValidator",
+        "SchemaEnvironment",
+        "SchemaNode",
+        "ResourceIdentity"
+      ],
+      "required_behavior": "Core owns the evaluation seam and read-only resource access; the optional evaluator owns compilation and per-value judgment",
+      "witnesses": [
+        {
+          "id": "prepare-positive",
+          "expectation": "External validator retains nodes and resolves from original resource"
+        },
+        {
+          "id": "prepare-negative",
+          "expectation": "Opaque schema forces evaluator to reconstruct a competing reference environment"
+        }
+      ],
+      "disposition": "design-new-from-authority",
+      "implementation_status": "not-implemented",
+      "existing_code": "assigned only after independent model and API design",
+      "necessity": {
+        "why_simpler_fails": "Resolving/compiling per instance repeats work; a value alone loses its resource. External schemas also need contextual nodes without pretending to be document entries.",
+        "visibility_rationale": "Custom evaluators need read-only resolution, original locations and opaque resource identity for dynamic scope, plus an owned validator. Storage indexes and vendor graphs stay private."
+      }
+    },
+    {
+      "id": "limits",
+      "classification": "policy",
+      "concept": "Work and memory admission",
+      "authority": [
+        {
+          "file": "spec/openbindings.md",
+          "line": 751,
+          "text_match": "## 9. Security considerations"
+        }
+      ],
+      "meaning": "Bound work without inventing conformance violations or value answers",
+      "owner": "core.control",
+      "proposed_api": [
+        "Limits",
+        "Control",
+        "preparation/no-verdict reasons"
+      ],
+      "required_behavior": "Bound work without inventing conformance violations or value answers",
+      "witnesses": [
+        {
+          "id": "limits-positive",
+          "expectation": "Cancellation/limit reported distinctly"
+        },
+        {
+          "id": "limits-negative",
+          "expectation": "Budget exhaustion called schema mismatch"
+        }
+      ],
+      "disposition": "design-new-from-authority",
+      "implementation_status": "not-implemented",
+      "existing_code": "assigned only after independent model and API design",
+      "policy_boundary": "SDK choice; cannot add a portable conformance or interface requirement."
+    },
+    {
+      "id": "checked",
+      "classification": "policy",
+      "concept": "Strict role admission",
+      "authority": [
+        {
+          "file": "interfaces/operation-invoker/README.md",
+          "line": 27,
+          "text_match": "## Publication boundary"
+        }
+      ],
+      "meaning": "Checked APIs require conformant input; this is SDK policy, not open wire carrier meaning",
+      "owner": "roles.checking",
+      "proposed_api": [
+        "Checked callers",
+        "BoundaryFailure"
+      ],
+      "required_behavior": "Checked APIs require conformant input; this is SDK policy, not open wire carrier meaning",
+      "witnesses": [
+        {
+          "id": "checked-positive",
+          "expectation": "Valid wire shape still lacks proof"
+        },
+        {
+          "id": "checked-negative",
+          "expectation": "Malformed provider result silently repaired"
+        }
+      ],
+      "disposition": "design-new-from-authority",
+      "implementation_status": "not-implemented",
+      "existing_code": "assigned only after independent model and API design",
+      "policy_boundary": "SDK choice; cannot add a portable conformance or interface requirement."
+    },
+    {
+      "id": "context",
+      "classification": "interface",
+      "concept": "Attempt context",
+      "authority": [
+        {
+          "file": "interfaces/context/README.md",
+          "line": 25,
+          "text_match": "## The context object"
+        }
+      ],
+      "meaning": "Opaque object per attempt, never an OBI field or a selection instruction",
+      "owner": "context",
+      "proposed_api": [
+        "Context"
+      ],
+      "required_behavior": "Opaque object per attempt, never an OBI field or a selection instruction",
+      "witnesses": [
+        {
+          "id": "context-positive",
+          "expectation": "Distinct contexts on two attempts"
+        },
+        {
+          "id": "context-negative",
+          "expectation": "SDK invents credential member names"
+        }
+      ],
+      "disposition": "design-new-from-authority",
+      "implementation_status": "not-implemented",
+      "existing_code": "assigned only after independent model and API design"
+    },
+    {
+      "id": "challenge",
+      "classification": "interface",
+      "concept": "Context challenge",
+      "authority": [
+        {
+          "file": "interfaces/context/README.md",
+          "line": 41,
+          "text_match": "## The challenge"
+        }
+      ],
+      "meaning": "message plus object-form 2020-12 schema; consumer acquires, producer consumes",
+      "owner": "context",
+      "proposed_api": [
+        "ContextChallenge"
+      ],
+      "required_behavior": "message plus object-form 2020-12 schema; consumer acquires, producer consumes",
+      "witnesses": [
+        {
+          "id": "challenge-positive",
+          "expectation": "Unknown annotations preserved"
+        },
+        {
+          "id": "challenge-negative",
+          "expectation": "Old target/requirements envelope accepted"
+        }
+      ],
+      "disposition": "design-new-from-authority",
+      "implementation_status": "not-implemented",
+      "existing_code": "assigned only after independent model and API design"
+    },
+    {
+      "id": "oauth",
+      "classification": "interface",
+      "concept": "OAuth annotation",
+      "authority": [
+        {
+          "file": "interfaces/context/README.md",
+          "line": 110,
+          "text_match": "## The oauth2 annotation"
+        }
+      ],
+      "meaning": "Acquisition facts only; no mandatory OAuth engine or automatic URL opening",
+      "owner": "context",
+      "proposed_api": [
+        "Challenge exact schema value"
+      ],
+      "required_behavior": "Acquisition facts only; no mandatory OAuth engine or automatic URL opening",
+      "witnesses": [
+        {
+          "id": "oauth-positive",
+          "expectation": "Schema retained without interpreting annotation"
+        },
+        {
+          "id": "oauth-negative",
+          "expectation": "Implicit login or secret disclosure"
+        }
+      ],
+      "disposition": "design-new-from-authority",
+      "implementation_status": "not-implemented",
+      "existing_code": "assigned only after independent model and API design"
+    },
+    {
+      "id": "binding-invoke",
+      "classification": "interface",
+      "concept": "Binding invocation",
+      "authority": [
+        {
+          "file": "interfaces/binding-invoker/README.md",
+          "line": 22,
+          "text_match": "## Why it's called"
+        }
+      ],
+      "meaning": "One document and binding key; no operation selection/value validation",
+      "owner": "invocation.binding",
+      "proposed_api": [
+        "BindingRequest",
+        "BindingInvoker",
+        "BindingClient"
+      ],
+      "required_behavior": "One document and binding key; no operation selection/value validation",
+      "witnesses": [
+        {
+          "id": "binding-invoke-positive",
+          "expectation": "Invoke explicit binding with source data null"
+        },
+        {
+          "id": "binding-invoke-negative",
+          "expectation": "Independent carrier loses document references"
+        }
+      ],
+      "disposition": "design-new-from-authority",
+      "implementation_status": "not-implemented",
+      "existing_code": "assigned only after independent model and API design"
+    },
+    {
+      "id": "preflight",
+      "classification": "interface",
+      "concept": "Advisory preflight",
+      "authority": [
+        {
+          "file": "interfaces/binding-invoker/README.md",
+          "line": 128,
+          "text_match": "### preflightBinding"
+        }
+      ],
+      "meaning": "Challenge or null, no dispatch/input/output; ordinary failure predicts nothing, ERR_REFUSED predicts refusal of same input",
+      "owner": "invocation.binding",
+      "proposed_api": [
+        "BindingInvoker.preflight",
+        "OperationClient.preflight",
+        "PreflightOutcome"
+      ],
+      "required_behavior": "Challenge or null, no dispatch/input/output; ordinary failure predicts nothing, ERR_REFUSED predicts refusal of same input",
+      "witnesses": [
+        {
+          "id": "preflight-positive",
+          "expectation": "Null followed by live challenge; ERR_REFUSED retains its prediction"
+        },
+        {
+          "id": "preflight-negative",
+          "expectation": "Preflight result treated as reservation or ordinary failure as refusal prediction"
+        }
+      ],
+      "disposition": "design-new-from-authority",
+      "implementation_status": "not-implemented",
+      "existing_code": "assigned only after independent model and API design"
+    },
+    {
+      "id": "operation-invoke",
+      "classification": "interface",
+      "concept": "Operation invocation",
+      "authority": [
+        {
+          "file": "interfaces/operation-invoker/README.md",
+          "line": 35,
+          "text_match": "## What an operation invoker does"
+        }
+      ],
+      "meaning": "Resolve, select explicitly and gate each declared input/output schema",
+      "owner": "invocation.operation",
+      "proposed_api": [
+        "OperationRequest",
+        "OperationClient"
+      ],
+      "required_behavior": "Resolve, select explicitly and gate each declared input/output schema",
+      "witnesses": [
+        {
+          "id": "operation-invoke-positive",
+          "expectation": "Alias plus ordered selection"
+        },
+        {
+          "id": "operation-invoke-negative",
+          "expectation": "Automatic ranking resolves multiplicity"
+        }
+      ],
+      "disposition": "design-new-from-authority",
+      "implementation_status": "not-implemented",
+      "existing_code": "assigned only after independent model and API design"
+    },
+    {
+      "id": "selection",
+      "classification": "interface",
+      "concept": "Binding selection",
+      "authority": [
+        {
+          "file": "interfaces/operation-invoker/README.md",
+          "line": 41,
+          "text_match": "2. **Resolves a binding**"
+        }
+      ],
+      "meaning": "Validate all listed keys; skip only unsupported choices; no fallback outside list",
+      "owner": "invocation.operation",
+      "proposed_api": [
+        "OperationAddress",
+        "ordered selection"
+      ],
+      "required_behavior": "Validate all listed keys; skip only unsupported choices; no fallback outside list",
+      "witnesses": [
+        {
+          "id": "selection-positive",
+          "expectation": "First supported listed key"
+        },
+        {
+          "id": "selection-negative",
+          "expectation": "Unknown key ignored or fallback outside selection"
+        }
+      ],
+      "disposition": "design-new-from-authority",
+      "implementation_status": "not-implemented",
+      "existing_code": "assigned only after independent model and API design"
+    },
+    {
+      "id": "frames",
+      "classification": "interface",
+      "concept": "Invocation frames and terminal result",
+      "authority": [
+        {
+          "file": "interfaces/binding-invoker/README.md",
+          "line": 204,
+          "text_match": "## Frame exchange"
+        }
+      ],
+      "meaning": "Concurrent values and half-close; exactly one terminal; late failure retains prior values",
+      "owner": "invocation.channel",
+      "proposed_api": [
+        "Invocation",
+        "InvocationInput",
+        "InvocationOutput",
+        "OutputEvent"
+      ],
+      "required_behavior": "Concurrent values and half-close; exactly one terminal; late failure retains prior values",
+      "witnesses": [
+        {
+          "id": "frames-positive",
+          "expectation": "Output followed by error"
+        },
+        {
+          "id": "frames-negative",
+          "expectation": "First output treated as success"
+        }
+      ],
+      "disposition": "design-new-from-authority",
+      "implementation_status": "not-implemented",
+      "existing_code": "assigned only after independent model and API design"
+    },
+    {
+      "id": "portable-error",
+      "classification": "interface",
+      "concept": "Portable unsuccessful completion",
+      "authority": [
+        {
+          "file": "interfaces/binding-invoker/README.md",
+          "line": 132,
+          "text_match": "## Unsuccessful completion"
+        }
+      ],
+      "meaning": "Only code and optional exact data; local details separate",
+      "owner": "invocation.wire",
+      "proposed_api": [
+        "InvocationFailure"
+      ],
+      "required_behavior": "Only code and optional exact data; local details separate",
+      "witnesses": [
+        {
+          "id": "portable-error-positive",
+          "expectation": "Present null error data"
+        },
+        {
+          "id": "portable-error-negative",
+          "expectation": "Stack/HTTP evidence placed in portable error fields"
+        }
+      ],
+      "disposition": "design-new-from-authority",
+      "implementation_status": "not-implemented",
+      "existing_code": "assigned only after independent model and API design"
+    },
+    {
+      "id": "support",
+      "classification": "mechanism",
+      "concept": "Invocation routing knowledge",
+      "authority": [
+        {
+          "file": "interfaces/operation-invoker/README.md",
+          "line": 41,
+          "text_match": "2. **Resolves a binding**"
+        }
+      ],
+      "meaning": "Authoritative per-invocation-kind support for selection, distinct from optional descriptor",
+      "owner": "invocation.operation",
+      "proposed_api": [
+        "InvocationSupport"
+      ],
+      "required_behavior": "Authoritative per-invocation-kind support for selection, distinct from optional descriptor",
+      "witnesses": [
+        {
+          "id": "support-positive",
+          "expectation": "Invoker without descriptor usable"
+        },
+        {
+          "id": "support-negative",
+          "expectation": "Absent descriptor interpreted as unsupported"
+        }
+      ],
+      "disposition": "design-new-from-authority",
+      "implementation_status": "not-implemented",
+      "existing_code": "assigned only after independent model and API design",
+      "necessity": {
+        "why_simpler_fails": "Selection cannot infer capabilities from a kind name or absent descriptor.",
+        "visibility_rationale": "Only operation-composition providers need this SDK facet; it is not a wire query."
+      }
+    },
+    {
+      "id": "channel",
+      "classification": "mechanism",
+      "concept": "Bounded caller/provider I/O",
+      "authority": [
+        {
+          "file": "interfaces/binding-invoker/README.md",
+          "line": 210,
+          "text_match": "The operation exchanges frames"
+        }
+      ],
+      "meaning": "Necessary async state drives provider without mandatory runtime or Send",
+      "owner": "invocation.channel",
+      "proposed_api": [
+        "BindingIo",
+        "split Invocation handles"
+      ],
+      "required_behavior": "Necessary async state drives provider without mandatory runtime or Send",
+      "witnesses": [
+        {
+          "id": "channel-positive",
+          "expectation": "Concurrent sending and receiving"
+        },
+        {
+          "id": "channel-negative",
+          "expectation": "Two mutable borrows prevent bidirectional use"
+        }
+      ],
+      "disposition": "design-new-from-authority",
+      "implementation_status": "not-implemented",
+      "existing_code": "assigned only after independent model and API design",
+      "necessity": {
+        "why_simpler_fails": "One mutable sequential handle cannot support concurrent bidi writes/reads with bounded memory.",
+        "visibility_rationale": "Split handles and a provider I/O capability are public; queue implementation is private."
+      }
+    },
+    {
+      "id": "kind-describe",
+      "classification": "interface",
+      "concept": "Kind descriptions",
+      "authority": [
+        {
+          "file": "interfaces/kind-descriptor/README.md",
+          "line": 27,
+          "text_match": "## Operations"
+        }
+      ],
+      "meaning": "List and describe kind data shapes and supported operation keys",
+      "owner": "kind-description",
+      "proposed_api": [
+        "KindDescriptor",
+        "KindDescription",
+        "KindSummary"
+      ],
+      "required_behavior": "List and describe kind data shapes and supported operation keys",
+      "witnesses": [
+        {
+          "id": "kind-describe-positive",
+          "expectation": "Invoke-only or catalog-only entry"
+        },
+        {
+          "id": "kind-describe-negative",
+          "expectation": "Universal kind-support flag"
+        }
+      ],
+      "disposition": "design-new-from-authority",
+      "implementation_status": "not-implemented",
+      "existing_code": "assigned only after independent model and API design"
+    },
+    {
+      "id": "source-check",
+      "classification": "interface",
+      "concept": "Source checking",
+      "authority": [
+        {
+          "file": "interfaces/kind-descriptor/README.md",
+          "line": 89,
+          "text_match": "## checkSource"
+        }
+      ],
+      "meaning": "Same kind, completed data, optional context; no source operation or document mutation",
+      "owner": "kind-description",
+      "proposed_api": [
+        "SourceChecker",
+        "CheckSourceRequest",
+        "CheckedSource"
+      ],
+      "required_behavior": "Same kind, completed data, optional context; no source operation or document mutation",
+      "witnesses": [
+        {
+          "id": "source-check-positive",
+          "expectation": "Absent data and executing-check disclosure"
+        },
+        {
+          "id": "source-check-negative",
+          "expectation": "Changing kind or auto-applying output"
+        }
+      ],
+      "disposition": "design-new-from-authority",
+      "implementation_status": "not-implemented",
+      "existing_code": "assigned only after independent model and API design"
+    },
+    {
+      "id": "pull",
+      "classification": "interface",
+      "concept": "Source pull",
+      "authority": [
+        {
+          "file": "interfaces/source-puller/README.md",
+          "line": 20,
+          "text_match": "## Request"
+        }
+      ],
+      "meaning": "One document/source/context; additions/report only",
+      "owner": "source-pull",
+      "proposed_api": [
+        "PullRequest",
+        "SourcePuller",
+        "PullClient"
+      ],
+      "required_behavior": "One document/source/context; additions/report only",
+      "witnesses": [
+        {
+          "id": "pull-positive",
+          "expectation": "Read and discard pull as inspection"
+        },
+        {
+          "id": "pull-negative",
+          "expectation": "Mutate document during pull"
+        }
+      ],
+      "disposition": "design-new-from-authority",
+      "implementation_status": "not-implemented",
+      "existing_code": "assigned only after independent model and API design"
+    },
+    {
+      "id": "additions",
+      "classification": "interface",
+      "concept": "Pull additions",
+      "authority": [
+        {
+          "file": "interfaces/source-puller/README.md",
+          "line": 57,
+          "text_match": "## Additions"
+        }
+      ],
+      "meaning": "New map keys/alias namespace; binding uses selected source; reuse by profile identity",
+      "owner": "source-pull.result",
+      "proposed_api": [
+        "PullResult.additions"
+      ],
+      "required_behavior": "New map keys/alias namespace; binding uses selected source; reuse by profile identity",
+      "witnesses": [
+        {
+          "id": "additions-positive",
+          "expectation": "New binding reuses equal existing operation"
+        },
+        {
+          "id": "additions-negative",
+          "expectation": "Overwrite existing operation"
+        }
+      ],
+      "disposition": "design-new-from-authority",
+      "implementation_status": "not-implemented",
+      "existing_code": "assigned only after independent model and API design"
+    },
+    {
+      "id": "pull-report",
+      "classification": "interface",
+      "concept": "Pull report",
+      "authority": [
+        {
+          "file": "interfaces/source-puller/README.md",
+          "line": 100,
+          "text_match": "## Report"
+        }
+      ],
+      "meaning": "Producer evidence, not certification; exact once-per-binding reporting",
+      "owner": "source-pull.result",
+      "proposed_api": [
+        "PullReport",
+        "Added",
+        "Existing",
+        "Omitted"
+      ],
+      "required_behavior": "Producer evidence, not certification; exact once-per-binding reporting",
+      "witnesses": [
+        {
+          "id": "pull-report-positive",
+          "expectation": "Incomplete report with limitation"
+        },
+        {
+          "id": "pull-report-negative",
+          "expectation": "Exhaustiveness certified by generic checker"
+        }
+      ],
+      "disposition": "design-new-from-authority",
+      "implementation_status": "not-implemented",
+      "existing_code": "assigned only after independent model and API design"
+    },
+    {
+      "id": "uses",
+      "classification": "interface",
+      "concept": "Addition dependency closure",
+      "authority": [
+        {
+          "file": "interfaces/source-puller/README.md",
+          "line": 109,
+          "text_match": "### Added"
+        }
+      ],
+      "meaning": "Closed labels over additions; kind supplies opaque dependency facts",
+      "owner": "source-pull.checking",
+      "proposed_api": [
+        "Added.uses",
+        "proposal uses"
+      ],
+      "required_behavior": "Closed labels over additions; kind supplies opaque dependency facts",
+      "witnesses": [
+        {
+          "id": "uses-positive",
+          "expectation": "Selective apply includes transitive schema additions"
+        },
+        {
+          "id": "uses-negative",
+          "expectation": "Scan unknown data to infer complete dependencies"
+        }
+      ],
+      "disposition": "design-new-from-authority",
+      "implementation_status": "not-implemented",
+      "existing_code": "assigned only after independent model and API design"
+    },
+    {
+      "id": "proposal",
+      "classification": "interface",
+      "concept": "Existing entries and proposals",
+      "authority": [
+        {
+          "file": "interfaces/source-puller/README.md",
+          "line": 133,
+          "text_match": "### Existing"
+        }
+      ],
+      "meaning": "current/stale/unmatched and kind-owned changes; author fields untouched",
+      "owner": "source-pull.result",
+      "proposed_api": [
+        "Existing",
+        "Proposal",
+        "Change"
+      ],
+      "required_behavior": "current/stale/unmatched and kind-owned changes; author fields untouched",
+      "witnesses": [
+        {
+          "id": "proposal-positive",
+          "expectation": "Stale binding proposal leaves idempotence"
+        },
+        {
+          "id": "proposal-negative",
+          "expectation": "Automatic overwrite of shared operation schema"
+        }
+      ],
+      "disposition": "design-new-from-authority",
+      "implementation_status": "not-implemented",
+      "existing_code": "assigned only after independent model and API design"
+    },
+    {
+      "id": "omitted",
+      "classification": "interface",
+      "concept": "Omitted source offerings",
+      "authority": [
+        {
+          "file": "interfaces/source-puller/README.md",
+          "line": 170,
+          "text_match": "### Omitted"
+        }
+      ],
+      "meaning": "Excluded, invalid, implementation-unsupported and conflict are distinct",
+      "owner": "source-pull.result",
+      "proposed_api": [
+        "Omitted"
+      ],
+      "required_behavior": "Excluded, invalid, implementation-unsupported and conflict are distinct",
+      "witnesses": [
+        {
+          "id": "omitted-positive",
+          "expectation": "Kind exclusion distinguished from implementation gap"
+        },
+        {
+          "id": "omitted-negative",
+          "expectation": "Unsupported relabeled as excluded"
+        }
+      ],
+      "disposition": "design-new-from-authority",
+      "implementation_status": "not-implemented",
+      "existing_code": "assigned only after independent model and API design"
+    },
+    {
+      "id": "complete",
+      "classification": "interface",
+      "concept": "Complete pull",
+      "authority": [
+        {
+          "file": "interfaces/source-puller/README.md",
+          "line": 191,
+          "text_match": "## Complete pull"
+        }
+      ],
+      "meaning": "Exhaustive and no implementation-unsupported omission",
+      "owner": "source-pull.result",
+      "proposed_api": [
+        "PullReport.is_complete"
+      ],
+      "required_behavior": "Exhaustive and no implementation-unsupported omission",
+      "witnesses": [
+        {
+          "id": "complete-positive",
+          "expectation": "Loss or conflict may coexist with completeness"
+        },
+        {
+          "id": "complete-negative",
+          "expectation": "Stricter caller acceptance redefines complete"
+        }
+      ],
+      "disposition": "design-new-from-authority",
+      "implementation_status": "not-implemented",
+      "existing_code": "assigned only after independent model and API design"
+    },
+    {
+      "id": "projection",
+      "classification": "mechanism",
+      "concept": "Source-only projection and existing-data matching",
+      "authority": [
+        {
+          "file": "interfaces/source-puller/README.md",
+          "line": 78,
+          "text_match": "The comparison is the"
+        }
+      ],
+      "meaning": "Kind derives names/shapes without destination influence; neutral reuse rule shared",
+      "owner": "source-pull.checking",
+      "proposed_api": [
+        "SourcePuller implementation contract",
+        "identity helper"
+      ],
+      "required_behavior": "Kind derives names/shapes without destination influence; neutral reuse rule shared",
+      "witnesses": [
+        {
+          "id": "projection-positive",
+          "expectation": "Two same-kind sources reuse operation"
+        },
+        {
+          "id": "projection-negative",
+          "expectation": "Universal target-address framework required"
+        }
+      ],
+      "disposition": "design-new-from-authority",
+      "implementation_status": "not-implemented",
+      "existing_code": "assigned only after independent model and API design",
+      "necessity": {
+        "why_simpler_fails": "Generic SDK code cannot interpret opaque kind data or invent matching identities.",
+        "visibility_rationale": "Complete role trait is public; no additional universal projection DSL is selected."
+      }
+    },
+    {
+      "id": "identity",
+      "classification": "profile",
+      "concept": "Normalized schema identity",
+      "authority": [
+        {
+          "file": "interfaces/schema-comparison/README.md",
+          "line": 181,
+          "text_match": "**Identical mode.**"
+        }
+      ],
+      "meaning": "Equal/different after profile normalization; failures do not produce verdicts",
+      "owner": "comparison.identity",
+      "proposed_api": [
+        "SchemaInput",
+        "Identity",
+        "identical"
+      ],
+      "required_behavior": "Equal/different after profile normalization; failures do not produce verdicts",
+      "witnesses": [
+        {
+          "id": "identity-positive",
+          "expectation": "Union multiplicity and exact decimal identity"
+        },
+        {
+          "id": "identity-negative",
+          "expectation": "Byte equality or indeterminate identity"
+        }
+      ],
+      "disposition": "design-new-from-authority",
+      "implementation_status": "not-implemented",
+      "existing_code": "assigned only after independent model and API design"
+    },
+    {
+      "id": "normalization",
+      "classification": "profile",
+      "concept": "Comparison normalization",
+      "authority": [
+        {
+          "file": "interfaces/schema-comparison/README.md",
+          "line": 64,
+          "text_match": "## Normalization"
+        }
+      ],
+      "meaning": "Profile semantics separate from value evaluation; refs require supplied environment",
+      "owner": "comparison.normalization",
+      "proposed_api": [
+        "Private normalization",
+        "explicit SchemaInput context"
+      ],
+      "required_behavior": "Profile semantics separate from value evaluation; refs require supplied environment",
+      "witnesses": [
+        {
+          "id": "normalization-positive",
+          "expectation": "Annotations stripped at schema positions only"
+        },
+        {
+          "id": "normalization-negative",
+          "expectation": "Drop const-data fields or change evaluation semantics"
+        }
+      ],
+      "disposition": "design-new-from-authority",
+      "implementation_status": "not-implemented",
+      "existing_code": "assigned only after independent model and API design"
+    },
+    {
+      "id": "comparison-limits",
+      "classification": "policy",
+      "concept": "Comparison failure and partial profile support",
+      "authority": [
+        {
+          "file": "interfaces/schema-comparison/README.md",
+          "line": 86,
+          "text_match": "A processor unable to retain"
+        }
+      ],
+      "meaning": "Missing/cyclic refs and exhausted exact capability remain failures; no subsumption claim",
+      "owner": "comparison",
+      "proposed_api": [
+        "ComparisonFailure"
+      ],
+      "required_behavior": "Missing/cyclic refs and exhausted exact capability remain failures; no subsumption claim",
+      "witnesses": [
+        {
+          "id": "comparison-limits-positive",
+          "expectation": "Normalization failure stops necessary reuse decision"
+        },
+        {
+          "id": "comparison-limits-negative",
+          "expectation": "Failure reported as unequal"
+        }
+      ],
+      "disposition": "design-new-from-authority",
+      "implementation_status": "not-implemented",
+      "existing_code": "assigned only after independent model and API design",
+      "policy_boundary": "SDK choice; cannot add a portable conformance or interface requirement."
+    },
+    {
+      "id": "http",
+      "classification": "companion",
+      "concept": "HTTP discovery and publication",
+      "authority": [
+        {
+          "file": "spec/http-discovery.md",
+          "line": 19,
+          "text_match": "## 1. Scope"
+        }
+      ],
+      "meaning": "Independent companion; endpoint and transport do not assign OBI identity",
+      "owner": "http-discovery",
+      "proposed_api": [
+        "DiscoveryClient",
+        "DiscoveryOutcome",
+        "Publication"
+      ],
+      "required_behavior": "Independent companion; endpoint and transport do not assign OBI identity",
+      "witnesses": [
+        {
+          "id": "http-positive",
+          "expectation": "Same document acquired through redirects"
+        },
+        {
+          "id": "http-negative",
+          "expectation": "Discovery satisfies dependencies or supplies schema base"
+        }
+      ],
+      "disposition": "design-new-from-authority",
+      "implementation_status": "not-implemented",
+      "existing_code": "assigned only after independent model and API design"
+    },
+    {
+      "id": "host",
+      "classification": "mechanism",
+      "concept": "Wasm/TypeScript ownership and representation",
+      "authority": [
+        {
+          "file": "spec/openbindings.md",
+          "line": 314,
+          "text_match": "**Strings and numbers.**"
+        }
+      ],
+      "meaning": "Same semantic engine, explicit disposal and exact text ingress",
+      "owner": "wasm; typescript",
+      "proposed_api": [
+        "Disposable owners",
+        "status outcomes"
+      ],
+      "required_behavior": "Same semantic engine, explicit disposal and exact text ingress",
+      "witnesses": [
+        {
+          "id": "host-positive",
+          "expectation": "Child view survives parent disposal"
+        },
+        {
+          "id": "host-negative",
+          "expectation": "Unsafe JS number silently accepted as exact input"
+        }
+      ],
+      "disposition": "design-new-from-authority",
+      "implementation_status": "not-implemented",
+      "existing_code": "assigned only after independent model and API design",
+      "necessity": {
+        "why_simpler_fails": "Wasm handles and JS numbers/lifetimes differ from Rust values/ownership.",
+        "visibility_rationale": "Host owners/conversions are public where necessary; bridge dispatch and handle tables are private."
+      }
+    },
+    {
+      "id": "qualification",
+      "classification": "mechanism",
+      "concept": "Qualification harness",
+      "authority": [
+        {
+          "file": "spec/conformance/README.md",
+          "line": 5,
+          "text_match": "The corpus is reference material"
+        }
+      ],
+      "meaning": "Assertions trace to authority; witnesses are not a second specification",
+      "owner": "test-support",
+      "proposed_api": [
+        "Suite",
+        "Observation",
+        "report tooling"
+      ],
+      "required_behavior": "Assertions trace to authority; witnesses are not a second specification",
+      "witnesses": [
+        {
+          "id": "qualification-positive",
+          "expectation": "Deliberately corrupted observer rejected"
+        },
+        {
+          "id": "qualification-negative",
+          "expectation": "Parity alone treated as proof"
+        }
+      ],
+      "disposition": "design-new-from-authority",
+      "implementation_status": "not-implemented",
+      "existing_code": "assigned only after independent model and API design",
+      "necessity": {
+        "why_simpler_fails": "A shared engine and its wrappers can agree on the same wrong result.",
+        "visibility_rationale": "Independent observer/judge and adapter kit are qualification APIs, not domain models."
+      }
+    }
+  ],
+  "relations": [
+    {
+      "from": "document",
+      "to": "operation",
+      "relation": "contains"
+    },
+    {
+      "from": "document",
+      "to": "source",
+      "relation": "contains"
+    },
+    {
+      "from": "document",
+      "to": "binding",
+      "relation": "contains"
+    },
+    {
+      "from": "document",
+      "to": "dependency",
+      "relation": "contains"
+    },
+    {
+      "from": "document",
+      "to": "schema",
+      "relation": "contains by placement"
+    },
+    {
+      "from": "binding",
+      "to": "operation",
+      "relation": "names key"
+    },
+    {
+      "from": "binding",
+      "to": "source",
+      "relation": "names key"
+    },
+    {
+      "from": "dependency",
+      "to": "operation",
+      "relation": "names key"
+    },
+    {
+      "from": "source",
+      "to": "kind",
+      "relation": "carries exact name"
+    },
+    {
+      "from": "operation",
+      "to": "schema",
+      "relation": "optional input/output"
+    },
+    {
+      "from": "schema",
+      "to": "resources",
+      "relation": "belongs to"
+    },
+    {
+      "from": "references",
+      "to": "resources",
+      "relation": "resolves with target context"
+    },
+    {
+      "from": "operation-invoke",
+      "to": "binding-invoke",
+      "relation": "selects then composes"
+    },
+    {
+      "from": "operation-invoke",
+      "to": "value-outcome",
+      "relation": "gates forwarded values"
+    },
+    {
+      "from": "pull",
+      "to": "identity",
+      "relation": "uses for reuse"
+    },
+    {
+      "from": "pull",
+      "to": "proposal",
+      "relation": "returns without applying"
+    },
+    {
+      "from": "binding-invoke",
+      "to": "context",
+      "relation": "receives"
+    },
+    {
+      "from": "source-check",
+      "to": "context",
+      "relation": "receives"
+    },
+    {
+      "from": "pull",
+      "to": "context",
+      "relation": "receives"
+    }
+  ]
+}

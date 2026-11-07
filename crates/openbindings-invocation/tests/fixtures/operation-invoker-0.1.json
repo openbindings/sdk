@@ -2,7 +2,7 @@
     "openbindings": "0.2.0",
     "name": "Operation Invoker",
     "version": "0.1.0",
-    "description": "Invoke an operation or binding addressed by name in a supplied OpenBindings interface document. Caller selection identifies the intended binding; declared operation schemas describe the caller-facing values, and the selected source kind gives binding interpretation.\n\nThese operations are offered for voluntary adoption by name. Their schemas and descriptions identify the exchanged values and the capability they describe; they do not prescribe an SDK, internal algorithm, validation or recovery policy, or process architecture. Correspondence is an author claim, not verification of an implementation.",
+    "description": "Invoke an operation or binding addressed by name in a supplied OpenBindings interface document. Caller selection identifies the intended binding; the operation's schemas describe the caller-facing values, and the kind of the selected binding's source gives the binding's data meaning.\n\nThese operations are offered for voluntary adoption by name. Their schemas and descriptions identify the exchanged values and the capability they describe; they do not prescribe an SDK, internal algorithm, validation or recovery policy, or process architecture. Correspondence is an author claim, not verification of an implementation.",
     "schemas": {
         "OpenBindingsInterface": {
             "type": "object",
@@ -11,87 +11,26 @@
         },
         "BindingContext": {
             "type": "object",
-            "description": "Opaque context supplied by value for one binding invocation. The contract neither requires nor exposes a context store; callers may assemble this object from per-call values, durable state, a credential broker, or any other source before invocation. The general named-credential field is 'credentials': an object keyed by a requirement's nonempty 'name'. For auth.bearer and auth.apiKey its named value is a string; for auth.basic it is an object with username and password; for auth.oauth2 it is an object whose accessToken is the applying credential and whose refreshToken, expiresAt, and clientSecret are optional lifecycle values. Unnamed or unambiguous single-scheme conveniences remain 'bearerToken', 'apiKey', 'basic', and 'accessToken' / 'refreshToken' / 'expiresAt'; the historical 'apiKeys' named map remains accepted for auth.apiKey. Well-known transport fields: 'headers' / 'cookies' / 'environment' (objects with string values) and 'metadata' (object with arbitrary values). Well-known configuration field: 'configuration' (object), keyed by configuration-point name and interpreted by the authority that defines each point. A config.value requirement's JSON Pointer path addresses within configuration[point]; an empty path addresses the entire point. Implementations and callers MAY add fields for session state, consent, or other runtime data; fields without a meaning defined here or by the kind have implementation-specific interpretation. Every value in credentials and the single-scheme credential fields is secret, and any other field may also be secret according to its requirement family, source's kind, or application policy.",
-            "additionalProperties": true
-        },
-        "ContextRequirement": {
-            "type": "object",
-            "description": "One prerequisite that must be satisfied before a binding can be invoked. `type` names the requirement family; the remaining fields are type-specific. A named well-known `auth.*` requirement resolves at BindingContext.credentials[name]: a string for `auth.bearer` and `auth.apiKey`, a username/password object for `auth.basic`, or an OAuth object beginning with accessToken for `auth.oauth2`. Unnamed or unambiguous single-scheme requirements use the corresponding bearerToken, apiKey, basic, or flat OAuth conveniences; historical apiKeys[name] remains accepted for `auth.apiKey`. OAuth requirements may carry flow fields such as grantType, authorizeUrl, tokenUrl, and scopes. The `config.value` family carries a configuration value a binding needs but the artifact does not supply: it carries 'point' and a JSON Pointer 'path' (plus an optional engine-asserted 'schema') and resolves within BindingContext.configuration. Other families (e.g. 'approval.user', 'account.link') resolve into their own context fields. Resolution architecture and value secrecy beyond the always-secret credential fields are determined by the requirement family, source's kind, and caller.",
-            "properties": {
-                "type": {
-                    "type": "string",
-                    "minLength": 1,
-                    "description": "Requirement family identifier, such as auth.bearer, auth.oauth2, auth.basic, auth.apiKey, approval.user or config.value. A challenge describes context the producer can apply to this interaction. Unknown families have only their independently defined meanings; the caller decides whether it can satisfy them."
-                },
-                "name": {
-                    "type": "string",
-                    "minLength": 1,
-                    "description": "The scheme name as the source artifact declares it (e.g. an OpenAPI securitySchemes key). Distinguishes multiple requirements of the same family and keys scheme-scoped lookup in BindingContext.credentials."
-                },
-                "point": {
-                    "type": "string",
-                    "description": "config.value only: the configuration point the source's kind defines ('server', 'address', a kind's decode point, …)."
-                },
-                "path": {
-                    "type": "string",
-                    "description": "config.value only: RFC 6901 JSON Pointer evaluated from configuration[point]. The empty pointer addresses the whole point; '/variables/region' addresses a nested member; '/value' addresses a member literally named value."
-                },
-                "schema": {
-                    "type": [
-                        "object",
-                        "boolean"
-                    ],
-                    "description": "config.value only: optional JSON Schema (object or Boolean) describing the value at configuration[point] and path. Read as a standalone schema resource, using JSON Schema 2020-12 unless its root declares another dialect with $schema. References follow the applicable JSON Schema dialect, including resource boundaries introduced by $id. The source artifact and the OBI supply no implicit reference environment. Absence states no constraint. This describes the value, not a required validator, resource-fetching policy or resolution procedure."
-                },
-                "description": {
-                    "type": "string",
-                    "description": "Human-readable description shown to a user or operator during resolution (e.g. an approval prompt message)."
-                },
-                "durable": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "Whether the producer describes resolved context as suitable for reuse (true) or only for the immediate attempt (false, the default). This is a reuse-safety claim, not a storage instruction; it supplies no store, key, trust decision or persistence policy."
-                }
-            },
-            "required": [
-                "type"
-            ],
+            "description": "Opaque context supplied by value for one attempt, as the context document defines it. Its members are whatever a previous challenge's schema described or the caller knows the source's kind reads; this interface defines none of them, requires no store, and prescribes no acquisition mechanism. How a value is used stays inside the kind's implementation. A value may be secret: a challenge marks secrets writeOnly, and callers avoid disclosing context through logs, diagnostics or storage keys.",
             "additionalProperties": true
         },
         "ContextRequiredDetails": {
             "type": "object",
-            "description": "The data of a CONTEXT_REQUIRED error or a preflight result. alternatives are disjunctive; requirements within one alternative are conjunctive. The object describes the context requested for one invocation, not permission to disclose unrelated credentials. Resolution, trust, storage and retry decisions belong to the caller.",
+            "description": "The data of a CONTEXT_REQUIRED error or a preflight result, as the context document defines it: why the attempt could not proceed, in the producer's words, and a JSON Schema of the context object to supply on the next attempt. The schema is ordinary JSON Schema 2020-12: oneOf branches with a title each for alternatives, required for values needed together, writeOnly on secrets, and a property description for where a person obtains a value. It describes the context requested for one attempt, not permission to disclose anything else. Acquisition, trust, storage and retry decisions belong to the caller.",
             "properties": {
-                "target": {
+                "message": {
                     "type": "string",
-                    "description": "Opaque identifier for the destination or context scope asserted by the invoker. The identifier is not proof of identity or permission to release a secret. Interpretation follows the source kind; trust decisions, normalization and storage keying belong to the caller."
+                    "minLength": 1,
+                    "description": "Why the attempt could not proceed, in the producer's words, for a person to read."
                 },
-                "alternatives": {
-                    "type": "array",
-                    "minItems": 1,
-                    "description": "Alternative ways to satisfy the reported context requirement (OR). Each alternative describes the requirements needed together (AND). The challenge makes no trust or authorization decision for the caller.",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "requirements": {
-                                "type": "array",
-                                "minItems": 1,
-                                "description": "Conjunctive set: every requirement in this alternative must be resolved for the alternative to be satisfied.",
-                                "items": {
-                                    "$ref": "#/schemas/ContextRequirement"
-                                }
-                            }
-                        },
-                        "required": [
-                            "requirements"
-                        ],
-                        "additionalProperties": false
-                    }
+                "schema": {
+                    "type": "object",
+                    "description": "A JSON Schema 2020-12 schema, in object form, of the context object to supply on the next attempt. The context document defines the conventions it uses and the oauth2 annotation an application may act on."
                 }
             },
             "required": [
-                "target",
-                "alternatives"
+                "message",
+                "schema"
             ],
             "additionalProperties": false
         },
@@ -102,7 +41,7 @@
                 "code": {
                     "type": "string",
                     "minLength": 1,
-                    "description": "Machine-readable reason. Binding invocation owns CONTEXT_REQUIRED (context requested, no operation output or effects), ERR_REFUSED (no operation effects), ERR_EXECUTION_FAILED (failure making no claim about effects or dispatch), ERR_FRAME_PROTOCOL (reported frame-exchange violation), ERR_TRANSPORT_CLOSED (transport ended before a terminal outcome), and ERR_CANCELLED (caller cancellation, with no rollback or external-stop claim). Operation invocation additionally owns ERR_OPERATION_NOT_FOUND (unresolved operation), ERR_BINDING_NOT_FOUND (unresolved allowed binding), ERR_BINDING_SELECTION_REQUIRED (ambiguous binding choice), ERR_UNKNOWN_SOURCE (unresolved selected source), ERR_OPERATION_VALIDATION_FAILED (value violates a declared schema), and ERR_SCHEMA_UNRESOLVED (validity could not be determined). These meanings do not prescribe detection, recovery or precedence. Other codes have kind-defined or implementation-specific meanings."
+                    "description": "Machine-readable reason. Binding invocation owns ERR_BINDING_NOT_FOUND (the requested key names no binding in the supplied interface), CONTEXT_REQUIRED (context requested, no operation output or effects), ERR_REFUSED (no operation effects), ERR_EXECUTION_FAILED (failure making no claim about effects or dispatch), ERR_FRAME_PROTOCOL (reported frame-exchange violation), ERR_TRANSPORT_CLOSED (transport ended before a terminal outcome), and ERR_CANCELLED (caller cancellation, with no rollback or external-stop claim). Operation invocation additionally owns ERR_OPERATION_NOT_FOUND (unresolved operation), ERR_BINDING_SELECTION_REQUIRED (ambiguous binding choice), ERR_OPERATION_VALIDATION_FAILED (value violates a declared schema), and ERR_SCHEMA_UNRESOLVED (validity could not be determined), and also reports ERR_BINDING_NOT_FOUND with a broader meaning (unresolved allowed binding). These meanings do not prescribe detection, recovery or precedence. Other codes have kind-defined or implementation-specific meanings."
                 },
                 "data": {
                     "description": "Optional portable JSON data associated with the unsuccessful completion. A rule defining `code` may define its structure and semantics; otherwise, the source's kind may use it to preserve an opaque application-authored failure value. For CONTEXT_REQUIRED, this is a ContextRequiredDetails object. Presence is significant: an absent member means no portable associated value, while an explicit null is a present JSON null value. Statuses, headers, trailers, envelopes, raw debugging bytes, exception prose, stacks, and implementation evidence do not belong here unless they are themselves application data under an explicit governing rule."
@@ -122,7 +61,7 @@
                 },
                 "operation": {
                     "type": "string",
-                    "description": "Operation name to invoke, resolved against the interface's flat identifier namespace — an operation key or any of its aliases, equally (core §5.1). A binding is resolved by the caller's ordered selection or by sole-candidate inference; ambiguity is refused."
+                    "description": "Operation name to invoke: an operation key or any of its aliases, resolved equally against the interface's flat identifier namespace (core §5.1). A binding is resolved by the caller's ordered selection or by sole-candidate inference; ambiguity is refused."
                 },
                 "binding": {
                     "type": "string",
@@ -298,7 +237,7 @@
     },
     "operations": {
         "openbindings.operation-invoker.invokeOperation": {
-            "description": "Invoke an operation or explicit binding from the supplied interface document, exchanging OperationInvokerInputFrame and OperationInvokerOutputFrame values. The frame meanings are those of binding-invoker.invokeBinding.\n\nAn operation name is resolved under the core key-and-alias rules; a binding refers to its operation by primary key. An explicit binding identifies that binding without fallback. An ordered selection identifies the first supported binding in that list; its entries name bindings of the requested operation. With no explicit choice, a sole supported binding is selected; zero candidates is ERR_BINDING_NOT_FOUND and multiple candidates is ERR_BINDING_SELECTION_REQUIRED. These input meanings do not choose a ranking based on metadata or registration order.\n\nInputs forwarded to the selected binding and successful outputs relayed to the caller satisfy the operation's declared schemas where present, read under the core schema rules. ERR_OPERATION_VALIDATION_FAILED reports an established mismatch; ERR_SCHEMA_UNRESOLVED reports inability to determine validity. An absent schema makes no validation claim. Validation implementation, preparation timing, caching and admission of documents outside the described input are implementation choices. A later failure does not retract earlier delivered values or imply absence of effects.\n\nThe selected source and binding values, including content absence versus null, retain their meaning. Context is forwarded without reinterpretation; kind-defined adaptation belongs to binding interpretation. The implementation may compose a binding invoker or provide the behavior itself.\n\nERR_OPERATION_NOT_FOUND describes an unresolved operation name; ERR_BINDING_NOT_FOUND an unresolved binding choice; ERR_BINDING_SELECTION_REQUIRED a choice still needed; ERR_UNKNOWN_SOURCE an unresolved selected source. These and the two validation codes have no data shape defined here. Binding-invoker and kind-defined error meanings remain applicable. Error precedence on malformed documents and internal resolution algorithms are not specified.",
+            "description": "Invoke an operation or explicit binding from the supplied interface document, exchanging OperationInvokerInputFrame and OperationInvokerOutputFrame values. The frame meanings are those of binding-invoker.invokeBinding.\n\nAn operation name is resolved under the core key-and-alias rules; a binding refers to its operation by primary key. An explicit binding identifies that binding without fallback. The candidate set is the operation's bindings whose sources' kinds the invoker can act on. An ordered selection identifies the first supported binding in that list; its entries name bindings of the requested operation. With no explicit choice, a sole supported binding is selected; zero candidates is ERR_BINDING_NOT_FOUND and multiple candidates is ERR_BINDING_SELECTION_REQUIRED. These input meanings do not choose a ranking based on metadata or registration order.\n\nInputs forwarded to the selected binding and successful outputs relayed to the caller satisfy the operation's declared schemas where present, read under the core schema rules. ERR_OPERATION_VALIDATION_FAILED reports an established mismatch; ERR_SCHEMA_UNRESOLVED reports inability to determine validity. An absent schema makes no validation claim. Validation implementation, preparation timing, caching and admission of documents outside the described input are implementation choices. A later failure does not retract earlier delivered values or imply absence of effects.\n\nAfter resolution, the same document and the selected binding's key drive binding invocation; the binding's data and its source's data, including absence versus null, retain their meaning. Context is forwarded without reinterpretation; kind-defined adaptation belongs to binding invocation. The implementation may compose a binding invoker or provide the behavior itself.\n\nERR_OPERATION_NOT_FOUND describes an unresolved operation name; ERR_BINDING_NOT_FOUND an unresolved binding choice, a broader meaning than binding invocation's; ERR_BINDING_SELECTION_REQUIRED a choice still needed. These and the two validation codes have no data shape defined here. Binding-invoker and kind-defined error meanings remain applicable. Error precedence on malformed documents and internal resolution algorithms are not specified.",
             "input": {
                 "$ref": "#/schemas/OperationInvokerInputFrame"
             },
@@ -323,6 +262,16 @@
                                         "output": {
                                             "type": "string"
                                         }
+                                    },
+                                    "count": {
+                                        "description": "Count Unicode code points in the input string.",
+                                        "input": {
+                                            "type": "string"
+                                        },
+                                        "output": {
+                                            "type": "integer",
+                                            "minimum": 0
+                                        }
                                     }
                                 },
                                 "sources": {
@@ -334,7 +283,12 @@
                                     "repeatText": {
                                         "operation": "repeat",
                                         "source": "text",
-                                        "content": "echo"
+                                        "data": "echo"
+                                    },
+                                    "countText": {
+                                        "operation": "count",
+                                        "source": "text",
+                                        "data": "length"
                                     }
                                 }
                             },
@@ -359,6 +313,16 @@
                                         "output": {
                                             "type": "string"
                                         }
+                                    },
+                                    "count": {
+                                        "description": "Count Unicode code points in the input string.",
+                                        "input": {
+                                            "type": "string"
+                                        },
+                                        "output": {
+                                            "type": "integer",
+                                            "minimum": 0
+                                        }
                                     }
                                 },
                                 "sources": {
@@ -370,7 +334,12 @@
                                     "repeatText": {
                                         "operation": "repeat",
                                         "source": "text",
-                                        "content": "echo"
+                                        "data": "echo"
+                                    },
+                                    "countText": {
+                                        "operation": "count",
+                                        "source": "text",
+                                        "data": "length"
                                     }
                                 }
                             },
@@ -395,6 +364,16 @@
                                         "output": {
                                             "type": "string"
                                         }
+                                    },
+                                    "count": {
+                                        "description": "Count Unicode code points in the input string.",
+                                        "input": {
+                                            "type": "string"
+                                        },
+                                        "output": {
+                                            "type": "integer",
+                                            "minimum": 0
+                                        }
                                     }
                                 },
                                 "sources": {
@@ -406,7 +385,12 @@
                                     "repeatText": {
                                         "operation": "repeat",
                                         "source": "text",
-                                        "content": "echo"
+                                        "data": "echo"
+                                    },
+                                    "countText": {
+                                        "operation": "count",
+                                        "source": "text",
+                                        "data": "length"
                                     }
                                 }
                             },
@@ -420,7 +404,7 @@
             }
         },
         "openbindings.operation-invoker.preflightOperation": {
-            "description": "Resolve the requested operation or binding using the same addressing meanings as invokeOperation, then report its preflight result. A later invocation is a separate attempt. Report context requirements identifiable for a possible invocation, as ContextRequiredDetails, or null for no prediction. Preflight does not perform the requested operation, consume its inputs or produce its outputs. It is advisory: null is a valid result even when invocation will need context; invocation does not depend on prior preflight. An unsuccessful completion reports inability to answer; ERR_REFUSED additionally reports that the same request would be refused without operation effects. Source acquisition, caching and other preparation are implementation choices under the source kind.",
+            "description": "Resolve the requested operation or binding using the same addressing meanings as invokeOperation, then report its preflight result. A later invocation is a separate attempt. Report context requirements identifiable for a possible invocation, as ContextRequiredDetails, or null for no prediction. Preflight does not perform the requested operation, consume its inputs or produce its outputs. It is advisory: null is a valid result even when invocation will need context; invocation does not depend on prior preflight. An unsuccessful completion reports inability to answer; ERR_REFUSED additionally reports that the same request would be refused without operation effects. Acquiring what the selected binding's data and its source's data refer to, caching and other preparation are implementation choices under the source's kind.",
             "input": {
                 "$ref": "#/schemas/OperationInvocationInput"
             },

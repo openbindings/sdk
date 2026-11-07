@@ -1,0 +1,167 @@
+use openbindings::*;
+use std::sync::atomic::AtomicBool;
+#[test]
+fn diagnostic_inspection_refuses_document_preconditions_without_schema_locations() {
+    for (text, code, reason) in [
+        (
+            r#"{"openbindings":"0.3.0","operations":{}}"#,
+            "unsupported-version",
+            ReferenceRefusalReason::UnsupportedCapability,
+        ),
+        (
+            r#"{"operations":{}}"#,
+            "malformed-version",
+            ReferenceRefusalReason::ResolverFailure,
+        ),
+        (
+            r#"{"openbindings":1,"operations":{}}"#,
+            "malformed-version",
+            ReferenceRefusalReason::ResolverFailure,
+        ),
+        (
+            r#"{"openbindings":"0.2.0","operations":{},"x":1,"x":2}"#,
+            "duplicate-members",
+            ReferenceRefusalReason::ResolverFailure,
+        ),
+    ] {
+        let document = Document::parse(text).unwrap();
+        let report = document.references();
+        assert!(!report.complete);
+        assert!(report.references.is_empty());
+        let limitation = report.limitation.unwrap();
+        assert_eq!(limitation.code, code);
+        assert_eq!(limitation.reason, reason);
+        assert!(limitation.location.is_none());
+        let cancelled =
+            document.references_with_resources(ExternalSchemas::default(), &AtomicBool::new(true));
+        assert_eq!(
+            cancelled.limitation.unwrap().reason,
+            ReferenceRefusalReason::Cancelled
+        );
+        assert_eq!(document.as_bytes(), text.as_bytes());
+    }
+}
+#[test]
+fn nonconformant_drafts_still_supply_original_reference_diagnostics() {
+    let doc = Document::parse(r#"{"openbindings":"0.2.0","description":42,"operations":{"op":{"input":{"$ref":"https://missing.test/schema"}}},"sources":{"s":{"kind":"k","data":{"$ref":"opaque"}}}}"#).unwrap();
+    assert!(doc.validate().unwrap().conformant().is_none());
+    let report = doc.references();
+    assert!(report.complete);
+    assert_eq!(report.references.len(), 1);
+    assert_eq!(
+        report.references[0].location.pointer,
+        "/operations/op/input/$ref"
+    );
+    assert_eq!(
+        report.references[0].spelling.as_deref(),
+        Some("https://missing.test/schema")
+    );
+    let ReferenceResolution::Unresolved { detail } = &report.references[0].resolution else {
+        panic!()
+    };
+    assert_eq!(detail.reason, ReferenceRefusalReason::ResourceUnavailable);
+}
+
+#[test]
+fn supplied_resource_references_are_reported_transitively_once() {
+    let draft = Document::parse(r#"{"openbindings":"0.2.0","operations":{"op":{"input":{"$ref":"https://example.test/a"}}}}"#).unwrap();
+    let resources = ExternalSchemas::new(
+        [
+            ("https://example.test/a", r#"{"$ref":"b"}"#),
+            (
+                "https://example.test/b",
+                r#"{"allOf":[{"$ref":"a"},{"$ref":"missing"}],"const":{"$ref":"opaque"}}"#,
+            ),
+            ("https://example.test/unused", r#"{"$ref":"also-missing"}"#),
+        ]
+        .map(|(uri, text)| ExternalSchema {
+            uri: uri.into(),
+            document: JsonValue::parse(text).unwrap(),
+        }),
+    )
+    .unwrap();
+    let proof = draft.validate().unwrap().conformant().unwrap();
+    let cancelled = AtomicBool::new(false);
+    let report = draft.references_with_resources(resources.clone(), &cancelled);
+    assert_eq!(
+        report,
+        proof.references_with_resources(resources, &cancelled)
+    );
+    assert!(report.complete);
+    assert!(report.limitation.is_none());
+    assert_eq!(report.references.len(), 4);
+    assert!(
+        report.references[..3]
+            .iter()
+            .all(|r| matches!(r.resolution, ReferenceResolution::Located { .. }))
+    );
+    let missing = &report.references[3];
+    assert_eq!(
+        missing.location.source_uri.as_deref(),
+        Some("https://example.test/b")
+    );
+    assert_eq!(missing.location.pointer, "/allOf/1/$ref");
+    assert_eq!(missing.spelling.as_deref(), Some("missing"));
+    let ReferenceResolution::Unresolved { detail } = &missing.resolution else {
+        panic!("missing resource")
+    };
+    assert_eq!(detail.reason, ReferenceRefusalReason::ResourceUnavailable);
+    assert_eq!(
+        detail.resource_uri.as_deref(),
+        Some("https://example.test/missing")
+    );
+}
+
+#[test]
+fn reached_supplied_schemas_keep_the_existing_depth_limit() {
+    let draft = Document::parse(r#"{"openbindings":"0.2.0","operations":{"op":{"input":{"$ref":"https://example.test/a"}}}}"#).unwrap();
+    let text = format!(
+        "{}{{\"$ref\":\"https://example.test/missing\"}}{}",
+        "{\"not\":".repeat(257),
+        "}".repeat(257)
+    );
+    let resources = ExternalSchemas::new([ExternalSchema {
+        uri: "https://example.test/a".into(),
+        document: JsonValue::parse(text).unwrap(),
+    }])
+    .unwrap();
+    let report = draft.references_with_resources(resources, &AtomicBool::new(false));
+    assert!(!report.complete);
+    assert_eq!(report.references.len(), 1);
+    let limitation = report.limitation.unwrap();
+    assert_eq!(limitation.reason, ReferenceRefusalReason::LimitExceeded);
+    assert_eq!(limitation.code, "schema-depth");
+    assert_eq!(
+        limitation.location.unwrap().source_uri.as_deref(),
+        Some("https://example.test/a")
+    );
+}
+
+#[test]
+fn reached_supplied_sources_include_nested_identifier_scopes() {
+    let document = Document::parse(r#"{"openbindings":"0.2.0","operations":{"op":{"input":{"$ref":"https://example.test/a"}}}}"#).unwrap();
+    let resources = ExternalSchemas::new([ExternalSchema {
+        uri: "https://example.test/a".into(),
+        document: JsonValue::parse(
+            r#"{"properties":{"p":{"$id":"https://nested.test/base/","$ref":"missing"}}}"#,
+        )
+        .unwrap(),
+    }])
+    .unwrap();
+    let report = document.references_with_resources(resources, &AtomicBool::new(false));
+    assert!(report.complete);
+    assert_eq!(report.references.len(), 2);
+    let reference = &report.references[1];
+    assert_eq!(
+        reference.location.source_uri.as_deref(),
+        Some("https://example.test/a")
+    );
+    assert_eq!(reference.location.pointer, "/properties/p/$ref");
+    let ReferenceResolution::Unresolved { detail } = &reference.resolution else {
+        panic!("missing resource")
+    };
+    assert_eq!(
+        detail.resource_uri.as_deref(),
+        Some("https://nested.test/base/missing")
+    );
+}

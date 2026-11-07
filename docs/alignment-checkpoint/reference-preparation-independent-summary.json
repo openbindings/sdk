@@ -1,0 +1,102 @@
+{
+  "production_drift": [],
+  "required_cases": 1546,
+  "required_failures": [],
+  "configuration_failures": [],
+  "semantic_controls": 19,
+  "semantic_failures": [],
+  "read_shape_controls": 210,
+  "public_preparation_cancelled_checkpoints": 240,
+  "fixed_read_cancelled_checkpoints": 390,
+  "frozen": [
+    {
+      "explain": {
+        "status": "S"
+      },
+      "id": "deep",
+      "memory": {
+        "allocations_per_op": 91.0,
+        "baseline_live_bytes": 1230295,
+        "ending_live_bytes": 1230295,
+        "incremental_peak_bytes": 51448,
+        "peak_live_bytes": 1281743,
+        "requested_bytes_per_op": 100564.0
+      },
+      "outcome": {
+        "status": "S"
+      }
+    },
+    {
+      "explain": {
+        "code": "evaluation-stack-limit",
+        "reason": "LimitExceeded",
+        "status": "N"
+      },
+      "id": "depth-stop",
+      "memory": {
+        "allocations_per_op": 2.0,
+        "baseline_live_bytes": 1231429,
+        "ending_live_bytes": 1231511,
+        "incremental_peak_bytes": 82,
+        "peak_live_bytes": 1231511,
+        "requested_bytes_per_op": 82.0
+      },
+      "outcome": {
+        "code": "evaluation-stack-limit",
+        "reason": "LimitExceeded",
+        "status": "N"
+      }
+    },
+    {
+      "explain": {
+        "status": "S"
+      },
+      "id": "reference-text-1000",
+      "memory": {
+        "allocations_per_op": 2007.0,
+        "baseline_live_bytes": 2676023,
+        "ending_live_bytes": 2676023,
+        "incremental_peak_bytes": 1492,
+        "peak_live_bytes": 2677515,
+        "requested_bytes_per_op": 289780.0
+      },
+      "outcome": {
+        "status": "S"
+      }
+    },
+    {
+      "explain": {
+        "status": "S"
+      },
+      "id": "reference-text-5000",
+      "memory": {
+        "allocations_per_op": 10007.0,
+        "baseline_live_bytes": 20180819,
+        "ending_live_bytes": 20180819,
+        "incremental_peak_bytes": 1492,
+        "peak_live_bytes": 20182311,
+        "requested_bytes_per_op": 1441780.0
+      },
+      "outcome": {
+        "status": "S"
+      }
+    },
+    {
+      "explain": {
+        "status": "S"
+      },
+      "id": "reference-fan-in",
+      "memory": {
+        "allocations_per_op": 207.0,
+        "baseline_live_bytes": 3603347,
+        "ending_live_bytes": 3603347,
+        "incremental_peak_bytes": 1492,
+        "peak_live_bytes": 3604839,
+        "requested_bytes_per_op": 30580.0
+      },
+      "outcome": {
+        "status": "S"
+      }
+    }
+  ]
+}

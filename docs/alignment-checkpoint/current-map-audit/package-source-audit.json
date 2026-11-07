@@ -1,0 +1,595 @@
+{
+  "status": "partial actual source/package audit; final independent audit and evaluator retirement pending",
+  "sdk_commit": "57cdc226034df802f991db16ded98b4c8155edae",
+  "logical_product_boundaries": {
+    "core": {
+      "name": "openbindings",
+      "depends_on": [],
+      "modules": [
+        "document",
+        "conformance",
+        "schema.inventory",
+        "schema.resources",
+        "schema.references",
+        "schema.evaluation",
+        "json",
+        "control"
+      ]
+    },
+    "evaluator": {
+      "name": "openbindings-json-schema-evaluator",
+      "depends_on": [
+        "core"
+      ],
+      "modules": [
+        "preparation",
+        "evaluation",
+        "diagnostics"
+      ]
+    },
+    "comparison": {
+      "name": "openbindings-schema-comparison",
+      "depends_on": [
+        "core"
+      ],
+      "modules": [
+        "normalization",
+        "identity"
+      ]
+    },
+    "context": {
+      "name": "openbindings-context",
+      "depends_on": [
+        "core"
+      ],
+      "modules": [
+        "context",
+        "challenge"
+      ]
+    },
+    "invocation": {
+      "name": "openbindings-invocation",
+      "depends_on": [
+        "core",
+        "context"
+      ],
+      "modules": [
+        "binding",
+        "operation",
+        "channel",
+        "wire"
+      ]
+    },
+    "kind-description": {
+      "name": "openbindings-kind-description",
+      "depends_on": [
+        "core",
+        "context"
+      ],
+      "modules": [
+        "descriptor",
+        "check"
+      ]
+    },
+    "source-pull": {
+      "name": "openbindings-source-pull",
+      "depends_on": [
+        "core",
+        "context"
+      ],
+      "modules": [
+        "request",
+        "model",
+        "carrier",
+        "relationships",
+        "validation",
+        "client",
+        "budget",
+        "error"
+      ]
+    },
+    "http-discovery": {
+      "name": "openbindings-http-discovery",
+      "depends_on": [
+        "core"
+      ],
+      "modules": [
+        "policy",
+        "transport"
+      ]
+    },
+    "test-support": {
+      "name": "openbindings-schema-evaluator-test-support",
+      "depends_on": [
+        "core"
+      ],
+      "modules": [
+        "fixtures",
+        "observer",
+        "judgment"
+      ]
+    },
+    "wasm": {
+      "name": "openbindings-wasm",
+      "depends_on": [
+        "core",
+        "evaluator",
+        "http-discovery"
+      ],
+      "modules": [
+        "handles",
+        "bridge"
+      ]
+    },
+    "typescript": {
+      "name": "@openbindings/sdk",
+      "depends_on": [
+        "wasm"
+      ],
+      "modules": [
+        "document",
+        "schema",
+        "json",
+        "http-discovery",
+        "runtime",
+        "diagnostics",
+        "ownership"
+      ]
+    }
+  },
+  "actual_rust_packages": [
+    {
+      "package": "openbindings",
+      "manifest": "crates/openbindings/Cargo.toml",
+      "manifest_sha256": "6c142239e72ed0e415779c675950eefdc781b438886802a8efe881d820bc8737",
+      "source_root": "crates/openbindings/src/lib.rs",
+      "source_root_sha256": "40a665dec1e00f1509b86f9330f33c41a1a6e00d24b2d86b9f0286f8e967b27e",
+      "top_level_modules": [
+        "json",
+        "uri",
+        "version",
+        "conformance",
+        "document",
+        "fixed_schema",
+        "schema",
+        "control"
+      ],
+      "sdk_dependencies": [
+        {
+          "package": "openbindings-internal-json",
+          "kind": "normal",
+          "target": null,
+          "optional": false
+        },
+        {
+          "package": "openbindings-internal-schema",
+          "kind": "normal",
+          "target": null,
+          "optional": false
+        }
+      ]
+    },
+    {
+      "package": "openbindings-internal-json",
+      "manifest": "crates/openbindings-internal-json/Cargo.toml",
+      "manifest_sha256": "77c6f6293381cb8d8557061e612561c9d5df8adcd028b34f1c15c5af15fce8bc",
+      "source_root": "crates/openbindings-internal-json/src/lib.rs",
+      "source_root_sha256": "1ca8756655344ff5dc269525fdb9f662c875333c0b0f581118683612485b2c15",
+      "top_level_modules": [
+        "backend",
+        "json",
+        "raw",
+        "object",
+        "pointer",
+        "decimal",
+        "numeric",
+        "work",
+        "conversion"
+      ],
+      "sdk_dependencies": []
+    },
+    {
+      "package": "openbindings-internal-schema",
+      "manifest": "crates/openbindings-internal-schema/Cargo.toml",
+      "manifest_sha256": "4b2a98b61d6bf5622a7adcd5cf32dd3713d784e497d16117e04da40d9a867aff",
+      "source_root": "crates/openbindings-internal-schema/src/lib.rs",
+      "source_root_sha256": "86f78bcea898610c0046034210c35037c31d84c79126cb113aa37f773353b2cb",
+      "top_level_modules": [
+        "dialect",
+        "fixed_locations",
+        "fixed_schema",
+        "identifiers",
+        "identity_budget",
+        "preparation",
+        "input_policy",
+        "schema_index",
+        "space",
+        "uri",
+        "program"
+      ],
+      "sdk_dependencies": [
+        {
+          "package": "openbindings-internal-json",
+          "kind": "normal",
+          "target": null,
+          "optional": false
+        }
+      ]
+    },
+    {
+      "package": "openbindings-context",
+      "manifest": "crates/openbindings-context/Cargo.toml",
+      "manifest_sha256": "1ee4904465a27d4772f6c03ff01aed2a36f3d0bec915c5ca4f67ffef88cb0996",
+      "source_root": "crates/openbindings-context/src/lib.rs",
+      "source_root_sha256": "2cafbf40bf56868b41511b96c4eba0fad73994c0c6eba93015584147ecbadee4",
+      "top_level_modules": [],
+      "sdk_dependencies": [
+        {
+          "package": "openbindings",
+          "kind": "normal",
+          "target": null,
+          "optional": false
+        }
+      ]
+    },
+    {
+      "package": "openbindings-http-discovery",
+      "manifest": "crates/openbindings-http-discovery/Cargo.toml",
+      "manifest_sha256": "fd632abf307be99dfdeff94dc0f8b034fdc5344be66178e3d839b44b3ecbdc88",
+      "source_root": "crates/openbindings-http-discovery/src/lib.rs",
+      "source_root_sha256": "11bf43d966ff808dc9e070b070ed633be7e4622b729854a9c65541b963029e00",
+      "top_level_modules": [
+        "client",
+        "publication",
+        "native"
+      ],
+      "sdk_dependencies": [
+        {
+          "package": "openbindings",
+          "kind": "normal",
+          "target": null,
+          "optional": false
+        },
+        {
+          "package": "openbindings-internal-cancellation",
+          "kind": "normal",
+          "target": null,
+          "optional": false
+        },
+        {
+          "package": "openbindings-invocation",
+          "kind": "dev",
+          "target": null,
+          "optional": false
+        },
+        {
+          "package": "openbindings-kind-description",
+          "kind": "dev",
+          "target": null,
+          "optional": false
+        },
+        {
+          "package": "openbindings-source-pull",
+          "kind": "dev",
+          "target": null,
+          "optional": false
+        }
+      ]
+    },
+    {
+      "package": "openbindings-internal-cancellation",
+      "manifest": "crates/openbindings-internal-cancellation/Cargo.toml",
+      "manifest_sha256": "7aa73ea16b39d237ed11a2934321d1223edc7a51efdefe099a97077fc791d94b",
+      "source_root": "crates/openbindings-internal-cancellation/src/lib.rs",
+      "source_root_sha256": "b8b51860a0890dd6d69a4e3752d9e11e2dd05ab1d6dce5ce80f9e2656028e486",
+      "top_level_modules": [
+        "tests"
+      ],
+      "sdk_dependencies": [
+        {
+          "package": "openbindings",
+          "kind": "normal",
+          "target": null,
+          "optional": false
+        }
+      ]
+    },
+    {
+      "package": "openbindings-invocation",
+      "manifest": "crates/openbindings-invocation/Cargo.toml",
+      "manifest_sha256": "51e979f3d0830d034ea5310ae233946331d531ee38e6efcb5bc6bde26a62c671",
+      "source_root": "crates/openbindings-invocation/src/lib.rs",
+      "source_root_sha256": "8e0a237c41918030a843cc9ad97d60a10eb57556df970d12b463eac57c3340dd",
+      "top_level_modules": [
+        "binding",
+        "boundary",
+        "channel",
+        "error",
+        "operation",
+        "value"
+      ],
+      "sdk_dependencies": [
+        {
+          "package": "openbindings",
+          "kind": "normal",
+          "target": null,
+          "optional": false
+        },
+        {
+          "package": "openbindings-context",
+          "kind": "normal",
+          "target": null,
+          "optional": false
+        },
+        {
+          "package": "openbindings-internal-cancellation",
+          "kind": "normal",
+          "target": null,
+          "optional": false
+        },
+        {
+          "package": "openbindings-json-schema-evaluator",
+          "kind": "dev",
+          "target": null,
+          "optional": false
+        }
+      ]
+    },
+    {
+      "package": "openbindings-json-schema-evaluator",
+      "manifest": "crates/openbindings-json-schema-evaluator/Cargo.toml",
+      "manifest_sha256": "7fc6b14bbecaac6792d9eb9a4b8513275a2088f387dadd6f32c09f1e658650f8",
+      "source_root": "crates/openbindings-json-schema-evaluator/src/lib.rs",
+      "source_root_sha256": "8e8fab8384e7e1390e5cec4645fe969ef3cf3af7d60f05dbded20d5856bd76fa",
+      "top_level_modules": [
+        "bounds",
+        "bundle",
+        "cycles",
+        "depth",
+        "es2020_properties",
+        "explain",
+        "missing",
+        "operands",
+        "pass",
+        "pattern",
+        "semantic",
+        "stack",
+        "unevaluated_walk",
+        "resource_identity",
+        "supplied_reuse"
+      ],
+      "sdk_dependencies": [
+        {
+          "package": "openbindings",
+          "kind": "normal",
+          "target": null,
+          "optional": false
+        },
+        {
+          "package": "openbindings-internal-json",
+          "kind": "normal",
+          "target": null,
+          "optional": false
+        },
+        {
+          "package": "openbindings-internal-schema",
+          "kind": "normal",
+          "target": null,
+          "optional": false
+        },
+        {
+          "package": "openbindings-json-schema-evaluator",
+          "kind": "dev",
+          "target": null,
+          "optional": false
+        }
+      ]
+    },
+    {
+      "package": "openbindings-kind-description",
+      "manifest": "crates/openbindings-kind-description/Cargo.toml",
+      "manifest_sha256": "6b45df2933309dd63867da9926da80026e5e846df3de27b702b36ae8d3a7082d",
+      "source_root": "crates/openbindings-kind-description/src/lib.rs",
+      "source_root_sha256": "86b06a315b197bc0b447c325cddaa9334c64e4ff4e7d9bccd557723983c47bb8",
+      "top_level_modules": [
+        "client",
+        "error",
+        "model"
+      ],
+      "sdk_dependencies": [
+        {
+          "package": "openbindings",
+          "kind": "normal",
+          "target": null,
+          "optional": false
+        },
+        {
+          "package": "openbindings-context",
+          "kind": "normal",
+          "target": null,
+          "optional": false
+        },
+        {
+          "package": "openbindings-internal-cancellation",
+          "kind": "normal",
+          "target": null,
+          "optional": false
+        }
+      ]
+    },
+    {
+      "package": "openbindings-source-pull",
+      "manifest": "crates/openbindings-source-pull/Cargo.toml",
+      "manifest_sha256": "9218259957464807a9b62695e631f0310d1d847b478c75d710a8ed455c566926",
+      "source_root": "crates/openbindings-source-pull/src/lib.rs",
+      "source_root_sha256": "8d968a39add4d058a522f071c9194d70af2d96831c85f2411085fdb5e8f63631",
+      "top_level_modules": [
+        "budget",
+        "carrier",
+        "client",
+        "error",
+        "model",
+        "relationships",
+        "request",
+        "validation"
+      ],
+      "sdk_dependencies": [
+        {
+          "package": "openbindings",
+          "kind": "normal",
+          "target": null,
+          "optional": false
+        },
+        {
+          "package": "openbindings-context",
+          "kind": "normal",
+          "target": null,
+          "optional": false
+        },
+        {
+          "package": "openbindings-internal-cancellation",
+          "kind": "normal",
+          "target": null,
+          "optional": false
+        },
+        {
+          "package": "openbindings-internal-json",
+          "kind": "normal",
+          "target": null,
+          "optional": false
+        },
+        {
+          "package": "openbindings-schema-comparison",
+          "kind": "dev",
+          "target": null,
+          "optional": false
+        }
+      ]
+    },
+    {
+      "package": "openbindings-schema-comparison",
+      "manifest": "crates/openbindings-schema-comparison/Cargo.toml",
+      "manifest_sha256": "a1241fce738d7f66ae45f6d9c7d5f7683e358f58182961101bba6087a9609f58",
+      "source_root": "crates/openbindings-schema-comparison/src/lib.rs",
+      "source_root_sha256": "b326028dcce7428647f36543171196694d3694377d876e4777a5b91ccd6a9fe6",
+      "top_level_modules": [
+        "budget",
+        "error",
+        "input",
+        "merge",
+        "normalize",
+        "reference",
+        "value"
+      ],
+      "sdk_dependencies": [
+        {
+          "package": "openbindings",
+          "kind": "normal",
+          "target": null,
+          "optional": false
+        },
+        {
+          "package": "openbindings-internal-json",
+          "kind": "normal",
+          "target": null,
+          "optional": false
+        },
+        {
+          "package": "openbindings-internal-schema",
+          "kind": "normal",
+          "target": null,
+          "optional": false
+        }
+      ]
+    },
+    {
+      "package": "openbindings-schema-evaluator-test-support",
+      "manifest": "crates/openbindings-schema-evaluator-test-support/Cargo.toml",
+      "manifest_sha256": "df9a1c7f66a460259de405932cd9d8c39c2d493d019db9b80d82c8bb37096b9b",
+      "source_root": "crates/openbindings-schema-evaluator-test-support/src/lib.rs",
+      "source_root_sha256": "f4b86272915a85c92518aa08a786f264cfa7d64f22e0c5b7415fecf112c8ea88",
+      "top_level_modules": [],
+      "sdk_dependencies": [
+        {
+          "package": "openbindings",
+          "kind": "normal",
+          "target": null,
+          "optional": false
+        },
+        {
+          "package": "openbindings-json-schema-evaluator",
+          "kind": "dev",
+          "target": null,
+          "optional": false
+        }
+      ]
+    },
+    {
+      "package": "openbindings-wasm",
+      "manifest": "crates/openbindings-wasm/Cargo.toml",
+      "manifest_sha256": "bb7427d5794dd24521eae9e3ec97c4b97d0a50d1531b0897f3f7131263b31e39",
+      "source_root": "crates/openbindings-wasm/src/lib.rs",
+      "source_root_sha256": "6a09911fd18b007a6d582bed6f44dbe9ddc524f46d8c93e905f294d488300c52",
+      "top_level_modules": [
+        "proof_mutation_tests",
+        "location_transfer_tests"
+      ],
+      "sdk_dependencies": [
+        {
+          "package": "openbindings",
+          "kind": "normal",
+          "target": null,
+          "optional": false
+        },
+        {
+          "package": "openbindings-http-discovery",
+          "kind": "normal",
+          "target": null,
+          "optional": false
+        },
+        {
+          "package": "openbindings-internal-json",
+          "kind": "normal",
+          "target": null,
+          "optional": false
+        },
+        {
+          "package": "openbindings-json-schema-evaluator",
+          "kind": "normal",
+          "target": null,
+          "optional": false
+        }
+      ]
+    }
+  ],
+  "typescript": {
+    "package": "@openbindings/sdk",
+    "source_modules": [
+      "diagnostics",
+      "document",
+      "http-discovery",
+      "index",
+      "json",
+      "ownership",
+      "runtime",
+      "schema",
+      "testing",
+      "wasm-module.d"
+    ],
+    "runtime_dependency": "private Rust/Wasm bridge; no independently reimplemented semantic engine"
+  },
+  "additional_private_packages": {
+    "openbindings-internal-json": "One version-locked exact JSON arena/parser, decimal arithmetic and work ledger is shared by core and optional companions. Public exact types are re-exported by core; storage/backend mechanics are not independent document concepts.",
+    "openbindings-internal-schema": "Shared original schema inventory/profile/URI interpretation and guarded fixed checks avoid separate meanings in core and optional evaluator/comparison. These are private Rust implementation mechanisms. The outgoing projection/compiler portions are still slated for retirement.",
+    "openbindings-internal-cancellation": "One cancellation token/future identity and scoped asynchronous relay/run_attempt serve the optional companions. Core only supplies the minimal WorkControl seam; async provider cancellation does not become a core specification concept."
+  },
+  "boundary_findings": [
+    "The11 logical design boundaries correspond to10 product Rust packages plus TypeScript; actual Rust organization additionally contains3 shared private implementation packages. This difference is intentional and must be explicit in the final map.",
+    "Default evaluator is a production dependency of the Wasm bridge, but only a dev/example dependency of invocation/test support. Core and role APIs do not import it.",
+    "Comparison is a provider/example dependency for source-pull, not a production dependency of the generic relationship checker.",
+    "Conditional HTTP native transport, third-party dependencies and dev-only consumers are distinct from the conceptual authority graph.",
+    "No legacy inspection/synthesis/internal-interface crate remains.",
+    "Evaluator top-level module names still describe a transitional two-engine implementation; final organization must be re-audited after removing outgoing projection/compiler paths."
+  ],
+  "working_delta": "HTTP companion public authority pin updated after57cdc22; no module/dependency behavior change."
+}

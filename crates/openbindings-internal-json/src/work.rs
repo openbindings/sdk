@@ -1,4 +1,5 @@
-//! The default evaluator's optional evaluation work allowance and stack guard.
+//! Shared synchronous work allowances for construction and evaluation, with a
+//! stack guard for backend instance traversal.
 //!
 //! An application that sets the evaluator's work cap gets one allowance per
 //! evaluation pass. This crate's adapter charges a unit for each element,
@@ -17,6 +18,28 @@ use std::cell::Cell;
 /// The pass's allowance ran out.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Spent;
+
+/// An already observed stop in an enclosing synchronous work scope.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Stop {
+    /// A charge exhausted the inherited work allowance.
+    Work,
+    /// A child traversal exceeded the inherited stack guard.
+    Stack,
+}
+
+/// Inspect the inherited stop without charging, granting, or resetting work.
+pub fn stopped() -> Option<Stop> {
+    STATE.with(|state| {
+        if state.allowance.get().spent {
+            Some(Stop::Work)
+        } else if state.deep.get() {
+            Some(Stop::Stack)
+        } else {
+            None
+        }
+    })
+}
 
 #[derive(Clone, Copy)]
 struct Allowance {
@@ -79,15 +102,10 @@ impl Drop for Scope {
     }
 }
 
-// The address of a local in a frame of its own, near the top of the stack.
-#[inline(never)]
-fn stack_address() -> usize {
-    let probe = 0u8;
-    std::hint::black_box(std::ptr::addr_of!(probe)) as usize
-}
-
 /// Run `evaluate` using at most `bytes` of stack below this call, also
 /// returning whether it used more: from then on every charge failed.
+// A distinct live frame keeps the origin above charges made by the callback.
+#[inline(never)]
 pub fn guard<T>(bytes: usize, evaluate: impl FnOnce() -> T) -> (T, bool) {
     struct Restore(Option<(usize, usize)>, bool);
     impl Drop for Restore {
@@ -99,14 +117,18 @@ pub fn guard<T>(bytes: usize, evaluate: impl FnOnce() -> T) -> (T, bool) {
             });
         }
     }
+    // Keep the origin in this live frame, not a temporary TLS/setup frame.
+    let probe = 0u8;
+    let start = std::hint::black_box(std::ptr::addr_of!(probe)) as usize;
     let _restore = STATE.with(|state| {
         let saved = Restore(state.stack.get(), state.deep.get());
-        state.stack.set(Some((stack_address(), bytes)));
+        state.stack.set(Some((start, bytes)));
         state.deep.set(false);
         state.engage();
         saved
     });
     let result = evaluate();
+    std::hint::black_box(&probe);
     (result, STATE.with(|state| state.deep.get()))
 }
 
@@ -196,6 +218,26 @@ fn engaged(state: &State, units: usize) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn observed_stops_are_inherited_without_granting_or_resetting_work() {
+        assert_eq!(stopped(), None);
+        assert_eq!(
+            scope(0, || {
+                assert!(!charge(1));
+                assert_eq!(stopped(), Some(Stop::Work));
+                assert_eq!(scope(usize::MAX, stopped), Err(Spent));
+                assert_eq!(stopped(), Some(Stop::Work));
+            }),
+            Err(Spent)
+        );
+        assert_eq!(stopped(), None);
+        let (_, deep) = guard(0, || {
+            assert!(!charge(1));
+            assert_eq!(stopped(), Some(Stop::Stack));
+        });
+        assert!(deep);
+        assert_eq!(stopped(), None);
+    }
     #[test]
     fn an_allowance_is_spent_by_its_charges_and_restored_after() {
         assert!(charge(usize::MAX));

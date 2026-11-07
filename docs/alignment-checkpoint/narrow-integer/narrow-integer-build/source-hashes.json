@@ -1,0 +1,4 @@
+{
+  "crates/openbindings-json-schema-evaluator/src/semantic/value_predicates.rs": "e1731c39927b297201afe4715ee6386aa670fff2ea5eb75f69cfd54a485a2b2a",
+  "crates/openbindings-json-schema-evaluator/src/semantic/primitive.rs": "7d619cea1d032cf9df1ec87b18d1f4b680744de9a82999afe34290e82f3ca0a1"
+}

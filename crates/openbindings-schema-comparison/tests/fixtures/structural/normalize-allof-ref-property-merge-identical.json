@@ -1,0 +1,63 @@
+{
+  "version": "1.0",
+  "description": "A $ref inside an overlapping-property merge is inlined before the merge runs: branches normalize first, so ref-carried constraints participate in the merged property schema instead of being dropped.",
+  "mode": "identical",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "schemas": {
+      "ShortString": {
+        "type": "string",
+        "minLength": 2
+      }
+    },
+    "operations": {
+      "refPropertyMerge": {
+        "input": {
+          "allOf": [
+            {
+              "type": "object",
+              "properties": {
+                "p": {
+                  "type": "string",
+                  "maxLength": 10
+                }
+              }
+            },
+            {
+              "properties": {
+                "p": {
+                  "$ref": "#/schemas/ShortString"
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "refPropertyMerge": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "p": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 10
+            }
+          }
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "compatible"
+    }
+  }
+}

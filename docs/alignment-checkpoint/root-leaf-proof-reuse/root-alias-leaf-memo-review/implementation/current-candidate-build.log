@@ -1,0 +1,10 @@
+warning: unused import: `Control as _`
+ --> /Users/matt/Code/ob-pj/openbindings/sdk-migration/receipts/2026-11-02-preparation/original-default-performance/root-alias-leaf-memo-review/implementation/candidate-copy/src/semantic/independent-root.rs:2:36
+  |
+2 | use openbindings_internal_schema::{Control as _,preparation::Attempt};
+  |                                    ^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: 1 warning emitted
+

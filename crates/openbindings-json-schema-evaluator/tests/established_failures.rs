@@ -2,7 +2,7 @@ use openbindings::*;
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 use serde_json::{Value, json};
 use std::sync::{
-    Arc, Mutex,
+    Mutex,
     atomic::{AtomicBool, AtomicUsize, Ordering},
 };
 
@@ -27,20 +27,27 @@ impl WorkControl for CancelAfterChecks {
 // Retain the public evaluator seam so the same prepared schema can be checked
 // directly and through the normative contract, which adds its own entry check.
 #[derive(Default)]
-struct RetainPrepared(Mutex<Option<Arc<dyn PreparedSchema>>>);
+struct RetainPrepared(Mutex<Option<openbindings_json_schema_evaluator::DefaultValidator>>);
 impl SchemaEvaluator for RetainPrepared {
+    type Validator = openbindings_json_schema_evaluator::DefaultValidator;
     fn prepare(
         &self,
-        request: &SchemaRequest,
+        request: EvaluationRequest<'_>,
+        limits: &PreparationLimits,
         control: &dyn WorkControl,
-    ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
-        let schema = DefaultEvaluator::new().prepare(request, control)?;
+    ) -> Result<Self::Validator, PreparationFailure> {
+        let schema = DefaultEvaluator::new().prepare(request, limits, control)?;
         *self.0.lock().unwrap() = Some(schema.clone());
         Ok(schema)
     }
 }
 
-fn prepared(schema: Value) -> (PreparedValueContract, Arc<dyn PreparedSchema>) {
+fn prepared(
+    schema: Value,
+) -> (
+    PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator>,
+    openbindings_json_schema_evaluator::DefaultValidator,
+) {
     let document = Document::parse(
         json!({"openbindings":"0.2.0","operations":{"op":{"input":schema}}}).to_string(),
     )
@@ -57,7 +64,11 @@ fn prepared(schema: Value) -> (PreparedValueContract, Arc<dyn PreparedSchema>) {
     let contract = operation
         .input()
         .expect("declared input")
-        .prepare(&evaluator)
+        .prepare(
+            &evaluator,
+            &openbindings::ExternalSchemas::default(),
+            &openbindings::PreparationLimits::default(),
+        )
         .unwrap();
     let schema = evaluator.0.lock().unwrap().take().unwrap();
     (contract, schema)
@@ -67,7 +78,7 @@ fn assert_interrupted_failure(schema: Value, instance: &str) {
     let (contract, prepared) = prepared(schema);
     let value = JsonValue::parse(instance).unwrap();
     assert!(matches!(
-        contract.validate(&value),
+        contract.evaluate(&value),
         ValueOutcome::Fails { .. }
     ));
     assert!(matches!(
@@ -75,18 +86,72 @@ fn assert_interrupted_failure(schema: Value, instance: &str) {
         ValueOutcome::Fails { problems, .. } if !problems.is_empty()
     ));
 
-    // At the evaluator seam, the first observation is healthy and every later
-    // observation is cancelled. The contract has one additional entry check.
-    let outcomes = [
-        prepared.validate(&value, Detail::Explain, &CancelAfterChecks::new(1)),
-        contract.explain_with_control(&value, &CancelAfterChecks::new(2)),
-        prepared.validate(&value, Detail::Outcome, &CancelAfterChecks::new(1)),
-        contract.validate_with_control(&value, &CancelAfterChecks::new(2)),
-    ];
-    assert!(
-        outcomes.iter().all(|outcome| matches!(outcome, ValueOutcome::Fails { problems, problems_complete: false, .. } if problems.is_empty())),
-        "an established failure must survive cancelled diagnostics: {outcomes:?}"
-    );
+    for through_contract in [false, true] {
+        let evaluate = |detail, control: &CancelAfterChecks| {
+            if through_contract {
+                match detail {
+                    Detail::Outcome => contract.evaluate_with_control(&value, control),
+                    Detail::Explain => contract.explain_with_control(&value, control),
+                    _ => unreachable!("only the two explicit test details are passed"),
+                }
+            } else {
+                prepared.evaluate(&value, detail, control)
+            }
+        };
+        let outcome_checks = CancelAfterChecks::new(usize::MAX);
+        assert!(matches!(
+            evaluate(Detail::Outcome, &outcome_checks),
+            ValueOutcome::Fails { .. }
+        ));
+        let verdict_boundary = outcome_checks.calls.load(Ordering::Relaxed);
+        let explain_checks = CancelAfterChecks::new(usize::MAX);
+        assert!(
+            matches!(evaluate(Detail::Explain, &explain_checks), ValueOutcome::Fails { problems, .. } if !problems.is_empty())
+        );
+        let completed_explanation = explain_checks.calls.load(Ordering::Relaxed);
+        // Explain and Outcome use independently selected lanes. Establish the
+        // Explain verdict boundary from its own first completed F, then check
+        // every interruption on either side without equating callback counts.
+        let explain_verdict_boundary = (0..=completed_explanation)
+            .find(|&healthy| {
+                matches!(
+                    evaluate(Detail::Explain, &CancelAfterChecks::new(healthy)),
+                    ValueOutcome::Fails { .. }
+                )
+            })
+            .expect("healthy Explain establishes F");
+        assert!(completed_explanation > explain_verdict_boundary);
+        for healthy in 0..=completed_explanation {
+            let result = evaluate(Detail::Explain, &CancelAfterChecks::new(healthy));
+            if healthy < explain_verdict_boundary {
+                assert!(matches!(result, ValueOutcome::NoVerdict { detail }
+                    if detail.reason == NoVerdictReason::Cancelled));
+            } else if healthy < completed_explanation {
+                assert!(matches!(result, ValueOutcome::Fails {
+                    problems, problems_complete: false, ..
+                } if problems.is_empty()));
+            } else {
+                assert!(
+                    matches!(result, ValueOutcome::Fails { problems, .. } if !problems.is_empty())
+                );
+            }
+        }
+        for healthy in 0..=verdict_boundary {
+            let result = evaluate(Detail::Outcome, &CancelAfterChecks::new(healthy));
+            if healthy < verdict_boundary {
+                assert!(matches!(result, ValueOutcome::NoVerdict { detail }
+                    if detail.reason == NoVerdictReason::Cancelled));
+            } else {
+                assert!(matches!(result, ValueOutcome::Fails {
+                    problems, problems_complete: false, ..
+                } if problems.is_empty()));
+            }
+        }
+        assert!(
+            matches!(evaluate(Detail::Explain, &CancelAfterChecks::new(usize::MAX)),
+            ValueOutcome::Fails { problems, .. } if !problems.is_empty())
+        );
+    }
 }
 
 #[test]
@@ -105,12 +170,12 @@ fn cancellation_before_verdict_still_yields_no_verdict() {
         let (contract, prepared) = prepared(schema);
         let value = JsonValue::null();
         for outcome in [
-            prepared.validate(&value, Detail::Outcome, &AtomicBool::new(true)),
-            prepared.validate(&value, Detail::Explain, &AtomicBool::new(true)),
-            contract.validate_with_control(&value, &AtomicBool::new(true)),
+            prepared.evaluate(&value, Detail::Outcome, &AtomicBool::new(true)),
+            prepared.evaluate(&value, Detail::Explain, &AtomicBool::new(true)),
+            contract.evaluate_with_control(&value, &AtomicBool::new(true)),
             contract.explain_with_control(&value, &AtomicBool::new(true)),
             // Cancellation at the evaluator's entry is still before a verdict.
-            contract.validate_with_control(&value, &CancelAfterChecks::new(1)),
+            contract.evaluate_with_control(&value, &CancelAfterChecks::new(1)),
             contract.explain_with_control(&value, &CancelAfterChecks::new(1)),
         ] {
             assert!(
@@ -123,33 +188,46 @@ fn cancellation_before_verdict_still_yields_no_verdict() {
 
 #[test]
 fn established_satisfaction_survives_cancellation_after_verdict() {
-    // Each control allows the observation an evaluation makes before its
-    // verdict and reports cancellation at every later one.
-    for (schema, instance, before_verdict) in [
-        (json!(true), "null", 1),
-        (json!({"type":"integer"}), "1", 1),
-    ] {
+    for (schema, instance) in [(json!(true), "null"), (json!({"type":"integer"}), "1")] {
         let (contract, prepared) = prepared(schema);
         let value = JsonValue::parse(instance).unwrap();
-        assert!(matches!(contract.validate(&value), ValueOutcome::Satisfies));
-        for outcome in [
-            prepared.validate(
-                &value,
-                Detail::Outcome,
-                &CancelAfterChecks::new(before_verdict),
-            ),
-            prepared.validate(
-                &value,
-                Detail::Explain,
-                &CancelAfterChecks::new(before_verdict),
-            ),
-            contract.validate_with_control(&value, &CancelAfterChecks::new(before_verdict + 1)),
-            contract.explain_with_control(&value, &CancelAfterChecks::new(before_verdict + 1)),
-        ] {
-            assert!(
-                matches!(outcome, ValueOutcome::Satisfies),
-                "an established satisfaction must survive later cancellation: {outcome:?}"
-            );
+        assert!(matches!(contract.evaluate(&value), ValueOutcome::Satisfies));
+        for through_contract in [false, true] {
+            let evaluate = |detail, control: &CancelAfterChecks| {
+                if through_contract {
+                    match detail {
+                        Detail::Outcome => contract.evaluate_with_control(&value, control),
+                        Detail::Explain => contract.explain_with_control(&value, control),
+                        _ => unreachable!("only the two explicit test details are passed"),
+                    }
+                } else {
+                    prepared.evaluate(&value, detail, control)
+                }
+            };
+            for detail in [Detail::Outcome, Detail::Explain] {
+                let baseline = CancelAfterChecks::new(usize::MAX);
+                assert!(matches!(
+                    evaluate(detail, &baseline),
+                    ValueOutcome::Satisfies
+                ));
+                let verdict_boundary = baseline.calls.load(Ordering::Relaxed);
+                for healthy in 0..verdict_boundary {
+                    assert!(matches!(evaluate(detail, &CancelAfterChecks::new(healthy)),
+                        ValueOutcome::NoVerdict { detail } if detail.reason == NoVerdictReason::Cancelled));
+                }
+                // S has no diagnostic second pass or additional cancellation
+                // check that can replace its completed verdict.
+                let control = CancelAfterChecks::new(verdict_boundary);
+                assert!(matches!(
+                    evaluate(detail, &control),
+                    ValueOutcome::Satisfies
+                ));
+                assert_eq!(control.calls.load(Ordering::Relaxed), verdict_boundary);
+                assert!(matches!(
+                    evaluate(detail, &CancelAfterChecks::new(usize::MAX)),
+                    ValueOutcome::Satisfies
+                ));
+            }
         }
     }
 }

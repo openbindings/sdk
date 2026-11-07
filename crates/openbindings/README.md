@@ -20,61 +20,57 @@ assert_eq!(operation.key(), "lookup");
 `validate_document` checks all document rules on the bytes as given and returns
 evidence as met, violated or inconclusive where applicable. Text that is not JSON
 is an OBI-01 violation in the report, with its location. Only established
-conformance produces a `Conformant<Document>`, with infallible typed field reads
-and operations that hand out value contracts. An unsupported specification
+conformance produces a `ConformantDocument`, with infallible typed field reads
+and operations that hand out schemas. An unsupported specification
 version is a separate refusal.
 
 To author, create an OBI with `Document::new()` or parse exact JSON with
 `Document::parse`, which retains a snapshot for inspection, including invalid
 editor drafts, and refuses text that is not JSON as an `InputError`;
-`Document::validate` then returns the same validation. Edit that same type through `&mut self`: use `set_description`, whole-part setters
-such as `set_operation(key, &operation)`, or RFC 6901 `set` and `remove`.
+`Document::validate` then returns the same validation. Edits borrow the original and return a new immutable snapshot: use RFC 6901
+`set` and `remove` with exact JSON values. Set a complete namespace when absent;
+editing does not fabricate intermediate containers.
 `edit(&[Edit])` commits one atomic batch with one splice and one parse. Sibling
 insertions coalesce in batch order; untouched bytes remain exact. The byte budget
 is checked before allocating replacement bytes. Final parsing enforces the default
-JSON limits. A failed batch leaves the document unchanged.
+JSON limits. Both successful and failed batches leave the original document unchanged. Retain the returned document to use an edit.
 
-A `Conformant<Document>` has infallible reads and no mutable access. Use
-`as_document()` for plain fallible reads, or consume it with `into_inner()` to edit
-again. Clones, views, validation reports and proofs retain their own revision;
+A `ConformantDocument` has infallible reads and no mutable access. Use
+`document()` for exact draft reads, or consume it with `into_inner()` to keep the underlying snapshot. Clones, views, validation reports and proofs retain their own revision;
 editing another owner cannot change them. Positions refer to each revision's
 current bytes, available from `as_bytes()`. Duplicate-member input remains
-inspectable but is refused by typed reads, editing and conformance proof.
+inspectable but is refused by editing and conformance proof. Canonical domain entries are acquired
+only from a `ConformantDocument`.
 
 The [Rust first-use guide](https://github.com/openbindings/sdk/blob/main/docs/rust-first-use.md)
 shows value validation and an exact opaque-member edit.
 
-## Value contracts and limits
+## Value schemas and limits
 
 Document validation works without a caller-supplied schema evaluator. Its fixed
 normative schema checks are part of core. Operation value validation requires an
 explicit `SchemaEvaluator`, including for `true`, `false` and empty schemas.
 Select the optional `openbindings-json-schema-evaluator` or implement the trait.
-A conformant operation's `input()` and `output()` return its `ValueContract`s, or
-`None` when it declares none. `prepare(&evaluator)` borrows the evaluator and
-supplies no resources; `prepare_with(&evaluator, &resources)` adds an immutable
-`ResourceSet`. Core does not depend on the companion.
-The [evaluator integration guide](https://github.com/openbindings/sdk/blob/main/docs/schema-evaluators.md)
-explains the no-evaluator behavior and custom implementations.
+A conformant operation's `input()` and `output()` return its `Schema`s, or
+`None` when it declares none. Named schemas come from `ConformantDocument::schema`.
+`prepare(&evaluator, &external_schemas, &preparation_limits)` borrows explicit inputs
+and returns `Result<PreparedSchema<E::Validator>, PreparationFailure>`. Core does
+not depend on the evaluator companion. Original schema inventory and resolution
+are available through `SchemaEnvironment`; evaluator projections remain private.
 
-Prepare a value contract, retain the `PreparedValueContract`, and handle satisfies, fails,
-undefined and no-verdict for each value. Preparation returns
-`Result<PreparedValueContract, NoVerdict>`, so `?` propagates a refusal with its
-payload. Use `PreparedValueContract::validate_json` for exact JSON text or bytes; only
-admission failure returns `Err`. Retain a `JsonValue` and use `validate` for
-repeated checks or custom admission limits. `validate` is the cheap check; call
-`explain` on the same value contract to learn why a value fails. Undefined means the value-contract
-rules leave whether the value satisfies its value contract undefined; no-verdict means
-the evaluator could not answer. Each preparation compiles independently; cloning a
-prepared value contract shares its compiled state. A `ResourceSet` indexes its resource
-identities once. For evaluators that request the core projection, a resolution
-space is assembled once per live document revision and set, and released when
-either is dropped.
+Retain a prepared schema and handle satisfies, fails, undefined and no-verdict for
+each value. Preparation failure judges no value. `evaluate_json` admits exact JSON
+text or bytes; only admission failure is `Err`. Retain a `JsonValue` and call
+`evaluate` for repeated checks or custom admission limits. `explain` requests
+diagnostics for the same verdict. Undefined establishes semantic dependence on a
+known undefined result; no-verdict means the implementation could not answer.
+Each preparation is independent. Ownership and thread-safety follow the concrete
+validator; the default evaluator shares compiled state when cloned.
 
 Core performs no resource acquisition, binding selection or invocation. Source
-and binding content remain opaque. Kind implementations interpret them outside
+and binding data remain opaque. Kind implementations interpret them outside
 core. Document conformance does not establish that a binding works or that an
-example satisfies its value contract.
+example satisfies its schema.
 
 Default JSON admission allows 32 MiB, 10,000 container levels and 1,000,000 nodes:
 `Document::parse`, `Document::parse_owned` and `JsonValue::parse` apply all three.
@@ -97,5 +93,5 @@ See [support](https://github.com/openbindings/sdk/blob/main/docs/support.md) and
 ## Reference
 
 Use the crate's type and method documentation for ownership, error and limit
-contracts. The [API reference guide](https://github.com/openbindings/sdk/blob/main/docs/api-reference.md)
+interfaces. The [API reference guide](https://github.com/openbindings/sdk/blob/main/docs/api-reference.md)
 explains how to build the full reference locally.

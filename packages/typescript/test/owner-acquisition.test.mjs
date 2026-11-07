@@ -19,15 +19,17 @@ await sdk.initialize();
 test("owner acquisition is a method; property access creates no owner", () => {
   const paths = [
     [sdk.ExactMember, ["name", "value"]],
-    [sdk.Document, ["value", "schemas"]],
-    [sdk.ConformantDocument, ["value", "schemas"]],
-    [sdk.OperationView, ["value", "input", "output"]],
-    [sdk.ConformantOperationView, ["value", "input", "output"]],
-    [sdk.ValueContract, ["schema", "prepare"]],
-    [sdk.DependencyView, ["value"]],
-    [sdk.BindingView, ["value", "content"]],
-    [sdk.SourceView, ["value", "content"]],
-    [sdk.ExampleView, ["value", "input", "output"]],
+    [sdk.Document, ["value"]],
+    [
+      sdk.ConformantDocument,
+      ["value", "schemas", "operations", "sources", "bindings", "dependencies"],
+    ],
+    [sdk.Operation, ["value", "input", "output"]],
+    [sdk.Schema, ["json", "prepare"]],
+    [sdk.Dependency, ["value"]],
+    [sdk.Binding, ["value", "data"]],
+    [sdk.Source, ["value", "data"]],
+    [sdk.Example, ["value", "input", "output"]],
   ];
   const before = registrations;
   for (const [type, names] of paths) {
@@ -76,7 +78,7 @@ test("owner acquisition is a method; property access creates no owner", () => {
   assert.equal(testing.liveStorageOwners(), baseline);
   for (const [type, name] of [
     [sdk.ExactJson, "text"],
-    [sdk.Document, "operations"],
+    [sdk.Operation, "key"],
   ]) {
     let prototype = type.prototype;
     while (!Object.hasOwn(prototype, name))

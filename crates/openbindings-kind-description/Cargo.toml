@@ -1,0 +1,22 @@
+[package]
+name = "openbindings-kind-description"
+description = "Exact kind descriptions and source checking for OpenBindings"
+readme = "README.md"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+openbindings = { version = "=0.2.0-alpha.1", path = "../openbindings" }
+openbindings-context = { version = "=0.2.0-alpha.1", path = "../openbindings-context" }
+openbindings-internal-cancellation = { version = "=0.2.0-alpha.1", path = "../openbindings-internal-cancellation" }
+
+[dev-dependencies]
+serde_json.workspace = true
+

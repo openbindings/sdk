@@ -8,8 +8,9 @@ const BASE: &str = "https://probe.invalid/root";
 /// Prepare operation `op` input of a conformant document with the default evaluator.
 fn prepare_input(
     doc: &Document,
-    resources: &ResourceSet,
-) -> Result<PreparedValueContract, NoVerdict> {
+    resources: &ExternalSchemas,
+) -> Result<PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator>, PreparationFailure>
+{
     doc.validate()
         .unwrap()
         .conformant()
@@ -18,21 +19,25 @@ fn prepare_input(
         .unwrap()
         .input()
         .unwrap()
-        .prepare_with(&DefaultEvaluator::new(), resources)
+        .prepare(
+            &DefaultEvaluator::new(),
+            resources,
+            &openbindings::PreparationLimits::default(),
+        )
 }
 
-fn fixture(schema: &str, reference: &str, supplied: bool) -> (Document, ResourceSet) {
+fn fixture(schema: &str, reference: &str, supplied: bool) -> (Document, ExternalSchemas) {
     let (schemas, resources) = if supplied {
         (
             "{}".into(),
-            ResourceSet::new([SchemaResource {
+            ExternalSchemas::new([ExternalSchema {
                 uri: BASE.into(),
                 document: JsonValue::parse(schema).unwrap(),
             }])
             .unwrap(),
         )
     } else {
-        (format!(r#"{{"R":{schema}}}"#), ResourceSet::default())
+        (format!(r#"{{"R":{schema}}}"#), ExternalSchemas::default())
     };
     let reference = serde_json::to_string(reference).unwrap();
     let doc = Document::parse(format!(r#"{{"openbindings":"0.2.0","schemas":{schemas},"operations":{{"op":{{"input":{{"$ref":{reference}}}}}}}}}"#)).unwrap();
@@ -75,9 +80,8 @@ fn contained_draft_and_supplied_surrogate_collision_preserves_each_original_targ
                         format!("{BASE}#/$defs/{fragment}")
                     };
                     let (doc, resources) = fixture(&schema, &reference, supplied);
-                    let report = doc
-                        .references_with_resources(resources.clone(), &AtomicBool::new(false))
-                        .unwrap();
+                    let report =
+                        doc.references_with_resources(resources.clone(), &AtomicBool::new(false));
                     let found = report
                         .references
                         .iter()
@@ -97,7 +101,7 @@ fn contained_draft_and_supplied_surrogate_collision_preserves_each_original_targ
                     };
                     assert!(
                         matches!(&found.resolution, ReferenceResolution::Located { target, .. }
-                        if target.pointer == expected_target && target.resource.as_deref() == supplied.then_some(BASE)),
+                        if target.pointer == expected_target && target.source_uri.as_deref() == supplied.then_some(BASE)),
                         "{found:?}"
                     );
                     // Retain draft reference inspection above. Evaluation uses
@@ -122,7 +126,7 @@ fn contained_draft_and_supplied_surrogate_collision_preserves_each_original_targ
                         problems
                             .iter()
                             .any(|p| p.schema.pointer == format!("{literal_pointer}/type")
-                                && p.schema.resource.as_deref() == Some(BASE)),
+                                && p.schema.source_uri.as_deref() == Some(BASE)),
                         "{problems:?}"
                     );
                 }
@@ -153,12 +157,12 @@ fn inspection_root_never_masks_missing_references_including_suffix_candidates() 
                 .collect::<Vec<_>>()
                 .join(",");
             let doc = Document::parse(format!(r#"{{"openbindings":"0.2.0","schemas":{{{schemas}}},"operations":{{"op":{{"input":{input}}}}}}}"#)).unwrap();
-            let report = doc.references().unwrap();
+            let report = doc.references();
             assert!(report.complete);
             assert!(report.references.iter().all(|r| matches!(&r.resolution, ReferenceResolution::Unresolved { detail } if detail.reason == ReferenceRefusalReason::ResourceUnavailable && detail.code == "resource-unavailable")), "{report:?}");
             // A dominating branch decides without the missing resource; a
             // value reaching it gives no verdict.
-            let Ok(contract) = prepare_input(&doc, &ResourceSet::default()) else {
+            let Ok(contract) = prepare_input(&doc, &ExternalSchemas::default()) else {
                 panic!("expected ready")
             };
             for value in ["null", r#""s""#, "3", "{}", "[]"] {
@@ -176,49 +180,31 @@ fn inspection_root_never_masks_missing_references_including_suffix_candidates() 
 }
 
 #[test]
-fn unused_malformed_reference_sibling_is_isolated_but_malformed_id_stays_refused() {
+fn unused_malformed_siblings_do_not_change_the_selected_schema() {
     for supplied in [false, true] {
         for bad in [r#"{"not":{"$ref":"%"}}"#, r#"{"$id":"%"}"#] {
             let schema =
                 format!(r#"{{"$id":"{BASE}","$defs":{{"good":{{"type":"string"}},"bad":{bad}}}}}"#);
             let (doc, resources) = fixture(&schema, &format!("{BASE}#/$defs/good"), supplied);
-            let report = doc
-                .references_with_resources(resources.clone(), &AtomicBool::new(false))
-                .unwrap();
+            let report = doc.references_with_resources(resources.clone(), &AtomicBool::new(false));
             let reference = report
                 .references
                 .iter()
                 .find(|r| r.location.pointer == "/operations/op/input/$ref")
                 .unwrap();
-            if bad.contains("$ref") {
-                assert!(matches!(
-                    &reference.resolution,
-                    ReferenceResolution::Located { .. }
-                ));
-            } else {
-                assert!(
-                    matches!(&reference.resolution, ReferenceResolution::Unresolved { detail } if detail.code == "resource-inspection")
-                );
-            }
-            let prepared = prepare_input(&doc, &resources);
-            if bad.contains("$ref") {
-                let contract = match prepared {
-                    Ok(contract) => contract,
-                    Err(detail) => panic!("{detail:?}"),
-                };
-                assert!(matches!(
-                    contract.explain(&JsonValue::parse(r#""s""#).unwrap()),
-                    ValueOutcome::Satisfies
-                ));
-                assert!(matches!(
-                    contract.explain(&JsonValue::parse("1").unwrap()),
-                    ValueOutcome::Fails { .. }
-                ));
-            } else {
-                assert!(
-                    matches!(prepared, Err(detail) if detail.reason == NoVerdictReason::ConservativePreparation && detail.code == "resource-inspection")
-                );
-            }
+            assert!(matches!(
+                &reference.resolution,
+                ReferenceResolution::Located { .. }
+            ));
+            let contract = prepare_input(&doc, &resources).unwrap();
+            assert!(matches!(
+                contract.explain(&JsonValue::parse(r#""s""#).unwrap()),
+                ValueOutcome::Satisfies
+            ));
+            assert!(matches!(
+                contract.explain(&JsonValue::parse("1").unwrap()),
+                ValueOutcome::Fails { .. }
+            ));
         }
     }
 }

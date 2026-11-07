@@ -50,14 +50,14 @@ fn cheap_property_name_failures_do_not_request_diagnostics() {
                 ..Default::default()
             },
         );
-        let Ok(contract) = operation
-            .input()
-            .expect("declared input")
-            .prepare(&evaluator)
-        else {
+        let Ok(contract) = operation.input().expect("declared input").prepare(
+            &evaluator,
+            &openbindings::ExternalSchemas::default(),
+            &openbindings::PreparationLimits::default(),
+        ) else {
             panic!()
         };
-        let outcome = contract.validate(&value);
+        let outcome = contract.evaluate(&value);
         if name == "not" {
             assert!(matches!(outcome, ValueOutcome::Satisfies));
         } else {

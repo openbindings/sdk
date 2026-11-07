@@ -14,18 +14,18 @@ function conformant(document) {
   check(result.status === "conformant", JSON.stringify(result));
   return result.document;
 }
-// Prepare one operation's input contract; the operation view and unprepared
-// contract are released, and the prepared value contract survives them.
+// Prepare one operation's input schema; the operation view and unprepared
+// schema are released, and the prepared value schema survives them.
 function prepareInput(proof, name, options) {
   const operation = proof.resolveOperation(name);
   check(operation, "missing operation " + name);
   let contract;
   try {
     contract = operation.input();
-    check(contract, "absent input contract " + name);
+    check(contract, "absent input schema " + name);
     const result = contract.prepare(options);
     check(result.status === "ready", JSON.stringify(result));
-    return result.valueContract;
+    return result.schema;
   } finally {
     contract?.dispose();
     operation.dispose();
@@ -70,7 +70,7 @@ export function retainedBatch(
   );
   const start = clock();
   for (let n = 0; n < repetitions; n++) {
-    const result = contract.validate(value);
+    const result = contract.evaluate(value);
     if (result.status !== expectedOutcome)
       throw Error("retained batch changed verdict: " + result.status);
   }
@@ -88,7 +88,7 @@ export function invalidSerializedBatch(contract, value, repetitions, clock) {
   let lastResult, lastWire;
   const start = clock();
   for (let n = 0; n < repetitions; n++) {
-    lastResult = contract.validate(value);
+    lastResult = contract.evaluate(value);
     if (lastResult.status !== "fails")
       throw Error("diagnostic batch changed verdict: " + lastResult.status);
     lastWire = JSON.stringify(lastResult);
@@ -140,15 +140,15 @@ export function runTier(sdk, testing, fixture, timed = true) {
         input = operation.input();
         const result = input.prepare();
         check(result.status === "ready", JSON.stringify(result));
-        return result.valueContract;
+        return result.schema;
       });
       value = take("parseValue", () => parsed(sdk, fixture.valid));
-      const first = take("firstValidation", () => contract.validate(value));
+      const first = take("firstValidation", () => contract.evaluate(value));
       check(first.status === fixture.validOutcome, JSON.stringify(first));
-      const hot = take("hotSingleDescriptive", () => contract.validate(value));
+      const hot = take("hotSingleDescriptive", () => contract.evaluate(value));
       check(hot.status === fixture.validOutcome, JSON.stringify(hot));
       invalid = take("parseInvalid", () => parsed(sdk, fixture.invalid));
-      const failed = take("invalid", () => contract.validate(invalid));
+      const failed = take("invalid", () => contract.evaluate(invalid));
       check(failed.status === "fails", JSON.stringify(failed));
       const wire = take("serialize", () => JSON.stringify(failed));
       last = {
@@ -245,7 +245,10 @@ export function runTier(sdk, testing, fixture, timed = true) {
     invalidValue?.dispose();
     invalidContract.dispose();
   }
-  check(testing.liveStorageOwners() === warmedOwners, "diagnostic batch cleanup");
+  check(
+    testing.liveStorageOwners() === warmedOwners,
+    "diagnostic batch cleanup",
+  );
   return {
     samplesMs: timed ? samples : null,
     repetitions,
@@ -276,7 +279,7 @@ export function lifetime(sdk, testing, fixture, timed = true) {
   const uri = "https://qualification.invalid/schema";
   const make = (type, generation) => {
     const resource = parsed(sdk, JSON.stringify({ type }));
-    const resources = new sdk.SchemaResources([[uri, resource]]);
+    const externalSchemas = new sdk.ExternalSchemas([[uri, resource]]);
     const document = parsed(
       sdk,
       JSON.stringify({
@@ -297,22 +300,22 @@ export function lifetime(sdk, testing, fixture, timed = true) {
     let proof;
     try {
       proof = conformant(document);
-      const contract = prepareInput(proof, "run", { resources });
+      const contract = prepareInput(proof, "run", { resources: externalSchemas });
       for (let n = 0; n < 6; n++)
-        prepareInput(proof, `op${n}`, { resources }).dispose();
+        prepareInput(proof, `op${n}`, { resources: externalSchemas }).dispose();
       return contract; // survives later preparations and all parent disposal
     } finally {
       proof?.dispose();
       document.dispose();
-      resources.dispose();
+      externalSchemas.dispose();
       resource.dispose();
     }
   };
   const warm = make("integer", -1);
-  warm.validate(1);
+  warm.evaluate(1);
   warm.dispose();
   const contract = prepare(sdk, fixture.document);
-  contract.validate([1]);
+  contract.evaluate([1]);
   contract.dispose();
   const warmed = testing.liveStorageOwners();
   let active = make("integer", 0);
@@ -321,7 +324,7 @@ export function lifetime(sdk, testing, fixture, timed = true) {
   try {
     for (let n = 0; n < 1000; n++)
       check(
-        active.validate(1).status === "satisfies",
+        active.evaluate(1).status === "satisfies",
         "sustained retained call",
       );
     for (let n = 1; n <= 200; n++) {
@@ -330,15 +333,15 @@ export function lifetime(sdk, testing, fixture, timed = true) {
       active = make(n % 2 ? "string" : "integer", n);
       const oldValue = n % 2 ? 1 : "old";
       check(
-        old.validate(oldValue).status === "satisfies",
+        old.evaluate(oldValue).status === "satisfies",
         "old snapshot survives replacement",
       );
       check(
-        active.validate(n % 2 ? "new" : 1).status === "satisfies",
+        active.evaluate(n % 2 ? "new" : 1).status === "satisfies",
         "new snapshot",
       );
       check(
-        active.validate(oldValue).status === "fails",
+        active.evaluate(oldValue).status === "fails",
         "snapshots must not mix",
       );
       old.dispose();
@@ -370,12 +373,12 @@ export function lifetime(sdk, testing, fixture, timed = true) {
     const cancellation = new AbortController();
     cancellation.abort();
     check(
-      active.validate(1, { signal: cancellation.signal }).status ===
+      active.evaluate(1, { signal: cancellation.signal }).status ===
         "no-verdict",
       "pre-cancellation",
     );
     check(
-      active.validate(1).status === "satisfies",
+      active.evaluate(1).status === "satisfies",
       "recovery after cancellation",
     );
   } finally {
@@ -391,7 +394,14 @@ export function lifetime(sdk, testing, fixture, timed = true) {
     replacementSamplesMs: timed ? replacementSamples : null,
   };
 }
-export async function discovery(sdk, testing, http, fixtures, timed = true, origin) {
+export async function discovery(
+  sdk,
+  testing,
+  http,
+  fixtures,
+  timed = true,
+  origin,
+) {
   const rows = {};
   for (const [tier, fixture] of Object.entries(fixtures)) {
     const samples = [];
@@ -443,7 +453,7 @@ export function amplification(sdk, fixture, timed = true) {
   try {
     for (let n = 0; n < (timed ? 9 : 1); n++) {
       const before = timed ? performance.now() : 0;
-      const result = contract.validate(value);
+      const result = contract.evaluate(value);
       const after = timed ? performance.now() : 0;
       const wire = JSON.stringify(result);
       const ended = timed ? performance.now() : 0;

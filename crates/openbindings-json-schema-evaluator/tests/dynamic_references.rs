@@ -24,27 +24,45 @@ fn dynamic_references_follow_each_paths_scope_through_reference_cycles() {
         serde_json::from_str(include_str!("fixtures/dynamic-references.json")).unwrap();
     assert_eq!(cases.len(), 9);
     for case in cases {
-        let resources = ResourceSet::new(case.resources.iter().map(|(uri, text)| SchemaResource {
-            uri: uri.clone(),
-            document: JsonValue::parse(text).unwrap(),
-        }))
-        .unwrap();
-        let proof = Document::parse(&case.document)
-            .unwrap()
+        let resources =
+            ExternalSchemas::new(case.resources.iter().map(|(uri, text)| ExternalSchema {
+                uri: uri.clone(),
+                document: JsonValue::parse(text).unwrap(),
+            }))
+            .unwrap();
+        let original = Document::parse(&case.document).unwrap();
+        let document = if case.id == "OBP-02" {
+            let report = original.validate().unwrap();
+            assert_eq!(report.report().evidence["OBI-14"], Evidence::Violated);
+            assert!(report.conformant().is_none());
+            original
+                .edit(&[Edit::set(
+                    &["schemas", "Strict", "$id"],
+                    JsonValue::parse(r#""https://x.example/strict.json""#).unwrap(),
+                )])
+                .unwrap()
+        } else {
+            original
+        };
+        let proof = document
             .validate()
             .unwrap()
             .conformant()
-            .expect("conformant fixture");
+            .expect("current fixture");
         let contract = proof
             .resolve_operation("op")
             .unwrap()
             .input()
             .unwrap()
-            .prepare_with(&DefaultEvaluator::new(), &resources)
+            .prepare(
+                &DefaultEvaluator::new(),
+                &resources,
+                &openbindings::PreparationLimits::default(),
+            )
             .unwrap_or_else(|detail| panic!("{}: {detail:?}", case.id));
         for (value, expected) in case.values.iter().zip(&case.expected) {
             let value = JsonValue::parse(value).unwrap();
-            for outcome in [contract.validate(&value), contract.explain(&value)] {
+            for outcome in [contract.evaluate(&value), contract.explain(&value)] {
                 let verdict = match outcome {
                     ValueOutcome::Satisfies => "S",
                     ValueOutcome::Fails { .. } => "F",

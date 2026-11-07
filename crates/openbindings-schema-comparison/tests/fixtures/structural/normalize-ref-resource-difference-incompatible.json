@@ -1,0 +1,45 @@
+{
+  "version": "1.0",
+  "description": "Two schema resources whose #/$defs/X differ are different once each reference resolves within its own resource.",
+  "mode": "identical",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "value": {
+        "input": {
+          "$id": "https://example.com/schemas/value",
+          "$defs": {
+            "X": {
+              "type": "string"
+            }
+          },
+          "$ref": "#/$defs/X"
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "value": {
+        "input": {
+          "$id": "https://example.com/schemas/value",
+          "$defs": {
+            "X": {
+              "type": "integer"
+            }
+          },
+          "$ref": "#/$defs/X"
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "incompatible"
+    }
+  }
+}

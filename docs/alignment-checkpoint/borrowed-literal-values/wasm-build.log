@@ -1,0 +1,8 @@
+
+> @openbindings/sdk@0.2.0-alpha.1 build:wasm
+> node scripts/build-wasm.mjs
+
+   Compiling openbindings-json-schema-evaluator v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-json-schema-evaluator)
+   Compiling openbindings-wasm v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-wasm)
+    Finished `release` profile [optimized] target(s) in 21.25s
+{"rustSource":"8ae7f9c4134a0bab4e400d201731d46f77d37cf52606f7c9095c2e63ae77acdd","artifacts":{"openbindings_wasm.js":"a6c4872bed0e3d6e9b059403bfcfe0da3e21a0bb264fa4372b4d4464ff440e2e","openbindings_wasm_bg.wasm":"82d19d94017e42aa1d14813d78feffd607e4993df9e3e97a3a5bb6748cc0f014","openbindings_wasm_signature.js":"b7a98f3e14387a59804c6b4c025b0d03cf5671acd66490e03ec47e89cedc3f6f"}}

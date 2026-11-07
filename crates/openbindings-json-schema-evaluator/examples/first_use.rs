@@ -62,16 +62,20 @@ fn main() -> Result<(), Box<dyn Error>> {
         .resolve_operation("find")
         .ok_or("operation is missing")?;
     println!("{:?}: {:?}", operation.key(), operation.description());
-    let contract = operation.input().ok_or("operation has no input contract")?;
-    // Conformant reads preserve presence; schema preparation remains separate.
-    let schema = contract.schema().location();
+    let input_schema = operation.input().ok_or("operation has no input schema")?;
+    // ConformantDocument reads preserve presence; schema preparation remains separate.
+    let schema_location = input_schema.json().location();
     println!(
         "input schema at {:?}, line {}",
-        schema.pointer.as_ref().map(ToString::to_string),
-        schema.line
+        schema_location.pointer.as_ref().map(ToString::to_string),
+        schema_location.line
     );
     // Default budgets and no supplied resources.
-    let input = contract.prepare(&DefaultEvaluator::new())?;
+    let input = input_schema.prepare(
+        &DefaultEvaluator::new(),
+        &openbindings::ExternalSchemas::default(),
+        &openbindings::PreparationLimits::default(),
+    )?;
     // Ordinary values have checked Serde admission. Exact text preserves its tokens.
     let ordinary = JsonValue::from_serializable(&Input {
         id: 9_007_199_254_740_993,
@@ -79,12 +83,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     let exact = JsonValue::parse(r#"{"id":9007199254740992}"#)?;
     for value in [&ordinary, &exact] {
         // The cheap check decides; an explanation of the same value says why.
-        let outcome = match input.validate(value) {
+        let outcome = match input.evaluate(value) {
             ValueOutcome::Fails { .. } => input.explain(value),
             outcome => outcome,
         };
         match outcome {
-            ValueOutcome::Satisfies => println!("input satisfies the input contract"),
+            ValueOutcome::Satisfies => println!("input satisfies the input schema"),
             ValueOutcome::Fails {
                 problems,
                 problems_complete,
@@ -107,6 +111,12 @@ fn main() -> Result<(), Box<dyn Error>> {
                         schema.byte_column,
                         problem.message
                     );
+                    // This local display deliberately includes schema facts.
+                    // For a public response with a private contract, forward
+                    // only instance and code instead of serializing the problem.
+                    if let Some(details) = &problem.details {
+                        println!("schema facts: {}", serde_json::to_string(details)?);
+                    }
                 }
                 println!("selected diagnostics complete: {problems_complete}");
             }

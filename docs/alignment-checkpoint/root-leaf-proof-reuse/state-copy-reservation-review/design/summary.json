@@ -1,0 +1,9 @@
+{
+  "status": "GO_DESIGN_ONLY",
+  "controls": 9,
+  "sdk_edit": false,
+  "builds_tests_probes": false,
+  "quota_or_oracle_changes_approved": false,
+  "storage_policy_change": "both-empty State clone base256->0, keep charge(0), all work and nonempty charges unchanged",
+  "root_memo_retention": "PENDING correction/control/measurement"
+}

@@ -1,0 +1,11 @@
+   Compiling openbindings-json-schema-evaluator v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-json-schema-evaluator)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.72s
+     Running unittests src/lib.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/openbindings_json_schema_evaluator-fe12ec3b910aeb19)
+
+running 1 test
+reference_free branches=6 items=4096 work=660031
+reference_free branches=29 items=4096 work=2826815
+test semantic::summary_tests::reference_free_large_composites_stream_with_bounded_frame_storage ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 175 filtered out; finished in 1.96s
+

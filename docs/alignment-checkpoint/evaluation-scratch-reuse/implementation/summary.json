@@ -1,0 +1,33 @@
+{
+  "status": "bounded PASS",
+  "production_findings": [],
+  "base": "a7aab1e6bf73b2ec05bd31f50fb6c6127817ca3f",
+  "scope": "Two-file evaluation scratch reuse only; no G6 or broader identity-retention acceptance",
+  "independent_control_groups": 17,
+  "private_test_groups_each_toolchain": 12,
+  "toolchains": [
+    "Rust 1.99.0 aarch64-apple-darwin",
+    "Rust 1.88.0 aarch64-apple-darwin"
+  ],
+  "alias_cancel_checkpoints": [
+    283,
+    33,
+    28
+  ],
+  "alias_all_byte_cuts_inclusive": [
+    8928,
+    352,
+    1220
+  ],
+  "collision_growth_failure_checkpoints": 110,
+  "intern_cancel_checkpoints": 53,
+  "intern_partial_children_checkpoints": 39,
+  "intern_exact_work": 405,
+  "intern_exact_reservation": 3890,
+  "workload_replays": 6,
+  "warm_alias_allocation_requests": 0,
+  "known_scalar_hit_allocation_requests": 0,
+  "first_scalar_map_allocations": 2,
+  "all_measured_owner_drops_return_to_baseline": true,
+  "harness_correction": "Initial private harness moved a borrowed internal JsonValue; corrected to borrow it. Initial compiler diagnostic retained. No production correction required."
+}

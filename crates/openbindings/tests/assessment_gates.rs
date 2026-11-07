@@ -10,7 +10,7 @@ fn later_rules_require_scalar_document_strings_but_allow_deep_opaque_data() {
     for (text, rules) in [
         (r#"{"openbindings":"0.2.0","description":"\ud800"}"#.to_owned(), vec!["OBI-02"]),
         (r#"{"openbindings":"0.2.0","operations":{"-bad":{}},"description":"\ud800"}"#.into(), vec!["OBI-02", "OBI-04"]),
-        (r#"{"openbindings":"0.2.0","operations":{},"sources":{"s":{"kind":"k"}},"bindings":{"b":{"operation":"missing","source":"s","content":"\ud800"}}}"#.into(), vec!["OBI-06"]),
+        (r#"{"openbindings":"0.2.0","operations":{},"sources":{"s":{"kind":"k"}},"bindings":{"b":{"operation":"missing","source":"s","data":"\ud800"}}}"#.into(), vec!["OBI-06"]),
         (r##"{"openbindings":"0.2.0","operations":{"op":{"input":{"$ref":"#/nope"}}},"x-data":"\ud800"}"##.into(), vec!["OBI-12"]),
         (r#"{"openbindings":"0.2.0","operations":{"op":{"input":{"$schema":"draft-07"}}},"x-data":"\ud800"}"#.into(), vec!["OBI-02", "OBI-09"]),
         (format!(r#"{{"openbindings":"0.2.0","x-d":{}0{}}}"#, "[".repeat(10001), "]".repeat(10001)), vec!["OBI-02"]),
@@ -34,11 +34,11 @@ fn later_rules_require_scalar_document_strings_but_allow_deep_opaque_data() {
 
 #[test]
 fn unpaired_document_strings_are_lossless_drafts_without_conformance() {
-    // OBI-01 covers opaque content and schemas as well as defined fields.
+    // OBI-01 covers opaque data and schemas as well as defined fields.
     for fields in [
         r#""description":"cut \ud83d""#,
         r#""name":"\ud800","version":"\ud800""#,
-        r#""sources":{"s":{"kind":"\ud800","content":{"\ud800":"\udc00"}}}"#,
+        r#""sources":{"s":{"kind":"\ud800","data":{"\ud800":"\udc00"}}}"#,
         r#""x-\ud800":{"\ud800":"\udc00"}"#,
         r#""schemas":{"s":{"description":"\ud800","pattern":"\ud800","const":"\ud800","required":["\ud800","\udc00","\ue000d800;"]}}"#,
         r#""dependencies":{"d":{"operation":"op","kinds":["\ud800","\udc00","\ue000d800;"]}}"#,
@@ -229,7 +229,7 @@ fn a_raised_byte_limit_admits_documents_to_it_and_they_keep_it_for_edits() {
     let validation = validate_document_with_limits(&at, raised).unwrap();
     assert_eq!(validation.report().conclusion, Conformance::Conformant);
     let proof = validation.conformant().unwrap();
-    assert_eq!(proof.as_document().limits(), raised);
+    assert_eq!(proof.document().limits(), raised);
     let refused = validate_document_with_limits(&over, raised).unwrap();
     assert_eq!(refused.report().conclusion, Conformance::Undetermined);
     assert!(refused.report().findings.iter().all(|f| f.message
@@ -253,22 +253,27 @@ fn a_raised_byte_limit_admits_documents_to_it_and_they_keep_it_for_edits() {
             .to_string()
             .ends_with("; raise JsonLimits::max_bytes (limits.maxBytes in TypeScript)")
     );
-    // Edits and typed setters parse under the document's limits: a small
+    // Exact edits parse under the document's limits: a small
     // document admitted with them grows past the default, one parsed with the
     // defaults does not.
     let empty = r#"{"openbindings":"0.2.0","operations":{}}"#;
     let large =
         JsonValue::parse_with_limits(format!(r#""{}""#, "a".repeat(default)), raised).unwrap();
     let mut grown = Document::parse_with_limits(empty, raised).unwrap();
-    grown.set("/x-fill", &large).unwrap();
+    grown = grown.set("/x-fill", &large).unwrap();
     assert!(grown.as_bytes().len() > default);
     assert_eq!(grown.limits(), raised);
-    grown.set_description(&"d".repeat(512)).unwrap();
+    grown = grown
+        .set(
+            "/description",
+            &JsonValue::string(&"d".repeat(512)).unwrap(),
+        )
+        .unwrap();
     assert_eq!(
         grown.validate().unwrap().report().conclusion,
         Conformance::Conformant
     );
-    let mut plain = Document::parse(empty).unwrap();
+    let plain = Document::parse(empty).unwrap();
     let error = plain.set("/x-fill", &large).unwrap_err();
     assert_eq!(error.code(), "byte-limit");
     // The refusal names the setting the document was admitted with.
@@ -280,9 +285,17 @@ fn a_raised_byte_limit_admits_documents_to_it_and_they_keep_it_for_edits() {
     // A proof's document keeps its limits for editing again: at the raised
     // limit it cannot grow, and once smaller it can.
     let mut again = proof.into_inner();
-    assert_eq!(again.set_name("raised").unwrap_err().code(), "byte-limit");
-    again.remove("/x-fill").unwrap();
-    again.set_name("raised").unwrap();
+    assert_eq!(
+        again
+            .set("/name", &JsonValue::string("raised").unwrap())
+            .unwrap_err()
+            .code(),
+        "byte-limit"
+    );
+    again = again.remove("/x-fill").unwrap();
+    again = again
+        .set("/name", &JsonValue::string("raised").unwrap())
+        .unwrap();
     assert_eq!(again.limits(), raised);
     // Each entry's default: the JsonLimits defaults for parsing, construction
     // and from_json, and no nesting cap for validate_document.
@@ -321,14 +334,9 @@ fn edit_limits_apply_to_the_edited_document() {
     )
     .unwrap();
     let three = JsonValue::parse("[[[1]]]").unwrap();
-    shallow.set("/x-a", &three).unwrap();
-    shallow.remove("/x-a").unwrap();
-    shallow
-        .edit(&[Edit::Set {
-            pointer: "/x-a".into(),
-            value: &three,
-        }])
-        .unwrap();
+    shallow = shallow.set("/x-a", &three).unwrap();
+    shallow = shallow.remove("/x-a").unwrap();
+    shallow = shallow.edit(&[Edit::set(&["x-a"], three.clone())]).unwrap();
     let error = shallow
         .set("/x-b", &JsonValue::parse("[[[[1]]]]").unwrap())
         .unwrap_err();
@@ -346,7 +354,7 @@ fn edit_limits_apply_to_the_edited_document() {
         },
     )
     .unwrap();
-    few.set("/x-a", &JsonValue::integer(1)).unwrap();
+    few = few.set("/x-a", &JsonValue::integer(1)).unwrap();
     let error = few.set("/x-b", &JsonValue::integer(1)).unwrap_err();
     assert_eq!(error.code(), "node-limit");
     assert_eq!(error.to_string(), refusal("node", "max_nodes", "maxNodes"));
@@ -360,7 +368,7 @@ fn edit_limits_apply_to_the_edited_document() {
         },
     )
     .unwrap();
-    sized
+    sized = sized
         .set("/x-a", &JsonValue::string("xyz").unwrap())
         .unwrap();
     let error = sized

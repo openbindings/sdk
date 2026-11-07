@@ -1,0 +1,715 @@
+{
+  "status": "advisory allocation observations; not full matched qualification",
+  "sources": {
+    "instrument": "0464ed6974956429",
+    "sdk": "0d240444d752c08c"
+  },
+  "binary_sha256": "d3a52ca07322b25601481d18438c0d63a0c39d1bba0edf9e4fcaaf941b9accb2",
+  "sdk_base": "a7aab1e6bf73b2ec05bd31f50fb6c6127817ca3f",
+  "working_patch_sha256": "3e71285d1677912275958b15eedc4eaf0f4e571c7145da366fa3c1d9679b62ef",
+  "rows": [
+    {
+      "workload": "reference-text-1000",
+      "request_sha256": "ce0a7c4df7c2791be3698838e51f81b20e78e6175ba0b5c719263b12b4c3c5bf",
+      "observed": {
+        "iterations": 1,
+        "memory": {
+          "allocations_per_op": 7.0,
+          "baseline_live_bytes": 2696514,
+          "ending_live_bytes": 2696514,
+          "incremental_peak_bytes": 1908,
+          "peak_live_bytes": 2698422,
+          "requested_bytes_per_op": 1908.0
+        },
+        "nanoseconds": 478667,
+        "observation": {
+          "status": "satisfies"
+        },
+        "outcomes": {
+          "satisfies": 1
+        }
+      },
+      "prior_metrics": {
+        "baseline_live_bytes": {
+          "base": 3851802,
+          "candidate": 2696514,
+          "ratio": 0.7000655796949065,
+          "ci95": [
+            0.7000655796949065,
+            0.7000655796949065
+          ],
+          "difference": -1155288,
+          "difference_ci95": [
+            -1155288,
+            -1155288
+          ],
+          "base_mad_fraction": 0.0,
+          "candidate_mad_fraction": 0.0
+        },
+        "peak_live_bytes": {
+          "base": 3851802,
+          "candidate": 2698134,
+          "ratio": 0.7004861620612898,
+          "ci95": [
+            0.7004861620612898,
+            0.7004861620612898
+          ],
+          "difference": -1153668,
+          "difference_ci95": [
+            -1153668,
+            -1153668
+          ],
+          "base_mad_fraction": 0.0,
+          "candidate_mad_fraction": 0.0
+        },
+        "incremental_peak_bytes": {
+          "base": 0,
+          "candidate": 1620,
+          "ratio": null,
+          "ci95": null,
+          "difference": 1620,
+          "difference_ci95": [
+            1620,
+            1620
+          ],
+          "base_mad_fraction": 0,
+          "candidate_mad_fraction": 0.0
+        },
+        "allocations_per_op": {
+          "base": 0.0,
+          "candidate": 2007.0,
+          "ratio": null,
+          "ci95": null,
+          "difference": 2007.0,
+          "difference_ci95": [
+            2007.0,
+            2007.0
+          ],
+          "base_mad_fraction": 0,
+          "candidate_mad_fraction": 0.0
+        },
+        "requested_bytes_per_op": {
+          "base": 0.0,
+          "candidate": 289908.0,
+          "ratio": null,
+          "ci95": null,
+          "difference": 289908.0,
+          "difference_ci95": [
+            289908.0,
+            289908.0
+          ],
+          "base_mad_fraction": 0,
+          "candidate_mad_fraction": 0.0
+        }
+      }
+    },
+    {
+      "workload": "reference-text-5000",
+      "request_sha256": "9e6088ba16ff8286210f5f51ec16f032e97bc73804ac5f28ea9da10e7bb2ae40",
+      "observed": {
+        "iterations": 1,
+        "memory": {
+          "allocations_per_op": 7.0,
+          "baseline_live_bytes": 21866114,
+          "ending_live_bytes": 21866114,
+          "incremental_peak_bytes": 1908,
+          "peak_live_bytes": 21868022,
+          "requested_bytes_per_op": 1908.0
+        },
+        "nanoseconds": 2408042,
+        "observation": {
+          "status": "satisfies"
+        },
+        "outcomes": {
+          "satisfies": 1
+        }
+      },
+      "prior_metrics": {
+        "baseline_live_bytes": {
+          "base": 28736378,
+          "candidate": 21866114,
+          "ratio": 0.7609210179515317,
+          "ci95": [
+            0.7609210179515317,
+            0.7609210179515317
+          ],
+          "difference": -6870264,
+          "difference_ci95": [
+            -6870264,
+            -6870264
+          ],
+          "base_mad_fraction": 0.0,
+          "candidate_mad_fraction": 0.0
+        },
+        "peak_live_bytes": {
+          "base": 28736378,
+          "candidate": 21867734,
+          "ratio": 0.7609773924883644,
+          "ci95": [
+            0.7609773924883644,
+            0.7609773924883644
+          ],
+          "difference": -6868644,
+          "difference_ci95": [
+            -6868644,
+            -6868644
+          ],
+          "base_mad_fraction": 0.0,
+          "candidate_mad_fraction": 0.0
+        },
+        "incremental_peak_bytes": {
+          "base": 0,
+          "candidate": 1620,
+          "ratio": null,
+          "ci95": null,
+          "difference": 1620,
+          "difference_ci95": [
+            1620,
+            1620
+          ],
+          "base_mad_fraction": 0,
+          "candidate_mad_fraction": 0.0
+        },
+        "allocations_per_op": {
+          "base": 0.0,
+          "candidate": 10007.0,
+          "ratio": null,
+          "ci95": null,
+          "difference": 10007.0,
+          "difference_ci95": [
+            10007.0,
+            10007.0
+          ],
+          "base_mad_fraction": 0,
+          "candidate_mad_fraction": 0.0
+        },
+        "requested_bytes_per_op": {
+          "base": 0.0,
+          "candidate": 1441908.0,
+          "ratio": null,
+          "ci95": null,
+          "difference": 1441908.0,
+          "difference_ci95": [
+            1441908.0,
+            1441908.0
+          ],
+          "base_mad_fraction": 0,
+          "candidate_mad_fraction": 0.0
+        }
+      }
+    },
+    {
+      "workload": "reference-fan-in",
+      "request_sha256": "614cbdde257d9c3f49d4c417170d1dc856057f28d33421af302e0be139e76c3b",
+      "observed": {
+        "iterations": 1,
+        "memory": {
+          "allocations_per_op": 7.0,
+          "baseline_live_bytes": 3675977,
+          "ending_live_bytes": 3675977,
+          "incremental_peak_bytes": 1908,
+          "peak_live_bytes": 3677885,
+          "requested_bytes_per_op": 1908.0
+        },
+        "nanoseconds": 66750,
+        "observation": {
+          "status": "satisfies"
+        },
+        "outcomes": {
+          "satisfies": 1
+        }
+      },
+      "prior_metrics": {
+        "baseline_live_bytes": {
+          "base": 3141590,
+          "candidate": 3675977,
+          "ratio": 1.170100808826104,
+          "ci95": [
+            1.170100808826104,
+            1.170100808826104
+          ],
+          "difference": 534387,
+          "difference_ci95": [
+            534387,
+            534387
+          ],
+          "base_mad_fraction": 0.0,
+          "candidate_mad_fraction": 0.0
+        },
+        "peak_live_bytes": {
+          "base": 3141590,
+          "candidate": 3677597,
+          "ratio": 1.170616471277283,
+          "ci95": [
+            1.170616471277283,
+            1.170616471277283
+          ],
+          "difference": 536007,
+          "difference_ci95": [
+            536007,
+            536007
+          ],
+          "base_mad_fraction": 0.0,
+          "candidate_mad_fraction": 0.0
+        },
+        "incremental_peak_bytes": {
+          "base": 0,
+          "candidate": 1620,
+          "ratio": null,
+          "ci95": null,
+          "difference": 1620,
+          "difference_ci95": [
+            1620,
+            1620
+          ],
+          "base_mad_fraction": 0,
+          "candidate_mad_fraction": 0.0
+        },
+        "allocations_per_op": {
+          "base": 0.0,
+          "candidate": 207.0,
+          "ratio": null,
+          "ci95": null,
+          "difference": 207.0,
+          "difference_ci95": [
+            207.0,
+            207.0
+          ],
+          "base_mad_fraction": 0,
+          "candidate_mad_fraction": 0.0
+        },
+        "requested_bytes_per_op": {
+          "base": 0.0,
+          "candidate": 30708.0,
+          "ratio": null,
+          "ci95": null,
+          "difference": 30708.0,
+          "difference_ci95": [
+            30708.0,
+            30708.0
+          ],
+          "base_mad_fraction": 0,
+          "candidate_mad_fraction": 0.0
+        }
+      }
+    },
+    {
+      "workload": "unique-array",
+      "request_sha256": "6afd0979ad4d83ca39b3f0ed5fa0b272e6832320c4a59d6a1f6aa04154621697",
+      "observed": {
+        "iterations": 1,
+        "memory": {
+          "allocations_per_op": 45.0,
+          "baseline_live_bytes": 2704466,
+          "ending_live_bytes": 2704466,
+          "incremental_peak_bytes": 2720104,
+          "peak_live_bytes": 5424570,
+          "requested_bytes_per_op": 4915564.0
+        },
+        "nanoseconds": 5932000,
+        "observation": {
+          "status": "satisfies"
+        },
+        "outcomes": {
+          "satisfies": 1
+        }
+      },
+      "prior_metrics": {
+        "baseline_live_bytes": {
+          "base": 2471873,
+          "candidate": 2704466,
+          "ratio": 1.0940958536300207,
+          "ci95": [
+            1.0940958536300207,
+            1.0940958536300207
+          ],
+          "difference": 232593,
+          "difference_ci95": [
+            232593,
+            232593
+          ],
+          "base_mad_fraction": 0.0,
+          "candidate_mad_fraction": 0.0
+        },
+        "peak_live_bytes": {
+          "base": 3000529,
+          "candidate": 5424306,
+          "ratio": 1.8077832275575407,
+          "ci95": [
+            1.8077832275575407,
+            1.8077832275575407
+          ],
+          "difference": 2423777,
+          "difference_ci95": [
+            2423777,
+            2423777
+          ],
+          "base_mad_fraction": 0.0,
+          "candidate_mad_fraction": 0.0
+        },
+        "incremental_peak_bytes": {
+          "base": 528656,
+          "candidate": 2719840,
+          "ratio": 5.1448200720317185,
+          "ci95": [
+            5.1448200720317185,
+            5.1448200720317185
+          ],
+          "difference": 2191184,
+          "difference_ci95": [
+            2191184,
+            2191184
+          ],
+          "base_mad_fraction": 0.0,
+          "candidate_mad_fraction": 0.0
+        },
+        "allocations_per_op": {
+          "base": 14.0,
+          "candidate": 20045.0,
+          "ratio": 1431.7857142857142,
+          "ci95": [
+            1431.7857142857142,
+            1431.7857142857142
+          ],
+          "difference": 20031.0,
+          "difference_ci95": [
+            20031.0,
+            20031.0
+          ],
+          "base_mad_fraction": 0.0,
+          "candidate_mad_fraction": 0.0
+        },
+        "requested_bytes_per_op": {
+          "base": 602436.0,
+          "candidate": 5395564.0,
+          "ratio": 8.956244314748787,
+          "ci95": [
+            8.956244314748787,
+            8.956244314748787
+          ],
+          "difference": 4793128.0,
+          "difference_ci95": [
+            4793128.0,
+            4793128.0
+          ],
+          "base_mad_fraction": 0.0,
+          "candidate_mad_fraction": 0.0
+        }
+      }
+    },
+    {
+      "workload": "unique-objects",
+      "request_sha256": "4d7b26331bf33af02278c3195678f45ff07f0f477cdc557e8ed673c80ddcabde",
+      "observed": {
+        "iterations": 1,
+        "memory": {
+          "allocations_per_op": 6036.0,
+          "baseline_live_bytes": 1602064,
+          "ending_live_bytes": 1602064,
+          "incremental_peak_bytes": 523732,
+          "peak_live_bytes": 2125796,
+          "requested_bytes_per_op": 1178628.0
+        },
+        "nanoseconds": 1611500,
+        "observation": {
+          "status": "satisfies"
+        },
+        "outcomes": {
+          "satisfies": 1
+        }
+      },
+      "prior_metrics": {
+        "baseline_live_bytes": {
+          "base": 1369471,
+          "candidate": 1602064,
+          "ratio": 1.1698414935402064,
+          "ci95": [
+            1.1698414935402064,
+            1.1698414935402064
+          ],
+          "difference": 232593,
+          "difference_ci95": [
+            232593,
+            232593
+          ],
+          "base_mad_fraction": 0.0,
+          "candidate_mad_fraction": 0.0
+        },
+        "peak_live_bytes": {
+          "base": 1453231,
+          "candidate": 2125508,
+          "ratio": 1.4626084910107202,
+          "ci95": [
+            1.4626084910107202,
+            1.4626084910107202
+          ],
+          "difference": 672277,
+          "difference_ci95": [
+            672277,
+            672277
+          ],
+          "base_mad_fraction": 0.0,
+          "candidate_mad_fraction": 0.0
+        },
+        "incremental_peak_bytes": {
+          "base": 83760,
+          "candidate": 523444,
+          "ratio": 6.249331423113658,
+          "ci95": [
+            6.249331423113658,
+            6.249331423113658
+          ],
+          "difference": 439684,
+          "difference_ci95": [
+            439684,
+            439684
+          ],
+          "base_mad_fraction": 0.0,
+          "candidate_mad_fraction": 0.0
+        },
+        "allocations_per_op": {
+          "base": 13.0,
+          "candidate": 7036.0,
+          "ratio": 541.2307692307693,
+          "ci95": [
+            541.2307692307693,
+            541.2307692307693
+          ],
+          "difference": 7023.0,
+          "difference_ci95": [
+            7023.0,
+            7023.0
+          ],
+          "base_mad_fraction": 0.0,
+          "candidate_mad_fraction": 0.0
+        },
+        "requested_bytes_per_op": {
+          "base": 93004.0,
+          "candidate": 1202628.0,
+          "ratio": 12.930927702034321,
+          "ci95": [
+            12.930927702034321,
+            12.930927702034321
+          ],
+          "difference": 1109624.0,
+          "difference_ci95": [
+            1109624.0,
+            1109624.0
+          ],
+          "base_mad_fraction": 0.0,
+          "candidate_mad_fraction": 0.0
+        }
+      }
+    },
+    {
+      "workload": "large-literal",
+      "request_sha256": "7e401d8e3d30a9a123e63375d2b28ee500a38b522a248736521dfcd1ae5d5fb7",
+      "observed": {
+        "iterations": 1,
+        "memory": {
+          "allocations_per_op": 88.0,
+          "baseline_live_bytes": 4261732,
+          "ending_live_bytes": 4261732,
+          "incremental_peak_bytes": 4850016,
+          "peak_live_bytes": 9111748,
+          "requested_bytes_per_op": 10158120.0
+        },
+        "nanoseconds": 7901333,
+        "observation": {
+          "status": "satisfies"
+        },
+        "outcomes": {
+          "satisfies": 1
+        }
+      },
+      "prior_metrics": {
+        "baseline_live_bytes": {
+          "base": 5346911,
+          "candidate": 4261732,
+          "ratio": 0.7970456212942388,
+          "ci95": [
+            0.7970456212942388,
+            0.7970456212942388
+          ],
+          "difference": -1085179,
+          "difference_ci95": [
+            -1085179,
+            -1085179
+          ],
+          "base_mad_fraction": 0.0,
+          "candidate_mad_fraction": 0.0
+        },
+        "peak_live_bytes": {
+          "base": 6306911,
+          "candidate": 9111460,
+          "ratio": 1.4446787024583032,
+          "ci95": [
+            1.4446787024583032,
+            1.4446787024583032
+          ],
+          "difference": 2804549,
+          "difference_ci95": [
+            2804549,
+            2804549
+          ],
+          "base_mad_fraction": 0.0,
+          "candidate_mad_fraction": 0.0
+        },
+        "incremental_peak_bytes": {
+          "base": 960000,
+          "candidate": 4849728,
+          "ratio": 5.0518,
+          "ci95": [
+            5.0518,
+            5.0518
+          ],
+          "difference": 3889728,
+          "difference_ci95": [
+            3889728,
+            3889728
+          ],
+          "base_mad_fraction": 0.0,
+          "candidate_mad_fraction": 0.0
+        },
+        "allocations_per_op": {
+          "base": 1.0,
+          "candidate": 90.0,
+          "ratio": 90.0,
+          "ci95": [
+            90.0,
+            90.0
+          ],
+          "difference": 89.0,
+          "difference_ci95": [
+            89.0,
+            89.0
+          ],
+          "base_mad_fraction": 0.0,
+          "candidate_mad_fraction": 0.0
+        },
+        "requested_bytes_per_op": {
+          "base": 960000.0,
+          "candidate": 10158168.0,
+          "ratio": 10.581425,
+          "ci95": [
+            10.581425,
+            10.581425
+          ],
+          "difference": 9198168.0,
+          "difference_ci95": [
+            9198168.0,
+            9198168.0
+          ],
+          "base_mad_fraction": 0.0,
+          "candidate_mad_fraction": 0.0
+        }
+      }
+    },
+    {
+      "workload": "late-duplicate",
+      "request_sha256": "608cea75c163607b530a950ce0594d1204c215cf1f097aa6b90b24af7c8f93d6",
+      "observed": {
+        "iterations": 1,
+        "memory": {
+          "allocations_per_op": 46.0,
+          "baseline_live_bytes": 2704503,
+          "ending_live_bytes": 2704503,
+          "incremental_peak_bytes": 2720104,
+          "peak_live_bytes": 5424607,
+          "requested_bytes_per_op": 4915597.0
+        },
+        "nanoseconds": 5793292,
+        "observation": {
+          "problems": [],
+          "problems_complete": false,
+          "status": "fails"
+        },
+        "outcomes": {
+          "fails": 1
+        }
+      },
+      "prior_metrics": {
+        "baseline_live_bytes": {
+          "base": 2471910,
+          "candidate": 2704503,
+          "ratio": 1.0940944451861112,
+          "ci95": [
+            1.0940944451861112,
+            1.0940944451861112
+          ],
+          "difference": 232593,
+          "difference_ci95": [
+            232593,
+            232593
+          ],
+          "base_mad_fraction": 0.0,
+          "candidate_mad_fraction": 0.0
+        },
+        "peak_live_bytes": {
+          "base": 3000574,
+          "candidate": 5424343,
+          "ratio": 1.8077684469704796,
+          "ci95": [
+            1.8077684469704796,
+            1.8077684469704796
+          ],
+          "difference": 2423769,
+          "difference_ci95": [
+            2423769,
+            2423769
+          ],
+          "base_mad_fraction": 0.0,
+          "candidate_mad_fraction": 0.0
+        },
+        "incremental_peak_bytes": {
+          "base": 528664,
+          "candidate": 2719840,
+          "ratio": 5.144742218119638,
+          "ci95": [
+            5.144742218119638,
+            5.144742218119638
+          ],
+          "difference": 2191176,
+          "difference_ci95": [
+            2191176,
+            2191176
+          ],
+          "base_mad_fraction": 0.0,
+          "candidate_mad_fraction": 0.0
+        },
+        "allocations_per_op": {
+          "base": 15.0,
+          "candidate": 20047.0,
+          "ratio": 1336.4666666666667,
+          "ci95": [
+            1336.4666666666667,
+            1336.4666666666667
+          ],
+          "difference": 20032.0,
+          "difference_ci95": [
+            20032.0,
+            20032.0
+          ],
+          "base_mad_fraction": 0.0,
+          "candidate_mad_fraction": 0.0
+        },
+        "requested_bytes_per_op": {
+          "base": 602485.0,
+          "candidate": 5395621.0,
+          "ratio": 8.955610513124808,
+          "ci95": [
+            8.955610513124808,
+            8.955610513124808
+          ],
+          "difference": 4793136.0,
+          "difference_ci95": [
+            4793136.0,
+            4793136.0
+          ],
+          "base_mad_fraction": 0.0,
+          "candidate_mad_fraction": 0.0
+        }
+      }
+    }
+  ]
+}

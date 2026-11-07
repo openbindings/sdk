@@ -1,0 +1,229 @@
+{
+  "status": "Current target with implemented boundaries; final source-to-map audit remains open",
+  "packages": {
+    "core": {
+      "name": "openbindings",
+      "depends_on": [],
+      "modules": [
+        "document",
+        "conformance",
+        "schema.inventory",
+        "schema.resources",
+        "schema.references",
+        "schema.evaluation",
+        "json",
+        "control"
+      ]
+    },
+    "evaluator": {
+      "name": "openbindings-json-schema-evaluator",
+      "depends_on": [
+        "core"
+      ],
+      "modules": [
+        "preparation",
+        "evaluation",
+        "diagnostics"
+      ]
+    },
+    "comparison": {
+      "name": "openbindings-schema-comparison",
+      "depends_on": [
+        "core"
+      ],
+      "modules": [
+        "normalization",
+        "identity"
+      ]
+    },
+    "context": {
+      "name": "openbindings-context",
+      "depends_on": [
+        "core"
+      ],
+      "modules": [
+        "context",
+        "challenge"
+      ]
+    },
+    "invocation": {
+      "name": "openbindings-invocation",
+      "depends_on": [
+        "core",
+        "context"
+      ],
+      "modules": [
+        "binding",
+        "operation",
+        "channel",
+        "wire"
+      ]
+    },
+    "kind-description": {
+      "name": "openbindings-kind-description",
+      "depends_on": [
+        "core",
+        "context"
+      ],
+      "modules": [
+        "descriptor",
+        "check"
+      ]
+    },
+    "source-pull": {
+      "name": "openbindings-source-pull",
+      "depends_on": [
+        "core",
+        "context"
+      ],
+      "modules": [
+        "request",
+        "model",
+        "carrier",
+        "relationships",
+        "validation",
+        "client",
+        "budget",
+        "error"
+      ]
+    },
+    "http-discovery": {
+      "name": "openbindings-http-discovery",
+      "depends_on": [
+        "core"
+      ],
+      "modules": [
+        "policy",
+        "transport"
+      ]
+    },
+    "test-support": {
+      "name": "openbindings-schema-evaluator-test-support",
+      "depends_on": [
+        "core"
+      ],
+      "modules": [
+        "fixtures",
+        "observer",
+        "judgment"
+      ]
+    },
+    "wasm": {
+      "name": "openbindings-wasm",
+      "depends_on": [
+        "core",
+        "evaluator",
+        "http-discovery"
+      ],
+      "modules": [
+        "handles",
+        "bridge"
+      ]
+    },
+    "typescript": {
+      "name": "@openbindings/sdk",
+      "depends_on": [
+        "wasm"
+      ],
+      "modules": [
+        "document",
+        "schema",
+        "json",
+        "http-discovery",
+        "runtime",
+        "diagnostics",
+        "ownership"
+      ]
+    }
+  },
+  "owner_packages": {
+    "core.document": [
+      "core"
+    ],
+    "core.json": [
+      "core"
+    ],
+    "core.control": [
+      "core"
+    ],
+    "core.conformance": [
+      "core"
+    ],
+    "core.schema": [
+      "core"
+    ],
+    "core.schema; evaluator": [
+      "core",
+      "evaluator"
+    ],
+    "core.schema.inventory": [
+      "core"
+    ],
+    "core.schema.resources": [
+      "core"
+    ],
+    "core.schema.references": [
+      "core"
+    ],
+    "comparison": [
+      "comparison"
+    ],
+    "comparison.identity": [
+      "comparison"
+    ],
+    "comparison.normalization": [
+      "comparison"
+    ],
+    "context": [
+      "context"
+    ],
+    "invocation.binding": [
+      "invocation"
+    ],
+    "invocation.operation": [
+      "invocation"
+    ],
+    "invocation.channel": [
+      "invocation"
+    ],
+    "invocation.wire": [
+      "invocation"
+    ],
+    "kind-description": [
+      "kind-description"
+    ],
+    "source-pull": [
+      "source-pull"
+    ],
+    "source-pull.result": [
+      "source-pull"
+    ],
+    "source-pull.checking": [
+      "source-pull"
+    ],
+    "roles.checking": [
+      "invocation",
+      "kind-description",
+      "source-pull"
+    ],
+    "http-discovery": [
+      "http-discovery"
+    ],
+    "test-support": [
+      "test-support"
+    ],
+    "wasm; typescript": [
+      "wasm",
+      "typescript"
+    ]
+  },
+  "notes": [
+    "Edges describe SDK production dependencies. Third-party dependencies, dev-only consumers, platform features and wire transports require separate implementation review.",
+    "Invocation uses the core SchemaEvaluator seam; applications inject a concrete evaluator. There is no edge from invocation to the default evaluator.",
+    "roles.checking is a shared policy classification, not an additional runtime package; each role owns its own admission and result checks.",
+    "Rust role Wasm compilation is separately required. The existing TypeScript bridge does not thereby expose role APIs.",
+    "One qualification concept spans the evaluator kit and repository-level tooling; it does not imply a universal runtime testing framework.",
+    "Providers and external qualification fixtures use comparison for reuse identity. The production source-pull checker cannot certify the unavailable offered schema and has no comparison dependency.",
+    "Evaluator preparation/evaluation/diagnostics are the refined target. The existing compiled backend remains transitional with its construction gate open until the original-node engine meets the independent restoration controls."
+  ]
+}

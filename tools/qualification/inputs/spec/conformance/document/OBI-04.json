@@ -1,7 +1,7 @@
 {
   "rule": "OBI-04",
   "section": "10",
-  "description": "Has every map key this specification defines (operation, dependency, binding, source, schema, and example keys) and every entry of an operation's aliases array a string matching ^[A-Za-z0-9_][A-Za-z0-9_.-]*$. The pattern is an ECMA-262 regular expression matched against the whole name. Property names inside JSON Schema objects are schema content, not map keys, and are unconstrained by this rule.",
+  "description": "Has every map key this specification defines (operation, source, binding, dependency, schema, and example keys) and every entry of an operation's aliases array a string matching ^[A-Za-z0-9_][A-Za-z0-9_.-]*$. The pattern is an ECMA-262 regular expression matched against the whole name. Property names inside JSON Schema objects are schema content, not map keys, and are unconstrained by this rule.",
   "notes": "The grammar permits a leading digit (2fa.verify): names are opaque data labels, not host-language identifiers. Only the start character is constrained to an alphanumeric or underscore; a leading dot or hyphen, embedded whitespace, slashes, non-ASCII characters, and the empty string remain rejected.",
   "tests": [
     {
@@ -52,14 +52,14 @@
           "createTask": {}
         },
         "sources": {
-          "httpApi": {
+          "tasksApi": {
             "kind": "example.openapi@1"
           }
         },
         "bindings": {
           "createTask.http": {
             "operation": "createTask",
-            "source": "httpApi"
+            "source": "tasksApi"
           }
         }
       },
@@ -168,15 +168,14 @@
       "valid": true
     },
     {
-      "description": "source key with whitespace",
+      "description": "Source keys follow the name grammar; whitespace is forbidden (§5.2, OBI-04).",
       "document": {
         "openbindings": "0.2.0",
-        "operations": {
-          "createTask": {}
-        },
+        "operations": {},
         "sources": {
           "http api": {
-            "kind": "example.openapi@1"
+            "kind": "example.openapi@1",
+            "data": {}
           }
         }
       },
@@ -261,14 +260,14 @@
           "-badKey": {}
         },
         "sources": {
-          "httpApi": {
+          "tasksApi": {
             "kind": "example.openapi@1"
           }
         },
         "bindings": {
           "createTask.http": {
             "operation": "createTask",
-            "source": "httpApi"
+            "source": "tasksApi"
           }
         }
       },
@@ -366,14 +365,14 @@
           "createTask": {}
         },
         "sources": {
-          "httpApi": {
+          "tasksApi": {
             "kind": "example.openapi@1"
           }
         },
         "bindings": {
           "createTask http": {
             "operation": "createTask",
-            "source": "httpApi"
+            "source": "tasksApi"
           }
         }
       },
@@ -416,6 +415,91 @@
       "violates": [
         "OBI-04"
       ]
+    },
+    {
+      "description": "Source key \"x-data\" is an ordinary entry name, including x- names (§5.2, §12).",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {},
+        "sources": {
+          "x-data": {
+            "kind": "example.local@1",
+            "data": null
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "Source key \"x-\" is an ordinary entry name, including x- names (§5.2, §12).",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {},
+        "sources": {
+          "x-": {
+            "kind": "example.local@1",
+            "data": null
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "Source key \"x-/data\" is an ordinary entry name, including x- names, and fails the grammar like any other (§5.2, §12, OBI-04).",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {},
+        "sources": {
+          "x-/data": {
+            "kind": "example.local@1",
+            "data": null
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02",
+        "OBI-04"
+      ]
+    },
+    {
+      "description": "Source key \"tail\\n\" is an ordinary entry name, and fails the grammar like any other (§5.2, OBI-04).",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {},
+        "sources": {
+          "tail\n": {
+            "kind": "example.local@1",
+            "data": null
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-02",
+        "OBI-04"
+      ]
+    },
+    {
+      "description": "Member names inside a source's data are unconstrained (§5.2).",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {},
+        "sources": {
+          "artifact": {
+            "kind": "example.local@1",
+            "data": {
+              "bad/name": {
+                "": true,
+                "with space": null,
+                "é": 1,
+                "x-/bad": []
+              }
+            }
+          }
+        }
+      },
+      "valid": true
     }
   ]
 }

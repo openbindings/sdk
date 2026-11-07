@@ -1,0 +1,33 @@
+{
+  "authority": "Independent prepared-pattern-ownership-review/design review; unchanged schemas determine existing semantic_required answers, not new implementation observations",
+  "six_eager_rows": {
+    "old": "N:LimitExceeded from per-value compiler allowance",
+    "new": [
+      "S",
+      "S",
+      "S",
+      "S",
+      "F",
+      "S"
+    ],
+    "unchanged": [
+      "schemas",
+      "instances",
+      "program_bytes",
+      "actual interpreter reach"
+    ],
+    "replacement_terminal_controls": "Same contexts with a{65535}; assert Program::Limited(pattern-size-limit) before checking demanded Limit"
+  },
+  "invalid_pattern_harness": "Contained invalid pattern was rejected by document conformance; supplied original root is the correct domain for Undefined controls.",
+  "zero_footprint": {
+    "old": "Unsupported reading prepared at total_pattern_memory=0; old policy counted matcher storage only",
+    "new": "Every retained Arc<Program> contributes the defined footprint, including Unsupported/Undefined/Limited. Zero cannot publish one; pattern-free schemas still prepare. Unsupported semantic outcome retained with funded owner.",
+    "review": "independent reviewer approved; exact and one-below owner controls retained"
+  },
+  "meta_attempt_reservations": {
+    "inputs": "unchanged 1001 short strings and one 10000-byte string, same held environment/meta-schema",
+    "old": "hardcoded 10000 work / 128KiB reservation refusal includes outgoing per-value compiler precharge",
+    "new": "Warm unchanged complete job, verify default success, find independent scoped work/reservation minimum with other funded, assert exact success, one-below typed shared refusal and clean retry. No local refusal accepted as exhaustion.",
+    "authority": "independent review approved"
+  }
+}

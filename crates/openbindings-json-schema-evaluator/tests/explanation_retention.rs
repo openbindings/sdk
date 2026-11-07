@@ -1,21 +1,19 @@
-//! A prepared value contract that can explain keeps only what its own explanations
-//! read. Its own binary, so no concurrent test changes the live arena count.
+//! A prepared schema owns its original environment, but no unrelated preparation. Its own binary, so no concurrent test changes the live arena count.
 use openbindings::*;
 use openbindings_internal_json::backend::live_arenas;
 use openbindings_json_schema_evaluator::DefaultEvaluator;
-use std::sync::Arc;
 
 const ITEM: &str = "https://example.test/item";
 const OTHER: &str = "https://example.test/other";
 
-fn resources(uri: &str, schema: &str) -> ResourceSet {
-    ResourceSet::new([SchemaResource {
+fn resources(uri: &str, schema: &str) -> ExternalSchemas {
+    ExternalSchemas::new([ExternalSchema {
         uri: uri.into(),
         document: JsonValue::parse(schema).unwrap(),
     }])
     .unwrap()
 }
-fn proof() -> Conformant<Document> {
+fn proof() -> ConformantDocument {
     Document::parse(format!(
         r#"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{{"$ref":"{ITEM}"}}}},"other":{{"input":{{"$ref":"{OTHER}"}}}}}}}}"#
     ))
@@ -29,16 +27,18 @@ fn proof() -> Conformant<Document> {
 // assembles a resolution space for the resources it is given.
 struct Projecting;
 impl SchemaEvaluator for Projecting {
+    type Validator = openbindings_json_schema_evaluator::DefaultValidator;
     fn prepare(
         &self,
-        request: &SchemaRequest,
+        request: EvaluationRequest<'_>,
+        limits: &PreparationLimits,
         control: &dyn WorkControl,
-    ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
-        request.evaluation_program(control)?;
-        DefaultEvaluator::new().prepare(request, control)
+    ) -> Result<Self::Validator, PreparationFailure> {
+        request.environment(limits, control)?;
+        DefaultEvaluator::new().prepare(request, limits, control)
     }
 }
-fn explaining_contract() -> PreparedValueContract {
+fn explaining_contract() -> PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator> {
     let proof = proof();
     let item = resources(
         ITEM,
@@ -49,7 +49,11 @@ fn explaining_contract() -> PreparedValueContract {
         .unwrap()
         .input()
         .unwrap()
-        .prepare_with(&DefaultEvaluator::new(), &item)
+        .prepare(
+            &DefaultEvaluator::new(),
+            &item,
+            &openbindings::PreparationLimits::default(),
+        )
         .unwrap();
     // Another set prepared on the same revision, with a projecting evaluator,
     // must not stay alive through this contract.
@@ -62,31 +66,35 @@ fn explaining_contract() -> PreparedValueContract {
         operation
             .input()
             .unwrap()
-            .prepare_with(&Projecting, &other)
+            .prepare(
+                &Projecting,
+                &other,
+                &openbindings::PreparationLimits::default(),
+            )
             .unwrap(),
     );
     contract
 }
 
 #[test]
-fn explaining_contracts_keep_neither_documents_nor_resources() {
+fn explaining_contracts_release_the_original_environment_on_final_drop() {
     // Warm process-lifetime schemas before counting.
     drop(explaining_contract());
     let before = live_arenas();
     let contract = explaining_contract();
-    // The document, both resource sets, the views and the resolution space are
-    // released; the contract holds no arena of theirs.
-    assert_eq!(live_arenas(), before);
+    // The original document and reached resource remain owned by the Plan.
+    // The unrelated OTHER resource and preparation have been released.
+    assert_eq!(live_arenas(), before + 2);
     let value = JsonValue::parse(r#"{"id":0}"#).unwrap();
     let ValueOutcome::Fails { problems, .. } = contract.explain(&value) else {
         panic!("expected failure")
     };
     let location = &problems[0].schema;
-    assert_eq!(location.resource.as_deref(), Some(ITEM));
+    assert_eq!(location.source_uri.as_deref(), Some(ITEM));
     assert_eq!(location.pointer, "/properties/id/minimum");
     drop(value);
-    // Explaining builds no arena either.
-    assert_eq!(live_arenas(), before);
+    // Explaining builds no additional arena.
+    assert_eq!(live_arenas(), before + 2);
     drop(contract);
     assert_eq!(live_arenas(), before);
 }

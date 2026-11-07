@@ -1,0 +1,199 @@
++ cargo rustdoc --locked --lib -p openbindings-internal-cancellation -- -D missing_docs -D missing_debug_implementations -D rustdoc::broken_intra_doc_links
+    Checking openbindings-internal-schema v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-internal-schema)
+    Checking openbindings v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings)
+ Documenting openbindings-internal-cancellation v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-internal-cancellation)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.32s
+   Generated /Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/doc/openbindings_internal_cancellation/index.html
++ cargo rustdoc --locked --lib -p openbindings -- -D missing_docs -D missing_debug_implementations -D rustdoc::broken_intra_doc_links
+ Documenting openbindings v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.59s
+   Generated /Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/doc/openbindings/index.html
++ cargo rustdoc --locked --lib -p openbindings-context -- -D missing_docs -D missing_debug_implementations -D rustdoc::broken_intra_doc_links
+ Documenting openbindings-context v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-context)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.41s
+   Generated /Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/doc/openbindings_context/index.html
++ cargo rustdoc --locked --lib -p openbindings-json-schema-evaluator -- -D missing_docs -D missing_debug_implementations -D rustdoc::broken_intra_doc_links
+    Checking openbindings-internal-schema v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-internal-schema)
+    Checking openbindings v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings)
+ Documenting openbindings-json-schema-evaluator v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-json-schema-evaluator)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.29s
+   Generated /Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/doc/openbindings_json_schema_evaluator/index.html
++ cargo rustdoc --locked --lib -p openbindings-http-discovery --features native -- -D missing_docs -D missing_debug_implementations -D rustdoc::broken_intra_doc_links
+    Checking openbindings-internal-schema v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-internal-schema)
+    Checking openbindings v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings)
+    Checking openbindings-internal-cancellation v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-internal-cancellation)
+ Documenting openbindings-http-discovery v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-http-discovery)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.42s
+   Generated /Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/doc/openbindings_http_discovery/index.html
++ cargo rustdoc --locked --lib -p openbindings-schema-evaluator-test-support -- -D missing_docs -D missing_debug_implementations -D rustdoc::broken_intra_doc_links
+ Documenting openbindings-schema-evaluator-test-support v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-schema-evaluator-test-support)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.45s
+   Generated /Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/doc/openbindings_schema_evaluator_test_support/index.html
++ cargo rustdoc --locked --lib -p openbindings-kind-description -- -D missing_docs -D missing_debug_implementations -D rustdoc::broken_intra_doc_links
+    Checking openbindings-internal-cancellation v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-internal-cancellation)
+    Checking openbindings-context v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-context)
+ Documenting openbindings-kind-description v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-kind-description)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.51s
+   Generated /Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/doc/openbindings_kind_description/index.html
++ cargo rustdoc --locked --lib -p openbindings-schema-comparison -- -D missing_docs -D missing_debug_implementations -D rustdoc::broken_intra_doc_links
+ Documenting openbindings-schema-comparison v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-schema-comparison)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.43s
+   Generated /Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/doc/openbindings_schema_comparison/index.html
++ cargo rustdoc --locked --lib -p openbindings-source-pull -- -D missing_docs -D missing_debug_implementations -D rustdoc::broken_intra_doc_links
+ Documenting openbindings-source-pull v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-source-pull)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.47s
+   Generated /Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/doc/openbindings_source_pull/index.html
++ cargo rustdoc --locked --lib -p openbindings-invocation -- -D missing_docs -D missing_debug_implementations -D rustdoc::broken_intra_doc_links
+ Documenting openbindings-invocation v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-invocation)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.63s
+   Generated /Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/doc/openbindings_invocation/index.html
++ cargo rustdoc --locked --lib -p openbindings-internal-json -- -D warnings
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.35s
+   Generated /Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/doc/openbindings_internal_json/index.html
++ cargo test --locked --doc -p openbindings-internal-cancellation -p openbindings -p openbindings-context -p openbindings-json-schema-evaluator -p openbindings-http-discovery -p openbindings-schema-evaluator-test-support -p openbindings-kind-description -p openbindings-schema-comparison -p openbindings-source-pull -p openbindings-invocation -p openbindings-internal-json --features openbindings-http-discovery/native
+   Compiling openbindings-internal-schema v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-internal-schema)
+   Compiling openbindings v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings)
+   Compiling openbindings-internal-cancellation v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-internal-cancellation)
+   Compiling openbindings-context v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-context)
+   Compiling openbindings-json-schema-evaluator v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-json-schema-evaluator)
+   Compiling openbindings-schema-comparison v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-schema-comparison)
+   Compiling openbindings-schema-evaluator-test-support v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-schema-evaluator-test-support)
+   Compiling openbindings-invocation v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-invocation)
+   Compiling openbindings-source-pull v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-source-pull)
+   Compiling openbindings-kind-description v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-kind-description)
+   Compiling openbindings-http-discovery v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-http-discovery)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.85s
+   Doc-tests openbindings
+
+running 7 tests
+test crates/openbindings/src/conformance.rs - conformance::Finding (line 100) ... ok
+test crates/openbindings/src/schema/references.rs - schema::references::ReferenceResolution (line 194) ... ok
+test crates/openbindings/src/version.rs - version::VersionDecision (line 18) ... ok
+test crates/openbindings/src/schema/evaluation.rs - schema::evaluation::ValueProblem (line 334) ... ok
+test crates/openbindings/src/control.rs - control::WorkControl (line 34) ... ok
+test crates/openbindings/src/../README.md - (line 7) ... ok
+test crates/openbindings/src/schema/evaluation.rs - schema::evaluation::SchemaEvaluator (line 536) ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+
+running 10 tests
+test crates/openbindings/src/conformance.rs - conformance::Finding (line 89) - compile fail ... ok
+test crates/openbindings/src/conformance.rs - conformance::Finding (line 94) - compile fail ... ok
+test crates/openbindings/src/document.rs - document::ConformantDocument (line 84) - compile fail ... ok
+test crates/openbindings/src/schema/evaluation.rs - schema::evaluation::ValueProblem (line 327) - compile fail ... ok
+test crates/openbindings/src/conformance.rs - conformance::DocumentValidation (line 246) - compile fail ... ok
+test crates/openbindings/src/schema/mod.rs - schema::Schema (line 20) - compile fail ... ok
+test crates/openbindings/src/conformance.rs - conformance::DocumentValidation (line 251) - compile fail ... ok
+test crates/openbindings/src/document.rs - document::ConformantDocument (line 95) - compile fail ... ok
+test crates/openbindings/src/document.rs - document::ConformantDocument (line 89) - compile fail ... ok
+test crates/openbindings/src/document.rs - document::ConformantDocument (line 100) - compile fail ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.27s
+
+all doctests ran in 1.17s; merged doctests compilation took 0.37s
+   Doc-tests openbindings_context
+
+running 1 test
+test crates/openbindings-context/src/lib.rs - (line 8) ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+all doctests ran in 0.51s; merged doctests compilation took 0.29s
+   Doc-tests openbindings_http_discovery
+
+running 4 tests
+test crates/openbindings-http-discovery/src/client.rs - client::DiscoveryOutcome (line 552) ... ok
+test crates/openbindings-http-discovery/src/client.rs - client::DiscoveryResult (line 630) ... ok
+test crates/openbindings-http-discovery/src/../README.md - (line 14) ... ok
+test crates/openbindings-http-discovery/src/publication.rs - publication::Publication::new (line 83) ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+
+running 2 tests
+test crates/openbindings-http-discovery/src/client.rs - client::DiscoveryResult (line 626) - compile fail ... ok
+test crates/openbindings-http-discovery/src/client.rs - client::DiscoveryOutcome (line 533) - compile fail ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+all doctests ran in 1.01s; merged doctests compilation took 0.47s
+   Doc-tests openbindings_internal_cancellation
+
+running 1 test
+test crates/openbindings-internal-cancellation/src/lib.rs - CancellationToken (line 23) ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+all doctests ran in 0.51s; merged doctests compilation took 0.29s
+   Doc-tests openbindings_internal_json
+
+running 2 tests
+test crates/openbindings-internal-json/src/json.rs - json::JsonKind (line 187) ... ok
+test crates/openbindings-internal-json/src/json.rs - json::JsonMember (line 305) ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+test crates/openbindings-internal-json/src/json.rs - json::JsonValue::bytes (line 364) - compile fail ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+all doctests ran in 0.51s; merged doctests compilation took 0.21s
+   Doc-tests openbindings_invocation
+
+running 1 test
+test crates/openbindings-invocation/src/../README.md - (line 12) ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+all doctests ran in 0.55s; merged doctests compilation took 0.32s
+   Doc-tests openbindings_json_schema_evaluator
+
+running 2 tests
+test crates/openbindings-json-schema-evaluator/src/../README.md - (line 98) ... ok
+test crates/openbindings-json-schema-evaluator/src/../README.md - (line 8) ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+all doctests ran in 0.86s; merged doctests compilation took 0.36s
+   Doc-tests openbindings_kind_description
+
+running 1 test
+test crates/openbindings-kind-description/src/../README.md - (line 25) ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+all doctests ran in 0.50s; merged doctests compilation took 0.27s
+   Doc-tests openbindings_schema_comparison
+
+running 1 test
+test crates/openbindings-schema-comparison/src/../README.md - (line 9) ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+all doctests ran in 0.63s; merged doctests compilation took 0.41s
+   Doc-tests openbindings_schema_evaluator_test_support
+
+running 2 tests
+test crates/openbindings-schema-evaluator-test-support/src/lib.rs - Report (line 144) ... ok
+test crates/openbindings-schema-evaluator-test-support/src/../README.md - (line 8) ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.36s
+
+
+running 1 test
+test crates/openbindings-schema-evaluator-test-support/src/lib.rs - Report (line 138) - compile fail ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+
+all doctests ran in 3.37s; merged doctests compilation took 0.39s
+   Doc-tests openbindings_source_pull
+
+running 1 test
+test crates/openbindings-source-pull/src/../README.md - (line 21) ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+all doctests ran in 0.56s; merged doctests compilation took 0.35s

@@ -25,6 +25,9 @@ examples. `python3 tools/verify.py --browser` adds browser checks.
 
 `tools/verify-api-reference.py` checks Rust documentation and TypeScript reference
 contracts. `tools/verify-rust-snippets.py` executes prose examples.
+`tools/verify-kind-adapter.py` checks the adapter guide's verbatim Rust blocks
+against its external example, then tests and lints that example with its lockfile.
+Add `--wasm` to build its library for `wasm32-unknown-unknown`.
 `tools/verify-product-labels.py --self-test` checks product vocabulary boundaries.
 `tools/verify-doc-links.py` checks local Markdown targets and fragments without
 network access, including repository URLs that name this checkout. Remote URLs
@@ -58,6 +61,12 @@ from the lock. When the lock changes `playwright-core`, update the tag and diges
 together; `docker buildx imagetools inspect mcr.microsoft.com/playwright:v<version>-noble`
 prints the index digest.
 
+Hash tables must never use input-chosen content as keys, including content hashes
+and tuples containing text or bytes. Use ordered maps, ordered sets or sorted
+sequences so worst-case work needs no secret seed or host entropy; SDK-assigned
+positions and content-free identities may still use hash tables. Fingerprints
+may select sorted candidates only when exact comparisons are charged.
+
 ## Resolver implementation
 
 The bundled resolver and default evaluator give a unique contained declared ID
@@ -65,12 +74,12 @@ priority over supplied names; packaged standards are the final fallback. Supplie
 retrieval aliases and declared IDs compete equally when no contained ID owns the
 name. A reached carrier must itself own its canonical ID: aliases, pointers and
 direct applicators into a competing carrier conservatively refuse preparation.
-Unused conflicts do not poison other contracts, and an independently named nested
+Unused conflicts do not poison other schemas, and an independently named nested
 resource retains its original base and dialect. No schema-body comparison, alias
-transfer or missing-fragment fallback occurs. `SchemaRequest::supplied_resources()`
-retains the original catalog. `SchemaLocation.resource` records original retrieval
+transfer or missing-fragment fallback occurs. `EvaluationRequest::supplied_resources()`
+retains the original catalog. `SchemaOrigin.resource` records original retrieval
 provenance, which need not be the winning lookup association for that URI. Replacing
-resources requires a new immutable set and preparation; retained contracts keep their inputs.
+resources requires a new immutable set and preparation; retained schemas keep their inputs.
 OBI-13 retains exact identifier comparison; ordinary JSON Schema resolution uses
 the library normalization policy.
 
@@ -148,16 +157,17 @@ release checklist records those SDK-specific outcomes separately from source lan
 Maintained value and frame-shape tests cover the adopted interface; lifecycle
 and malformed-frame tests separately qualify this SDK's policy.
 The frame mapper is test-only and does not establish a new streaming fixture
-standard. The external Catalog consumer joins inspection, synthesis and explicit
-binding invocation against an independent execution oracle. The invoker-only
-consumer guards dependency isolation; the Node/Wasm probe qualifies a thin Rust
-bridge, not a released TypeScript API or browser deployment. Run
-`tools/verify-binding-invocation.py` for the maintained consumer qualification.
+standard. The external Catalog consumer explicitly pulls, adopts additions, then
+invokes a selected binding or operation from its conformant document. The
+invoker-only consumer guards dependency isolation; the Node/Wasm probe qualifies
+a thin Rust bridge, not a released TypeScript API or browser deployment. Run
+`tools/verify-invocation.py` for the maintained consumer qualification.
 
 Context provisioning and protocol transports remain application responsibilities.
 The SDK supplies no kind-specific instances. The separate
-[OpenAPI project](https://github.com/openbindings/openapi) implements the interfaces. Operation consumer and cancellation tests, the shared
-Catalog pipeline, and the expanded Node/Wasm probe qualify the operation layer.
+[OpenAPI project](https://github.com/openbindings/openapi) implements the interfaces.
+Current operation consumer checks cover aliases, selection, rejected values,
+context challenges and explicit retries without implicit effects.
 The resource probe records warmed binding-versus-operation overhead and owner
 release; it does not claim HTTP parity, browser memory bounds, or arbitrary schema
 throughput.

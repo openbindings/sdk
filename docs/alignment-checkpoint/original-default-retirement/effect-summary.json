@@ -1,0 +1,9 @@
+{
+  "status": "bounded-fixed-policy-pass",
+  "current_rust_groups": 7,
+  "minimum_rust_groups": 7,
+  "logical_effect_limit": 64,
+  "sampled_additional_guard_bytes": 262144,
+  "universal_physical_stack_claim": false,
+  "whole_default_retirement": "open"
+}

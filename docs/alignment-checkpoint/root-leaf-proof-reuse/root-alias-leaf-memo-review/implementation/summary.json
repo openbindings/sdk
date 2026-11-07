@@ -1,0 +1,26 @@
+{
+  "status": "PASS_BOUNDED_IMPLEMENTATION",
+  "base": "f62f47757ba6682bea316492056428a665a7bea4",
+  "source_hashes": {
+    "semantic/mod.rs": "ef984b0da0071567c11f631f8cfba97e26d7a5d9bad2d753ec8c2332eeacfa10",
+    "semantic/execution/mod.rs": "60c64c3f2689ff30ce412a3f184795532b7682b042d929d909fbba672766d588",
+    "semantic/preparation.rs": "9fded76a459726beb736b8f36b6e5bded22b5d7b638fa7e8f5f9a452dfb5aeab",
+    "semantic/readings.rs": "1a2663e4a817422c165ebf1592a017dc2d3f56ee1dd1a54daf035505344bc0e9"
+  },
+  "current_and_minimum_distinct_tests": 70,
+  "preexisting_ignored_release_tests": 2,
+  "public_complete_observations_match": 106,
+  "public_existing_exhaustive_stops_each_version": 798,
+  "new_root_exhaustive_stops_each_version": 794,
+  "marking_pass_and_completion_stops_each_version": 10,
+  "root_5000": {
+    "body_calls_per_pass": 1,
+    "hits_per_pass": 4999,
+    "leaf_memo_entries": 1
+  },
+  "large_child_alias_leaf_entries": 0,
+  "source_edits_by_reviewer": false,
+  "performance_acceptance": false,
+  "findings": [],
+  "layout_artifact": "layouts.json"
+}

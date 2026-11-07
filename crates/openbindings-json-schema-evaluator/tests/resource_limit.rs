@@ -1,9 +1,8 @@
 //! `Limits::schema_resources` caps the schema resources one contract may reach, counted
-//! as its projection holds them: the document resource holding the contract's
+//! in its original environment: the document resource holding the contract's
 //! schema, and each embedded `$id`, supplied and packaged meta-schema resource it
 //! reaches. The default sets no cap. A capped contract that reaches more is
-//! refused before the library registers any resource, so the refusal stays cheap
-//! however many it reaches.
+//! refused during traversal, under the same shared preparation allowance.
 use openbindings::*;
 use openbindings_json_schema_evaluator::{DefaultEvaluator, Limits};
 use std::time::{Duration, Instant};
@@ -16,9 +15,19 @@ fn document(schemas: &[String], input: &str) -> String {
 }
 fn prepare_limited(
     text: &str,
-    resources: &ResourceSet,
+    resources: &ExternalSchemas,
     limits: Limits,
-) -> Result<PreparedValueContract, NoVerdict> {
+) -> Result<PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator>, PreparationFailure>
+{
+    prepare_scoped(text, resources, limits, &PreparationLimits::default())
+}
+fn prepare_scoped(
+    text: &str,
+    resources: &ExternalSchemas,
+    limits: Limits,
+    preparation: &PreparationLimits,
+) -> Result<PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator>, PreparationFailure>
+{
     let proof = Document::parse(text)
         .unwrap()
         .validate()
@@ -30,13 +39,18 @@ fn prepare_limited(
         .expect("declared operation")
         .input()
         .expect("declared input")
-        .prepare_with(&DefaultEvaluator::with_limits(limits), resources)
+        .prepare(
+            &DefaultEvaluator::with_limits(limits),
+            resources,
+            preparation,
+        )
 }
 fn prepare(
     text: &str,
-    resources: &ResourceSet,
+    resources: &ExternalSchemas,
     cap: Option<usize>,
-) -> Result<PreparedValueContract, NoVerdict> {
+) -> Result<PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator>, PreparationFailure>
+{
     let limits = Limits {
         schema_resources: cap,
         ..Limits::default()
@@ -44,13 +58,13 @@ fn prepare(
     prepare_limited(text, resources, limits)
 }
 // An input that references each of `count` supplied integer resources.
-fn supplied(count: usize) -> (String, ResourceSet) {
+fn supplied(count: usize) -> (String, ExternalSchemas) {
     let uri = |i: usize| format!("https://set.test/r{i}");
     let references: Vec<_> = (0..count)
         .map(|i| format!(r#"{{"$ref":"{}"}}"#, uri(i)))
         .collect();
     let input = format!(r#"{{"allOf":[{}]}}"#, references.join(","));
-    let resources = ResourceSet::new((0..count).map(|i| SchemaResource {
+    let resources = ExternalSchemas::new((0..count).map(|i| ExternalSchema {
         uri: uri(i),
         document: JsonValue::parse(r#"{"type":"integer"}"#).unwrap(),
     }))
@@ -69,23 +83,27 @@ fn id_chain(links: usize) -> String {
     ));
     document(&schemas, r##"{"$ref":"#/schemas/d0"}"##)
 }
-fn assert_refused(refused: NoVerdict) {
-    assert_eq!(refused.reason, NoVerdictReason::LimitExceeded);
-    assert_eq!(refused.code, "schema-resource-limit");
-    assert!(refused.location.is_none());
+fn assert_refused(refused: PreparationFailure) {
+    assert_eq!(
+        refused.kind,
+        PreparationFailureKind::Limit {
+            resource: "schema-resource-limit".into()
+        }
+    );
+    assert!(refused.origin.is_none());
 }
 // A cap of `reached` admits the contract, and so does no cap; one less refuses it.
 // The admitted contract decides `value`, which satisfies it.
-fn assert_reaches_deciding(text: &str, resources: &ResourceSet, reached: usize, value: &str) {
+fn assert_reaches_deciding(text: &str, resources: &ExternalSchemas, reached: usize, value: &str) {
     let admitted = prepare(text, resources, Some(reached)).expect("admitted at its count");
     assert!(matches!(
-        admitted.validate(&JsonValue::parse(value).unwrap()),
+        admitted.evaluate(&JsonValue::parse(value).unwrap()),
         ValueOutcome::Satisfies
     ));
     prepare(text, resources, None).expect("admitted without a cap");
     assert_refused(prepare(text, resources, Some(reached - 1)).unwrap_err());
 }
-fn assert_reaches(text: &str, resources: &ResourceSet, reached: usize) {
+fn assert_reaches(text: &str, resources: &ExternalSchemas, reached: usize) {
     assert_reaches_deciding(text, resources, reached, "7");
 }
 
@@ -96,7 +114,7 @@ fn the_default_sets_no_resource_cap() {
 
 #[test]
 fn a_cap_admits_exactly_the_resources_a_contract_reaches() {
-    let none = ResourceSet::default();
+    let none = ExternalSchemas::default();
     // The document resource alone.
     assert_reaches(&document(&[], r#"{"type":"integer"}"#), &none, 1);
     // The document resource and each supplied resource.
@@ -117,7 +135,12 @@ fn packaged_meta_schema_resources_count_when_reached() {
         &[],
         r#"{"$ref":"https://json-schema.org/draft/2020-12/schema"}"#,
     );
-    assert_reaches_deciding(&text, &ResourceSet::default(), 9, r#"{"type":"integer"}"#);
+    assert_reaches_deciding(
+        &text,
+        &ExternalSchemas::default(),
+        9,
+        r#"{"type":"integer"}"#,
+    );
 }
 
 #[test]
@@ -125,7 +148,7 @@ fn zero_refuses_every_contract() {
     assert_refused(
         prepare(
             &document(&[], r#"{"type":"integer"}"#),
-            &ResourceSet::default(),
+            &ExternalSchemas::default(),
             Some(0),
         )
         .unwrap_err(),
@@ -133,19 +156,19 @@ fn zero_refuses_every_contract() {
 }
 
 #[test]
-fn a_refusal_precedes_preparing_any_resource() {
-    // Each resource's patterns are admitted as it is registered, so a pattern
-    // over the byte limit refuses a contract within the cap. Over the cap, the
-    // same contract refuses for its resources before any of them is prepared.
+fn a_resource_cap_precedes_evaluation_of_a_local_pattern_limit() {
     let text = document(&[], r#"{"type":"string","pattern":"^(ab)+$"}"#);
-    let none = ResourceSet::default();
+    let none = ExternalSchemas::default();
     let limits = |cap| Limits {
         pattern_bytes: 4,
         schema_resources: cap,
         ..Limits::default()
     };
-    let within = prepare_limited(&text, &none, limits(Some(1))).unwrap_err();
-    assert_eq!(within.code, "pattern-byte-limit");
+    let within = prepare_limited(&text, &none, limits(Some(1))).unwrap();
+    assert!(
+        matches!(within.evaluate_json(r#""ab""#).unwrap(), ValueOutcome::NoVerdict { detail }
+        if detail.reason == NoVerdictReason::LimitExceeded && detail.code == "pattern-byte-limit")
+    );
     assert_refused(prepare_limited(&text, &none, limits(Some(0))).unwrap_err());
 }
 
@@ -155,7 +178,21 @@ fn refusal_time(count: usize) -> Duration {
     (0..3)
         .map(|_| {
             let start = Instant::now();
-            assert_refused(prepare(&text, &resources, Some(count)).unwrap_err());
+            assert_refused(
+                prepare_scoped(
+                    &text,
+                    &resources,
+                    Limits {
+                        schema_resources: Some(count),
+                        ..Limits::default()
+                    },
+                    &PreparationLimits {
+                        max_sdk_work_units: 1_000_000_000,
+                        ..PreparationLimits::default()
+                    },
+                )
+                .unwrap_err(),
+            );
             start.elapsed()
         })
         .min()
@@ -164,10 +201,9 @@ fn refusal_time(count: usize) -> Duration {
 
 #[test]
 fn a_refusal_takes_time_linear_in_the_resources() {
-    // Registering resources takes time quadratic in their number: refused after
-    // registration, four times the resources took about thirteen times as long in
-    // a debug build. Refused before it, the time grows with the projection, about
-    // fourfold.
+    // Fund shared work independently so this measures the selected resource cap,
+    // not whichever other allowance happens to exhaust first. Retain the same
+    // 2,000/8,000-resource inputs and the original generous scaling bound.
     let small = refusal_time(2_000);
     let large = refusal_time(8_000);
     let ratio = large.as_secs_f64() / small.as_secs_f64();
@@ -184,29 +220,30 @@ fn a_contract_s_patterns_are_bounded_together() {
         &[],
         r#"{"properties":{"a":{"pattern":"^aaaaaa$"},"b":{"patternProperties":{"^bbbbbb$":true}},"c":{"pattern":"^cccccc$"}}}"#,
     );
-    let none = ResourceSet::default();
+    let none = ExternalSchemas::default();
     let limits = |total| Limits {
         total_pattern_bytes: total,
         ..Limits::default()
     };
     assert!(prepare_limited(&text, &none, limits(24)).is_ok());
     let refused = prepare_limited(&text, &none, limits(23)).unwrap_err();
-    assert_eq!(refused.code, "pattern-total-byte-limit");
-    assert_eq!(refused.reason, NoVerdictReason::LimitExceeded);
-    let pointer = refused.location.expect("located").pointer.to_string();
-    assert!(
-        pointer.ends_with("/pattern") || pointer.ends_with("/patternProperties"),
-        "{pointer}"
+    assert_eq!(
+        refused.kind,
+        PreparationFailureKind::Limit {
+            resource: "pattern-total-byte-limit".into()
+        }
     );
+    // Aggregate preparation exhaustion is not a local schema assertion and
+    // does not promise a unique original keyword location.
 }
 
 // The total counts forms, not patterns: a set's form spells it out, so a
 // two-byte `\S` takes far more of the total than its source. A `pattern` kept
-// once for every schema holding it counts once; the library matches each
-// `patternProperties` name from its own copy of the form, so each counts.
+// once for every schema holding it counts once. The same normalized form in
+// patternProperties also shares that immutable program.
 #[test]
 fn the_pattern_total_counts_the_forms_kept() {
-    let none = ResourceSet::default();
+    let none = ExternalSchemas::default();
     let limits = |total| Limits {
         total_pattern_bytes: total,
         ..Limits::default()
@@ -215,8 +252,10 @@ fn the_pattern_total_counts_the_forms_kept() {
     assert_eq!(
         prepare_limited(&spelled, &none, limits(64))
             .unwrap_err()
-            .code,
-        "pattern-total-byte-limit"
+            .kind,
+        PreparationFailureKind::Limit {
+            resource: "pattern-total-byte-limit".into()
+        }
     );
     assert!(prepare_limited(&spelled, &none, limits(1024)).is_ok());
     let repeated = document(
@@ -228,9 +267,13 @@ fn the_pattern_total_counts_the_forms_kept() {
         &[],
         r#"{"properties":{"a":{"patternProperties":{"^aaaaaa$":true}},"b":{"patternProperties":{"^aaaaaa$":true}}}}"#,
     );
-    assert!(prepare_limited(&names, &none, limits(16)).is_ok());
+    for total in [16, 15, 8] {
+        assert!(prepare_limited(&names, &none, limits(total)).is_ok());
+    }
     assert_eq!(
-        prepare_limited(&names, &none, limits(15)).unwrap_err().code,
-        "pattern-total-byte-limit"
+        prepare_limited(&names, &none, limits(7)).unwrap_err().kind,
+        PreparationFailureKind::Limit {
+            resource: "pattern-total-byte-limit".into()
+        }
     );
 }

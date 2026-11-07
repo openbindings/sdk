@@ -690,6 +690,7 @@ dependencies = [
  "fancy-regex",
  "fraction",
  "getrandom 0.3.4",
+ "idna",
  "itoa",
  "jsonschema-regex",
  "jsonschema-value",
@@ -886,15 +887,24 @@ version = "0.0.0"
 dependencies = [
  "bytes",
  "openbindings",
+ "openbindings-context",
  "openbindings-http-discovery",
- "openbindings-interface-synthesis",
  "openbindings-invocation",
  "openbindings-json-schema-evaluator",
- "openbindings-source-inspection",
+ "openbindings-kind-description",
+ "openbindings-schema-comparison",
+ "openbindings-source-pull",
  "reqwest",
  "serde",
  "serde_json",
  "tokio",
+]
+
+[[package]]
+name = "openbindings-context"
+version = "0.2.0-alpha.1"
+dependencies = [
+ "openbindings",
 ]
 
 [[package]]
@@ -912,30 +922,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "openbindings-interface-synthesis"
-version = "0.2.0-alpha.1"
-dependencies = [
- "openbindings",
- "openbindings-internal-cancellation",
- "openbindings-internal-interfaces",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "openbindings-internal-cancellation"
 version = "0.2.0-alpha.1"
 dependencies = [
  "openbindings",
-]
-
-[[package]]
-name = "openbindings-internal-interfaces"
-version = "0.2.0-alpha.1"
-dependencies = [
- "openbindings",
- "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -967,8 +957,8 @@ version = "0.2.0-alpha.1"
 dependencies = [
  "futures-core",
  "openbindings",
+ "openbindings-context",
  "openbindings-internal-cancellation",
- "openbindings-internal-interfaces",
  "serde",
  "serde_json",
 ]
@@ -982,19 +972,38 @@ dependencies = [
  "openbindings-internal-json",
  "openbindings-internal-schema",
  "regex",
+ "regex-automata",
+ "regex-syntax",
  "serde",
  "serde_json",
 ]
 
 [[package]]
-name = "openbindings-source-inspection"
+name = "openbindings-kind-description"
 version = "0.2.0-alpha.1"
 dependencies = [
  "openbindings",
+ "openbindings-context",
  "openbindings-internal-cancellation",
- "openbindings-internal-interfaces",
- "serde",
- "serde_json",
+]
+
+[[package]]
+name = "openbindings-schema-comparison"
+version = "0.2.0-alpha.1"
+dependencies = [
+ "openbindings",
+ "openbindings-internal-json",
+ "openbindings-internal-schema",
+]
+
+[[package]]
+name = "openbindings-source-pull"
+version = "0.2.0-alpha.1"
+dependencies = [
+ "openbindings",
+ "openbindings-context",
+ "openbindings-internal-cancellation",
+ "openbindings-internal-json",
 ]
 
 [[package]]

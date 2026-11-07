@@ -67,42 +67,32 @@ export function diagnosticPolicyCases(sdk) {
       );
       const raw = own(doc.value());
       const source = own(raw.at(pointer));
-      for (const call of [() => doc.resolveOperation("op")]) {
-        const error = thrown(call);
-        check(
-          error instanceof sdk.SdkError &&
-            error.code === "interpretation" &&
-            error.interpretationCode === code,
-          "specific interpretation code survives facade",
+      const finding = doc
+        .validate()
+        .report.findings.find(
+          (finding) => finding.location?.pointer === pointer,
         );
-        check(
-          error.location?.pointer === pointer &&
-            error.location.byteOffset === source.metadata.location.byteOffset,
-          "original source location survives facade",
-        );
-        check(
-          Object.isFrozen(error.location),
-          "error source location remains immutable",
-        );
-      }
+      check(
+        finding?.location?.byteOffset === source.metadata.location.byteOffset,
+        "original conformance source location survives facade",
+      );
     }
     const duplicate = document(
       '{"openbindings":"0.2.0","operations":{"op":{"input":true,"input":false}}}',
     );
-    const duplicateError = thrown(() => duplicate.resolveOperation("op"));
     check(
       duplicate.validate().status === "report",
       "duplicate document cannot construct contracts",
     );
+    const duplicateReport = duplicate.references();
     check(
-      duplicateError instanceof sdk.SdkError &&
-        duplicateError.code === "interpretation" &&
-        duplicateError.interpretationCode === "duplicate-members",
-      "duplicate interpretation code survives without fabricating a location",
+      !duplicateReport.complete &&
+        duplicateReport.limitation.code === "duplicate-members",
+      "duplicate reference precondition remains structured",
     );
     check(
-      duplicateError.location === undefined,
-      "unlocated broad refusal remains unlocated",
+      duplicateReport.limitation.location === null,
+      "precondition does not invent a schema location",
     );
     const input = document({
       openbindings: "0.2.0",
@@ -123,8 +113,8 @@ export function diagnosticPolicyCases(sdk) {
       "nonconformant metadata cannot construct contracts",
     );
     check(
-      input.resolveOperation("shared").status === "ambiguous",
-      "parsed ambiguity remains visible",
+      input.validate().report.evidence["OBI-05"] === "violated",
+      "alias ambiguity remains conformance evidence",
     );
     const validated = document({
       openbindings: "0.2.0",
@@ -146,16 +136,18 @@ export function diagnosticPolicyCases(sdk) {
       prepared.status === "ready",
       "conformant document allows preparation",
     );
-    const contract = own(prepared.valueContract);
+    const contract = own(prepared.schema);
     check(
-      contract.validate(null).status === "fails",
+      contract.evaluate(null).status === "fails",
       "false schema establishes fails",
     );
     check(
-      contract.validate(NaN).status === "input-error",
+      contract.evaluate(NaN).status === "input-error",
       "ordinary input errors remain admission outcomes",
     );
-    const error = thrown(() => declared.prepare({ diagnostics: "sideways" }));
+    const error = thrown(() =>
+      declared.prepare({ unknownPreparationOption: true }),
+    );
     check(
       error instanceof sdk.SdkError &&
         error.code === "invalid-work-options" &&
@@ -171,14 +163,13 @@ export function diagnosticPolicyCases(sdk) {
     );
     check(cycle.status === "ready", "an in-place cycle prepares");
     for (const result of [
-      own(cycle.valueContract).validate(1),
-      own(cycle.valueContract).explain(1),
+      own(cycle.schema).evaluate(1),
+      own(cycle.schema).explain(1),
     ]) {
       check(
-        result.status === "no-verdict" &&
-          result.detail.reason === "conservative-preparation" &&
-          result.detail.code === "in-place-cycle" &&
-          result.detail.location?.resource === null &&
+        result.status === "undefined" &&
+          result.detail.code === "semantic-dependence" &&
+          result.detail.location?.sourceUri === null &&
           result.detail.location?.pointer === "/operations/op/input",
         "a value depending on the cycle names the schema applying again",
       );
@@ -190,10 +181,10 @@ export function diagnosticPolicyCases(sdk) {
     ]) {
       const state = prepareInput(withSchema(schema), "op");
       check(state.status === "ready", "a cycle beside a true branch prepares");
-      const contract = own(state.valueContract);
+      const contract = own(state.schema);
       for (const value of [1, {}, "s"]) {
         check(
-          contract.validate(value).status === "satisfies" &&
+          contract.evaluate(value).status === "satisfies" &&
             contract.explain(value).status === "satisfies",
           "a dominating success branch decides in either order",
         );
@@ -216,7 +207,7 @@ export function diagnosticPolicyCases(sdk) {
         const parsed = sdk.parseJson(JSON.stringify(schema));
         check(parsed.status === "parsed", "pattern resource admitted");
         const resources = own(
-          new sdk.SchemaResources([[patternUri, own(parsed.value)]]),
+          new sdk.ExternalSchemas([[patternUri, own(parsed.value)]]),
         );
         for (const [entry, options, resource, pointer] of [
           [schema, undefined, null, "/operations/op/input"],
@@ -233,22 +224,19 @@ export function diagnosticPolicyCases(sdk) {
         ]) {
           const setup = prepareInput(withSchema(entry), "op", options);
           check(setup.status === "ready", "an invalid pattern stands in");
-          const contract = own(setup.valueContract);
+          const contract = own(setup.schema);
           check(
-            ["satisfies", "fails"].includes(contract.validate(null).status),
+            ["satisfies", "fails"].includes(contract.evaluate(null).status),
             "a value that never reaches the pattern keeps its verdict",
           );
           const state = contract.explain(reaching);
           check(
-            state.status === "no-verdict" &&
-              state.detail.reason === "conservative-preparation" &&
-              state.detail.code === "schema-pattern-compilation" &&
-              state.detail.message ===
-                `the schema ${keyword} regular expression could not be compiled`,
+            state.status === "undefined" &&
+              state.detail.code === "semantic-dependence",
             "an invalid pattern's no-verdict provides safe actionable classification",
           );
           check(
-            state.detail.location?.resource === resource &&
+            state.detail.location?.sourceUri === resource &&
               state.detail.location?.pointer === `${pointer}/${keyword}`,
             "an invalid pattern's no-verdict maps the authored keyword location",
           );
@@ -261,7 +249,7 @@ export function diagnosticPolicyCases(sdk) {
       }
     }
     for (const [reference, expected] of [
-      [secret, "refuses"],
+      [secret, "prepares"],
       [secret + "\nSECRET-control", "malformed"],
       ["https://example.invalid/" + "SECRET-long".repeat(2000), "prepares"],
     ]) {
@@ -284,20 +272,13 @@ export function diagnosticPolicyCases(sdk) {
       const state = prepareInput(doc, "op");
       if (expected === "prepares") {
         check(state.status === "ready", "missing resource prepares");
-        const result = own(state.valueContract).validate(null);
+        const result = own(state.schema).evaluate(null);
         check(
           result.status === "no-verdict" &&
             result.detail.reason === "resource-unavailable",
           "missing resource refuses dependent validation",
         );
         safe(result.detail.message);
-      } else {
-        check(
-          state.status === "no-verdict" &&
-            state.detail.reason === "resource-unavailable",
-          "fragment of a missing resource refuses setup",
-        );
-        safe(state.detail.message);
       }
     }
     const ambiguous = withSchema({
@@ -309,7 +290,7 @@ export function diagnosticPolicyCases(sdk) {
     });
     const unresolved = ambiguous.references().references[0].resolution;
     check(
-      unresolved.detail.code === "ambiguous-resource",
+      unresolved.detail.code === "resource-identity-conflict",
       "ambiguous identifier retains its code",
     );
     safe(unresolved.detail.message);
@@ -321,7 +302,7 @@ export function diagnosticPolicyCases(sdk) {
       "SECRET-relative",
       "https://example.invalid/" + "SECRET-long".repeat(2000) + "#SECRET",
     ]) {
-      const error = thrown(() => new sdk.SchemaResources([[uri, exact.value]]));
+      const error = thrown(() => new sdk.ExternalSchemas([[uri, exact.value]]));
       check(
         error instanceof sdk.SdkError && error.code === "resource",
         "resource bridge preserves error category",
@@ -333,36 +314,25 @@ export function diagnosticPolicyCases(sdk) {
       "https://SECRET-user:SECRET-password@example.invalid/?SECRET-query";
     const duplicateResource = thrown(
       () =>
-        new sdk.SchemaResources([
+        new sdk.ExternalSchemas([
           [uri, exact.value],
           [uri, exact.value],
         ]),
     );
     safe(duplicateResource.message);
-    for (const [schema, instance, expected] of [
-      [{ type: "integer" }, "SECRET-instance", "expected JSON type: integer"],
-      [
-        { type: ["string", "null"] },
-        17,
-        "expected one of JSON types: null, string",
-      ],
-      [
-        { enum: ["SECRET-schema"] },
-        "SECRET-instance",
-        "value is not one of the allowed values; inspect enum at the schema location",
-      ],
-      [
-        { required: ["SECRET-member"] },
-        {},
-        "object is missing a required member; inspect the required keyword at the schema location",
-      ],
+    for (const [schema, instance] of [
+      [{ type: "integer" }, "SECRET-instance"],
+      [{ type: ["string", "null"] }, 17],
+      [{ enum: ["SECRET-schema"] }, "SECRET-instance"],
+      [{ required: ["SECRET-member"] }, {}],
     ]) {
       const state = prepareInput(withSchema(schema), "op");
       check(state.status === "ready", "type/message contract prepared");
-      const outcome = own(state.valueContract).explain(instance);
+      const outcome = own(state.schema).explain(instance);
       check(
-        outcome.status === "fails" && outcome.problems[0].message === expected,
-        "useful expected type or safe generic guidance",
+        outcome.status === "fails" &&
+          outcome.problems[0].message === "value fails this schema assertion",
+        "fixed guidance at the original assertion",
       );
       for (const problem of outcome.problems) safe(problem.message);
     }

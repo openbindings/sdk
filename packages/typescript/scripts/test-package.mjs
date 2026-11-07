@@ -5,6 +5,7 @@ import {
   mkdtempSync,
   realpathSync,
   readFileSync,
+  readdirSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -164,12 +165,15 @@ console.log("Installed README TypeScript first-use block compiled and ran verbat
       ),
     );
   }
-  const declaration = readFileSync(
-    join(installed, "dist/internal.d.ts"),
-    "utf8",
-  );
-  assert.match(declaration, /interpretationCode\?: string/);
-  assert.match(declaration, /Specific interpretation refusal/);
+  const declaration = readdirSync(join(installed, "dist"))
+    .filter((name) => name.endsWith(".d.ts"))
+    .sort()
+    .map((name) => readFileSync(join(installed, "dist", name), "utf8"))
+    .join("\n");
+  assert(!readdirSync(join(installed, "dist")).includes("internal.js"));
+  assert.doesNotMatch(declaration, /interpretationCode/);
+  assert.match(declaration, /readonly inputPointer: string \| null/);
+  assert.match(declaration, /export declare class Operation\b/);
   writeFileSync(
     join(temporary, "consumer.mjs"),
     `

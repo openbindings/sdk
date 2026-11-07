@@ -1,0 +1,27 @@
+error[E0599]: no method named `charge_allocation` found for reference `&openbindings_internal_schema::preparation::Attempt<'_>` in the current scope
+  --> /Users/matt/Code/ob-pj/openbindings/sdk-migration/receipts/2026-11-02-preparation/original-default-performance/narrow-integer-review/implementation/candidate-copy/src/semantic/independent-integer.rs:32:21
+   |
+32 |   if memory{let _=a.charge_allocation(2);}else{let _=a.charge_work(2);}
+   |                     ^^^^^^^^^^^^^^^^^ method not found in `&Attempt<'_>`
+   |
+   = help: items from traits can only be used if the trait is in scope
+help: trait `Control` which provides `charge_allocation` is implemented but not in scope; perhaps you want to import it
+   |
+1  + use openbindings_internal_schema::Control;
+   |
+
+error[E0599]: no method named `charge_work` found for reference `&openbindings_internal_schema::preparation::Attempt<'_>` in the current scope
+  --> /Users/matt/Code/ob-pj/openbindings/sdk-migration/receipts/2026-11-02-preparation/original-default-performance/narrow-integer-review/implementation/candidate-copy/src/semantic/independent-integer.rs:32:56
+   |
+32 |   if memory{let _=a.charge_allocation(2);}else{let _=a.charge_work(2);}
+   |                                                        ^^^^^^^^^^^ method not found in `&Attempt<'_>`
+   |
+   = help: items from traits can only be used if the trait is in scope
+help: trait `Control` which provides `charge_work` is implemented but not in scope; perhaps you want to import it
+   |
+1  + use openbindings_internal_schema::Control;
+   |
+
+error: aborting due to 2 previous errors
+
+For more information about this error, try `rustc --explain E0599`.

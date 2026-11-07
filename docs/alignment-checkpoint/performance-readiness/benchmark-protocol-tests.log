@@ -1,0 +1,23 @@
+   Compiling openbindings-evaluator-bench v0.0.0 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/tools/evaluator-bench)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.91s
+     Running unittests src/main.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/openbindings_evaluator_bench-9a846614172497fe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/observations.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/observations-1594194424a9624c)
+
+running 10 tests
+test provenance_reports_the_embedded_source_digests ... ok
+test incorrect_expected_outcomes_abort_instead_of_producing_timings ... ok
+test preparation_refusal_is_counted_without_an_instance_verdict ... ok
+test missing_local_target_is_a_value_outcome_not_preparation_refusal ... ok
+test unsupported_modes_abort_without_measuring ... ok
+test conformant_reads_visit_all_text_and_distinguish_absent_contracts ... ok
+test refused_preparation_cannot_be_timed_as_a_ready_contract ... ok
+test document_validation_acquires_proof_only_for_conformance ... ok
+test explain_checks_reported_count_and_original_problem_locations ... ok
+test each_mode_times_its_own_operation_and_counts_every_iteration ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.87s

@@ -1,0 +1,11 @@
+# Fixed logical effect policy — bounded implementation PASS
+
+The implementation matches next-default-retirement-policy.md: one private maximum of 64 effects is passed into every original evaluate_pass Graph, including ordinary values, selected-meta evaluation and the optional Explain pass. The sampled 256 KiB Observation is independent and remains only an additional refusal guard. It is not a portable physical-stack guarantee and does not replace per-build/host qualification.
+
+Graph::variable checks work/cancellation first, then the logical ceiling before publishing a new class. The new code semantic-effect-limit accurately names the supported logical resource. No caller setting can increase it. Existing evaluation-work/program-storage controls remain, and the evaluator/bridge/TypeScript source no longer contains stack_bytes/compile_json_depth or their camel-case option names. No aliases or compatibility layer were added.
+
+Independent current/minimum Rust public replays each pass seven groups: the five parent groups (63/64/65 both modes, same-original/equal-subject reuse versus distinct effects, earlier work/storage/cancellation, selected-meta boundary, removed option rejection) plus two independently authored groups. The additional controls require coherent P∨¬P identities to settle S at 63/64 effects (65 stays a typed limit), and distinguish the logical effect ceiling from a concrete 96-layer schema and a 200-target alias chain, both with S/F in both modes.
+
+The implementation retains one per-pass logical profile rather than a global lifetime cap: cumulative work/storage and preparation Attempt remain separate shared authorities. The source proof bounding ordered apply/quantify recursion by N+2 still applies; no arbitrary compiler/host stack-byte claim is made. No new production finding was established in this bounded diff.
+
+This approval does not close default retirement. Existing mixed quantify/apply host evidence, deep/long-reference workloads, required/auxiliary values, verdict-first cancellation, actual TypeScript rejection and resource/performance gates still need the final parent tree replay. Source hashes, actual current/minimum driver commands and results are preserved here. No production edits by this reviewer.

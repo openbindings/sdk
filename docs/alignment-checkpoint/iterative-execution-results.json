@@ -1,0 +1,82 @@
+{
+  "source_base": "46186957c2a4494405b92d6e1c5efdd8245347ea",
+  "source_dirty": true,
+  "current_rust": {
+    "version": "1.99.0",
+    "full_final": {
+      "passed": 533,
+      "ignored": 6
+    },
+    "release_stack": {
+      "passed": 2,
+      "ignored": 0
+    },
+    "strict_lint": "pass"
+  },
+  "minimum_rust": {
+    "version": "1.88.0",
+    "full_first_source": {
+      "passed": 530,
+      "ignored": 4
+    },
+    "final_semantic": {
+      "passed": 30,
+      "ignored": 2
+    },
+    "release_stack": {
+      "passed": 2,
+      "ignored": 0
+    }
+  },
+  "node_tests": 181,
+  "type_check": "pass",
+  "installed_package_assertions": 352,
+  "browser": {
+    "chromium": {
+      "core": 505,
+      "required_values": 1546,
+      "new_original_frame_cases": 8,
+      "status": "pass"
+    },
+    "webkit": {
+      "core": 505,
+      "required_values": 1546,
+      "new_original_frame_cases": 8,
+      "status": "pass"
+    }
+  },
+  "wasm": {
+    "rust_source": "5aab34886ca797c5e33314f06067b297e5e85e04fe5e594b3fed0466084ddd6e",
+    "artifact": "4c8e005b0f856a671256f45f3cb1852aeda338b691beac1fa9bd1f376994177e"
+  },
+  "independent_implementation_review": {
+    "status": "pass",
+    "required_values": 1546,
+    "fixed_frame_controls": 36,
+    "numeric_container_controls": 62,
+    "additional_chain_alias_controls": 17,
+    "recursive_2019_controls": 4,
+    "cancellation_boundaries": 4830,
+    "differential_inputs": 770,
+    "storage_model_operations": 8000,
+    "small_thread_calls": 12,
+    "concurrent_threads": 8,
+    "concurrent_pairs_per_thread": 16
+  },
+  "frozen_long_reference_preparation": "open",
+  "full_physical_stack_qualification": "open",
+  "default_engine_switch": "not performed",
+  "whole_sdk_alignment": "open",
+  "native_frame_bytes": 224,
+  "native_phase_bytes": 128,
+  "initial_frame_backing_bytes": 896,
+  "ci_stack_gate": "Two original-engine release checks added to tools/verify.py on every native CI host",
+  "saved_commit": "98ab475",
+  "pushed": true,
+  "clean_full_portable_verification": {
+    "commit": "98ab4753f7f78ae1d5f381717477d2b6dd83d26d",
+    "command": "python3 tools/verify.py",
+    "exit_code": 0,
+    "log_sha256": "af9107852b61a975c19de1de3525b5076244143dc9c3c3267df0a79a63640a63"
+  }
+}

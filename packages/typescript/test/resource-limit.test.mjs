@@ -26,7 +26,7 @@ const supplied = (count) => {
     sdk.ExactJson.from(integer),
   );
   try {
-    const resources = new sdk.SchemaResources(
+    const resources = new sdk.ExternalSchemas(
       values.map((value, i) => [uri(i), value]),
     );
     return { text: document({}, input), resources };
@@ -56,10 +56,10 @@ const preparation = (text, resources, cap, limits = {}) => {
   }
 };
 const assertRefused = (prepared) => {
-  assert.equal(prepared.status, "no-verdict");
-  assert.equal(prepared.detail.reason, "limit-exceeded");
-  assert.equal(prepared.detail.code, "schema-resource-limit");
-  assert.equal(prepared.detail.location, null);
+  assert.equal(prepared.status, "refused");
+  assert.equal(prepared.failure.kind, "limit");
+  assert.equal(prepared.failure.details.resource, "schema-resource-limit");
+  assert.equal(prepared.failure.origin, null);
 };
 // A cap of `reached` admits the contract, and so does no cap; one less refuses
 // it. The admitted contract decides `value`, which satisfies it.
@@ -67,8 +67,8 @@ const assertReaches = (text, resources, reached, value = 7) => {
   for (const cap of [reached, null]) {
     const prepared = preparation(text, resources, cap);
     assert.equal(prepared.status, "ready", `cap ${cap}`);
-    assert.equal(prepared.valueContract.validate(value).status, "satisfies");
-    prepared.valueContract.dispose();
+    assert.equal(prepared.schema.evaluate(value).status, "satisfies");
+    prepared.schema.dispose();
   }
   assertRefused(preparation(text, resources, reached - 1));
 };
@@ -102,14 +102,19 @@ test("a resource cap counts reached resources as natively", () => {
   assertRefused(preparation(document({}, integer), undefined, 0));
 });
 
-test("a resource cap refuses before preparing any resource", () => {
-  // Each resource's patterns are admitted as it is registered, so a pattern
-  // over the byte limit refuses a contract within the cap. Over the cap, the
-  // same contract refuses for its resources before any of them is prepared.
-  const text = document({}, { type: "string", pattern: "^(ab)+$" });
+test("a resource cap precedes a demanded local pattern limit", () => {
+  const text = document({}, { pattern: "^(ab)+$" });
   const within = preparation(text, undefined, 1, { patternBytes: 4 });
-  assert.equal(within.status, "no-verdict");
-  assert.equal(within.detail.code, "pattern-byte-limit");
+  assert.equal(within.status, "ready");
+  try {
+    assert.equal(within.schema.evaluate(null).status, "satisfies");
+    const result = within.schema.evaluate("ab");
+    assert.equal(result.status, "no-verdict");
+    assert.equal(result.detail.reason, "limit-exceeded");
+    assert.equal(result.detail.code, "pattern-byte-limit");
+  } finally {
+    within.schema.dispose();
+  }
   assertRefused(preparation(text, undefined, 0, { patternBytes: 4 }));
 });
 
@@ -125,11 +130,11 @@ test("a contract's patterns are bounded together", () => {
   );
   const within = preparation(text, undefined, null, { totalPatternBytes: 16 });
   assert.equal(within.status, "ready");
-  within.valueContract.dispose();
+  within.schema.dispose();
   const over = preparation(text, undefined, null, { totalPatternBytes: 15 });
-  assert.equal(over.status, "no-verdict");
-  assert.equal(over.detail.reason, "limit-exceeded");
-  assert.equal(over.detail.code, "pattern-total-byte-limit");
+  assert.equal(over.status, "refused");
+  assert.equal(over.failure.kind, "limit");
+  assert.equal(over.failure.details.resource, "pattern-total-byte-limit");
   assert.equal(sdk.evaluatorLimits().totalPatternBytes, 4 * 1024 * 1024);
   // The total counts forms, which spell every set out: a two-byte `\S` passes
   // a 64-byte total.
@@ -137,114 +142,76 @@ test("a contract's patterns are bounded together", () => {
   const short = preparation(spelled, undefined, null, {
     totalPatternBytes: 64,
   });
-  assert.equal(short.status, "no-verdict");
-  assert.equal(short.detail.code, "pattern-total-byte-limit");
+  assert.equal(short.status, "refused");
+  assert.equal(short.failure.details.resource, "pattern-total-byte-limit");
   const ample = preparation(spelled, undefined, null, {
     totalPatternBytes: 1024,
   });
   assert.equal(ample.status, "ready");
-  ample.valueContract.dispose();
+  ample.schema.dispose();
 });
 
-// A contract's compiled patterns share its pattern memory, with the same
-// refusals, codes, locations and messages as the Rust evaluator: each compiled
-// pattern first compiles within 48 KiB, those that need more share what that
-// leaves, a name that does not fit what it is given refuses preparation, and a
-// `pattern` value compiled when a string first reaches it gives that string no
-// verdict.
-test("a contract's compiled patterns share its pattern memory", () => {
+// Immutable programs share a defined representation footprint. Construction
+// has a separate aggregate allowance; caches belong to value calls.
+test("pattern preparation bounds construction and unique program storage", () => {
   assert.equal(sdk.evaluatorLimits().totalPatternMemory, 64 * 1024 * 1024);
-  const at = "/operations/op/input";
-  const assertMemoryRefusal = (prepared, pointer) => {
-    assert.equal(prepared.status, "no-verdict");
-    assert.equal(prepared.detail.reason, "limit-exceeded");
-    assert.equal(prepared.detail.code, "pattern-total-memory-limit");
-    assert.match(prepared.detail.location.pointer, pointer);
-    return prepared.detail.message;
+  const refusal = (state, code) => {
+    assert.equal(state.status, "refused");
+    assert.equal(state.failure.kind, "limit");
+    assert.equal(state.failure.details.resource, code);
   };
-  const ready = (prepared) => {
-    assert.equal(prepared.status, "ready");
-    return prepared.valueContract;
+  const ready = (state) => {
+    assert.equal(state.status, "ready");
+    return state.schema;
   };
-  const raise = "raise total_pattern_memory (totalPatternMemory in TypeScript)";
-  // Forty names of the form `^.{1,10000}N$` need more together than the
-  // memory leaves; one alone compiles and decides.
   const names = (count) =>
     Object.fromEntries(
       Array.from({ length: count }, (_, i) => [`^.{1,10000}${i}$`, false]),
     );
-  const forty = assertMemoryRefusal(
+  refusal(
     preparation(
       document({}, { patternProperties: names(40) }),
       undefined,
       null,
     ),
-    new RegExp(`^${at}/patternProperties$`),
+    "pattern-construction-helper-payload",
   );
-  assert.match(forty, /; the 40 that need more share it equally, but this one/);
-  assert.ok(forty.endsWith(raise));
-  const alone = ready(
-    preparation(document({}, { patternProperties: names(1) }), undefined, null),
-  );
-  assert.equal(alone.validateJson('{"a0":1}').status, "fails");
-  assert.equal(alone.validateJson("{}").status, "satisfies");
-  alone.dispose();
-  // Small patterns elsewhere leave the large name its outcome.
   const small = Object.fromEntries(
     Array.from({ length: 100 }, (_, i) => [`s${i}`, { pattern: `a${i}|b` }]),
   );
-  const among = ready(
-    preparation(
-      document({}, { patternProperties: names(1), properties: small }),
-      undefined,
-      null,
-    ),
-  );
-  assert.equal(among.validateJson('{"a0":1}').status, "fails");
-  among.dispose();
-  // Three patterns' 48 KiB admit three compiled patterns; a run matcher
-  // holds its bytes of the same memory, so it fits beside two and not three.
+  for (const properties of [{}, small]) {
+    const contract = ready(
+      preparation(
+        document(
+          {},
+          {
+            patternProperties: names(1),
+            properties,
+          },
+        ),
+        undefined,
+        null,
+      ),
+    );
+    try {
+      assert.equal(contract.evaluateJson('{"a0":1}').status, "fails");
+      assert.equal(contract.evaluateJson("{}").status, "satisfies");
+    } finally {
+      contract.dispose();
+    }
+  }
   const three = { totalPatternMemory: 3 * 64 * 1024 };
   const compiled = (count) =>
     Array.from({ length: count }, (_, i) => ({ pattern: `a${i}|b` }));
-  ready(
-    preparation(
-      document({}, { prefixItems: [...compiled(2), { pattern: "^a+$" }] }),
-      undefined,
-      null,
-      three,
-    ),
-  ).dispose();
-  assert.equal(
-    assertMemoryRefusal(
-      preparation(
-        document({}, { prefixItems: [...compiled(3), { pattern: "^a+$" }] }),
-        undefined,
-        null,
-        three,
-      ),
-      new RegExp(`^${at}/prefixItems/[0-9]+/pattern$`),
-    ),
-    "this value contract's run matchers hold 104 bytes and its 3 compiled regular " +
-      "expressions 48 KiB each, more together than the 144 KiB its 192 KiB " +
-      "total_pattern_memory holds for them once search caches take a quarter; " +
-      raise,
-  );
-  assert.equal(
-    assertMemoryRefusal(
-      preparation(
-        document({}, { prefixItems: compiled(4) }),
-        undefined,
-        null,
-        three,
-      ),
-      new RegExp(`^${at}/prefixItems/[0-9]+/pattern$`),
-    ),
-    "this value contract compiles more than 3 regular expressions, as many as its 192 KiB " +
-      "total_pattern_memory holds at 48 KiB each once their search caches take a quarter; " +
-      raise,
-  );
-  // One pattern in 256 KiB compiles `^.{1,100}x$` but not `^.{1,1000}x$`.
+  for (const prefixItems of [
+    [...compiled(2), { pattern: "^a+$" }],
+    [...compiled(3), { pattern: "^a+$" }],
+    compiled(4),
+  ]) {
+    ready(
+      preparation(document({}, { prefixItems }), undefined, null, three),
+    ).dispose();
+  }
   const quarter = { totalPatternMemory: 256 * 1024 };
   ready(
     preparation(
@@ -254,47 +221,70 @@ test("a contract's compiled patterns share its pattern memory", () => {
       quarter,
     ),
   ).dispose();
-  assertMemoryRefusal(
-    preparation(
-      document({}, { patternProperties: { "^.{1,1000}x$": false } }),
-      undefined,
-      null,
-      quarter,
-    ),
-    new RegExp(`^${at}/patternProperties$`),
+  for (const schema of [
+    { patternProperties: { "^.{1,1000}x$": false } },
+    { pattern: "^.{1,1000}x$" },
+  ]) {
+    refusal(
+      preparation(document({}, schema), undefined, null, quarter),
+      "pattern-total-memory-limit",
+    );
+  }
+  const minimum = (schema) => {
+    const text = document({}, schema);
+    let below = 0,
+      enough = 1024 * 1024;
+    ready(
+      preparation(text, undefined, null, { totalPatternMemory: enough }),
+    ).dispose();
+    while (enough - below > 1) {
+      const middle = below + Math.floor((enough - below) / 2);
+      const state = preparation(text, undefined, null, {
+        totalPatternMemory: middle,
+      });
+      if (state.status === "ready") {
+        state.schema.dispose();
+        enough = middle;
+      } else {
+        refusal(state, "pattern-total-memory-limit");
+        below = middle;
+      }
+    }
+    refusal(
+      preparation(text, undefined, null, { totalPatternMemory: enough - 1 }),
+      "pattern-total-memory-limit",
+    );
+    return enough;
+  };
+  const one = minimum({ pattern: "a|b" });
+  const repeated = {
+    prefixItems: Array.from({ length: 100 }, () => ({ pattern: "a|b" })),
+  };
+  assert.equal(minimum(repeated), one);
+  const shared = ready(
+    preparation(document({}, repeated), undefined, null, {
+      totalPatternMemory: one,
+    }),
   );
-  const lazy = ready(
-    preparation(
-      document({}, { pattern: "^.{1,1000}x$" }),
-      undefined,
-      null,
-      quarter,
-    ),
-  );
-  const unmatched = lazy.validateJson('"ax"');
-  assert.equal(unmatched.status, "no-verdict");
-  assert.equal(unmatched.detail.code, "pattern-total-memory-limit");
-  assert.equal(
-    unmatched.detail.message,
-    "this value contract's one compiled regular expression holds 48 KiB of its 256 KiB " +
-      "total_pattern_memory and 64 KiB for its search cache, which leaves 144 KiB; this " +
-      "one, which needs more, may take it all, but does not compile within the 192 KiB " +
-      "that gives it; " +
-      raise,
-  );
-  lazy.dispose();
+  try {
+    assert.equal(shared.evaluate(["a", "b"]).status, "satisfies");
+    assert.equal(shared.evaluate(["z"]).status, "fails");
+  } finally {
+    shared.dispose();
+  }
 });
 
-test("a resource cap refusal takes time linear in the resources", () => {
-  // Registering resources takes time quadratic in their number; a refusal
-  // before registration grows with the projection, about fourfold here.
+test("large resource requests remain bounded before registration", () => {
+  // Both unchanged workloads reach the requested resource cap within the
+  // current default preparation allowance.
   const fastest = (count) => {
     const { text, resources } = supplied(count);
     try {
       let best = Infinity;
       for (let run = 0; run < 3; run++) {
         const start = performance.now();
-        assertRefused(preparation(text, resources, count));
+        const state = preparation(text, resources, count);
+        assertRefused(state);
         best = Math.min(best, performance.now() - start);
       }
       return best;
@@ -305,4 +295,38 @@ test("a resource cap refusal takes time linear in the resources", () => {
   const small = fastest(2000);
   const large = fastest(8000);
   assert.ok(large / small < 8, `${small} ms -> ${large} ms`);
+});
+
+test("expanded pattern preparation preserves default capacity and exact sharing", () => {
+  const pattern = (i) => "\\S".repeat(5000) + `z${i}`;
+  const input = (count, repeated = false) => ({
+    properties: Object.fromEntries(
+      Array.from({ length: count }, (_, i) => [
+        `p${i}`,
+        { pattern: pattern(repeated ? 0 : i) },
+      ]),
+    ),
+  });
+  for (const [count, repeated] of [
+    [1, false],
+    [4, false],
+    [380, true],
+  ]) {
+    const result = preparation(
+      document({}, input(count, repeated)),
+      undefined,
+      null,
+    );
+    assert.equal(result.status, "ready");
+    const prepared = result.schema;
+    try {
+      assert.equal(prepared.evaluate({}).status, "satisfies");
+    } finally {
+      prepared.dispose();
+    }
+  }
+  const fifth = preparation(document({}, input(5)), undefined, null);
+  assert.equal(fifth.status, "refused");
+  assert.equal(fifth.failure.kind, "limit");
+  assert.equal(fifth.failure.details.resource, "pattern-total-byte-limit");
 });

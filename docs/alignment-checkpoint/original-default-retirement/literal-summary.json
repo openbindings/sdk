@@ -1,0 +1,21 @@
+{
+  "status": "bounded-native-implementation-pass",
+  "full_reader_rows": 153,
+  "retained_rows": 1186,
+  "reading_differences": 0,
+  "index_groups_each_rust": 4,
+  "collision_cancellation_checkpoints": 53,
+  "inherited_groups_each_rust": 8,
+  "public_default_job_checks_each_rust": 12,
+  "wide_sibling_checks_each_rust": 14,
+  "rust_versions": [
+    "1.99",
+    "1.88"
+  ],
+  "final_work_threshold": 3552,
+  "final_reservation_threshold": 11672,
+  "public_job_requested_bytes": 8129646,
+  "public_job_incremental_peak_bytes": 7757588,
+  "public_job_live_delta_after_drop": 0,
+  "host_gate": "parent-owned; not independently claimed here"
+}

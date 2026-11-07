@@ -4,7 +4,10 @@
 use openbindings::*;
 use openbindings_json_schema_evaluator::{DefaultEvaluator, Limits};
 
-fn prepared(schema: &str) -> Result<PreparedValueContract, NoVerdict> {
+fn prepared(
+    schema: &str,
+) -> Result<PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator>, PreparationFailure>
+{
     let text = format!(r#"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{schema}}}}}}}"#);
     let proof = Document::parse(text)
         .unwrap()
@@ -13,12 +16,16 @@ fn prepared(schema: &str) -> Result<PreparedValueContract, NoVerdict> {
         .conformant()
         .unwrap();
     let operation = proof.resolve_operation("op").unwrap();
-    operation.input().unwrap().prepare(&DefaultEvaluator::new())
+    operation.input().unwrap().prepare(
+        &DefaultEvaluator::new(),
+        &openbindings::ExternalSchemas::default(),
+        &openbindings::PreparationLimits::default(),
+    )
 }
 
-// Release builds need at most 96 KiB here (macOS arm64). Unoptimized code gives
-// the regular-expression compiler frames large enough that 32 nested quantified
-// groups need up to 1 MiB, so tools/verify.py runs this test in release builds.
+// This qualifies the concrete release build on a 256 KiB thread. It does not
+// promise a universal physical-stack bound. tools/verify.py runs the release
+// build because dependency parser frames are larger without optimization.
 #[test]
 #[cfg_attr(
     debug_assertions,
@@ -41,10 +48,8 @@ fn patterns_at_the_default_depth_prepare_and_check_on_a_small_stack() {
             ] {
                 let pattern = format!("{}a{}", open.repeat(depth), close.repeat(depth));
                 let quoted = serde_json::to_string(&pattern).unwrap();
-                // Each keyword is checked against a value it applies to. A
-                // lookaround needs a backtracking engine: a string that reaches
-                // the pattern gets no verdict, and a `patternProperties` name
-                // holding one refuses preparation.
+                // Both keywords retain local capability limits until a value
+                // actually demands the unsupported match.
                 for (keyword, schema, value) in [
                     ("pattern", format!(r#"{{"pattern":{quoted}}}"#), r#""a""#),
                     (
@@ -54,33 +59,46 @@ fn patterns_at_the_default_depth_prepare_and_check_on_a_small_stack() {
                     ),
                 ] {
                     let value = JsonValue::parse(value).unwrap();
-                    match prepared(&schema) {
-                        Ok(contract) => {
-                            let outcome = contract.validate(&value);
-                            if matched {
-                                assert!(!matches!(outcome, ValueOutcome::NoVerdict { .. }), "{pattern}");
-                            } else {
-                                assert!(
-                                    matches!(&outcome, ValueOutcome::NoVerdict { detail } if detail.code == "pattern-backtracking"),
-                                    "{pattern}: {outcome:?}"
-                                );
-                            }
-                        }
-                        Err(detail) => {
-                            assert!(!matched && keyword == "patternProperties", "{pattern}: {detail:?}");
-                            assert_eq!(detail.code, "pattern-backtracking");
+                    let contract = prepared(&schema).unwrap();
+                    for outcome in [contract.evaluate(&value), contract.explain(&value)] {
+                        let accepts_a = open != "(?:[a-z]";
+                        if matched && ((keyword == "pattern") == accepts_a) {
+                            assert!(
+                                matches!(outcome, ValueOutcome::Satisfies),
+                                "{pattern}: {outcome:?}"
+                            );
+                        } else if matched {
+                            assert!(
+                                matches!(outcome, ValueOutcome::Fails { .. }),
+                                "{pattern}: {outcome:?}"
+                            );
+                        } else {
+                            assert!(
+                                matches!(&outcome, ValueOutcome::NoVerdict { detail }
+                                    if detail.reason == NoVerdictReason::UnsupportedCapability
+                                    && detail.code == "pattern-backtracking"),
+                                "{pattern}: {outcome:?}"
+                            );
                         }
                     }
                 }
-                // One level deeper is refused before any regular expression is built.
+                // One deeper is retained as a local limit before construction;
+                // values outside the string domain still have a definite result.
                 let deeper = format!("{}a{}", open.repeat(depth + 1), close.repeat(depth + 1));
                 let schema = format!(
                     r#"{{"pattern":{}}}"#,
                     serde_json::to_string(&deeper).unwrap()
                 );
+                let contract = prepared(&schema).unwrap();
                 assert!(matches!(
-                    prepared(&schema),
-                    Err(detail) if detail.code == "pattern-depth-limit"
+                    contract.evaluate_json("null").unwrap(),
+                    ValueOutcome::Satisfies
+                ));
+                assert!(matches!(
+                    contract.evaluate_json(r#""a""#).unwrap(),
+                    ValueOutcome::NoVerdict { detail }
+                        if detail.reason == NoVerdictReason::LimitExceeded
+                        && detail.code == "pattern-depth-limit"
                 ));
             }
         })

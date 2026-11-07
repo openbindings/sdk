@@ -1,0 +1,518 @@
+{
+  "scope": "Independent design controls against 0b9dc04; no prepared-numeric implementation claim. Exact source strings are authoritative; expected answers were derived before replay.",
+  "rows": [
+    {
+      "id": "minimum-negative-zero",
+      "schema_text": "{\"minimum\":0}",
+      "value_text": "-0",
+      "required": "S",
+      "reason": "Exact numeric meaning; no binary64 conversion or spelling identity."
+    },
+    {
+      "id": "minimum-small-negative",
+      "schema_text": "{\"minimum\":0}",
+      "value_text": "-0.1",
+      "required": "F",
+      "reason": "Exact numeric meaning; no binary64 conversion or spelling identity."
+    },
+    {
+      "id": "minimum-beyond-binary64",
+      "schema_text": "{\"minimum\":9007199254740993}",
+      "value_text": "9007199254740992",
+      "required": "F",
+      "reason": "Exact numeric meaning; no binary64 conversion or spelling identity."
+    },
+    {
+      "id": "minimum-wide-equal",
+      "schema_text": "{\"minimum\":123456789012345678901234567890}",
+      "value_text": "12345678901234567890123456789e1",
+      "required": "S",
+      "reason": "Exact numeric meaning; no binary64 conversion or spelling identity."
+    },
+    {
+      "id": "maximum-large-exponent",
+      "schema_text": "{\"maximum\":1e1000}",
+      "value_text": "1e999",
+      "required": "S",
+      "reason": "Exact numeric meaning; no binary64 conversion or spelling identity."
+    },
+    {
+      "id": "maximum-large-exponent-fail",
+      "schema_text": "{\"maximum\":1e1000}",
+      "value_text": "1e1001",
+      "required": "F",
+      "reason": "Exact numeric meaning; no binary64 conversion or spelling identity."
+    },
+    {
+      "id": "exclusive-minimum-alias",
+      "schema_text": "{\"exclusiveMinimum\":0.1}",
+      "value_text": "0.10",
+      "required": "F",
+      "reason": "Exact numeric meaning; no binary64 conversion or spelling identity."
+    },
+    {
+      "id": "exclusive-minimum-larger",
+      "schema_text": "{\"exclusiveMinimum\":0.1}",
+      "value_text": "0.1001",
+      "required": "S",
+      "reason": "Exact numeric meaning; no binary64 conversion or spelling identity."
+    },
+    {
+      "id": "exclusive-maximum-negative",
+      "schema_text": "{\"exclusiveMaximum\":-1}",
+      "value_text": "-1.5",
+      "required": "S",
+      "reason": "Exact numeric meaning; no binary64 conversion or spelling identity."
+    },
+    {
+      "id": "exclusive-maximum-equal",
+      "schema_text": "{\"exclusiveMaximum\":-1}",
+      "value_text": "-1.0",
+      "required": "F",
+      "reason": "Exact numeric meaning; no binary64 conversion or spelling identity."
+    },
+    {
+      "id": "multiple-decimal",
+      "schema_text": "{\"multipleOf\":0.1}",
+      "value_text": "0.3",
+      "required": "S",
+      "reason": "Exact numeric meaning; no binary64 conversion or spelling identity."
+    },
+    {
+      "id": "multiple-decimal-fail",
+      "schema_text": "{\"multipleOf\":0.1}",
+      "value_text": "0.31",
+      "required": "F",
+      "reason": "Exact numeric meaning; no binary64 conversion or spelling identity."
+    },
+    {
+      "id": "multiple-negative-instance",
+      "schema_text": "{\"multipleOf\":7}",
+      "value_text": "-21",
+      "required": "S",
+      "reason": "Exact numeric meaning; no binary64 conversion or spelling identity."
+    },
+    {
+      "id": "multiple-small-fraction",
+      "schema_text": "{\"multipleOf\":2}",
+      "value_text": "1e-400",
+      "required": "F",
+      "reason": "Exact numeric meaning; no binary64 conversion or spelling identity."
+    },
+    {
+      "id": "multiple-zero-large-exponent",
+      "schema_text": "{\"multipleOf\":1e1000000000}",
+      "value_text": "0",
+      "required": "S",
+      "reason": "Exact numeric meaning; no binary64 conversion or spelling identity."
+    },
+    {
+      "id": "numeric-non-number",
+      "schema_text": "{\"minimum\":1e1000}",
+      "value_text": "null",
+      "required": "S",
+      "reason": "Exact numeric meaning; no binary64 conversion or spelling identity."
+    },
+    {
+      "id": "multiple-finite-domain",
+      "schema_text": "{\"multipleOf\":1e-1000000000}",
+      "value_text": "1e1000000000",
+      "required": "N:LimitExceeded",
+      "reason": "Preserve the explicit finite arithmetic boundary; this is not a semantic Undefined.",
+      "classification": "current_capability_boundary"
+    },
+    {
+      "id": "length-zero",
+      "schema_text": "{\"maxLength\":-0}",
+      "value_text": "\"\"",
+      "required": "S",
+      "reason": "Count is a mathematical nonnegative integer; saturation preserves comparison with every representable input cardinality."
+    },
+    {
+      "id": "length-zero-fail",
+      "schema_text": "{\"maxLength\":0}",
+      "value_text": "\"a\"",
+      "required": "F",
+      "reason": "Count is a mathematical nonnegative integer; saturation preserves comparison with every representable input cardinality."
+    },
+    {
+      "id": "length-fractional-spelling",
+      "schema_text": "{\"minLength\":1.00}",
+      "value_text": "\"a\"",
+      "required": "S",
+      "reason": "Count is a mathematical nonnegative integer; saturation preserves comparison with every representable input cardinality."
+    },
+    {
+      "id": "length-exponent-spelling",
+      "schema_text": "{\"maxLength\":100e-2}",
+      "value_text": "\"ab\"",
+      "required": "F",
+      "reason": "Count is a mathematical nonnegative integer; saturation preserves comparison with every representable input cardinality."
+    },
+    {
+      "id": "length-astral-pair",
+      "schema_text": "{\"maxLength\":2}",
+      "value_text": "\"a\\ud83d\\ude00\"",
+      "required": "S",
+      "reason": "Count is a mathematical nonnegative integer; saturation preserves comparison with every representable input cardinality."
+    },
+    {
+      "id": "length-astral-pair-fail",
+      "schema_text": "{\"maxLength\":1}",
+      "value_text": "\"a\\ud83d\\ude00\"",
+      "required": "F",
+      "reason": "Count is a mathematical nonnegative integer; saturation preserves comparison with every representable input cardinality."
+    },
+    {
+      "id": "length-lone-unit",
+      "schema_text": "{\"minLength\":1}",
+      "value_text": "\"\\ud800\"",
+      "required": "S",
+      "reason": "Count is a mathematical nonnegative integer; saturation preserves comparison with every representable input cardinality."
+    },
+    {
+      "id": "length-lone-unit-max",
+      "schema_text": "{\"maxLength\":1}",
+      "value_text": "\"\\ud800\"",
+      "required": "S",
+      "reason": "Count is a mathematical nonnegative integer; saturation preserves comparison with every representable input cardinality."
+    },
+    {
+      "id": "items-minimum",
+      "schema_text": "{\"minItems\":1.0}",
+      "value_text": "[]",
+      "required": "F",
+      "reason": "Count is a mathematical nonnegative integer; saturation preserves comparison with every representable input cardinality."
+    },
+    {
+      "id": "items-minimum-pass",
+      "schema_text": "{\"minItems\":1e0}",
+      "value_text": "[null]",
+      "required": "S",
+      "reason": "Count is a mathematical nonnegative integer; saturation preserves comparison with every representable input cardinality."
+    },
+    {
+      "id": "items-maximum",
+      "schema_text": "{\"maxItems\":1}",
+      "value_text": "[1,2]",
+      "required": "F",
+      "reason": "Count is a mathematical nonnegative integer; saturation preserves comparison with every representable input cardinality."
+    },
+    {
+      "id": "properties-minimum",
+      "schema_text": "{\"minProperties\":1}",
+      "value_text": "{}",
+      "required": "F",
+      "reason": "Count is a mathematical nonnegative integer; saturation preserves comparison with every representable input cardinality."
+    },
+    {
+      "id": "properties-maximum",
+      "schema_text": "{\"maxProperties\":1}",
+      "value_text": "{\"a\":0,\"b\":1}",
+      "required": "F",
+      "reason": "Count is a mathematical nonnegative integer; saturation preserves comparison with every representable input cardinality."
+    },
+    {
+      "id": "count-u64-max-min",
+      "schema_text": "{\"minItems\":18446744073709551615}",
+      "value_text": "[]",
+      "required": "F",
+      "reason": "Count is a mathematical nonnegative integer; saturation preserves comparison with every representable input cardinality."
+    },
+    {
+      "id": "count-over-u64-min",
+      "schema_text": "{\"minItems\":18446744073709551616}",
+      "value_text": "[1]",
+      "required": "F",
+      "reason": "Count is a mathematical nonnegative integer; saturation preserves comparison with every representable input cardinality."
+    },
+    {
+      "id": "count-over-u64-max",
+      "schema_text": "{\"maxProperties\":18446744073709551616}",
+      "value_text": "{\"a\":1}",
+      "required": "S",
+      "reason": "Count is a mathematical nonnegative integer; saturation preserves comparison with every representable input cardinality."
+    },
+    {
+      "id": "count-huge-exponent-min",
+      "schema_text": "{\"minLength\":1e1000}",
+      "value_text": "\"abc\"",
+      "required": "F",
+      "reason": "Count is a mathematical nonnegative integer; saturation preserves comparison with every representable input cardinality."
+    },
+    {
+      "id": "count-huge-exponent-max",
+      "schema_text": "{\"maxLength\":1e1000}",
+      "value_text": "\"abc\"",
+      "required": "S",
+      "reason": "Count is a mathematical nonnegative integer; saturation preserves comparison with every representable input cardinality."
+    },
+    {
+      "id": "contains-zero",
+      "schema_text": "{\"contains\":false,\"minContains\":0}",
+      "value_text": "[]",
+      "required": "S",
+      "reason": "Only activated applicator/cardinality relations apply; an orphan bound or child is not a root assertion."
+    },
+    {
+      "id": "contains-exact",
+      "schema_text": "{\"contains\":true,\"minContains\":2.0,\"maxContains\":2e0}",
+      "value_text": "[1,2]",
+      "required": "S",
+      "reason": "Only activated applicator/cardinality relations apply; an orphan bound or child is not a root assertion."
+    },
+    {
+      "id": "contains-over",
+      "schema_text": "{\"contains\":true,\"minContains\":2,\"maxContains\":2}",
+      "value_text": "[1,2,3]",
+      "required": "F",
+      "reason": "Only activated applicator/cardinality relations apply; an orphan bound or child is not a root assertion."
+    },
+    {
+      "id": "contains-huge-min",
+      "schema_text": "{\"contains\":true,\"minContains\":1e1000}",
+      "value_text": "[]",
+      "required": "F",
+      "reason": "Only activated applicator/cardinality relations apply; an orphan bound or child is not a root assertion."
+    },
+    {
+      "id": "contains-huge-max",
+      "schema_text": "{\"contains\":true,\"maxContains\":1e1000}",
+      "value_text": "[1]",
+      "required": "S",
+      "reason": "Only activated applicator/cardinality relations apply; an orphan bound or child is not a root assertion."
+    },
+    {
+      "id": "orphan-contains",
+      "schema_text": "{\"minContains\":8,\"maxContains\":0}",
+      "value_text": "[1]",
+      "required": "S",
+      "reason": "Only activated applicator/cardinality relations apply; an orphan bound or child is not a root assertion."
+    },
+    {
+      "id": "numeric-under-missing-property",
+      "schema_text": "{\"properties\":{\"x\":{\"minimum\":99}}}",
+      "value_text": "{}",
+      "required": "S",
+      "reason": "Only activated applicator/cardinality relations apply; an orphan bound or child is not a root assertion."
+    },
+    {
+      "id": "orphan-then",
+      "schema_text": "{\"then\":{\"minimum\":99}}",
+      "value_text": "0",
+      "required": "S",
+      "reason": "Only activated applicator/cardinality relations apply; an orphan bound or child is not a root assertion."
+    },
+    {
+      "id": "custom-multiple-zero",
+      "schema_text": "{\"$schema\":\"https://numeric.test/meta\",\"multipleOf\":0}",
+      "value_text": "1",
+      "required": "N:UnsupportedCapability",
+      "reason": "Invalid operands admitted by the selected permissive meta remain local; no new whole-preparation rejection. Contains shape refusal remains at its existing demand point.",
+      "external": true,
+      "resources": {
+        "https://numeric.test/meta": "{\"$id\":\"https://numeric.test/meta\",\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"$vocabulary\":{\"https://json-schema.org/draft/2020-12/vocab/core\":true,\"https://json-schema.org/draft/2020-12/vocab/applicator\":true,\"https://json-schema.org/draft/2020-12/vocab/validation\":true},\"type\":\"object\"}"
+      },
+      "classification": "local_custom_profile_boundary"
+    },
+    {
+      "id": "custom-multiple-negative",
+      "schema_text": "{\"$schema\":\"https://numeric.test/meta\",\"multipleOf\":-1}",
+      "value_text": "1",
+      "required": "N:UnsupportedCapability",
+      "reason": "Invalid operands admitted by the selected permissive meta remain local; no new whole-preparation rejection. Contains shape refusal remains at its existing demand point.",
+      "external": true,
+      "resources": {
+        "https://numeric.test/meta": "{\"$id\":\"https://numeric.test/meta\",\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"$vocabulary\":{\"https://json-schema.org/draft/2020-12/vocab/core\":true,\"https://json-schema.org/draft/2020-12/vocab/applicator\":true,\"https://json-schema.org/draft/2020-12/vocab/validation\":true},\"type\":\"object\"}"
+      },
+      "classification": "local_custom_profile_boundary"
+    },
+    {
+      "id": "custom-multiple-shape",
+      "schema_text": "{\"$schema\":\"https://numeric.test/meta\",\"multipleOf\":\"x\"}",
+      "value_text": "1",
+      "required": "N:UnsupportedCapability",
+      "reason": "Invalid operands admitted by the selected permissive meta remain local; no new whole-preparation rejection. Contains shape refusal remains at its existing demand point.",
+      "external": true,
+      "resources": {
+        "https://numeric.test/meta": "{\"$id\":\"https://numeric.test/meta\",\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"$vocabulary\":{\"https://json-schema.org/draft/2020-12/vocab/core\":true,\"https://json-schema.org/draft/2020-12/vocab/applicator\":true,\"https://json-schema.org/draft/2020-12/vocab/validation\":true},\"type\":\"object\"}"
+      },
+      "classification": "local_custom_profile_boundary"
+    },
+    {
+      "id": "custom-count-fraction",
+      "schema_text": "{\"$schema\":\"https://numeric.test/meta\",\"maxLength\":0.5}",
+      "value_text": "\"a\"",
+      "required": "N:UnsupportedCapability",
+      "reason": "Invalid operands admitted by the selected permissive meta remain local; no new whole-preparation rejection. Contains shape refusal remains at its existing demand point.",
+      "external": true,
+      "resources": {
+        "https://numeric.test/meta": "{\"$id\":\"https://numeric.test/meta\",\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"$vocabulary\":{\"https://json-schema.org/draft/2020-12/vocab/core\":true,\"https://json-schema.org/draft/2020-12/vocab/applicator\":true,\"https://json-schema.org/draft/2020-12/vocab/validation\":true},\"type\":\"object\"}"
+      },
+      "classification": "local_custom_profile_boundary"
+    },
+    {
+      "id": "custom-numeric-masked",
+      "schema_text": "{\"$schema\":\"https://numeric.test/meta\",\"anyOf\":[true,{\"multipleOf\":0}]}",
+      "value_text": "1",
+      "required": "S",
+      "reason": "Invalid operands admitted by the selected permissive meta remain local; no new whole-preparation rejection. Contains shape refusal remains at its existing demand point.",
+      "external": true,
+      "resources": {
+        "https://numeric.test/meta": "{\"$id\":\"https://numeric.test/meta\",\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"$vocabulary\":{\"https://json-schema.org/draft/2020-12/vocab/core\":true,\"https://json-schema.org/draft/2020-12/vocab/applicator\":true,\"https://json-schema.org/draft/2020-12/vocab/validation\":true},\"type\":\"object\"}"
+      },
+      "classification": "schema_semantics"
+    },
+    {
+      "id": "custom-count-masked",
+      "schema_text": "{\"$schema\":\"https://numeric.test/meta\",\"allOf\":[false,{\"maxItems\":-1}]}",
+      "value_text": "[]",
+      "required": "F",
+      "reason": "Invalid operands admitted by the selected permissive meta remain local; no new whole-preparation rejection. Contains shape refusal remains at its existing demand point.",
+      "external": true,
+      "resources": {
+        "https://numeric.test/meta": "{\"$id\":\"https://numeric.test/meta\",\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"$vocabulary\":{\"https://json-schema.org/draft/2020-12/vocab/core\":true,\"https://json-schema.org/draft/2020-12/vocab/applicator\":true,\"https://json-schema.org/draft/2020-12/vocab/validation\":true},\"type\":\"object\"}"
+      },
+      "classification": "schema_semantics"
+    },
+    {
+      "id": "custom-orphan-count-shape",
+      "schema_text": "{\"$schema\":\"https://numeric.test/meta\",\"minContains\":\"x\",\"maxContains\":-1}",
+      "value_text": "[]",
+      "required": "S",
+      "reason": "Invalid operands admitted by the selected permissive meta remain local; no new whole-preparation rejection. Contains shape refusal remains at its existing demand point.",
+      "external": true,
+      "resources": {
+        "https://numeric.test/meta": "{\"$id\":\"https://numeric.test/meta\",\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"$vocabulary\":{\"https://json-schema.org/draft/2020-12/vocab/core\":true,\"https://json-schema.org/draft/2020-12/vocab/applicator\":true,\"https://json-schema.org/draft/2020-12/vocab/validation\":true},\"type\":\"object\"}"
+      },
+      "classification": "schema_semantics"
+    },
+    {
+      "id": "custom-contains-count-shape",
+      "schema_text": "{\"$schema\":\"https://numeric.test/meta\",\"contains\":true,\"minContains\":\"x\"}",
+      "value_text": "[]",
+      "required": "N:UnsupportedCapability",
+      "reason": "Invalid operands admitted by the selected permissive meta remain local; no new whole-preparation rejection. Contains shape refusal remains at its existing demand point.",
+      "external": true,
+      "resources": {
+        "https://numeric.test/meta": "{\"$id\":\"https://numeric.test/meta\",\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"$vocabulary\":{\"https://json-schema.org/draft/2020-12/vocab/core\":true,\"https://json-schema.org/draft/2020-12/vocab/applicator\":true,\"https://json-schema.org/draft/2020-12/vocab/validation\":true},\"type\":\"object\"}"
+      },
+      "classification": "local_custom_profile_boundary"
+    },
+    {
+      "id": "custom-absent-property-invalid",
+      "schema_text": "{\"$schema\":\"https://numeric.test/meta\",\"properties\":{\"x\":{\"minimum\":\"bad\",\"maxLength\":-1}}}",
+      "value_text": "{}",
+      "required": "S",
+      "reason": "Invalid operands admitted by the selected permissive meta remain local; no new whole-preparation rejection. Contains shape refusal remains at its existing demand point.",
+      "external": true,
+      "resources": {
+        "https://numeric.test/meta": "{\"$id\":\"https://numeric.test/meta\",\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"$vocabulary\":{\"https://json-schema.org/draft/2020-12/vocab/core\":true,\"https://json-schema.org/draft/2020-12/vocab/applicator\":true,\"https://json-schema.org/draft/2020-12/vocab/validation\":true},\"type\":\"object\"}"
+      },
+      "classification": "schema_semantics"
+    },
+    {
+      "id": "inactive-validation",
+      "schema_text": "{\"$schema\":\"https://numeric.test/core-applicator\",\"minimum\":\"bad\",\"multipleOf\":0,\"minItems\":-1,\"maxContains\":\"bad\",\"contains\":true}",
+      "value_text": "[1]",
+      "required": "S",
+      "reason": "Inactive validation keywords create no prepared operand.",
+      "external": true,
+      "resources": {
+        "https://numeric.test/core-applicator": "{\"$id\":\"https://numeric.test/core-applicator\",\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"$vocabulary\":{\"https://json-schema.org/draft/2020-12/vocab/core\":true,\"https://json-schema.org/draft/2020-12/vocab/applicator\":true},\"type\":\"object\"}"
+      },
+      "classification": "schema_semantics"
+    },
+    {
+      "id": "inactive-counts-contains-default",
+      "schema_text": "{\"$schema\":\"https://numeric.test/core-applicator\",\"minContains\":0,\"contains\":true}",
+      "value_text": "[]",
+      "required": "F",
+      "reason": "Inactive minContains does not remove the active contains default of at least one match.",
+      "external": true,
+      "resources": {
+        "https://numeric.test/core-applicator": "{\"$id\":\"https://numeric.test/core-applicator\",\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"$vocabulary\":{\"https://json-schema.org/draft/2020-12/vocab/core\":true,\"https://json-schema.org/draft/2020-12/vocab/applicator\":true},\"type\":\"object\"}"
+      },
+      "classification": "schema_semantics"
+    },
+    {
+      "id": "draft7-contains-counts-inactive",
+      "schema_text": "{\"$schema\":\"http://json-schema.org/draft-07/schema#\",\"contains\":true,\"minContains\":2,\"maxContains\":0}",
+      "value_text": "[1]",
+      "required": "S",
+      "reason": "Draft-07 has contains but not min/maxContains.",
+      "external": true
+    },
+    {
+      "id": "distinct-original-predicates",
+      "schema_text": "{\"$id\":\"https://numeric.test/root\",\"$defs\":{\"A\":{\"minimum\":1},\"B\":{\"minimum\":2}},\"oneOf\":[{\"$ref\":\"#/$defs/A\"},{\"$ref\":\"#/$defs/B\"}]}",
+      "value_text": "1",
+      "required": "S",
+      "reason": "Cache identity is original occurrence/profile; nearby numeric tokens cannot replace each other."
+    },
+    {
+      "id": "same-original-repeated",
+      "schema_text": "{\"$id\":\"https://numeric.test/root\",\"$defs\":{\"A\":{\"minimum\":1}},\"oneOf\":[{\"$ref\":\"#/$defs/A\"},{\"$ref\":\"#/$defs/A\"}]}",
+      "value_text": "1",
+      "required": "F",
+      "reason": "Repeated use of one original operand preserves semantics and shared ownership."
+    },
+    {
+      "id": "missing-content-masked",
+      "schema_text": "{\"anyOf\":[{\"minimum\":0},{\"$ref\":\"https://numeric.test/absent\"}]}",
+      "value_text": "1",
+      "required": "S",
+      "reason": "Prepared operands do not force unknown reference content to settle a decisive branch."
+    },
+    {
+      "id": "missing-content-needed",
+      "schema_text": "{\"allOf\":[{\"minimum\":0},{\"$ref\":\"https://numeric.test/absent\"}]}",
+      "value_text": "1",
+      "required": "N:ResourceUnavailable",
+      "reason": "Unresolved content remains distinct from invalid numeric operands."
+    }
+  ],
+  "generated_stress": [
+    {
+      "id": "unused-wide-operands",
+      "generator": "properties.unused.{minimum|maxLength}=decimal token consisting of N ones; value={}",
+      "sizes": [
+        100000,
+        1000000,
+        2500000,
+        3000000
+      ],
+      "required": "S at default preparation/evaluation limits; no eager parse of oversized fallback"
+    },
+    {
+      "id": "orphan-wide-count",
+      "generator": "minContains=decimal token consisting of 3000000 ones, no contains; value={}",
+      "required": "S at defaults"
+    },
+    {
+      "id": "cached-wide-comparison",
+      "generator": "minimum=1e followed by N nines, preparse Bound outside counted region, admits(1)",
+      "sizes": [
+        100,
+        1000,
+        100000,
+        1000000
+      ],
+      "required": "F; retain and charge schema-dependent runtime scratch"
+    },
+    {
+      "id": "aggregate-short-operands",
+      "generator": "Many activated distinct nodes with <=small-token-limit numeric/count fields, only an initial subset visited by the value",
+      "required": "Once aggregate eager ceiling is reached, subsequent fields use original fallback; no speculative sticky failure"
+    }
+  ],
+  "protocol_controls": [
+    "At exact and one-below eager policy limits, every deferred original operand remains reachable and correctly interpreted.",
+    "One-before/every observed preparation and evaluation cancellation checkpoint; clean retry and no retained control.",
+    "Repeated calls and concurrent calls retain immutable bounds; drop all original caller owners; fresh snapshot must not share stale operand records.",
+    "Low per-call work proves prepared counts avoid schema parsing; cached comparisons and multipleOf retain bound-dependent arithmetic reservations.",
+    "Same exact token in different original nodes and profiles does not merge semantic-effect identities.",
+    "Permissive custom invalid shape tests are separate from standard meta rejection of the identical malformed documents.",
+    "Forced original Plan required suite1546 plus existing recursive, annotation, custom profile, primitive, exact JSON, and frozen large-container gates."
+  ]
+}

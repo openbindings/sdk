@@ -1,0 +1,523 @@
+{
+  "status": "bounded implementation PASS; final tool-lint peer replay qualified",
+  "toolchains": {
+    "current": {
+      "test_groups": [
+        {
+          "filter": "independent_budget",
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "filter": "review_benchmark::limits_tests",
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "filter": "evaluation_allowance_serialization_uses_only_current_names",
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "filter": "an_evaluator_reports_the_budgets_it_was_given",
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "filter": "semantic::explain::tests",
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "filter": "semantic::decision::tests",
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "filter": "review_preparation_budgets",
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "filter": "review_semantic_interruption",
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "passed": 27,
+      "defaults_and_domain_rows": [
+        {
+          "evaluation_sdk_reservation_bytes": 0,
+          "evaluation_sdk_work_units": null
+        },
+        {
+          "evaluation_sdk_reservation_bytes": 41,
+          "evaluation_sdk_work_units": null
+        },
+        {
+          "evaluation_sdk_reservation_bytes": 18446744073709551615,
+          "evaluation_sdk_work_units": null
+        },
+        {
+          "evaluation_sdk_reservation_bytes": 0,
+          "evaluation_sdk_work_units": 0
+        },
+        {
+          "evaluation_sdk_reservation_bytes": 41,
+          "evaluation_sdk_work_units": 0
+        },
+        {
+          "evaluation_sdk_reservation_bytes": 18446744073709551615,
+          "evaluation_sdk_work_units": 0
+        },
+        {
+          "evaluation_sdk_reservation_bytes": 0,
+          "evaluation_sdk_work_units": 17
+        },
+        {
+          "evaluation_sdk_reservation_bytes": 41,
+          "evaluation_sdk_work_units": 17
+        },
+        {
+          "evaluation_sdk_reservation_bytes": 18446744073709551615,
+          "evaluation_sdk_work_units": 17
+        },
+        {
+          "evaluation_sdk_reservation_bytes": 0,
+          "evaluation_sdk_work_units": 4294967295
+        },
+        {
+          "evaluation_sdk_reservation_bytes": 41,
+          "evaluation_sdk_work_units": 4294967295
+        },
+        {
+          "evaluation_sdk_reservation_bytes": 18446744073709551615,
+          "evaluation_sdk_work_units": 4294967295
+        },
+        {
+          "evaluation_sdk_reservation_bytes": 0,
+          "evaluation_sdk_work_units": 4294967296
+        },
+        {
+          "evaluation_sdk_reservation_bytes": 41,
+          "evaluation_sdk_work_units": 4294967296
+        },
+        {
+          "evaluation_sdk_reservation_bytes": 18446744073709551615,
+          "evaluation_sdk_work_units": 4294967296
+        },
+        {
+          "evaluation_sdk_reservation_bytes": 0,
+          "evaluation_sdk_work_units": 18446744073709551615
+        },
+        {
+          "evaluation_sdk_reservation_bytes": 41,
+          "evaluation_sdk_work_units": 18446744073709551615
+        },
+        {
+          "evaluation_sdk_reservation_bytes": 18446744073709551615,
+          "evaluation_sdk_work_units": 18446744073709551615
+        }
+      ],
+      "meta_limits": [
+        {
+          "code": "evaluation-work-limit",
+          "failure": {
+            "details": {
+              "resource": "evaluation-work-limit"
+            },
+            "kind": "limit",
+            "origin": null
+          },
+          "warm": false
+        },
+        {
+          "code": "semantic-analysis-memory-limit",
+          "failure": {
+            "details": {
+              "resource": "semantic-analysis-memory-limit"
+            },
+            "kind": "limit",
+            "origin": null
+          },
+          "warm": false
+        },
+        {
+          "code": "evaluation-work-limit",
+          "failure": {
+            "details": {
+              "resource": "evaluation-work-limit"
+            },
+            "kind": "limit",
+            "origin": null
+          },
+          "warm": true
+        },
+        {
+          "code": "semantic-analysis-memory-limit",
+          "failure": {
+            "details": {
+              "resource": "semantic-analysis-memory-limit"
+            },
+            "kind": "limit",
+            "origin": null
+          },
+          "warm": true
+        }
+      ],
+      "carrier_observations": [
+        {
+          "observation": {
+            "status": "satisfies"
+          },
+          "request": {}
+        },
+        {
+          "observation": {
+            "status": "satisfies"
+          },
+          "request": {
+            "evaluation_steps": null,
+            "program_bytes": 65536
+          }
+        },
+        {
+          "observation": {
+            "status": "satisfies"
+          },
+          "request": {
+            "evaluation_steps": 1000,
+            "program_bytes": 65536
+          }
+        },
+        {
+          "observation": {
+            "code": "evaluation-work-limit",
+            "detail": {
+              "code": "evaluation-work-limit",
+              "location": null,
+              "message": "semantic analysis exceeded its configured resource allowance",
+              "reason": "limit-exceeded"
+            },
+            "status": "no-verdict"
+          },
+          "request": {
+            "evaluation_steps": 0
+          }
+        },
+        {
+          "observation": {
+            "code": "semantic-analysis-memory-limit",
+            "detail": {
+              "code": "semantic-analysis-memory-limit",
+              "location": null,
+              "message": "semantic analysis exceeded its configured resource allowance",
+              "reason": "limit-exceeded"
+            },
+            "status": "no-verdict"
+          },
+          "request": {
+            "program_bytes": 0
+          }
+        }
+      ]
+    },
+    "minimum": {
+      "test_groups": [
+        {
+          "filter": "independent_budget",
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "filter": "review_benchmark::limits_tests",
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "filter": "evaluation_allowance_serialization_uses_only_current_names",
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "filter": "an_evaluator_reports_the_budgets_it_was_given",
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "filter": "semantic::explain::tests",
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "filter": "semantic::decision::tests",
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "filter": "review_preparation_budgets",
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "filter": "review_semantic_interruption",
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "passed": 27,
+      "defaults_and_domain_rows": [
+        {
+          "evaluation_sdk_reservation_bytes": 0,
+          "evaluation_sdk_work_units": null
+        },
+        {
+          "evaluation_sdk_reservation_bytes": 41,
+          "evaluation_sdk_work_units": null
+        },
+        {
+          "evaluation_sdk_reservation_bytes": 18446744073709551615,
+          "evaluation_sdk_work_units": null
+        },
+        {
+          "evaluation_sdk_reservation_bytes": 0,
+          "evaluation_sdk_work_units": 0
+        },
+        {
+          "evaluation_sdk_reservation_bytes": 41,
+          "evaluation_sdk_work_units": 0
+        },
+        {
+          "evaluation_sdk_reservation_bytes": 18446744073709551615,
+          "evaluation_sdk_work_units": 0
+        },
+        {
+          "evaluation_sdk_reservation_bytes": 0,
+          "evaluation_sdk_work_units": 17
+        },
+        {
+          "evaluation_sdk_reservation_bytes": 41,
+          "evaluation_sdk_work_units": 17
+        },
+        {
+          "evaluation_sdk_reservation_bytes": 18446744073709551615,
+          "evaluation_sdk_work_units": 17
+        },
+        {
+          "evaluation_sdk_reservation_bytes": 0,
+          "evaluation_sdk_work_units": 4294967295
+        },
+        {
+          "evaluation_sdk_reservation_bytes": 41,
+          "evaluation_sdk_work_units": 4294967295
+        },
+        {
+          "evaluation_sdk_reservation_bytes": 18446744073709551615,
+          "evaluation_sdk_work_units": 4294967295
+        },
+        {
+          "evaluation_sdk_reservation_bytes": 0,
+          "evaluation_sdk_work_units": 4294967296
+        },
+        {
+          "evaluation_sdk_reservation_bytes": 41,
+          "evaluation_sdk_work_units": 4294967296
+        },
+        {
+          "evaluation_sdk_reservation_bytes": 18446744073709551615,
+          "evaluation_sdk_work_units": 4294967296
+        },
+        {
+          "evaluation_sdk_reservation_bytes": 0,
+          "evaluation_sdk_work_units": 18446744073709551615
+        },
+        {
+          "evaluation_sdk_reservation_bytes": 41,
+          "evaluation_sdk_work_units": 18446744073709551615
+        },
+        {
+          "evaluation_sdk_reservation_bytes": 18446744073709551615,
+          "evaluation_sdk_work_units": 18446744073709551615
+        }
+      ],
+      "meta_limits": [
+        {
+          "code": "evaluation-work-limit",
+          "failure": {
+            "details": {
+              "resource": "evaluation-work-limit"
+            },
+            "kind": "limit",
+            "origin": null
+          },
+          "warm": false
+        },
+        {
+          "code": "semantic-analysis-memory-limit",
+          "failure": {
+            "details": {
+              "resource": "semantic-analysis-memory-limit"
+            },
+            "kind": "limit",
+            "origin": null
+          },
+          "warm": false
+        },
+        {
+          "code": "evaluation-work-limit",
+          "failure": {
+            "details": {
+              "resource": "evaluation-work-limit"
+            },
+            "kind": "limit",
+            "origin": null
+          },
+          "warm": true
+        },
+        {
+          "code": "semantic-analysis-memory-limit",
+          "failure": {
+            "details": {
+              "resource": "semantic-analysis-memory-limit"
+            },
+            "kind": "limit",
+            "origin": null
+          },
+          "warm": true
+        }
+      ],
+      "carrier_observations": [
+        {
+          "observation": {
+            "status": "satisfies"
+          },
+          "request": {}
+        },
+        {
+          "observation": {
+            "status": "satisfies"
+          },
+          "request": {
+            "evaluation_steps": null,
+            "program_bytes": 65536
+          }
+        },
+        {
+          "observation": {
+            "status": "satisfies"
+          },
+          "request": {
+            "evaluation_steps": 1000,
+            "program_bytes": 65536
+          }
+        },
+        {
+          "observation": {
+            "code": "evaluation-work-limit",
+            "detail": {
+              "code": "evaluation-work-limit",
+              "location": null,
+              "message": "semantic analysis exceeded its configured resource allowance",
+              "reason": "limit-exceeded"
+            },
+            "status": "no-verdict"
+          },
+          "request": {
+            "evaluation_steps": 0
+          }
+        },
+        {
+          "observation": {
+            "code": "semantic-analysis-memory-limit",
+            "detail": {
+              "code": "semantic-analysis-memory-limit",
+              "location": null,
+              "message": "semantic analysis exceeded its configured resource allowance",
+              "reason": "limit-exceeded"
+            },
+            "status": "no-verdict"
+          },
+          "request": {
+            "program_bytes": 0
+          }
+        }
+      ]
+    }
+  },
+  "source_hashes_unchanged": true,
+  "static_audit": {
+    "changed_files": 30,
+    "exact_renames_only": 18,
+    "json_spelling_only": 6,
+    "accounting_site_changes": false,
+    "default_or_code_changes": false,
+    "instrument_changed": [
+      "src/sdk.rs"
+    ],
+    "third_party_lock_or_instrument_phase_changes": false
+  },
+  "sdk_edits_by_reviewer": false,
+  "release_replay": {
+    "scope": "complete observation replay, not a timing comparison",
+    "fixtures": 42,
+    "rows": 101,
+    "equal": 101,
+    "errors": [],
+    "binaries": {
+      "baseline": {
+        "sha256": "7c1e35ef1e9581876a5e5c1c1c7bbaa446dcf2900d70d2f28db67821fdae081f",
+        "provenance": {
+          "instrument": "0464ed6974956429",
+          "sdk": "4238ea9c175d4547"
+        }
+      },
+      "candidate": {
+        "sha256": "c96fe60f172b3db9b4b043f639389e0d9f2620a6c475e25b831ad7947d30f13d",
+        "provenance": {
+          "instrument": "3e82ba886b9ac89e",
+          "sdk": "d8430ea45d8da187"
+        }
+      }
+    },
+    "baseline_production_equals_4e4cdfb": true,
+    "current_manifest_and_provenance_verified": true,
+    "fixture_bytes_unchanged": true
+  },
+  "open_findings": [],
+  "tool_lint_refresh": {
+    "changed": [
+      "tools/evaluator-bench/src/sdk.rs"
+    ],
+    "two_equivalent_let_chain_sites": true,
+    "sdk_digest_unchanged": true,
+    "all_101_observations_match_prior_replay": true,
+    "sdk_tests_repeated": false,
+    "prior_evidence": "before-tool-lint/"
+  },
+  "parent_host_results": {
+    "wasm_build": "pass",
+    "types_reference": "pass",
+    "node": 189,
+    "consumer_compat_configurations": 4,
+    "installed_package_assertions": 352,
+    "shared_budget_assertions": 32,
+    "tool_clippy_warnings_denied": "pass",
+    "independent_rerun": false
+  }
+}

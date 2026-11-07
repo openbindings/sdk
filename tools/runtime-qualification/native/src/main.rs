@@ -30,16 +30,20 @@ fn once(
             .expect("declared operation");
         let input = operation.input().expect("declared input");
         input
-            .prepare(&DefaultEvaluator::new())
+            .prepare(
+                &DefaultEvaluator::new(),
+                &openbindings::ExternalSchemas::default(),
+                &openbindings::PreparationLimits::default(),
+            )
             .expect("must prepare")
     });
     row.insert("contextAndPrepare", ms);
     let (value, ms) = measured(timed, || JsonValue::parse(valid).unwrap());
     row.insert("parseValue", ms);
-    let (first, ms) = measured(timed, || contract.validate(&value));
+    let (first, ms) = measured(timed, || contract.evaluate(&value));
     row.insert("firstValidation", ms);
     assert!(matches!(first, ValueOutcome::Satisfies));
-    let (hot, ms) = measured(timed, || contract.validate(&value));
+    let (hot, ms) = measured(timed, || contract.evaluate(&value));
     row.insert("hot", ms);
     assert_eq!(
         serde_json::to_value(&first).unwrap(),
@@ -47,7 +51,7 @@ fn once(
     );
     let (invalid, ms) = measured(timed, || JsonValue::parse(invalid).unwrap());
     row.insert("parseInvalid", ms);
-    let (failed, ms) = measured(timed, || contract.validate(&invalid));
+    let (failed, ms) = measured(timed, || contract.evaluate(&invalid));
     row.insert("invalid", ms);
     assert!(matches!(failed, ValueOutcome::Fails { .. }));
     let (wire, ms) = measured(timed, || serde_json::to_string(&failed).unwrap());
@@ -149,18 +153,18 @@ fn main() {
     let operation = proof
         .resolve_operation("check")
         .expect("declared operation");
-    let Ok(contract) = operation
-        .input()
-        .expect("declared input")
-        .prepare(&DefaultEvaluator::new())
-    else {
+    let Ok(contract) = operation.input().expect("declared input").prepare(
+        &DefaultEvaluator::new(),
+        &openbindings::ExternalSchemas::default(),
+        &openbindings::PreparationLimits::default(),
+    ) else {
         panic!("witness prepares")
     };
     let value = JsonValue::parse(&source("invalid")).unwrap();
     let mut samples = vec![];
     let mut observation = Value::Null;
     for n in 0..if timed { 9 } else { 1 } {
-        let (result, invalid_ms) = measured(timed, || contract.validate(&value));
+        let (result, invalid_ms) = measured(timed, || contract.evaluate(&value));
         let (wire, serialize_ms) = measured(timed, || serde_json::to_string(&result).unwrap());
         let ValueOutcome::Fails {
             problems,

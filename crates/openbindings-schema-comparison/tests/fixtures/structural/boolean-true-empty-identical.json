@@ -1,0 +1,29 @@
+{
+  "version": "1.0",
+  "description": "Boolean true takes its object spelling {} and is identical to the empty schema after normalization.",
+  "mode": "identical",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "trueIsEmpty": {
+        "input": true
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "trueIsEmpty": {
+        "input": {}
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "compatible"
+    }
+  }
+}

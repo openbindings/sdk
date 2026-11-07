@@ -1,0 +1,9 @@
+   Compiling openbindings-json-schema-evaluator v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-json-schema-evaluator)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.39s
+     Running tests/evaluation_budgets.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/evaluation_budgets-7ff08b32953918c1)
+
+running 1 test
+test repeated_root_proofs_fit_a_small_reservation_without_copying_empty_storage ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.22s
+

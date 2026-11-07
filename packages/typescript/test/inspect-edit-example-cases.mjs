@@ -9,7 +9,7 @@ export function inspectEditExampleCases(sdk, example) {
       "output":{"type":"integer"},
       "examples":{"large":{"output":900719925474099312345}}}},
     "sources":{"archive":{"kind":"https://example.test/archive",
-      "content":{"limit":900719925474099312345}}},
+      "data":{"limit":900719925474099312345}}},
     "bindings":{"native":{"operation":"read","source":"archive","preference":0}},
     "x-tokens":{"large":900719925474099312345,"negative":-0}
   }`;
@@ -30,8 +30,8 @@ export function inspectEditExampleCases(sdk, example) {
     '"source":"missing"',
   );
   assert.equal(
-    example.inspectBindings(missingSource, "read").rows[0].source,
-    null,
+    example.inspectBindings(missingSource, "read").report.conclusion,
+    "non-conformant",
   );
   const edited = edit();
   assert.equal(edited.status, "edited");
@@ -46,7 +46,7 @@ export function inspectEditExampleCases(sdk, example) {
     try {
       for (const pointer of [
         "/x-tokens",
-        "/sources/archive/content",
+        "/sources/archive/data",
         "/operations/read/examples/large/output",
       ]) {
         const oldValue = original.at(pointer);
@@ -59,7 +59,14 @@ export function inspectEditExampleCases(sdk, example) {
         }
       }
       assert.equal(new TextDecoder().decode(before.value.toBytes()), text);
-      assert.deepEqual(after.value.operations[0].tags, ["read", "reviewed"]);
+      const proof = after.value.validate().document;
+      const operation = proof.operation("read");
+      try {
+        assert.deepEqual(operation.tags, ["read", "reviewed"]);
+      } finally {
+        operation.dispose();
+        proof.dispose();
+      }
     } finally {
       revised.dispose();
       original.dispose();
@@ -83,7 +90,7 @@ export function inspectEditExampleCases(sdk, example) {
       "read",
       "x",
     ).status,
-    "edit-error",
+    "report",
   );
   const raw = sdk.parseJson(
     String.raw`{"a":900719925474099312345,"a":-0,"\ud800":true}`,
@@ -111,7 +118,7 @@ export function inspectEditExampleCases(sdk, example) {
     scalar.value.dispose();
   }
   const empty = sdk.Document.create();
-  assert.equal(example.addTag(empty, "toString", "x"), false);
+  assert.equal(example.addTag(empty, "toString", "x"), undefined);
   empty.dispose();
   const opaque = String.raw`{"openbindings":"0.2.0","operations":{},"x-editor":{
     "annotation":null,"large":900719925474099312345,"tiny":1e-1000,
@@ -198,7 +205,7 @@ export function inspectEditExampleCases(sdk, example) {
   );
   // An edited owner survives its source and borrowed replacement value.
   const source = sdk.Document.parse(opaque).value;
-  const built = source.retain();
+  let built = source.retain();
   const root = source.value(),
     extension = root.get("x-editor");
   const inserted = example.replaceExactObjectMember(
@@ -206,7 +213,7 @@ export function inspectEditExampleCases(sdk, example) {
     "annotation",
     "Detached",
   );
-  built.set("/x-editor", inserted);
+  built = replaceDocument(built, built.set("/x-editor", inserted));
   inserted.dispose();
   extension.dispose();
   root.dispose();
@@ -222,4 +229,10 @@ export function inspectEditExampleCases(sdk, example) {
     installedInspectionEditingExample: "passed",
     releasedArenas: baseline,
   };
+}
+
+// Test fixture cursor: keep the new immutable snapshot and release its predecessor.
+function replaceDocument(previous, next) {
+  previous.dispose();
+  return next;
 }

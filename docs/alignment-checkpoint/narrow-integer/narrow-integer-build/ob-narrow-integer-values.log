@@ -1,0 +1,13 @@
+   Compiling openbindings-json-schema-evaluator v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-json-schema-evaluator)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.85s
+     Running unittests src/lib.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/openbindings_json_schema_evaluator-eec785131aa5a368)
+
+running 5 tests
+test semantic::value_predicates::tests::duplicate_literal_check_is_subtree_local_and_does_not_select_first_member ... ok
+test semantic::value_predicates::tests::refusal_cannot_become_a_false_predicate_and_fresh_retry_succeeds ... ok
+test semantic::value_predicates::tests::exact_values_keep_number_string_order_and_kind_meanings ... ok
+test semantic::value_predicates::tests::forced_collisions_verify_nonadjacent_candidates_exactly ... ok
+test semantic::value_predicates::tests::integer_predicate_preserves_numeric_admission_and_exact_answers ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 183 filtered out; finished in 0.01s
+

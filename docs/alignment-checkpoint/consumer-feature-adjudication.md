@@ -1,0 +1,21 @@
+# Independent member-order feature gate adjudication
+
+2026-11-03. The proposed migration is justified, with the gates below. This is an oracle/disposition review, not a successful feature-matrix execution claim. Production was not edited.
+
+All11 original document strings,64 value strings and seven limit configurations per document remain byte-identical in the reviewed current inputs. `original-member-order-cases.json` preserves every historical serialized preparation/value/diagnostic outcome. `adjudication.json` independently records the current semantic answers. No legacy API or incidental message/budget threshold is an authority.
+
+Pinned core c1419c9 §5.5 defines per-value JSON Schema2020-12 validity and dependence on an invalid Unicode-mode pattern. It does not fix an evaluator's work-unit cost, traversal schedule, first diagnostic message or historical cutoff. Replacing an old unsupported-pattern result at evaluation_steps=3 with a typed Limit is not itself a semantic regression. The independent S/F answers for the ten ordinary groups (and the empty-object value of the special pattern group) follow directly from required/dependentSchemas, type/count/number constraints, property-pattern matches and unevaluated-property coverage. All63 such answers match the proposed current default-funded statuses.
+
+The special group `po:patternProperties-reason` must remain distinct. Empty object requires S because no property name reaches either pattern. For {"x":1}, valid u-mode `(a)\1` cannot match x. Whether the invalid `[` pattern matches x changes whether its false schema applies, so full governing semantics requires Undefined. The current unsupported-backreference engine can honestly refuse with UnsupportedCapability; that is a retained capability characterization and an open semantic obligation, not full S/F/U qualification. A default Limit or EvaluatorFailure must not be silently accepted merely because its top-level status also says no-verdict. Retain exact original inputs; no need require the old diagnostic code/prose forever.
+
+Required meaningful gates:
+
+1. Compare fresh, complete per-case observations across evaluator, evaluator+arbitrary_precision, and evaluator+preserve_order+conversion-check. Parse as JSON; do not compare incidental object serialization order. Require exactly the expected IDs, values, detail modes and limits, with no missing/duplicate matrix entries. Equality is the feature-composability gate, not the semantic oracle.
+2. Independently assert the recorded default-funded S/F answers. `{}` options mean defaults, not truly unlimited resources; call this lane default/funded unless all caps are explicitly removed.
+3. At every smaller budget, any completed S/F must agree with the independently known semantic answer. Otherwise an identical wrong verdict across all feature graphs can pass. For ordinary supported fixtures, interruptions should be typed Limit; no cancellation is requested. Do not accept arbitrary preparation failures as budget refusals.
+4. For the special pattern value, no concrete S/F is sound. Its funded capability lane may produce UnsupportedCapability (or Undefined if support later closes, with an explicit capability update); tiny budgets may legitimately return Limit. None of those capability passes discharges the separate required Undefined result.
+5. Keep all seven original bounds and their complete observation equality; do not re-record a current output golden or require historical cutoff locations/messages. Preserve original history alongside this disposition.
+
+The separate ordinary compiler allocation certificate remains open; this feature gate does not close it.
+
+Follow-up source inspection: the current harness now checks every established S/F/Undefined answer against required_statuses at every budget, restricts ordinary incomplete results to typed Limit, requires completion at defaults, and separates the special unsupported-capability row while retaining its required Undefined answer. The fresh cross-feature matrix equality remains. These corrections implement the recommended gate organization; source hashes are retained in reviewed-current-hashes.json. This is source review, not a claim that the full feature matrix has completed.

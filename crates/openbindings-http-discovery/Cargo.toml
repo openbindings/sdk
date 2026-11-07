@@ -30,8 +30,8 @@ bytes = { version = "1.12.1", optional = true }
 
 [dev-dependencies]
 openbindings-invocation = { version = "=0.2.0-alpha.1", path = "../openbindings-invocation" }
-openbindings-source-inspection = { version = "=0.2.0-alpha.1", path = "../openbindings-source-inspection" }
-openbindings-interface-synthesis = { version = "=0.2.0-alpha.1", path = "../openbindings-interface-synthesis" }
+openbindings-kind-description = { version = "=0.2.0-alpha.1", path = "../openbindings-kind-description" }
+openbindings-source-pull = { version = "=0.2.0-alpha.1", path = "../openbindings-source-pull" }
 
 tokio = { version = "1.54.1", features = ["rt", "macros", "time", "sync"] }
 flate2 = "=1.1.10"

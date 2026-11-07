@@ -1,0 +1,9 @@
+{
+  "host": "node",
+  "version": "v22.23.0",
+  "rows": 11274,
+  "failures": [],
+  "linear_stack_bytes": 131072,
+  "wasm_sha256": "9c4f81be606492c1e34ab7fffb30d1d23a68b62b3125164917d62ac63e4f8035",
+  "inputs_sha256": "5a7a15e347116009b72779eaf260d657eb1a08bf822856962a51cfe735505ab8"
+}

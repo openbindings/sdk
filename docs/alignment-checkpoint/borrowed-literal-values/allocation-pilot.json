@@ -1,0 +1,266 @@
+{
+  "status": "stable-seed allocation observations; no timing qualification",
+  "sources": {
+    "sdk": "903b0bde2f305bf2",
+    "instrument": "0464ed6974956429"
+  },
+  "binary_sha256": "77540fd3e68b818a039a45cbdd39ff126f0c0c517248208a77b58f9654f5ee83",
+  "rows": [
+    {
+      "workload": "reference-text-1000",
+      "request_sha256": "ce0a7c4df7c2791be3698838e51f81b20e78e6175ba0b5c719263b12b4c3c5bf",
+      "observed": {
+        "iterations": 1,
+        "memory": {
+          "allocations_per_op": 7.0,
+          "baseline_live_bytes": 2696530,
+          "ending_live_bytes": 2696530,
+          "incremental_peak_bytes": 1908,
+          "peak_live_bytes": 2698438,
+          "requested_bytes_per_op": 1908.0
+        },
+        "nanoseconds": 494875,
+        "observation": {
+          "status": "satisfies"
+        },
+        "outcomes": {
+          "satisfies": 1
+        }
+      },
+      "prior_memory": {
+        "allocations_per_op": 7.0,
+        "baseline_live_bytes": 2696514,
+        "ending_live_bytes": 2696514,
+        "incremental_peak_bytes": 1908,
+        "peak_live_bytes": 2698422,
+        "requested_bytes_per_op": 1908.0
+      }
+    },
+    {
+      "workload": "reference-text-5000",
+      "request_sha256": "9e6088ba16ff8286210f5f51ec16f032e97bc73804ac5f28ea9da10e7bb2ae40",
+      "observed": {
+        "iterations": 1,
+        "memory": {
+          "allocations_per_op": 7.0,
+          "baseline_live_bytes": 21866130,
+          "ending_live_bytes": 21866130,
+          "incremental_peak_bytes": 1908,
+          "peak_live_bytes": 21868038,
+          "requested_bytes_per_op": 1908.0
+        },
+        "nanoseconds": 2473750,
+        "observation": {
+          "status": "satisfies"
+        },
+        "outcomes": {
+          "satisfies": 1
+        }
+      },
+      "prior_memory": {
+        "allocations_per_op": 7.0,
+        "baseline_live_bytes": 21866114,
+        "ending_live_bytes": 21866114,
+        "incremental_peak_bytes": 1908,
+        "peak_live_bytes": 21868022,
+        "requested_bytes_per_op": 1908.0
+      }
+    },
+    {
+      "workload": "reference-fan-in",
+      "request_sha256": "614cbdde257d9c3f49d4c417170d1dc856057f28d33421af302e0be139e76c3b",
+      "observed": {
+        "iterations": 1,
+        "memory": {
+          "allocations_per_op": 7.0,
+          "baseline_live_bytes": 3675993,
+          "ending_live_bytes": 3675993,
+          "incremental_peak_bytes": 1908,
+          "peak_live_bytes": 3677901,
+          "requested_bytes_per_op": 1908.0
+        },
+        "nanoseconds": 67375,
+        "observation": {
+          "status": "satisfies"
+        },
+        "outcomes": {
+          "satisfies": 1
+        }
+      },
+      "prior_memory": {
+        "allocations_per_op": 7.0,
+        "baseline_live_bytes": 3675977,
+        "ending_live_bytes": 3675977,
+        "incremental_peak_bytes": 1908,
+        "peak_live_bytes": 3677885,
+        "requested_bytes_per_op": 1908.0
+      }
+    },
+    {
+      "workload": "unique-array",
+      "request_sha256": "6afd0979ad4d83ca39b3f0ed5fa0b272e6832320c4a59d6a1f6aa04154621697",
+      "observed": {
+        "iterations": 1,
+        "memory": {
+          "allocations_per_op": 4.0,
+          "baseline_live_bytes": 2704482,
+          "ending_live_bytes": 2704482,
+          "incremental_peak_bytes": 320328,
+          "peak_live_bytes": 3024810,
+          "requested_bytes_per_op": 320328.0
+        },
+        "nanoseconds": 1293750,
+        "observation": {
+          "status": "satisfies"
+        },
+        "outcomes": {
+          "satisfies": 1
+        }
+      },
+      "prior_memory": {
+        "allocations_per_op": 45.0,
+        "baseline_live_bytes": 2704466,
+        "ending_live_bytes": 2704466,
+        "incremental_peak_bytes": 2720104,
+        "peak_live_bytes": 5424570,
+        "requested_bytes_per_op": 4915564.0
+      }
+    },
+    {
+      "workload": "unique-objects",
+      "request_sha256": "4d7b26331bf33af02278c3195678f45ff07f0f477cdc557e8ed673c80ddcabde",
+      "observed": {
+        "iterations": 1,
+        "memory": {
+          "allocations_per_op": 5.0,
+          "baseline_live_bytes": 1602080,
+          "ending_live_bytes": 1602080,
+          "incremental_peak_bytes": 16776,
+          "peak_live_bytes": 1618856,
+          "requested_bytes_per_op": 16776.0
+        },
+        "nanoseconds": 314500,
+        "observation": {
+          "status": "satisfies"
+        },
+        "outcomes": {
+          "satisfies": 1
+        }
+      },
+      "prior_memory": {
+        "allocations_per_op": 6036.0,
+        "baseline_live_bytes": 1602064,
+        "ending_live_bytes": 1602064,
+        "incremental_peak_bytes": 523732,
+        "peak_live_bytes": 2125796,
+        "requested_bytes_per_op": 1178628.0
+      }
+    },
+    {
+      "workload": "large-literal",
+      "request_sha256": "7e401d8e3d30a9a123e63375d2b28ee500a38b522a248736521dfcd1ae5d5fb7",
+      "observed": {
+        "iterations": 1,
+        "memory": {
+          "allocations_per_op": 4.0,
+          "baseline_live_bytes": 4261748,
+          "ending_live_bytes": 4261748,
+          "incremental_peak_bytes": 488,
+          "peak_live_bytes": 4262236,
+          "requested_bytes_per_op": 488.0
+        },
+        "nanoseconds": 774458,
+        "observation": {
+          "status": "satisfies"
+        },
+        "outcomes": {
+          "satisfies": 1
+        }
+      },
+      "prior_memory": {
+        "allocations_per_op": 88.0,
+        "baseline_live_bytes": 4261732,
+        "ending_live_bytes": 4261732,
+        "incremental_peak_bytes": 4850016,
+        "peak_live_bytes": 9111748,
+        "requested_bytes_per_op": 10158120.0
+      }
+    },
+    {
+      "workload": "late-duplicate",
+      "request_sha256": "608cea75c163607b530a950ce0594d1204c215cf1f097aa6b90b24af7c8f93d6",
+      "observed": {
+        "iterations": 1,
+        "memory": {
+          "allocations_per_op": 5.0,
+          "baseline_live_bytes": 2704519,
+          "ending_live_bytes": 2704519,
+          "incremental_peak_bytes": 320344,
+          "peak_live_bytes": 3024863,
+          "requested_bytes_per_op": 320377.0
+        },
+        "nanoseconds": 1274291,
+        "observation": {
+          "problems": [],
+          "problems_complete": false,
+          "status": "fails"
+        },
+        "outcomes": {
+          "fails": 1
+        }
+      },
+      "prior_memory": {
+        "allocations_per_op": 46.0,
+        "baseline_live_bytes": 2704503,
+        "ending_live_bytes": 2704503,
+        "incremental_peak_bytes": 2720104,
+        "peak_live_bytes": 5424607,
+        "requested_bytes_per_op": 4915597.0
+      }
+    },
+    {
+      "workload": "mixed-equality",
+      "observed": {
+        "iterations": 1,
+        "memory": {
+          "allocations_per_op": 4.0,
+          "baseline_live_bytes": 1227688,
+          "ending_live_bytes": 1227688,
+          "incremental_peak_bytes": 488,
+          "peak_live_bytes": 1228176,
+          "requested_bytes_per_op": 488.0
+        },
+        "nanoseconds": 3750,
+        "observation": {
+          "status": "satisfies"
+        },
+        "outcomes": {
+          "satisfies": 1
+        }
+      }
+    },
+    {
+      "workload": "equal-decimals",
+      "observed": {
+        "iterations": 1,
+        "memory": {
+          "allocations_per_op": 5.0,
+          "baseline_live_bytes": 1227489,
+          "ending_live_bytes": 1227489,
+          "incremental_peak_bytes": 392,
+          "peak_live_bytes": 1227881,
+          "requested_bytes_per_op": 425.0
+        },
+        "nanoseconds": 959,
+        "observation": {
+          "problems": [],
+          "problems_complete": false,
+          "status": "fails"
+        },
+        "outcomes": {
+          "fails": 1
+        }
+      }
+    }
+  ]
+}

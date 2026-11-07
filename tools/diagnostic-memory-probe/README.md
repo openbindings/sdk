@@ -177,3 +177,24 @@ assertions for each failing path alone, and restores the copy. It never mutates
 the production evaluator. Each path must fail the allocation assertion while
 retaining the expected public outcome. Fresh mutation receipts are generated under
 `target/diagnostics-review/value-mutations`.
+
+The `--semantic-only` lane exercises both the compiled-to-semantic path and direct
+semantic evaluation with 100 KB and 1 MB original keys and instance strings.
+The four oversized-origin runs keep a 64 KiB program allowance and must remain
+Undefined without inventing a truncated origin. The two pattern runs use 8 MiB
+and must satisfy; matching 64 KiB controls must report a resource limit before
+building the bounded matcher. All eight runs must add less than 128 KiB
+allocator-live peak bytes. Inputs and preparation
+precede each baseline. These checks catch temporary source-pointer and UTF-16
+copies; they do not claim a process RSS bound or include caller-owned input.
+
+The `--recursive-only` lane measures the recursive proof state for closed OR
+components of four and eight nodes and annotation producers with 32 or 512
+properties. Each case runs cold and warm against the same prepared owner at
+64 KiB and 8 MiB program allowances. The low allowance must refuse truthfully;
+the larger allowance must establish the adjudicated result, except that the
+512-property case also demonstrates the default proof-variable limit. A separate
+512-property control supplies a 4 MiB stack allowance and must satisfy. The SDK's
+default limits are unchanged. Every call must retain zero bytes after dropping its
+result and peak within twice its program allowance. These are regression bounds
+for the measured cases, not universal bounds or a matched performance comparison.

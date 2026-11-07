@@ -843,6 +843,10 @@ mod tests {
                 "{token}"
             );
         }
+        #[expect(
+            clippy::disallowed_types,
+            reason = "Test verifies equal decimals have equal fingerprints without a table"
+        )]
         let state = std::collections::hash_map::RandomState::new();
         let hash = |value: &Decimal| std::hash::BuildHasher::hash_one(&state, value);
         for (i, (left, (value, text))) in tokens.iter().zip(parsed.iter().zip(&texts)).enumerate() {

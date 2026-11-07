@@ -1,0 +1,106 @@
+{
+  "status": "bounded independent implementation/resource approval; parent native/host gates pass; inactive private stage",
+  "source_sha256": {
+    "crates/openbindings-json-schema-evaluator/src/pattern.rs": "79d86720f5f1fa6d5231803334642e7c1959c11d98d87f444462b01316bbd9c1",
+    "crates/openbindings-json-schema-evaluator/src/lib.rs": "3af6fbf9f2549d43fcb6248b719d95f87063100706d714bb65a4dcbfe460de01",
+    "crates/openbindings-json-schema-evaluator/src/semantic/patterns/compiler.rs": "06a57aa80d2b0e896f2083757e0bfa1228e95ba1de2d834294d6473acb92ef46",
+    "crates/openbindings-json-schema-evaluator/src/semantic/patterns/compiler/hir.rs": "7a34dcef696be161ea8d057307ad6751b3d5ccca4fc7bdb5cc6fd1a762e0ff02",
+    "crates/openbindings-json-schema-evaluator/src/semantic/patterns/compiler/hir/tests.rs": "52f49679b6535dd6e413ac136f108d5c6e74a090858d7aa6e2564df0c46e2dab",
+    "crates/openbindings-json-schema-evaluator/src/semantic/patterns/compiler/hir/tests/independent.json": "6bba3f47cd6ea695b20459f65fd164f8ee753f00ada5bc7a0c3b3cefc5271749"
+  },
+  "authority": {
+    "spec": "c1419c9fc3ae5a00c2b83da710c11bf67dab7934",
+    "interfaces": "5815fb106bddd2c85ff4e93e0077570b3f6b9e74"
+  },
+  "native": {
+    "current": {
+      "lane": "current",
+      "rows": 11305,
+      "success": 11246,
+      "reader": 51,
+      "refusal": 8,
+      "failures": [],
+      "seconds": 1.3120253086090088,
+      "maximum_reserved": 180339746,
+      "maximum_requested": 85771712
+    },
+    "msrv": {
+      "lane": "msrv",
+      "rows": 11305,
+      "success": 11246,
+      "reader": 51,
+      "refusal": 8,
+      "failures": [],
+      "seconds": 1.649327039718628,
+      "maximum_reserved": 180339746,
+      "maximum_requested": 85771712
+    }
+  },
+  "wasm": {
+    "node": {
+      "host": "node",
+      "version": "v22.23.0",
+      "rows": 11305,
+      "success": 11227,
+      "reader": 51,
+      "refusal": 27,
+      "overflow": 19,
+      "failures": [],
+      "linear_stack_bytes": 131072,
+      "wasm_sha256": "221401d7460675b3e9cba40bd1b7b60bdd8e1af001ea0d832014f2658748cce5",
+      "inputs_sha256": "0c93fe954e913a3cd36d696b57365100fcad35a3560112f73bdc3cc3516a351c"
+    },
+    "chromium": {
+      "host": "chromium",
+      "version": "156.0.8078.4",
+      "rows": 11305,
+      "success": 11227,
+      "reader": 51,
+      "refusal": 27,
+      "overflow": 19,
+      "failures": [],
+      "linear_stack_bytes": 131072,
+      "wasm_sha256": "221401d7460675b3e9cba40bd1b7b60bdd8e1af001ea0d832014f2658748cce5",
+      "inputs_sha256": "0c93fe954e913a3cd36d696b57365100fcad35a3560112f73bdc3cc3516a351c"
+    },
+    "webkit": {
+      "host": "webkit",
+      "version": "27.2",
+      "rows": 11305,
+      "success": 11227,
+      "reader": 51,
+      "refusal": 27,
+      "overflow": 19,
+      "failures": [],
+      "linear_stack_bytes": 131072,
+      "wasm_sha256": "221401d7460675b3e9cba40bd1b7b60bdd8e1af001ea0d832014f2658748cce5",
+      "inputs_sha256": "0c93fe954e913a3cd36d696b57365100fcad35a3560112f73bdc3cc3516a351c"
+    }
+  },
+  "tests": {
+    "current_library": {
+      "passed": 149,
+      "ignored_existing_release_only": 2
+    },
+    "minimum_focused": 11,
+    "strict_all_targets_clippy": "pass"
+  },
+  "entry_work": {
+    "native": 488,
+    "definition": "128 fixed scalar operations plus four logical word transfers for each of six actual owner/result layouts"
+  },
+  "scope": "Does not activate compiler/default or qualify complete NFA/Reader/Plan/default budgets or arbitrary builds physical stack.",
+  "independent": {
+    "current_and_minimum": {
+      "corpus_rows": 11261,
+      "successful_hir": 11253,
+      "profile_refusals": 2,
+      "grammar_refusals": 6,
+      "resource_interruption_rows": 3217,
+      "targeted_work_precharge_rows": 12,
+      "actual_sdk_unit_groups": 11
+    },
+    "findings_open": 0,
+    "scope": "See implementation-review.md and final-source-hashes.json; parent Wasm evidence inspected, not independently rerun."
+  }
+}

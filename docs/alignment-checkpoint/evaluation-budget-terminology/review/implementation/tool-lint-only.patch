@@ -1,0 +1,31 @@
+--- prior-sdk.rs
++++ final-sdk.rs
+@@ -258,20 +258,20 @@
+                 value["code"] = json!(detail.code);
+                 value["detail"] = serde_json::to_value(detail).unwrap();
+                 // The instrument's location protocol is fixed across SDK revisions.
+-                if let Some(location) = value["detail"]["location"].as_object_mut() {
+-                    if let Some(uri) = location.remove("source_uri") {
+-                        location.insert("resource".into(), uri);
+-                    }
++                if let Some(location) = value["detail"]["location"].as_object_mut()
++                    && let Some(uri) = location.remove("source_uri")
++                {
++                    location.insert("resource".into(), uri);
+                 }
+             }
+             ValueOutcome::Undefined { detail } => {
+                 value["code"] = json!(detail.code);
+                 value["detail"] = serde_json::to_value(detail).unwrap();
+                 // The instrument's location protocol is fixed across SDK revisions.
+-                if let Some(location) = value["detail"]["location"].as_object_mut() {
+-                    if let Some(uri) = location.remove("source_uri") {
+-                        location.insert("resource".into(), uri);
+-                    }
++                if let Some(location) = value["detail"]["location"].as_object_mut()
++                    && let Some(uri) = location.remove("source_uri")
++                {
++                    location.insert("resource".into(), uri);
+                 }
+             }
+             ValueOutcome::Fails {

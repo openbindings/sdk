@@ -5,9 +5,9 @@
 use openbindings::{JsonRef, JsonValue};
 use openbindings_invocation::CancellationToken;
 use openbindings_invocation::{
-    BindingInvocationInput, BindingRequest, InvocationError, InvocationLimits, ProviderIo,
+    BindingRequest, InvocationError, InvocationLimits, OutputEvent, PreflightOutcome, ProviderIo,
     WriteError,
-    binding::{BindingInvoker, Invoker},
+    binding::{BindingInvoker, BindingInvokerExt},
 };
 use std::{
     collections::HashSet,
@@ -20,7 +20,7 @@ use std::{
 };
 
 const INTERFACE: &str = include_str!("fixtures/binding-invoker-0.1.json");
-const OPEN: &str = r#"{"kind":"open","input":{"source":{"kind":"fixture.frames"},"binding":{}}}"#;
+const OPEN: &str = r#"{"kind":"open","input":{"interface":{"openbindings":"0.2.0","operations":{"o":{}},"sources":{"s":{"kind":"fixture.frames"}},"bindings":{"b":{"operation":"o","source":"s"}}},"binding":"b"}}"#;
 
 fn json(text: &str) -> JsonValue {
     JsonValue::parse(text).unwrap()
@@ -65,7 +65,7 @@ fn envelope(value: JsonRef<'_>, output: bool) -> Result<&str, InvocationError> {
 }
 
 enum Action {
-    Open(Box<BindingInvocationInput>),
+    Open(Box<BindingRequest>),
     Input(JsonValue),
     Close,
     Ignore,
@@ -96,7 +96,7 @@ impl Ingress {
         }
         match kind {
             "open" => {
-                let request = BindingInvocationInput::from_json_ref(frame.get("input").unwrap())
+                let request = BindingRequest::from_json_ref(frame.get("input").unwrap())
                     .map_err(|_| InvocationError::refused())?;
                 self.opened = true;
                 Ok(Action::Open(Box::new(request)))
@@ -124,6 +124,21 @@ struct Egress {
 }
 
 impl Egress {
+    fn event(&mut self, event: OutputEvent) {
+        match event {
+            OutputEvent::Output(value) => {
+                self.output(&value);
+            }
+            OutputEvent::InputClosed => self.input_closed(),
+            OutputEvent::Complete => {
+                self.settle(Ok(()));
+            }
+            OutputEvent::Error(error) => {
+                self.settle(Err(error));
+            }
+            _ => panic!("unknown event"),
+        }
+    }
     fn output(&mut self, value: &JsonValue) -> bool {
         if self.terminal {
             return false;
@@ -218,6 +233,7 @@ struct Fixture {
     mode: Mode,
     attempts: Arc<AtomicUsize>,
     accepted_outputs: Arc<AtomicUsize>,
+    gate: CancellationToken,
 }
 
 impl Fixture {
@@ -226,38 +242,45 @@ impl Fixture {
             mode,
             attempts: Arc::default(),
             accepted_outputs: Arc::default(),
+            gate: CancellationToken::new(),
         }
     }
 }
 
 impl BindingInvoker for Fixture {
-    type Invocation<'a> = Pin<Box<dyn Future<Output = Result<(), InvocationError>> + 'a>>;
-    fn supports_kind(&self, kind: &str) -> bool {
-        kind == "fixture.frames"
-    }
-    fn invoke<'a>(
+    type Invoke<'a> = Pin<Box<dyn Future<Output = Result<(), InvocationError>> + 'a>>;
+    type Preflight<'a> = std::future::Ready<Result<PreflightOutcome, InvocationError>>;
+    fn handle_preflight<'a>(
         &'a self,
-        _request: BindingRequest<'a>,
+        _: BindingRequest,
+        _: CancellationToken,
+    ) -> Self::Preflight<'a> {
+        std::future::ready(Ok(PreflightOutcome::NoPrediction))
+    }
+    fn handle_invoke<'a>(
+        &'a self,
+        _request: BindingRequest,
         mut io: ProviderIo,
         _control: CancellationToken,
-    ) -> Self::Invocation<'a> {
+    ) -> Self::Invoke<'a> {
         Box::pin(async move {
             self.attempts.fetch_add(1, Ordering::SeqCst);
             match self.mode {
                 Mode::Echo => {
                     while let Some(value) = io.next().await {
-                        io.emit(value).await?;
+                        io.send(value).await?;
                         self.accepted_outputs.fetch_add(1, Ordering::SeqCst);
                     }
                 }
                 Mode::NoInput => {
                     io.close_input();
-                    io.emit(json("null")).await?;
+                    self.gate.cancelled().await;
+                    io.send(json("null")).await?;
                     self.accepted_outputs.fetch_add(1, Ordering::SeqCst);
                 }
                 Mode::Empty => {}
                 Mode::OutputFailure => {
-                    io.emit(json("9007199254740993")).await?;
+                    io.send(json("9007199254740993")).await?;
                     self.accepted_outputs.fetch_add(1, Ordering::SeqCst);
                     return Err(
                         InvocationError::new("fixture/application", Some(json("null"))).unwrap(),
@@ -265,7 +288,7 @@ impl BindingInvoker for Fixture {
                 }
                 Mode::QueuedBeforeCancel => {
                     for value in ["1e9999", r#"{"same":1,"same":2}"#, "3"] {
-                        io.emit(json(value)).await?;
+                        io.send(json(value)).await?;
                         self.accepted_outputs.fetch_add(1, Ordering::SeqCst);
                     }
                     pending::<()>().await;
@@ -277,7 +300,7 @@ impl BindingInvoker for Fixture {
     }
 }
 
-fn opened(ingress: &mut Ingress) -> BindingInvocationInput {
+fn opened(ingress: &mut Ingress) -> BindingRequest {
     let Action::Open(input) = ingress.receive(&json(OPEN)).unwrap() else {
         panic!("expected open")
     };
@@ -292,16 +315,23 @@ fn assert_error(result: Result<Action, InvocationError>, code: &str) {
 }
 
 async fn start_native(frame: &JsonValue, provider: &Fixture) -> Result<(), InvocationError> {
-    let Action::Open(input) = Ingress::default().receive(frame)? else {
-        unreachable!("a live initial envelope exposes only open or a terminal error")
+    let Action::Open(request) = Ingress::default().receive(frame)? else {
+        unreachable!()
     };
-    let invoker = Invoker::new(provider);
-    let mut invocation = invoker.invoke(input.request());
-    invocation.close();
-    while let Some(item) = invocation.next().await {
-        item?;
+    let client = provider;
+    let (mut input, mut output) = client
+        .invoke(*request, CancellationToken::new())
+        .map_err(|_| InvocationError::refused())?
+        .split();
+    input.close();
+    while let Some(event) = output.next().await {
+        match event {
+            OutputEvent::Complete => return Ok(()),
+            OutputEvent::Error(error) => return Err(error),
+            _ => (),
+        }
     }
-    invocation.outcome().expect("observed terminal")
+    Err(InvocationError::transport_closed())
 }
 
 #[test]
@@ -383,26 +413,66 @@ async fn malformed_envelopes_and_first_nonopen_frames_are_protocol_errors_before
 
 #[tokio::test(flavor = "current_thread")]
 async fn valid_open_envelopes_refuse_invalid_carried_payloads_before_work() {
+    use openbindings_invocation::BoundaryFailureKind as K;
     let provider = Fixture::new(Mode::Echo);
-    for payload in [
-        "null",
-        "{}",
-        r#"{"source":{"kind":"fixture.frames"}}"#,
-        r#"{"source":{"kind":"fixture.frames"},"binding":{},"extra":0}"#,
-        r#"{"source":{"kind":"fixture.frames","location":"legacy"},"binding":{}}"#,
-        r#"{"source":{"kind":"fixture.frames","kind":"other"},"binding":{}}"#,
-        r#"{"source":{"kind":"fixture.frames"},"binding":{"selector":"legacy"}}"#,
-        r#"{"source":{"kind":"fixture.frames"},"binding":{},"context":null}"#,
+    let opening = json(OPEN);
+    let doc = opening.at("/input/interface").unwrap().text();
+    let illegal_source = doc.replace(
+        r#""kind":"fixture.frames""#,
+        r#""kind":"fixture.frames","location":"legacy""#,
+    );
+    let duplicate_kind = doc.replace(
+        r#""kind":"fixture.frames""#,
+        r#""kind":"fixture.frames","kind":"other""#,
+    );
+    let illegal_binding = doc.replace(r#""source":"s""#, r#""source":"s","selector":"legacy""#);
+    for (payload, kind) in [
+        ("null".to_owned(), K::ExpectedObject),
+        ("{}".to_owned(), K::MissingMember),
+        (format!(r#"{{"interface":{doc}}}"#), K::MissingMember),
+        (
+            format!(r#"{{"interface":{doc},"binding":"b","extra":0}}"#),
+            K::UnexpectedMember,
+        ),
+        (
+            format!(r#"{{"interface":{illegal_source},"binding":"b"}}"#),
+            K::InvalidDocument,
+        ),
+        (
+            format!(r#"{{"interface":{duplicate_kind},"binding":"b"}}"#),
+            K::InvalidDocument,
+        ),
+        (
+            format!(r#"{{"interface":{illegal_binding},"binding":"b"}}"#),
+            K::InvalidDocument,
+        ),
+        (
+            format!(r#"{{"interface":{doc},"binding":"b","context":null}}"#),
+            K::ExpectedObject,
+        ),
+        (
+            format!(r#"{{"interface":{doc},"binding":{{}}}}"#),
+            K::ExpectedString,
+        ),
+        (
+            format!(r#"{{"interface":{doc},"binding":"b","bind\u0069ng":"b"}}"#),
+            K::DuplicateMember,
+        ),
     ] {
+        assert_eq!(
+            BindingRequest::from_json(&json(&payload))
+                .unwrap_err()
+                .kind(),
+            kind
+        );
         let frame = json(&format!(r#"{{"kind":"open","input":{payload}}}"#));
+        assert_eq!(envelope(frame.view(), false).unwrap(), "open");
         assert_eq!(
             start_native(&frame, &provider).await.unwrap_err().code(),
             "ERR_REFUSED"
         );
     }
     assert_eq!(provider.attempts.load(Ordering::SeqCst), 0);
-    start_native(&json(OPEN), &provider).await.unwrap();
-    assert_eq!(provider.attempts.load(Ordering::SeqCst), 1);
 }
 
 #[test]
@@ -467,32 +537,37 @@ async fn echo_frames_correspond_to_native_half_close_exact_values_and_complete()
     let provider = Fixture::new(Mode::Echo);
     let mut ingress = Ingress::default();
     let request = opened(&mut ingress);
-    let invoker = Invoker::new(&provider);
-    let mut invocation = invoker.invoke(request.request());
+    let client = &provider;
+    let (mut input, mut output) = client
+        .invoke(request, CancellationToken::new())
+        .unwrap()
+        .split();
     assert_eq!(provider.attempts.load(Ordering::SeqCst), 0);
-    for frame in [
-        r#"{"kind":"input","value":9007199254740993}"#,
-        r#"{"kind":"input","value":null}"#,
-        r#"{"kind":"close"}"#,
-        r#"{"kind":"close"}"#,
-        r#"{"kind":"input","value":"late"}"#,
-    ] {
-        match ingress.receive(&json(frame)).unwrap() {
-            Action::Input(value) => invocation.write(value).await.unwrap(),
-            Action::Close => invocation.close(),
-            Action::Ignore => assert_eq!(
-                invocation.write(json("\"late\"")).await,
-                Err(WriteError::Closed)
-            ),
-            Action::Open(_) => panic!("second open"),
+    let writer = async {
+        for frame in [
+            r#"{"kind":"input","value":9007199254740993}"#,
+            r#"{"kind":"input","value":null}"#,
+            r#"{"kind":"close"}"#,
+            r#"{"kind":"close"}"#,
+            r#"{"kind":"input","value":"late"}"#,
+        ] {
+            match ingress.receive(&json(frame)).unwrap() {
+                Action::Input(value) => input.send(value).await.unwrap(),
+                Action::Close => input.close(),
+                Action::Ignore => {
+                    assert_eq!(input.send(json(r#""late""#)).await, Err(WriteError::Closed))
+                }
+                Action::Open(_) => panic!("second open"),
+            }
         }
-    }
+    };
     let mut egress = Egress::default();
-    while let Some(item) = invocation.next().await {
-        egress.output(&item.unwrap());
-    }
-    assert!(invocation.outcome().unwrap().is_ok());
-    egress.settle(Ok(()));
+    let reader = async {
+        while let Some(event) = output.next().await {
+            egress.event(event);
+        }
+    };
+    tokio::join!(writer, reader);
     assert_eq!(
         egress.text(),
         [
@@ -510,22 +585,29 @@ async fn provider_input_closure_needs_no_caller_close_and_keeps_output_open() {
     let provider = Fixture::new(Mode::NoInput);
     let mut ingress = Ingress::default();
     let request = opened(&mut ingress);
-    let invoker = Invoker::new(&provider);
-    let (mut input, mut outputs) = invoker.invoke(request.request()).split();
+    let client = &provider;
+    let (mut input, mut output) = client
+        .invoke(request, CancellationToken::new())
+        .unwrap()
+        .split();
+    let mut egress = Egress::default();
+    let event = output.next().await.unwrap();
+    assert!(matches!(event, OutputEvent::InputClosed));
+    egress.event(event);
     input.closed().await;
     ingress.provider_closed();
-    let mut egress = Egress::default();
-    egress.input_closed();
     assert!(matches!(
         ingress
             .receive(&json(r#"{"kind":"input","value":0}"#))
             .unwrap(),
         Action::Ignore
     ));
-    assert_eq!(input.write(json("0")).await, Err(WriteError::Closed));
-    egress.output(&outputs.next().await.unwrap().unwrap());
-    assert!(outputs.next().await.is_none());
-    egress.settle(outputs.outcome().unwrap());
+    assert_eq!(input.send(json("0")).await, Err(WriteError::Closed));
+    assert!(output.control().outcome().is_none());
+    provider.gate.cancel();
+    while let Some(event) = output.next().await {
+        egress.event(event);
+    }
     assert_eq!(
         egress.text(),
         [
@@ -551,21 +633,17 @@ async fn native_empty_completion_and_output_then_failure_have_distinct_terminal_
     ] {
         let provider = Fixture::new(mode);
         let request = opened(&mut Ingress::default());
-        let invoker = Invoker::new(&provider);
-        let mut invocation = invoker.invoke(request.request());
+        let client = &provider;
+        let (_, mut output) = client
+            .invoke(request, CancellationToken::new())
+            .unwrap()
+            .split();
         let mut egress = Egress::default();
-        while let Some(item) = invocation.next().await {
-            match item {
-                Ok(value) => {
-                    egress.output(&value);
-                }
-                Err(error) => {
-                    egress.settle(Err(error));
-                }
-            }
+        while let Some(event) = output.next().await {
+            egress.event(event);
         }
-        egress.settle(invocation.outcome().unwrap());
-        assert!(invocation.next().await.is_none());
+        assert!(output.next().await.is_none());
+        assert!(!egress.settle(Ok(())));
         assert_eq!(egress.text(), expected);
         let mut consumer = Consumer::default();
         for frame in &egress.frames {
@@ -580,31 +658,31 @@ async fn native_empty_completion_and_output_then_failure_have_distinct_terminal_
 async fn cancellation_drains_committed_outputs_before_one_terminal_frame() {
     let provider = Fixture::new(Mode::QueuedBeforeCancel);
     let request = opened(&mut Ingress::default());
-    let invoker = Invoker::with_limits(
-        &provider,
-        InvocationLimits {
-            output_capacity: 2,
-            ..InvocationLimits::default()
-        },
-    )
-    .unwrap();
-    let mut invocation = invoker.invoke(request.request());
-    let control = invocation.control();
+    let client = &provider;
+    let client_limits = InvocationLimits {
+        output_capacity: 2,
+        ..Default::default()
+    };
+    let call = client
+        .invoke_with_limits(request, CancellationToken::new(), client_limits)
+        .unwrap();
+    let control = call.control();
+    let (_, mut output) = call.split();
     let mut egress = Egress::default();
-    // Polling this write starts the provider: two outputs fill its queue and
-    // the third emission parks. No output consumer has read a value yet.
-    invocation.write(json("null")).await.unwrap();
+    // Only the output poll starts work. It returns the first of two committed
+    // values while the third live emission remains blocked on queue capacity.
+    egress.event(output.next().await.unwrap());
     assert_eq!(provider.accepted_outputs.load(Ordering::SeqCst), 2);
     control.cancel();
     assert_eq!(
         control.outcome().unwrap().unwrap_err().code(),
         "ERR_CANCELLED"
     );
-    egress.output(&invocation.next().await.unwrap().unwrap());
-    egress.output(&invocation.next().await.unwrap().unwrap());
-    egress.settle(Err(invocation.next().await.unwrap().unwrap_err()));
+    while let Some(event) = output.next().await {
+        egress.event(event);
+    }
     control.cancel();
-    assert!(invocation.next().await.is_none());
+    assert!(output.next().await.is_none());
     assert!(!egress.settle(Ok(())));
     assert!(!egress.output(&json("3")));
     assert_eq!(
@@ -675,7 +753,7 @@ fn malformed_output_and_invalid_safe_challenges_are_not_portable_successes() {
     consumer
         .receive(&json(r#"{"kind":"output","value":null}"#))
         .unwrap();
-    assert_eq!(consumer.receive(&json(r#"{"kind":"error","error":{"code":"CONTEXT_REQUIRED","data":{"target":"","alternatives":[{"requirements":[{"type":"extension"}]}]}}}"#)).unwrap_err().code(), "ERR_FRAME_PROTOCOL");
+    assert_eq!(consumer.receive(&json(r#"{"kind":"error","error":{"code":"CONTEXT_REQUIRED","data":{"message":"context","schema":{}}}}"#)).unwrap_err().code(), "ERR_FRAME_PROTOCOL");
 }
 
 #[test]
@@ -718,8 +796,16 @@ fn operation_interface_reuses_the_same_closed_frame_protocol() {
         "InvocationError",
         "BindingContext",
         "ContextRequiredDetails",
-        "ContextRequirement",
+        "OpenBindingsInterface",
     ] {
+        assert!(
+            binding["schemas"][schema].is_object(),
+            "missing binding schema {schema}"
+        );
+        assert!(
+            operation["schemas"][schema].is_object(),
+            "missing operation schema {schema}"
+        );
         assert_eq!(binding["schemas"][schema], operation["schemas"][schema]);
     }
     assert_eq!(

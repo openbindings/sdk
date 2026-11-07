@@ -1,0 +1,52 @@
+{
+  "document": {
+    "openbindings": "0.2.0",
+    "operations": {},
+    "schemas": {
+      "entry": {
+        "allOf": [
+          {
+            "$ref": "https://facts.test/c1"
+          },
+          {
+            "$ref": "https://facts.test/c2"
+          }
+        ]
+      }
+    }
+  },
+  "entry": "entry",
+  "resources": {
+    "https://facts.test/m1": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "$vocabulary": {
+        "https://json-schema.org/draft/2020-12/vocab/core": true,
+        "https://json-schema.org/draft/2020-12/vocab/applicator": true,
+        "https://json-schema.org/draft/2020-12/vocab/validation": true
+      },
+      "$ref": "https://facts.test/helper"
+    },
+    "https://facts.test/m2": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "$vocabulary": {
+        "https://json-schema.org/draft/2020-12/vocab/core": true,
+        "https://json-schema.org/draft/2020-12/vocab/applicator": true,
+        "https://json-schema.org/draft/2020-12/vocab/validation": true
+      },
+      "$ref": "https://facts.test/helper"
+    },
+    "https://facts.test/helper": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object"
+    },
+    "https://facts.test/c1": {
+      "$schema": "https://facts.test/m1",
+      "type": "integer"
+    },
+    "https://facts.test/c2": {
+      "$schema": "https://facts.test/m2",
+      "minimum": 0
+    }
+  },
+  "value": 1
+}

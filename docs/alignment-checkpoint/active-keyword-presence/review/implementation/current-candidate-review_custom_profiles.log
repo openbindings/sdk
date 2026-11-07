@@ -1,0 +1,21 @@
+
+running 16 tests
+test review_custom_profiles::a_permissive_custom_meta_can_admit_an_empty_type_union ... ok
+test review_custom_profiles::actual_meta_required_and_const_restrictions_gate_the_validator ... ok
+test review_custom_profiles::admission_dependency_cycles_do_not_count_as_validated ... ok
+test review_custom_profiles::custom_primitive_assertions_read_original_operands_across_arenas ... ok
+test review_custom_profiles::date_time_formats_require_ascii_digits_and_utc_month_boundaries ... ok
+test review_custom_profiles::local_meta_checks_do_not_hide_invalid_unused_original_positions ... ok
+test review_custom_profiles::meta_must_itself_be_a_valid_schema_under_its_own_profile ... ok
+test review_custom_profiles::meta_primitives_preserve_exact_utf16_names_values_and_decimal_operands ... ok
+test review_custom_profiles::meta_reference_missing_bytes_remain_a_structured_preparation_failure ... ok
+test review_custom_profiles::meta_uses_its_own_profile_while_omitted_consumer_keywords_are_data ... ok
+test review_custom_profiles::original_meta_dependent_and_unevaluated_constraints_are_active ... ok
+test review_custom_profiles::recursive_meta_validation_retains_original_dynamic_scope ... ok
+test review_custom_profiles::regex_format_matches_independent_no_flags_syntax_controls ... ok
+test review_custom_profiles::required_standard_formats_optional_annotation_and_nonstring_values ... ok
+test review_custom_profiles::selected_meta_references_resolve_from_its_original_base ... ok
+test review_custom_profiles::unknown_required_formats_refuse_preparation_and_exact_pointer_units_survive ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 239 filtered out; finished in 0.14s
+

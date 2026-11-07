@@ -1,0 +1,44 @@
+{
+  "status": "all actual obligation and individual witness bindings inspected; final independent audit pending",
+  "obligations": 83,
+  "witnesses": 108,
+  "concepts": 54,
+  "fields": 32,
+  "relations": 19,
+  "rust_manifests": 13,
+  "logical_products": 11,
+  "new_direct_controls": [
+    "no prediction followed by live context challenge",
+    "two same-kind sources reuse one operation independently",
+    "exact JSON and ordinary Number serialization boundary"
+  ],
+  "adjudication": "host-number-adjudication.md",
+  "remaining": [
+    "independent final semantic/API/package audit after evaluator replacement",
+    "refresh changed evaluator source and final runtime identity",
+    "remaining original-evaluator implementation and whole-SDK gates"
+  ],
+  "new_control_validation": {
+    "minimum_rust_role_tests": {
+      "passed": 191,
+      "failed": 0
+    },
+    "node_tests": {
+      "passed": 187,
+      "failed": 0
+    },
+    "current_strict_clippy": "pass",
+    "format": "pass",
+    "documentation_links": "pass",
+    "product_labels": "pass"
+  },
+  "validation_logs": {
+    "preflight-live-challenge-final.log": "6227c64cf0605ef4a5fb2e8fcdf63d5bd1bb4d1805e60b0b4795265c8d29d5a6",
+    "pull-two-sources.log": "34a14d820c5e6938a4b86b07ac8b538be5363a4d0915303e1282bbabd491b7b2",
+    "host-number-witness.log": "869b6667926d2381d395842135602f2fdb03c853184973e71e66e0c109a9f2bd",
+    "msrv-role-tests.log": "6ca8a31c795afc3cc9471024bc7384ee1c4c5f28e219accea083a2f34c2f2c08",
+    "node-tests.log": "775fc98252725fc6e9de77001e9fd085922e507ef76e7e50ae898546be3bf9d2",
+    "test-clippy.log": "7ae0e1825de5977ada46d74b6be9564d2ec1037c7edbef3f33276cd4c0ed251a",
+    "format.log": "1cfc077f1514d44a2d3e23e8272b6c79111490cf2d0f408d9b4d093a941cc098"
+  }
+}

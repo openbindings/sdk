@@ -1,7 +1,7 @@
 {
   "rule": "OBI-07",
   "section": "10",
-  "description": "Has every bindings[*].source value present as a key in the document's sources map.",
+  "description": "Has every bindings[*].source value present as a key in the document's sources map; an absent sources holds no key.",
   "tests": [
     {
       "description": "binding references an existing source key",
@@ -11,18 +11,42 @@
           "createTask": {}
         },
         "sources": {
-          "httpApi": {
+          "tasksApi": {
             "kind": "example.openapi@1"
           }
         },
         "bindings": {
           "createTask.http": {
             "operation": "createTask",
-            "source": "httpApi"
+            "source": "tasksApi"
           }
         }
       },
       "valid": true
+    },
+    {
+      "description": "binding references a non-existent source key",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTask": {}
+        },
+        "sources": {
+          "tasksApi": {
+            "kind": "example.openapi@1"
+          }
+        },
+        "bindings": {
+          "createTask.http": {
+            "operation": "createTask",
+            "source": "nonexistentSource"
+          }
+        }
+      },
+      "valid": false,
+      "violates": [
+        "OBI-07"
+      ]
     },
     {
       "description": "binding references source \"constructor\", a valid OBI-04 identifier that is also a built-in object property name, with no such source defined (guards against an implementation resolving the reference through a language object's prototype chain rather than the document's own map)",
@@ -32,7 +56,7 @@
           "createTask": {}
         },
         "sources": {
-          "httpApi": {
+          "tasksApi": {
             "kind": "example.openapi@1"
           }
         },
@@ -49,21 +73,16 @@
       ]
     },
     {
-      "description": "binding references a non-existent source key",
+      "description": "binding references a source when the document has no sources map",
       "document": {
         "openbindings": "0.2.0",
         "operations": {
           "createTask": {}
         },
-        "sources": {
-          "httpApi": {
-            "kind": "example.openapi@1"
-          }
-        },
         "bindings": {
           "createTask.http": {
             "operation": "createTask",
-            "source": "missingSource"
+            "source": "tasksApi"
           }
         }
       },
@@ -73,21 +92,21 @@
       ]
     },
     {
-      "description": "binding references source HttpApi, which differs from the source key httpApi only in case",
+      "description": "binding source value differs from a source key only in case: names are equal only as exact strings (section 5)",
       "document": {
         "openbindings": "0.2.0",
         "operations": {
           "createTask": {}
         },
         "sources": {
-          "httpApi": {
+          "tasksApi": {
             "kind": "example.openapi@1"
           }
         },
         "bindings": {
           "createTask.http": {
             "operation": "createTask",
-            "source": "HttpApi"
+            "source": "tasksapi"
           }
         }
       },
@@ -95,6 +114,56 @@
       "violates": [
         "OBI-07"
       ]
+    },
+    {
+      "description": "two bindings reference one source, and a source no binding references is permitted (section 5.3, section 5.2)",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTask": {},
+          "listTasks": {}
+        },
+        "sources": {
+          "tasksApi": {
+            "kind": "example.openapi@1"
+          },
+          "adminApi": {
+            "kind": "example.openapi@1"
+          }
+        },
+        "bindings": {
+          "createTask.http": {
+            "operation": "createTask",
+            "source": "tasksApi"
+          },
+          "listTasks.http": {
+            "operation": "listTasks",
+            "source": "tasksApi"
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "document may genuinely define and reference a source named constructor",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "createTask": {}
+        },
+        "sources": {
+          "constructor": {
+            "kind": "example.openapi@1"
+          }
+        },
+        "bindings": {
+          "createTask.http": {
+            "operation": "createTask",
+            "source": "constructor"
+          }
+        }
+      },
+      "valid": true
     }
   ]
 }

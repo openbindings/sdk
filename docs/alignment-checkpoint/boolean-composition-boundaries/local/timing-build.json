@@ -1,0 +1,19 @@
+{
+  "scope": "Final test-corrected Boolean boundary peer; no G6 acceptance",
+  "sdk_base": "0142eaa56ca2c8fd50716e943aeef05931bee19b",
+  "binary": {
+    "sha256": "6d293088c82e0e36cd8a6de964410f11ec66805182bbeaf9d7b014e34012dee7",
+    "provenance": {
+      "instrument": "0464ed6974956429",
+      "sdk": "6c6435aa08ea84d1"
+    }
+  },
+  "source_hashes": {
+    "crates/openbindings-json-schema-evaluator/src/semantic/counts.rs": "b66ce576c2e58c40b380d537f2336290d8d107e5f3cc7a855e4a7ae8d98ba310",
+    "crates/openbindings-json-schema-evaluator/src/semantic/decision.rs": "5dadc1c7074bea686c9552286c0760f27c349d32e33319f07ad305f9534c59d9",
+    "crates/openbindings-json-schema-evaluator/src/semantic/execution/mod.rs": "5cf3383fb9971b7d9189a59b49874e4fa7de855149fa287ef9d39eb7d889c159",
+    "crates/openbindings-json-schema-evaluator/src/semantic/mod.rs": "6727673af1213a08f0f0fe2687e7e5fadf282bdb9a68b89394c78b4f119189fb"
+  },
+  "runtime_change_since_initial_peer": "none: only permanent allocation-test coverage repair",
+  "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)\nbinary: rustc\ncommit-hash: b940084d7eb6a299eb4bfeb8e34901bc051e7ac4\ncommit-date: 2026-09-28\nhost: aarch64-apple-darwin\nrelease: 1.99.0\nLLVM version: 23.1.1\n"
+}

@@ -8,8 +8,7 @@
 //! container's parent link is the way back. Ids are `u32` in storage because
 //! admission caps the node count at `u32::MAX`.
 use std::{
-    collections::{HashMap, hash_map::RandomState},
-    hash::{BuildHasher, Hasher},
+    cmp::Ordering,
     ops::Range,
     sync::{Arc, Mutex},
 };
@@ -24,54 +23,53 @@ const PENDING_START: usize = 64;
 /// The parent link of a root node.
 pub const NO_PARENT: u32 = u32::MAX;
 
-// One slot per distinct decoded key: the member position of its first
-// occurrence. Equal repeats reuse that slot; distinct keys whose hashes collide
-// share a list, in original member order.
-#[derive(Debug, Clone, Copy)]
-enum KeyBucket {
-    One(u32),
-    Many(u32),
+/// First occurrences in key order, borrowing the arena's flat member index.
+pub(crate) struct MemberCandidates<'a> {
+    remaining: &'a [u32],
 }
-#[derive(Debug, Default)]
-struct MemberIndex {
-    slots: HashMap<u64, KeyBucket>,
-    collisions: Vec<Vec<u32>>,
-}
-impl MemberIndex {
-    fn with_capacity(capacity: usize) -> Self {
-        Self {
-            slots: HashMap::with_capacity(capacity),
-            collisions: Vec::new(),
-        }
-    }
-    fn members(&self, hash: u64) -> &[u32] {
-        match self.slots.get(&hash) {
-            None => &[],
-            Some(KeyBucket::One(slot)) => std::slice::from_ref(slot),
-            Some(&KeyBucket::Many(list)) => &self.collisions[list as usize],
-        }
+impl Iterator for MemberCandidates<'_> {
+    type Item = Id;
+    fn next(&mut self) -> Option<Id> {
+        let (&name, rest) = self.remaining.split_first()?;
+        self.remaining = rest;
+        Some(name as usize)
     }
 }
 
-#[derive(Debug, Default)]
-struct KeyHasher {
-    state: RandomState,
-    #[cfg(test)]
-    injected: Option<fn(&[u16]) -> u64>,
+#[inline]
+fn key_prefix(bytes: &[u8]) -> u64 {
+    let mut prefix = [0u8; 8];
+    let len = bytes.len().min(8);
+    prefix[..len].copy_from_slice(&bytes[..len]);
+    u64::from_be_bytes(prefix)
 }
-impl KeyHasher {
-    fn hash(&self, units: impl Iterator<Item = u16>) -> u64 {
-        #[cfg(test)]
-        if let Some(hash) = self.injected {
-            return hash(&units.collect::<Vec<_>>());
-        }
-        let mut hasher = self.state.build_hasher();
-        for unit in units {
-            hasher.write_u16(unit);
-        }
-        hasher.finish()
+
+// Compare the leading eight bytes as one integer before the remaining slice.
+// This preserves byte order and avoids a byte-at-a-time prefix scan on Wasm.
+#[inline]
+fn scalar_cmp(a: &str, b: &str) -> Ordering {
+    let (a, b) = (a.as_bytes(), b.as_bytes());
+    if a.len() >= 8 && b.len() >= 8 {
+        let x = u64::from_be_bytes(a[..8].try_into().expect("eight bytes"));
+        let y = u64::from_be_bytes(b[..8].try_into().expect("eight bytes"));
+        x.cmp(&y).then_with(|| a[8..].cmp(&b[8..]))
+    } else {
+        a.cmp(b)
     }
 }
+#[inline]
+fn scalar_eq(a: &str, b: &str) -> bool {
+    let (a, b) = (a.as_bytes(), b.as_bytes());
+    if a.len() != b.len() {
+        return false;
+    }
+    if a.len() >= 8 {
+        a[..8] == b[..8] && a[8..] == b[8..]
+    } else {
+        a == b
+    }
+}
+
 /// How a string token's decoded value is held: an index into the decoded
 /// strings, or one of two marks. Every node but a container root can be an
 /// escaped string, so an index stays below both marks. A plain number keeps
@@ -216,12 +214,12 @@ pub struct Arena {
     _lifetime: Lifetime,
     source: Box<str>,
     positions: Mutex<PositionIndex>,
-    // Completed objects of at least INDEX_MIN_MEMBERS members publish an
-    // index built once, at their exact size, when they close; listed by object
-    // once parsing ends. The immutable index is shared by retained views and
-    // threads, without lookup-time locks.
-    member_indexes: Vec<(u32, MemberIndex)>,
-    key_hasher: KeyHasher,
+    // Objects of at least INDEX_MIN_MEMBERS members publish sorted first
+    // occurrences after parsing, in one exactly sized allocation. Each record
+    // caches eight key bytes after the object's common scalar prefix. The
+    // immutable index is shared by retained views and threads without locks.
+    member_indexes: Vec<(u32, Range<usize>, usize)>,
+    member_slots: Vec<(u64, u32)>,
     #[cfg(test)]
     key_comparisons: std::sync::atomic::AtomicUsize,
     #[cfg(test)]
@@ -246,7 +244,11 @@ pub struct Arena {
 impl Arena {
     /// Parse into a shared owner, written where it will stay.
     pub fn parse(bytes: &[u8], limits: Limits) -> Result<Arc<Self>, Problem> {
-        Self::parse_with_hasher(bytes, limits, KeyHasher::default())
+        if bytes.starts_with(&[0xef, 0xbb, 0xbf]) {
+            return Err(bom());
+        }
+        let text = std::str::from_utf8(bytes).map_err(|e| utf8(e.valid_up_to()))?;
+        Self::parse_source(Box::from(text), limits).map_err(|(problem, _)| problem)
     }
     /// Parse owned bytes, which become the owner's source without a copy.
     /// A refusal hands the bytes back.
@@ -258,32 +260,17 @@ impl Arena {
             let offset = e.utf8_error().valid_up_to();
             (utf8(offset), e.into_bytes())
         })?;
-        Self::parse_source(text.into_boxed_str(), limits, KeyHasher::default())
+        Self::parse_source(text.into_boxed_str(), limits)
             .map_err(|(problem, source)| (problem, source.into_string().into_bytes()))
     }
-    fn parse_with_hasher(
-        bytes: &[u8],
-        limits: Limits,
-        key_hasher: KeyHasher,
-    ) -> Result<Arc<Self>, Problem> {
-        if bytes.starts_with(&[0xef, 0xbb, 0xbf]) {
-            return Err(bom());
-        }
-        let text = std::str::from_utf8(bytes).map_err(|e| utf8(e.valid_up_to()))?;
-        Self::parse_source(Box::from(text), limits, key_hasher).map_err(|(problem, _)| problem)
-    }
     // Parse `source` into a new owner; a refusal hands the source back.
-    fn parse_source(
-        source: Box<str>,
-        limits: Limits,
-        key_hasher: KeyHasher,
-    ) -> Result<Arc<Self>, (Problem, Box<str>)> {
+    fn parse_source(source: Box<str>, limits: Limits) -> Result<Arc<Self>, (Problem, Box<str>)> {
         let mut owner = Arc::new(Self {
             _lifetime: Lifetime::new(),
             source,
             positions: Mutex::default(),
             member_indexes: Vec::new(),
-            key_hasher,
+            member_slots: Vec::new(),
             #[cfg(test)]
             key_comparisons: std::sync::atomic::AtomicUsize::new(0),
             #[cfg(test)]
@@ -308,7 +295,6 @@ impl Arena {
             state: 0,
             depth: 0,
             pending: Vec::new(),
-            distinct: Vec::new(),
             limits,
         }
         .document();
@@ -320,23 +306,25 @@ impl Arena {
             }
         }
     }
+    fn compare_keys(&self, left: Id, right: Id) -> Ordering {
+        #[cfg(test)]
+        self.key_comparisons
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        match (self.string(left), self.string(right)) {
+            (Some(a), Some(b)) => scalar_cmp(a, b),
+            (None, None) => self.utf16(left).cmp(self.utf16(right)),
+            (Some(_), None) => Ordering::Less,
+            (None, Some(_)) => Ordering::Greater,
+        }
+    }
     fn equal_keys(&self, left: Id, right: Id) -> bool {
         #[cfg(test)]
         self.key_comparisons
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         match (self.string(left), self.string(right)) {
-            (Some(a), Some(b)) => a == b,
+            (Some(a), Some(b)) => scalar_eq(a, b),
             (None, None) => self.utf16(left).eq(self.utf16(right)),
             _ => false,
-        }
-    }
-    fn hash_key(&self, id: Id) -> u64 {
-        if let Some(s) = self.string(id) {
-            self.key_hasher.hash(s.encode_utf16())
-        } else if let Some(units) = self.unpaired_units(id) {
-            self.key_hasher.hash(units)
-        } else {
-            unreachable!("only string tokens are member names")
         }
     }
     pub fn source(&self) -> &str {
@@ -488,6 +476,9 @@ impl Arena {
     // before comparing the rest.
     #[inline]
     fn name_is(&self, name: Id, key: &str) -> bool {
+        #[cfg(test)]
+        self.key_comparisons
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let node = &self.nodes[name];
         match node.kind {
             Kind::String {
@@ -503,13 +494,104 @@ impl Arena {
     pub fn get(&self, id: Id, key: &str) -> Option<Id> {
         self.get_with_probe(id, key, || true)
     }
-    fn member_index(&self, object: Id) -> Option<&MemberIndex> {
-        let object = object as u32;
-        let at = self
-            .member_indexes
-            .binary_search_by_key(&object, |&(id, _)| id)
-            .ok()?;
-        Some(&self.member_indexes[at].1)
+    fn member_index(&self, object: Id) -> Option<(&[(u64, u32)], usize)> {
+        self.member_index_with_probe(object, &mut || true)
+    }
+    fn member_index_with_probe(
+        &self,
+        object: Id,
+        probe: &mut impl FnMut() -> bool,
+    ) -> Option<(&[(u64, u32)], usize)> {
+        let mut range = 0..self.member_indexes.len();
+        while range.start < range.end {
+            if !probe() {
+                return None;
+            }
+            let mid = range.start + range.len() / 2;
+            let (id, slots, common) = &self.member_indexes[mid];
+            match (*id as usize).cmp(&object) {
+                Ordering::Less => range.start = mid + 1,
+                Ordering::Greater => range.end = mid,
+                Ordering::Equal => return Some((&self.member_slots[slots.clone()], *common)),
+            }
+        }
+        None
+    }
+    pub(crate) fn member_candidates<E>(
+        &self,
+        id: Id,
+        scalar: Option<&str>,
+        units: impl Iterator<Item = u16>,
+        token_bytes: usize,
+        work: &mut impl FnMut(usize) -> Result<(), E>,
+    ) -> Result<MemberCandidates<'_>, E> {
+        let names = self.member_names(id).unwrap_or(&[]);
+        let search = self.member_indexes.len().checked_ilog2().unwrap_or(0) as usize + 1;
+        let steps = names.len().checked_ilog2().unwrap_or(0) as usize + 1;
+        // Prepay decoding and every binary-search comparison, bounded by the
+        // query token's length. Keep the same minimum payment for small objects.
+        work(
+            token_bytes
+                .saturating_mul(16)
+                .saturating_mul(steps)
+                .saturating_add(search),
+        )?;
+        let Some((index, _)) = self.member_index(id) else {
+            return Ok(MemberCandidates { remaining: names });
+        };
+        // Scalar text is already decoded in its arena; only unpaired tokens
+        // need a copy of their units.
+        let mut decoded = Vec::new();
+        if scalar.is_none() {
+            for (at, unit) in units.enumerate() {
+                if at % 1024 == 0 {
+                    work(1)?;
+                }
+                decoded.push(unit);
+            }
+        }
+        work(1)?;
+        let mut range = 0..index.len();
+        while range.start < range.end {
+            work(1)?;
+            let mid = range.start + range.len() / 2;
+            let name = index[mid].1 as usize;
+            #[cfg(test)]
+            self.key_comparisons
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            let order = match (self.string(name), scalar) {
+                (Some(a), Some(b)) => scalar_cmp(a, b),
+                (Some(_), None) => Ordering::Less,
+                (None, Some(_)) => Ordering::Greater,
+                (None, None) => {
+                    let mut candidate = self.utf16(name);
+                    let mut order = Ordering::Equal;
+                    for (at, &unit) in decoded.iter().enumerate() {
+                        if at % 1024 == 0 {
+                            work(1)?;
+                        }
+                        order = candidate.next().cmp(&Some(unit));
+                        if order != Ordering::Equal {
+                            break;
+                        }
+                    }
+                    if order == Ordering::Equal {
+                        order = candidate.next().cmp(&None);
+                    }
+                    order
+                }
+            };
+            match order {
+                Ordering::Less => range.start = mid + 1,
+                Ordering::Greater => range.end = mid,
+                Ordering::Equal => {
+                    return Ok(MemberCandidates {
+                        remaining: std::slice::from_ref(&index[mid].1),
+                    });
+                }
+            }
+        }
+        Ok(MemberCandidates { remaining: &[] })
     }
     pub(crate) fn get_with_probe(
         &self,
@@ -518,32 +600,41 @@ impl Arena {
         mut probe: impl FnMut() -> bool,
     ) -> Option<Id> {
         let names = self.member_names(id)?;
-        let matches = |name: u32, admitted: bool| {
-            if !admitted {
-                return None;
-            }
-            #[cfg(test)]
-            self.member_probes
-                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            Some(self.name_is(name as usize, key))
-        };
-        if let Some(index) = self.member_index(id) {
-            // hash the token once, then inspect only its exact-name bucket.
-            // Charge the table lookup as well as each collision candidate when
-            // called by the evaluator. Small objects scan at most 15 members.
-            if !probe() {
-                return None;
-            }
-            let hash = self.key_hasher.hash(key.encode_utf16());
-            for &slot in index.members(hash) {
-                let name = names[slot as usize];
-                if matches(name, probe())? {
-                    return Some(name as usize + 1);
-                }
-            }
+        if names.len() >= INDEX_MIN_MEMBERS {
+            let (index, common) = self.member_index_with_probe(id, &mut probe)?;
+            let prefix = key_prefix(key.as_bytes().get(common..)?);
+            let mut exhausted = false;
+            let found = index
+                .binary_search_by(|&(candidate, name)| {
+                    if exhausted || !probe() {
+                        exhausted = true;
+                        return Ordering::Less;
+                    }
+                    #[cfg(test)]
+                    {
+                        self.member_probes
+                            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        self.key_comparisons
+                            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    }
+                    // A key outside the common prefix can only miss; prefix ties
+                    // still compare the full key before returning a match.
+                    candidate.cmp(&prefix).then_with(|| {
+                        self.string(name as usize)
+                            .map_or(Ordering::Greater, |s| scalar_cmp(s, key))
+                    })
+                })
+                .ok()?;
+            return (!exhausted).then(|| index[found].1 as usize + 1);
         } else {
             for &name in names {
-                if matches(name, probe())? {
+                if !probe() {
+                    return None;
+                }
+                #[cfg(test)]
+                self.member_probes
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                if self.name_is(name as usize, key) {
                     return Some(name as usize + 1);
                 }
             }
@@ -696,36 +787,67 @@ impl Arena {
         if let Some(text) = self.pointer_from(id, root) {
             return crate::Pointer::escaped(text);
         }
-        // An ancestor's name holds an unpaired unit: write escaped units.
-        let segments: Vec<Vec<u16>> = self
+        // The relative path contains an unpaired name. Measure and fill only
+        // the final buffer, avoiding decoded-name and ancestor vectors.
+        let name_len = |key| {
+            self.utf16(key)
+                .try_fold(0usize, |size, unit| {
+                    size.checked_add(
+                        1 + usize::from(unit == u16::from(b'~') || unit == u16::from(b'/')),
+                    )
+                })
+                .expect("pointer segment length fits address space")
+        };
+        let escaped = self
             .edges(id, root)
-            .map(|edge| match edge {
-                Edge::Index(index) => index.to_string().encode_utf16().collect(),
-                Edge::Key(key) => self.units(key).expect("member name is a string"),
+            .try_fold(0usize, |size, edge| {
+                let segment = match edge {
+                    Edge::Index(index) => index
+                        .checked_ilog10()
+                        .map_or(1, |digits| digits as usize + 1),
+                    Edge::Key(key) => name_len(key),
+                };
+                size.checked_add(1)?.checked_add(segment)
             })
-            .collect();
-        let escaped: usize = segments
-            .iter()
-            .map(|segment| {
-                1 + segment.len()
-                    + segment
-                        .iter()
-                        .filter(|&&unit| unit == u16::from(b'~') || unit == u16::from(b'/'))
-                        .count()
-            })
-            .sum();
-        let mut units = Vec::with_capacity(escaped);
-        for segment in segments.iter().rev() {
-            units.push(u16::from(b'/'));
-            for &unit in segment {
-                match u8::try_from(unit) {
-                    Ok(b'~') => units.extend([u16::from(b'~'), u16::from(b'0')]),
-                    Ok(b'/') => units.extend([u16::from(b'~'), u16::from(b'1')]),
-                    _ => units.push(unit),
+            .expect("pointer length fits address space");
+        let mut units = vec![0u16; escaped];
+        let mut end = units.len();
+        for edge in self.edges(id, root) {
+            match edge {
+                Edge::Index(mut index) => loop {
+                    end -= 1;
+                    units[end] = u16::from(b'0') + (index % 10) as u16;
+                    index /= 10;
+                    if index == 0 {
+                        break;
+                    }
+                },
+                Edge::Key(key) => {
+                    let start = end - name_len(key);
+                    let mut at = start;
+                    for unit in self.utf16(key) {
+                        let escape = match unit {
+                            0x7e => Some(u16::from(b'0')),
+                            0x2f => Some(u16::from(b'1')),
+                            _ => None,
+                        };
+                        if let Some(code) = escape {
+                            units[at] = u16::from(b'~');
+                            units[at + 1] = code;
+                            at += 2;
+                        } else {
+                            units[at] = unit;
+                            at += 1;
+                        }
+                    }
+                    end = start;
                 }
             }
+            end -= 1;
+            units[end] = u16::from(b'/');
         }
-        crate::Pointer::from_escaped_units(units)
+        debug_assert_eq!(end, 0);
+        crate::Pointer::from_escaped_unpaired_units(units)
     }
     /// One-based line and byte column of a node's offset, found by one pass
     /// over the bytes before it; nothing is indexed or retained.
@@ -797,8 +919,6 @@ struct Parser<'a> {
     /// Items of the unclosed containers, outermost first. While open, a
     /// container's `first` is where its items begin here.
     pending: Vec<u32>,
-    /// A small object's distinct names so far, with their hashes.
-    distinct: Vec<(u64, u32)>,
     limits: Limits,
 }
 impl Parser<'_> {
@@ -849,13 +969,9 @@ impl Parser<'_> {
         if self.pos != self.out.source.len() {
             return Err(self.error("trailing-token"));
         }
-        // Objects record their repeated names and indexes as they close,
-        // innermost first; token ids follow the source, so this restores
-        // source order.
+        self.index_members();
+        // Token ids follow source order, including duplicates in nested objects.
         self.out.duplicates.sort_unstable_by_key(|&(_, key)| key);
-        self.out
-            .member_indexes
-            .sort_unstable_by_key(|&(object, _)| object);
         Ok(())
     }
     fn error(&self, code: &'static str) -> Problem {
@@ -912,66 +1028,114 @@ impl Parser<'_> {
         self.state = 1;
         self.depth -= 1;
     }
-    // Compare only distinct names sharing a keyed hash, in member order.
-    // Expected work is linear in decoded key units plus matching repeats. A
-    // bucket of b adversarially colliding distinct names still takes up to b
-    // exact comparisons per insertion/lookup, each bounded by the compared key
-    // lengths. RandomState makes deliberate collisions difficult, not
-    // impossible. Input byte and node limits bound those lengths and b (at
-    // most half the admitted nodes for member-name/value pairs), not constant
-    // work.
+    // Small objects compare names directly. Larger objects sort names by key
+    // and source slot, record adjacent repeats, and retain each first occurrence
+    // in one flat index. Member iteration always uses the source-order items.
     fn members(&mut self, object: Id, start: usize, count: usize) {
         let out = &mut *self.out;
         let names = &out.items[start..start + count];
         if count < INDEX_MIN_MEMBERS {
-            self.distinct.clear();
-            for &name in names {
-                let hash = out.hash_key(name as usize);
-                let repeated = self.distinct.iter().any(|&(seen, first)| {
-                    seen == hash && out.equal_keys(first as usize, name as usize)
+            let mut scalar = [None; INDEX_MIN_MEMBERS];
+            let mut duplicates = [0; INDEX_MIN_MEMBERS];
+            let mut repeats = 0;
+            for (at, &name) in names.iter().enumerate() {
+                scalar[at] = out.string(name as usize);
+                let repeated = (0..at).any(|prior| match (scalar[prior], scalar[at]) {
+                    (Some(a), Some(b)) => {
+                        #[cfg(test)]
+                        out.key_comparisons
+                            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        scalar_eq(a, b)
+                    }
+                    (None, None) => out.equal_keys(names[prior] as usize, name as usize),
+                    _ => {
+                        #[cfg(test)]
+                        out.key_comparisons
+                            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        false
+                    }
                 });
                 if repeated {
-                    out.duplicates.push((object as u32, name));
-                } else {
-                    self.distinct.push((hash, name));
+                    duplicates[repeats] = name;
+                    repeats += 1;
                 }
             }
+            out.duplicates.extend(
+                duplicates[..repeats]
+                    .iter()
+                    .map(|&name| (object as u32, name)),
+            );
             return;
         }
-        let mut index = MemberIndex::with_capacity(count);
-        for (slot, &name) in names.iter().enumerate() {
-            let slot = slot as u32;
-            let hash = out.hash_key(name as usize);
-            let Some(&bucket) = index.slots.get(&hash) else {
-                index.slots.insert(hash, KeyBucket::One(slot));
-                continue;
-            };
-            let first;
-            let candidates = match bucket {
-                KeyBucket::One(slot) => {
-                    first = slot;
-                    std::slice::from_ref(&first)
+        out.member_indexes
+            .push((object as u32, start..start + count, 0));
+    }
+    // Allocate once for all indexed names, without per-object sorting scratch.
+    // A record uses at most sixteen bytes; no per-object spare bucket capacity.
+    fn index_members(&mut self) {
+        let out = &mut *self.out;
+        let mut indexes = std::mem::take(&mut out.member_indexes);
+        let capacity = indexes.iter().map(|(_, names, _)| names.len()).sum();
+        let mut slots: Vec<(u64, u32)> = Vec::with_capacity(capacity);
+        for (object, range, common) in &mut indexes {
+            let names = &out.items[range.clone()];
+            // Removing a shared scalar prefix preserves byte order. Unpaired
+            // keys have their own class, after every valid UTF-8 prefix.
+            let mut scalar = names.iter().filter_map(|&id| out.string(id as usize));
+            let first_key = scalar.next().unwrap_or("").as_bytes();
+            *common = first_key.len();
+            for key in scalar {
+                *common = first_key[..*common]
+                    .iter()
+                    .zip(key.as_bytes())
+                    .take_while(|(a, b)| a == b)
+                    .count();
+                if *common == 0 {
+                    break;
                 }
-                KeyBucket::Many(list) => index.collisions[list as usize].as_slice(),
-            };
-            if candidates
-                .iter()
-                .any(|&prior| out.equal_keys(names[prior as usize] as usize, name as usize))
-            {
-                out.duplicates.push((object as u32, name));
-                continue;
             }
-            match bucket {
-                KeyBucket::One(first) => {
-                    let list = u32::try_from(index.collisions.len())
-                        .expect("collisions are bounded by the node count");
-                    index.collisions.push(vec![first, slot]);
-                    index.slots.insert(hash, KeyBucket::Many(list));
+            let first = slots.len();
+            for &name in names {
+                let prefix = out
+                    .string(name as usize)
+                    .map_or(u64::MAX, |key| key_prefix(&key.as_bytes()[*common..]));
+                slots.push((prefix, name));
+            }
+            slots[first..].sort_unstable_by(|a, b| {
+                #[cfg(test)]
+                out.key_comparisons
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                a.cmp(b)
+            });
+            let mut begin = first;
+            while begin < slots.len() {
+                let mut end = begin + 1;
+                while end < slots.len() && slots[end].0 == slots[begin].0 {
+                    end += 1;
                 }
-                KeyBucket::Many(list) => index.collisions[list as usize].push(slot),
+                slots[begin..end].sort_unstable_by(|&(_, a), &(_, b)| {
+                    out.compare_keys(a as usize, b as usize)
+                        .then_with(|| a.cmp(&b))
+                });
+                begin = end;
             }
+            let mut end = first + 1;
+            for at in first + 1..slots.len() {
+                let (prefix, name) = slots[at];
+                let (prior_prefix, prior) = slots[end - 1];
+                if prefix == prior_prefix && out.equal_keys(prior as usize, name as usize) {
+                    out.duplicates.push((*object, name));
+                } else {
+                    slots[end] = slots[at];
+                    end += 1;
+                }
+            }
+            slots.truncate(end);
+            *range = first..end;
         }
-        out.member_indexes.push((object as u32, index));
+        indexes.sort_unstable_by_key(|&(object, _, _)| object);
+        out.member_slots = slots;
+        out.member_indexes = indexes;
     }
     /// Parse one value; an `element` is listed as an item of its array parent.
     /// A container is left open, its items to follow.
@@ -1254,33 +1418,77 @@ mod tests {
     fn probes(arena: &Arena) -> usize {
         arena.member_probes.load(Ordering::Relaxed)
     }
-    fn with_hash(text: &str, hash: fn(&[u16]) -> u64) -> crate::JsonValue {
-        crate::JsonValue {
-            owner: Arena::parse_with_hasher(
-                text.as_bytes(),
-                Limits::default(),
-                KeyHasher {
-                    injected: Some(hash),
-                    ..KeyHasher::default()
-                },
-            )
-            .unwrap(),
-            id: 0,
+    #[test]
+    fn borrowed_name_candidates_keep_threshold_and_exact_units() {
+        for count in [15, 16, 33] {
+            let mut fields = vec![r#""\ud800":0"#.to_owned(), r#""\ud83d\ude00":1"#.to_owned()];
+            fields.extend((2..count).map(|i| format!(r#""k{i}":{i}"#)));
+            let text = format!("{{{}}}", fields.join(","));
+            {
+                let object = crate::JsonValue::parse(&text).unwrap();
+                for member in object.view().members().unwrap() {
+                    let candidates: Vec<_> =
+                        crate::backend::member_candidates(object.view(), member.name, |_| {
+                            Ok::<_, ()>(())
+                        })
+                        .unwrap()
+                        .collect();
+                    let matches: Vec<_> = candidates
+                        .iter()
+                        .filter(|candidate| candidate.name.as_string() == member.name.as_string())
+                        .collect();
+                    assert_eq!(matches.len(), 1);
+                    assert_eq!(matches[0].value.text(), member.value.text());
+                    if count == 15 {
+                        assert_eq!(candidates.len(), count);
+                    } else {
+                        assert_eq!(candidates.len(), 1);
+                    }
+                }
+                // A differently escaped token compares as the same key.
+                let escaped = crate::JsonValue::parse(r#""k\u0032""#).unwrap();
+                assert!(
+                    crate::backend::member_candidates(
+                        object.view(),
+                        escaped.view(),
+                        |_| Ok::<_, ()>(())
+                    )
+                    .unwrap()
+                    .any(|m| m.value.text() == "2")
+                );
+            }
         }
-    }
-    fn distinct_hash(units: &[u16]) -> u64 {
-        // Base 257 is injective for the short ASCII kN/sN names in the scaling
-        // fixtures. This removes randomness from the asserted work counts.
-        units.iter().fold(0_u64, |n, &u| {
-            n.wrapping_mul(257).wrapping_add(u64::from(u))
-        })
     }
 
     #[test]
-    fn key_comparisons_and_member_probes_are_linear() {
+    fn borrowed_name_search_cancellation_never_returns_a_partial_match() {
+        for prefix in ["", r"\ud800"] {
+            let name = format!("{prefix}{}", "x".repeat(8192));
+            let mut fields: Vec<_> = (0..15).map(|i| format!(r#""k{i}":{i}"#)).collect();
+            fields.push(format!(r#""{name}":99"#));
+            let object = crate::JsonValue::parse(format!("{{{}}}", fields.join(","))).unwrap();
+            let name = crate::JsonValue::parse(format!(r#""{name}""#)).unwrap();
+            let mut calls = 0;
+            let result = crate::backend::member_candidates(object.view(), name.view(), |_| {
+                calls += 1;
+                if calls == 4 { Err("cancelled") } else { Ok(()) }
+            });
+            assert_eq!(result.unwrap_err(), "cancelled");
+            assert_eq!(calls, 4);
+            let found: Vec<_> =
+                crate::backend::member_candidates(object.view(), name.view(), |_| Ok::<_, ()>(()))
+                    .unwrap()
+                    .collect();
+            assert_eq!(found.len(), 1);
+            assert_eq!(found[0].value.text(), "99");
+        }
+    }
+
+    #[test]
+    fn key_comparisons_and_member_probes_are_n_log_n() {
         // N distinct names, and N names followed by the same N again.
         // Assert exact operation counts rather than scheduler-dependent timing.
-        for n in [10_000, 20_000, 40_000] {
+        for n in [10_000usize, 20_000, 40_000] {
             for repeated in [false, true] {
                 let count = if repeated { 2 * n } else { n };
                 let mut text = String::from("{");
@@ -1291,15 +1499,15 @@ mod tests {
                     write!(text, "\"k{}\":{i}", i % n).unwrap();
                 }
                 text.push('}');
-                let value = with_hash(&text, distinct_hash);
-                assert_eq!(comparisons(&value.owner), if repeated { n } else { 0 });
+                let value = crate::JsonValue::parse(&text).unwrap();
+                assert!(comparisons(&value.owner) <= 4 * count * (count.ilog2() as usize + 1));
                 assert_eq!(value.owner.duplicates.len(), if repeated { n } else { 0 });
                 assert_eq!(value.view().len(), Some(count));
                 for i in 0..n {
                     assert_eq!(value.get(&format!("k{i}")).unwrap().text(), i.to_string());
                     assert!(value.get(&format!("s{i}")).is_none());
                 }
-                assert_eq!(probes(&value.owner), n);
+                assert!(probes(&value.owner) <= 2 * n * (count.ilog2() as usize + 2));
                 if repeated {
                     let duplicate_keys: Vec<_> = value
                         .view()
@@ -1321,9 +1529,9 @@ mod tests {
     }
 
     #[test]
-    fn many_schema_pointer_references_have_linear_member_probes() {
+    fn many_schema_pointer_references_have_logarithmic_member_probes() {
         // match the reported shape, including reading each actual $ref.
-        for n in [10_000, 20_000, 40_000] {
+        for n in [10_000usize, 20_000, 40_000] {
             let mut text = String::from("{\"schemas\":{");
             for i in 0..n {
                 if i > 0 {
@@ -1332,8 +1540,8 @@ mod tests {
                 write!(text, "\"s{i}\":{{\"$ref\":\"#/schemas/s{}\"}}", n - 1).unwrap();
             }
             text.push_str("}}");
-            let document = with_hash(&text, distinct_hash);
-            assert_eq!(comparisons(&document.owner), 0);
+            let document = crate::JsonValue::parse(&text).unwrap();
+            assert!(comparisons(&document.owner) <= 4 * n * (n.ilog2() as usize + 1));
             let schemas = document.get("schemas").unwrap();
             let target = schemas.get(&format!("s{}", n - 1)).unwrap().id;
             document.owner.member_probes.store(0, Ordering::Relaxed);
@@ -1347,15 +1555,15 @@ mod tests {
                     target
                 );
             }
-            // One $ref probe, one root probe and one indexed schemas probe.
-            assert_eq!(probes(&document.owner), 3 * n);
+            // Each reference has two direct probes and a binary search.
+            assert!(probes(&document.owner) <= n * (n.ilog2() as usize + 4));
         }
     }
 
     #[test]
-    fn forced_collisions_keep_exact_names_order_and_coordinates() {
-        // all hashes collide, including unpaired and escaped-equal
-        // UTF-16 names. A hash is never authority for name equality.
+    fn sorted_keys_keep_exact_names_order_and_coordinates() {
+        // Mixed classes, escaped-equal names and long shared prefixes retain
+        // exact equality, first occurrences and source coordinates.
         let prefix = "shared".repeat(1024);
         let mut text = format!(
             r#"{{"a":1,"\u0061":2,"\ud800":3,"\uD800":4,"\udc00":5,"😀":6,"\ud83d\ude00":7,"{prefix}x":8,"{prefix}y":9,"nested":{{"a":10,"\u0061":11}}"#
@@ -1364,17 +1572,17 @@ mod tests {
             write!(text, ",\"pad{i}\":{i}").unwrap();
         }
         text.push('}');
-        let value = with_hash(&text, |_| 0);
+        let value = crate::JsonValue::parse(&text).unwrap();
         let a = &value.owner;
-        assert_eq!(comparisons(a), 23 * 22 / 2 + 1 + 2 + 4 + 1);
+        assert!(comparisons(a) <= 4 * 26 * 5 + 1);
         assert_eq!(value.get("a").unwrap().text(), "1");
         assert_eq!(value.get("😀").unwrap().text(), "6");
         assert_eq!(value.get(&format!("{prefix}x")).unwrap().text(), "8");
         assert_eq!(value.get(&format!("{prefix}y")).unwrap().text(), "9");
         let before = probes(a);
         assert!(value.get(&format!("{prefix}z")).is_none());
-        // Every distinct first name is tried, once. Repeats have no index slot.
-        assert_eq!(probes(a) - before, 23);
+        // A miss compares at most one key per binary-search level.
+        assert!(probes(a) - before <= 6);
         let offsets: Vec<_> = a
             .duplicates
             .iter()
@@ -1412,8 +1620,7 @@ mod tests {
             write!(text, ",\"k{i}\":{i}").unwrap();
         }
         text.push_str("}}");
-        // Force collision fallback in pointer lookup too.
-        let root = with_hash(&text, |_| 0);
+        let root = crate::JsonValue::parse(&text).unwrap();
         let retained = root.get("outer").unwrap().to_owned();
         drop(root);
         let count = probes(&retained.owner);
@@ -1463,8 +1670,8 @@ mod tests {
 
     #[cfg(feature = "evaluator-work")]
     #[test]
-    fn evaluator_index_preserves_collision_work_accounting() {
-        // the evaluator charges the table access and every exact candidate,
+    fn evaluator_index_charges_every_binary_search_probe() {
+        // The evaluator charges the object-index search and every key comparison,
         // and refuses exhausted budgets without returning a partial match.
         use crate::work;
         use jsonschema_value::{JsonNumber as _, Node as _, Object as _};
@@ -1476,11 +1683,9 @@ mod tests {
             write!(text, "\"k{i}\":{i}").unwrap();
         }
         text.push('}');
-        for (hash, required) in [
-            (distinct_hash as fn(&[u16]) -> u64, 2),
-            ((|_| 0) as fn(&[u16]) -> u64, 21),
-        ] {
-            let value = with_hash(&text, hash);
+        {
+            let required = 7;
+            let value = crate::JsonValue::parse(&text).unwrap();
             let view = crate::backend::View::Stored(&value.owner, 0);
             let object = view.as_object().unwrap();
             let key = String::from("k19");
@@ -1514,7 +1719,7 @@ mod tests {
                 write!(text, ",\"k{i}\":{i}").unwrap();
             }
             text.push('}');
-            let value = with_hash(&text, distinct_hash);
+            let value = crate::JsonValue::parse(&text).unwrap();
             assert_eq!(
                 value.owner.member_index(0).is_some(),
                 n >= INDEX_MIN_MEMBERS
@@ -1526,6 +1731,189 @@ mod tests {
             assert!(value.get("absent").is_none());
             assert_eq!(value.owner.duplicates.len(), 1);
         }
+    }
+
+    #[test]
+    fn ordered_members_preserve_all_key_classes_across_threshold() {
+        for count in [15, 16, 17, 33] {
+            for keys in [
+                vec![r#""a""#, r#""\u0061""#, r#""b""#],
+                vec![r#""\ud800""#, r#""\uD800""#, r#""\udc00""#],
+                vec![
+                    r#""a""#,
+                    r#""\ud800""#,
+                    r#""😀""#,
+                    r#""\ud83d\ude00""#,
+                    r#""\u0061""#,
+                ],
+                vec![r#""\ud800""#],
+                vec![r#""a""#],
+            ] {
+                let text = format!(
+                    "{{{}}}",
+                    (0..count)
+                        .map(|i| format!("{}:{i}", keys[i % keys.len()]))
+                        .collect::<Vec<_>>()
+                        .join(",")
+                );
+                let value = crate::JsonValue::parse(&text).unwrap();
+                let members: Vec<_> = value.view().members().unwrap().collect();
+                let mut seen = std::collections::BTreeMap::new();
+                let mut duplicates = Vec::new();
+                for (i, member) in members.iter().enumerate() {
+                    assert_eq!(member.name.text(), keys[i % keys.len()]);
+                    assert_eq!(member.value.text(), i.to_string());
+                    let units = member.name.utf16_units().unwrap();
+                    let first = *seen.entry(units).or_insert(i);
+                    if first != i {
+                        duplicates.push((0, member.name.id as u32));
+                    }
+                    if let Some(scalar) = member.name.as_str() {
+                        assert_eq!(value.get(scalar).unwrap().text(), first.to_string());
+                    }
+                    let mut candidates =
+                        crate::backend::member_candidates(value.view(), member.name, |_| {
+                            Ok::<_, ()>(())
+                        })
+                        .unwrap();
+                    let found = candidates
+                        .find(|m| m.name.as_string() == member.name.as_string())
+                        .unwrap();
+                    assert_eq!(found.value.text(), first.to_string());
+                }
+                assert_eq!(value.owner.duplicates, duplicates);
+                assert!(value.get("absent").is_none());
+                let missing = crate::JsonValue::parse(r#""\udfff""#).unwrap();
+                assert!(
+                    !crate::backend::member_candidates(
+                        value.view(),
+                        missing.view(),
+                        |_| Ok::<_, ()>(())
+                    )
+                    .unwrap()
+                    .any(|m| m.name.as_string() == missing.view().as_string())
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn hostile_key_orders_have_n_log_n_parse_and_lookup_comparisons() {
+        for n in [256usize, 1024, 4096] {
+            for shape in 0..5 {
+                let key = |i: usize| match shape {
+                    0 => format!("k{:08}", n - i),
+                    1 => format!("k{:08}", i.min(n - i)),
+                    2 => format!("{}{:08}", "shared".repeat(128), i),
+                    3 => format!("\\ud800{:08}", n - i),
+                    _ => "equal".to_owned(),
+                };
+                let text = format!(
+                    "{{{}}}",
+                    (0..n)
+                        .map(|i| format!("\"{}\":{i}", key(i)))
+                        .collect::<Vec<_>>()
+                        .join(",")
+                );
+                let value = crate::JsonValue::parse(&text).unwrap();
+                let bound = n * (n.ilog2() as usize + 1);
+                assert!(
+                    comparisons(&value.owner) <= 4 * bound,
+                    "parse shape {shape}, n={n}"
+                );
+                value.owner.key_comparisons.store(0, Ordering::Relaxed);
+                for member in value.view().members().unwrap() {
+                    assert!(
+                        crate::backend::member_candidates(
+                            value.view(),
+                            member.name,
+                            |_| Ok::<_, ()>(())
+                        )
+                        .unwrap()
+                        .any(|m| m.name.as_string() == member.name.as_string())
+                    );
+                    if let Some(key) = member.name.as_str() {
+                        assert!(value.get(key).is_some());
+                        assert!(value.get(&format!("{key}~absent")).is_none());
+                    }
+                }
+                assert!(
+                    comparisons(&value.owner) <= 3 * bound,
+                    "lookup shape {shape}, n={n}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn cached_prefix_ties_and_zero_padding_keep_exact_byte_order() {
+        let keys = [
+            "",
+            "a",
+            "\0",
+            "a\0",
+            "ab",
+            "ab\0",
+            "abcdefghx",
+            "abcdefghy",
+            "sharedéx",
+            "sharedêy",
+            "shared😀x",
+            "shared😀y",
+        ];
+        let text = format!(
+            "{{{}}}",
+            (0..36)
+                .map(|i| format!(
+                    "{}:{i}",
+                    serde_json::to_string(keys[i % keys.len()]).unwrap()
+                ))
+                .collect::<Vec<_>>()
+                .join(",")
+        );
+        let value = crate::JsonValue::parse(text).unwrap();
+        for (i, key) in keys.iter().enumerate() {
+            assert_eq!(value.get(key).unwrap().text(), i.to_string());
+        }
+        for key in ["a\0\0", "abcdefghi", "sharedéz", "absent"] {
+            assert!(value.get(key).is_none());
+        }
+        let (slots, _) = value.owner.member_index(0).unwrap();
+        let mut expected = keys.to_vec();
+        expected.sort_unstable();
+        assert_eq!(
+            slots
+                .iter()
+                .map(|&(_, id)| value.owner.string(id as usize).unwrap())
+                .collect::<Vec<_>>(),
+            expected
+        );
+    }
+
+    #[test]
+    fn all_object_indexes_share_one_exactly_sized_allocation() {
+        let object = |n, equal| {
+            format!(
+                "{{{}}}",
+                (0..n)
+                    .map(|i| format!("\"k{}\":{i}", if equal { 0 } else { i }))
+                    .collect::<Vec<_>>()
+                    .join(",")
+            )
+        };
+        let value = crate::JsonValue::parse(format!(
+            "[{},{},{},{}]",
+            object(15, false),
+            object(16, false),
+            object(64, false),
+            object(32, true)
+        ))
+        .unwrap();
+        assert_eq!(value.owner.member_indexes.len(), 3);
+        assert_eq!(value.owner.member_slots.len(), 16 + 64 + 1);
+        assert_eq!(value.owner.member_slots.capacity(), 16 + 64 + 32);
+        assert!(size_of::<(u64, u32)>() <= 16);
+        assert_eq!(value.owner.duplicates.len(), 31);
     }
 
     // Independent oracle: the original definition in terms of the entire UTF-8

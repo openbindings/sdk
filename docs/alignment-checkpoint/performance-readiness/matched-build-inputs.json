@@ -1,0 +1,19 @@
+{
+  "baseline_revision": "18a66957d038431a5caf0db340d96f60bc1decdf",
+  "candidate_revision": "df06588bb8c07251b2f15e5121f2456634c99dfe",
+  "baseline_source": "/Users/matt/Code/ob-pj/openbindings/sdk-migration/work/performance-baseline-18a66957-rust199",
+  "candidate_source": "/Users/matt/Code/ob-pj/openbindings/sdk-migration/work/performance-candidate-df06588-rust199",
+  "driver": "tools/evaluator-matched",
+  "policy": "Identical timed driver, allocator, build provenance and Cargo manifest; version-specific SDK adapters and real SDK dependency closures. Original side-specific fixture expectations. Explicitly separate from the generic automatic cross-API builder.",
+  "common_driver_sha256": {
+    "src/main.rs": "3c88e74701027e317eaee312bb2eebf8c131f6cd5e8dede7210ed9758d231f1f",
+    "src/allocations.rs": "92224bb487c32371517ad4dd136b25964a82697ac638acbbfbb0b3520e7ce48c",
+    "build.rs": "9c15b28a31903b7d742b5dd0ca7e02ff417988c385fab502d857e2d8e504c5d6",
+    "Cargo.toml": "447668f7a9b22897e25f4a0b5e60fad21f9c519a0f1d07f97141d7f99afc04eb"
+  },
+  "readiness_correction": "Both matched adapters require Result::is_ok; preparation refusal cannot count as a prepared owner (R-PERF1). SDK sources are unchanged.",
+  "adapter_sha256": {
+    "baseline": "43798383f2a1f5b18a660d691d55bdc35acf70169ea00065ba3232d033764e83",
+    "candidate": "a4ea8e1fdfcc4c016f7269bd066bcfd0ffb7860df537acfc391165bf18a9a708"
+  }
+}

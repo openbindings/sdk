@@ -1,0 +1,27 @@
+{
+  "version": "1.0",
+  "description": "In identical mode an absent slot is identical only to an absent slot: a stated schema, even {}, differs from none (core section 5.1).",
+  "mode": "identical",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "deliver": {
+        "input": {}
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "deliver": {}
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "incompatible"
+    }
+  }
+}

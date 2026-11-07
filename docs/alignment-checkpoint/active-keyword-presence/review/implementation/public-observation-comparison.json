@@ -1,0 +1,23 @@
+{
+  "current-original versus current-candidate": {
+    "rows": 106,
+    "outcome_differences": [],
+    "checks_changed": 52,
+    "check_total_left": 63858,
+    "check_total_right": 53530
+  },
+  "minimum-original versus minimum-candidate": {
+    "rows": 106,
+    "outcome_differences": [],
+    "checks_changed": 52,
+    "check_total_left": 63858,
+    "check_total_right": 53530
+  },
+  "current-candidate versus minimum-candidate": {
+    "rows": 106,
+    "outcome_differences": [],
+    "checks_changed": 0,
+    "check_total_left": 53530,
+    "check_total_right": 53530
+  }
+}

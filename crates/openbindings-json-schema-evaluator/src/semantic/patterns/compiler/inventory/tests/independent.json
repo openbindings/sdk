@@ -1,0 +1,4448 @@
+[
+  {
+    "id": "hir-inventory/adjacent-literals",
+    "form": "abc",
+    "invariant": "One adjacent AST literal run; original encoded bytes remain three.",
+    "expected": {
+      "allocation_sites_native": [
+        [
+          "smart_constructors",
+          1803
+        ],
+        [
+          "initial_properties_and_unary",
+          320
+        ],
+        [
+          "literal_frames",
+          143
+        ],
+        [
+          "class_backing",
+          0
+        ],
+        [
+          "translator_stack",
+          1728
+        ],
+        [
+          "visitor_stack",
+          640
+        ],
+        [
+          "cleanup",
+          6016
+        ]
+      ],
+      "allocation_total_native": 10650,
+      "maximum_equality_height": 0,
+      "maximum_prefix_calls": 0,
+      "shape": {
+        "a": 0,
+        "all_concat": false,
+        "alt_cost": 0,
+        "b": 3,
+        "concat_cost": 1803,
+        "cost": 1803,
+        "flat_r": 0,
+        "front": 1,
+        "h": 1,
+        "k": 0,
+        "lit": 3,
+        "m": 1,
+        "n": 4,
+        "nonzero": true,
+        "p": 1,
+        "prefixes": 0,
+        "r": 0,
+        "root": "Literal",
+        "u": 0,
+        "zero": false
+      },
+      "work_counters": {
+        "alt_frontier": 0,
+        "alt_input": 0,
+        "concat_bytes": 3,
+        "concat_input": 1,
+        "concat_visit": 1,
+        "prefix_bytes": 0,
+        "prefix_nodes": 0,
+        "prefix_ranges": 0,
+        "prefix_split": 0,
+        "range_slots": 0,
+        "sort_pairs": 0
+      },
+      "work_sites_native": [
+        [
+          "visitor_pre_post_and_edges",
+          16
+        ],
+        [
+          "translator_stack_push_pop_growth",
+          192
+        ],
+        [
+          "initial_property_fields_and_unary",
+          64
+        ],
+        [
+          "initial_literal_encoding_growth_utf8",
+          24
+        ],
+        [
+          "initial_ordered_class_slots",
+          0
+        ],
+        [
+          "concat_input_reverse_transfer",
+          24
+        ],
+        [
+          "concat_kind_and_into_parts",
+          17
+        ],
+        [
+          "concat_output_push_growth",
+          18
+        ],
+        [
+          "concat_property_fields_prefix_suffix",
+          22
+        ],
+        [
+          "concat_literal_copy_growth_utf8",
+          18
+        ],
+        [
+          "alt_input_reverse_transfer",
+          0
+        ],
+        [
+          "alt_flatten_parts_and_properties",
+          0
+        ],
+        [
+          "alt_output_push_growth",
+          0
+        ],
+        [
+          "alt_singleton_class_dispatch_probes",
+          0
+        ],
+        [
+          "prefix_equality_node_fields",
+          0
+        ],
+        [
+          "prefix_equality_literal_bytes",
+          0
+        ],
+        [
+          "prefix_equality_range_fields",
+          0
+        ],
+        [
+          "prefix_split_and_move",
+          0
+        ],
+        [
+          "range_sort_comparisons_moves",
+          0
+        ],
+        [
+          "range_union_equality_scan_extend_drain",
+          0
+        ],
+        [
+          "cleanup_stack_and_parts",
+          200
+        ]
+      ],
+      "work_sites_wasm_width": [
+        [
+          "visitor_pre_post_and_edges",
+          16
+        ],
+        [
+          "translator_stack_push_pop_growth",
+          224
+        ],
+        [
+          "initial_property_fields_and_unary",
+          64
+        ],
+        [
+          "initial_literal_encoding_growth_utf8",
+          24
+        ],
+        [
+          "initial_ordered_class_slots",
+          0
+        ],
+        [
+          "concat_input_reverse_transfer",
+          28
+        ],
+        [
+          "concat_kind_and_into_parts",
+          17
+        ],
+        [
+          "concat_output_push_growth",
+          21
+        ],
+        [
+          "concat_property_fields_prefix_suffix",
+          22
+        ],
+        [
+          "concat_literal_copy_growth_utf8",
+          18
+        ],
+        [
+          "alt_input_reverse_transfer",
+          0
+        ],
+        [
+          "alt_flatten_parts_and_properties",
+          0
+        ],
+        [
+          "alt_output_push_growth",
+          0
+        ],
+        [
+          "alt_singleton_class_dispatch_probes",
+          0
+        ],
+        [
+          "prefix_equality_node_fields",
+          0
+        ],
+        [
+          "prefix_equality_literal_bytes",
+          0
+        ],
+        [
+          "prefix_equality_range_fields",
+          0
+        ],
+        [
+          "prefix_split_and_move",
+          0
+        ],
+        [
+          "range_sort_comparisons_moves",
+          0
+        ],
+        [
+          "range_union_equality_scan_extend_drain",
+          0
+        ],
+        [
+          "cleanup_stack_and_parts",
+          212
+        ]
+      ]
+    }
+  },
+  {
+    "id": "hir-inventory/group-breaks-run",
+    "form": "a(?:b)c",
+    "invariant": "Group sentinel breaks initial AST literal coalescing even if the resulting HIR is one literal.",
+    "expected": {
+      "allocation_sites_native": [
+        [
+          "smart_constructors",
+          2123
+        ],
+        [
+          "initial_properties_and_unary",
+          400
+        ],
+        [
+          "literal_frames",
+          175
+        ],
+        [
+          "class_backing",
+          0
+        ],
+        [
+          "translator_stack",
+          2112
+        ],
+        [
+          "visitor_stack",
+          800
+        ],
+        [
+          "cleanup",
+          7520
+        ]
+      ],
+      "allocation_total_native": 13130,
+      "maximum_equality_height": 0,
+      "maximum_prefix_calls": 0,
+      "shape": {
+        "a": 0,
+        "all_concat": false,
+        "alt_cost": 0,
+        "b": 3,
+        "concat_cost": 2123,
+        "cost": 2123,
+        "flat_r": 0,
+        "front": 1,
+        "h": 1,
+        "k": 0,
+        "lit": 3,
+        "m": 1,
+        "n": 5,
+        "nonzero": true,
+        "p": 3,
+        "prefixes": 0,
+        "r": 0,
+        "root": "Literal",
+        "u": 0,
+        "zero": false
+      },
+      "work_counters": {
+        "alt_frontier": 0,
+        "alt_input": 0,
+        "concat_bytes": 3,
+        "concat_input": 3,
+        "concat_visit": 3,
+        "prefix_bytes": 0,
+        "prefix_nodes": 0,
+        "prefix_ranges": 0,
+        "prefix_split": 0,
+        "range_slots": 0,
+        "sort_pairs": 0
+      },
+      "work_sites_native": [
+        [
+          "visitor_pre_post_and_edges",
+          20
+        ],
+        [
+          "translator_stack_push_pop_growth",
+          240
+        ],
+        [
+          "initial_property_fields_and_unary",
+          80
+        ],
+        [
+          "initial_literal_encoding_growth_utf8",
+          24
+        ],
+        [
+          "initial_ordered_class_slots",
+          0
+        ],
+        [
+          "concat_input_reverse_transfer",
+          72
+        ],
+        [
+          "concat_kind_and_into_parts",
+          51
+        ],
+        [
+          "concat_output_push_growth",
+          54
+        ],
+        [
+          "concat_property_fields_prefix_suffix",
+          66
+        ],
+        [
+          "concat_literal_copy_growth_utf8",
+          18
+        ],
+        [
+          "alt_input_reverse_transfer",
+          0
+        ],
+        [
+          "alt_flatten_parts_and_properties",
+          0
+        ],
+        [
+          "alt_output_push_growth",
+          0
+        ],
+        [
+          "alt_singleton_class_dispatch_probes",
+          0
+        ],
+        [
+          "prefix_equality_node_fields",
+          0
+        ],
+        [
+          "prefix_equality_literal_bytes",
+          0
+        ],
+        [
+          "prefix_equality_range_fields",
+          0
+        ],
+        [
+          "prefix_split_and_move",
+          0
+        ],
+        [
+          "range_sort_comparisons_moves",
+          0
+        ],
+        [
+          "range_union_equality_scan_extend_drain",
+          0
+        ],
+        [
+          "cleanup_stack_and_parts",
+          250
+        ]
+      ],
+      "work_sites_wasm_width": [
+        [
+          "visitor_pre_post_and_edges",
+          20
+        ],
+        [
+          "translator_stack_push_pop_growth",
+          280
+        ],
+        [
+          "initial_property_fields_and_unary",
+          80
+        ],
+        [
+          "initial_literal_encoding_growth_utf8",
+          24
+        ],
+        [
+          "initial_ordered_class_slots",
+          0
+        ],
+        [
+          "concat_input_reverse_transfer",
+          84
+        ],
+        [
+          "concat_kind_and_into_parts",
+          51
+        ],
+        [
+          "concat_output_push_growth",
+          63
+        ],
+        [
+          "concat_property_fields_prefix_suffix",
+          66
+        ],
+        [
+          "concat_literal_copy_growth_utf8",
+          18
+        ],
+        [
+          "alt_input_reverse_transfer",
+          0
+        ],
+        [
+          "alt_flatten_parts_and_properties",
+          0
+        ],
+        [
+          "alt_output_push_growth",
+          0
+        ],
+        [
+          "alt_singleton_class_dispatch_probes",
+          0
+        ],
+        [
+          "prefix_equality_node_fields",
+          0
+        ],
+        [
+          "prefix_equality_literal_bytes",
+          0
+        ],
+        [
+          "prefix_equality_range_fields",
+          0
+        ],
+        [
+          "prefix_split_and_move",
+          0
+        ],
+        [
+          "range_sort_comparisons_moves",
+          0
+        ],
+        [
+          "range_union_equality_scan_extend_drain",
+          0
+        ],
+        [
+          "cleanup_stack_and_parts",
+          265
+        ]
+      ]
+    }
+  },
+  {
+    "id": "hir-inventory/empty-group",
+    "form": "a(?:)b",
+    "invariant": "Original empty/group lineage remains charged after concat simplification.",
+    "expected": {
+      "allocation_sites_native": [
+        [
+          "smart_constructors",
+          2114
+        ],
+        [
+          "initial_properties_and_unary",
+          400
+        ],
+        [
+          "literal_frames",
+          170
+        ],
+        [
+          "class_backing",
+          0
+        ],
+        [
+          "translator_stack",
+          2112
+        ],
+        [
+          "visitor_stack",
+          800
+        ],
+        [
+          "cleanup",
+          7520
+        ]
+      ],
+      "allocation_total_native": 13116,
+      "maximum_equality_height": 0,
+      "maximum_prefix_calls": 0,
+      "shape": {
+        "a": 0,
+        "all_concat": false,
+        "alt_cost": 0,
+        "b": 2,
+        "concat_cost": 2114,
+        "cost": 2114,
+        "flat_r": 0,
+        "front": 1,
+        "h": 1,
+        "k": 0,
+        "lit": 2,
+        "m": 1,
+        "n": 5,
+        "nonzero": true,
+        "p": 3,
+        "prefixes": 0,
+        "r": 0,
+        "root": "Literal",
+        "u": 0,
+        "zero": false
+      },
+      "work_counters": {
+        "alt_frontier": 0,
+        "alt_input": 0,
+        "concat_bytes": 2,
+        "concat_input": 3,
+        "concat_visit": 3,
+        "prefix_bytes": 0,
+        "prefix_nodes": 0,
+        "prefix_ranges": 0,
+        "prefix_split": 0,
+        "range_slots": 0,
+        "sort_pairs": 0
+      },
+      "work_sites_native": [
+        [
+          "visitor_pre_post_and_edges",
+          20
+        ],
+        [
+          "translator_stack_push_pop_growth",
+          240
+        ],
+        [
+          "initial_property_fields_and_unary",
+          80
+        ],
+        [
+          "initial_literal_encoding_growth_utf8",
+          16
+        ],
+        [
+          "initial_ordered_class_slots",
+          0
+        ],
+        [
+          "concat_input_reverse_transfer",
+          72
+        ],
+        [
+          "concat_kind_and_into_parts",
+          51
+        ],
+        [
+          "concat_output_push_growth",
+          54
+        ],
+        [
+          "concat_property_fields_prefix_suffix",
+          66
+        ],
+        [
+          "concat_literal_copy_growth_utf8",
+          12
+        ],
+        [
+          "alt_input_reverse_transfer",
+          0
+        ],
+        [
+          "alt_flatten_parts_and_properties",
+          0
+        ],
+        [
+          "alt_output_push_growth",
+          0
+        ],
+        [
+          "alt_singleton_class_dispatch_probes",
+          0
+        ],
+        [
+          "prefix_equality_node_fields",
+          0
+        ],
+        [
+          "prefix_equality_literal_bytes",
+          0
+        ],
+        [
+          "prefix_equality_range_fields",
+          0
+        ],
+        [
+          "prefix_split_and_move",
+          0
+        ],
+        [
+          "range_sort_comparisons_moves",
+          0
+        ],
+        [
+          "range_union_equality_scan_extend_drain",
+          0
+        ],
+        [
+          "cleanup_stack_and_parts",
+          250
+        ]
+      ],
+      "work_sites_wasm_width": [
+        [
+          "visitor_pre_post_and_edges",
+          20
+        ],
+        [
+          "translator_stack_push_pop_growth",
+          280
+        ],
+        [
+          "initial_property_fields_and_unary",
+          80
+        ],
+        [
+          "initial_literal_encoding_growth_utf8",
+          16
+        ],
+        [
+          "initial_ordered_class_slots",
+          0
+        ],
+        [
+          "concat_input_reverse_transfer",
+          84
+        ],
+        [
+          "concat_kind_and_into_parts",
+          51
+        ],
+        [
+          "concat_output_push_growth",
+          63
+        ],
+        [
+          "concat_property_fields_prefix_suffix",
+          66
+        ],
+        [
+          "concat_literal_copy_growth_utf8",
+          12
+        ],
+        [
+          "alt_input_reverse_transfer",
+          0
+        ],
+        [
+          "alt_flatten_parts_and_properties",
+          0
+        ],
+        [
+          "alt_output_push_growth",
+          0
+        ],
+        [
+          "alt_singleton_class_dispatch_probes",
+          0
+        ],
+        [
+          "prefix_equality_node_fields",
+          0
+        ],
+        [
+          "prefix_equality_literal_bytes",
+          0
+        ],
+        [
+          "prefix_equality_range_fields",
+          0
+        ],
+        [
+          "prefix_split_and_move",
+          0
+        ],
+        [
+          "range_sort_comparisons_moves",
+          0
+        ],
+        [
+          "range_union_equality_scan_extend_drain",
+          0
+        ],
+        [
+          "cleanup_stack_and_parts",
+          265
+        ]
+      ]
+    }
+  },
+  {
+    "id": "hir-inventory/zero-repetition",
+    "form": "a(?:b){0}c",
+    "invariant": "Original b/node/unary work remains; resulting child root is empty.",
+    "expected": {
+      "allocation_sites_native": [
+        [
+          "smart_constructors",
+          2123
+        ],
+        [
+          "initial_properties_and_unary",
+          608
+        ],
+        [
+          "literal_frames",
+          207
+        ],
+        [
+          "class_backing",
+          0
+        ],
+        [
+          "translator_stack",
+          2496
+        ],
+        [
+          "visitor_stack",
+          960
+        ],
+        [
+          "cleanup",
+          9024
+        ]
+      ],
+      "allocation_total_native": 15418,
+      "maximum_equality_height": 0,
+      "maximum_prefix_calls": 0,
+      "shape": {
+        "a": 0,
+        "all_concat": false,
+        "alt_cost": 0,
+        "b": 3,
+        "concat_cost": 2123,
+        "cost": 2123,
+        "flat_r": 0,
+        "front": 1,
+        "h": 1,
+        "k": 0,
+        "lit": 2,
+        "m": 1,
+        "n": 6,
+        "nonzero": true,
+        "p": 3,
+        "prefixes": 0,
+        "r": 0,
+        "root": "Literal",
+        "u": 1,
+        "zero": false
+      },
+      "work_counters": {
+        "alt_frontier": 0,
+        "alt_input": 0,
+        "concat_bytes": 3,
+        "concat_input": 3,
+        "concat_visit": 3,
+        "prefix_bytes": 0,
+        "prefix_nodes": 0,
+        "prefix_ranges": 0,
+        "prefix_split": 0,
+        "range_slots": 0,
+        "sort_pairs": 0
+      },
+      "work_sites_native": [
+        [
+          "visitor_pre_post_and_edges",
+          24
+        ],
+        [
+          "translator_stack_push_pop_growth",
+          288
+        ],
+        [
+          "initial_property_fields_and_unary",
+          128
+        ],
+        [
+          "initial_literal_encoding_growth_utf8",
+          24
+        ],
+        [
+          "initial_ordered_class_slots",
+          0
+        ],
+        [
+          "concat_input_reverse_transfer",
+          72
+        ],
+        [
+          "concat_kind_and_into_parts",
+          51
+        ],
+        [
+          "concat_output_push_growth",
+          54
+        ],
+        [
+          "concat_property_fields_prefix_suffix",
+          66
+        ],
+        [
+          "concat_literal_copy_growth_utf8",
+          18
+        ],
+        [
+          "alt_input_reverse_transfer",
+          0
+        ],
+        [
+          "alt_flatten_parts_and_properties",
+          0
+        ],
+        [
+          "alt_output_push_growth",
+          0
+        ],
+        [
+          "alt_singleton_class_dispatch_probes",
+          0
+        ],
+        [
+          "prefix_equality_node_fields",
+          0
+        ],
+        [
+          "prefix_equality_literal_bytes",
+          0
+        ],
+        [
+          "prefix_equality_range_fields",
+          0
+        ],
+        [
+          "prefix_split_and_move",
+          0
+        ],
+        [
+          "range_sort_comparisons_moves",
+          0
+        ],
+        [
+          "range_union_equality_scan_extend_drain",
+          0
+        ],
+        [
+          "cleanup_stack_and_parts",
+          300
+        ]
+      ],
+      "work_sites_wasm_width": [
+        [
+          "visitor_pre_post_and_edges",
+          24
+        ],
+        [
+          "translator_stack_push_pop_growth",
+          336
+        ],
+        [
+          "initial_property_fields_and_unary",
+          128
+        ],
+        [
+          "initial_literal_encoding_growth_utf8",
+          24
+        ],
+        [
+          "initial_ordered_class_slots",
+          0
+        ],
+        [
+          "concat_input_reverse_transfer",
+          84
+        ],
+        [
+          "concat_kind_and_into_parts",
+          51
+        ],
+        [
+          "concat_output_push_growth",
+          63
+        ],
+        [
+          "concat_property_fields_prefix_suffix",
+          66
+        ],
+        [
+          "concat_literal_copy_growth_utf8",
+          18
+        ],
+        [
+          "alt_input_reverse_transfer",
+          0
+        ],
+        [
+          "alt_flatten_parts_and_properties",
+          0
+        ],
+        [
+          "alt_output_push_growth",
+          0
+        ],
+        [
+          "alt_singleton_class_dispatch_probes",
+          0
+        ],
+        [
+          "prefix_equality_node_fields",
+          0
+        ],
+        [
+          "prefix_equality_literal_bytes",
+          0
+        ],
+        [
+          "prefix_equality_range_fields",
+          0
+        ],
+        [
+          "prefix_split_and_move",
+          0
+        ],
+        [
+          "range_sort_comparisons_moves",
+          0
+        ],
+        [
+          "range_union_equality_scan_extend_drain",
+          0
+        ],
+        [
+          "cleanup_stack_and_parts",
+          318
+        ]
+      ]
+    }
+  },
+  {
+    "id": "hir-inventory/one-repetition",
+    "form": "(?:[a]){1}",
+    "invariant": "Singleton class and transparent exact-one collapse preserve encoded literal facts.",
+    "expected": {
+      "allocation_sites_native": [
+        [
+          "smart_constructors",
+          0
+        ],
+        [
+          "initial_properties_and_unary",
+          368
+        ],
+        [
+          "literal_frames",
+          105
+        ],
+        [
+          "class_backing",
+          160
+        ],
+        [
+          "translator_stack",
+          1344
+        ],
+        [
+          "visitor_stack",
+          1600
+        ],
+        [
+          "cleanup",
+          4512
+        ]
+      ],
+      "allocation_total_native": 8089,
+      "maximum_equality_height": 0,
+      "maximum_prefix_calls": 0,
+      "shape": {
+        "a": 0,
+        "all_concat": false,
+        "alt_cost": 0,
+        "b": 1,
+        "concat_cost": 0,
+        "cost": 0,
+        "flat_r": 0,
+        "front": 1,
+        "h": 1,
+        "k": 1,
+        "lit": 1,
+        "m": 1,
+        "n": 3,
+        "nonzero": true,
+        "p": 1,
+        "prefixes": 0,
+        "r": 1,
+        "root": "Literal",
+        "u": 1,
+        "zero": false
+      },
+      "work_counters": {
+        "alt_frontier": 0,
+        "alt_input": 0,
+        "concat_bytes": 0,
+        "concat_input": 0,
+        "concat_visit": 0,
+        "prefix_bytes": 0,
+        "prefix_nodes": 0,
+        "prefix_ranges": 0,
+        "prefix_split": 0,
+        "range_slots": 0,
+        "sort_pairs": 0
+      },
+      "work_sites_native": [
+        [
+          "visitor_pre_post_and_edges",
+          16
+        ],
+        [
+          "translator_stack_push_pop_growth",
+          168
+        ],
+        [
+          "initial_property_fields_and_unary",
+          80
+        ],
+        [
+          "initial_literal_encoding_growth_utf8",
+          8
+        ],
+        [
+          "initial_ordered_class_slots",
+          8
+        ],
+        [
+          "concat_input_reverse_transfer",
+          0
+        ],
+        [
+          "concat_kind_and_into_parts",
+          0
+        ],
+        [
+          "concat_output_push_growth",
+          0
+        ],
+        [
+          "concat_property_fields_prefix_suffix",
+          0
+        ],
+        [
+          "concat_literal_copy_growth_utf8",
+          0
+        ],
+        [
+          "alt_input_reverse_transfer",
+          0
+        ],
+        [
+          "alt_flatten_parts_and_properties",
+          0
+        ],
+        [
+          "alt_output_push_growth",
+          0
+        ],
+        [
+          "alt_singleton_class_dispatch_probes",
+          0
+        ],
+        [
+          "prefix_equality_node_fields",
+          0
+        ],
+        [
+          "prefix_equality_literal_bytes",
+          0
+        ],
+        [
+          "prefix_equality_range_fields",
+          0
+        ],
+        [
+          "prefix_split_and_move",
+          0
+        ],
+        [
+          "range_sort_comparisons_moves",
+          0
+        ],
+        [
+          "range_union_equality_scan_extend_drain",
+          0
+        ],
+        [
+          "cleanup_stack_and_parts",
+          150
+        ]
+      ],
+      "work_sites_wasm_width": [
+        [
+          "visitor_pre_post_and_edges",
+          16
+        ],
+        [
+          "translator_stack_push_pop_growth",
+          196
+        ],
+        [
+          "initial_property_fields_and_unary",
+          80
+        ],
+        [
+          "initial_literal_encoding_growth_utf8",
+          8
+        ],
+        [
+          "initial_ordered_class_slots",
+          8
+        ],
+        [
+          "concat_input_reverse_transfer",
+          0
+        ],
+        [
+          "concat_kind_and_into_parts",
+          0
+        ],
+        [
+          "concat_output_push_growth",
+          0
+        ],
+        [
+          "concat_property_fields_prefix_suffix",
+          0
+        ],
+        [
+          "concat_literal_copy_growth_utf8",
+          0
+        ],
+        [
+          "alt_input_reverse_transfer",
+          0
+        ],
+        [
+          "alt_flatten_parts_and_properties",
+          0
+        ],
+        [
+          "alt_output_push_growth",
+          0
+        ],
+        [
+          "alt_singleton_class_dispatch_probes",
+          0
+        ],
+        [
+          "prefix_equality_node_fields",
+          0
+        ],
+        [
+          "prefix_equality_literal_bytes",
+          0
+        ],
+        [
+          "prefix_equality_range_fields",
+          0
+        ],
+        [
+          "prefix_split_and_move",
+          0
+        ],
+        [
+          "range_sort_comparisons_moves",
+          0
+        ],
+        [
+          "range_union_equality_scan_extend_drain",
+          0
+        ],
+        [
+          "cleanup_stack_and_parts",
+          159
+        ]
+      ]
+    }
+  },
+  {
+    "id": "hir-inventory/equal-range",
+    "form": "[a-a]",
+    "invariant": "One range becomes a singleton literal; range lineage remains charged.",
+    "expected": {
+      "allocation_sites_native": [
+        [
+          "smart_constructors",
+          0
+        ],
+        [
+          "initial_properties_and_unary",
+          80
+        ],
+        [
+          "literal_frames",
+          41
+        ],
+        [
+          "class_backing",
+          160
+        ],
+        [
+          "translator_stack",
+          768
+        ],
+        [
+          "visitor_stack",
+          1600
+        ],
+        [
+          "cleanup",
+          1504
+        ]
+      ],
+      "allocation_total_native": 4153,
+      "maximum_equality_height": 0,
+      "maximum_prefix_calls": 0,
+      "shape": {
+        "a": 0,
+        "all_concat": false,
+        "alt_cost": 0,
+        "b": 1,
+        "concat_cost": 0,
+        "cost": 0,
+        "flat_r": 0,
+        "front": 1,
+        "h": 1,
+        "k": 1,
+        "lit": 1,
+        "m": 1,
+        "n": 1,
+        "nonzero": true,
+        "p": 1,
+        "prefixes": 0,
+        "r": 1,
+        "root": "Literal",
+        "u": 0,
+        "zero": false
+      },
+      "work_counters": {
+        "alt_frontier": 0,
+        "alt_input": 0,
+        "concat_bytes": 0,
+        "concat_input": 0,
+        "concat_visit": 0,
+        "prefix_bytes": 0,
+        "prefix_nodes": 0,
+        "prefix_ranges": 0,
+        "prefix_split": 0,
+        "range_slots": 0,
+        "sort_pairs": 0
+      },
+      "work_sites_native": [
+        [
+          "visitor_pre_post_and_edges",
+          8
+        ],
+        [
+          "translator_stack_push_pop_growth",
+          72
+        ],
+        [
+          "initial_property_fields_and_unary",
+          16
+        ],
+        [
+          "initial_literal_encoding_growth_utf8",
+          8
+        ],
+        [
+          "initial_ordered_class_slots",
+          8
+        ],
+        [
+          "concat_input_reverse_transfer",
+          0
+        ],
+        [
+          "concat_kind_and_into_parts",
+          0
+        ],
+        [
+          "concat_output_push_growth",
+          0
+        ],
+        [
+          "concat_property_fields_prefix_suffix",
+          0
+        ],
+        [
+          "concat_literal_copy_growth_utf8",
+          0
+        ],
+        [
+          "alt_input_reverse_transfer",
+          0
+        ],
+        [
+          "alt_flatten_parts_and_properties",
+          0
+        ],
+        [
+          "alt_output_push_growth",
+          0
+        ],
+        [
+          "alt_singleton_class_dispatch_probes",
+          0
+        ],
+        [
+          "prefix_equality_node_fields",
+          0
+        ],
+        [
+          "prefix_equality_literal_bytes",
+          0
+        ],
+        [
+          "prefix_equality_range_fields",
+          0
+        ],
+        [
+          "prefix_split_and_move",
+          0
+        ],
+        [
+          "range_sort_comparisons_moves",
+          0
+        ],
+        [
+          "range_union_equality_scan_extend_drain",
+          0
+        ],
+        [
+          "cleanup_stack_and_parts",
+          50
+        ]
+      ],
+      "work_sites_wasm_width": [
+        [
+          "visitor_pre_post_and_edges",
+          8
+        ],
+        [
+          "translator_stack_push_pop_growth",
+          84
+        ],
+        [
+          "initial_property_fields_and_unary",
+          16
+        ],
+        [
+          "initial_literal_encoding_growth_utf8",
+          8
+        ],
+        [
+          "initial_ordered_class_slots",
+          8
+        ],
+        [
+          "concat_input_reverse_transfer",
+          0
+        ],
+        [
+          "concat_kind_and_into_parts",
+          0
+        ],
+        [
+          "concat_output_push_growth",
+          0
+        ],
+        [
+          "concat_property_fields_prefix_suffix",
+          0
+        ],
+        [
+          "concat_literal_copy_growth_utf8",
+          0
+        ],
+        [
+          "alt_input_reverse_transfer",
+          0
+        ],
+        [
+          "alt_flatten_parts_and_properties",
+          0
+        ],
+        [
+          "alt_output_push_growth",
+          0
+        ],
+        [
+          "alt_singleton_class_dispatch_probes",
+          0
+        ],
+        [
+          "prefix_equality_node_fields",
+          0
+        ],
+        [
+          "prefix_equality_literal_bytes",
+          0
+        ],
+        [
+          "prefix_equality_range_fields",
+          0
+        ],
+        [
+          "prefix_split_and_move",
+          0
+        ],
+        [
+          "range_sort_comparisons_moves",
+          0
+        ],
+        [
+          "range_union_equality_scan_extend_drain",
+          0
+        ],
+        [
+          "cleanup_stack_and_parts",
+          53
+        ]
+      ]
+    }
+  },
+  {
+    "id": "hir-inventory/astral-singleton",
+    "form": "[\\x{1F600}]",
+    "invariant": "Singleton contributes four encoded literal bytes.",
+    "expected": {
+      "allocation_sites_native": [
+        [
+          "smart_constructors",
+          0
+        ],
+        [
+          "initial_properties_and_unary",
+          80
+        ],
+        [
+          "literal_frames",
+          56
+        ],
+        [
+          "class_backing",
+          160
+        ],
+        [
+          "translator_stack",
+          768
+        ],
+        [
+          "visitor_stack",
+          1600
+        ],
+        [
+          "cleanup",
+          1504
+        ]
+      ],
+      "allocation_total_native": 4168,
+      "maximum_equality_height": 0,
+      "maximum_prefix_calls": 0,
+      "shape": {
+        "a": 0,
+        "all_concat": false,
+        "alt_cost": 0,
+        "b": 4,
+        "concat_cost": 0,
+        "cost": 0,
+        "flat_r": 0,
+        "front": 1,
+        "h": 1,
+        "k": 1,
+        "lit": 4,
+        "m": 1,
+        "n": 1,
+        "nonzero": true,
+        "p": 1,
+        "prefixes": 0,
+        "r": 1,
+        "root": "Literal",
+        "u": 0,
+        "zero": false
+      },
+      "work_counters": {
+        "alt_frontier": 0,
+        "alt_input": 0,
+        "concat_bytes": 0,
+        "concat_input": 0,
+        "concat_visit": 0,
+        "prefix_bytes": 0,
+        "prefix_nodes": 0,
+        "prefix_ranges": 0,
+        "prefix_split": 0,
+        "range_slots": 0,
+        "sort_pairs": 0
+      },
+      "work_sites_native": [
+        [
+          "visitor_pre_post_and_edges",
+          8
+        ],
+        [
+          "translator_stack_push_pop_growth",
+          72
+        ],
+        [
+          "initial_property_fields_and_unary",
+          16
+        ],
+        [
+          "initial_literal_encoding_growth_utf8",
+          32
+        ],
+        [
+          "initial_ordered_class_slots",
+          8
+        ],
+        [
+          "concat_input_reverse_transfer",
+          0
+        ],
+        [
+          "concat_kind_and_into_parts",
+          0
+        ],
+        [
+          "concat_output_push_growth",
+          0
+        ],
+        [
+          "concat_property_fields_prefix_suffix",
+          0
+        ],
+        [
+          "concat_literal_copy_growth_utf8",
+          0
+        ],
+        [
+          "alt_input_reverse_transfer",
+          0
+        ],
+        [
+          "alt_flatten_parts_and_properties",
+          0
+        ],
+        [
+          "alt_output_push_growth",
+          0
+        ],
+        [
+          "alt_singleton_class_dispatch_probes",
+          0
+        ],
+        [
+          "prefix_equality_node_fields",
+          0
+        ],
+        [
+          "prefix_equality_literal_bytes",
+          0
+        ],
+        [
+          "prefix_equality_range_fields",
+          0
+        ],
+        [
+          "prefix_split_and_move",
+          0
+        ],
+        [
+          "range_sort_comparisons_moves",
+          0
+        ],
+        [
+          "range_union_equality_scan_extend_drain",
+          0
+        ],
+        [
+          "cleanup_stack_and_parts",
+          50
+        ]
+      ],
+      "work_sites_wasm_width": [
+        [
+          "visitor_pre_post_and_edges",
+          8
+        ],
+        [
+          "translator_stack_push_pop_growth",
+          84
+        ],
+        [
+          "initial_property_fields_and_unary",
+          16
+        ],
+        [
+          "initial_literal_encoding_growth_utf8",
+          32
+        ],
+        [
+          "initial_ordered_class_slots",
+          8
+        ],
+        [
+          "concat_input_reverse_transfer",
+          0
+        ],
+        [
+          "concat_kind_and_into_parts",
+          0
+        ],
+        [
+          "concat_output_push_growth",
+          0
+        ],
+        [
+          "concat_property_fields_prefix_suffix",
+          0
+        ],
+        [
+          "concat_literal_copy_growth_utf8",
+          0
+        ],
+        [
+          "alt_input_reverse_transfer",
+          0
+        ],
+        [
+          "alt_flatten_parts_and_properties",
+          0
+        ],
+        [
+          "alt_output_push_growth",
+          0
+        ],
+        [
+          "alt_singleton_class_dispatch_probes",
+          0
+        ],
+        [
+          "prefix_equality_node_fields",
+          0
+        ],
+        [
+          "prefix_equality_literal_bytes",
+          0
+        ],
+        [
+          "prefix_equality_range_fields",
+          0
+        ],
+        [
+          "prefix_split_and_move",
+          0
+        ],
+        [
+          "range_sort_comparisons_moves",
+          0
+        ],
+        [
+          "range_union_equality_scan_extend_drain",
+          0
+        ],
+        [
+          "cleanup_stack_and_parts",
+          53
+        ]
+      ]
+    }
+  },
+  {
+    "id": "hir-inventory/zero-width-repetition",
+    "form": "(?-u:\\b){0,2}",
+    "invariant": "Use the reviewed zero-width repetition clamp; retain original unary costs.",
+    "expected": {
+      "allocation_sites_native": [
+        [
+          "smart_constructors",
+          0
+        ],
+        [
+          "initial_properties_and_unary",
+          368
+        ],
+        [
+          "literal_frames",
+          96
+        ],
+        [
+          "class_backing",
+          0
+        ],
+        [
+          "translator_stack",
+          1344
+        ],
+        [
+          "visitor_stack",
+          640
+        ],
+        [
+          "cleanup",
+          4512
+        ]
+      ],
+      "allocation_total_native": 6960,
+      "maximum_equality_height": 0,
+      "maximum_prefix_calls": 0,
+      "shape": {
+        "a": 0,
+        "all_concat": false,
+        "alt_cost": 0,
+        "b": 0,
+        "concat_cost": 0,
+        "cost": 0,
+        "flat_r": 2,
+        "front": 2,
+        "h": 2,
+        "k": 0,
+        "lit": 0,
+        "m": 2,
+        "n": 3,
+        "nonzero": false,
+        "p": 1,
+        "prefixes": 0,
+        "r": 0,
+        "root": "Unary",
+        "u": 1,
+        "zero": true
+      },
+      "work_counters": {
+        "alt_frontier": 0,
+        "alt_input": 0,
+        "concat_bytes": 0,
+        "concat_input": 0,
+        "concat_visit": 0,
+        "prefix_bytes": 0,
+        "prefix_nodes": 0,
+        "prefix_ranges": 0,
+        "prefix_split": 0,
+        "range_slots": 0,
+        "sort_pairs": 0
+      },
+      "work_sites_native": [
+        [
+          "visitor_pre_post_and_edges",
+          12
+        ],
+        [
+          "translator_stack_push_pop_growth",
+          144
+        ],
+        [
+          "initial_property_fields_and_unary",
+          80
+        ],
+        [
+          "initial_literal_encoding_growth_utf8",
+          0
+        ],
+        [
+          "initial_ordered_class_slots",
+          0
+        ],
+        [
+          "concat_input_reverse_transfer",
+          0
+        ],
+        [
+          "concat_kind_and_into_parts",
+          0
+        ],
+        [
+          "concat_output_push_growth",
+          0
+        ],
+        [
+          "concat_property_fields_prefix_suffix",
+          0
+        ],
+        [
+          "concat_literal_copy_growth_utf8",
+          0
+        ],
+        [
+          "alt_input_reverse_transfer",
+          0
+        ],
+        [
+          "alt_flatten_parts_and_properties",
+          0
+        ],
+        [
+          "alt_output_push_growth",
+          0
+        ],
+        [
+          "alt_singleton_class_dispatch_probes",
+          0
+        ],
+        [
+          "prefix_equality_node_fields",
+          0
+        ],
+        [
+          "prefix_equality_literal_bytes",
+          0
+        ],
+        [
+          "prefix_equality_range_fields",
+          0
+        ],
+        [
+          "prefix_split_and_move",
+          0
+        ],
+        [
+          "range_sort_comparisons_moves",
+          0
+        ],
+        [
+          "range_union_equality_scan_extend_drain",
+          0
+        ],
+        [
+          "cleanup_stack_and_parts",
+          150
+        ]
+      ],
+      "work_sites_wasm_width": [
+        [
+          "visitor_pre_post_and_edges",
+          12
+        ],
+        [
+          "translator_stack_push_pop_growth",
+          168
+        ],
+        [
+          "initial_property_fields_and_unary",
+          80
+        ],
+        [
+          "initial_literal_encoding_growth_utf8",
+          0
+        ],
+        [
+          "initial_ordered_class_slots",
+          0
+        ],
+        [
+          "concat_input_reverse_transfer",
+          0
+        ],
+        [
+          "concat_kind_and_into_parts",
+          0
+        ],
+        [
+          "concat_output_push_growth",
+          0
+        ],
+        [
+          "concat_property_fields_prefix_suffix",
+          0
+        ],
+        [
+          "concat_literal_copy_growth_utf8",
+          0
+        ],
+        [
+          "alt_input_reverse_transfer",
+          0
+        ],
+        [
+          "alt_flatten_parts_and_properties",
+          0
+        ],
+        [
+          "alt_output_push_growth",
+          0
+        ],
+        [
+          "alt_singleton_class_dispatch_probes",
+          0
+        ],
+        [
+          "prefix_equality_node_fields",
+          0
+        ],
+        [
+          "prefix_equality_literal_bytes",
+          0
+        ],
+        [
+          "prefix_equality_range_fields",
+          0
+        ],
+        [
+          "prefix_split_and_move",
+          0
+        ],
+        [
+          "range_sort_comparisons_moves",
+          0
+        ],
+        [
+          "range_union_equality_scan_extend_drain",
+          0
+        ],
+        [
+          "cleanup_stack_and_parts",
+          159
+        ]
+      ]
+    }
+  },
+  {
+    "id": "hir-inventory/zero-width-bounded",
+    "form": "(?:^$){20,30}",
+    "invariant": "Zero-width body clamps repetition without claiming successful matching.",
+    "expected": {
+      "allocation_sites_native": [
+        [
+          "smart_constructors",
+          1936
+        ],
+        [
+          "initial_properties_and_unary",
+          528
+        ],
+        [
+          "literal_frames",
+          160
+        ],
+        [
+          "class_backing",
+          0
+        ],
+        [
+          "translator_stack",
+          2112
+        ],
+        [
+          "visitor_stack",
+          800
+        ],
+        [
+          "cleanup",
+          7520
+        ]
+      ],
+      "allocation_total_native": 13056,
+      "maximum_equality_height": 0,
+      "maximum_prefix_calls": 0,
+      "shape": {
+        "a": 0,
+        "all_concat": false,
+        "alt_cost": 0,
+        "b": 0,
+        "concat_cost": 1936,
+        "cost": 1936,
+        "flat_r": 3,
+        "front": 2,
+        "h": 2,
+        "k": 0,
+        "lit": 0,
+        "m": 3,
+        "n": 5,
+        "nonzero": false,
+        "p": 2,
+        "prefixes": 0,
+        "r": 0,
+        "root": "Concat",
+        "u": 1,
+        "zero": true
+      },
+      "work_counters": {
+        "alt_frontier": 0,
+        "alt_input": 0,
+        "concat_bytes": 0,
+        "concat_input": 2,
+        "concat_visit": 2,
+        "prefix_bytes": 0,
+        "prefix_nodes": 0,
+        "prefix_ranges": 0,
+        "prefix_split": 0,
+        "range_slots": 0,
+        "sort_pairs": 0
+      },
+      "work_sites_native": [
+        [
+          "visitor_pre_post_and_edges",
+          20
+        ],
+        [
+          "translator_stack_push_pop_growth",
+          240
+        ],
+        [
+          "initial_property_fields_and_unary",
+          112
+        ],
+        [
+          "initial_literal_encoding_growth_utf8",
+          0
+        ],
+        [
+          "initial_ordered_class_slots",
+          0
+        ],
+        [
+          "concat_input_reverse_transfer",
+          48
+        ],
+        [
+          "concat_kind_and_into_parts",
+          34
+        ],
+        [
+          "concat_output_push_growth",
+          36
+        ],
+        [
+          "concat_property_fields_prefix_suffix",
+          44
+        ],
+        [
+          "concat_literal_copy_growth_utf8",
+          0
+        ],
+        [
+          "alt_input_reverse_transfer",
+          0
+        ],
+        [
+          "alt_flatten_parts_and_properties",
+          0
+        ],
+        [
+          "alt_output_push_growth",
+          0
+        ],
+        [
+          "alt_singleton_class_dispatch_probes",
+          0
+        ],
+        [
+          "prefix_equality_node_fields",
+          0
+        ],
+        [
+          "prefix_equality_literal_bytes",
+          0
+        ],
+        [
+          "prefix_equality_range_fields",
+          0
+        ],
+        [
+          "prefix_split_and_move",
+          0
+        ],
+        [
+          "range_sort_comparisons_moves",
+          0
+        ],
+        [
+          "range_union_equality_scan_extend_drain",
+          0
+        ],
+        [
+          "cleanup_stack_and_parts",
+          250
+        ]
+      ],
+      "work_sites_wasm_width": [
+        [
+          "visitor_pre_post_and_edges",
+          20
+        ],
+        [
+          "translator_stack_push_pop_growth",
+          280
+        ],
+        [
+          "initial_property_fields_and_unary",
+          112
+        ],
+        [
+          "initial_literal_encoding_growth_utf8",
+          0
+        ],
+        [
+          "initial_ordered_class_slots",
+          0
+        ],
+        [
+          "concat_input_reverse_transfer",
+          56
+        ],
+        [
+          "concat_kind_and_into_parts",
+          34
+        ],
+        [
+          "concat_output_push_growth",
+          42
+        ],
+        [
+          "concat_property_fields_prefix_suffix",
+          44
+        ],
+        [
+          "concat_literal_copy_growth_utf8",
+          0
+        ],
+        [
+          "alt_input_reverse_transfer",
+          0
+        ],
+        [
+          "alt_flatten_parts_and_properties",
+          0
+        ],
+        [
+          "alt_output_push_growth",
+          0
+        ],
+        [
+          "alt_singleton_class_dispatch_probes",
+          0
+        ],
+        [
+          "prefix_equality_node_fields",
+          0
+        ],
+        [
+          "prefix_equality_literal_bytes",
+          0
+        ],
+        [
+          "prefix_equality_range_fields",
+          0
+        ],
+        [
+          "prefix_split_and_move",
+          0
+        ],
+        [
+          "range_sort_comparisons_moves",
+          0
+        ],
+        [
+          "range_union_equality_scan_extend_drain",
+          0
+        ],
+        [
+          "cleanup_stack_and_parts",
+          265
+        ]
+      ]
+    }
+  },
+  {
+    "id": "hir-inventory/retained-capture",
+    "form": "(a){1}",
+    "invariant": "Exact-one removal leaves the capture wrapper, not a bare literal.",
+    "expected": {
+      "allocation_sites_native": [
+        [
+          "smart_constructors",
+          0
+        ],
+        [
+          "initial_properties_and_unary",
+          496
+        ],
+        [
+          "literal_frames",
+          101
+        ],
+        [
+          "class_backing",
+          0
+        ],
+        [
+          "translator_stack",
+          1344
+        ],
+        [
+          "visitor_stack",
+          640
+        ],
+        [
+          "cleanup",
+          4512
+        ]
+      ],
+      "allocation_total_native": 7093,
+      "maximum_equality_height": 0,
+      "maximum_prefix_calls": 0,
+      "shape": {
+        "a": 0,
+        "all_concat": false,
+        "alt_cost": 0,
+        "b": 1,
+        "concat_cost": 0,
+        "cost": 0,
+        "flat_r": 0,
+        "front": 1,
+        "h": 2,
+        "k": 0,
+        "lit": 0,
+        "m": 2,
+        "n": 3,
+        "nonzero": true,
+        "p": 1,
+        "prefixes": 0,
+        "r": 0,
+        "root": "Unary",
+        "u": 2,
+        "zero": false
+      },
+      "work_counters": {
+        "alt_frontier": 0,
+        "alt_input": 0,
+        "concat_bytes": 0,
+        "concat_input": 0,
+        "concat_visit": 0,
+        "prefix_bytes": 0,
+        "prefix_nodes": 0,
+        "prefix_ranges": 0,
+        "prefix_split": 0,
+        "range_slots": 0,
+        "sort_pairs": 0
+      },
+      "work_sites_native": [
+        [
+          "visitor_pre_post_and_edges",
+          12
+        ],
+        [
+          "translator_stack_push_pop_growth",
+          144
+        ],
+        [
+          "initial_property_fields_and_unary",
+          112
+        ],
+        [
+          "initial_literal_encoding_growth_utf8",
+          8
+        ],
+        [
+          "initial_ordered_class_slots",
+          0
+        ],
+        [
+          "concat_input_reverse_transfer",
+          0
+        ],
+        [
+          "concat_kind_and_into_parts",
+          0
+        ],
+        [
+          "concat_output_push_growth",
+          0
+        ],
+        [
+          "concat_property_fields_prefix_suffix",
+          0
+        ],
+        [
+          "concat_literal_copy_growth_utf8",
+          0
+        ],
+        [
+          "alt_input_reverse_transfer",
+          0
+        ],
+        [
+          "alt_flatten_parts_and_properties",
+          0
+        ],
+        [
+          "alt_output_push_growth",
+          0
+        ],
+        [
+          "alt_singleton_class_dispatch_probes",
+          0
+        ],
+        [
+          "prefix_equality_node_fields",
+          0
+        ],
+        [
+          "prefix_equality_literal_bytes",
+          0
+        ],
+        [
+          "prefix_equality_range_fields",
+          0
+        ],
+        [
+          "prefix_split_and_move",
+          0
+        ],
+        [
+          "range_sort_comparisons_moves",
+          0
+        ],
+        [
+          "range_union_equality_scan_extend_drain",
+          0
+        ],
+        [
+          "cleanup_stack_and_parts",
+          150
+        ]
+      ],
+      "work_sites_wasm_width": [
+        [
+          "visitor_pre_post_and_edges",
+          12
+        ],
+        [
+          "translator_stack_push_pop_growth",
+          168
+        ],
+        [
+          "initial_property_fields_and_unary",
+          112
+        ],
+        [
+          "initial_literal_encoding_growth_utf8",
+          8
+        ],
+        [
+          "initial_ordered_class_slots",
+          0
+        ],
+        [
+          "concat_input_reverse_transfer",
+          0
+        ],
+        [
+          "concat_kind_and_into_parts",
+          0
+        ],
+        [
+          "concat_output_push_growth",
+          0
+        ],
+        [
+          "concat_property_fields_prefix_suffix",
+          0
+        ],
+        [
+          "concat_literal_copy_growth_utf8",
+          0
+        ],
+        [
+          "alt_input_reverse_transfer",
+          0
+        ],
+        [
+          "alt_flatten_parts_and_properties",
+          0
+        ],
+        [
+          "alt_output_push_growth",
+          0
+        ],
+        [
+          "alt_singleton_class_dispatch_probes",
+          0
+        ],
+        [
+          "prefix_equality_node_fields",
+          0
+        ],
+        [
+          "prefix_equality_literal_bytes",
+          0
+        ],
+        [
+          "prefix_equality_range_fields",
+          0
+        ],
+        [
+          "prefix_split_and_move",
+          0
+        ],
+        [
+          "range_sort_comparisons_moves",
+          0
+        ],
+        [
+          "range_union_equality_scan_extend_drain",
+          0
+        ],
+        [
+          "cleanup_stack_and_parts",
+          159
+        ]
+      ]
+    }
+  },
+  {
+    "id": "hir-inventory/coalesced-alternate",
+    "form": "(?:a|b)c",
+    "invariant": "Terminal singleton coalescing and its range lineage remain accounted.",
+    "expected": {
+      "allocation_sites_native": [
+        [
+          "smart_constructors",
+          4587
+        ],
+        [
+          "initial_properties_and_unary",
+          480
+        ],
+        [
+          "literal_frames",
+          207
+        ],
+        [
+          "class_backing",
+          0
+        ],
+        [
+          "translator_stack",
+          2496
+        ],
+        [
+          "visitor_stack",
+          960
+        ],
+        [
+          "cleanup",
+          9024
+        ]
+      ],
+      "allocation_total_native": 17754,
+      "maximum_equality_height": 0,
+      "maximum_prefix_calls": 1,
+      "shape": {
+        "a": 1,
+        "all_concat": false,
+        "alt_cost": 1952,
+        "b": 3,
+        "concat_cost": 2635,
+        "cost": 4587,
+        "flat_r": 5,
+        "front": 5,
+        "h": 3,
+        "k": 0,
+        "lit": 0,
+        "m": 5,
+        "n": 6,
+        "nonzero": true,
+        "p": 3,
+        "prefixes": 0,
+        "r": 0,
+        "root": "Concat",
+        "u": 0,
+        "zero": false
+      },
+      "work_counters": {
+        "alt_frontier": 2,
+        "alt_input": 4,
+        "concat_bytes": 3,
+        "concat_input": 2,
+        "concat_visit": 5,
+        "prefix_bytes": 2,
+        "prefix_nodes": 6,
+        "prefix_ranges": 2,
+        "prefix_split": 0,
+        "range_slots": 64,
+        "sort_pairs": 1152
+      },
+      "work_sites_native": [
+        [
+          "visitor_pre_post_and_edges",
+          24
+        ],
+        [
+          "translator_stack_push_pop_growth",
+          288
+        ],
+        [
+          "initial_property_fields_and_unary",
+          96
+        ],
+        [
+          "initial_literal_encoding_growth_utf8",
+          24
+        ],
+        [
+          "initial_ordered_class_slots",
+          0
+        ],
+        [
+          "concat_input_reverse_transfer",
+          48
+        ],
+        [
+          "concat_kind_and_into_parts",
+          85
+        ],
+        [
+          "concat_output_push_growth",
+          90
+        ],
+        [
+          "concat_property_fields_prefix_suffix",
+          110
+        ],
+        [
+          "concat_literal_copy_growth_utf8",
+          18
+        ],
+        [
+          "alt_input_reverse_transfer",
+          96
+        ],
+        [
+          "alt_flatten_parts_and_properties",
+          66
+        ],
+        [
+          "alt_output_push_growth",
+          36
+        ],
+        [
+          "alt_singleton_class_dispatch_probes",
+          18
+        ],
+        [
+          "prefix_equality_node_fields",
+          132
+        ],
+        [
+          "prefix_equality_literal_bytes",
+          2
+        ],
+        [
+          "prefix_equality_range_fields",
+          4
+        ],
+        [
+          "prefix_split_and_move",
+          0
+        ],
+        [
+          "range_sort_comparisons_moves",
+          2304
+        ],
+        [
+          "range_union_equality_scan_extend_drain",
+          64
+        ],
+        [
+          "cleanup_stack_and_parts",
+          300
+        ]
+      ],
+      "work_sites_wasm_width": [
+        [
+          "visitor_pre_post_and_edges",
+          24
+        ],
+        [
+          "translator_stack_push_pop_growth",
+          336
+        ],
+        [
+          "initial_property_fields_and_unary",
+          96
+        ],
+        [
+          "initial_literal_encoding_growth_utf8",
+          24
+        ],
+        [
+          "initial_ordered_class_slots",
+          0
+        ],
+        [
+          "concat_input_reverse_transfer",
+          56
+        ],
+        [
+          "concat_kind_and_into_parts",
+          85
+        ],
+        [
+          "concat_output_push_growth",
+          105
+        ],
+        [
+          "concat_property_fields_prefix_suffix",
+          110
+        ],
+        [
+          "concat_literal_copy_growth_utf8",
+          18
+        ],
+        [
+          "alt_input_reverse_transfer",
+          112
+        ],
+        [
+          "alt_flatten_parts_and_properties",
+          66
+        ],
+        [
+          "alt_output_push_growth",
+          42
+        ],
+        [
+          "alt_singleton_class_dispatch_probes",
+          18
+        ],
+        [
+          "prefix_equality_node_fields",
+          132
+        ],
+        [
+          "prefix_equality_literal_bytes",
+          2
+        ],
+        [
+          "prefix_equality_range_fields",
+          4
+        ],
+        [
+          "prefix_split_and_move",
+          0
+        ],
+        [
+          "range_sort_comparisons_moves",
+          2304
+        ],
+        [
+          "range_union_equality_scan_extend_drain",
+          128
+        ],
+        [
+          "cleanup_stack_and_parts",
+          318
+        ]
+      ]
+    }
+  },
+  {
+    "id": "hir-inventory/nonliteral-alternate",
+    "form": "(?:a?|b?)c",
+    "invariant": "Do not apply literal/class collapse merely because children share a scalar alphabet.",
+    "expected": {
+      "allocation_sites_native": [
+        [
+          "smart_constructors",
+          3915
+        ],
+        [
+          "initial_properties_and_unary",
+          896
+        ],
+        [
+          "literal_frames",
+          271
+        ],
+        [
+          "class_backing",
+          0
+        ],
+        [
+          "translator_stack",
+          3264
+        ],
+        [
+          "visitor_stack",
+          1280
+        ],
+        [
+          "cleanup",
+          12032
+        ]
+      ],
+      "allocation_total_native": 21658,
+      "maximum_equality_height": 0,
+      "maximum_prefix_calls": 1,
+      "shape": {
+        "a": 1,
+        "all_concat": false,
+        "alt_cost": 1952,
+        "b": 3,
+        "concat_cost": 1963,
+        "cost": 3915,
+        "flat_r": 7,
+        "front": 2,
+        "h": 4,
+        "k": 0,
+        "lit": 0,
+        "m": 7,
+        "n": 8,
+        "nonzero": true,
+        "p": 3,
+        "prefixes": 0,
+        "r": 0,
+        "root": "Concat",
+        "u": 2,
+        "zero": false
+      },
+      "work_counters": {
+        "alt_frontier": 2,
+        "alt_input": 4,
+        "concat_bytes": 3,
+        "concat_input": 2,
+        "concat_visit": 2,
+        "prefix_bytes": 2,
+        "prefix_nodes": 10,
+        "prefix_ranges": 2,
+        "prefix_split": 0,
+        "range_slots": 0,
+        "sort_pairs": 0
+      },
+      "work_sites_native": [
+        [
+          "visitor_pre_post_and_edges",
+          32
+        ],
+        [
+          "translator_stack_push_pop_growth",
+          384
+        ],
+        [
+          "initial_property_fields_and_unary",
+          192
+        ],
+        [
+          "initial_literal_encoding_growth_utf8",
+          24
+        ],
+        [
+          "initial_ordered_class_slots",
+          0
+        ],
+        [
+          "concat_input_reverse_transfer",
+          48
+        ],
+        [
+          "concat_kind_and_into_parts",
+          34
+        ],
+        [
+          "concat_output_push_growth",
+          36
+        ],
+        [
+          "concat_property_fields_prefix_suffix",
+          44
+        ],
+        [
+          "concat_literal_copy_growth_utf8",
+          18
+        ],
+        [
+          "alt_input_reverse_transfer",
+          96
+        ],
+        [
+          "alt_flatten_parts_and_properties",
+          66
+        ],
+        [
+          "alt_output_push_growth",
+          36
+        ],
+        [
+          "alt_singleton_class_dispatch_probes",
+          18
+        ],
+        [
+          "prefix_equality_node_fields",
+          220
+        ],
+        [
+          "prefix_equality_literal_bytes",
+          2
+        ],
+        [
+          "prefix_equality_range_fields",
+          4
+        ],
+        [
+          "prefix_split_and_move",
+          0
+        ],
+        [
+          "range_sort_comparisons_moves",
+          0
+        ],
+        [
+          "range_union_equality_scan_extend_drain",
+          0
+        ],
+        [
+          "cleanup_stack_and_parts",
+          400
+        ]
+      ],
+      "work_sites_wasm_width": [
+        [
+          "visitor_pre_post_and_edges",
+          32
+        ],
+        [
+          "translator_stack_push_pop_growth",
+          448
+        ],
+        [
+          "initial_property_fields_and_unary",
+          192
+        ],
+        [
+          "initial_literal_encoding_growth_utf8",
+          24
+        ],
+        [
+          "initial_ordered_class_slots",
+          0
+        ],
+        [
+          "concat_input_reverse_transfer",
+          56
+        ],
+        [
+          "concat_kind_and_into_parts",
+          34
+        ],
+        [
+          "concat_output_push_growth",
+          42
+        ],
+        [
+          "concat_property_fields_prefix_suffix",
+          44
+        ],
+        [
+          "concat_literal_copy_growth_utf8",
+          18
+        ],
+        [
+          "alt_input_reverse_transfer",
+          112
+        ],
+        [
+          "alt_flatten_parts_and_properties",
+          66
+        ],
+        [
+          "alt_output_push_growth",
+          42
+        ],
+        [
+          "alt_singleton_class_dispatch_probes",
+          18
+        ],
+        [
+          "prefix_equality_node_fields",
+          220
+        ],
+        [
+          "prefix_equality_literal_bytes",
+          2
+        ],
+        [
+          "prefix_equality_range_fields",
+          4
+        ],
+        [
+          "prefix_split_and_move",
+          0
+        ],
+        [
+          "range_sort_comparisons_moves",
+          0
+        ],
+        [
+          "range_union_equality_scan_extend_drain",
+          0
+        ],
+        [
+          "cleanup_stack_and_parts",
+          424
+        ]
+      ]
+    }
+  },
+  {
+    "id": "hir-inventory/failed-prefix",
+    "form": "a?b?|a?c?|x",
+    "invariant": "Charge equality before later non-concat prevents reconstruction.",
+    "expected": {
+      "allocation_sites_native": [
+        [
+          "smart_constructors",
+          5980
+        ],
+        [
+          "initial_properties_and_unary",
+          1472
+        ],
+        [
+          "literal_frames",
+          409
+        ],
+        [
+          "class_backing",
+          0
+        ],
+        [
+          "translator_stack",
+          4800
+        ],
+        [
+          "visitor_stack",
+          1920
+        ],
+        [
+          "cleanup",
+          18048
+        ]
+      ],
+      "allocation_total_native": 32629,
+      "maximum_equality_height": 3,
+      "maximum_prefix_calls": 1,
+      "shape": {
+        "a": 1,
+        "all_concat": true,
+        "alt_cost": 2072,
+        "b": 5,
+        "concat_cost": 3908,
+        "cost": 5980,
+        "flat_r": 12,
+        "front": 12,
+        "h": 4,
+        "k": 0,
+        "lit": 0,
+        "m": 12,
+        "n": 12,
+        "nonzero": true,
+        "p": 3,
+        "prefixes": 0,
+        "r": 0,
+        "root": "Unknown",
+        "u": 4,
+        "zero": false
+      },
+      "work_counters": {
+        "alt_frontier": 3,
+        "alt_input": 6,
+        "concat_bytes": 4,
+        "concat_input": 4,
+        "concat_visit": 4,
+        "prefix_bytes": 5,
+        "prefix_nodes": 24,
+        "prefix_ranges": 5,
+        "prefix_split": 0,
+        "range_slots": 96,
+        "sort_pairs": 1824
+      },
+      "work_sites_native": [
+        [
+          "visitor_pre_post_and_edges",
+          48
+        ],
+        [
+          "translator_stack_push_pop_growth",
+          576
+        ],
+        [
+          "initial_property_fields_and_unary",
+          320
+        ],
+        [
+          "initial_literal_encoding_growth_utf8",
+          40
+        ],
+        [
+          "initial_ordered_class_slots",
+          0
+        ],
+        [
+          "concat_input_reverse_transfer",
+          96
+        ],
+        [
+          "concat_kind_and_into_parts",
+          68
+        ],
+        [
+          "concat_output_push_growth",
+          72
+        ],
+        [
+          "concat_property_fields_prefix_suffix",
+          88
+        ],
+        [
+          "concat_literal_copy_growth_utf8",
+          24
+        ],
+        [
+          "alt_input_reverse_transfer",
+          144
+        ],
+        [
+          "alt_flatten_parts_and_properties",
+          99
+        ],
+        [
+          "alt_output_push_growth",
+          54
+        ],
+        [
+          "alt_singleton_class_dispatch_probes",
+          27
+        ],
+        [
+          "prefix_equality_node_fields",
+          528
+        ],
+        [
+          "prefix_equality_literal_bytes",
+          5
+        ],
+        [
+          "prefix_equality_range_fields",
+          10
+        ],
+        [
+          "prefix_split_and_move",
+          0
+        ],
+        [
+          "range_sort_comparisons_moves",
+          3648
+        ],
+        [
+          "range_union_equality_scan_extend_drain",
+          96
+        ],
+        [
+          "cleanup_stack_and_parts",
+          600
+        ]
+      ],
+      "work_sites_wasm_width": [
+        [
+          "visitor_pre_post_and_edges",
+          48
+        ],
+        [
+          "translator_stack_push_pop_growth",
+          672
+        ],
+        [
+          "initial_property_fields_and_unary",
+          320
+        ],
+        [
+          "initial_literal_encoding_growth_utf8",
+          40
+        ],
+        [
+          "initial_ordered_class_slots",
+          0
+        ],
+        [
+          "concat_input_reverse_transfer",
+          112
+        ],
+        [
+          "concat_kind_and_into_parts",
+          68
+        ],
+        [
+          "concat_output_push_growth",
+          84
+        ],
+        [
+          "concat_property_fields_prefix_suffix",
+          88
+        ],
+        [
+          "concat_literal_copy_growth_utf8",
+          24
+        ],
+        [
+          "alt_input_reverse_transfer",
+          168
+        ],
+        [
+          "alt_flatten_parts_and_properties",
+          99
+        ],
+        [
+          "alt_output_push_growth",
+          63
+        ],
+        [
+          "alt_singleton_class_dispatch_probes",
+          27
+        ],
+        [
+          "prefix_equality_node_fields",
+          528
+        ],
+        [
+          "prefix_equality_literal_bytes",
+          5
+        ],
+        [
+          "prefix_equality_range_fields",
+          10
+        ],
+        [
+          "prefix_split_and_move",
+          0
+        ],
+        [
+          "range_sort_comparisons_moves",
+          3648
+        ],
+        [
+          "range_union_equality_scan_extend_drain",
+          192
+        ],
+        [
+          "cleanup_stack_and_parts",
+          636
+        ]
+      ]
+    }
+  },
+  {
+    "id": "hir-inventory/successful-prefix",
+    "form": "a?b?|a?c?",
+    "invariant": "Charge suffix/final concat reconstruction as well as equality.",
+    "expected": {
+      "allocation_sites_native": [
+        [
+          "smart_constructors",
+          72092
+        ],
+        [
+          "initial_properties_and_unary",
+          1392
+        ],
+        [
+          "literal_frames",
+          372
+        ],
+        [
+          "class_backing",
+          0
+        ],
+        [
+          "translator_stack",
+          4416
+        ],
+        [
+          "visitor_stack",
+          1760
+        ],
+        [
+          "cleanup",
+          18240
+        ]
+      ],
+      "allocation_total_native": 98272,
+      "maximum_equality_height": 3,
+      "maximum_prefix_calls": 2,
+      "shape": {
+        "a": 1,
+        "all_concat": true,
+        "alt_cost": 68184,
+        "b": 4,
+        "concat_cost": 3908,
+        "cost": 72092,
+        "flat_r": 11,
+        "front": 11,
+        "h": 8,
+        "k": 0,
+        "lit": 0,
+        "m": 11,
+        "n": 11,
+        "nonzero": true,
+        "p": 3,
+        "prefixes": 2,
+        "r": 0,
+        "root": "Unknown",
+        "u": 4,
+        "zero": false
+      },
+      "work_counters": {
+        "alt_frontier": 44,
+        "alt_input": 46,
+        "concat_bytes": 20,
+        "concat_input": 92,
+        "concat_visit": 92,
+        "prefix_bytes": 8,
+        "prefix_nodes": 44,
+        "prefix_ranges": 8,
+        "prefix_split": 44,
+        "range_slots": 704,
+        "sort_pairs": 26752
+      },
+      "work_sites_native": [
+        [
+          "visitor_pre_post_and_edges",
+          44
+        ],
+        [
+          "translator_stack_push_pop_growth",
+          528
+        ],
+        [
+          "initial_property_fields_and_unary",
+          304
+        ],
+        [
+          "initial_literal_encoding_growth_utf8",
+          32
+        ],
+        [
+          "initial_ordered_class_slots",
+          0
+        ],
+        [
+          "concat_input_reverse_transfer",
+          2208
+        ],
+        [
+          "concat_kind_and_into_parts",
+          1564
+        ],
+        [
+          "concat_output_push_growth",
+          1656
+        ],
+        [
+          "concat_property_fields_prefix_suffix",
+          2024
+        ],
+        [
+          "concat_literal_copy_growth_utf8",
+          120
+        ],
+        [
+          "alt_input_reverse_transfer",
+          1104
+        ],
+        [
+          "alt_flatten_parts_and_properties",
+          1452
+        ],
+        [
+          "alt_output_push_growth",
+          792
+        ],
+        [
+          "alt_singleton_class_dispatch_probes",
+          396
+        ],
+        [
+          "prefix_equality_node_fields",
+          968
+        ],
+        [
+          "prefix_equality_literal_bytes",
+          8
+        ],
+        [
+          "prefix_equality_range_fields",
+          16
+        ],
+        [
+          "prefix_split_and_move",
+          792
+        ],
+        [
+          "range_sort_comparisons_moves",
+          53504
+        ],
+        [
+          "range_union_equality_scan_extend_drain",
+          704
+        ],
+        [
+          "cleanup_stack_and_parts",
+          618
+        ]
+      ],
+      "work_sites_wasm_width": [
+        [
+          "visitor_pre_post_and_edges",
+          44
+        ],
+        [
+          "translator_stack_push_pop_growth",
+          616
+        ],
+        [
+          "initial_property_fields_and_unary",
+          304
+        ],
+        [
+          "initial_literal_encoding_growth_utf8",
+          32
+        ],
+        [
+          "initial_ordered_class_slots",
+          0
+        ],
+        [
+          "concat_input_reverse_transfer",
+          2576
+        ],
+        [
+          "concat_kind_and_into_parts",
+          1564
+        ],
+        [
+          "concat_output_push_growth",
+          1932
+        ],
+        [
+          "concat_property_fields_prefix_suffix",
+          2024
+        ],
+        [
+          "concat_literal_copy_growth_utf8",
+          120
+        ],
+        [
+          "alt_input_reverse_transfer",
+          1288
+        ],
+        [
+          "alt_flatten_parts_and_properties",
+          1452
+        ],
+        [
+          "alt_output_push_growth",
+          924
+        ],
+        [
+          "alt_singleton_class_dispatch_probes",
+          396
+        ],
+        [
+          "prefix_equality_node_fields",
+          968
+        ],
+        [
+          "prefix_equality_literal_bytes",
+          8
+        ],
+        [
+          "prefix_equality_range_fields",
+          16
+        ],
+        [
+          "prefix_split_and_move",
+          924
+        ],
+        [
+          "range_sort_comparisons_moves",
+          53504
+        ],
+        [
+          "range_union_equality_scan_extend_drain",
+          1408
+        ],
+        [
+          "cleanup_stack_and_parts",
+          657
+        ]
+      ]
+    }
+  },
+  {
+    "id": "hir-inventory/nested-alternates",
+    "form": "(?:a?|a?b?)|(?:a?c?)",
+    "invariant": "First-branch weight/frontier use flattening-aware recurrence.",
+    "expected": {
+      "allocation_sites_native": [
+        [
+          "smart_constructors",
+          7932
+        ],
+        [
+          "initial_properties_and_unary",
+          1920
+        ],
+        [
+          "literal_frames",
+          537
+        ],
+        [
+          "class_backing",
+          0
+        ],
+        [
+          "translator_stack",
+          6336
+        ],
+        [
+          "visitor_stack",
+          2560
+        ],
+        [
+          "cleanup",
+          24064
+        ]
+      ],
+      "allocation_total_native": 43349,
+      "maximum_equality_height": 0,
+      "maximum_prefix_calls": 1,
+      "shape": {
+        "a": 2,
+        "all_concat": false,
+        "alt_cost": 4024,
+        "b": 5,
+        "concat_cost": 3908,
+        "cost": 7932,
+        "flat_r": 0,
+        "front": 3,
+        "h": 5,
+        "k": 0,
+        "lit": 0,
+        "m": 14,
+        "n": 16,
+        "nonzero": true,
+        "p": 3,
+        "prefixes": 0,
+        "r": 0,
+        "root": "Alt",
+        "u": 5,
+        "zero": false
+      },
+      "work_counters": {
+        "alt_frontier": 5,
+        "alt_input": 9,
+        "concat_bytes": 4,
+        "concat_input": 4,
+        "concat_visit": 4,
+        "prefix_bytes": 8,
+        "prefix_nodes": 44,
+        "prefix_ranges": 8,
+        "prefix_split": 0,
+        "range_slots": 0,
+        "sort_pairs": 0
+      },
+      "work_sites_native": [
+        [
+          "visitor_pre_post_and_edges",
+          64
+        ],
+        [
+          "translator_stack_push_pop_growth",
+          768
+        ],
+        [
+          "initial_property_fields_and_unary",
+          416
+        ],
+        [
+          "initial_literal_encoding_growth_utf8",
+          40
+        ],
+        [
+          "initial_ordered_class_slots",
+          0
+        ],
+        [
+          "concat_input_reverse_transfer",
+          96
+        ],
+        [
+          "concat_kind_and_into_parts",
+          68
+        ],
+        [
+          "concat_output_push_growth",
+          72
+        ],
+        [
+          "concat_property_fields_prefix_suffix",
+          88
+        ],
+        [
+          "concat_literal_copy_growth_utf8",
+          24
+        ],
+        [
+          "alt_input_reverse_transfer",
+          216
+        ],
+        [
+          "alt_flatten_parts_and_properties",
+          165
+        ],
+        [
+          "alt_output_push_growth",
+          90
+        ],
+        [
+          "alt_singleton_class_dispatch_probes",
+          45
+        ],
+        [
+          "prefix_equality_node_fields",
+          968
+        ],
+        [
+          "prefix_equality_literal_bytes",
+          8
+        ],
+        [
+          "prefix_equality_range_fields",
+          16
+        ],
+        [
+          "prefix_split_and_move",
+          0
+        ],
+        [
+          "range_sort_comparisons_moves",
+          0
+        ],
+        [
+          "range_union_equality_scan_extend_drain",
+          0
+        ],
+        [
+          "cleanup_stack_and_parts",
+          800
+        ]
+      ],
+      "work_sites_wasm_width": [
+        [
+          "visitor_pre_post_and_edges",
+          64
+        ],
+        [
+          "translator_stack_push_pop_growth",
+          896
+        ],
+        [
+          "initial_property_fields_and_unary",
+          416
+        ],
+        [
+          "initial_literal_encoding_growth_utf8",
+          40
+        ],
+        [
+          "initial_ordered_class_slots",
+          0
+        ],
+        [
+          "concat_input_reverse_transfer",
+          112
+        ],
+        [
+          "concat_kind_and_into_parts",
+          68
+        ],
+        [
+          "concat_output_push_growth",
+          84
+        ],
+        [
+          "concat_property_fields_prefix_suffix",
+          88
+        ],
+        [
+          "concat_literal_copy_growth_utf8",
+          24
+        ],
+        [
+          "alt_input_reverse_transfer",
+          252
+        ],
+        [
+          "alt_flatten_parts_and_properties",
+          165
+        ],
+        [
+          "alt_output_push_growth",
+          105
+        ],
+        [
+          "alt_singleton_class_dispatch_probes",
+          45
+        ],
+        [
+          "prefix_equality_node_fields",
+          968
+        ],
+        [
+          "prefix_equality_literal_bytes",
+          8
+        ],
+        [
+          "prefix_equality_range_fields",
+          16
+        ],
+        [
+          "prefix_split_and_move",
+          0
+        ],
+        [
+          "range_sort_comparisons_moves",
+          0
+        ],
+        [
+          "range_union_equality_scan_extend_drain",
+          0
+        ],
+        [
+          "cleanup_stack_and_parts",
+          848
+        ]
+      ]
+    }
+  },
+  {
+    "id": "hir-inventory/shared-prefix-chain",
+    "form": "(?:a?b?|a?c?)d?|(?:a?b?|a?c?)e?",
+    "invariant": "Nested transformed child height must feed outer equality bound.",
+    "expected": {
+      "allocation_sites_native": [
+        [
+          "smart_constructors",
+          513126
+        ],
+        [
+          "initial_properties_and_unary",
+          3760
+        ],
+        [
+          "literal_frames",
+          1042
+        ],
+        [
+          "class_backing",
+          0
+        ],
+        [
+          "translator_stack",
+          12096
+        ],
+        [
+          "visitor_stack",
+          4960
+        ],
+        [
+          "cleanup",
+          53408
+        ]
+      ],
+      "allocation_total_native": 588392,
+      "maximum_equality_height": 9,
+      "maximum_prefix_calls": 4,
+      "shape": {
+        "a": 3,
+        "all_concat": true,
+        "alt_cost": 494372,
+        "b": 10,
+        "concat_cost": 18754,
+        "cost": 513126,
+        "flat_r": 29,
+        "front": 29,
+        "h": 18,
+        "k": 0,
+        "lit": 0,
+        "m": 29,
+        "n": 31,
+        "nonzero": true,
+        "p": 5,
+        "prefixes": 8,
+        "r": 0,
+        "root": "Unknown",
+        "u": 10,
+        "zero": false
+      },
+      "work_counters": {
+        "alt_frontier": 320,
+        "alt_input": 326,
+        "concat_bytes": 130,
+        "concat_input": 652,
+        "concat_visit": 674,
+        "prefix_bytes": 56,
+        "prefix_nodes": 320,
+        "prefix_ranges": 56,
+        "prefix_split": 320,
+        "range_slots": 40384,
+        "sort_pairs": 1155968
+      },
+      "work_sites_native": [
+        [
+          "visitor_pre_post_and_edges",
+          124
+        ],
+        [
+          "translator_stack_push_pop_growth",
+          1488
+        ],
+        [
+          "initial_property_fields_and_unary",
+          816
+        ],
+        [
+          "initial_literal_encoding_growth_utf8",
+          80
+        ],
+        [
+          "initial_ordered_class_slots",
+          0
+        ],
+        [
+          "concat_input_reverse_transfer",
+          15648
+        ],
+        [
+          "concat_kind_and_into_parts",
+          11458
+        ],
+        [
+          "concat_output_push_growth",
+          12132
+        ],
+        [
+          "concat_property_fields_prefix_suffix",
+          14828
+        ],
+        [
+          "concat_literal_copy_growth_utf8",
+          780
+        ],
+        [
+          "alt_input_reverse_transfer",
+          7824
+        ],
+        [
+          "alt_flatten_parts_and_properties",
+          10560
+        ],
+        [
+          "alt_output_push_growth",
+          5760
+        ],
+        [
+          "alt_singleton_class_dispatch_probes",
+          2880
+        ],
+        [
+          "prefix_equality_node_fields",
+          7040
+        ],
+        [
+          "prefix_equality_literal_bytes",
+          56
+        ],
+        [
+          "prefix_equality_range_fields",
+          112
+        ],
+        [
+          "prefix_split_and_move",
+          5760
+        ],
+        [
+          "range_sort_comparisons_moves",
+          2311936
+        ],
+        [
+          "range_union_equality_scan_extend_drain",
+          40384
+        ],
+        [
+          "cleanup_stack_and_parts",
+          1822
+        ]
+      ],
+      "work_sites_wasm_width": [
+        [
+          "visitor_pre_post_and_edges",
+          124
+        ],
+        [
+          "translator_stack_push_pop_growth",
+          1736
+        ],
+        [
+          "initial_property_fields_and_unary",
+          816
+        ],
+        [
+          "initial_literal_encoding_growth_utf8",
+          80
+        ],
+        [
+          "initial_ordered_class_slots",
+          0
+        ],
+        [
+          "concat_input_reverse_transfer",
+          18256
+        ],
+        [
+          "concat_kind_and_into_parts",
+          11458
+        ],
+        [
+          "concat_output_push_growth",
+          14154
+        ],
+        [
+          "concat_property_fields_prefix_suffix",
+          14828
+        ],
+        [
+          "concat_literal_copy_growth_utf8",
+          780
+        ],
+        [
+          "alt_input_reverse_transfer",
+          9128
+        ],
+        [
+          "alt_flatten_parts_and_properties",
+          10560
+        ],
+        [
+          "alt_output_push_growth",
+          6720
+        ],
+        [
+          "alt_singleton_class_dispatch_probes",
+          2880
+        ],
+        [
+          "prefix_equality_node_fields",
+          7040
+        ],
+        [
+          "prefix_equality_literal_bytes",
+          56
+        ],
+        [
+          "prefix_equality_range_fields",
+          112
+        ],
+        [
+          "prefix_split_and_move",
+          6720
+        ],
+        [
+          "range_sort_comparisons_moves",
+          2311936
+        ],
+        [
+          "range_union_equality_scan_extend_drain",
+          80768
+        ],
+        [
+          "cleanup_stack_and_parts",
+          1939
+        ]
+      ]
+    }
+  },
+  {
+    "id": "hir-inventory/flat-prefix-1000",
+    "form": "a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?b|a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?c",
+    "invariant": "Equality height bound 3; width increases work, not recursive equality depth.",
+    "expected": {
+      "allocation_sites_native": [
+        [
+          "smart_constructors",
+          25498946
+        ],
+        [
+          "initial_properties_and_unary",
+          576400
+        ],
+        [
+          "literal_frames",
+          138170
+        ],
+        [
+          "class_backing",
+          0
+        ],
+        [
+          "translator_stack",
+          1538112
+        ],
+        [
+          "visitor_stack",
+          640800
+        ],
+        [
+          "cleanup",
+          6025216
+        ]
+      ],
+      "allocation_total_native": 34417644,
+      "maximum_equality_height": 3,
+      "maximum_prefix_calls": 2,
+      "shape": {
+        "a": 1,
+        "all_concat": true,
+        "alt_cost": 24391680,
+        "b": 2002,
+        "concat_cost": 1107266,
+        "cost": 25498946,
+        "flat_r": 4005,
+        "front": 4005,
+        "h": 8,
+        "k": 0,
+        "lit": 0,
+        "m": 4005,
+        "n": 4005,
+        "nonzero": true,
+        "p": 1002,
+        "prefixes": 2,
+        "r": 0,
+        "root": "Unknown",
+        "u": 2000,
+        "zero": false
+      },
+      "work_counters": {
+        "alt_frontier": 16020,
+        "alt_input": 16022,
+        "concat_bytes": 10010,
+        "concat_input": 34042,
+        "concat_visit": 34042,
+        "prefix_bytes": 4004,
+        "prefix_nodes": 16020,
+        "prefix_ranges": 4004,
+        "prefix_split": 16020,
+        "range_slots": 256320,
+        "sort_pairs": 2057224320
+      },
+      "work_sites_native": [
+        [
+          "visitor_pre_post_and_edges",
+          16020
+        ],
+        [
+          "translator_stack_push_pop_growth",
+          192240
+        ],
+        [
+          "initial_property_fields_and_unary",
+          128080
+        ],
+        [
+          "initial_literal_encoding_growth_utf8",
+          16016
+        ],
+        [
+          "initial_ordered_class_slots",
+          0
+        ],
+        [
+          "concat_input_reverse_transfer",
+          817008
+        ],
+        [
+          "concat_kind_and_into_parts",
+          578714
+        ],
+        [
+          "concat_output_push_growth",
+          612756
+        ],
+        [
+          "concat_property_fields_prefix_suffix",
+          748924
+        ],
+        [
+          "concat_literal_copy_growth_utf8",
+          60060
+        ],
+        [
+          "alt_input_reverse_transfer",
+          384528
+        ],
+        [
+          "alt_flatten_parts_and_properties",
+          528660
+        ],
+        [
+          "alt_output_push_growth",
+          288360
+        ],
+        [
+          "alt_singleton_class_dispatch_probes",
+          144180
+        ],
+        [
+          "prefix_equality_node_fields",
+          352440
+        ],
+        [
+          "prefix_equality_literal_bytes",
+          4004
+        ],
+        [
+          "prefix_equality_range_fields",
+          8008
+        ],
+        [
+          "prefix_split_and_move",
+          288360
+        ],
+        [
+          "range_sort_comparisons_moves",
+          4114448640
+        ],
+        [
+          "range_union_equality_scan_extend_drain",
+          256320
+        ],
+        [
+          "cleanup_stack_and_parts",
+          200318
+        ]
+      ],
+      "work_sites_wasm_width": [
+        [
+          "visitor_pre_post_and_edges",
+          16020
+        ],
+        [
+          "translator_stack_push_pop_growth",
+          224280
+        ],
+        [
+          "initial_property_fields_and_unary",
+          128080
+        ],
+        [
+          "initial_literal_encoding_growth_utf8",
+          16016
+        ],
+        [
+          "initial_ordered_class_slots",
+          0
+        ],
+        [
+          "concat_input_reverse_transfer",
+          953176
+        ],
+        [
+          "concat_kind_and_into_parts",
+          578714
+        ],
+        [
+          "concat_output_push_growth",
+          714882
+        ],
+        [
+          "concat_property_fields_prefix_suffix",
+          748924
+        ],
+        [
+          "concat_literal_copy_growth_utf8",
+          60060
+        ],
+        [
+          "alt_input_reverse_transfer",
+          448616
+        ],
+        [
+          "alt_flatten_parts_and_properties",
+          528660
+        ],
+        [
+          "alt_output_push_growth",
+          336420
+        ],
+        [
+          "alt_singleton_class_dispatch_probes",
+          144180
+        ],
+        [
+          "prefix_equality_node_fields",
+          352440
+        ],
+        [
+          "prefix_equality_literal_bytes",
+          4004
+        ],
+        [
+          "prefix_equality_range_fields",
+          8008
+        ],
+        [
+          "prefix_split_and_move",
+          336420
+        ],
+        [
+          "range_sort_comparisons_moves",
+          4114448640
+        ],
+        [
+          "range_union_equality_scan_extend_drain",
+          512640
+        ],
+        [
+          "cleanup_stack_and_parts",
+          212339
+        ]
+      ]
+    }
+  },
+  {
+    "id": "hir-inventory/empty-alternatives",
+    "form": "((()|())|(()|()))",
+    "invariant": "Retain temporary empty-root cleanup and conservative collapse facts.",
+    "expected": {
+      "allocation_sites_native": [
+        [
+          "smart_constructors",
+          5856
+        ],
+        [
+          "initial_properties_and_unary",
+          2016
+        ],
+        [
+          "literal_frames",
+          448
+        ],
+        [
+          "class_backing",
+          0
+        ],
+        [
+          "translator_stack",
+          5568
+        ],
+        [
+          "visitor_stack",
+          2240
+        ],
+        [
+          "cleanup",
+          21056
+        ]
+      ],
+      "allocation_total_native": 37184,
+      "maximum_equality_height": 0,
+      "maximum_prefix_calls": 1,
+      "shape": {
+        "a": 3,
+        "all_concat": false,
+        "alt_cost": 5856,
+        "b": 0,
+        "concat_cost": 0,
+        "cost": 5856,
+        "flat_r": 0,
+        "front": 1,
+        "h": 6,
+        "k": 0,
+        "lit": 0,
+        "m": 14,
+        "n": 14,
+        "nonzero": false,
+        "p": 1,
+        "prefixes": 0,
+        "r": 0,
+        "root": "Unary",
+        "u": 7,
+        "zero": true
+      },
+      "work_counters": {
+        "alt_frontier": 6,
+        "alt_input": 12,
+        "concat_bytes": 0,
+        "concat_input": 0,
+        "concat_visit": 0,
+        "prefix_bytes": 0,
+        "prefix_nodes": 46,
+        "prefix_ranges": 0,
+        "prefix_split": 0,
+        "range_slots": 0,
+        "sort_pairs": 0
+      },
+      "work_sites_native": [
+        [
+          "visitor_pre_post_and_edges",
+          56
+        ],
+        [
+          "translator_stack_push_pop_growth",
+          672
+        ],
+        [
+          "initial_property_fields_and_unary",
+          448
+        ],
+        [
+          "initial_literal_encoding_growth_utf8",
+          0
+        ],
+        [
+          "initial_ordered_class_slots",
+          0
+        ],
+        [
+          "concat_input_reverse_transfer",
+          0
+        ],
+        [
+          "concat_kind_and_into_parts",
+          0
+        ],
+        [
+          "concat_output_push_growth",
+          0
+        ],
+        [
+          "concat_property_fields_prefix_suffix",
+          0
+        ],
+        [
+          "concat_literal_copy_growth_utf8",
+          0
+        ],
+        [
+          "alt_input_reverse_transfer",
+          288
+        ],
+        [
+          "alt_flatten_parts_and_properties",
+          198
+        ],
+        [
+          "alt_output_push_growth",
+          108
+        ],
+        [
+          "alt_singleton_class_dispatch_probes",
+          54
+        ],
+        [
+          "prefix_equality_node_fields",
+          1012
+        ],
+        [
+          "prefix_equality_literal_bytes",
+          0
+        ],
+        [
+          "prefix_equality_range_fields",
+          0
+        ],
+        [
+          "prefix_split_and_move",
+          0
+        ],
+        [
+          "range_sort_comparisons_moves",
+          0
+        ],
+        [
+          "range_union_equality_scan_extend_drain",
+          0
+        ],
+        [
+          "cleanup_stack_and_parts",
+          700
+        ]
+      ],
+      "work_sites_wasm_width": [
+        [
+          "visitor_pre_post_and_edges",
+          56
+        ],
+        [
+          "translator_stack_push_pop_growth",
+          784
+        ],
+        [
+          "initial_property_fields_and_unary",
+          448
+        ],
+        [
+          "initial_literal_encoding_growth_utf8",
+          0
+        ],
+        [
+          "initial_ordered_class_slots",
+          0
+        ],
+        [
+          "concat_input_reverse_transfer",
+          0
+        ],
+        [
+          "concat_kind_and_into_parts",
+          0
+        ],
+        [
+          "concat_output_push_growth",
+          0
+        ],
+        [
+          "concat_property_fields_prefix_suffix",
+          0
+        ],
+        [
+          "concat_literal_copy_growth_utf8",
+          0
+        ],
+        [
+          "alt_input_reverse_transfer",
+          336
+        ],
+        [
+          "alt_flatten_parts_and_properties",
+          198
+        ],
+        [
+          "alt_output_push_growth",
+          126
+        ],
+        [
+          "alt_singleton_class_dispatch_probes",
+          54
+        ],
+        [
+          "prefix_equality_node_fields",
+          1012
+        ],
+        [
+          "prefix_equality_literal_bytes",
+          0
+        ],
+        [
+          "prefix_equality_range_fields",
+          0
+        ],
+        [
+          "prefix_split_and_move",
+          0
+        ],
+        [
+          "range_sort_comparisons_moves",
+          0
+        ],
+        [
+          "range_union_equality_scan_extend_drain",
+          0
+        ],
+        [
+          "cleanup_stack_and_parts",
+          742
+        ]
+      ]
+    }
+  }
+]

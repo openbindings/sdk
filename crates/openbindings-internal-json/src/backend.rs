@@ -59,6 +59,52 @@ pub fn member_at(value: crate::JsonRef<'_>, index: usize) -> Option<crate::JsonM
     })
 }
 
+/// Borrow candidate members from the arena's ordered name index. The caller
+/// compares each candidate exactly. Work is prepaid and cancellation checked on
+/// every search step. A name holding unpaired units is copied first, with a
+/// check every 1,024 UTF-16 units; other names are compared where they are.
+pub fn member_candidates<'a, E>(
+    object: crate::JsonRef<'a>,
+    name: crate::JsonRef<'_>,
+    mut work: impl FnMut(usize) -> Result<(), E>,
+) -> Result<MemberCandidates<'a>, E> {
+    let members = object.owner.member_candidates(
+        object.id,
+        name.as_str(),
+        name.as_string().expect("member name").utf16_units(),
+        name.text().len(),
+        &mut work,
+    )?;
+    Ok(MemberCandidates { object, members })
+}
+
+/// A borrowed candidate sequence; it owns neither an arena nor a name.
+pub struct MemberCandidates<'a> {
+    object: crate::JsonRef<'a>,
+    members: crate::raw::MemberCandidates<'a>,
+}
+impl std::fmt::Debug for MemberCandidates<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("MemberCandidates { .. }")
+    }
+}
+impl<'a> Iterator for MemberCandidates<'a> {
+    type Item = crate::JsonMember<'a>;
+    fn next(&mut self) -> Option<Self::Item> {
+        let name = self.members.next()?;
+        Some(crate::JsonMember {
+            name: crate::JsonRef {
+                owner: self.object.owner,
+                id: name,
+            },
+            value: crate::JsonRef {
+                owner: self.object.owner,
+                id: name + 1,
+            },
+        })
+    }
+}
+
 // Fixed schemas only test ASCII patterns, ASCII constants and nonempty strings.
 // Escape the marker itself and encode unpaired units, retaining every UTF-16 unit.
 // This presentation is injective; it is not a Unicode replacement operation.
@@ -608,8 +654,12 @@ fn subtree_end(arena: &Arena, mut id: Id) -> Id {
 impl ArrayView<'_> {
     // Hash every node of the elements, `first..end`, charging each, and
     // compare the elements whose hashes repeat. Each check is its own frame,
-    // so a check holds only its own table on the stack.
+    // so a check holds only its own buffers on the stack.
     #[inline(never)]
+    #[expect(
+        clippy::disallowed_types,
+        reason = "Fingerprints only select sorted candidates; exact comparisons are charged"
+    )]
     fn hashed_unique(&self, first: Id, end: Id, counting: bool) -> bool {
         use std::{collections::hash_map::RandomState, hash::BuildHasher};
         let hasher = RandomState::new();
@@ -708,51 +758,22 @@ impl ArrayView<'_> {
         }
         true
     }
-    // Hashes only select candidates: an element is compared, in array order,
-    // with every earlier element of its hash, each comparison charged and
-    // verified exactly. Equal elements hash alike, but unequal ones may too:
-    // objects holding one name twice, which equality reads by the name's first
-    // occurrence while the hash counts every member, and collisions of keyed
-    // 64-bit hashes. While no hash repeats, only the hashes seen are kept. The
-    // first repeat finds its candidates by one scan; unless it ends the check,
-    // the elements are then grouped by hash once, so that every later
-    // element's candidates are listed directly, for work linear in the
-    // comparisons charged. The table grows as usual while small, so an early
-    // repeat costs little; past that it grows once, to hold every element
-    // left, rather than keeping old and new tables while doubling.
-    // `hash_of` reads the hash of the element at a position.
+    // Fingerprints select candidates; every candidate is compared exactly and
+    // charged, in original array order. A small array scans its fingerprints
+    // without allocating. A larger one sorts them into groups.
     fn unique_by_hash(&self, hash_of: &impl Fn(usize) -> u64, counting: bool) -> bool {
-        const DOUBLING: usize = 4096;
-        // A small array finds its first repeated hash by scanning the earlier
-        // ones, as the table would find it.
-        if self.1.len() <= SMALL {
-            for at in 1..self.1.len() {
-                let hash = hash_of(at);
-                if (0..at).any(|prior| hash_of(prior) == hash) {
-                    let earlier = (0..at).filter(|&prior| hash_of(prior) == hash);
-                    return match self.repeats(at, earlier, counting) {
-                        Some(unique) => unique,
-                        None => self.unique_by_groups(at + 1, hash_of, counting),
-                    };
-                }
-            }
-            return true;
+        if self.1.len() > SMALL {
+            return self.unique_by_groups(0, hash_of, counting);
         }
-        let mut seen = std::collections::HashSet::new();
-        for at in 0..self.1.len() {
+        for at in 1..self.1.len() {
             let hash = hash_of(at);
-            if seen.len() == seen.capacity() && seen.len() >= DOUBLING {
-                seen.reserve(self.1.len() - at);
+            if (0..at).any(|prior| hash_of(prior) == hash) {
+                let earlier = (0..at).filter(|&prior| hash_of(prior) == hash);
+                return match self.repeats(at, earlier, counting) {
+                    Some(unique) => unique,
+                    None => self.unique_by_groups(at + 1, hash_of, counting),
+                };
             }
-            if seen.insert(hash) {
-                continue;
-            }
-            drop(seen);
-            let earlier = (0..at).filter(|&prior| hash_of(prior) == hash);
-            return match self.repeats(at, earlier, counting) {
-                Some(unique) => unique,
-                None => self.unique_by_groups(at + 1, hash_of, counting),
-            };
         }
         true
     }
@@ -843,6 +864,53 @@ pub fn string_pointer(value: crate::JsonRef<'_>) -> Option<crate::Pointer> {
 pub fn relative_pointer(value: crate::JsonRef<'_>, root: crate::JsonRef<'_>) -> crate::Pointer {
     debug_assert!(std::sync::Arc::ptr_eq(value.owner, root.owner));
     value.owner.exact_pointer_from(value.id, root.id)
+}
+/// Measure the exact relative representation and establish same-arena ancestry
+/// without constructing it. This excludes names above the selected root.
+pub fn relative_pointer_size(
+    value: crate::JsonRef<'_>,
+    root: crate::JsonRef<'_>,
+    limit: usize,
+) -> Option<usize> {
+    if !std::sync::Arc::ptr_eq(value.owner, root.owner) {
+        return None;
+    }
+    let (mut bytes, mut units, mut unpaired) = (0usize, 0usize, false);
+    let mut current = value.id;
+    while current != root.id {
+        let (parent, edge) = value.owner.edge(current)?;
+        bytes = bytes.checked_add(1)?;
+        units = units.checked_add(1)?;
+        match edge {
+            crate::raw::Edge::Index(index) => {
+                let digits = index.checked_ilog10().map_or(1, |n| n as usize + 1);
+                bytes = bytes.checked_add(digits)?;
+                units = units.checked_add(digits)?;
+            }
+            crate::raw::Edge::Key(key) => {
+                if let Some(name) = value.owner.string(key) {
+                    bytes = bytes.checked_add(name.len())?;
+                    for unit in name.encode_utf16() {
+                        let escape = usize::from(unit == 0x7e || unit == 0x2f);
+                        units = units.checked_add(1 + escape)?;
+                        bytes = bytes.checked_add(escape)?;
+                    }
+                } else {
+                    unpaired = true;
+                    for unit in value.owner.unpaired_units(key)? {
+                        units = units.checked_add(1 + usize::from(unit == 0x7e || unit == 0x2f))?;
+                    }
+                }
+            }
+        }
+        current = parent;
+    }
+    let size = if unpaired {
+        units.checked_mul(2)?
+    } else {
+        bytes
+    };
+    (size <= limit && size <= isize::MAX as usize).then_some(size)
 }
 /// Append escaped RFC 6901 text, such as a keyword's `/minimum`.
 pub fn push_pointer(pointer: &mut crate::Pointer, escaped: &str) {
@@ -1289,6 +1357,11 @@ pub fn node_id(value: &crate::JsonValue) -> usize {
 pub fn ref_id(value: crate::JsonRef<'_>) -> usize {
     value.id
 }
+/// Process-local occurrence identity while the owning arena is retained. Unlike
+/// `ref_id`, this can distinguish operands borrowed from different arenas.
+pub fn occurrence(value: crate::JsonRef<'_>) -> (usize, usize) {
+    (std::sync::Arc::as_ptr(value.owner) as usize, value.id)
+}
 /// Borrow the value at an arena position recorded by [`ref_id`] from any value
 /// sharing that arena. `None` when the position does not exist.
 pub fn node(value: &crate::JsonValue, id: usize) -> Option<crate::JsonRef<'_>> {
@@ -1391,6 +1464,14 @@ pub fn node_count(value: crate::JsonRef<'_>) -> usize {
     nodes.partition_point(|node| node.span.start < end)
 }
 
+/// Visit every subtree node, borrowing its number token when it is numeric.
+/// Callers can observe control even across long nonnumeric spans.
+pub fn number_nodes(value: &crate::JsonValue) -> impl Iterator<Item = Option<&str>> {
+    let count = node_count(value.view());
+    (value.id..value.id + count)
+        .map(|id| matches!(value.owner.nodes[id].kind, Kind::Number).then(|| value.owner.raw(id)))
+}
+
 /// Whether [`depth`] is at most `limit`, without allocating for a value that
 /// nests at most 32 levels, and without reading past the first container
 /// deeper than `limit`.
@@ -1466,6 +1547,105 @@ pub fn byte_range(value: crate::JsonRef<'_>) -> std::ops::Range<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn direct_exact_pointers_round_trip_mixed_names_and_retained_subtrees() {
+        let value = crate::JsonValue::parse(
+            r#"{"\ud800":{"":{"~/":[0,1,2,3,4,5,6,7,8,9,{"😀":{"\udc00":false,"é":true}}]}},"scalar":{"😀":1}}"#,
+        )
+        .unwrap();
+        let subtree = member_at(value.view(), 0).unwrap().value.to_owned();
+        for root in [&value, &subtree] {
+            let mut pending = vec![root.view()];
+            while let Some(current) = pending.pop() {
+                let pointer = relative_pointer(current, root.view());
+                let size = pointer_bytes(&pointer);
+                assert_eq!(
+                    relative_pointer_size(current, root.view(), size),
+                    Some(size)
+                );
+                if size > 0 {
+                    assert_eq!(relative_pointer_size(current, root.view(), size - 1), None);
+                }
+                assert_eq!(
+                    occurrence(root.at_pointer(&pointer).unwrap()),
+                    occurrence(current)
+                );
+                let serialized = serde_json::to_string(&pointer).unwrap();
+                let token = crate::JsonValue::parse(serialized).unwrap();
+                let lossy = String::from_utf16_lossy(&pointer.utf16_units().collect::<Vec<_>>());
+                assert_eq!(string_pointer(token.view()).unwrap(), lossy);
+                // Exact lookup still round-trips every original UTF-16 unit;
+                // ordinary serialization is a scalar-text presentation.
+                let exact = pointer
+                    .utf16_units()
+                    .map(|unit| format!("\\u{unit:04x}"))
+                    .collect::<String>();
+                let token = crate::JsonValue::parse(format!("\"{exact}\"")).unwrap();
+                assert_eq!(string_pointer(token.view()).unwrap(), pointer);
+                if let Some(items) = current.elements() {
+                    pending.extend(items);
+                } else if let Some(members) = current.members() {
+                    pending.extend(members.map(|member| member.value));
+                }
+            }
+            assert_eq!(
+                relative_pointer(root.view(), root.view()).as_str(),
+                Some("")
+            );
+        }
+        // An unpaired ancestor outside the chosen root does not change the
+        // representation of a scalar relative path, including empty segments.
+        let scalar = subtree.at("//~0~1/10/😀/é").unwrap();
+        assert_eq!(
+            relative_pointer(scalar, subtree.view()).as_str(),
+            Some("//~0~1/10/😀/é")
+        );
+        assert!(relative_pointer(scalar, value.view()).as_str().is_none());
+        let object = subtree.at("//~0~1/10/😀").unwrap();
+        let lone = member_at(object, 0).unwrap().value;
+        let pointer = relative_pointer(lone, subtree.view());
+        let mut expected: Vec<_> = "//~0~1/10/😀/".encode_utf16().collect();
+        expected.push(0xdc00);
+        assert_eq!(pointer.utf16_units().collect::<Vec<_>>(), expected);
+        assert_eq!(
+            relative_pointer_size(value.view(), subtree.view(), usize::MAX),
+            None
+        );
+        let unrelated = crate::JsonValue::parse("0").unwrap();
+        assert_eq!(
+            relative_pointer_size(unrelated.view(), value.view(), usize::MAX),
+            None
+        );
+        let sibling = value.at("/scalar").unwrap();
+        assert_eq!(
+            relative_pointer_size(sibling, subtree.view(), usize::MAX),
+            None
+        );
+    }
+
+    #[test]
+    fn direct_exact_pointers_preserve_deep_empty_segments() {
+        for depth in [8, 32, 64, 128] {
+            let text = format!(
+                "{{\"\\ud800\":{}0{}}}",
+                "{\"\":".repeat(depth - 1),
+                "}".repeat(depth - 1)
+            );
+            let value = crate::JsonValue::parse(text).unwrap();
+            let mut leaf = value.view();
+            for _ in 0..depth {
+                leaf = member_at(leaf, 0).unwrap().value;
+            }
+            let pointer = relative_pointer(leaf, value.view());
+            let expected = std::iter::once(u16::from(b'/'))
+                .chain(std::iter::once(0xd800))
+                .chain(std::iter::repeat_n(u16::from(b'/'), depth - 1));
+            assert!(pointer.utf16_units().eq(expected));
+            assert_eq!(pointer_bytes(&pointer), 2 * (depth + 1));
+            assert_eq!(value.at_pointer(&pointer).unwrap().text(), "0");
+        }
+    }
+
     #[test]
     fn measured_location_sizes_agree_with_each_walk() {
         // Escaped and multibyte names, multi-digit indices, nesting, and names

@@ -97,6 +97,7 @@ def main():
     paths = sorted(set([
         *ROOT.glob('*.md'), *ROOT.glob('docs/*.md'),
         *ROOT.glob('crates/*/README.md'), *ROOT.glob('crates/**/*.rs'),
+        *ROOT.glob('examples/*/README.md'),
         ROOT / 'packages/typescript/README.md',
     ]))
     errors, checked, remote = check(paths)

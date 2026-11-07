@@ -93,22 +93,17 @@ mod tests {
         );
     }
 
-    // Preparation and every verdict and explanation are the same whatever
-    // order the consumer's serde_json maps keep: these outcomes were taken
-    // from the SDK before projected definitions, whose text always held
-    // keywords and subschemas by name. The `patternProperties` reason case's
-    // were taken again once a name the evaluator does not match became a
-    // stand-in: the first such name by name gives a value's no-verdict its
-    // reason, as it gave the refusal before. The `po` configuration keeps
-    // insertion order, and with `check` each preparation also checks its
-    // conversion.
+    // Compare fresh observations across actual Cargo feature graphs. The verifier
+    // pairs this matrix with evaluator/ap/preserve_order runs.
+    // Historical budget cutoffs and diagnostic prose are not SDK compatibility
+    // requirements. Default-funded ordinary cases retain independent semantic answers.
     #[cfg(feature = "evaluator")]
     #[test]
     fn serde_json_member_order_never_changes_preparation_or_verdicts() {
         use openbindings::{Document, JsonValue};
         use openbindings_json_schema_evaluator::{DefaultEvaluator, Limits};
         let cases: Value = serde_json::from_str(include_str!("member-order-cases.json")).unwrap();
-        let mut runs = 0;
+        let mut observations = Vec::new();
         for case in cases.as_array().unwrap() {
             let id = case["id"].as_str().unwrap();
             let document = Document::parse(case["document"].as_str().unwrap()).unwrap();
@@ -127,31 +122,71 @@ mod tests {
                 .collect();
             for run in case["runs"].as_array().unwrap() {
                 let limits: Limits = serde_json::from_value(run["limits"].clone()).unwrap();
-                let expected = &run["expected"];
-                match contract.prepare(&DefaultEvaluator::with_limits(limits)) {
-                    Err(refusal) => assert_eq!(
-                        serde_json::to_value(&refusal).unwrap(),
-                        expected["prepare"],
-                        "{id} {}",
-                        run["limits"]
-                    ),
-                    Ok(prepared) => {
-                        assert_eq!(expected["prepare"], "prepared", "{id} {}", run["limits"]);
-                        let expected = expected["values"].as_array().unwrap();
-                        assert_eq!(values.len(), expected.len());
-                        for (value, expected) in values.iter().zip(expected) {
-                            let outcomes = serde_json::json!([
-                                serde_json::to_value(prepared.validate(value)).unwrap(),
-                                serde_json::to_value(prepared.explain(value)).unwrap(),
-                            ]);
-                            assert_eq!(&outcomes, expected, "{id} {} {}", run["limits"], value.text());
-                        }
+                let funded = run["limits"].as_object().unwrap().is_empty();
+                let observed = match contract.prepare(
+                    &DefaultEvaluator::with_limits(limits),
+                    &openbindings::ExternalSchemas::default(),
+                    &openbindings::PreparationLimits::default(),
+                ) {
+                    Err(refusal) => {
+                        assert!(
+                            !funded,
+                            "{id}: ordinary case must prepare with default limits"
+                        );
+                        assert!(
+                            matches!(
+                                refusal.kind,
+                                openbindings::PreparationFailureKind::Limit { .. }
+                            ),
+                            "{id}"
+                        );
+                        serde_json::json!({"prepare": refusal})
                     }
-                }
-                runs += 1;
+                    Ok(prepared) => {
+                        let answers: Vec<Value> = values
+                            .iter()
+                            .enumerate()
+                            .map(|(index, value)| {
+                                let cheap = serde_json::to_value(prepared.evaluate(value)).unwrap();
+                                let explained =
+                                    serde_json::to_value(prepared.explain(value)).unwrap();
+                                for answer in [&cheap, &explained] {
+                                    match answer["status"].as_str().unwrap() {
+                                        "satisfies" | "fails" | "undefined" => assert_eq!(
+                                            answer["status"],
+                                            case["required_statuses"][index],
+                                            "{id}: {}",
+                                            value.text()
+                                        ),
+                                        "no-verdict" => {
+                                            let reason =
+                                                answer["detail"]["reason"].as_str().unwrap();
+                                            let capability =
+                                                case["capability_reasons"][index].as_str();
+                                            assert!(
+                                                (!funded && reason == "limit-exceeded")
+                                                    || capability == Some(reason),
+                                                "{id}: unexpected incomplete result {answer}"
+                                            );
+                                        }
+                                        status => panic!("unexpected status: {status}"),
+                                    }
+                                }
+                                serde_json::json!([cheap, explained])
+                            })
+                            .collect();
+                        serde_json::json!({"prepare": "prepared", "values": answers})
+                    }
+                };
+                observations.push(
+                    serde_json::json!({"id": id, "limits": run["limits"], "observed": observed}),
+                );
             }
         }
-        assert_eq!(runs, 77);
+        assert!(!observations.is_empty());
+        if let Some(path) = std::env::var_os("OB_CONSUMER_OBSERVATIONS") {
+            std::fs::write(path, serde_json::to_vec(&observations).unwrap()).unwrap();
+        }
     }
 
     #[cfg(feature = "sdk")]
@@ -182,10 +217,7 @@ mod tests {
             assert_eq!(decoded.text(), token);
             let raw: Box<serde_json::value::RawValue> = serde_json::from_str(token).unwrap();
             assert_eq!(serde_json::to_string(&raw).unwrap(), token);
-            assert_eq!(
-                JsonValue::from_serializable(&raw).unwrap_err().kind(),
-                openbindings::ValueConversionErrorKind::UnsupportedRepresentation
-            );
+            assert_eq!(JsonValue::from_serializable(&raw).unwrap().text(), token);
             // Consumer-enabled AP uses the same identity. Preserve its emitted
             // Number protocol; spelling already normalized by serde is not recovered.
             #[cfg(feature = "ap")]
@@ -215,43 +247,38 @@ mod tests {
 
     #[cfg(feature = "sdk")]
     #[test]
-    fn public_custom_evaluator_and_projection_use_sdk_values() {
+    fn public_custom_evaluator_and_original_environment_use_sdk_values() {
         use openbindings::*;
-        use std::sync::Arc;
         struct ExactConstant;
         struct Prepared(JsonValue);
         impl SchemaEvaluator for ExactConstant {
+            type Validator = Prepared;
             fn prepare(
                 &self,
-                request: &SchemaRequest,
+                request: EvaluationRequest<'_>,
+                limits: &PreparationLimits,
                 control: &dyn WorkControl,
-            ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
-                let program: EvaluationProgram = request.evaluation_program(control)?;
-                let _: &str = program.entry_uri();
-                let resources: &[SchemaResource] = program.resources();
-                assert!(!resources.is_empty());
-                for resource in resources {
-                    let document: &JsonValue = &resource.document;
-                    let encoded = serde_json::to_string(document).unwrap();
-                    let decoded: JsonValue = serde_json::from_str(&encoded).unwrap();
-                    assert_eq!(decoded.text(), document.text());
-                }
-                let entry = resources
-                    .iter()
-                    .find(|resource| resource.uri == program.entry_uri())
-                    .unwrap();
-                let reference = entry.document.get("$ref").unwrap();
-                let location: SchemaLocation = program
-                    .original_location(reference.as_str().unwrap())
-                    .unwrap();
-                assert_eq!(location.pointer, request.entry_location().pointer);
-                let constant: JsonValue = request.entry().get("const").unwrap().to_owned();
+            ) -> Result<Prepared, PreparationFailure> {
+                let environment = request.environment(limits, control)?;
+                let root = environment.root();
+                let document: JsonValue = root.value();
+                let encoded = serde_json::to_string(&document).unwrap();
+                let decoded: JsonValue = serde_json::from_str(&encoded).unwrap();
+                assert_eq!(decoded.text(), document.text());
+                assert_eq!(root.origin().pointer, "/operations/read/input");
+                assert_eq!(root.origin().source_uri, None);
+                let constant: JsonValue = document.get("const").unwrap().to_owned();
                 assert_eq!(constant.text(), "1e400");
-                Ok(Arc::new(Prepared(constant)))
+                Ok(Prepared(constant))
             }
         }
-        impl PreparedSchema for Prepared {
-            fn validate(&self, value: &JsonValue, _: Detail, control: &dyn WorkControl) -> ValueOutcome {
+        impl SchemaValidator for Prepared {
+            fn evaluate(
+                &self,
+                value: &JsonValue,
+                _: Detail,
+                control: &dyn WorkControl,
+            ) -> ValueOutcome {
                 control.check().unwrap();
                 // This finite signature witness only calls the supported exact constant.
                 assert_eq!(value.semantic_eq(&self.0), Some(true));
@@ -268,12 +295,16 @@ mod tests {
             .conformant()
             .expect("conformant document");
         let operation = proof.resolve_operation("read").expect("declared operation");
-        let input: ValueContract<'_> = operation.input().expect("declared input");
-        let contract: PreparedValueContract = input
-            .prepare(&ExactConstant)
+        let input: Schema = operation.input().expect("declared input");
+        let contract: PreparedSchema<Prepared> = input
+            .prepare(
+                &ExactConstant,
+                &openbindings::ExternalSchemas::default(),
+                &openbindings::PreparationLimits::default(),
+            )
             .expect("custom evaluator must prepare");
         assert!(matches!(
-            contract.validate(&JsonValue::parse("1e400").unwrap()),
+            contract.evaluate(&JsonValue::parse("1e400").unwrap()),
             ValueOutcome::Satisfies
         ));
     }

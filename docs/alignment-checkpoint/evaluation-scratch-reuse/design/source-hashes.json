@@ -1,0 +1,12 @@
+{
+  "checkpoint": "a7aab1e6bf73b2ec05bd31f50fb6c6127817ca3f",
+  "files": {
+    "sdk/crates/openbindings-json-schema-evaluator/src/semantic/mod.rs": "6000583cc031c5fcdbe411f5c3c0f59877a39dff06da5e06354bbcfafd6c1902",
+    "sdk/crates/openbindings-json-schema-evaluator/src/semantic/execution/mod.rs": "a6279e0ce688805c835ff3ce66e0567164d49d32b188aa1d8fe3047031ea9392",
+    "sdk/crates/openbindings-json-schema-evaluator/src/semantic/storage.rs": "e32d2cf6f03af6fb5b6b4670f543f0232ac68bd77ffcf5bb9cf16f98cebd2d52",
+    "sdk/crates/openbindings-json-schema-evaluator/src/semantic/values.rs": "d620978d075d2c6b5962341d82637df0728619fe4f169b425072c83c3501a72e",
+    "sdk/crates/openbindings-json-schema-evaluator/src/semantic/primitive.rs": "99cc154dd786e879e2df9ab458b45cd74022f97c4a7dfad7fbb4d3334cd416e9",
+    "sdk/tools/evaluator-bench/fixtures.py": "033ee97e6ac472a2818362e96275ea75ec8ab35d5bad31c80e3e5961fe984636",
+    "design/2026-11-02/evaluation-scratch-reuse.md": "da0afca8b6168d07919f64144cd775b54f33bbe9dfaee5496bd864fefe67c843"
+  }
+}

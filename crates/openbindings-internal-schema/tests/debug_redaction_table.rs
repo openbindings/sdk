@@ -32,6 +32,9 @@ fn internal_rows(context: &JsonValue) -> Vec<Row> {
         message: SECRET.into(),
         location: Some(location.clone()),
         reference_defect: Some(schema::StaticReferenceDefect::MalformedReference),
+        query_failure: Some(Box::new(schema::QueryFailure::ResourceUnavailable(
+            SECRET.into(),
+        ))),
     };
     let reference = schema::Reference {
         location: location.clone(),

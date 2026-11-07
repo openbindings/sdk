@@ -1,0 +1,79 @@
+{
+  "version": "1.0",
+  "description": "$ref is inlined during normalization (fragment refs resolve against the containing document, transitively) and $defs is stripped.",
+  "mode": "identical",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "schemas": {
+      "Name": {
+        "type": "string",
+        "minLength": 1
+      },
+      "Outer": {
+        "type": "object",
+        "properties": {
+          "inner": {
+            "$ref": "#/schemas/Name"
+          }
+        }
+      }
+    },
+    "operations": {
+      "refInlined": {
+        "input": {
+          "$ref": "#/schemas/Name"
+        }
+      },
+      "refTransitive": {
+        "input": {
+          "$ref": "#/schemas/Outer"
+        }
+      },
+      "defsStripped": {
+        "input": {
+          "type": "string",
+          "$defs": {
+            "Unused": {
+              "type": "integer"
+            }
+          }
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "refInlined": {
+        "input": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "refTransitive": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "inner": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      },
+      "defsStripped": {
+        "input": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "compatible"
+    }
+  }
+}

@@ -1,0 +1,563 @@
+{
+  "status": "Frozen independent bounded design controls; no implementation output used",
+  "base": "5cf704eb6cbd8f0d36b916ba53c1def4ebb20d0a",
+  "token_rows": [
+    {
+      "id": "NI-token-01",
+      "token": "0",
+      "integer": true,
+      "path": "i64",
+      "expected_graph_work": 9,
+      "expected_graph_reservation": 0
+    },
+    {
+      "id": "NI-token-02",
+      "token": "-0",
+      "integer": true,
+      "path": "i64",
+      "expected_graph_work": 17,
+      "expected_graph_reservation": 0
+    },
+    {
+      "id": "NI-token-03",
+      "token": "1",
+      "integer": true,
+      "path": "i64",
+      "expected_graph_work": 9,
+      "expected_graph_reservation": 0
+    },
+    {
+      "id": "NI-token-04",
+      "token": "-1",
+      "integer": true,
+      "path": "i64",
+      "expected_graph_work": 17,
+      "expected_graph_reservation": 0
+    },
+    {
+      "id": "NI-token-05",
+      "token": "9",
+      "integer": true,
+      "path": "i64",
+      "expected_graph_work": 9,
+      "expected_graph_reservation": 0
+    },
+    {
+      "id": "NI-token-06",
+      "token": "10",
+      "integer": true,
+      "path": "i64",
+      "expected_graph_work": 17,
+      "expected_graph_reservation": 0
+    },
+    {
+      "id": "NI-token-07",
+      "token": "1000",
+      "integer": true,
+      "path": "i64",
+      "expected_graph_work": 33,
+      "expected_graph_reservation": 0
+    },
+    {
+      "id": "NI-token-08",
+      "token": "-1000",
+      "integer": true,
+      "path": "i64",
+      "expected_graph_work": 41,
+      "expected_graph_reservation": 0
+    },
+    {
+      "id": "NI-token-09",
+      "token": "9223372036854775807",
+      "integer": true,
+      "path": "i64",
+      "expected_graph_work": 153,
+      "expected_graph_reservation": 0
+    },
+    {
+      "id": "NI-token-10",
+      "token": "9223372036854775806",
+      "integer": true,
+      "path": "i64",
+      "expected_graph_work": 153,
+      "expected_graph_reservation": 0
+    },
+    {
+      "id": "NI-token-11",
+      "token": "-9223372036854775808",
+      "integer": true,
+      "path": "i64",
+      "expected_graph_work": 161,
+      "expected_graph_reservation": 0
+    },
+    {
+      "id": "NI-token-12",
+      "token": "-9223372036854775807",
+      "integer": true,
+      "path": "i64",
+      "expected_graph_work": 161,
+      "expected_graph_reservation": 0
+    },
+    {
+      "id": "NI-token-13",
+      "token": "9007199254740991",
+      "integer": true,
+      "path": "i64",
+      "expected_graph_work": 129,
+      "expected_graph_reservation": 0
+    },
+    {
+      "id": "NI-token-14",
+      "token": "9007199254740992",
+      "integer": true,
+      "path": "i64",
+      "expected_graph_work": 129,
+      "expected_graph_reservation": 0
+    },
+    {
+      "id": "NI-token-15",
+      "token": "9007199254740993",
+      "integer": true,
+      "path": "i64",
+      "expected_graph_work": 129,
+      "expected_graph_reservation": 0
+    },
+    {
+      "id": "NI-token-16",
+      "token": "-9007199254740993",
+      "integer": true,
+      "path": "i64",
+      "expected_graph_work": 137,
+      "expected_graph_reservation": 0
+    },
+    {
+      "id": "NI-token-17",
+      "token": "9223372036854775808",
+      "integer": true,
+      "path": "Decimal",
+      "expected_graph_work": 153,
+      "expected_graph_reservation": 560
+    },
+    {
+      "id": "NI-token-18",
+      "token": "-9223372036854775809",
+      "integer": true,
+      "path": "Decimal",
+      "expected_graph_work": 161,
+      "expected_graph_reservation": 576
+    },
+    {
+      "id": "NI-token-19",
+      "token": "18446744073709551615",
+      "integer": true,
+      "path": "Decimal",
+      "expected_graph_work": 161,
+      "expected_graph_reservation": 576
+    },
+    {
+      "id": "NI-token-20",
+      "token": "18446744073709551616",
+      "integer": true,
+      "path": "Decimal",
+      "expected_graph_work": 161,
+      "expected_graph_reservation": 576
+    },
+    {
+      "id": "NI-token-21",
+      "token": "-18446744073709551616",
+      "integer": true,
+      "path": "Decimal",
+      "expected_graph_work": 169,
+      "expected_graph_reservation": 592
+    },
+    {
+      "id": "NI-token-22",
+      "token": "99999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999",
+      "integer": true,
+      "path": "Decimal",
+      "expected_graph_work": 1025,
+      "expected_graph_reservation": 2304
+    },
+    {
+      "id": "NI-token-23",
+      "token": "10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "integer": true,
+      "path": "Decimal",
+      "expected_graph_work": 32777,
+      "expected_graph_reservation": 65808
+    },
+    {
+      "id": "NI-token-24",
+      "token": "1.0",
+      "integer": true,
+      "path": "Decimal",
+      "expected_graph_work": 25,
+      "expected_graph_reservation": 304
+    },
+    {
+      "id": "NI-token-25",
+      "token": "-1.0",
+      "integer": true,
+      "path": "Decimal",
+      "expected_graph_work": 33,
+      "expected_graph_reservation": 320
+    },
+    {
+      "id": "NI-token-26",
+      "token": "0.0",
+      "integer": true,
+      "path": "Decimal",
+      "expected_graph_work": 25,
+      "expected_graph_reservation": 304
+    },
+    {
+      "id": "NI-token-27",
+      "token": "-0.000",
+      "integer": true,
+      "path": "Decimal",
+      "expected_graph_work": 49,
+      "expected_graph_reservation": 352
+    },
+    {
+      "id": "NI-token-28",
+      "token": "1e0",
+      "integer": true,
+      "path": "Decimal",
+      "expected_graph_work": 25,
+      "expected_graph_reservation": 304
+    },
+    {
+      "id": "NI-token-29",
+      "token": "1E+0",
+      "integer": true,
+      "path": "Decimal",
+      "expected_graph_work": 33,
+      "expected_graph_reservation": 320
+    },
+    {
+      "id": "NI-token-30",
+      "token": "-1e-0",
+      "integer": true,
+      "path": "Decimal",
+      "expected_graph_work": 41,
+      "expected_graph_reservation": 336
+    },
+    {
+      "id": "NI-token-31",
+      "token": "1.5e1",
+      "integer": true,
+      "path": "Decimal",
+      "expected_graph_work": 41,
+      "expected_graph_reservation": 336
+    },
+    {
+      "id": "NI-token-32",
+      "token": "10e-1",
+      "integer": true,
+      "path": "Decimal",
+      "expected_graph_work": 41,
+      "expected_graph_reservation": 336
+    },
+    {
+      "id": "NI-token-33",
+      "token": "1000000e-6",
+      "integer": true,
+      "path": "Decimal",
+      "expected_graph_work": 81,
+      "expected_graph_reservation": 416
+    },
+    {
+      "id": "NI-token-34",
+      "token": "9223372036854775807.0",
+      "integer": true,
+      "path": "Decimal",
+      "expected_graph_work": 169,
+      "expected_graph_reservation": 592
+    },
+    {
+      "id": "NI-token-35",
+      "token": "-9223372036854775808.0",
+      "integer": true,
+      "path": "Decimal",
+      "expected_graph_work": 177,
+      "expected_graph_reservation": 608
+    },
+    {
+      "id": "NI-token-36",
+      "token": "1.234567890123456789e19",
+      "integer": true,
+      "path": "Decimal",
+      "expected_graph_work": 185,
+      "expected_graph_reservation": 624
+    },
+    {
+      "id": "NI-token-37",
+      "token": "1e9999999999999999999999999999999999999999999999999999999999999999",
+      "integer": true,
+      "path": "Decimal",
+      "expected_graph_work": 529,
+      "expected_graph_reservation": 1312
+    },
+    {
+      "id": "NI-token-38",
+      "token": "0e-9999999999999999999999999999999999999999999999999999999999999999",
+      "integer": true,
+      "path": "Decimal",
+      "expected_graph_work": 537,
+      "expected_graph_reservation": 1328
+    },
+    {
+      "id": "NI-token-39",
+      "token": "-0.000e9999999999999999999999999999999999999999999999999999999999999999",
+      "integer": true,
+      "path": "Decimal",
+      "expected_graph_work": 569,
+      "expected_graph_reservation": 1392
+    },
+    {
+      "id": "NI-token-40",
+      "token": "0.100000000000000000000e1",
+      "integer": true,
+      "path": "Decimal",
+      "expected_graph_work": 201,
+      "expected_graph_reservation": 656
+    },
+    {
+      "id": "NI-token-41",
+      "token": "0.5",
+      "integer": false,
+      "path": "Decimal",
+      "expected_graph_work": 25,
+      "expected_graph_reservation": 304
+    },
+    {
+      "id": "NI-token-42",
+      "token": "-0.5",
+      "integer": false,
+      "path": "Decimal",
+      "expected_graph_work": 33,
+      "expected_graph_reservation": 320
+    },
+    {
+      "id": "NI-token-43",
+      "token": "1.0000000000000001",
+      "integer": false,
+      "path": "Decimal",
+      "expected_graph_work": 145,
+      "expected_graph_reservation": 544
+    },
+    {
+      "id": "NI-token-44",
+      "token": "10.000000001",
+      "integer": false,
+      "path": "Decimal",
+      "expected_graph_work": 97,
+      "expected_graph_reservation": 448
+    },
+    {
+      "id": "NI-token-45",
+      "token": "15e-1",
+      "integer": false,
+      "path": "Decimal",
+      "expected_graph_work": 41,
+      "expected_graph_reservation": 336
+    },
+    {
+      "id": "NI-token-46",
+      "token": "1000001e-6",
+      "integer": false,
+      "path": "Decimal",
+      "expected_graph_work": 81,
+      "expected_graph_reservation": 416
+    },
+    {
+      "id": "NI-token-47",
+      "token": "9223372036854775807.1",
+      "integer": false,
+      "path": "Decimal",
+      "expected_graph_work": 169,
+      "expected_graph_reservation": 592
+    },
+    {
+      "id": "NI-token-48",
+      "token": "-9223372036854775808.1",
+      "integer": false,
+      "path": "Decimal",
+      "expected_graph_work": 177,
+      "expected_graph_reservation": 608
+    },
+    {
+      "id": "NI-token-49",
+      "token": "0.0000000000000000000000001",
+      "integer": false,
+      "path": "Decimal",
+      "expected_graph_work": 217,
+      "expected_graph_reservation": 688
+    },
+    {
+      "id": "NI-token-50",
+      "token": "1e-9999999999999999999999999999999999999999999999999999999999999999",
+      "integer": false,
+      "path": "Decimal",
+      "expected_graph_work": 537,
+      "expected_graph_reservation": 1328
+    },
+    {
+      "id": "NI-token-51",
+      "token": "-1e-9999999999999999999999999999999999999999999999999999999999999999",
+      "integer": false,
+      "path": "Decimal",
+      "expected_graph_work": 545,
+      "expected_graph_reservation": 1344
+    },
+    {
+      "id": "NI-token-52",
+      "token": "1.234567890123456789e17",
+      "integer": false,
+      "path": "Decimal",
+      "expected_graph_work": 185,
+      "expected_graph_reservation": 624
+    }
+  ],
+  "groups": [
+    {
+      "id": "NI-01",
+      "name": "Exact admitted numeric tokens",
+      "require": "Every frozen token matches the independent mathematical integer answer and the old number(...).is_integer result; preserve all charges even when fallback Decimal ultimately fits inline."
+    },
+    {
+      "id": "NI-02",
+      "name": "Public kind and type-name boundaries",
+      "cases": [
+        {
+          "schema": {
+            "type": "integer"
+          },
+          "value": null,
+          "expected": "F"
+        },
+        {
+          "schema": {
+            "type": "integer"
+          },
+          "value": false,
+          "expected": "F"
+        },
+        {
+          "schema": {
+            "type": "integer"
+          },
+          "value": true,
+          "expected": "F"
+        },
+        {
+          "schema": {
+            "type": "integer"
+          },
+          "value": "1",
+          "expected": "F"
+        },
+        {
+          "schema": {
+            "type": "integer"
+          },
+          "value": [],
+          "expected": "F"
+        },
+        {
+          "schema": {
+            "type": "integer"
+          },
+          "value": {},
+          "expected": "F"
+        },
+        {
+          "schema": {
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "value": "x",
+          "expected": "S"
+        },
+        {
+          "schema": {
+            "type": [
+              "string",
+              "integer"
+            ]
+          },
+          "value": 1,
+          "expected": "S"
+        }
+      ],
+      "require": "No numeric parser/work charge for a non-Number branch. Invalid type shape/name remains its current admission/local-inability policy; test null, number, unknown string, nested array and unpaired type name under permissive custom meta. Empty type array remains F."
+    },
+    {
+      "id": "NI-03",
+      "name": "Eager type-union visit preservation",
+      "cases": [
+        {
+          "schema": {
+            "type": [
+              "integer",
+              17
+            ]
+          },
+          "value": 1,
+          "expected_local": "N:UnsupportedCapability"
+        },
+        {
+          "schema": {
+            "type": [
+              17,
+              "integer"
+            ]
+          },
+          "value": 1,
+          "expected_local": "N:UnsupportedCapability"
+        }
+      ],
+      "require": "Under a permissive custom meta, successful integer does not short-circuit later invalid names. Standard-meta admission rejection remains a separate unchanged boundary."
+    },
+    {
+      "id": "NI-04",
+      "name": "Direct exact work and reservation boundaries",
+      "require": "For each token, old and new direct Graph traces exactly agree. Succeed at W, refuse W-1 before parse; for fallback succeed at M and refuse M-1 after the same work/control sequence. i64 accepts zero reservation, but cannot bypass low work or cancellation. Check positive pre-spent work/storage as well as empty ledgers."
+    },
+    {
+      "id": "NI-05",
+      "name": "Every actual stop and first cause",
+      "require": "Record every observed WorkControl and enclosing Preparation Control boundary. Old/new result and trace must match for cancellation at each; shared prior work/storage/cancel cause remains first. Retry on the same owner/input after interruption matches the uninterrupted full outcome. Do not add a callback during or after Decimal parsing."
+    },
+    {
+      "id": "NI-06",
+      "name": "Exact fallback remains unchanged",
+      "require": "Fractions and exponents never use a fractional-part approximation or f64. Wide plain integers still take the old parse/charge path; zero with huge signed exponent remains integer. Compare exact F/Undefined/NoVerdict diagnostics when embedded in later failing/limited branches; no branch skipping beyond the existing kind short-circuit."
+    },
+    {
+      "id": "NI-07",
+      "name": "Actual allocation and ownership",
+      "require": "Small i64 path has no incremental allocations before/after; no retained value, cache, control or source owner added. For wide inputs retain existing Decimal allocations and release; do not weaken the scoped reservation based on an inline fallback sample."
+    },
+    {
+      "id": "NI-08",
+      "name": "Integration and performance boundary",
+      "require": "Current/minimum Rust, both detail modes and complete original locations; preserved20k/late-invalid array,50k object and700k numeric jobs as appropriate to the parent validation lane. Compare the same frozen selected requests and exact direct trace policy, not only a microbenchmark. Performance acceptance and G6 remain separate."
+    },
+    {
+      "id": "NI-09",
+      "name": "Invalid JSON is not an integer-helper API",
+      "tokens": [
+        "+1",
+        "01",
+        "1.",
+        "NaN",
+        "Infinity",
+        "--1"
+      ],
+      "require": "Existing JsonValue parsing rejects these before semantic predicates. The helper consumes validated Number tokens; it must not become a public parser or silently repair syntax."
+    }
+  ]
+}

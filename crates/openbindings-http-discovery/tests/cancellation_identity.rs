@@ -5,8 +5,8 @@ use openbindings_http_discovery::{Cancellation, CancellationToken};
 fn companions_reexport_one_token_and_future_identity() {
     let discovery = CancellationToken::new();
     let invocation: openbindings_invocation::CancellationToken = discovery.clone();
-    let inspection: openbindings_source_inspection::CancellationToken = invocation.clone();
-    let synthesis: openbindings_interface_synthesis::CancellationToken = inspection.clone();
+    let description: openbindings_kind_description::CancellationToken = invocation.clone();
+    let pulling: openbindings_source_pull::CancellationToken = description.clone();
     let waits: [Cancellation; 4] = [
         discovery.cancelled(),
         {
@@ -14,18 +14,18 @@ fn companions_reexport_one_token_and_future_identity() {
             wait
         },
         {
-            let wait: openbindings_source_inspection::Cancellation = inspection.cancelled();
+            let wait: openbindings_kind_description::Cancellation = description.cancelled();
             wait
         },
         {
-            let wait: openbindings_interface_synthesis::Cancellation = synthesis.cancelled();
+            let wait: openbindings_source_pull::Cancellation = pulling.cancelled();
             wait
         },
     ];
-    let synchronous: &dyn WorkControl = &synthesis;
+    let synchronous: &dyn WorkControl = &pulling;
     assert!(synchronous.check().is_ok());
     discovery.cancel();
     assert_eq!(synchronous.check(), Err(openbindings::Cancelled));
-    assert!(invocation.is_cancelled() && inspection.is_cancelled());
+    assert!(invocation.is_cancelled() && description.is_cancelled());
     drop(waits);
 }

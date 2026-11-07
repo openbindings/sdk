@@ -1,0 +1,24 @@
+{
+  "sdk_base": "f62f47757ba6682bea316492056428a665a7bea4 plus reviewed root-alias-leaf memo experiment",
+  "state_source_sha256": "ef984b0da0071567c11f631f8cfba97e26d7a5d9bad2d753ec8c2332eeacfa10",
+  "stdlib": [
+    {
+      "rust": "1.88",
+      "commit": "6b00bc3880198600130e1cf62b8f8a93494488cc",
+      "source": "library/alloc/src/collections/btree/map.rs",
+      "url": "https://github.com/rust-lang/rust/blob/6b00bc3880198600130e1cf62b8f8a93494488cc/library/alloc/src/collections/btree/map.rs",
+      "file": "rust-1.88-btree-map.rs",
+      "sha256": "e3926938904e45721b30e613ff46f79dce2bf6136cf4d31e1b106a0cb47ee377"
+    },
+    {
+      "rust": "1.99",
+      "commit": "b940084d7eb6a299eb4bfeb8e34901bc051e7ac4",
+      "source": "library/alloc/src/collections/btree/map.rs",
+      "url": "https://github.com/rust-lang/rust/blob/b940084d7eb6a299eb4bfeb8e34901bc051e7ac4/library/alloc/src/collections/btree/map.rs",
+      "file": "rust-1.99-btree-map.rs",
+      "sha256": "2ce3f3468c9686421c216a74b38211fefdfe506c794b3c350bbf69ce3fb71a19"
+    }
+  ],
+  "counterexample": "../root-alias-leaf-memo-small-reservation/witness.json",
+  "method": "read-only source and existing observation review; no allocator probe/build/test performed"
+}

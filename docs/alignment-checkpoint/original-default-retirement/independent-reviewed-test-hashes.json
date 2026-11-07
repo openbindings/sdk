@@ -1,0 +1,38 @@
+[
+  {
+    "path": "crates/openbindings-json-schema-evaluator/tests/string_gates.rs",
+    "sha256": "b70c0f3570d0ed170df05f8952a0c5fec3412ae406b55b9d6c3d1f91b32be79e"
+  },
+  {
+    "path": "crates/openbindings-json-schema-evaluator/tests/supplied_resource_dialects.rs",
+    "sha256": "09f03c3d35e48e60094bc5f31040abb3999bdd383cc476fd78bb1df177891f05"
+  },
+  {
+    "path": "crates/openbindings-json-schema-evaluator/tests/current_reference_obligations.rs",
+    "sha256": "8a85294f2764dc77e6aa1b6e4c679fab5a3354427f8064e0e3229f30be39f1d0"
+  },
+  {
+    "path": "crates/openbindings-json-schema-evaluator/tests/exact_operands.rs",
+    "sha256": "58ee69e723d22827225e69d9c1906fd80180d9f157d10bda39623cf2def1261f"
+  },
+  {
+    "path": "crates/openbindings-json-schema-evaluator/tests/contracts.rs",
+    "sha256": "eca38c98c995f71f3a3e2f53fb95eeb4131d04fdda31d5e9b6ce3f380be9bbc2"
+  },
+  {
+    "path": "crates/openbindings-json-schema-evaluator/tests/established_failures.rs",
+    "sha256": "b229077b28e3b43e0510349a1225e1087b0f2ff59e5093adf8fbfb43f4947c64"
+  },
+  {
+    "path": "crates/openbindings-json-schema-evaluator/tests/diagnostic_budget.rs",
+    "sha256": "fd999f45a24cd835d8cbe4e4416b37cdedccee01bd1b56dec931301f7d7c0cc9"
+  },
+  {
+    "path": "crates/openbindings-json-schema-evaluator/tests/private/resource_identity.rs",
+    "sha256": "20d4bb74901999f55ea59e6a65d33ba9ffdc8a94a5c9842c48e2f00db33b898a"
+  },
+  {
+    "path": "crates/openbindings-json-schema-evaluator/tests/fixtures/semantic-limits.json",
+    "sha256": "23688af6b1fb5df34db8f86e66ba8d31698024178e1986db2bbc69408d033f3e"
+  }
+]

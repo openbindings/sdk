@@ -1,0 +1,7 @@
+{
+  "status": "two exact nested-if to short-circuit let-chain replacements only",
+  "sites": 2,
+  "prior_sha256": "cff07ec5c653fbf9b5939b7d15bc1c62ee4e9f34b1a1765b432c764861c20a9c",
+  "final_sha256": "48f14628e458276585a3d5d343e9eb6657fe99112ab8ba0d9de2ec45e36c1a1c",
+  "sdk_code_unchanged": true
+}

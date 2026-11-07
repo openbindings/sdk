@@ -1,0 +1,51 @@
+{
+  "version": "1.0",
+  "description": "type canonicalizes to a sorted array: a scalar type and array order differences normalize identically.",
+  "mode": "identical",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "scalarToArray": {
+        "input": {
+          "type": "string"
+        }
+      },
+      "unsortedArray": {
+        "input": {
+          "type": [
+            "string",
+            "integer"
+          ]
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "scalarToArray": {
+        "input": {
+          "type": [
+            "string"
+          ]
+        }
+      },
+      "unsortedArray": {
+        "input": {
+          "type": [
+            "integer",
+            "string"
+          ]
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "compatible"
+    }
+  }
+}

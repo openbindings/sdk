@@ -23,7 +23,8 @@ fn retained(count: usize, width: usize) -> (usize, usize) {
             document: target,
         }])
         .unwrap(),
-    );
+    )
+    .unwrap();
     let holder = space
         .document_node(
             &space

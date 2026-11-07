@@ -1,0 +1,84 @@
+{
+  "status": "parent and independent implementation/resource gates pass",
+  "sdk_base": "fc1ade8d953014e674d3dc46df2849f98a78df66",
+  "scope": "call-local PikeVM search cache only; full pattern compiler construction remains under separate review",
+  "native": {
+    "rust-current": {
+      "passed": 926,
+      "ignored": 6
+    },
+    "rust-msrv": {
+      "passed": 320,
+      "ignored": 2
+    }
+  },
+  "focused_groups": 5,
+  "production_cache_allocation_probes": 10,
+  "node_tests": 184,
+  "installed_package_assertions": 352,
+  "types": "pass",
+  "format": "pass",
+  "strict_clippy": "pass",
+  "browser": {
+    "chromium": {
+      "core": 505,
+      "required": 1546,
+      "pattern_caches": 5,
+      "syntax_facts": 7,
+      "frames": 8,
+      "reference_preparation": 4
+    },
+    "webkit": {
+      "core": 505,
+      "required": 1546,
+      "pattern_caches": 5,
+      "syntax_facts": 7,
+      "frames": 8,
+      "reference_preparation": 4
+    }
+  },
+  "wasm_build": {
+    "rustSource": "66635b74f662fda957b2f5628f884d6d302d15b820e4d8e1e6e9a96cfed5c569",
+    "artifacts": {
+      "openbindings_wasm.js": "a6c4872bed0e3d6e9b059403bfcfe0da3e21a0bb264fa4372b4d4464ff440e2e",
+      "openbindings_wasm_bg.wasm": "930b11dfb27e451cb56cb2bcb2f64d300c75057fc183c520d500c068575af1aa",
+      "openbindings_wasm_signature.js": "b7a98f3e14387a59804c6b4c025b0d03cf5671acd66490e03ec47e89cedc3f6f"
+    }
+  },
+  "open": [
+    "Prepared pattern program compiler certificate",
+    "Original Explain implementation and physical-stack/default-switch gates",
+    "Final matched performance/clean package/reference/map audit"
+  ],
+  "log_sha256": {
+    "chromium-judge.log": "daf3b54a131340ee014d49e865fa5b56c04333a58a37539fc8f525ae57c34faa",
+    "chromium.log": "c284a6ef7499964fe343e68789110a35acff0c46e51e40a25e2484d654e6c1a4",
+    "clippy.log": "87065a4e7349897ec54ced3ba3dc5b827bf816af778ca39f017224ef897ea12e",
+    "focused-tests-final.log": "3e34aebc3ef4152105c57e3cb10537386738299748410c89c8d3bddddd57f8b4",
+    "focused-tests.log": "13127be79046e52e1139fde329b6236921833f7de5516dbf0cdd8ce170c0cd92",
+    "format.log": "1cfc077f1514d44a2d3e23e8272b6c79111490cf2d0f408d9b4d093a941cc098",
+    "node-cache.log": "50d07b32f080684e2fe964519e4bd25d9b05e7de1b8f6ca093f65a94dd8fab96",
+    "node.log": "5904380cffdd3d3050fe3a16c39bed12844e0f4117fd4290805c37b34cc05a34",
+    "package.log": "0a6e3463f1fb14be6d2c39f28d4f45a967ee1a0e5d9c007437527e6d3d9057b3",
+    "probe-build.log": "2ef2c1b5574bcf89ca3d5192ab3604ef029814dbc10f0239a78f86a4b0882a6a",
+    "production-probe-build.log": "2ef2c1b5574bcf89ca3d5192ab3604ef029814dbc10f0239a78f86a4b0882a6a",
+    "rust-current.log": "bb369a185776e12d534fc6841b44271437892425a790f7135046c5710492c47d",
+    "rust-msrv.log": "1bf05e6d9b60f8cc00e5a73b45d83643eca38c225db4c8abcbf07745494cc0de",
+    "types.log": "9d01015fc418b66651cf69fbcf72b176e114d0f1e0a9bdfa91c24b548e2cbdb1",
+    "typescript-build.log": "c478142e26b8f6c3e071780e91d75175bb1e67f4ae9e8f2c497a09c845858018",
+    "wasm-build.log": "6a4bb424fc9bf6bb8e882db14f34a636262672d081703f773ee3adb4db966e3b",
+    "webkit-judge.log": "daf3b54a131340ee014d49e865fa5b56c04333a58a37539fc8f525ae57c34faa",
+    "webkit.log": "2df836eb9542ad4b1cd367699de811106051dfbae1e22940060cfc1518000435"
+  },
+  "saved_commit": "421706c",
+  "pushed": true,
+  "independent_review": {
+    "status": "pass",
+    "report": "../pattern-search-cache-review/review.md",
+    "required": 1546,
+    "inherited_controls_both_modes": 62,
+    "allocation_probes": 10,
+    "private_tests": 23,
+    "unresolved_findings": 0
+  }
+}

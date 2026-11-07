@@ -1,0 +1,6 @@
+
+running 1 test
+test review_pattern_memory::run_matchers_hold_about_their_text_of_the_pattern_memory ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 254 filtered out; finished in 0.62s
+

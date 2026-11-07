@@ -1,6 +1,6 @@
 # Pinned qualification fixtures
 
-The specification corpus is copied from revision 30416ef1ca626e58eb8c383a0c71422a68f9243f. The immutable inventory contains 440 cases. The observer uses public SDK APIs; the Python judge is independent and includes deliberately incorrect-result controls. These files support repository CI and replay, not runtime SDK features. Generated observations are ignored. The reusable evaluator kit separately preserves 1,566 case IDs with its own provenance: 1,564 evaluator observations and two core rejection cases.
+The current specification corpus is copied from revision c1419c9fc3ae5a00c2b83da710c11bf67dab7934: 372 document cases and 133 scenarios (505 total). The public-API observer and independent Python judge preserve exact text/base64 carriage and include deliberately wrong-result controls. Generated observations are ignored. The evaluator kit still carries its historical 1,566-case source; the migration adjudication assigns 1,546 value cases and 20 document-admission cases. Applying that adjudication to the evaluator runner is separate from this document-admission checkpoint.
 
 For a specification re-pin, replace only the files already present in
 `inputs/spec/` with the same paths from the selected checkout. Rebuild
@@ -21,7 +21,7 @@ browser replay. These policies remain live contract inputs.
 Check and explain every case through the public evaluator API:
 
 ```sh
-cargo run --locked -p openbindings-schema-evaluator-test-support --example replay
+cargo run --locked -p openbindings-json-schema-evaluator --example replay
 ```
 
 The live allocation thresholds and generators are described in
@@ -54,21 +54,17 @@ Set `REFERENCE_RECEIPT` to separate output paths when running each, then run:
 python3 tools/qualification/replay/check-reference-completions.py native.json typescript.json
 ```
 
-The matrix's 1,086 cases and the 1,262 completion cases are retained, including
-the unsupported families. A contract that reaches a static reference defect
-refuses preparation, naming the reference, and a missing resource has a
-stand-in whose no-verdict names it. Against the earlier evaluator, 194 defect
-cases that were decided or undefined now refuse preparation, 8 values that reach
-a stand-in give no verdict, 34 no-verdicts now name the missing resource, 2
-preparation refusals are decided, 5 refusals name a different first defect or
-limit, and no case changes between satisfies and fails. Since in-place cycles
-and patterns the evaluator does not match became stand-ins too, the 26 cases of
-the cycle, pattern and `patternProperties` families and their controls that
-refused preparation prepare, each giving the case's specification answer where
-it does not depend on the stand-in and the stand-in's no-verdict where it does,
-and 8 values that reached a missing resource's stand-in are decided, each as
-every completion of the resource decides it. Additional controls
-preserve siblings and identities while replacing individual defective
-invocations with concrete schemas, and keep the complete-fragment oracle's
-verdicts. The oracle, completion comparisons, and injected false results run
-without network or an independent resolver implementation.
+The original matrix's 1,086 cases and 1,262 concrete-completion cases remain
+unchanged. `reference-current-oracle.json` records their current obligations:
+194 original admission negatives, 2,072 preserved/adjudicated S/F values,
+50 independently adjudicated former semantic gaps, 30 genuinely unavailable
+external-content cases, and two explicit-budget controls. Concrete replacement
+and ordering rows use their concrete S/F expectations, not inherited undefined
+labels. The oracle is not generated from current evaluator observations.
+
+Known local defects are evaluated per value; preparation failure is not used as
+an undefined verdict. Available annotation-producing applicators remain coupled
+with validity, and missing content is not assigned an invented source origin.
+`semantic-soundness.json` and `semantic-limits.json` retain independent review
+counterexamples alongside the unchanged corpus. Rust/TypeScript parity is a
+separate gate and requires a freshly built Wasm artifact.

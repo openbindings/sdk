@@ -1,0 +1,25 @@
+{
+  "sdk_head": "127e6f9b4ec1fd3d535392032f4422ad9c2c86d6",
+  "production": {
+    "/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-internal-json/src/raw.rs": "57388b5aefcf218cd433399670dbe09ad16f654279d00ddbd7d6400e6c4aec04",
+    "/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-internal-json/src/pointer.rs": "b5687c9b9279b977c5a14dbb2e6484d074777491491fec07ac2b08b77fda575b",
+    "/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-internal-json/src/backend.rs": "f94069161c239ba33cf7f727e4b98c560a206da2f88a1d3be1ac4538292a3d95",
+    "/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/packages/typescript/test/exact-pointers.mjs": "1a86a95d60438385e245149bdf16989c2b5be2b839e9865417b2fafbbaa62fb4",
+    "/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/packages/typescript/test/exact-pointers.test.mjs": "bfb28276d218f8bdc4c6dc608a7f43789051caec7dd90aa1da8f8ed163ada466",
+    "/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/packages/typescript/test/browser.mjs": "c6652c221da6ec7ee525b85cf854ee995b6222aa5d5f733a4ee5e0a5611852d7"
+  },
+  "linked_library": "b1ae6b79cb58ab4067eb7f42a8260738a7df8072bb4f2eae6eb9e053c177c7e5",
+  "artifacts": {
+    "allocation-observations.jsonl": "25bdb91214fe60db7d8e6282180a78373e2b477bb93d6736a7c45793b1daf865",
+    "roundtrip-initial-driver-error.log": "b4bd6de3699829df11b4dbed9b3dccb33bc27edc1bcadae45da10c3cfa830e35",
+    "roundtrip-stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "roundtrip-result.json": "c2a7cf9e7aa3320fea94afa3003e66ccc7a852d533fd9aef7a6d62bab72d8fbb",
+    "allocation-command.json": "f6901e2916ebe9e2bf2dc7575c3a346afa0bb70b517dc8a4956fb1d462b36a87",
+    "inputs.jsonl": "b9f5e991f1f9b876b5784178ebc23394401fd5bfd61572b2b1db75adc04b86af",
+    "pointer-probe.rs": "8764dfc7cc187dd420fe136d6820de586d82874befcc4920aa86c24a09c12346",
+    "roundtrip.rs": "70d950927e7e2a8451df49c551fc5ae96d2d8a1d8a36ed5f3420cdcdcba8123c",
+    "roundtrip-build.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "roundtrip-command.json": "8b7262145970f5e0756665fe801917400b913975a012515335a780a21ccaec07",
+    "allocation-build.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+}

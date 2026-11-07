@@ -1,0 +1,47 @@
+{
+  "status": "pass",
+  "scope": "bounded prepared numeric and count readings",
+  "base": "4998c72b9d48ea91ddbb4e004e8e730f9e8c0293",
+  "policy": {
+    "maximum_token_bytes": 256,
+    "aggregate_source_bytes": 65536,
+    "node_records": 1024
+  },
+  "current_rust": {
+    "tests": 270,
+    "existing_ignored": 3,
+    "required_values": 1546,
+    "failures": 0
+  },
+  "node_tests": 180,
+  "typescript_types": "pass",
+  "npm_archive": "pass",
+  "strict_clippy": "pass",
+  "chromium": {
+    "core": 505,
+    "required_values": 1546,
+    "failures": 0
+  },
+  "webkit": {
+    "core": 505,
+    "required_values": 1546,
+    "failures": 0
+  },
+  "independent_review": "pass",
+  "open": [
+    "full VM-once preparation",
+    "local syntax admission accounting",
+    "iterative execution",
+    "original diagnostic witnesses",
+    "default original-engine switch and outgoing compiler removal",
+    "final matched performance and full-host qualification",
+    "final alignment-map audit"
+  ],
+  "minimum_rust": {
+    "version": "1.88.0",
+    "tests": 270,
+    "existing_ignored": 3,
+    "required_values": 1546,
+    "failures": 0
+  }
+}

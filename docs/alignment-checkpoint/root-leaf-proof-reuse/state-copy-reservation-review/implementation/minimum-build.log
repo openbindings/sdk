@@ -1,0 +1,40 @@
+warning: method `explain` is never used
+   --> /Users/matt/Code/ob-pj/openbindings/sdk-migration/receipts/2026-11-02-preparation/original-default-performance/state-copy-reservation-review/implementation/candidate-copy/src/review_benchmark.rs:150:12
+    |
+141 | impl Prepared {
+    | ------------- method in this implementation
+...
+150 |     pub fn explain(&self, value: &ParsedValue, cancelled: bool) -> Outcome {
+    |            ^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: struct `CheckedDocument` is never constructed
+   --> /Users/matt/Code/ob-pj/openbindings/sdk-migration/receipts/2026-11-02-preparation/original-default-performance/state-copy-reservation-review/implementation/candidate-copy/src/review_benchmark.rs:249:12
+    |
+249 | pub struct CheckedDocument {
+    |            ^^^^^^^^^^^^^^^
+
+warning: function `validate_document_bytes` is never used
+   --> /Users/matt/Code/ob-pj/openbindings/sdk-migration/receipts/2026-11-02-preparation/original-default-performance/state-copy-reservation-review/implementation/candidate-copy/src/review_benchmark.rs:253:8
+    |
+253 | pub fn validate_document_bytes(bytes: &[u8]) -> CheckedDocument {
+    |        ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: methods `status`, `observation`, and `read` are never used
+   --> /Users/matt/Code/ob-pj/openbindings/sdk-migration/receipts/2026-11-02-preparation/original-default-performance/state-copy-reservation-review/implementation/candidate-copy/src/review_benchmark.rs:270:12
+    |
+268 | impl CheckedDocument {
+    | -------------------- methods in this implementation
+269 |     #[inline(always)]
+270 |     pub fn status(&self) -> &'static str {
+    |            ^^^^^^
+...
+277 |     pub fn observation(&self) -> Value {
+    |            ^^^^^^^^^^^
+...
+281 |     pub fn read(&self) -> Reads {
+    |            ^^^^
+
+warning: 4 warnings emitted
+

@@ -1,0 +1,1215 @@
+{
+  "format": "openbindings-sdk-witness-audit-partial-v1",
+  "sdk_commit": "5d7e8d4c39fd8175029dc14516d3aafa77142b2e",
+  "scope": "52 individual document/schema witnesses; finite and structural claims are distinguished.",
+  "runtime_source": "5d7e8d4c39fd8175029dc14516d3aafa77142b2e",
+  "portable_log_sha256": "dff1de3faca5c3b968785c4ea2c2e05327cb33537cfa0060ccc5d69e9e6cdcb3",
+  "host_reports": {
+    "chromium": {
+      "file": "original-explain-progress/chromium-final/core.json",
+      "sha256": "b0e24064c12f58bab1522fc66823f4328528efe7018fa4182701ad4294cbee86"
+    },
+    "webkit": {
+      "file": "original-explain-progress/webkit-final/core.json",
+      "sha256": "b0e24064c12f58bab1522fc66823f4328528efe7018fa4182701ad4294cbee86"
+    }
+  },
+  "witnesses": [
+    {
+      "id": "document-positive",
+      "expectation": "Minimal operations map",
+      "concept_id": "document",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "tools/qualification/inputs/spec/conformance/document/OBI-02.json",
+          "case_id": "document/OBI-02.json#/tests/0",
+          "description": "minimal valid document",
+          "sha256": "1ee0bec6059701e2ecfc0660187086ec1d254e1354c1049807e2c58368f4032c",
+          "observed": {
+            "chromium": "pass",
+            "webkit": "pass"
+          }
+        }
+      ],
+      "audit": "The minimal version plus empty operations document is conformant.",
+      "status": "source/assertion or pinned-case binding audited; final independent review pending"
+    },
+    {
+      "id": "document-negative",
+      "expectation": "Non-object and missing operations",
+      "concept_id": "document",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "tools/qualification/inputs/spec/conformance/document/OBI-02.json",
+          "case_id": "document/OBI-02.json#/tests/1",
+          "description": "missing required `operations` field",
+          "sha256": "1ee0bec6059701e2ecfc0660187086ec1d254e1354c1049807e2c58368f4032c",
+          "observed": {
+            "chromium": "pass",
+            "webkit": "pass"
+          }
+        },
+        {
+          "file": "tools/qualification/inputs/spec/conformance/document/OBI-03.json",
+          "case_id": "document/OBI-03.json#/tests/18",
+          "description": "a text that is not an object declares no version",
+          "sha256": "949481d89548f3b245f32d6eb97d840b8fc919f09425b7cab3f700e26f4b8dfb",
+          "observed": {
+            "chromium": "pass",
+            "webkit": "pass"
+          }
+        }
+      ],
+      "audit": "Missing operations and a non-object cannot produce a conformant document.",
+      "status": "source/assertion or pinned-case binding audited; final independent review pending"
+    },
+    {
+      "id": "operation-positive",
+      "expectation": "Alias resolves to its operation",
+      "concept_id": "operation",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings/tests/domain.rs",
+          "line": 156,
+          "anchor": "fn exact_keys_aliases_kinds_and_unranked_relations(",
+          "sha256": "6f05a958a5afcd545b901d44ef04f7a082aae3fa483ee04e92ecb76ec113af7a",
+          "portable_verifier_pass_occurrences": 1
+        },
+        {
+          "file": "tools/qualification/inputs/spec/conformance/scenarios/5.1-names.json",
+          "case_id": "NAMES-01",
+          "description": "An alias identifies its operation, whose bindings are those whose operation member holds its key (section 5.1, Aliases).",
+          "sha256": "b679aaef73be6714933498b706bd7b0fce363d996549dd8ac36600809ee5c265",
+          "observed": {
+            "chromium": "pass",
+            "webkit": "pass"
+          }
+        }
+      ],
+      "audit": "Alias resolution returns the primary operation and its bindings.",
+      "status": "source/assertion or pinned-case binding audited; final independent review pending"
+    },
+    {
+      "id": "operation-negative",
+      "expectation": "Alias used as a binding operation key",
+      "concept_id": "operation",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "tools/qualification/inputs/spec/conformance/document/OBI-06.json",
+          "case_id": "document/OBI-06.json#/tests/3",
+          "description": "binding operation value matches an alias rather than a key in the operations map",
+          "sha256": "7582805c5cd103d51a9f4e88baa15e1ae1b78f0dc06f41ce1b990765f28c48f9",
+          "observed": {
+            "chromium": "pass",
+            "webkit": "pass"
+          }
+        }
+      ],
+      "audit": "A binding must refer to the primary key; an alias is not an operation-map key.",
+      "status": "source/assertion or pinned-case binding audited; final independent review pending"
+    },
+    {
+      "id": "source-positive",
+      "expectation": "Kind-only source and two bindings sharing it",
+      "concept_id": "source",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "tools/qualification/inputs/spec/conformance/document/OBI-02.json",
+          "case_id": "document/OBI-02.json#/tests/7",
+          "description": "A binding needs only operation and source, and a source only kind; data is optional on both (\u00a75.3, \u00a75.2).",
+          "sha256": "1ee0bec6059701e2ecfc0660187086ec1d254e1354c1049807e2c58368f4032c",
+          "observed": {
+            "chromium": "pass",
+            "webkit": "pass"
+          }
+        },
+        {
+          "file": "crates/openbindings/tests/domain.rs",
+          "line": 156,
+          "anchor": "fn exact_keys_aliases_kinds_and_unranked_relations(",
+          "sha256": "6f05a958a5afcd545b901d44ef04f7a082aae3fa483ee04e92ecb76ec113af7a",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "Kind-only sources are admitted; the canonical domain fixture has two bindings sharing one source.",
+      "status": "source/assertion or pinned-case binding audited; final independent review pending"
+    },
+    {
+      "id": "source-negative",
+      "expectation": "Source data interpreted as OBI schemas",
+      "concept_id": "source",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings/tests/foundation_02.rs",
+          "line": 4,
+          "anchor": "fn kind_data_is_exact_opaque_and_presence_sensitive(",
+          "sha256": "545f6848eb8ffbba52044cfc764c668c9765d56218348580e175e5144c57851c",
+          "portable_verifier_pass_occurrences": 1
+        },
+        {
+          "file": "tools/qualification/inputs/spec/conformance/document/OBI-12.json",
+          "case_id": "document/OBI-12.json#/tests/61",
+          "description": "An $id in a source's data does not identify a contained schema resource; its URI remains external (\u00a7\u00a75.5, 7.2).",
+          "sha256": "a84b201b1c4d9aba7ee1f31046a8d28bd75e01b53351ffc1655c1d033ca2a612",
+          "observed": {
+            "chromium": "pass",
+            "webkit": "pass"
+          }
+        }
+      ],
+      "audit": "Malformed-looking references/anchors and large exact values in source data stay opaque; data does not register schema resources.",
+      "status": "source/assertion or pinned-case binding audited; final independent review pending"
+    },
+    {
+      "id": "binding-positive",
+      "expectation": "Multiple bindings for one operation",
+      "concept_id": "binding",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings/tests/domain.rs",
+          "line": 156,
+          "anchor": "fn exact_keys_aliases_kinds_and_unranked_relations(",
+          "sha256": "6f05a958a5afcd545b901d44ef04f7a082aae3fa483ee04e92ecb76ec113af7a",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "Both bindings remain associated with the operation regardless of preference or deprecation.",
+      "status": "source/assertion or pinned-case binding audited; final independent review pending"
+    },
+    {
+      "id": "binding-negative",
+      "expectation": "Detached source/binding carrier substitutes for document context",
+      "concept_id": "binding",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings/tests/domain.rs",
+          "line": 183,
+          "anchor": "fn owners_keep_original_entries_and_relations_across_drop_and_edits(",
+          "sha256": "6f05a958a5afcd545b901d44ef04f7a082aae3fa483ee04e92ecb76ec113af7a",
+          "portable_verifier_pass_occurrences": 1
+        },
+        {
+          "file": "crates/openbindings-invocation/tests/values.rs",
+          "line": 15,
+          "anchor": "fn owned_document_request_preserves_exact_payloads_and_owners(",
+          "sha256": "145bad36902d96e35195542f90a1734516f802783a01f7b3e73edf0d899d476c",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "Retained entries keep same-snapshot relationships; invocation retains the original interface instead of reconstructing it from detached data.",
+      "status": "source/assertion or pinned-case binding audited; final independent review pending"
+    },
+    {
+      "id": "dependency-positive",
+      "expectation": "Absent kinds accepts any exact kind",
+      "concept_id": "dependency",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings/tests/domain.rs",
+          "line": 92,
+          "anchor": "fn absent_empty_false_and_null_remain_distinct(",
+          "sha256": "6f05a958a5afcd545b901d44ef04f7a082aae3fa483ee04e92ecb76ec113af7a",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "An absent kinds constraint accepts any exact kind.",
+      "status": "source/assertion or pinned-case binding audited; final independent review pending"
+    },
+    {
+      "id": "dependency-negative",
+      "expectation": "Treating dependency as an executable binding",
+      "concept_id": "dependency",
+      "evidence_kind": "bounded runtime assertion plus inspected public role boundary",
+      "evidence": [
+        {
+          "file": "tools/qualification/inputs/spec/conformance/scenarios/5.1-names.json",
+          "case_id": "NAMES-20",
+          "description": "A dependency key is not an operation identifier: a string equal to one identifies no operation, not even the one the dependency consumes.",
+          "sha256": "b679aaef73be6714933498b706bd7b0fce363d996549dd8ac36600809ee5c265",
+          "observed": {
+            "chromium": "pass",
+            "webkit": "pass"
+          }
+        },
+        {
+          "file": "crates/openbindings/src/document/model.rs",
+          "line": 85,
+          "anchor": "    Dependency,",
+          "sha256": "6cb83f0bba47f0649a56587a73fd86cb73d3d4370eeef1569198c97cc6755e2f"
+        },
+        {
+          "file": "crates/openbindings/src/document/model.rs",
+          "line": 336,
+          "anchor": "impl Dependency {",
+          "sha256": "6cb83f0bba47f0649a56587a73fd86cb73d3d4370eeef1569198c97cc6755e2f"
+        }
+      ],
+      "audit": "A dependency names a consumed operation and optional kinds; its key is not an operation address and core exposes no dependency executor.",
+      "status": "source/assertion or pinned-case binding audited; final independent review pending"
+    },
+    {
+      "id": "example-positive",
+      "expectation": "Out-of-schema example does not invalidate document",
+      "concept_id": "example",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings/tests/domain.rs",
+          "line": 23,
+          "anchor": "fn all_32_declared_fields_have_canonical_access(",
+          "sha256": "6f05a958a5afcd545b901d44ef04f7a082aae3fa483ee04e92ecb76ec113af7a",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "The canonical conformant fixture has an example output despite output:false; the accessor retains the authored value.",
+      "status": "source/assertion or pinned-case binding audited; final independent review pending"
+    },
+    {
+      "id": "example-negative",
+      "expectation": "Examples scanned as schemas",
+      "concept_id": "example",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "tools/qualification/inputs/spec/conformance/document/OBI-09.json",
+          "case_id": "document/OBI-09.json#/tests/6",
+          "description": "a $schema member inside an example value or a source's data is data, not a schema keyword",
+          "sha256": "afd94bc0240a9680c6689b2b4e6f7fe85c9979ebddcd7ca10457f9535c994f5c",
+          "observed": {
+            "chromium": "pass",
+            "webkit": "pass"
+          }
+        },
+        {
+          "file": "tools/qualification/inputs/spec/conformance/document/OBI-12.json",
+          "case_id": "document/OBI-12.json#/tests/28",
+          "description": "a pointer into an example value",
+          "sha256": "a84b201b1c4d9aba7ee1f31046a8d28bd75e01b53351ffc1655c1d033ca2a612",
+          "observed": {
+            "chromium": "pass",
+            "webkit": "pass"
+          }
+        }
+      ],
+      "audit": "Schema-looking example content does not enter the schema inventory or become a valid schema reference target.",
+      "status": "source/assertion or pinned-case binding audited; final independent review pending"
+    },
+    {
+      "id": "kind-positive",
+      "expectation": "Unknown and URI-shaped kinds",
+      "concept_id": "kind",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "tools/qualification/inputs/spec/conformance/document/OBI-02.json",
+          "case_id": "document/OBI-02.json#/tests/33",
+          "description": "document declares an unknown kind on a source",
+          "sha256": "1ee0bec6059701e2ecfc0660187086ec1d254e1354c1049807e2c58368f4032c",
+          "observed": {
+            "chromium": "pass",
+            "webkit": "pass"
+          }
+        },
+        {
+          "file": "tools/qualification/inputs/spec/conformance/document/OBI-02.json",
+          "case_id": "document/OBI-02.json#/tests/83",
+          "description": "A non-empty kind is an opaque string without a name grammar (\u00a76): white space, a prototype-like name, and a URI-shaped string are kinds.",
+          "sha256": "1ee0bec6059701e2ecfc0660187086ec1d254e1354c1049807e2c58368f4032c",
+          "observed": {
+            "chromium": "pass",
+            "webkit": "pass"
+          }
+        }
+      ],
+      "audit": "Unknown and URI-shaped kinds remain opaque nonempty strings.",
+      "status": "source/assertion or pinned-case binding audited; final independent review pending"
+    },
+    {
+      "id": "kind-negative",
+      "expectation": "Case folding or inferred compatible versions",
+      "concept_id": "kind",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings/tests/domain.rs",
+          "line": 156,
+          "anchor": "fn exact_keys_aliases_kinds_and_unranked_relations(",
+          "sha256": "6f05a958a5afcd545b901d44ef04f7a082aae3fa483ee04e92ecb76ec113af7a",
+          "portable_verifier_pass_occurrences": 1
+        },
+        {
+          "file": "crates/openbindings/tests/validated_access.rs",
+          "line": 281,
+          "anchor": "fn conformant_kind_filters_compare_text_independent_of_escape_spelling(",
+          "sha256": "a54c0f420e653080518be7ee9c29485d369973452d52dbe7c1cda7613560df05",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "Kind filters compare decoded exact strings; case variants and extra whitespace do not match. No version compatibility inference is implemented.",
+      "status": "source/assertion or pinned-case binding audited; final independent review pending"
+    },
+    {
+      "id": "presence-positive",
+      "expectation": "Source data null retained",
+      "concept_id": "presence",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings/tests/foundation_02.rs",
+          "line": 4,
+          "anchor": "fn kind_data_is_exact_opaque_and_presence_sensitive(",
+          "sha256": "545f6848eb8ffbba52044cfc764c668c9765d56218348580e175e5144c57851c",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "Present null is returned as a JSON null value.",
+      "status": "source/assertion or pinned-case binding audited; final independent review pending"
+    },
+    {
+      "id": "presence-negative",
+      "expectation": "Converting missing to null",
+      "concept_id": "presence",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings/tests/domain.rs",
+          "line": 92,
+          "anchor": "fn absent_empty_false_and_null_remain_distinct(",
+          "sha256": "6f05a958a5afcd545b901d44ef04f7a082aae3fa483ee04e92ecb76ec113af7a",
+          "portable_verifier_pass_occurrences": 1
+        },
+        {
+          "file": "crates/openbindings/tests/foundation_02.rs",
+          "line": 4,
+          "anchor": "fn kind_data_is_exact_opaque_and_presence_sensitive(",
+          "sha256": "545f6848eb8ffbba52044cfc764c668c9765d56218348580e175e5144c57851c",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "Missing data stays None and is not synthesized as null.",
+      "status": "source/assertion or pinned-case binding audited; final independent review pending"
+    },
+    {
+      "id": "names-positive",
+      "expectation": "Prototype-like key and exact alias",
+      "concept_id": "names",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "tools/qualification/inputs/spec/conformance/scenarios/5.1-names.json",
+          "case_id": "NAMES-11",
+          "description": "A document may define an operation whose key is a host-language prototype name, and that key identifies it.",
+          "sha256": "b679aaef73be6714933498b706bd7b0fce363d996549dd8ac36600809ee5c265",
+          "observed": {
+            "chromium": "pass",
+            "webkit": "pass"
+          }
+        },
+        {
+          "file": "tools/qualification/inputs/spec/conformance/scenarios/5.1-names.json",
+          "case_id": "NAMES-01",
+          "description": "An alias identifies its operation, whose bindings are those whose operation member holds its key (section 5.1, Aliases).",
+          "sha256": "b679aaef73be6714933498b706bd7b0fce363d996549dd8ac36600809ee5c265",
+          "observed": {
+            "chromium": "pass",
+            "webkit": "pass"
+          }
+        }
+      ],
+      "audit": "A declared prototype-like key resolves normally, as does an exact alias.",
+      "status": "source/assertion or pinned-case binding audited; final independent review pending"
+    },
+    {
+      "id": "names-negative",
+      "expectation": "Implicit namespace splitting",
+      "concept_id": "names",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "tools/qualification/inputs/spec/conformance/scenarios/5.1-names.json",
+          "case_id": "NAMES-15",
+          "description": "A prefix of a key identifies no operation: only an equal string does (section 5.1).",
+          "sha256": "b679aaef73be6714933498b706bd7b0fce363d996549dd8ac36600809ee5c265",
+          "observed": {
+            "chromium": "pass",
+            "webkit": "pass"
+          }
+        },
+        {
+          "file": "tools/qualification/inputs/spec/conformance/scenarios/5.1-names.json",
+          "case_id": "NAMES-16",
+          "description": "Dots carry no structure (section 5): a trailing segment of a qualified alias identifies no operation.",
+          "sha256": "b679aaef73be6714933498b706bd7b0fce363d996549dd8ac36600809ee5c265",
+          "observed": {
+            "chromium": "pass",
+            "webkit": "pass"
+          }
+        }
+      ],
+      "audit": "Neither a prefix nor a trailing dot-separated alias segment identifies the complete name.",
+      "status": "source/assertion or pinned-case binding audited; final independent review pending"
+    },
+    {
+      "id": "claims-positive",
+      "expectation": "False-looking claim remains conformant",
+      "concept_id": "claims",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings/tests/domain.rs",
+          "line": 23,
+          "anchor": "fn all_32_declared_fields_have_canonical_access(",
+          "sha256": "6f05a958a5afcd545b901d44ef04f7a082aae3fa483ee04e92ecb76ec113af7a",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "An example contradicting output:false is still author content in a conformant document; binding author flags remain available.",
+      "status": "source/assertion or pinned-case binding audited; final independent review pending"
+    },
+    {
+      "id": "claims-negative",
+      "expectation": "Trusted or verified claim minted from conformance",
+      "concept_id": "claims",
+      "evidence_kind": "inspected public role boundary with bounded claim-carriage assertion",
+      "evidence": [
+        {
+          "file": "crates/openbindings/src/document.rs",
+          "line": 105,
+          "anchor": "pub struct ConformantDocument {",
+          "sha256": "e9fabe4c5ce2a496410d3d5f225359051ee05db96431cdf7c8ac8792d7d61d5b"
+        },
+        {
+          "file": "crates/openbindings/src/document/model.rs",
+          "line": 314,
+          "anchor": "pub fn idempotent(",
+          "sha256": "6cb83f0bba47f0649a56587a73fd86cb73d3d4370eeef1569198c97cc6755e2f"
+        },
+        {
+          "file": "crates/openbindings/src/document/model.rs",
+          "line": 357,
+          "anchor": "impl Example {",
+          "sha256": "6cb83f0bba47f0649a56587a73fd86cb73d3d4370eeef1569198c97cc6755e2f"
+        },
+        {
+          "file": "crates/openbindings/tests/domain.rs",
+          "line": 156,
+          "anchor": "fn exact_keys_aliases_kinds_and_unranked_relations(",
+          "sha256": "6f05a958a5afcd545b901d44ef04f7a082aae3fa483ee04e92ecb76ec113af7a",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "Accessors expose claims without a verified/trusted capability. Conformance establishes document rules, not provider fidelity or actual idempotence.",
+      "status": "source/assertion or pinned-case binding audited; final independent review pending"
+    },
+    {
+      "id": "preference-positive",
+      "expectation": "Equal/absent preference selects nothing",
+      "concept_id": "preference",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings/tests/domain.rs",
+          "line": 156,
+          "anchor": "fn exact_keys_aliases_kinds_and_unranked_relations(",
+          "sha256": "6f05a958a5afcd545b901d44ef04f7a082aae3fa483ee04e92ecb76ec113af7a",
+          "portable_verifier_pass_occurrences": 1
+        },
+        {
+          "file": "crates/openbindings-invocation/tests/support/operation_cases.rs",
+          "line": 231,
+          "anchor": "fn aliases_ordered_selection_and_ambiguity_follow_caller_policy(",
+          "sha256": "8b629aa6fd18c08f2126834188222665726afb7a8edc7862b0d57da1b6504a42",
+          "portable_verifier_pass_occurrences": 2
+        }
+      ],
+      "audit": "Enumeration retains all bindings; operation invocation requires selection when multiple supported choices exist.",
+      "status": "source/assertion or pinned-case binding audited; final independent review pending"
+    },
+    {
+      "id": "preference-negative",
+      "expectation": "Selecting by preference without caller instruction",
+      "concept_id": "preference",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings-invocation/tests/support/operation_cases.rs",
+          "line": 231,
+          "anchor": "fn aliases_ordered_selection_and_ambiguity_follow_caller_policy(",
+          "sha256": "8b629aa6fd18c08f2126834188222665726afb7a8edc7862b0d57da1b6504a42",
+          "portable_verifier_pass_occurrences": 2
+        }
+      ],
+      "audit": "The ambiguous case remains a selection-required terminal rather than ranking by author preference. This controls the operative behavior, not every possible preference value.",
+      "status": "source/assertion or pinned-case binding audited; final independent review pending"
+    },
+    {
+      "id": "schema-positive",
+      "expectation": "Named and operation schemas with original context",
+      "concept_id": "schema",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings/tests/api_quality.rs",
+          "line": 602,
+          "anchor": "fn contextual_schemas_and_prepared_validators_own_their_inputs(",
+          "sha256": "7c93ecbd664d2144c7bfd927c498376de26985fe3f12563c965b63e081b25e6d",
+          "portable_verifier_pass_occurrences": 1
+        },
+        {
+          "file": "crates/openbindings/tests/schema_environment.rs",
+          "line": 137,
+          "anchor": "fn original_sources_bases_and_resource_roots_are_separate(",
+          "sha256": "985ef65e0fdbcd64eacf2104d6adba4aaea2a5540b6e2e42972e311b8d61158b",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "Named and operation schemas retain original owners and locations.",
+      "status": "source/assertion or pinned-case binding audited; final independent review pending"
+    },
+    {
+      "id": "schema-negative",
+      "expectation": "Preparing a bare extracted schema with wrong base",
+      "concept_id": "schema",
+      "evidence_kind": "bounded runtime assertions plus inspected preparation boundary",
+      "evidence": [
+        {
+          "file": "crates/openbindings/tests/schema_environment.rs",
+          "line": 137,
+          "anchor": "fn original_sources_bases_and_resource_roots_are_separate(",
+          "sha256": "985ef65e0fdbcd64eacf2104d6adba4aaea2a5540b6e2e42972e311b8d61158b",
+          "portable_verifier_pass_occurrences": 1
+        },
+        {
+          "file": "crates/openbindings/src/schema/mod.rs",
+          "line": 27,
+          "anchor": "pub struct Schema {",
+          "sha256": "afb7c5968f8bb5d7c990bb6eb63b8104499c5cce1a41d477675d126ad1d134c5"
+        },
+        {
+          "file": "crates/openbindings/src/schema/mod.rs",
+          "line": 59,
+          "anchor": "pub fn document(",
+          "sha256": "afb7c5968f8bb5d7c990bb6eb63b8104499c5cce1a41d477675d126ad1d134c5"
+        }
+      ],
+      "audit": "Environment nodes distinguish original source, resource base and resource root. Core preparation takes a contextual Schema, not a bare extracted JSON value.",
+      "status": "source/assertion or pinned-case binding audited; final independent review pending"
+    },
+    {
+      "id": "schema-states-positive",
+      "expectation": "False present and input omitted",
+      "concept_id": "schema-states",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings/tests/domain.rs",
+          "line": 92,
+          "anchor": "fn absent_empty_false_and_null_remain_distinct(",
+          "sha256": "6f05a958a5afcd545b901d44ef04f7a082aae3fa483ee04e92ecb76ec113af7a",
+          "portable_verifier_pass_occurrences": 1
+        },
+        {
+          "file": "crates/openbindings/tests/domain.rs",
+          "line": 23,
+          "anchor": "fn all_32_declared_fields_have_canonical_access(",
+          "sha256": "6f05a958a5afcd545b901d44ef04f7a082aae3fa483ee04e92ecb76ec113af7a",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "Omitted input is None; a declared false output remains a Schema.",
+      "status": "source/assertion or pinned-case binding audited; final independent review pending"
+    },
+    {
+      "id": "schema-states-negative",
+      "expectation": "Treating null as no schema",
+      "concept_id": "schema-states",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings/tests/api_quality.rs",
+          "line": 34,
+          "anchor": "fn malformed_operation_fields_and_alias_collisions_never_acquire_proof(",
+          "sha256": "7c93ecbd664d2144c7bfd927c498376de26985fe3f12563c965b63e081b25e6d",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "A present null output prevents conformance rather than becoming an absent schema.",
+      "status": "source/assertion or pinned-case binding audited; final independent review pending"
+    },
+    {
+      "id": "placement-positive",
+      "expectation": "Unused named schemas inventoried",
+      "concept_id": "placement",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "tools/qualification/inputs/spec/conformance/document/OBI-14.json",
+          "case_id": "document/OBI-14.json#/tests/0",
+          "description": "An unused schemas entry with $dynamicAnchor belongs to the document resource (\u00a77.2, OBI-14).",
+          "sha256": "df1466c99a5cce5a0f6f23549db557846bc97aa5b71a2f59000965f6bcfc3a2b",
+          "observed": {
+            "chromium": "pass",
+            "webkit": "pass"
+          }
+        }
+      ],
+      "audit": "An unused named schema is inventoried and its forbidden document-resource dynamic anchor is reported.",
+      "status": "source/assertion or pinned-case binding audited; final independent review pending"
+    },
+    {
+      "id": "placement-negative",
+      "expectation": "Source/const/unknown-keyword values promoted",
+      "concept_id": "placement",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings/tests/schema_environment.rs",
+          "line": 242,
+          "anchor": "fn checked_subschemas_never_promote_maps_literals_or_opaque_objects(",
+          "sha256": "985ef65e0fdbcd64eacf2104d6adba4aaea2a5540b6e2e42972e311b8d61158b",
+          "portable_verifier_pass_occurrences": 1
+        },
+        {
+          "file": "tools/qualification/inputs/spec/conformance/document/OBI-12.json",
+          "case_id": "document/OBI-12.json#/tests/61",
+          "description": "An $id in a source's data does not identify a contained schema resource; its URI remains external (\u00a7\u00a75.5, 7.2).",
+          "sha256": "a84b201b1c4d9aba7ee1f31046a8d28bd75e01b53351ffc1655c1d033ca2a612",
+          "observed": {
+            "chromium": "pass",
+            "webkit": "pass"
+          }
+        }
+      ],
+      "audit": "Maps, const data, unknown-keyword values and source data do not become schema nodes.",
+      "status": "source/assertion or pinned-case binding audited; final independent review pending"
+    },
+    {
+      "id": "resources-positive",
+      "expectation": "Nested identified resource retains base",
+      "concept_id": "resources",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings/tests/schema_environment.rs",
+          "line": 137,
+          "anchor": "fn original_sources_bases_and_resource_roots_are_separate(",
+          "sha256": "985ef65e0fdbcd64eacf2104d6adba4aaea2a5540b6e2e42972e311b8d61158b",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "A nested external identifier retains its own named base and resource root while source URI still identifies the original supplied document.",
+      "status": "source/assertion or pinned-case binding audited; final independent review pending"
+    },
+    {
+      "id": "resources-negative",
+      "expectation": "One flat document base assigned to every node",
+      "concept_id": "resources",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings/tests/schema_environment.rs",
+          "line": 137,
+          "anchor": "fn original_sources_bases_and_resource_roots_are_separate(",
+          "sha256": "985ef65e0fdbcd64eacf2104d6adba4aaea2a5540b6e2e42972e311b8d61158b",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "The same test distinguishes anonymous root, local identified resource and nested external resource; a single flat base would fail these assertions.",
+      "status": "source/assertion or pinned-case binding audited; final independent review pending"
+    },
+    {
+      "id": "references-positive",
+      "expectation": "Pointer into identified resource",
+      "concept_id": "references",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings/tests/foundation_02.rs",
+          "line": 39,
+          "anchor": "fn document_pointers_reach_contained_schemas_but_not_primitive_schema_slots(",
+          "sha256": "545f6848eb8ffbba52044cfc764c668c9765d56218348580e175e5144c57851c",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "Document pointers can enter an identified resource and locate a nested schema.",
+      "status": "source/assertion or pinned-case binding audited; final independent review pending"
+    },
+    {
+      "id": "references-negative",
+      "expectation": "Malformed fragment or non-schema target treated as schema",
+      "concept_id": "references",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings/tests/schema_environment.rs",
+          "line": 292,
+          "anchor": "fn defects_are_distinct_from_unavailable_content_and_unknown_dialects(",
+          "sha256": "985ef65e0fdbcd64eacf2104d6adba4aaea2a5540b6e2e42972e311b8d61158b",
+          "portable_verifier_pass_occurrences": 1
+        },
+        {
+          "file": "crates/openbindings/tests/schema_environment.rs",
+          "line": 242,
+          "anchor": "fn checked_subschemas_never_promote_maps_literals_or_opaque_objects(",
+          "sha256": "985ef65e0fdbcd64eacf2104d6adba4aaea2a5540b6e2e42972e311b8d61158b",
+          "portable_verifier_pass_occurrences": 1
+        },
+        {
+          "file": "tools/qualification/inputs/spec/conformance/document/OBI-12.json",
+          "case_id": "document/OBI-12.json#/tests/37",
+          "description": "a fragment whose percent-decoding is not valid UTF-8 identifies nothing",
+          "sha256": "a84b201b1c4d9aba7ee1f31046a8d28bd75e01b53351ffc1655c1d033ca2a612",
+          "observed": {
+            "chromium": "pass",
+            "webkit": "pass"
+          }
+        }
+      ],
+      "audit": "Invalid fragment decoding, malformed queries and pointers to non-schema locations do not fabricate schema targets.",
+      "status": "source/assertion or pinned-case binding audited; final independent review pending"
+    },
+    {
+      "id": "external-positive",
+      "expectation": "Independent external sets with same URI",
+      "concept_id": "external",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings-json-schema-evaluator/tests/contracts.rs",
+          "line": 249,
+          "anchor": "fn same_uri_resources_are_isolated_and_precancellation_does_not_poison(",
+          "sha256": "1a81e3c049f5f40d842af99180f800017c9c16c3756c16d0195094c547f01945",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "Two immutable resource sets give different schemas for the same URI.",
+      "status": "source/assertion or pinned-case binding audited; final independent review pending"
+    },
+    {
+      "id": "external-negative",
+      "expectation": "Global registry contaminates another document",
+      "concept_id": "external",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings-json-schema-evaluator/tests/contracts.rs",
+          "line": 249,
+          "anchor": "fn same_uri_resources_are_isolated_and_precancellation_does_not_poison(",
+          "sha256": "1a81e3c049f5f40d842af99180f800017c9c16c3756c16d0195094c547f01945",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "Preparing one set or cancelling its attempt does not alter the other set or poison a later independent attempt.",
+      "status": "source/assertion or pinned-case binding audited; final independent review pending"
+    },
+    {
+      "id": "value-outcome-positive",
+      "expectation": "Decided branch independent of missing resource",
+      "concept_id": "value-outcome",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings-json-schema-evaluator/tests/contracts.rs",
+          "line": 417,
+          "anchor": "fn a_missing_resource_gives_no_verdict_only_where_evaluation_reaches_it(",
+          "sha256": "1a81e3c049f5f40d842af99180f800017c9c16c3756c16d0195094c547f01945",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "A satisfied disjunction establishes Satisfies without needing unavailable resource content.",
+      "status": "source/assertion or pinned-case binding audited; final independent review pending"
+    },
+    {
+      "id": "value-outcome-negative",
+      "expectation": "No-verdict converted to false",
+      "concept_id": "value-outcome",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings-json-schema-evaluator/tests/contracts.rs",
+          "line": 417,
+          "anchor": "fn a_missing_resource_gives_no_verdict_only_where_evaluation_reaches_it(",
+          "sha256": "1a81e3c049f5f40d842af99180f800017c9c16c3756c16d0195094c547f01945",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "The dependent value returns ResourceUnavailable NoVerdict in both detail modes, never Fails.",
+      "status": "source/assertion or pinned-case binding audited; final independent review pending"
+    },
+    {
+      "id": "version-positive",
+      "expectation": "Patch/build metadata same line",
+      "concept_id": "version",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings/tests/assessment_gates.rs",
+          "line": 483,
+          "anchor": "fn version_declarations_follow_the_specification_examples(",
+          "sha256": "dc515f81357fe8c92b1c735ac75d3752a7c078d61ed0530d07077a365deb1b72",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "The supported specification line admits its permitted patch/build variants.",
+      "status": "source/assertion or pinned-case binding audited; final independent review pending"
+    },
+    {
+      "id": "version-negative",
+      "expectation": "Unsupported line falsely reported nonconformant",
+      "concept_id": "version",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings/tests/api_quality.rs",
+          "line": 629,
+          "anchor": "fn version_refusals_are_built_only_for_unsupported_declarations(",
+          "sha256": "7c93ecbd664d2144c7bfd927c498376de26985fe3f12563c965b63e081b25e6d",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "Unsupported valid declarations use VersionRefusal separately from document nonconformance.",
+      "status": "source/assertion or pinned-case binding audited; final independent review pending"
+    },
+    {
+      "id": "extensions-positive",
+      "expectation": "x- source key treated as entry",
+      "concept_id": "extensions",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "tools/qualification/inputs/spec/conformance/document/OBI-04.json",
+          "case_id": "document/OBI-04.json#/tests/29",
+          "description": "Source key \"x-data\" is an ordinary entry name, including x- names (\u00a75.2, \u00a712).",
+          "sha256": "7e87f7a27eab7e364ac3f1aa68ff4b3b0e4dee90d6efac500655fa6832d10fa2",
+          "observed": {
+            "chromium": "pass",
+            "webkit": "pass"
+          }
+        },
+        {
+          "file": "tools/qualification/inputs/spec/conformance/document/OBI-04.json",
+          "case_id": "document/OBI-04.json#/tests/30",
+          "description": "Source key \"x-\" is an ordinary entry name, including x- names (\u00a75.2, \u00a712).",
+          "sha256": "7e87f7a27eab7e364ac3f1aa68ff4b3b0e4dee90d6efac500655fa6832d10fa2",
+          "observed": {
+            "chromium": "pass",
+            "webkit": "pass"
+          }
+        }
+      ],
+      "audit": "x-prefixed source-map keys are ordinary entries with the ordinary name grammar.",
+      "status": "source/assertion or pinned-case binding audited; final independent review pending"
+    },
+    {
+      "id": "extensions-negative",
+      "expectation": "Unknown unprefixed field admitted as extension",
+      "concept_id": "extensions",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "tools/qualification/inputs/spec/conformance/document/OBI-02.json",
+          "case_id": "document/OBI-02.json#/tests/24",
+          "description": "an operation member the specification does not define and that lacks the x- prefix (outpt beside input)",
+          "sha256": "1ee0bec6059701e2ecfc0660187086ec1d254e1354c1049807e2c58368f4032c",
+          "observed": {
+            "chromium": "pass",
+            "webkit": "pass"
+          }
+        },
+        {
+          "file": "tools/qualification/inputs/spec/conformance/document/OBI-02.json",
+          "case_id": "document/OBI-02.json#/tests/29",
+          "description": "an undefined root member",
+          "sha256": "1ee0bec6059701e2ecfc0660187086ec1d254e1354c1049807e2c58368f4032c",
+          "observed": {
+            "chromium": "pass",
+            "webkit": "pass"
+          }
+        }
+      ],
+      "audit": "Unprefixed unknown OBI fields violate structural conformance; they are not silently treated as extensions.",
+      "status": "source/assertion or pinned-case binding audited; final independent review pending"
+    },
+    {
+      "id": "exact-positive",
+      "expectation": "Adjacent large decimals remain distinct",
+      "concept_id": "exact",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings-json-schema-evaluator/tests/exact_operands.rs",
+          "line": 43,
+          "anchor": "fn every_numeric_family_uses_exact_values_in_both_detail_modes(",
+          "sha256": "4be573b76446f621517e680fca305580ab2c8944d413f7a121361f1a752b474f",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "Adjacent integers beyond binary64 precision remain distinct in const, maximum and uniqueItems checks.",
+      "status": "source/assertion or pinned-case binding audited; final independent review pending"
+    },
+    {
+      "id": "exact-negative",
+      "expectation": "Binary64 rounding decides equality",
+      "concept_id": "exact",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings-json-schema-evaluator/tests/exact_operands.rs",
+          "line": 43,
+          "anchor": "fn every_numeric_family_uses_exact_values_in_both_detail_modes(",
+          "sha256": "4be573b76446f621517e680fca305580ab2c8944d413f7a121361f1a752b474f",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "The exact-number controls reject the rounded-neighbor value while accepting alternate decimal spellings of the same mathematical value.",
+      "status": "source/assertion or pinned-case binding audited; final independent review pending"
+    },
+    {
+      "id": "snapshot-positive",
+      "expectation": "Old view after edit and parent drop",
+      "concept_id": "snapshot",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings/tests/document_edit.rs",
+          "line": 692,
+          "anchor": "fn successful_edits_preserve_original_snapshot_and_exact_owners(",
+          "sha256": "60c11b598884e3d0869553173cb51e15fcdcc6247f3f46c45f75b4f6f2268118",
+          "portable_verifier_pass_occurrences": 1
+        },
+        {
+          "file": "crates/openbindings/tests/domain.rs",
+          "line": 183,
+          "anchor": "fn owners_keep_original_entries_and_relations_across_drop_and_edits(",
+          "sha256": "6f05a958a5afcd545b901d44ef04f7a082aae3fa483ee04e92ecb76ec113af7a",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "Retained views/entries and their original locations survive parent drop and creation of an edited revision.",
+      "status": "source/assertion or pinned-case binding audited; final independent review pending"
+    },
+    {
+      "id": "snapshot-negative",
+      "expectation": "Mutation invalidates a previously issued proof",
+      "concept_id": "snapshot",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings/tests/document_edit.rs",
+          "line": 13,
+          "anchor": "fn atomic_failure_keeps_bytes_caches_views_and_proof(",
+          "sha256": "60c11b598884e3d0869553173cb51e15fcdcc6247f3f46c45f75b4f6f2268118",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "A failed atomic edit leaves bytes, caches, views and proof unchanged; successful edits return a different snapshot.",
+      "status": "source/assertion or pinned-case binding audited; final independent review pending"
+    },
+    {
+      "id": "proof-positive",
+      "expectation": "Proof only on all applicable rules satisfied",
+      "concept_id": "proof",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings/tests/validated_access.rs",
+          "line": 171,
+          "anchor": "fn rejected_and_undetermined_documents_cannot_produce_proof(",
+          "sha256": "a54c0f420e653080518be7ee9c29485d369973452d52dbe7c1cda7613560df05",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "Nonconformant and undetermined documents cannot yield ConformantDocument.",
+      "status": "source/assertion or pinned-case binding audited; final independent review pending"
+    },
+    {
+      "id": "proof-negative",
+      "expectation": "Public constructor fabricates proof",
+      "concept_id": "proof",
+      "evidence_kind": "compile-fail public API control",
+      "evidence": [
+        {
+          "file": "crates/openbindings/src/document.rs",
+          "line": 86,
+          "anchor": "fn forge(document: Document) { let _ = ConformantDocument { document }; }",
+          "sha256": "e9fabe4c5ce2a496410d3d5f225359051ee05db96431cdf7c8ac8792d7d61d5b",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "A compile-fail doctest verifies that the public API cannot construct the proof from an arbitrary Document.",
+      "status": "source/assertion or pinned-case binding audited; final independent review pending"
+    },
+    {
+      "id": "findings-positive",
+      "expectation": "Truncation keeps established violations",
+      "concept_id": "findings",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings/tests/diagnostic_bounds.rs",
+          "line": 4,
+          "anchor": "fn duplicate_cap_preserves_order_coordinates_and_truthful_truncation(",
+          "sha256": "343a5a694d40248f824ec44466805db48b36ed9a3aabb58c4cb53c8b25b69e3e",
+          "portable_verifier_pass_occurrences": 1
+        },
+        {
+          "file": "crates/openbindings/tests/diagnostic_bounds.rs",
+          "line": 48,
+          "anchor": "fn nonfixed_findings_keep_coordinates_and_evidence_after_the_cap(",
+          "sha256": "343a5a694d40248f824ec44466805db48b36ed9a3aabb58c4cb53c8b25b69e3e",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "Findings stop at their cap while independent rule violations remain recorded.",
+      "status": "source/assertion or pinned-case binding audited; final independent review pending"
+    },
+    {
+      "id": "findings-negative",
+      "expectation": "Diagnostic limit turns failure into conformance",
+      "concept_id": "findings",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings/tests/diagnostic_bounds.rs",
+          "line": 4,
+          "anchor": "fn duplicate_cap_preserves_order_coordinates_and_truthful_truncation(",
+          "sha256": "343a5a694d40248f824ec44466805db48b36ed9a3aabb58c4cb53c8b25b69e3e",
+          "portable_verifier_pass_occurrences": 1
+        },
+        {
+          "file": "crates/openbindings/tests/diagnostic_bounds.rs",
+          "line": 84,
+          "anchor": "fn aggregate_pointer_budget_applies_to_duplicates_and_keeps_rule_evidence(",
+          "sha256": "343a5a694d40248f824ec44466805db48b36ed9a3aabb58c4cb53c8b25b69e3e",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "Both finding-count and pointer-byte truncation preserve NonConformant/Violated evidence.",
+      "status": "source/assertion or pinned-case binding audited; final independent review pending"
+    },
+    {
+      "id": "prepare-positive",
+      "expectation": "External validator retains nodes and resolves from original resource",
+      "concept_id": "prepare",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings/tests/generic_evaluation.rs",
+          "line": 47,
+          "anchor": "fn local_nonclone_validator_owns_only_what_it_retains(",
+          "sha256": "587f6721860c3f80c7db679cc087595102cf98a886a7e0d967cbc47f69478f5e",
+          "portable_verifier_pass_occurrences": 1
+        },
+        {
+          "file": "crates/openbindings/tests/schema_environment.rs",
+          "line": 137,
+          "anchor": "fn original_sources_bases_and_resource_roots_are_separate(",
+          "sha256": "985ef65e0fdbcd64eacf2104d6adba4aaea2a5540b6e2e42972e311b8d61158b",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "A local non-clone external validator retains the original root after evaluator, schema and resource inputs drop.",
+      "status": "source/assertion or pinned-case binding audited; final independent review pending"
+    },
+    {
+      "id": "prepare-negative",
+      "expectation": "Opaque schema forces evaluator to reconstruct a competing reference environment",
+      "concept_id": "prepare",
+      "evidence_kind": "bounded runtime assertions plus inspected evaluator integration boundary",
+      "evidence": [
+        {
+          "file": "crates/openbindings/tests/generic_evaluation.rs",
+          "line": 47,
+          "anchor": "fn local_nonclone_validator_owns_only_what_it_retains(",
+          "sha256": "587f6721860c3f80c7db679cc087595102cf98a886a7e0d967cbc47f69478f5e",
+          "portable_verifier_pass_occurrences": 1
+        },
+        {
+          "file": "crates/openbindings/src/schema/evaluation.rs",
+          "line": 508,
+          "anchor": "pub struct EvaluationRequest",
+          "sha256": "fef3cb699ab40f616753167f127138c45bda9f2d1197ff2bc5aedb63e2134e1c"
+        },
+        {
+          "file": "crates/openbindings/src/schema/evaluation.rs",
+          "line": 566,
+          "anchor": "pub trait SchemaEvaluator",
+          "sha256": "fef3cb699ab40f616753167f127138c45bda9f2d1197ff2bc5aedb63e2134e1c"
+        },
+        {
+          "file": "crates/openbindings/src/schema/evaluation.rs",
+          "line": 594,
+          "anchor": "pub trait SchemaValidator",
+          "sha256": "fef3cb699ab40f616753167f127138c45bda9f2d1197ff2bc5aedb63e2134e1c"
+        },
+        {
+          "file": "crates/openbindings/src/schema/evaluation.rs",
+          "line": 618,
+          "anchor": "pub struct PreparedSchema",
+          "sha256": "fef3cb699ab40f616753167f127138c45bda9f2d1197ff2bc5aedb63e2134e1c"
+        }
+      ],
+      "audit": "EvaluationRequest supplies the original environment and checked resolution. An evaluator can retain its necessary nodes without reconstructing a competing base/identifier model.",
+      "status": "source/assertion or pinned-case binding audited; final independent review pending"
+    },
+    {
+      "id": "limits-positive",
+      "expectation": "Cancellation/limit reported distinctly",
+      "concept_id": "limits",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings/tests/schema_environment.rs",
+          "line": 441,
+          "anchor": "fn limits_and_cancellation_leave_retriable_immutable_inputs(",
+          "sha256": "985ef65e0fdbcd64eacf2104d6adba4aaea2a5540b6e2e42972e311b8d61158b",
+          "portable_verifier_pass_occurrences": 1
+        },
+        {
+          "file": "crates/openbindings/tests/schema_environment.rs",
+          "line": 28,
+          "anchor": "fn preparation_attempts_bound_work_and_allocations_without_poisoning_caches(",
+          "sha256": "985ef65e0fdbcd64eacf2104d6adba4aaea2a5540b6e2e42972e311b8d61158b",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "Work/allocation exhaustion and cancellation remain explicit preparation failures with retriable immutable inputs.",
+      "status": "source/assertion or pinned-case binding audited; final independent review pending"
+    },
+    {
+      "id": "limits-negative",
+      "expectation": "Budget exhaustion called schema mismatch",
+      "concept_id": "limits",
+      "evidence_kind": "bounded runtime assertions",
+      "evidence": [
+        {
+          "file": "crates/openbindings/tests/schema_environment.rs",
+          "line": 28,
+          "anchor": "fn preparation_attempts_bound_work_and_allocations_without_poisoning_caches(",
+          "sha256": "985ef65e0fdbcd64eacf2104d6adba4aaea2a5540b6e2e42972e311b8d61158b",
+          "portable_verifier_pass_occurrences": 1
+        },
+        {
+          "file": "crates/openbindings/tests/generic_evaluation.rs",
+          "line": 137,
+          "anchor": "fn preparation_cancellation_never_returns_or_leaks_a_ready_validator(",
+          "sha256": "587f6721860c3f80c7db679cc087595102cf98a886a7e0d967cbc47f69478f5e",
+          "portable_verifier_pass_occurrences": 1
+        }
+      ],
+      "audit": "Exhaustion or a late cancellation cannot publish a ready validator or become a value mismatch.",
+      "status": "source/assertion or pinned-case binding audited; final independent review pending"
+    }
+  ],
+  "remaining_individual_bindings": 56,
+  "final_independent_audit": "pending"
+}

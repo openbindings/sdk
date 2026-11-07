@@ -1,0 +1,27 @@
+   Compiling openbindings-internal-schema v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-internal-schema)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.36s
+     Running unittests src/lib.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/openbindings_internal_schema-277ddeed42aaf5f7)
+
+running 13 tests
+test fixed_schema::local::tests::impossible_extents_refuse_instead_of_wrapping_or_erasing_exhaustion ... ok
+test fixed_schema::local::tests::every_localized_recursive_terminal_is_only_a_kind_check ... ok
+test fixed_schema::local::tests::complete_localized_graph_is_the_reviewed_read_shape ... ok
+test fixed_schema::local::tests::constrained_names_match_the_complete_fixed_graph_in_every_edition ... ok
+test fixed_schema::local::tests::graph_guard_covers_the_compilers_selected_entry ... ok
+test fixed_schema::local::tests::graph_guard_rejects_child_inspecting_and_nonrecursive_changes ... ok
+test fixed_schema::local::tests::reference_operand_audit_and_nonasserting_format_policy_are_fixed ... ok
+test fixed_schema::local::tests::arrays_opaque_data_wrong_kinds_and_exact_spelling_remain_charged ... ok
+test fixed_schema::local::tests::exact_limits_cancellation_and_nested_attempts_remain_authoritative ... ok
+test fixed_schema::local::tests::only_audited_reference_strings_drop_their_payload_extent ... ok
+test fixed_schema::local::tests::each_cut_family_retains_headers_and_only_skips_schema_payloads ... ok
+test fixed_schema::local::tests::depth_and_payload_growth_do_not_repeat_descendant_extent_at_the_parent ... ok
+test fixed_schema::local::tests::unread_unknown_payloads_keep_their_names_and_preserve_bounded_checks ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 85 filtered out; finished in 0.07s
+
+     Running tests/debug_redaction_table.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/deps/debug_redaction_table-75f70f08bd156a19)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+

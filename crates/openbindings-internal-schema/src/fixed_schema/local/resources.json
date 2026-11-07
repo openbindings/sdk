@@ -1,0 +1,1264 @@
+{
+  "draft2019": {
+    "entry": "https://openbindings.invalid/foreign-meta/draft/2019-09/schema",
+    "resources": {
+      "https://openbindings.invalid/foreign-meta/draft/2019-09/meta/applicator": {
+        "$defs": {
+          "schemaArray": {
+            "items": {
+              "type": [
+                "object",
+                "boolean"
+              ]
+            },
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "$id": "https://openbindings.invalid/foreign-meta/draft/2019-09/meta/applicator",
+        "$recursiveAnchor": true,
+        "properties": {
+          "additionalItems": {
+            "type": [
+              "object",
+              "boolean"
+            ]
+          },
+          "additionalProperties": {
+            "type": [
+              "object",
+              "boolean"
+            ]
+          },
+          "allOf": {
+            "$ref": "#/$defs/schemaArray"
+          },
+          "anyOf": {
+            "$ref": "#/$defs/schemaArray"
+          },
+          "contains": {
+            "type": [
+              "object",
+              "boolean"
+            ]
+          },
+          "dependentSchemas": {
+            "additionalProperties": {
+              "type": [
+                "object",
+                "boolean"
+              ]
+            },
+            "type": "object"
+          },
+          "else": {
+            "type": [
+              "object",
+              "boolean"
+            ]
+          },
+          "if": {
+            "type": [
+              "object",
+              "boolean"
+            ]
+          },
+          "items": {
+            "anyOf": [
+              {
+                "type": [
+                  "object",
+                  "boolean"
+                ]
+              },
+              {
+                "$ref": "#/$defs/schemaArray"
+              }
+            ]
+          },
+          "not": {
+            "type": [
+              "object",
+              "boolean"
+            ]
+          },
+          "oneOf": {
+            "$ref": "#/$defs/schemaArray"
+          },
+          "patternProperties": {
+            "additionalProperties": {
+              "type": [
+                "object",
+                "boolean"
+              ]
+            },
+            "default": {},
+            "propertyNames": {
+              "format": "regex"
+            },
+            "type": "object"
+          },
+          "properties": {
+            "additionalProperties": {
+              "type": [
+                "object",
+                "boolean"
+              ]
+            },
+            "default": {},
+            "type": "object"
+          },
+          "propertyNames": {
+            "type": [
+              "object",
+              "boolean"
+            ]
+          },
+          "then": {
+            "type": [
+              "object",
+              "boolean"
+            ]
+          },
+          "unevaluatedItems": {
+            "type": [
+              "object",
+              "boolean"
+            ]
+          },
+          "unevaluatedProperties": {
+            "type": [
+              "object",
+              "boolean"
+            ]
+          }
+        },
+        "title": "Applicator vocabulary meta-schema",
+        "type": [
+          "object",
+          "boolean"
+        ]
+      },
+      "https://openbindings.invalid/foreign-meta/draft/2019-09/meta/content": {
+        "$id": "https://openbindings.invalid/foreign-meta/draft/2019-09/meta/content",
+        "$recursiveAnchor": true,
+        "properties": {
+          "contentEncoding": {
+            "type": "string"
+          },
+          "contentMediaType": {
+            "type": "string"
+          },
+          "contentSchema": {
+            "type": [
+              "object",
+              "boolean"
+            ]
+          }
+        },
+        "title": "Content vocabulary meta-schema",
+        "type": [
+          "object",
+          "boolean"
+        ]
+      },
+      "https://openbindings.invalid/foreign-meta/draft/2019-09/meta/core": {
+        "$id": "https://openbindings.invalid/foreign-meta/draft/2019-09/meta/core",
+        "$recursiveAnchor": true,
+        "properties": {
+          "$anchor": {
+            "pattern": "^[A-Za-z][-A-Za-z0-9.:_]*$",
+            "type": "string"
+          },
+          "$comment": {
+            "type": "string"
+          },
+          "$defs": {
+            "additionalProperties": {
+              "type": [
+                "object",
+                "boolean"
+              ]
+            },
+            "default": {},
+            "type": "object"
+          },
+          "$id": {
+            "$comment": "Non-empty fragments not allowed.",
+            "format": "uri-reference",
+            "pattern": "^[^#]*#?$",
+            "type": "string"
+          },
+          "$recursiveAnchor": {
+            "default": false,
+            "type": "boolean"
+          },
+          "$recursiveRef": {
+            "format": "uri-reference",
+            "type": "string"
+          },
+          "$ref": {
+            "format": "uri-reference",
+            "type": "string"
+          },
+          "$schema": {
+            "format": "uri",
+            "type": "string"
+          },
+          "$vocabulary": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "propertyNames": {
+              "format": "uri",
+              "type": "string"
+            },
+            "type": "object"
+          }
+        },
+        "title": "Core vocabulary meta-schema",
+        "type": [
+          "object",
+          "boolean"
+        ]
+      },
+      "https://openbindings.invalid/foreign-meta/draft/2019-09/meta/format": {
+        "$id": "https://openbindings.invalid/foreign-meta/draft/2019-09/meta/format",
+        "$recursiveAnchor": true,
+        "properties": {
+          "format": {
+            "type": "string"
+          }
+        },
+        "title": "Format vocabulary meta-schema",
+        "type": [
+          "object",
+          "boolean"
+        ]
+      },
+      "https://openbindings.invalid/foreign-meta/draft/2019-09/meta/meta-data": {
+        "$id": "https://openbindings.invalid/foreign-meta/draft/2019-09/meta/meta-data",
+        "$recursiveAnchor": true,
+        "properties": {
+          "default": true,
+          "deprecated": {
+            "default": false,
+            "type": "boolean"
+          },
+          "description": {
+            "type": "string"
+          },
+          "examples": {
+            "items": true,
+            "type": "array"
+          },
+          "readOnly": {
+            "default": false,
+            "type": "boolean"
+          },
+          "title": {
+            "type": "string"
+          },
+          "writeOnly": {
+            "default": false,
+            "type": "boolean"
+          }
+        },
+        "title": "Meta-data vocabulary meta-schema",
+        "type": [
+          "object",
+          "boolean"
+        ]
+      },
+      "https://openbindings.invalid/foreign-meta/draft/2019-09/meta/validation": {
+        "$defs": {
+          "nonNegativeInteger": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "nonNegativeIntegerDefault0": {
+            "$ref": "#/$defs/nonNegativeInteger",
+            "default": 0
+          },
+          "simpleTypes": {
+            "enum": [
+              "array",
+              "boolean",
+              "integer",
+              "null",
+              "number",
+              "object",
+              "string"
+            ]
+          },
+          "stringArray": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "uniqueItems": true
+          }
+        },
+        "$id": "https://openbindings.invalid/foreign-meta/draft/2019-09/meta/validation",
+        "$recursiveAnchor": true,
+        "properties": {
+          "const": true,
+          "dependentRequired": {
+            "additionalProperties": {
+              "$ref": "#/$defs/stringArray"
+            },
+            "type": "object"
+          },
+          "enum": {
+            "items": true,
+            "type": "array"
+          },
+          "exclusiveMaximum": {
+            "type": "number"
+          },
+          "exclusiveMinimum": {
+            "type": "number"
+          },
+          "maxContains": {
+            "$ref": "#/$defs/nonNegativeInteger"
+          },
+          "maxItems": {
+            "$ref": "#/$defs/nonNegativeInteger"
+          },
+          "maxLength": {
+            "$ref": "#/$defs/nonNegativeInteger"
+          },
+          "maxProperties": {
+            "$ref": "#/$defs/nonNegativeInteger"
+          },
+          "maximum": {
+            "type": "number"
+          },
+          "minContains": {
+            "$ref": "#/$defs/nonNegativeInteger",
+            "default": 1
+          },
+          "minItems": {
+            "$ref": "#/$defs/nonNegativeIntegerDefault0"
+          },
+          "minLength": {
+            "$ref": "#/$defs/nonNegativeIntegerDefault0"
+          },
+          "minProperties": {
+            "$ref": "#/$defs/nonNegativeIntegerDefault0"
+          },
+          "minimum": {
+            "type": "number"
+          },
+          "multipleOf": {
+            "exclusiveMinimum": 0,
+            "type": "number"
+          },
+          "pattern": {
+            "format": "regex",
+            "type": "string"
+          },
+          "required": {
+            "$ref": "#/$defs/stringArray"
+          },
+          "type": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/simpleTypes"
+              },
+              {
+                "items": {
+                  "$ref": "#/$defs/simpleTypes"
+                },
+                "minItems": 1,
+                "type": "array",
+                "uniqueItems": true
+              }
+            ]
+          },
+          "uniqueItems": {
+            "default": false,
+            "type": "boolean"
+          }
+        },
+        "title": "Validation vocabulary meta-schema",
+        "type": [
+          "object",
+          "boolean"
+        ]
+      },
+      "https://openbindings.invalid/foreign-meta/draft/2019-09/schema": {
+        "$id": "https://openbindings.invalid/foreign-meta/draft/2019-09/schema",
+        "$recursiveAnchor": true,
+        "$vocabulary": {
+          "https://json-schema.org/draft/2019-09/vocab/applicator": true,
+          "https://json-schema.org/draft/2019-09/vocab/content": true,
+          "https://json-schema.org/draft/2019-09/vocab/core": true,
+          "https://json-schema.org/draft/2019-09/vocab/format": false,
+          "https://json-schema.org/draft/2019-09/vocab/meta-data": true,
+          "https://json-schema.org/draft/2019-09/vocab/validation": true
+        },
+        "allOf": [
+          {
+            "$ref": "meta/core"
+          },
+          {
+            "$ref": "meta/applicator"
+          },
+          {
+            "$ref": "meta/validation"
+          },
+          {
+            "$ref": "meta/meta-data"
+          },
+          {
+            "$ref": "meta/format"
+          },
+          {
+            "$ref": "meta/content"
+          }
+        ],
+        "properties": {
+          "definitions": {
+            "$comment": "While no longer an official keyword as it is replaced by $defs, this keyword is retained in the meta-schema to prevent incompatible extensions as it remains in common use.",
+            "additionalProperties": {
+              "type": [
+                "object",
+                "boolean"
+              ]
+            },
+            "default": {},
+            "type": "object"
+          },
+          "dependencies": {
+            "$comment": "\"dependencies\" is no longer a keyword, but schema authors should avoid redefining it to facilitate a smooth transition to \"dependentSchemas\" and \"dependentRequired\"",
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": [
+                    "object",
+                    "boolean"
+                  ]
+                },
+                {
+                  "$ref": "meta/validation#/$defs/stringArray"
+                }
+              ]
+            },
+            "type": "object"
+          }
+        },
+        "title": "Core and Validation specifications meta-schema",
+        "type": [
+          "object",
+          "boolean"
+        ]
+      }
+    }
+  },
+  "draft2020": {
+    "entry": "https://openbindings.invalid/internal-meta/schema",
+    "resources": {
+      "https://openbindings.invalid/internal-meta/meta/applicator": {
+        "$defs": {
+          "schemaArray": {
+            "items": {
+              "type": [
+                "object",
+                "boolean"
+              ]
+            },
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "$dynamicAnchor": "meta",
+        "$id": "https://openbindings.invalid/internal-meta/meta/applicator",
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$vocabulary": {
+          "https://json-schema.org/draft/2020-12/vocab/applicator": true
+        },
+        "properties": {
+          "additionalProperties": {
+            "type": [
+              "object",
+              "boolean"
+            ]
+          },
+          "allOf": {
+            "$ref": "#/$defs/schemaArray"
+          },
+          "anyOf": {
+            "$ref": "#/$defs/schemaArray"
+          },
+          "contains": {
+            "type": [
+              "object",
+              "boolean"
+            ]
+          },
+          "dependentSchemas": {
+            "additionalProperties": {
+              "type": [
+                "object",
+                "boolean"
+              ]
+            },
+            "default": {},
+            "type": "object"
+          },
+          "else": {
+            "type": [
+              "object",
+              "boolean"
+            ]
+          },
+          "if": {
+            "type": [
+              "object",
+              "boolean"
+            ]
+          },
+          "items": {
+            "type": [
+              "object",
+              "boolean"
+            ]
+          },
+          "not": {
+            "type": [
+              "object",
+              "boolean"
+            ]
+          },
+          "oneOf": {
+            "$ref": "#/$defs/schemaArray"
+          },
+          "patternProperties": {
+            "additionalProperties": {
+              "type": [
+                "object",
+                "boolean"
+              ]
+            },
+            "default": {},
+            "propertyNames": {
+              "format": "regex"
+            },
+            "type": "object"
+          },
+          "prefixItems": {
+            "$ref": "#/$defs/schemaArray"
+          },
+          "properties": {
+            "additionalProperties": {
+              "type": [
+                "object",
+                "boolean"
+              ]
+            },
+            "default": {},
+            "type": "object"
+          },
+          "propertyNames": {
+            "type": [
+              "object",
+              "boolean"
+            ]
+          },
+          "then": {
+            "type": [
+              "object",
+              "boolean"
+            ]
+          }
+        },
+        "title": "Applicator vocabulary meta-schema",
+        "type": [
+          "object",
+          "boolean"
+        ]
+      },
+      "https://openbindings.invalid/internal-meta/meta/content": {
+        "$dynamicAnchor": "meta",
+        "$id": "https://openbindings.invalid/internal-meta/meta/content",
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$vocabulary": {
+          "https://json-schema.org/draft/2020-12/vocab/content": true
+        },
+        "properties": {
+          "contentEncoding": {
+            "type": "string"
+          },
+          "contentMediaType": {
+            "type": "string"
+          },
+          "contentSchema": {
+            "type": [
+              "object",
+              "boolean"
+            ]
+          }
+        },
+        "title": "Content vocabulary meta-schema",
+        "type": [
+          "object",
+          "boolean"
+        ]
+      },
+      "https://openbindings.invalid/internal-meta/meta/core": {
+        "$defs": {
+          "anchorString": {
+            "pattern": "^[A-Za-z_][-A-Za-z0-9._]*$",
+            "type": "string"
+          },
+          "uriReferenceString": {
+            "format": "uri-reference",
+            "type": "string"
+          },
+          "uriString": {
+            "format": "uri",
+            "type": "string"
+          }
+        },
+        "$dynamicAnchor": "meta",
+        "$id": "https://openbindings.invalid/internal-meta/meta/core",
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$vocabulary": {
+          "https://json-schema.org/draft/2020-12/vocab/core": true
+        },
+        "properties": {
+          "$anchor": {
+            "$ref": "#/$defs/anchorString"
+          },
+          "$comment": {
+            "type": "string"
+          },
+          "$defs": {
+            "additionalProperties": {
+              "type": [
+                "object",
+                "boolean"
+              ]
+            },
+            "type": "object"
+          },
+          "$dynamicAnchor": {
+            "$ref": "#/$defs/anchorString"
+          },
+          "$dynamicRef": {
+            "$ref": "#/$defs/uriReferenceString"
+          },
+          "$id": {
+            "$comment": "Non-empty fragments not allowed.",
+            "$ref": "#/$defs/uriReferenceString",
+            "pattern": "^[^#]*#?$"
+          },
+          "$ref": {
+            "$ref": "#/$defs/uriReferenceString"
+          },
+          "$schema": {
+            "$ref": "#/$defs/uriString"
+          },
+          "$vocabulary": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "propertyNames": {
+              "$ref": "#/$defs/uriString"
+            },
+            "type": "object"
+          }
+        },
+        "title": "Core vocabulary meta-schema",
+        "type": [
+          "object",
+          "boolean"
+        ]
+      },
+      "https://openbindings.invalid/internal-meta/meta/format-annotation": {
+        "$dynamicAnchor": "meta",
+        "$id": "https://openbindings.invalid/internal-meta/meta/format-annotation",
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$vocabulary": {
+          "https://json-schema.org/draft/2020-12/vocab/format-annotation": true
+        },
+        "properties": {
+          "format": {
+            "type": "string"
+          }
+        },
+        "title": "Format vocabulary meta-schema for annotation results",
+        "type": [
+          "object",
+          "boolean"
+        ]
+      },
+      "https://openbindings.invalid/internal-meta/meta/meta-data": {
+        "$dynamicAnchor": "meta",
+        "$id": "https://openbindings.invalid/internal-meta/meta/meta-data",
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$vocabulary": {
+          "https://json-schema.org/draft/2020-12/vocab/meta-data": true
+        },
+        "properties": {
+          "default": true,
+          "deprecated": {
+            "default": false,
+            "type": "boolean"
+          },
+          "description": {
+            "type": "string"
+          },
+          "examples": {
+            "items": true,
+            "type": "array"
+          },
+          "readOnly": {
+            "default": false,
+            "type": "boolean"
+          },
+          "title": {
+            "type": "string"
+          },
+          "writeOnly": {
+            "default": false,
+            "type": "boolean"
+          }
+        },
+        "title": "Meta-data vocabulary meta-schema",
+        "type": [
+          "object",
+          "boolean"
+        ]
+      },
+      "https://openbindings.invalid/internal-meta/meta/unevaluated": {
+        "$dynamicAnchor": "meta",
+        "$id": "https://openbindings.invalid/internal-meta/meta/unevaluated",
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$vocabulary": {
+          "https://json-schema.org/draft/2020-12/vocab/unevaluated": true
+        },
+        "properties": {
+          "unevaluatedItems": {
+            "type": [
+              "object",
+              "boolean"
+            ]
+          },
+          "unevaluatedProperties": {
+            "type": [
+              "object",
+              "boolean"
+            ]
+          }
+        },
+        "title": "Unevaluated applicator vocabulary meta-schema",
+        "type": [
+          "object",
+          "boolean"
+        ]
+      },
+      "https://openbindings.invalid/internal-meta/meta/validation": {
+        "$defs": {
+          "nonNegativeInteger": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "nonNegativeIntegerDefault0": {
+            "$ref": "#/$defs/nonNegativeInteger",
+            "default": 0
+          },
+          "simpleTypes": {
+            "enum": [
+              "array",
+              "boolean",
+              "integer",
+              "null",
+              "number",
+              "object",
+              "string"
+            ]
+          },
+          "stringArray": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "uniqueItems": true
+          }
+        },
+        "$dynamicAnchor": "meta",
+        "$id": "https://openbindings.invalid/internal-meta/meta/validation",
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$vocabulary": {
+          "https://json-schema.org/draft/2020-12/vocab/validation": true
+        },
+        "properties": {
+          "const": true,
+          "dependentRequired": {
+            "additionalProperties": {
+              "$ref": "#/$defs/stringArray"
+            },
+            "type": "object"
+          },
+          "enum": {
+            "items": true,
+            "type": "array"
+          },
+          "exclusiveMaximum": {
+            "type": "number"
+          },
+          "exclusiveMinimum": {
+            "type": "number"
+          },
+          "maxContains": {
+            "$ref": "#/$defs/nonNegativeInteger"
+          },
+          "maxItems": {
+            "$ref": "#/$defs/nonNegativeInteger"
+          },
+          "maxLength": {
+            "$ref": "#/$defs/nonNegativeInteger"
+          },
+          "maxProperties": {
+            "$ref": "#/$defs/nonNegativeInteger"
+          },
+          "maximum": {
+            "type": "number"
+          },
+          "minContains": {
+            "$ref": "#/$defs/nonNegativeInteger",
+            "default": 1
+          },
+          "minItems": {
+            "$ref": "#/$defs/nonNegativeIntegerDefault0"
+          },
+          "minLength": {
+            "$ref": "#/$defs/nonNegativeIntegerDefault0"
+          },
+          "minProperties": {
+            "$ref": "#/$defs/nonNegativeIntegerDefault0"
+          },
+          "minimum": {
+            "type": "number"
+          },
+          "multipleOf": {
+            "exclusiveMinimum": 0,
+            "type": "number"
+          },
+          "pattern": {
+            "format": "regex",
+            "type": "string"
+          },
+          "required": {
+            "$ref": "#/$defs/stringArray"
+          },
+          "type": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/simpleTypes"
+              },
+              {
+                "items": {
+                  "$ref": "#/$defs/simpleTypes"
+                },
+                "minItems": 1,
+                "type": "array",
+                "uniqueItems": true
+              }
+            ]
+          },
+          "uniqueItems": {
+            "default": false,
+            "type": "boolean"
+          }
+        },
+        "title": "Validation vocabulary meta-schema",
+        "type": [
+          "object",
+          "boolean"
+        ]
+      },
+      "https://openbindings.invalid/internal-meta/schema": {
+        "$comment": "This meta-schema also defines keywords that have appeared in previous drafts in order to prevent incompatible extensions as they remain in common use.",
+        "$dynamicAnchor": "meta",
+        "$id": "https://openbindings.invalid/internal-meta/schema",
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$vocabulary": {
+          "https://json-schema.org/draft/2020-12/vocab/applicator": true,
+          "https://json-schema.org/draft/2020-12/vocab/content": true,
+          "https://json-schema.org/draft/2020-12/vocab/core": true,
+          "https://json-schema.org/draft/2020-12/vocab/format-annotation": true,
+          "https://json-schema.org/draft/2020-12/vocab/meta-data": true,
+          "https://json-schema.org/draft/2020-12/vocab/unevaluated": true,
+          "https://json-schema.org/draft/2020-12/vocab/validation": true
+        },
+        "allOf": [
+          {
+            "$ref": "meta/core"
+          },
+          {
+            "$ref": "meta/applicator"
+          },
+          {
+            "$ref": "meta/unevaluated"
+          },
+          {
+            "$ref": "meta/validation"
+          },
+          {
+            "$ref": "meta/meta-data"
+          },
+          {
+            "$ref": "meta/format-annotation"
+          },
+          {
+            "$ref": "meta/content"
+          }
+        ],
+        "properties": {
+          "$recursiveAnchor": {
+            "$comment": "\"$recursiveAnchor\" has been replaced by \"$dynamicAnchor\".",
+            "$ref": "meta/core#/$defs/anchorString",
+            "deprecated": true
+          },
+          "$recursiveRef": {
+            "$comment": "\"$recursiveRef\" has been replaced by \"$dynamicRef\".",
+            "$ref": "meta/core#/$defs/uriReferenceString",
+            "deprecated": true
+          },
+          "definitions": {
+            "$comment": "\"definitions\" has been replaced by \"$defs\".",
+            "additionalProperties": {
+              "type": [
+                "object",
+                "boolean"
+              ]
+            },
+            "default": {},
+            "deprecated": true,
+            "type": "object"
+          },
+          "dependencies": {
+            "$comment": "\"dependencies\" has been split and replaced by \"dependentSchemas\" and \"dependentRequired\" in order to serve their differing semantics.",
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": [
+                    "object",
+                    "boolean"
+                  ]
+                },
+                {
+                  "$ref": "meta/validation#/$defs/stringArray"
+                }
+              ]
+            },
+            "default": {},
+            "deprecated": true,
+            "type": "object"
+          }
+        },
+        "title": "Core and Validation specifications meta-schema",
+        "type": [
+          "object",
+          "boolean"
+        ]
+      }
+    }
+  },
+  "draft7": {
+    "entry": "https://openbindings.invalid/foreign-meta/draft-07/schema#",
+    "resources": {
+      "https://openbindings.invalid/foreign-meta/draft-07/schema#": {
+        "$id": "https://openbindings.invalid/foreign-meta/draft-07/schema#",
+        "default": true,
+        "definitions": {
+          "nonNegativeInteger": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "nonNegativeIntegerDefault0": {
+            "allOf": [
+              {
+                "$ref": "#/definitions/nonNegativeInteger"
+              },
+              {
+                "default": 0
+              }
+            ]
+          },
+          "schemaArray": {
+            "items": {
+              "type": [
+                "object",
+                "boolean"
+              ]
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "simpleTypes": {
+            "enum": [
+              "array",
+              "boolean",
+              "integer",
+              "null",
+              "number",
+              "object",
+              "string"
+            ]
+          },
+          "stringArray": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "uniqueItems": true
+          }
+        },
+        "properties": {
+          "$comment": {
+            "type": "string"
+          },
+          "$id": {
+            "format": "uri-reference",
+            "type": "string"
+          },
+          "$ref": {
+            "format": "uri-reference",
+            "type": "string"
+          },
+          "$schema": {
+            "format": "uri",
+            "type": "string"
+          },
+          "additionalItems": {
+            "type": [
+              "object",
+              "boolean"
+            ]
+          },
+          "additionalProperties": {
+            "type": [
+              "object",
+              "boolean"
+            ]
+          },
+          "allOf": {
+            "$ref": "#/definitions/schemaArray"
+          },
+          "anyOf": {
+            "$ref": "#/definitions/schemaArray"
+          },
+          "const": true,
+          "contains": {
+            "type": [
+              "object",
+              "boolean"
+            ]
+          },
+          "contentEncoding": {
+            "type": "string"
+          },
+          "contentMediaType": {
+            "type": "string"
+          },
+          "default": true,
+          "definitions": {
+            "additionalProperties": {
+              "type": [
+                "object",
+                "boolean"
+              ]
+            },
+            "default": {},
+            "type": "object"
+          },
+          "dependencies": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": [
+                    "object",
+                    "boolean"
+                  ]
+                },
+                {
+                  "$ref": "#/definitions/stringArray"
+                }
+              ]
+            },
+            "type": "object"
+          },
+          "description": {
+            "type": "string"
+          },
+          "else": {
+            "type": [
+              "object",
+              "boolean"
+            ]
+          },
+          "enum": {
+            "items": true,
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "examples": {
+            "items": true,
+            "type": "array"
+          },
+          "exclusiveMaximum": {
+            "type": "number"
+          },
+          "exclusiveMinimum": {
+            "type": "number"
+          },
+          "format": {
+            "type": "string"
+          },
+          "if": {
+            "type": [
+              "object",
+              "boolean"
+            ]
+          },
+          "items": {
+            "anyOf": [
+              {
+                "type": [
+                  "object",
+                  "boolean"
+                ]
+              },
+              {
+                "$ref": "#/definitions/schemaArray"
+              }
+            ],
+            "default": true
+          },
+          "maxItems": {
+            "$ref": "#/definitions/nonNegativeInteger"
+          },
+          "maxLength": {
+            "$ref": "#/definitions/nonNegativeInteger"
+          },
+          "maxProperties": {
+            "$ref": "#/definitions/nonNegativeInteger"
+          },
+          "maximum": {
+            "type": "number"
+          },
+          "minItems": {
+            "$ref": "#/definitions/nonNegativeIntegerDefault0"
+          },
+          "minLength": {
+            "$ref": "#/definitions/nonNegativeIntegerDefault0"
+          },
+          "minProperties": {
+            "$ref": "#/definitions/nonNegativeIntegerDefault0"
+          },
+          "minimum": {
+            "type": "number"
+          },
+          "multipleOf": {
+            "exclusiveMinimum": 0,
+            "type": "number"
+          },
+          "not": {
+            "type": [
+              "object",
+              "boolean"
+            ]
+          },
+          "oneOf": {
+            "$ref": "#/definitions/schemaArray"
+          },
+          "pattern": {
+            "format": "regex",
+            "type": "string"
+          },
+          "patternProperties": {
+            "additionalProperties": {
+              "type": [
+                "object",
+                "boolean"
+              ]
+            },
+            "default": {},
+            "propertyNames": {
+              "format": "regex"
+            },
+            "type": "object"
+          },
+          "properties": {
+            "additionalProperties": {
+              "type": [
+                "object",
+                "boolean"
+              ]
+            },
+            "default": {},
+            "type": "object"
+          },
+          "propertyNames": {
+            "type": [
+              "object",
+              "boolean"
+            ]
+          },
+          "readOnly": {
+            "default": false,
+            "type": "boolean"
+          },
+          "required": {
+            "$ref": "#/definitions/stringArray"
+          },
+          "then": {
+            "type": [
+              "object",
+              "boolean"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "type": {
+            "anyOf": [
+              {
+                "$ref": "#/definitions/simpleTypes"
+              },
+              {
+                "items": {
+                  "$ref": "#/definitions/simpleTypes"
+                },
+                "minItems": 1,
+                "type": "array",
+                "uniqueItems": true
+              }
+            ]
+          },
+          "uniqueItems": {
+            "default": false,
+            "type": "boolean"
+          },
+          "writeOnly": {
+            "default": false,
+            "type": "boolean"
+          }
+        },
+        "title": "Core schema meta-schema",
+        "type": [
+          "object",
+          "boolean"
+        ]
+      }
+    }
+  }
+}

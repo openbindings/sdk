@@ -1,12 +1,15 @@
 use openbindings::*;
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 
-fn prepare(schema: &str, extra: &str) -> PreparedValueContract {
+fn prepare(
+    schema: &str,
+    extra: &str,
+) -> PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator> {
     // Schema text and opaque examples live in a supplied resource. OBI-01
     // governs the interface document, not supplied schemas or caller values.
     let text = r#"{"openbindings":"0.2.0","operations":{"op":{"input":{"$ref":"https://strings.invalid/schema#/$defs/target"}}}}"#;
     let resource = format!(r#"{{"$defs":{{"target":{schema}}},"examples":["\ud800"]{extra}}}"#);
-    let resources = ResourceSet::new([SchemaResource {
+    let resources = ExternalSchemas::new([ExternalSchema {
         uri: "https://strings.invalid/schema".into(),
         document: JsonValue::parse(resource).unwrap(),
     }])
@@ -20,17 +23,17 @@ fn prepare(schema: &str, extra: &str) -> PreparedValueContract {
     let operation = document
         .resolve_operation("op")
         .expect("declared operation");
-    let Ok(contract) = operation
-        .input()
-        .expect("declared input")
-        .prepare_with(&DefaultEvaluator::new(), &resources)
-    else {
+    let Ok(contract) = operation.input().expect("declared input").prepare(
+        &DefaultEvaluator::new(),
+        &resources,
+        &openbindings::PreparationLimits::default(),
+    ) else {
         panic!("{text}")
     };
     contract
 }
 fn outcome(schema: &str, value: &str) -> ValueOutcome {
-    prepare(schema, "").validate(&JsonValue::parse(value).unwrap())
+    prepare(schema, "").evaluate(&JsonValue::parse(value).unwrap())
 }
 #[test]
 fn uninterpreted_surrogates_do_not_disable_contracts() {
@@ -45,7 +48,7 @@ fn uninterpreted_surrogates_do_not_disable_contracts() {
             extra,
         );
         assert!(matches!(
-            contract.validate(&JsonValue::parse("1").unwrap()),
+            contract.evaluate(&JsonValue::parse("1").unwrap()),
             ValueOutcome::Satisfies
         ));
     }
@@ -92,10 +95,12 @@ fn only_reached_string_interpretation_refuses_and_scopes_do_not_leak() {
     // never skip an actual JSON string as if it were another JSON type.
     for (schema, value) in [
         (r#"{"pattern":"a"}"#, r#""\ud800""#),
-        (r#"{"minLength":1}"#, r#""\ud800""#),
-        (r#"{"maxLength":9}"#, r#""\ud800""#),
         (r#"{"propertyNames":{"pattern":"a"}}"#, r#"{"\ud800":1}"#),
-        (r#"{"patternProperties":{"a":true}}"#, r#"{"\ud800":1}"#),
+        (r#"{"patternProperties":{"a":false}}"#, r#"{"\ud800":1}"#),
+        (
+            r#"{"patternProperties":{"a":true},"unevaluatedProperties":false}"#,
+            r#"{"\ud800":1}"#,
+        ),
         (
             r#"{"properties":{"checked":{"pattern":"x"}}}"#,
             r#"{"checked":"\ud800"}"#,
@@ -115,14 +120,58 @@ fn only_reached_string_interpretation_refuses_and_scopes_do_not_leak() {
     let contract = prepare(r#"{"pattern":"a"}"#, "");
     for _ in 0..2 {
         assert!(matches!(
-            contract.validate(&JsonValue::parse(r#""\ud800""#).unwrap()),
+            contract.evaluate(&JsonValue::parse(r#""\ud800""#).unwrap()),
             ValueOutcome::NoVerdict { .. }
         ));
         assert!(matches!(
-            contract.validate(&JsonValue::parse(r#""a""#).unwrap()),
+            contract.evaluate(&JsonValue::parse(r#""a""#).unwrap()),
             ValueOutcome::Satisfies
         ));
     }
+}
+#[test]
+fn exact_lengths_and_irrelevant_matches_do_not_need_scalar_conversion() {
+    // This is the SDK's exact-string length policy, already qualified by the
+    // native primitive oracle: a pair counts once, an isolated unit once.
+    // RFC 8259 §8.2 does not promise cross-implementation agreement for the latter.
+    for (text, length) in [
+        (r#""\ud800""#, 1),
+        (r#""\udfff""#, 1),
+        (r#""\ud800\udfff""#, 1),
+        (r#""\udfff\ud800""#, 2),
+        (r#""\ud800\ud800""#, 2),
+        (r#""\ud800\udfff\ud800""#, 2),
+        (r#""a\ud800b""#, 3),
+        (r#""😀""#, 1),
+        (r#""""#, 0),
+    ] {
+        for bound in 0..=4 {
+            for (keyword, valid) in [
+                ("minLength", length >= bound),
+                ("maxLength", length <= bound),
+            ] {
+                let schema = format!(r#"{{"{keyword}":{bound}}}"#);
+                let prepared = prepare(&schema, "");
+                let value = JsonValue::parse(text).unwrap();
+                for result in [prepared.evaluate(&value), prepared.explain(&value)] {
+                    assert!(
+                        if valid {
+                            matches!(result, ValueOutcome::Satisfies)
+                        } else {
+                            matches!(result, ValueOutcome::Fails { .. })
+                        },
+                        "{schema} / {text}: {result:?}"
+                    );
+                }
+            }
+        }
+    }
+    // Either possible match applies `true`; without an annotation consumer,
+    // the undecidable regex cannot change validity (pinned spec §5.5).
+    assert!(matches!(
+        outcome(r#"{"patternProperties":{"a":true}}"#, r#"{"\ud800":1}"#),
+        ValueOutcome::Satisfies
+    ));
 }
 #[test]
 fn exact_equality_decides_strings_with_unpaired_units() {

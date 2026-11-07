@@ -13,7 +13,7 @@ export default {
       );
       if (setup.status !== "ready")
         return Response.json(setup, { status: 503 });
-      service = new ValidationService(setup.valueContract);
+      service = new ValidationService(setup.schema);
     }
     if (request.method === "DELETE") {
       service.dispose();

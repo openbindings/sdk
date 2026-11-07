@@ -11,18 +11,29 @@ export function inspectBindings(text: string, operationName: string) {
   const parsed = Document.parse(text);
   if (parsed.status !== "parsed") return parsed;
   using document = parsed.value;
-  const selected = document.resolveOperation(operationName);
-  if (selected.status !== "found") return selected;
-  using operation = selected.operation;
+  const checked = document.validate();
+  if (checked.status !== "conformant") return checked;
+  using proof = checked.document;
+  using operation = proof.resolveOperation(operationName);
+  if (!operation) return { status: "missing" as const };
   const rows = [];
-  for (const key of operation.bindings) {
-    using binding = document.binding(key);
-    if (!binding) throw new Error("An associated binding disappeared.");
-    const metadata = binding.metadata;
-    using source = document.source(metadata.source);
-    rows.push({ binding: metadata, source: source?.metadata ?? null });
+  const bindings = operation.bindings();
+  try {
+    for (const binding of bindings) {
+      using source = binding.source();
+      rows.push({
+        binding: { key: binding.key, preference: binding.preference },
+        source: { key: source.key, kind: source.kind },
+      });
+    }
+  } finally {
+    for (const binding of bindings) binding.dispose();
   }
-  return { status: "inspected" as const, operation: operation.metadata, rows };
+  return {
+    status: "inspected" as const,
+    operation: { key: operation.key },
+    rows,
+  };
 }
 
 const pointer = (name: string) =>
@@ -32,13 +43,15 @@ export function addTag(
   document: Document,
   primaryKey: string,
   tag: string,
-): boolean {
-  const operation = document.operations.find((row) => row.key === primaryKey);
-  if (!operation) return false;
-  document.set(`/operations/${pointer(primaryKey)}/tags`, [
+): Document | undefined {
+  const checked = document.validate();
+  if (checked.status !== "conformant") return undefined;
+  using proof = checked.document;
+  using operation = proof.operation(primaryKey);
+  if (!operation) return undefined;
+  return document.set(`/operations/${pointer(primaryKey)}/tags`, [
     ...new Set([...(operation.tags ?? []), tag]),
   ]);
-  return true;
 }
 function edited(document: Document) {
   const checked = document.validate();
@@ -61,9 +74,12 @@ export function editMetadata(
   if (opened.status !== "parsed") return opened;
   using document = opened.value;
   try {
-    const operation = document.operations.find((row) => row.key === primaryKey);
+    const checked = document.validate();
+    if (checked.status !== "conformant") return checked;
+    using proof = checked.document;
+    using operation = proof.operation(primaryKey);
     if (!operation) return { status: "operation-missing" as const };
-    document.edit([
+    using changed = document.edit([
       { op: "set", pointer: "/description", value: description },
       {
         op: "set",
@@ -72,7 +88,7 @@ export function editMetadata(
       },
     ]);
     // Bytes and reports are detached. Application policy decides whether to save.
-    return edited(document);
+    return edited(changed);
   } catch (error) {
     if (error instanceof SdkError)
       return { status: "edit-error" as const, error };
@@ -143,7 +159,7 @@ export function replaceExactObjectMember(
   }
 }
 
-/** Edit an extension member in place, keeping unrelated exact bytes. */
+/** Return edited extension bytes, keeping unrelated exact bytes. */
 export function editExtensionMember(
   text: string,
   extensionKey: string,
@@ -158,6 +174,9 @@ export function editExtensionMember(
   if (!extension) return { status: "extension-missing" as const };
   using member = extension.get(memberKey);
   if (!member) throw new TypeError("Replacement member is absent.");
-  document.set(`/${pointer(extensionKey)}/${pointer(memberKey)}`, replacement);
-  return edited(document);
+  using changed = document.set(
+    `/${pointer(extensionKey)}/${pointer(memberKey)}`,
+    replacement,
+  );
+  return edited(changed);
 }

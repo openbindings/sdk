@@ -1,0 +1,21 @@
+
+running 11 tests
+test semantic::borrowed_review_public::c02_pure_values_do_not_intern_effects_do ... ok
+test semantic::borrowed_review_public::e10_d01_d04_c02_c03_public_domains ... ok
+test semantic::value_predicates::borrowed_review::d02_d03_duplicate_subtree_defense ... ok
+test semantic::value_predicates::borrowed_review::e01_e04_h01_exact_domains ... ok
+test semantic::value_predicates::borrowed_review::e05_long_chunked_units_and_names ... ok
+test semantic::value_predicates::borrowed_review::e06_e09_iterative_shapes ... ok
+test semantic::value_predicates::borrowed_review::e09_release_small_stack ... ok
+test semantic::value_predicates::borrowed_review::h02_h05_collisions_and_early_duplicate ... ok
+test semantic::value_predicates::borrowed_review::h06_h07_hash_scratch_and_vacuous ... warm-hash={"allocations_per_op":0.0,"baseline_live_bytes":1282274,"ending_live_bytes":1282274,"incremental_peak_bytes":0,"peak_live_bytes":1282274,"requested_bytes_per_op":0.0}
+ok
+test semantic::value_predicates::borrowed_review::l01_l04_real_index_and_hash_cancellation ... name-hash-checkpoints=67
+ok
+test semantic::value_predicates::borrowed_review::s01_s02_c01_all_stops_owner_release_and_exact_limits ... kind=0 checks=42 bytes=768 work=889
+kind=1 checks=45 bytes=512 work=753
+kind=2 checks=31 bytes=480 work=495
+ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 202 filtered out; finished in 0.52s
+

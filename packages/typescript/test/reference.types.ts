@@ -6,8 +6,8 @@ import {
   type JsonInput,
   type ValueOutcome,
   type ValueCheck,
-  type ValueContractPreparation,
-  type PreparedValueContract,
+  type SchemaPreparation,
+  type PreparedSchema,
   type DocumentValidation,
   type DocumentReport,
   validateDocument,
@@ -32,25 +32,25 @@ export async function referenceExample(wasmBytes: Uint8Array, source: string) {
   using operation = validated.resolveOperation("run"); // primary name or alias
   if (!operation) return { status: "operation-missing" as const };
   using input = operation.input();
-  if (!input) return { status: "no-value-contract" as const };
-  const setup: ValueContractPreparation = input.prepare({
-    limits: { evaluationSteps: 2000000 },
+  if (!input) return { status: "no-schema" as const };
+  const setup: SchemaPreparation = input.prepare({
+    limits: { evaluationSdkWorkUnits: 2000000 },
   });
   if (setup.status !== "ready") return setup;
-  using contract: PreparedValueContract = setup.valueContract;
+  using contract: PreparedSchema = setup.schema;
   const exact = parseJson("9007199254740993");
   if (exact.status !== "parsed") return exact.error;
   using value = exact.value;
-  const exactOutcome: ValueOutcome = contract.validate(value);
+  const exactOutcome: ValueOutcome = contract.evaluate(value);
   const ordinary: JsonInput = { precise: value };
-  const ordinaryOutcome: ValueCheck = contract.validate(ordinary);
+  const ordinaryOutcome: ValueCheck = contract.evaluate(ordinary);
   if (ordinaryOutcome.status === "input-error") {
     ordinaryOutcome.error.instancePointer satisfies string | null;
   }
   if (exactOutcome.status === "no-verdict")
     exactOutcome.detail.reason satisfies string;
   // @ts-expect-error Ordinary admission introduces the input-error branch.
-  const missingAdmission: ValueOutcome = contract.validate(ordinary);
+  const missingAdmission: ValueOutcome = contract.evaluate(ordinary);
   // @ts-expect-error Exact inspection cannot manufacture normative proof.
   new DiscoveryPublication(document);
   void missingAdmission;

@@ -1,0 +1,72 @@
+443 cases; 374 corpus
+    Finished `release` profile [optimized] target(s) in 0.05s
+     Running `/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/release/openbindings-diagnostic-memory-probe /Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/document-diagnostics/fixtures/inputs.json`
+{
+  "large": {
+    "cases": 69,
+    "samples": 207,
+    "validity": {
+      "max_peak_bytes": 4194108,
+      "max_peak_case": "meta-type-anyof",
+      "median_nanos": 5417,
+      "max_nanos": 14465750
+    },
+    "location": {
+      "max_peak_bytes": 8456902,
+      "max_peak_case": "finding-retention-8192",
+      "median_nanos": 42,
+      "max_nanos": 33626709
+    },
+    "fixed": {
+      "max_peak_bytes": 8456998,
+      "max_peak_case": "finding-retention-8192",
+      "median_nanos": 347916,
+      "max_nanos": 39091750
+    },
+    "sdk": {
+      "max_peak_bytes": 8738483,
+      "max_peak_case": "finding-retention-8192",
+      "median_nanos": 444875,
+      "max_nanos": 46776791
+    },
+    "location_walk_cases": 32,
+    "median_active_location_nanos": 304125.0,
+    "max_fixed_minus_validity_bytes": 8456974,
+    "max_sdk_minus_validity_bytes": 8738459,
+    "median_fixed_minus_validity_nanos": 333708
+  },
+  "corpus": {
+    "cases": 369,
+    "samples": 1107,
+    "validity": {
+      "max_peak_bytes": 3578,
+      "max_peak_case": "document/OBI-09.json#/tests/0",
+      "median_nanos": 750,
+      "max_nanos": 30125
+    },
+    "location": {
+      "max_peak_bytes": 832,
+      "max_peak_case": "document/OBI-02.json#/tests/22",
+      "median_nanos": 42,
+      "max_nanos": 10708
+    },
+    "fixed": {
+      "max_peak_bytes": 972,
+      "max_peak_case": "document/OBI-02.json#/tests/52",
+      "median_nanos": 1041,
+      "max_nanos": 12875
+    },
+    "sdk": {
+      "max_peak_bytes": 2472,
+      "max_peak_case": "document/OBI-13.json#/tests/6",
+      "median_nanos": 2791,
+      "max_nanos": 24166
+    },
+    "location_walk_cases": 111,
+    "median_active_location_nanos": 2291,
+    "max_fixed_minus_validity_bytes": 948,
+    "max_sdk_minus_validity_bytes": 2400,
+    "median_fixed_minus_validity_nanos": -125
+  }
+}
+/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/document-diagnostics/memory.jsonl

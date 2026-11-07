@@ -1,0 +1,10 @@
+{
+  "host": "node",
+  "version": "v22.23.0",
+  "observations": 1546,
+  "failures": [],
+  "configuration_failures": [],
+  "milliseconds": 1292,
+  "wasm_sha256": "e15c7282a6dd3e35dfbb24024060cff3805f65ae81255542a5e100a2d5da5b71",
+  "linear_stack_bytes": 1048576
+}

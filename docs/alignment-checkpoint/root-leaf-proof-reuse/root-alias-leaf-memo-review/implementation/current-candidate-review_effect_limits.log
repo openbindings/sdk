@@ -1,0 +1,10 @@
+
+running 5 tests
+test review_effect_limits::actual_work_and_storage_exhaustion_precede_the_effect_ceiling ... ok
+test review_effect_limits::distinct_effects_have_one_63_64_65_boundary_in_both_detail_modes ... ok
+test review_effect_limits::removed_compiler_and_stack_options_are_rejected ... ok
+test review_effect_limits::same_original_effect_and_equal_subjects_reuse_one_variable ... ok
+test review_effect_limits::selected_meta_evaluation_uses_the_same_effect_profile ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 229 filtered out; finished in 0.07s
+

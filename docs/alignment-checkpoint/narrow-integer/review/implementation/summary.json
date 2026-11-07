@@ -1,0 +1,31 @@
+{
+  "status": "Bounded implementation PASS; no production finding",
+  "baseline": "5cf704eb6cbd8f0d36b916ba53c1def4ebb20d0a",
+  "files": {
+    "src/semantic/value_predicates.rs": "e1731c39927b297201afe4715ee6386aa670fff2ea5eb75f69cfd54a485a2b2a",
+    "src/semantic/primitive.rs": "7d619cea1d032cf9df1ec87b18d1f4b680744de9a82999afe34290e82f3ca0a1"
+  },
+  "toolchains": [
+    "Rust1.99.0",
+    "Rust1.88.0"
+  ],
+  "frozen_tokens": 52,
+  "direct_budget_prespent_rows_per_toolchain": 520,
+  "direct_stop_rows_per_toolchain": 520,
+  "public_records_unchanged": 106,
+  "public_work_storage_control_trace_rows_unchanged": 36,
+  "public_trace_stop_rows_unchanged": 617,
+  "paired_allocation_cases_per_toolchain": 52,
+  "paired_allocation_differences": 0,
+  "retained_allocations": 0,
+  "cross_compiler_fallback_allocation_differences": 5,
+  "production_edits_by_reviewer": false,
+  "layout": "Native Frame256 Phase144 State64 Witness32 unchanged",
+  "scope": "Bounded9-group source/control review; broad default capacities and final host/release qualification intentionally not repeated",
+  "performance_accepted": false,
+  "harness_corrections": [
+    "missing Control trait import",
+    "test cancellation counter changed from non-Sync Cell to AtomicUsize; cancellation armed after successful pre-spend",
+    "allocation comparison corrected to paired old/new within each build, preserving five cross-compiler fallback differences"
+  ]
+}

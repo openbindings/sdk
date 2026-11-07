@@ -1,0 +1,750 @@
+{
+  "authority": "ECMA-262 11th edition §21.2.2.8.3–8.4 Tables55–58; pinned OpenBindings §5.5",
+  "oracle": {
+    "node": "v22.19.0",
+    "v8": "12.4.254.21-node.29",
+    "unicode": "16.0"
+  },
+  "notes": [
+    "All input strings are Unicode scalar strings. Surrogates are spelled only in patterns.",
+    "semantic_matches records JS u-mode match existence; unsupported capability is not a semantic pass.",
+    "Kawi is valid in current Node but invalid in fixed edition11 Table58. Other invalid rows are checked against edition11 grammar/tables.",
+    "Apply linear semantic rows to pattern and patternProperties, including unevaluatedProperties annotation witnesses."
+  ],
+  "strings": [
+    "",
+    "a",
+    "A",
+    "1",
+    "ab",
+    "aaab",
+    "a\n",
+    "\na",
+    "α",
+    "é",
+    "̀",
+    "‌",
+    " ",
+    "﻿",
+    "😀",
+    "",
+    "􏿿",
+    "ー",
+    "あ",
+    "ア"
+  ],
+  "rows": [
+    {
+      "id": "independent-pattern-001",
+      "pattern": "^\\p{L}+$",
+      "ecma11_valid": true,
+      "expected_capability": "linear",
+      "js_valid": true,
+      "semantic_matches": "01101100110000000111"
+    },
+    {
+      "id": "independent-pattern-002",
+      "pattern": "^\\p{Letter}+$",
+      "ecma11_valid": true,
+      "expected_capability": "linear",
+      "js_valid": true,
+      "semantic_matches": "01101100110000000111"
+    },
+    {
+      "id": "independent-pattern-003",
+      "pattern": "^\\p{gc=Letter}+$",
+      "ecma11_valid": true,
+      "expected_capability": "linear",
+      "js_valid": true,
+      "semantic_matches": "01101100110000000111"
+    },
+    {
+      "id": "independent-pattern-004",
+      "pattern": "^\\p{General_Category=L}+$",
+      "ecma11_valid": true,
+      "expected_capability": "linear",
+      "js_valid": true,
+      "semantic_matches": "01101100110000000111"
+    },
+    {
+      "id": "independent-pattern-005",
+      "pattern": "^\\p{sc=Grek}+$",
+      "ecma11_valid": true,
+      "expected_capability": "linear",
+      "js_valid": true,
+      "semantic_matches": "00000000100000000000"
+    },
+    {
+      "id": "independent-pattern-006",
+      "pattern": "^\\p{Script=Greek}+$",
+      "ecma11_valid": true,
+      "expected_capability": "linear",
+      "js_valid": true,
+      "semantic_matches": "00000000100000000000"
+    },
+    {
+      "id": "independent-pattern-007",
+      "pattern": "^\\p{scx=Hira}+$",
+      "ecma11_valid": true,
+      "expected_capability": "linear",
+      "js_valid": true,
+      "semantic_matches": "00000000000000000110"
+    },
+    {
+      "id": "independent-pattern-008",
+      "pattern": "^\\p{Script_Extensions=Hiragana}+$",
+      "ecma11_valid": true,
+      "expected_capability": "linear",
+      "js_valid": true,
+      "semantic_matches": "00000000000000000110"
+    },
+    {
+      "id": "independent-pattern-009",
+      "pattern": "^\\p{sc=Hira}+$",
+      "ecma11_valid": true,
+      "expected_capability": "linear",
+      "js_valid": true,
+      "semantic_matches": "00000000000000000010"
+    },
+    {
+      "id": "independent-pattern-010",
+      "pattern": "^\\p{gc=Zl}$",
+      "ecma11_valid": true,
+      "expected_capability": "linear",
+      "js_valid": true,
+      "semantic_matches": "00000000000010000000"
+    },
+    {
+      "id": "independent-pattern-011",
+      "pattern": "^\\p{Line_Separator}$",
+      "ecma11_valid": true,
+      "expected_capability": "linear",
+      "js_valid": true,
+      "semantic_matches": "00000000000010000000"
+    },
+    {
+      "id": "independent-pattern-012",
+      "pattern": "^\\p{Join_C}$",
+      "ecma11_valid": true,
+      "expected_capability": "linear",
+      "js_valid": true,
+      "semantic_matches": "00000000000100000000"
+    },
+    {
+      "id": "independent-pattern-013",
+      "pattern": "^\\p{space}$",
+      "ecma11_valid": true,
+      "expected_capability": "linear",
+      "js_valid": true,
+      "semantic_matches": "00000000000010000000"
+    },
+    {
+      "id": "independent-pattern-014",
+      "pattern": "^\\p{White_Space}$",
+      "ecma11_valid": true,
+      "expected_capability": "linear",
+      "js_valid": true,
+      "semantic_matches": "00000000000010000000"
+    },
+    {
+      "id": "independent-pattern-015",
+      "pattern": "^\\s$",
+      "ecma11_valid": true,
+      "expected_capability": "linear",
+      "js_valid": true,
+      "semantic_matches": "00000000000011000000"
+    },
+    {
+      "id": "independent-pattern-016",
+      "pattern": "^\\p{ASCII}$",
+      "ecma11_valid": true,
+      "expected_capability": "linear",
+      "js_valid": true,
+      "semantic_matches": "01110000000000000000"
+    },
+    {
+      "id": "independent-pattern-017",
+      "pattern": "^\\p{Any}$",
+      "ecma11_valid": true,
+      "expected_capability": "linear",
+      "js_valid": true,
+      "semantic_matches": "01110000111111111111"
+    },
+    {
+      "id": "independent-pattern-018",
+      "pattern": "^\\P{Any}$",
+      "ecma11_valid": true,
+      "expected_capability": "linear",
+      "js_valid": true,
+      "semantic_matches": "00000000000000000000"
+    },
+    {
+      "id": "independent-pattern-019",
+      "pattern": "^\\p{Assigned}$",
+      "ecma11_valid": true,
+      "expected_capability": "linear",
+      "js_valid": true,
+      "semantic_matches": "01110000111111110111"
+    },
+    {
+      "id": "independent-pattern-020",
+      "pattern": "^\\p{Unassigned}$",
+      "ecma11_valid": true,
+      "expected_capability": "linear",
+      "js_valid": true,
+      "semantic_matches": "00000000000000001000"
+    },
+    {
+      "id": "independent-pattern-021",
+      "pattern": "^[^\\P{L}]+$",
+      "ecma11_valid": true,
+      "expected_capability": "linear",
+      "js_valid": true,
+      "semantic_matches": "01101100110000000111"
+    },
+    {
+      "id": "independent-pattern-022",
+      "pattern": "^[\\P{L}]+$",
+      "ecma11_valid": true,
+      "expected_capability": "linear",
+      "js_valid": true,
+      "semantic_matches": "00010000001111111000"
+    },
+    {
+      "id": "independent-pattern-023",
+      "pattern": "^[^\\p{L}]+$",
+      "ecma11_valid": true,
+      "expected_capability": "linear",
+      "js_valid": true,
+      "semantic_matches": "00010000001111111000"
+    },
+    {
+      "id": "independent-pattern-024",
+      "pattern": "[\\p{L}\\P{L}]",
+      "ecma11_valid": true,
+      "expected_capability": "linear",
+      "js_valid": true,
+      "semantic_matches": "01111111111111111111"
+    },
+    {
+      "id": "independent-pattern-025",
+      "pattern": "[^\\p{L}\\P{L}]",
+      "ecma11_valid": true,
+      "expected_capability": "linear",
+      "js_valid": true,
+      "semantic_matches": "00000000000000000000"
+    },
+    {
+      "id": "independent-pattern-026",
+      "pattern": "^[\\p{L}\\uD800]$",
+      "ecma11_valid": true,
+      "expected_capability": "linear",
+      "js_valid": true,
+      "semantic_matches": "01100000110000000111"
+    },
+    {
+      "id": "independent-pattern-027",
+      "pattern": "^[^\\p{L}\\uD800]$",
+      "ecma11_valid": true,
+      "expected_capability": "linear",
+      "js_valid": true,
+      "semantic_matches": "00010000001111111000"
+    },
+    {
+      "id": "independent-pattern-028",
+      "pattern": "^[\\P{L}\\uDFFF]$",
+      "ecma11_valid": true,
+      "expected_capability": "linear",
+      "js_valid": true,
+      "semantic_matches": "00010000001111111000"
+    },
+    {
+      "id": "independent-pattern-029",
+      "pattern": "^[^\\P{L}\\uDFFF]$",
+      "ecma11_valid": true,
+      "expected_capability": "linear",
+      "js_valid": true,
+      "semantic_matches": "01100000110000000111"
+    },
+    {
+      "id": "independent-pattern-030",
+      "pattern": "(?=)",
+      "ecma11_valid": true,
+      "expected_capability": "linear",
+      "js_valid": true,
+      "semantic_matches": "11111111111111111111"
+    },
+    {
+      "id": "independent-pattern-031",
+      "pattern": "^(?=a|ab)",
+      "ecma11_valid": true,
+      "expected_capability": "linear",
+      "js_valid": true,
+      "semantic_matches": "01001110000000000000"
+    },
+    {
+      "id": "independent-pattern-032",
+      "pattern": "a(?=b)",
+      "ecma11_valid": true,
+      "expected_capability": "linear",
+      "js_valid": true,
+      "semantic_matches": "00001100000000000000"
+    },
+    {
+      "id": "independent-pattern-033",
+      "pattern": "a(?=b$)|aa",
+      "ecma11_valid": true,
+      "expected_capability": "linear",
+      "js_valid": true,
+      "semantic_matches": "00001100000000000000"
+    },
+    {
+      "id": "independent-pattern-034",
+      "pattern": "^b|a(?=b)",
+      "ecma11_valid": true,
+      "expected_capability": "linear",
+      "js_valid": true,
+      "semantic_matches": "00001100000000000000"
+    },
+    {
+      "id": "independent-pattern-035",
+      "pattern": "a*(?=a)",
+      "ecma11_valid": true,
+      "expected_capability": "linear",
+      "js_valid": true,
+      "semantic_matches": "01001111000000000000"
+    },
+    {
+      "id": "independent-pattern-036",
+      "pattern": "a*?(?=a)",
+      "ecma11_valid": true,
+      "expected_capability": "linear",
+      "js_valid": true,
+      "semantic_matches": "01001111000000000000"
+    },
+    {
+      "id": "independent-pattern-037",
+      "pattern": "a$(?=)",
+      "ecma11_valid": true,
+      "expected_capability": "linear",
+      "js_valid": true,
+      "semantic_matches": "01000001000000000000"
+    },
+    {
+      "id": "independent-pattern-038",
+      "pattern": "a$(?=b)",
+      "ecma11_valid": true,
+      "expected_capability": "linear",
+      "js_valid": true,
+      "semantic_matches": "00000000000000000000"
+    },
+    {
+      "id": "independent-pattern-039",
+      "pattern": "a\\b(?=b)",
+      "ecma11_valid": true,
+      "expected_capability": "linear",
+      "js_valid": true,
+      "semantic_matches": "00000000000000000000"
+    },
+    {
+      "id": "independent-pattern-040",
+      "pattern": "(?=(a|ab))",
+      "ecma11_valid": true,
+      "expected_capability": "linear",
+      "js_valid": true,
+      "semantic_matches": "01001111000000000000"
+    },
+    {
+      "id": "independent-pattern-041",
+      "pattern": "(?=a|)",
+      "ecma11_valid": true,
+      "expected_capability": "linear",
+      "js_valid": true,
+      "semantic_matches": "11111111111111111111"
+    },
+    {
+      "id": "independent-pattern-042",
+      "pattern": "^b|(?=a)|$",
+      "ecma11_valid": true,
+      "expected_capability": "linear",
+      "js_valid": true,
+      "semantic_matches": "11111111111111111111"
+    },
+    {
+      "id": "independent-pattern-043",
+      "pattern": "(?=\\p{L}+$)",
+      "ecma11_valid": true,
+      "expected_capability": "linear",
+      "js_valid": true,
+      "semantic_matches": "01101101110000000111"
+    },
+    {
+      "id": "independent-pattern-044",
+      "pattern": "^a(?=[\\P{L}])",
+      "ecma11_valid": true,
+      "expected_capability": "linear",
+      "js_valid": true,
+      "semantic_matches": "00000010000000000000"
+    },
+    {
+      "id": "independent-pattern-045",
+      "pattern": "(?=[])",
+      "ecma11_valid": true,
+      "expected_capability": "linear",
+      "js_valid": true,
+      "semantic_matches": "00000000000000000000"
+    },
+    {
+      "id": "independent-pattern-046",
+      "pattern": "(?=[^])",
+      "ecma11_valid": true,
+      "expected_capability": "linear",
+      "js_valid": true,
+      "semantic_matches": "01111111111111111111"
+    },
+    {
+      "id": "independent-pattern-047",
+      "pattern": "(?=\\P{Any})",
+      "ecma11_valid": true,
+      "expected_capability": "linear",
+      "js_valid": true,
+      "semantic_matches": "00000000000000000000"
+    },
+    {
+      "id": "independent-pattern-048",
+      "pattern": "(?=\\uD800)",
+      "ecma11_valid": true,
+      "expected_capability": "linear",
+      "js_valid": true,
+      "semantic_matches": "00000000000000000000"
+    },
+    {
+      "id": "independent-pattern-049",
+      "pattern": "(?=a$)",
+      "ecma11_valid": true,
+      "expected_capability": "linear",
+      "js_valid": true,
+      "semantic_matches": "01000001000000000000"
+    },
+    {
+      "id": "independent-pattern-050",
+      "pattern": "\\p{Cs}",
+      "ecma11_valid": true,
+      "expected_capability": "unsupported",
+      "js_valid": true,
+      "semantic_matches": "00000000000000000000"
+    },
+    {
+      "id": "independent-pattern-051",
+      "pattern": "\\P{Surrogate}",
+      "ecma11_valid": true,
+      "expected_capability": "unsupported",
+      "js_valid": true,
+      "semantic_matches": "01111111111111111111"
+    },
+    {
+      "id": "independent-pattern-052",
+      "pattern": "\\p{gc=Cs}",
+      "ecma11_valid": true,
+      "expected_capability": "unsupported",
+      "js_valid": true,
+      "semantic_matches": "00000000000000000000"
+    },
+    {
+      "id": "independent-pattern-053",
+      "pattern": "\\p{CWKCF}",
+      "ecma11_valid": true,
+      "expected_capability": "unsupported",
+      "js_valid": true,
+      "semantic_matches": "00100000000101000000"
+    },
+    {
+      "id": "independent-pattern-054",
+      "pattern": "(?=a)b",
+      "ecma11_valid": true,
+      "expected_capability": "unsupported",
+      "js_valid": true,
+      "semantic_matches": "00000000000000000000"
+    },
+    {
+      "id": "independent-pattern-055",
+      "pattern": "a(?=b)c",
+      "ecma11_valid": true,
+      "expected_capability": "unsupported",
+      "js_valid": true,
+      "semantic_matches": "00000000000000000000"
+    },
+    {
+      "id": "independent-pattern-056",
+      "pattern": "(?=a)(?=b)",
+      "ecma11_valid": true,
+      "expected_capability": "unsupported",
+      "js_valid": true,
+      "semantic_matches": "00000000000000000000"
+    },
+    {
+      "id": "independent-pattern-057",
+      "pattern": "(?!a)",
+      "ecma11_valid": true,
+      "expected_capability": "unsupported",
+      "js_valid": true,
+      "semantic_matches": "11111111111111111111"
+    },
+    {
+      "id": "independent-pattern-058",
+      "pattern": "(?<=a)b",
+      "ecma11_valid": true,
+      "expected_capability": "unsupported",
+      "js_valid": true,
+      "semantic_matches": "00001100000000000000"
+    },
+    {
+      "id": "independent-pattern-059",
+      "pattern": "(?<!a)b",
+      "ecma11_valid": true,
+      "expected_capability": "unsupported",
+      "js_valid": true,
+      "semantic_matches": "00000000000000000000"
+    },
+    {
+      "id": "independent-pattern-060",
+      "pattern": "(?:(?=a))",
+      "ecma11_valid": true,
+      "expected_capability": "unsupported",
+      "js_valid": true,
+      "semantic_matches": "01001111000000000000"
+    },
+    {
+      "id": "independent-pattern-061",
+      "pattern": "((?=a))",
+      "ecma11_valid": true,
+      "expected_capability": "unsupported",
+      "js_valid": true,
+      "semantic_matches": "01001111000000000000"
+    },
+    {
+      "id": "independent-pattern-062",
+      "pattern": "(?=(?=a))",
+      "ecma11_valid": true,
+      "expected_capability": "unsupported",
+      "js_valid": true,
+      "semantic_matches": "01001111000000000000"
+    },
+    {
+      "id": "independent-pattern-063",
+      "pattern": "(?=(?!a))",
+      "ecma11_valid": true,
+      "expected_capability": "unsupported",
+      "js_valid": true,
+      "semantic_matches": "11111111111111111111"
+    },
+    {
+      "id": "independent-pattern-064",
+      "pattern": "(?=a)|(?=b)c",
+      "ecma11_valid": true,
+      "expected_capability": "unsupported",
+      "js_valid": true,
+      "semantic_matches": "01001111000000000000"
+    },
+    {
+      "id": "independent-pattern-065",
+      "pattern": "(?=(a))\\1",
+      "ecma11_valid": true,
+      "expected_capability": "unsupported",
+      "js_valid": true,
+      "semantic_matches": "01001111000000000000"
+    },
+    {
+      "id": "independent-pattern-066",
+      "pattern": "(a)\\1(?=b)",
+      "ecma11_valid": true,
+      "expected_capability": "unsupported",
+      "js_valid": true,
+      "semantic_matches": "00000100000000000000"
+    },
+    {
+      "id": "independent-pattern-067",
+      "pattern": "\\1(?=(a))",
+      "ecma11_valid": true,
+      "expected_capability": "unsupported",
+      "js_valid": true,
+      "semantic_matches": "01001111000000000000"
+    },
+    {
+      "id": "independent-pattern-068",
+      "pattern": "(?<x>a)(?=\\k<x>)",
+      "ecma11_valid": true,
+      "expected_capability": "unsupported",
+      "js_valid": true,
+      "semantic_matches": "00000100000000000000"
+    },
+    {
+      "id": "independent-pattern-069",
+      "pattern": "\\B(?=a)",
+      "ecma11_valid": true,
+      "expected_capability": "unsupported",
+      "js_valid": true,
+      "semantic_matches": "00000100000000000000"
+    },
+    {
+      "id": "independent-pattern-070",
+      "pattern": "\\p{General_Category}",
+      "ecma11_valid": false,
+      "expected_capability": "invalid",
+      "js_valid": false,
+      "semantic_matches": null
+    },
+    {
+      "id": "independent-pattern-071",
+      "pattern": "\\P{gc=General_Category}",
+      "ecma11_valid": false,
+      "expected_capability": "invalid",
+      "js_valid": false,
+      "semantic_matches": null
+    },
+    {
+      "id": "independent-pattern-072",
+      "pattern": "\\p{General_Category=General_Category}",
+      "ecma11_valid": false,
+      "expected_capability": "invalid",
+      "js_valid": false,
+      "semantic_matches": null
+    },
+    {
+      "id": "independent-pattern-073",
+      "pattern": "\\p{sc=Script}",
+      "ecma11_valid": false,
+      "expected_capability": "invalid",
+      "js_valid": false,
+      "semantic_matches": null
+    },
+    {
+      "id": "independent-pattern-074",
+      "pattern": "\\P{Script=Script_Extensions}",
+      "ecma11_valid": false,
+      "expected_capability": "invalid",
+      "js_valid": false,
+      "semantic_matches": null
+    },
+    {
+      "id": "independent-pattern-075",
+      "pattern": "\\p{scx=Script}",
+      "ecma11_valid": false,
+      "expected_capability": "invalid",
+      "js_valid": false,
+      "semantic_matches": null
+    },
+    {
+      "id": "independent-pattern-076",
+      "pattern": "\\P{Script_Extensions=Script_Extensions}",
+      "ecma11_valid": false,
+      "expected_capability": "invalid",
+      "js_valid": false,
+      "semantic_matches": null
+    },
+    {
+      "id": "independent-pattern-077",
+      "pattern": "\\p{letter}",
+      "ecma11_valid": false,
+      "expected_capability": "invalid",
+      "js_valid": false,
+      "semantic_matches": null
+    },
+    {
+      "id": "independent-pattern-078",
+      "pattern": "\\p{general_category=L}",
+      "ecma11_valid": false,
+      "expected_capability": "invalid",
+      "js_valid": false,
+      "semantic_matches": null
+    },
+    {
+      "id": "independent-pattern-079",
+      "pattern": "\\p{sc=greek}",
+      "ecma11_valid": false,
+      "expected_capability": "invalid",
+      "js_valid": false,
+      "semantic_matches": null
+    },
+    {
+      "id": "independent-pattern-080",
+      "pattern": "\\p{L }",
+      "ecma11_valid": false,
+      "expected_capability": "invalid",
+      "js_valid": false,
+      "semantic_matches": null
+    },
+    {
+      "id": "independent-pattern-081",
+      "pattern": "\\p{Script=Kawi}",
+      "ecma11_valid": false,
+      "expected_capability": "invalid",
+      "js_valid": true,
+      "semantic_matches": null
+    },
+    {
+      "id": "independent-pattern-082",
+      "pattern": "\\p{Script_Extensions=Kawi}",
+      "ecma11_valid": false,
+      "expected_capability": "invalid",
+      "js_valid": true,
+      "semantic_matches": null
+    },
+    {
+      "id": "independent-pattern-083",
+      "pattern": "\\p{IsLatin}",
+      "ecma11_valid": false,
+      "expected_capability": "invalid",
+      "js_valid": false,
+      "semantic_matches": null
+    },
+    {
+      "id": "independent-pattern-084",
+      "pattern": "[\\p{L}-a]",
+      "ecma11_valid": false,
+      "expected_capability": "invalid",
+      "js_valid": false,
+      "semantic_matches": null
+    },
+    {
+      "id": "independent-pattern-085",
+      "pattern": "[a-\\p{L}]",
+      "ecma11_valid": false,
+      "expected_capability": "invalid",
+      "js_valid": false,
+      "semantic_matches": null
+    },
+    {
+      "id": "independent-pattern-086",
+      "pattern": "(?=a)*",
+      "ecma11_valid": false,
+      "expected_capability": "invalid",
+      "js_valid": false,
+      "semantic_matches": null
+    },
+    {
+      "id": "independent-pattern-087",
+      "pattern": "(?=a)?",
+      "ecma11_valid": false,
+      "expected_capability": "invalid",
+      "js_valid": false,
+      "semantic_matches": null
+    },
+    {
+      "id": "independent-pattern-088",
+      "pattern": "(?=a){0,2}",
+      "ecma11_valid": false,
+      "expected_capability": "invalid",
+      "js_valid": false,
+      "semantic_matches": null
+    },
+    {
+      "id": "independent-pattern-089",
+      "pattern": "(?=(?<x>a)(?<x>b))",
+      "ecma11_valid": false,
+      "expected_capability": "invalid",
+      "js_valid": false,
+      "semantic_matches": null
+    }
+  ]
+}

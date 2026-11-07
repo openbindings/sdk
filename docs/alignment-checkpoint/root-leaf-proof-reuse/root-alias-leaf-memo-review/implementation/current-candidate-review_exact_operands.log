@@ -1,0 +1,11 @@
+
+running 6 tests
+test review_exact_operands::compact_exponents_public_equality_and_arithmetic_refusal_remain_separate ... ok
+test review_exact_operands::every_numeric_family_uses_exact_values_in_both_detail_modes ... ok
+test review_exact_operands::exact_bounds_and_choices_fail_at_their_original_keywords ... ok
+test review_exact_operands::integer_fast_path_edges_preserve_exact_bounds_and_equality ... ok
+test review_exact_operands::repeated_uniqueness_checks_keep_the_same_control_allowance ... ok
+test review_exact_operands::substituted_resource_nodes_keep_distinct_original_provenance ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 228 filtered out; finished in 0.11s
+

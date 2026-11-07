@@ -10,10 +10,20 @@ the compiled-pattern memory and the exponential evaluation example were measured
 on 2026-10-21, and preparation and the Wasm size on 2026-10-24. Use the locked
 dependencies and release profile to reproduce them.
 
+The 0.2 alignment work now routes static references directly through the bounded
+original schema inventory. The older carrier-inspection caches described with
+these historical measurements have been removed. Their timing and allocation
+tables are historical evidence, not measurements of this implementation. The
+matched-toolchain comparison against the pinned SDK baseline remains a release
+gate; no current performance conclusion is implied by those tables. The older
+API names, preparation algorithms and limit policies below describe those measured
+revisions. Use [current capabilities](../CAPABILITIES.md) and the
+[evaluator guide](../crates/openbindings-json-schema-evaluator/README.md) for current behavior.
+
 ## Prepared value contracts
 
-Retain a `PreparedValueContract` for repeated validation. Reusing a conformant
-document and `ResourceSet` also saves work, but still prepares a fresh contract on
+Retain a `PreparedSchema` for repeated validation. Reusing a conformant
+document and `ExternalSchemas` also saves work, but still prepares a fresh contract on
 each `prepare` call. The SDK does not transparently cache arbitrary custom
 evaluator results.
 
@@ -718,7 +728,8 @@ and, when the host sets one, `evaluation_steps`.
 ## Stand-ins
 
 A value contract with a stand-in compiles a bounds program beside its own
-program (see the evaluator's [stand-ins](../crates/openbindings-json-schema-evaluator/README.md#stand-ins)),
+program (the current evaluator's [semantic dependence policy](../crates/openbindings-json-schema-evaluator/README.md#results-and-semantic-dependence)
+supersedes this historical implementation),
 so preparing it takes a second compilation, and a pass that reaches a stand-in
 takes two more: one over the contract's own entry in the bounds program, which
 measures the pass's work, and one over a bound, within eight times that work
@@ -763,10 +774,10 @@ that each reference the final schema.
 | Schema references | 25,000 | 913,942 | 29.480 |
 | Schema references | 40,000 | 1,468,942 | 47.743 |
 
-Duplicate detection and object lookup use indexed decoded names. Ordinary hashes
-produce work proportional to source/key size; deliberate collisions can require
-more exact comparisons. Caller byte and node limits still bound admission. These
-fixtures do not characterize arbitrary schema evaluation or cold compilation.
+Duplicate detection and object lookup use decoded names in sorted order, so their
+work grows as `n log n` comparisons whatever names the input chooses, with no
+secret seed. Caller byte and node limits still bound admission. These fixtures do
+not characterize arbitrary schema evaluation or cold compilation.
 
 ### Memory at the default limits
 
@@ -783,18 +794,21 @@ the input it allocates:
   surrogate escape keeps no decoded copy: its UTF-16 units are read from its
   token when asked for.
 - The parsed tree: 32 bytes per node, 4 per array element or member name, 8 per
-  escaped string, and for an object of 16 or more members a name index of 17
-  bytes per slot, at most about 39 per member.
+  escaped string, and for an object of 16 or more members a name index of 16
+  bytes per member and one record per such object, 16 bytes on `wasm32` and 32
+  on 64-bit targets.
 - Validation state: 12 bytes per schema position and 8 per position still to
   visit, plus 4 per position once a same-document pointer is resolved; 8 bytes
   per resource and 4 per compared `$id` declaration; for compared identifiers,
   a 40-byte record per declaration and 16 bytes per query or fragment, and at
-  most three 48-byte directories with a 17-byte index slot each, whatever the
-  length of the identifier, since a directory holds a run of whole segments as
-  a span of one `$id`'s text, plus once the text of a path whose removed dot
-  segments separate its segments; for a `uniqueItems` check, 8 bytes per node
-  of the array and 9 per slot of its hash table, and 8 more per element once
-  unequal elements share a hash; 9 bytes per alias; and at most 4,096 findings
+  most three 48-byte directories with an ordered index entry of at most 26
+  bytes each, whatever the length of the identifier, since a directory holds a
+  run of whole segments as a span of one `$id`'s text, plus once the text of a
+  path whose removed dot segments separate its segments, plus each distinct
+  first segment once, at most 42 bytes and its text; for a `uniqueItems` check,
+  8 bytes per node of the array and, past 16 elements, 8 per element for its
+  sorted positions; 9
+  bytes per alias; and at most 4,096 findings
   and 8 MiB of their pointers, with a table of 4 bytes per node (8 when an
   unpaired surrogate occurs) once one finding's pointer has not fitted. The
   fixed checks read every string in place: they would escape U+E000 only beside

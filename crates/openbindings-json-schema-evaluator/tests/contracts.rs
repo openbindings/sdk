@@ -7,12 +7,12 @@ use std::sync::{
 // Existing evaluator cases compare semantic outcomes from either preparation refusal
 // or value evaluation. Preparation-stage tests below assert the stage independently.
 trait EvaluateCase {
-    fn validate(&self, value: &JsonValue) -> ValueOutcome;
+    fn evaluate(&self, value: &JsonValue) -> ValueOutcome;
     fn explain(&self, value: &JsonValue) -> ValueOutcome;
     fn check(&self, value: &JsonValue, detail: Detail) -> ValueOutcome;
 }
-impl EvaluateCase for Result<PreparedValueContract, NoVerdict> {
-    fn validate(&self, value: &JsonValue) -> ValueOutcome {
+impl<V: SchemaValidator> EvaluateCase for Result<PreparedSchema<V>, PreparationFailure> {
+    fn evaluate(&self, value: &JsonValue) -> ValueOutcome {
         self.check(value, Detail::Outcome)
     }
     fn explain(&self, value: &JsonValue) -> ValueOutcome {
@@ -21,11 +21,9 @@ impl EvaluateCase for Result<PreparedValueContract, NoVerdict> {
     fn check(&self, value: &JsonValue, detail: Detail) -> ValueOutcome {
         let control = std::sync::atomic::AtomicBool::new(false);
         match (self, detail) {
-            (Ok(contract), Detail::Outcome) => contract.validate_with_control(value, &control),
+            (Ok(contract), Detail::Outcome) => contract.evaluate_with_control(value, &control),
             (Ok(contract), _) => contract.explain_with_control(value, &control),
-            (Err(detail), _) => ValueOutcome::NoVerdict {
-                detail: detail.clone(),
-            },
+            (Err(failure), _) => panic!("expected preparation to succeed: {:?}", failure.kind),
         }
     }
 }
@@ -35,26 +33,34 @@ fn doc(schema: &str) -> Document {
     ))
     .unwrap()
 }
-fn conformant(document: &Document) -> Conformant<Document> {
+fn conformant(document: &Document) -> ConformantDocument {
     document
         .validate()
         .unwrap()
         .conformant()
         .expect("conformant document")
 }
-/// Prepare the input contract of operation `op` with no supplied resources.
+/// Prepare the input schema of operation `op` with no supplied resources.
 fn prepare_op(
-    document: &Conformant<Document>,
-    evaluator: &dyn SchemaEvaluator,
-) -> Result<PreparedValueContract, NoVerdict> {
+    document: &ConformantDocument,
+    evaluator: &DefaultEvaluator,
+) -> Result<PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator>, PreparationFailure>
+{
     document
         .resolve_operation("op")
         .expect("declared operation")
         .input()
         .expect("declared input")
-        .prepare(evaluator)
+        .prepare(
+            evaluator,
+            &ExternalSchemas::default(),
+            &PreparationLimits::default(),
+        )
 }
-fn prepare(schema: &str) -> Result<PreparedValueContract, NoVerdict> {
+fn prepare(
+    schema: &str,
+) -> Result<PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator>, PreparationFailure>
+{
     prepare_op(&conformant(&doc(schema)), &DefaultEvaluator::new())
 }
 fn value(text: &str) -> JsonValue {
@@ -82,7 +88,7 @@ fn numeric_arithmetic_admission_preserves_carriage_types_counts_and_bounds() {
     let multiple = prepare("{\"multipleOf\":3}");
     for token in [&huge, &"7".repeat(4097)] {
         assert!(
-            matches!(multiple.explain(&value(token)),ValueOutcome::NoVerdict {detail:NoVerdict {reason:NoVerdictReason::LimitExceeded,ref code,..}} if code=="numeric-arithmetic-limit")
+            matches!(multiple.explain(&value(token)),ValueOutcome::NoVerdict {detail:NoVerdict {reason:NoVerdictReason::LimitExceeded,ref code,..}} if code=="multiple-of-arithmetic-limit")
         );
         assert!(matches!(
             multiple.explain(&value("3")),
@@ -121,7 +127,7 @@ fn deep_literal_and_opaque_data_do_not_inherit_compiler_tree_depth() {
             else {
                 panic!("{depth}: {result:?}")
             };
-            assert!(!problems_complete);
+            assert!(problems_complete);
             assert_eq!(problems[0].instance, "");
             assert!(matches!(problems[0].code.as_str(), "const" | "enum"));
         }
@@ -146,17 +152,19 @@ fn explicit_preparation_and_retained_validation_have_caller_owned_lifetimes() {
             self.0.fetch_sub(1, Ordering::SeqCst);
         }
     }
-    impl PreparedSchema for Held {
-        fn validate(&self, _: &JsonValue, _: Detail, _: &dyn WorkControl) -> ValueOutcome {
+    impl SchemaValidator for Held {
+        fn evaluate(&self, _: &JsonValue, _: Detail, _: &dyn WorkControl) -> ValueOutcome {
             ValueOutcome::Satisfies
         }
     }
     impl SchemaEvaluator for Probe {
+        type Validator = Arc<Held>;
         fn prepare(
             &self,
-            _: &SchemaRequest,
+            _: EvaluationRequest<'_>,
+            _: &PreparationLimits,
             _: &dyn WorkControl,
-        ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
+        ) -> Result<Self::Validator, PreparationFailure> {
             self.calls.fetch_add(1, Ordering::SeqCst);
             self.live.fetch_add(1, Ordering::SeqCst);
             Ok(Arc::new(Held(self.live.clone())))
@@ -176,7 +184,11 @@ fn explicit_preparation_and_retained_validation_have_caller_owned_lifetimes() {
             .expect("declared operation")
             .input()
             .expect("declared input")
-            .prepare(&evaluator)
+            .prepare(
+                &evaluator,
+                &openbindings::ExternalSchemas::default(),
+                &openbindings::PreparationLimits::default(),
+            )
     };
     let retained = prepare_input("a");
     drop(prepare_input("a"));
@@ -195,7 +207,7 @@ fn explicit_preparation_and_retained_validation_have_caller_owned_lifetimes() {
     drop(evaluator);
     for _ in 0..100 {
         assert!(matches!(
-            retained.validate(&value("7")),
+            retained.evaluate(&value("7")),
             ValueOutcome::Satisfies
         ));
     }
@@ -226,20 +238,13 @@ fn retained_contracts_outlive_documents_and_distinguish_absent_sides() {
     assert!(document.resolve_operation("missing").is_none());
 }
 #[test]
-fn anonymous_scope_selects_outer_dynamic_anchor() {
+fn document_resource_dynamic_anchor_is_an_obi14_admission_violation() {
     let document=Document::parse(r##"{"openbindings":"0.2.0","operations":{"op":{"input":{"$ref":"https://review.invalid/list"}}},"schemas":{"List":{"$id":"https://review.invalid/list","type":"array","items":{"$dynamicRef":"#element"},"$defs":{"element":{"$dynamicAnchor":"element","type":"string"}}},"Override":{"$dynamicAnchor":"element","type":"integer"}}}"##).unwrap();
-    let prepared = prepare_op(&conformant(&document), &DefaultEvaluator::new());
-    assert!(matches!(
-        prepared.explain(&value("[7]")),
-        ValueOutcome::Satisfies
-    ));
-    let result = prepared.explain(&value(r#"["x"]"#));
-    let ValueOutcome::Fails { problems, .. } = result else {
-        panic!("{result:?}");
-    };
-    assert_eq!(problems[0].instance, "/0");
-    assert_eq!(problems[0].schema.pointer, "/schemas/Override/type");
+    let assessment = document.validate().unwrap();
+    assert!(assessment.conformant().is_none());
+    assert_eq!(assessment.report().evidence["OBI-14"], Evidence::Violated);
 }
+
 #[test]
 fn same_uri_resources_are_isolated_and_precancellation_does_not_poison() {
     let proof = conformant(&doc(r#"{"$ref":"https://review.invalid/shared"}"#));
@@ -248,7 +253,7 @@ fn same_uri_resources_are_isolated_and_precancellation_does_not_poison() {
     let evaluator = DefaultEvaluator::new();
     // Two resource sets supply different snapshots for the same retrieval URI.
     let snapshot = |schema: &str| {
-        ResourceSet::new([SchemaResource {
+        ExternalSchemas::new([ExternalSchema {
             uri: "https://review.invalid/shared".into(),
             document: value(schema),
         }])
@@ -260,34 +265,52 @@ fn same_uri_resources_are_isolated_and_precancellation_does_not_poison() {
         let cancelled = std::sync::atomic::AtomicBool::new(false);
         cancelled.store(true, std::sync::atomic::Ordering::Release);
         assert!(matches!(
-            contract.prepare_with_control(&evaluator, resources, &cancelled),
-            Err(NoVerdict {
-                reason: NoVerdictReason::Cancelled,
+            contract.prepare_with_control(
+                &evaluator,
+                resources,
+                &openbindings::PreparationLimits::default(),
+                &cancelled
+            ),
+            Err(PreparationFailure {
+                kind: PreparationFailureKind::Cancelled,
                 ..
             })
         ));
     }
     assert!(matches!(
         contract
-            .prepare_with(&evaluator, &integer)
+            .prepare(
+                &evaluator,
+                &integer,
+                &openbindings::PreparationLimits::default()
+            )
             .explain(&value("7")),
         ValueOutcome::Satisfies
     ));
     assert!(matches!(
         contract
-            .prepare_with(&evaluator, &string)
+            .prepare(
+                &evaluator,
+                &string,
+                &openbindings::PreparationLimits::default()
+            )
             .explain(&value("7")),
         ValueOutcome::Fails { .. }
     ));
     std::thread::scope(|scope| {
         for _ in 0..8 {
+            let contract = contract.clone();
             let resources = integer.clone();
             let evaluator = &evaluator;
             scope.spawn(move || {
                 for _ in 0..100 {
                     assert!(matches!(
                         contract
-                            .prepare_with(evaluator, &resources)
+                            .prepare(
+                                evaluator,
+                                &resources,
+                                &openbindings::PreparationLimits::default()
+                            )
                             .explain(&value("7")),
                         ValueOutcome::Satisfies
                     ));
@@ -301,16 +324,18 @@ struct CancelOnce {
     cancelled: Arc<std::sync::atomic::AtomicBool>,
 }
 impl SchemaEvaluator for CancelOnce {
+    type Validator = openbindings_json_schema_evaluator::DefaultValidator;
     fn prepare(
         &self,
-        request: &SchemaRequest,
+        request: EvaluationRequest<'_>,
+        limits: &PreparationLimits,
         control: &dyn WorkControl,
-    ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
+    ) -> Result<Self::Validator, PreparationFailure> {
         if self.calls.fetch_add(1, Ordering::SeqCst) == 0 {
             self.cancelled.store(true, Ordering::Release);
             control.check()?;
         }
-        DefaultEvaluator::new().prepare(request, control)
+        DefaultEvaluator::new().prepare(request, limits, control)
     }
 }
 #[test]
@@ -323,40 +348,47 @@ fn cancellation_during_preparation_allows_independent_retries() {
     let proof = conformant(&doc("true"));
     let operation = proof.resolve_operation("op").expect("declared operation");
     let contract = operation.input().expect("declared input");
-    let cancelled =
-        contract.prepare_with_control(&evaluator, &ResourceSet::default(), control.as_ref());
+    let cancelled = contract.prepare_with_control(
+        &evaluator,
+        &ExternalSchemas::default(),
+        &openbindings::PreparationLimits::default(),
+        control.as_ref(),
+    );
     assert!(matches!(
         cancelled,
-        Err(NoVerdict {
-            reason: NoVerdictReason::Cancelled,
+        Err(PreparationFailure {
+            kind: PreparationFailureKind::Cancelled,
             ..
         })
     ));
     assert!(matches!(
-        contract.prepare(&evaluator).validate(&value("1")),
+        contract
+            .prepare(
+                &evaluator,
+                &openbindings::ExternalSchemas::default(),
+                &openbindings::PreparationLimits::default()
+            )
+            .evaluate(&value("1")),
         ValueOutcome::Satisfies
     ));
     assert!(matches!(
-        contract.prepare(&evaluator).validate(&value("2")),
+        contract
+            .prepare(
+                &evaluator,
+                &openbindings::ExternalSchemas::default(),
+                &openbindings::PreparationLimits::default()
+            )
+            .evaluate(&value("2")),
         ValueOutcome::Satisfies
     ));
     assert_eq!(evaluator.calls.load(Ordering::SeqCst), 3);
 }
 #[test]
-fn conservative_preparation_is_not_semantic_undefinedness() {
-    // A string whose verdict depends on an invalid pattern's match gives no
-    // verdict, conservatively, rather than establishing an undefined result;
-    // one a true branch decides keeps its verdict in either order.
+fn known_dependence_is_distinct_from_evaluator_inability() {
+    // An invalid Unicode pattern has an undefined match. This value depends
+    // on it; a true branch settles validity in either order.
     let result = prepare(r#"{"anyOf":[false,{"pattern":"["}]}"#).explain(&value(r#""secret""#));
-    assert!(matches!(
-        result,
-        ValueOutcome::NoVerdict {
-            detail: NoVerdict {
-                reason: NoVerdictReason::ConservativePreparation,
-                ..
-            }
-        }
-    ));
+    assert!(matches!(result, ValueOutcome::Undefined { .. }));
     for schema in [
         r#"{"anyOf":[true,{"pattern":"["}]}"#,
         r#"{"anyOf":[{"pattern":"["},true]}"#,
@@ -392,7 +424,7 @@ fn a_missing_resource_gives_no_verdict_only_where_evaluation_reaches_it() {
         ValueOutcome::Satisfies
     ));
     for outcome in [
-        prepared.validate(&value("7")),
+        prepared.evaluate(&value("7")),
         prepared.explain(&value("7")),
     ] {
         let ValueOutcome::NoVerdict { detail } = outcome else {
@@ -400,11 +432,12 @@ fn a_missing_resource_gives_no_verdict_only_where_evaluation_reaches_it() {
         };
         assert_eq!(detail.reason, NoVerdictReason::ResourceUnavailable);
         assert_eq!(detail.code, "resource-unavailable");
+        // The missing content has no source, but the original reference does.
         assert_eq!(
             detail.location,
-            Some(SchemaLocation::new(
-                Some("https://absent.invalid/x".into()),
-                "".parse().unwrap()
+            Some(SchemaOrigin::new(
+                None,
+                "/operations/op/input/anyOf/1/$ref".parse().unwrap(),
             ))
         );
     }
@@ -415,14 +448,40 @@ fn diagnostics_have_a_separate_bounded_pass_and_healthy_reuse() {
         r#"{{"allOf":[false,{{"allOf":[{}]}}]}}"#,
         vec!["false"; 200].join(",")
     );
-    let evaluator = DefaultEvaluator::with_limits(Limits {
-        evaluation_steps: Some(30),
-
-        ..Limits::default()
-    });
+    // Retain the former 30-unit request as a real pre-verdict exhaustion.
+    // Work units belong to the current evaluator, not the retired compiler.
+    let with_work = |work| {
+        DefaultEvaluator::with_limits(Limits {
+            evaluation_sdk_work_units: Some(work),
+            ..Limits::default()
+        })
+    };
+    assert!(
+        matches!(prepare_op(&conformant(&doc(&expensive)), &with_work(30)).evaluate(&value("0")),
+        ValueOutcome::NoVerdict { detail } if detail.reason == NoVerdictReason::LimitExceeded)
+    );
+    let (mut below, mut enough) = (30, 10_000);
+    assert!(matches!(
+        prepare_op(&conformant(&doc(&expensive)), &with_work(enough)).evaluate(&value("0")),
+        ValueOutcome::Fails { .. }
+    ));
+    while enough - below > 1 {
+        let middle = below + (enough - below) / 2;
+        match prepare_op(&conformant(&doc(&expensive)), &with_work(middle)).evaluate(&value("0")) {
+            ValueOutcome::Fails { .. } => enough = middle,
+            ValueOutcome::NoVerdict { detail }
+                if detail.reason == NoVerdictReason::LimitExceeded
+                    && detail.code == "evaluation-work-limit" =>
+            {
+                below = middle
+            }
+            other => panic!("unexpected outcome: {other:?}"),
+        }
+    }
+    let evaluator = with_work(enough);
     let prepared = prepare_op(&conformant(&doc(&expensive)), &evaluator);
     for _ in 0..5 {
-        let result = prepared.validate(&value("0"));
+        let result = prepared.evaluate(&value("0"));
         let ValueOutcome::Fails {
             problems,
             problems_complete,
@@ -434,19 +493,26 @@ fn diagnostics_have_a_separate_bounded_pass_and_healthy_reuse() {
         assert!(!problems_complete);
         assert!(problems.is_empty());
     }
+    // Exact verdict work leaves no allowance to complete a diagnostic pass.
+    assert!(
+        matches!(prepared.explain(&value("0")), ValueOutcome::Fails { problems, problems_complete:false, .. } if problems.is_empty())
+    );
+    assert!(
+        matches!(prepare(&expensive).explain(&value("0")), ValueOutcome::Fails { problems, problems_complete: false, .. } if problems.len() == 100)
+    );
     assert!(matches!(
-        prepare("true").validate(&value("0")),
+        prepare("true").evaluate(&value("0")),
         ValueOutcome::Satisfies
     ));
     let limited = prepare_op(
         &conformant(&doc(r#"{"allOf":[true,true,true]}"#)),
         &DefaultEvaluator::with_limits(Limits {
-            evaluation_steps: Some(1),
+            evaluation_sdk_work_units: Some(1),
             ..Limits::default()
         }),
     );
     assert!(matches!(
-        limited.validate(&value("0")),
+        limited.evaluate(&value("0")),
         ValueOutcome::NoVerdict {
             detail: NoVerdict {
                 reason: NoVerdictReason::LimitExceeded,
@@ -468,10 +534,15 @@ fn diagnostics_are_original_and_do_not_expose_instance_values() {
         panic!("{result:?}");
     };
     assert!(problems.iter().any(|p| p.instance == "/a~1b"));
-    assert_eq!(problems.len(), 1);
+    assert_eq!(problems.len(), 2);
+    assert_eq!(problems[1].instance, "/secret");
+    assert_eq!(
+        problems[1].schema.pointer,
+        "/operations/op/input/unevaluatedProperties"
+    );
 }
 #[test]
-fn property_escape_refusal_is_lazy_and_does_not_poison_thread_state() {
+fn property_escape_matching_is_lazy_and_does_not_poison_thread_state() {
     let prepared = prepare(r#"{"pattern":"\\p{Lu}"}"#);
     assert!(matches!(
         prepared.explain(&value("3")),
@@ -479,12 +550,7 @@ fn property_escape_refusal_is_lazy_and_does_not_poison_thread_state() {
     ));
     assert!(matches!(
         prepared.explain(&value(r#""A""#)),
-        ValueOutcome::NoVerdict {
-            detail: NoVerdict {
-                reason: NoVerdictReason::UnsupportedCapability,
-                ..
-            }
-        }
+        ValueOutcome::Satisfies
     ));
     assert!(matches!(
         prepared.explain(&value("3")),
@@ -507,7 +573,7 @@ fn diagnostic_allocation_admission_bounds_many_missing_names() {
         &conformant(&doc(&schema)),
         &DefaultEvaluator::with_limits(Limits::default()),
     )
-    .validate(&value("{}"));
+    .evaluate(&value("{}"));
     let ValueOutcome::Fails {
         problems,
         problems_complete,
@@ -542,7 +608,7 @@ fn upstream_test_dispositions_use_the_supported_exact_ecma_u_path() {
         let schema = serde_json::json!({"pattern": pattern}).to_string();
         assert!(matches!(
             prepare(&schema).explain(&value(r#""-""#)),
-            ValueOutcome::NoVerdict { .. }
+            ValueOutcome::Undefined { .. }
         ));
     }
     // The original test expected an engine failure for a valid empty match.
@@ -559,20 +625,11 @@ fn upstream_test_dispositions_use_the_supported_exact_ecma_u_path() {
             ValueOutcome::Satisfies
         ));
     }
-    // Raw dependency APIs lack the SDK's enclosing refusal guard. Through the
-    // public adapter, selected property matching can never become false validity.
+    // Unicode properties supply evaluated-name annotations through the SDK.
     let schema = serde_json::json!({"patternProperties": {r"^\p{L}{300}$": {"type":"integer"}}, "unevaluatedProperties": false}).to_string();
     let result =
         prepare(&schema).explain(&value(&serde_json::json!({"a".repeat(300): 1}).to_string()));
-    assert!(matches!(
-        result,
-        ValueOutcome::NoVerdict {
-            detail: NoVerdict {
-                reason: NoVerdictReason::UnsupportedCapability,
-                ..
-            }
-        }
-    ));
+    assert!(matches!(result, ValueOutcome::Satisfies));
 }
 
 #[test]
@@ -581,10 +638,10 @@ fn preparation_separates_setup_from_value_and_keeps_ready_healthy() {
     let validation = d.validate().unwrap();
     assert!(validation.conformant().is_none());
     assert_eq!(validation.report().evidence["OBI-05"], Evidence::Violated);
-    assert!(matches!(
-        d.resolve_operation("shared").unwrap(),
-        OperationSelection::Ambiguous { .. }
-    ));
+    assert_eq!(
+        d.value().at("/operations/yes/aliases/0").unwrap().as_str(),
+        Some("shared")
+    );
     let d = Document::parse(r#"{"openbindings":"0.2.0","operations":{"absent":{},"yes":{"input":true},"no":{"input":false}}}"#).unwrap();
     let c = conformant(&d);
     let evaluator = DefaultEvaluator::new();
@@ -600,7 +657,11 @@ fn preparation_separates_setup_from_value_and_keeps_ready_healthy() {
             .expect("declared operation")
             .input()
             .expect("declared input")
-            .prepare(&evaluator)
+            .prepare(
+                &evaluator,
+                &openbindings::ExternalSchemas::default(),
+                &openbindings::PreparationLimits::default(),
+            )
     };
     let Ok(ready) = prepare_input("yes") else {
         panic!()
@@ -647,15 +708,15 @@ fn preparation_separates_setup_from_value_and_keeps_ready_healthy() {
         let d = Document::parse(text).unwrap();
         let validation = d.validate().unwrap();
         assert!(validation.conformant().is_none());
-        let error = d.operations().unwrap_err();
-        assert_eq!(
-            error
-                .source_location()
-                .unwrap()
-                .pointer
-                .as_ref()
-                .and_then(openbindings::Pointer::as_str),
-            Some(pointer)
+        assert!(
+            validation
+                .report()
+                .findings
+                .iter()
+                .filter_map(|finding| finding.location.as_ref())
+                .any(
+                    |location| location.pointer.as_ref().and_then(Pointer::as_str) == Some(pointer)
+                )
         );
     }
 }
@@ -663,12 +724,12 @@ fn preparation_separates_setup_from_value_and_keeps_ready_healthy() {
 fn resources_reject_compared_uri_duplicates_even_for_equal_bytes() {
     let schema = value("true");
     assert!(
-        ResourceSet::new([
-            SchemaResource {
+        ExternalSchemas::new([
+            ExternalSchema {
                 uri: "https://example.invalid/a/../b".into(),
                 document: schema.clone()
             },
-            SchemaResource {
+            ExternalSchema {
                 uri: "https://example.invalid/b#".into(),
                 document: schema
             }

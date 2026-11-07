@@ -1,0 +1,45 @@
+{
+  "native_current": {
+    "baseline": {
+      "Run": 976,
+      "State": 64,
+      "Fields": 8,
+      "Frame": 256
+    },
+    "candidate": {
+      "Run": 984,
+      "State": 64,
+      "Fields": 8,
+      "Frame": 256
+    }
+  },
+  "native_minimum": {
+    "baseline": {
+      "Run": 976,
+      "State": 64,
+      "Fields": 8,
+      "Frame": 256
+    },
+    "candidate": {
+      "Run": 984,
+      "State": 64,
+      "Fields": 8,
+      "Frame": 256
+    }
+  },
+  "wasm32_current": {
+    "baseline": {
+      "Run": 600,
+      "State": 32,
+      "Fields": 8,
+      "Frame": 136
+    },
+    "candidate": {
+      "Run": 600,
+      "State": 32,
+      "Fields": 8,
+      "Frame": 136
+    },
+    "method": "intentional compile-time array-size diagnostic, exactly four expected E0308 diagnostics per side, pinned current dependency fingerprint"
+  }
+}

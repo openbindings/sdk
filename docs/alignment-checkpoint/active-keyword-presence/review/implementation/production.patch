@@ -1,0 +1,297 @@
+diff --git a/crates/openbindings-json-schema-evaluator/src/semantic/execution/mod.rs b/crates/openbindings-json-schema-evaluator/src/semantic/execution/mod.rs
+index 16ae844..d376640 100644
+--- a/crates/openbindings-json-schema-evaluator/src/semantic/execution/mod.rs
++++ b/crates/openbindings-json-schema-evaluator/src/semantic/execution/mod.rs
+@@ -22,6 +22,7 @@ struct Request<'v> {
+ struct Frame<'v> {
+     visit: Visit,
+     value: JsonRef<'v>,
++    fields: readings::Fields,
+     state: State,
+     phase: Phase,
+ }
+@@ -73,6 +74,7 @@ impl<'v> Frame<'v> {
+         Interpreted {
+             value: original.value.view(),
+             profile: original.profile.expect("entered known schema"),
++            fields: self.fields,
+         }
+     }
+     fn advance(
+@@ -85,7 +87,12 @@ impl<'v> Frame<'v> {
+             let phase = std::mem::replace(&mut self.phase, Phase::Done);
+             let action = match phase {
+                 Phase::Start => {
+-                    match run.begin(self.visit.schema, self.value, &self.visit.context)? {
++                    match run.begin(
++                        self.visit.schema,
++                        self.fields,
++                        self.value,
++                        &self.visit.context,
++                    )? {
+                         Beginning::Ready(state) => {
+                             self.state = state;
+                             Action::Complete
+@@ -164,9 +171,32 @@ impl<'v> Frame<'v> {
+                         Action::Continue
+                     }
+                 }
+-                Phase::Logical(cursor) => logical::advance(self, run, cursor, returned.take())?,
+-                Phase::Object(cursor) => object::advance(self, run, cursor, returned.take())?,
+-                Phase::Array(cursor) => array::advance(self, run, cursor, returned.take())?,
++                Phase::Logical(cursor) => {
++                    if self.fields.logical() {
++                        logical::advance(self, run, cursor, returned.take())?
++                    } else {
++                        debug_assert!(returned.is_none());
++                        self.phase = Phase::Object(object::Cursor::start());
++                        Action::Continue
++                    }
++                }
++                Phase::Object(cursor) => {
++                    if self.fields.object() {
++                        object::advance(self, run, cursor, returned.take())?
++                    } else {
++                        debug_assert!(returned.is_none());
++                        self.phase = Phase::Array(array::Cursor::start());
++                        Action::Continue
++                    }
++                }
++                Phase::Array(cursor) => {
++                    if self.fields.array() {
++                        array::advance(self, run, cursor, returned.take())?
++                    } else {
++                        debug_assert!(returned.is_none());
++                        Action::Complete
++                    }
++                }
+                 Phase::Done => Action::Complete,
+             };
+             if !matches!(action, Action::Continue) {
+@@ -232,9 +262,10 @@ impl Run<'_> {
+             context,
+         } = request;
+         self.graph.tick()?;
+-        if self.plan.leaves.contains(&node) {
++        let fields = self.plan.fields(node);
++        if fields.is_leaf() {
+             let context = self.enter(node, &context)?;
+-            return match self.begin(node, value, &context)? {
++            return match self.begin(node, fields, value, &context)? {
+                 Beginning::Ready(state) => Ok(Entry::Ready(state)),
+                 _ => unreachable!("certified leaf has no child application"),
+             };
+@@ -252,8 +283,9 @@ impl Run<'_> {
+                 )
+                 .map(Entry::Ready);
+         }
+-        if self.plan.leaves.contains(&node) {
+-            return match self.begin(node, value, &context)? {
++        let fields = self.plan.fields(node);
++        if fields.is_leaf() {
++            return match self.begin(node, fields, value, &context)? {
+                 Beginning::Ready(state) => Ok(Entry::Ready(state)),
+                 _ => unreachable!("alias reached a certified leaf"),
+             };
+@@ -304,6 +336,7 @@ impl Run<'_> {
+         Ok(Entry::Frame(Frame {
+             visit: key,
+             value,
++            fields,
+             state: State::truth(TRUE),
+             phase: Phase::Start,
+         }))
+@@ -352,10 +385,14 @@ impl Run<'_> {
+     fn begin(
+         &mut self,
+         node: usize,
++        fields: readings::Fields,
+         value: JsonRef<'_>,
+         context: &Context,
+     ) -> Result<Beginning, NoVerdict> {
+-        let schema = self.space().node(node).value.clone();
++        // Plan owns the original source for this entire run. Borrowing through
++        // that immutable owner keeps later mutable Run calls independent.
++        let plan = self.plan;
++        let schema = &plan.environment.space().node(node).value;
+         if let Some(boolean) = schema.view().as_bool() {
+             let mut state = State::truth(if boolean { TRUE } else { FALSE });
+             if !boolean {
+@@ -385,6 +422,7 @@ impl Run<'_> {
+         let schema = Interpreted {
+             value: schema.view(),
+             profile,
++            fields,
+         };
+         if profile.reference_object(schema.value) {
+             return Ok(Beginning::ReferenceObject);
+@@ -447,7 +485,7 @@ impl Run<'_> {
+                 self.record_failure(&mut state, node, value, Some("pattern"))?;
+             }
+         }
+-        if self.plan.leaves.contains(&node) {
++        if fields.is_leaf() {
+             return Ok(Beginning::Ready(state));
+         }
+         Ok(Beginning::Body(state))
+diff --git a/crates/openbindings-json-schema-evaluator/src/semantic/mod.rs b/crates/openbindings-json-schema-evaluator/src/semantic/mod.rs
+index 58f15c8..383dd42 100644
+--- a/crates/openbindings-json-schema-evaluator/src/semantic/mod.rs
++++ b/crates/openbindings-json-schema-evaluator/src/semantic/mod.rs
+@@ -13,6 +13,7 @@ mod operands;
+ mod patterns;
+ mod preparation;
+ mod primitive;
++mod readings;
+ mod refinement;
+ mod regex_format;
+ mod stack;
+@@ -80,10 +81,15 @@ struct AnnotationDemand {
+ struct Interpreted<'a> {
+     value: JsonRef<'a>,
+     profile: Profile,
++    fields: readings::Fields,
+ }
+ impl<'a> Interpreted<'a> {
+     fn get(self, keyword: &str) -> Option<JsonRef<'a>> {
+-        self.profile.get(self.value, keyword)
++        if self.fields.may_read(keyword) {
++            self.profile.get(self.value, keyword)
++        } else {
++            None
++        }
+     }
+ }
+ 
+@@ -99,7 +105,7 @@ pub(super) struct Plan {
+     patterns: PreparedPatterns,
+     operands: HashMap<usize, operands::Prepared>,
+     annotations: AnnotationDemand,
+-    leaves: HashSet<usize>,
++    fields: HashMap<usize, readings::Fields>,
+     // Keep candidate ordering stable for repeated attempts on this contract.
+     value_hash: std::collections::hash_map::RandomState,
+ }
+@@ -140,10 +146,16 @@ impl Plan {
+             patterns: checked.patterns,
+             operands: checked.operands,
+             annotations: checked.annotations,
+-            leaves: checked.leaves,
++            fields: checked.fields,
+             value_hash: std::collections::hash_map::RandomState::new(),
+         })
+     }
++    fn fields(&self, node: usize) -> readings::Fields {
++        self.fields
++            .get(&node)
++            .copied()
++            .unwrap_or(readings::Fields::ORIGINAL)
++    }
+     pub(super) fn evaluate(
+         &self,
+         value: &JsonValue,
+@@ -883,8 +895,9 @@ impl Run<'_> {
+                 self.graph.charge(64)?;
+                 return Ok((canonical, Arc::new(relevant), true));
+             }
+-            let original = self.space().node(node);
+-            let schema = original.value.clone();
++            let plan = self.plan;
++            let original = plan.environment.space().node(node);
++            let schema = &original.value;
+             if !self.space().eligible(original.resource)
+                 || original.profile.is_none()
+                 || self.space().query_inventory(original.resource).is_err()
+diff --git a/crates/openbindings-json-schema-evaluator/src/semantic/preparation.rs b/crates/openbindings-json-schema-evaluator/src/semantic/preparation.rs
+index 16ef75b..e0722e4 100644
+--- a/crates/openbindings-json-schema-evaluator/src/semantic/preparation.rs
++++ b/crates/openbindings-json-schema-evaluator/src/semantic/preparation.rs
+@@ -14,7 +14,7 @@ pub(super) struct Checked {
+     pub patterns: PreparedPatterns,
+     pub operands: HashMap<usize, operands::Prepared>,
+     pub annotations: AnnotationDemand,
+-    pub leaves: HashSet<usize>,
++    pub fields: HashMap<usize, readings::Fields>,
+ }
+ 
+ /// Syntax admission traverses every declared schema position, including unused
+@@ -124,7 +124,7 @@ pub(super) fn check_from(
+     let mut queries = PreparedQueries::new();
+     let mut shared_queries = queries::Queries::new(space);
+     let mut annotations = AnnotationDemand::default();
+-    let mut leaves = HashSet::new();
++    let mut fields = HashMap::new();
+     while let Some(node) = queue.pop_front() {
+         control.check()?;
+         if visited.contains(&node) {
+@@ -182,7 +182,11 @@ pub(super) fn check_from(
+         let schema = Interpreted {
+             value: original.value.view(),
+             profile,
++            fields: readings::Fields::ORIGINAL,
+         };
++        // All preparation reads retain Original fallback until the complete
++        // member scan and post-check publish this separate accumulator.
++        let mut present = readings::Fields::EMPTY;
+         operands.add(node, schema, control)?;
+         annotations.properties |= schema.get("unevaluatedProperties").is_some();
+         annotations.items |= schema.get("unevaluatedItems").is_some();
+@@ -299,13 +303,17 @@ pub(super) fn check_from(
+                 // Presence disqualifies even empty or malformed applicators.
+                 // A permissive custom meta-schema can admit those operands;
+                 // finding no child positions does not make their behavior inert.
+-                if schema.get(keyword).is_some()
++                let active = schema.get(keyword).is_some();
++                if active {
++                    present.include(keyword);
++                }
++                if active
+                     && (child_shape(keyword).is_some()
+                         || matches!(keyword, "dependencies" | "additionalItems"))
+                 {
+                     leaf = false;
+                 }
+-                if schema.get(keyword).is_none()
++                if !active
+                     || (child_shape(keyword).is_none()
+                         && !matches!(keyword, "dependencies" | "additionalItems"))
+                     || (matches!(keyword, "then" | "else") && schema.get("if").is_none())
+@@ -343,9 +351,14 @@ pub(super) fn check_from(
+             }
+         }
+         if leaf {
+-            control.charge_allocation(128)?;
+-            leaves.insert(node);
++            present.certify_leaf();
+         }
++        // The existing map reservation policy includes bucket/growth slack.
++        // This replaces the 128-byte leaf-set estimate and also charges every
++        // non-leaf descriptor, before allocation or publication.
++        control.check()?;
++        control.charge_allocation(128 + std::mem::size_of::<readings::Fields>())?;
++        fields.insert(node, present);
+     }
+     control.charge_allocation(resources.len().saturating_mul(8))?;
+     let mut resources: Vec<_> = resources.into_iter().collect();
+@@ -358,7 +371,7 @@ pub(super) fn check_from(
+         patterns: readings,
+         operands: operands.records,
+         annotations,
+-        leaves,
++        fields,
+     })
+ }
+ fn limit(resource: &str) -> PreparationFailure {
+diff --git a/crates/openbindings-json-schema-evaluator/src/semantic/refinement.rs b/crates/openbindings-json-schema-evaluator/src/semantic/refinement.rs
+index c1c6263..8cb773a 100644
+--- a/crates/openbindings-json-schema-evaluator/src/semantic/refinement.rs
++++ b/crates/openbindings-json-schema-evaluator/src/semantic/refinement.rs
+@@ -67,7 +67,7 @@ impl Run<'_> {
+             // preparation certificate still proves that they produce no
+             // annotations, including under a foreign or custom profile.
+             // This is structural absence, not an omitted-demand map.
+-            if self.plan.leaves.contains(&node) {
++            if self.plan.fields(node).is_leaf() {
+                 continue;
+             }
+             // A complete State already incorporates conditional selection and

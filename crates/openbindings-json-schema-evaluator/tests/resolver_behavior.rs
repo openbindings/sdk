@@ -120,14 +120,14 @@ fn library_normalizes_the_frozen_case_variant_unmatched_identity() {
 }
 
 #[test]
-fn encoded_plain_names_keep_document_decoding_and_follow_the_library_elsewhere() {
+fn encoded_plain_names_resolve_in_each_original_resource() {
     use openbindings::*;
     use openbindings_json_schema_evaluator::DefaultEvaluator;
     const URI: &str = "https://resolver.example.invalid/anchor";
     for carrier in ["document", "contained", "supplied"] {
         for fragment in ["task", "t%61sk"] {
             let mut schema = json!({"$defs":{"target":{"$anchor":"task","type":"string"}}});
-            let mut supplied = ResourceSet::default();
+            let mut supplied = ExternalSchemas::default();
             let reference = if carrier == "document" {
                 format!("#{fragment}")
             } else {
@@ -135,7 +135,7 @@ fn encoded_plain_names_keep_document_decoding_and_follow_the_library_elsewhere()
                 format!("{URI}#{fragment}")
             };
             let schemas = if carrier == "supplied" {
-                supplied = ResourceSet::new([SchemaResource {
+                supplied = ExternalSchemas::new([ExternalSchema {
                     uri: URI.into(),
                     document: JsonValue::parse(schema.to_string()).unwrap(),
                 }])
@@ -166,31 +166,25 @@ fn encoded_plain_names_keep_document_decoding_and_follow_the_library_elsewhere()
                 .find(|r| r.location.pointer == "/operations/op/input/$ref")
                 .unwrap();
             let operation = proof.resolve_operation("op").expect("declared operation");
-            let prepared = operation
-                .input()
-                .expect("declared input")
-                .prepare_with(&DefaultEvaluator::new(), &supplied);
-            if fragment == "task" || carrier == "document" {
-                assert!(matches!(
-                    reference.resolution,
-                    ReferenceResolution::Located { .. }
-                ));
-                let contract = match prepared {
-                    Ok(contract) => contract,
-                    Err(detail) => panic!("{detail:?}"),
-                };
-                assert!(matches!(
-                    contract.validate(&JsonValue::parse(r#""s""#).unwrap()),
-                    ValueOutcome::Satisfies
-                ));
-            } else {
-                assert!(
-                    matches!(&reference.resolution, ReferenceResolution::Unresolved { detail }
-                    if detail.reason == ReferenceRefusalReason::MissingTarget && detail.code == "anchor-missing")
-                );
-                assert!(matches!(prepared, Err(detail)
-                    if detail.reason == NoVerdictReason::ConservativePreparation && detail.code == "anchor-missing"));
-            }
+            let prepared = operation.input().expect("declared input").prepare(
+                &DefaultEvaluator::new(),
+                &supplied,
+                &openbindings::PreparationLimits::default(),
+            );
+            assert!(matches!(
+                reference.resolution,
+                ReferenceResolution::Located { .. }
+            ));
+            let contract =
+                prepared.unwrap_or_else(|detail| panic!("{carrier} {fragment}: {detail:?}"));
+            assert!(matches!(
+                contract.evaluate(&JsonValue::parse(r#""s""#).unwrap()),
+                ValueOutcome::Satisfies
+            ));
+            assert!(matches!(
+                contract.evaluate(&JsonValue::parse("1").unwrap()),
+                ValueOutcome::Fails { .. }
+            ));
         }
     }
 }

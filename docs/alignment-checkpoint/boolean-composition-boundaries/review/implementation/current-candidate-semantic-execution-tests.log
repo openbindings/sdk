@@ -1,0 +1,14 @@
+
+running 8 tests
+test semantic::execution::tests::alias_leaf_patterns_keep_equal_text_correlation_across_distinct_scopes ... ok
+test semantic::execution::tests::alias_leaves_do_not_retain_per_item_frames_or_memo_entries ... ok
+test semantic::execution::tests::frame_backing_growth_has_an_exact_requested_byte_gate ... frame_bytes=256 phase_bytes=144 state_bytes=64 witness_bytes=32 initial_backing_bytes=1024
+ok
+test semantic::execution::tests::independently_fixed_applicator_scope_and_depth_controls ... ok
+test semantic::execution::tests::interruption_at_entry_return_and_retry_boundaries_does_not_poison_reuse ... ok
+test semantic::execution::tests::original_frame_stack_observations ... ignored, release-only stack observations, separate from allocation and timing
+test semantic::execution::tests::original_frames_run_deep_values_on_a_small_native_stack ... ignored, release-only small-thread-stack qualification
+test semantic::execution::tests::shared_scope_identity_is_content_based_and_preserves_ambiguity ... ok
+
+test result: ok. 6 passed; 0 failed; 2 ignored; 0 measured; 223 filtered out; finished in 0.68s
+

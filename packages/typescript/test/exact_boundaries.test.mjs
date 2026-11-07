@@ -25,11 +25,6 @@ const disposed = (call) =>
     call,
     (e) => e instanceof sdk.SdkError && e.code === "disposed-handle",
   );
-const interpretation = (call) =>
-  assert.throws(
-    call,
-    (e) => e instanceof sdk.SdkError && e.code === "interpretation",
-  );
 
 test("raw member cursor preserves source order, duplicates, escaped/unpaired names and independent ownership", () => {
   const baseline = testing.liveStorageOwners();
@@ -92,7 +87,7 @@ test("raw member cursor preserves source order, duplicates, escaped/unpaired nam
 
 test("member/element cursors preserve the first terminal reason for every closing order", () => {
   const baseline = testing.liveStorageOwners();
-  for (const source of ["{}", "[]"]) {
+  for (let source of ["{}", "[]"]) {
     const root = exact(source),
       iterator = source === "{}" ? root.members() : root.elements();
     root.dispose();
@@ -115,7 +110,7 @@ test("member/element cursors preserve the first terminal reason for every closin
       if (terminal === "return") assert.equal(iterator.next().done, true);
       else disposed(() => iterator.next());
     }
-  for (const source of ["null", "1", "false", '"x"']) {
+  for (let source of ["null", "1", "false", '"x"']) {
     const root = exact(source);
     assert.equal(root.members(), undefined);
     assert.equal(root.elements(), undefined);
@@ -213,27 +208,55 @@ test("cursor failure closes only cursor; metadata-only prefix never acquires unv
 });
 
 const documentText =
-  '{"openbindings":"0.2.0","description":"before","operations":{"__proto__":{"tags":[],"aliases":["alias"],"input":{"const":9007199254740993},"examples":{"constructor":{"input":9007199254740993,"output":null,"x-exact":0.29000000000000001}}},"constructor":{}},"schemas":{"__proto__":{"enum":[9007199254740992,9007199254740993]},"constructor":true},"sources":{"toString":{"kind":"local","content":null}},"bindings":{"constructor":{"operation":"__proto__","source":"toString","content":{"large":1000000000000000128},"preference":-1,"deprecated":false}},"dependencies":{"__proto__":{"operation":"__proto__","kinds":[]}},"x-exact":1000000000000000128,"additionalFields":false}';
+  '{"openbindings":"0.2.0","description":"before","operations":{"__proto__":{"tags":[],"aliases":["alias"],"input":{"const":9007199254740993},"examples":{"constructor":{"input":9007199254740993,"output":null,"x-exact":0.29000000000000001}}},"constructor":{}},"schemas":{"__proto__":{"enum":[9007199254740992,9007199254740993]},"constructor":true},"sources":{"toString":{"kind":"local","data":null}},"bindings":{"constructor":{"operation":"__proto__","source":"toString","data":{"large":1000000000000000128},"preference":-1,"deprecated":false}},"dependencies":{"__proto__":{"operation":"__proto__","kinds":[]}},"x-exact":1000000000000000128,"additionalFields":false}';
 
 test("document edits and prototype-sensitive names preserve exact unrelated values", () => {
   // Edits operate directly on exact documents.
   const original = parsed(documentText),
     originalValue = original.value();
-  const document = original.retain();
+  let document = original.retain();
   original.dispose();
   try {
-    document.setDescription("after");
-    document.setOperation("temporary", { input: { type: "integer" } });
-    document.set("/operations/__proto__/tags", ["reviewed"]);
-    document.set("/operations/__proto__/tags", []);
-    document.set("/operations/__proto__/aliases/-", "another");
-    document.remove("/operations/__proto__/aliases/1");
-    document.set("/dependencies/__proto__/kinds/-", "x");
-    document.remove("/dependencies/__proto__/kinds/0");
-    const found = document.resolveOperation("temporary");
-    assert.equal(found.status, "found");
-    found.operation.dispose();
-    document.remove("/operations/temporary");
+    document = replaceDocument(document, document.set("/description", "after"));
+    document = replaceDocument(
+      document,
+      document.set("/operations/" + "temporary", {
+        input: { type: "integer" },
+      }),
+    );
+    document = replaceDocument(
+      document,
+      document.set("/operations/__proto__/tags", ["reviewed"]),
+    );
+    document = replaceDocument(
+      document,
+      document.set("/operations/__proto__/tags", []),
+    );
+    document = replaceDocument(
+      document,
+      document.set("/operations/__proto__/aliases/-", "another"),
+    );
+    document = replaceDocument(
+      document,
+      document.remove("/operations/__proto__/aliases/1"),
+    );
+    document = replaceDocument(
+      document,
+      document.set("/dependencies/__proto__/kinds/-", "x"),
+    );
+    document = replaceDocument(
+      document,
+      document.remove("/dependencies/__proto__/kinds/0"),
+    );
+    const root = document.value(),
+      found = root.at("/operations/temporary");
+    assert.equal(found.text, '{"input":{"type":"integer"}}');
+    found.dispose();
+    root.dispose();
+    document = replaceDocument(
+      document,
+      document.remove("/operations/temporary"),
+    );
     const newValue = document.value(),
       cursor = originalValue.members();
     try {
@@ -270,7 +293,7 @@ test("document edits and prototype-sensitive names preserve exact unrelated valu
 test("edits retain removed leaves and never adopt external owners", () => {
   // Every acquired exact value owns its revision independently.
   const baseline = testing.liveStorageOwners();
-  const source = parsed(
+  let source = parsed(
     '{"openbindings":"0.2.0","operations":{"run":{"input":true}},"schemas":{"kept":9007199254740993}}',
   );
   const root = source.value(),
@@ -278,12 +301,15 @@ test("edits retain removed leaves and never adopt external owners", () => {
     retained = removed.retain(),
     external = exact("0.29000000000000001");
   root.dispose();
-  source.remove("/schemas/kept");
-  source.setOperationInput("run", external);
+  source = replaceDocument(source, source.remove("/schemas/kept"));
+  source = replaceDocument(
+    source,
+    source.set("/operations/" + "run" + "/input", external),
+  );
   const branch = source.retain();
   source.dispose();
   try {
-    disposed(() => source.setName("disposed"));
+    disposed(() => source.set("/name", "disposed"));
     assert.equal(removed.text, "9007199254740993");
     assert.equal(retained.text, "9007199254740993");
     assert.equal(external.text, "0.29000000000000001");
@@ -305,15 +331,23 @@ test("edits retain removed leaves and never adopt external owners", () => {
 });
 
 test("malformed documents stay inspectable and repairable independently of conformance", () => {
-  // Typed read errors address current bytes; duplicates refuse editing.
-  const source = parsed(
+  // Raw values and conformance findings address current bytes; duplicates refuse editing.
+  let source = parsed(
     '{"openbindings":"0.2.0","operations":{},"description":17}',
   );
-  assert.throws(
-    () => source.description,
-    (e) => e.code === "interpretation" && e.location.pointer === "/description",
+  const root = source.value(),
+    description = root.get("description");
+  assert.equal(description.text, "17");
+  const report = source.validate().report;
+  assert.equal(report.conclusion, "non-conformant");
+  assert.ok(
+    report.findings.some(
+      (finding) => finding.location.pointer === "/description",
+    ),
   );
-  source.setDescription("repaired");
+  description.dispose();
+  root.dispose();
+  source = replaceDocument(source, source.set("/description", "repaired"));
   const proof = source.validate();
   assert.equal(proof.status, "conformant");
   proof.document.dispose();
@@ -322,12 +356,15 @@ test("malformed documents stay inspectable and repairable independently of confo
     '{"openbindings":"0.2.0","operations":{"\\ud800":{}}}',
     '{"openbindings":"0.2.0"}',
   ]) {
-    const document = parsed(text);
+    let document = parsed(text);
     assert.equal(document.validate().status, "report");
-    if (!text.includes("operations"))
-      assert.throws(() => document.operations, sdk.SdkError);
+    if (!text.includes("operations")) {
+      const root = document.value();
+      assert.equal(root.get("operations"), undefined);
+      root.dispose();
+    }
     assert.deepEqual(document.toBytes(), new TextEncoder().encode(text));
-    document.setOperations({});
+    document = replaceDocument(document, document.set("/operations", {}));
     const checked = document.validate();
     assert.equal(checked.status, "conformant");
     checked.document.dispose();
@@ -338,7 +375,7 @@ test("malformed documents stay inspectable and repairable independently of confo
   );
   const before = duplicate.toBytes();
   assert.throws(
-    () => duplicate.setName("refused"),
+    () => duplicate.set("/name", "refused"),
     (e) => e.code === "duplicate-members",
   );
   assert.deepEqual(duplicate.toBytes(), before);
@@ -347,10 +384,13 @@ test("malformed documents stay inspectable and repairable independently of confo
     '{"openbindings":"0.2.0","operations":{"run":{"input":null}},"unexpected":{"value":9007199254740993}}',
     '{"openbindings":"0.2.0","operations":{"run":{"input":null}},"unexpected":{"\\ud800":9007199254740993}}',
   ]) {
-    const document = parsed(text),
+    let document = parsed(text),
       held = document.retain();
     document.dispose();
-    held.setDescription("still a broken document");
+    held = replaceDocument(
+      held,
+      held.set("/description", "still a broken document"),
+    );
     assert.equal(held.validate().report.conclusion, "non-conformant");
     held.dispose();
   }
@@ -358,7 +398,7 @@ test("malformed documents stay inspectable and repairable independently of confo
 
 test("failed edit encoding and native commits release temporary state", () => {
   // Failure leaves the document unchanged and releases temporary owners.
-  const source = parsed(documentText),
+  let source = parsed(documentText),
     baseline = testing.liveStorageOwners(),
     before = source.toBytes();
   const original = bridge.WasmDocument.prototype.editEncoded;
@@ -390,110 +430,140 @@ test("failed edit encoding and native commits release temporary state", () => {
   }
 });
 
-test("new metadata is narrow/frozen/lexical; exact views retain after document release", () => {
-  const source = parsed(documentText);
+test("canonical fields are narrow/frozen/lexical and exact children outlive the proof", () => {
+  const baseline = testing.liveStorageOwners();
+  const draft = parsed(documentText);
+  // Preserve the original nonconformant draft; repair its kind filter and
+  // unprefixed extension only for the canonical positive case.
+  assert.equal(draft.validate().report.conclusion, "non-conformant");
+  const valid = draft.edit([
+    { op: "set", pointer: "/dependencies/__proto__/kinds", value: ["local"] },
+    { op: "remove", pointer: "/additionalFields" },
+  ]);
+  const source = valid.validate().document;
+  draft.dispose();
+  valid.dispose();
   const binding = source.binding("constructor"),
     sourceView = source.source("toString"),
-    dependency = source.dependency("__proto__");
-  const selected = source.resolveOperation("alias");
-  assert.equal(selected.status, "found");
-  const operation = selected.operation,
+    dependency = source.dependency("__proto__"),
+    operation = source.resolveOperation("alias"),
     example = operation.example("constructor");
   try {
-    assert.deepEqual(
-      source.operations.map((x) => x.key),
-      ["__proto__", "constructor"],
-    );
-    assert.equal(source.operations[0].deprecated, null);
-    assert.deepEqual(source.operations[0].tags, []);
-    assert.equal(Object.isFrozen(source.operations[0].tags), true);
-    assert.equal(Object.isFrozen(binding.metadata), true);
-    assert.equal("content" in binding.metadata, false);
-    assert.equal(binding.metadata.preference, -1);
-    assert.equal(binding.metadata.deprecated, false);
-    assert.equal(Object.isFrozen(dependency.metadata.kinds), true);
-    assert.deepEqual(dependency.metadata.kinds, []);
-    assert.deepEqual(operation.examples, [
-      {
-        key: "constructor",
-        description: null,
-        hasInput: true,
-        hasOutput: true,
-      },
-    ]);
-    const content = sourceView.content(),
+    const operations = source.operations(),
+      examples = operation.examples();
+    try {
+      assert.deepEqual(
+        operations.map((x) => x.key),
+        ["__proto__", "constructor"],
+      );
+      assert.equal(operations[0].deprecated, undefined);
+      assert.deepEqual(operations[0].tags, []);
+      assert.ok(Object.isFrozen(operations[0].tags));
+      assert.ok(Object.isFrozen(operations));
+      assert.deepEqual(
+        examples.map((x) => [x.key, x.description]),
+        [["constructor", undefined]],
+      );
+    } finally {
+      for (const owner of [...operations, ...examples]) owner.dispose();
+    }
+    assert.equal("metadata" in binding, false);
+    assert.equal(binding.preference, -1);
+    assert.equal(binding.deprecated, false);
+    assert.ok(Object.isFrozen(dependency.kinds));
+    assert.deepEqual(dependency.kinds, ["local"]);
+    assert.equal(dependency.acceptsKind("local"), true);
+    assert.equal(dependency.acceptsKind("other"), false);
+    const content = sourceView.data(),
       input = example.input(),
       output = example.output(),
       retained = binding.retain();
-    source.dispose();
-    operation.dispose();
-    example.dispose();
-    binding.dispose();
-    sourceView.dispose();
-    dependency.dispose();
+    for (const owner of [
+      source,
+      operation,
+      example,
+      binding,
+      sourceView,
+      dependency,
+    ])
+      owner.dispose();
     try {
       assert.equal(content.text, "null");
       assert.equal(input.text, "9007199254740993");
       assert.equal(output.text, "null");
-      assert.equal(retained.metadata.source, "toString");
-      disposed(() => binding.metadata);
+      assert.equal(retained.sourceKey, "toString");
+      disposed(() => binding.sourceKey);
     } finally {
-      content.dispose();
-      input.dispose();
-      output.dispose();
-      retained.dispose();
+      for (const owner of [content, input, output, retained]) owner.dispose();
     }
   } finally {
-    source.dispose();
-    operation.dispose();
-    example.dispose();
-    binding.dispose();
-    sourceView.dispose();
-    dependency.dispose();
+    for (const owner of [
+      source,
+      operation,
+      example,
+      binding,
+      sourceView,
+      dependency,
+    ])
+      owner.dispose();
   }
+  assert.equal(testing.liveStorageOwners(), baseline);
 });
 
-test("keyed metadata checks selected rows and avoids operation namespace interpretation", () => {
-  const source = parsed(
-    '{"openbindings":"0.2.0","operations":{"broken":{"aliases":[17]}},"sources":{"good":{"kind":"k"},"bad":{"kind":"k","description":17}},"bindings":{"good":{"operation":"absent","source":"absent"}},"dependencies":{"good":{"operation":"absent"},"bad":{"operation":"x","kinds":[17]}}}',
-  );
+test("invalid domain rows stay exact and diagnostic while only conformance exposes canonical entries", () => {
+  const text =
+    '{"openbindings":"0.2.0","operations":{"broken":{"aliases":[17]}},"sources":{"good":{"kind":"k"},"bad":{"kind":"k","description":17}},"bindings":{"good":{"operation":"absent","source":"absent"}},"dependencies":{"good":{"operation":"absent"},"bad":{"operation":"x","kinds":[17]}}}';
+  const source = parsed(text),
+    root = source.value();
   try {
-    interpretation(() => source.operations);
-    const good = source.source("good"),
-      bad = source.source("bad"),
-      binding = source.binding("good"),
-      dependency = source.dependency("good");
-    try {
-      assert.equal(good.metadata.kind, "k");
-      interpretation(() => bad.metadata);
-      interpretation(() => source.sources);
-      assert.equal(binding.metadata.source, "absent");
-      assert.equal(source.source("absent"), undefined);
-      assert.equal(dependency.metadata.kinds, null);
-      assert.equal(source.dependencyAcceptsKind("good", "arbitrary"), true);
-      interpretation(() => source.dependencyAcceptsKind("bad", "arbitrary"));
-      interpretation(() => source.dependencies);
-    } finally {
-      good.dispose();
-      bad.dispose();
-      binding.dispose();
-      dependency.dispose();
+    const checked = source.validate();
+    assert.equal(checked.status, "report");
+    assert.equal(checked.report.conclusion, "non-conformant");
+    assert.deepEqual(source.toBytes(), new TextEncoder().encode(text));
+    for (const [pointer, token] of [
+      ["/operations/broken/aliases", "[17]"],
+      ["/sources/good/kind", '"k"'],
+      ["/sources/bad/description", "17"],
+      ["/bindings/good/source", '"absent"'],
+      ["/dependencies/good/operation", '"absent"'],
+      ["/dependencies/bad/kinds", "[17]"],
+    ]) {
+      const value = root.at(pointer);
+      try {
+        assert.equal(value.text, token);
+        assert.equal(value.metadata.location.pointer, pointer);
+      } finally {
+        value.dispose();
+      }
     }
+    assert.equal(root.at("/sources/absent"), undefined);
+    assert.equal(root.at("/dependencies/good/kinds"), undefined);
+    for (const member of [
+      "operations",
+      "sources",
+      "source",
+      "binding",
+      "dependency",
+    ])
+      assert.equal(source[member], undefined);
   } finally {
+    root.dispose();
     source.dispose();
   }
   for (const [suffix, expected] of [
-    ["", null],
+    ["", undefined],
     [',"sources":{},"bindings":{},"dependencies":{}', []],
   ]) {
     const doc = parsed(
       '{"openbindings":"0.2.0","operations":{"run":{}}' + suffix + "}",
     );
+    const proof = doc.validate().document;
     try {
-      assert.deepEqual(doc.sources, expected);
-      assert.deepEqual(doc.bindings, expected);
-      assert.deepEqual(doc.dependencies, expected);
+      assert.deepEqual(proof.sources(), expected);
+      assert.deepEqual(proof.bindings(), expected);
+      assert.deepEqual(proof.dependencies(), expected);
     } finally {
+      proof.dispose();
       doc.dispose();
     }
   }
@@ -501,8 +571,12 @@ test("keyed metadata checks selected rows and avoids operation namespace interpr
     '{"openbindings":"0.2.0","operations":{},"sources":null}',
   );
   try {
-    interpretation(() => malformed.sources);
-    interpretation(() => malformed.source("x"));
+    assert.equal(malformed.validate().report.conclusion, "non-conformant");
+    const root = malformed.value(),
+      sources = root.get("sources");
+    assert.equal(sources.text, "null");
+    sources.dispose();
+    root.dispose();
   } finally {
     malformed.dispose();
   }
@@ -512,13 +586,13 @@ test("keyed metadata checks selected rows and avoids operation namespace interpr
 // JavaScript copy of its UTF-8; each entry point admits it exactly as it
 // admits those bytes.
 test("text and its UTF-8 bytes are admitted alike by every exact entry point", () => {
-  const document = parsed(
+  let document = parsed(
     '{"openbindings":"0.2.0","operations":{"run":{"input":{"type":"string"}}}}',
   );
   const prepared = prepareInput(document, "run");
   document.dispose();
   assert.equal(prepared.status, "ready");
-  const contract = prepared.valueContract;
+  const contract = prepared.schema;
   const before = testing.liveStorageOwners();
   const plain = (result) => {
     const value = result.value;
@@ -552,8 +626,8 @@ test("text and its UTF-8 bytes are admitted alike by every exact entry point", (
         plain(sdk.Document.parse(bytes)),
       );
       assert.deepEqual(
-        contract.validateJson(text),
-        contract.validateJson(bytes),
+        contract.evaluateJson(text),
+        contract.evaluateJson(bytes),
       );
     }
     assert.equal(testing.liveStorageOwners(), before);
@@ -620,3 +694,9 @@ console.log(JSON.stringify({
   assert(native.unpaired.filter(Boolean).length > 500);
   assert(native.unpaired.filter((unpaired) => !unpaired).length > 500);
 });
+
+// Test fixture cursor: keep the new immutable snapshot and release its predecessor.
+function replaceDocument(previous, next) {
+  previous.dispose();
+  return next;
+}

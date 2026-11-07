@@ -1,0 +1,21 @@
+{
+  "current": {
+    "checks": 195,
+    "logged_normal_cases": 45,
+    "max_requested": 322094,
+    "max_peak": 321396,
+    "retained_after_drop": 0
+  },
+  "minimum": {
+    "checks": 195,
+    "logged_normal_cases": 45,
+    "max_requested": 322094,
+    "max_peak": 321396,
+    "retained_after_drop": 0
+  },
+  "path_controls": 19,
+  "allocation_failure": {
+    "fixed": "Size without cancellation; Attempt(Cancelled) with cancellation",
+    "reconstructed_old": "Size in both cases"
+  }
+}

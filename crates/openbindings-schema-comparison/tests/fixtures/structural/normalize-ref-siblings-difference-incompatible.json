@@ -1,0 +1,45 @@
+{
+  "version": "1.0",
+  "description": "Siblings beside the same $ref are compared, not dropped with the reference: a maxLength of 10 differs from a maxLength of 1.",
+  "mode": "identical",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "schemas": {
+      "Base": {
+        "type": "string"
+      }
+    },
+    "operations": {
+      "name": {
+        "input": {
+          "$ref": "#/schemas/Base",
+          "maxLength": 10
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "schemas": {
+      "Base": {
+        "type": "string"
+      }
+    },
+    "operations": {
+      "name": {
+        "input": {
+          "$ref": "#/schemas/Base",
+          "maxLength": 1
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "incompatible"
+    }
+  }
+}

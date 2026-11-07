@@ -1,0 +1,19 @@
+{
+  "status": "passed",
+  "scope": "Check actual map integrity against pinned authority and current SDK sources.\n\nThis is a source/evidence consistency gate, not a runtime or performance replay.",
+  "counts": {
+    "concepts": 54,
+    "obligations": 83,
+    "witnesses": 108,
+    "fields": 32,
+    "relations": 19,
+    "source_anchors": 849,
+    "authority_references": 137,
+    "rust_packages": 13,
+    "logical_products": 11
+  },
+  "map_sha256": "1b3e3a78c77fd466db69f734fb088a056e99d9c98e70392ee5671ad8d061ae6e",
+  "modules_sha256": "90b8d2dfae5e5828fd1b5e8c972cb88373394273316f2c35cb1bfa312f6107f9",
+  "sdk_commit": "3d948b55c679d70f90fce4af11e7511cf13c47c6",
+  "runtime_or_performance_claim": false
+}

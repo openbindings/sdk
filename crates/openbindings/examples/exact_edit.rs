@@ -43,9 +43,8 @@ pub fn edit_extension_member(
     member: &str,
     replacement: &JsonValue,
 ) -> Result<Document> {
-    let mut edited = document.clone();
     let escape = |text: &str| text.replace('~', "~0").replace('/', "~1");
-    edited.set(
+    let edited = document.set(
         &format!("/{}/{}", escape(extension), escape(member)),
         replacement,
     )?;

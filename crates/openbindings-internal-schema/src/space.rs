@@ -1,5 +1,8 @@
 //! Original-context resource graph. No URI here acquires bytes.
-mod library;
+mod catalog;
+mod custom;
+mod original;
+mod potential;
 use crate::{
     schema_index::{DIALECT, SchemaIndex},
     uri, *,
@@ -8,9 +11,11 @@ use openbindings_internal_json::backend::{
     has_unpaired, location_pointer_size, node_id, pointer_into, push_pointer, ref_id,
     relative_pointer,
 };
-use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
+pub use original::QueryFailure;
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 
 pub struct SpaceNode {
+    pub profile: Option<crate::dialect::Profile>,
     pub value: JsonValue,
     pub resource: usize,
     pub source: usize,
@@ -27,6 +32,7 @@ pub struct Resource {
     pub base: Option<String>,
     pub anonymous: bool,
     pub dialect: Option<String>,
+    pub profile: Option<crate::dialect::Profile>,
     pub anchors: BTreeMap<String, Vec<(usize, bool)>>,
     pub origin: ResourceOrigin,
     // Read through `SchemaSpace::eligible`, which accounts for local claims.
@@ -51,6 +57,8 @@ struct NameSelection {
     origin: ResourceOrigin,
     // None denotes multiple carriers at the winning priority, never absence.
     carrier: Option<usize>,
+    // An OBI-13 spelling outranks a URI-library normalization alias.
+    exact_contained: bool,
 }
 pub struct Source {
     pub uri: Option<String>,
@@ -69,9 +77,11 @@ const PROGRAM_NAMESPACE: &str = "https://sdk-program.openbindings.invalid/";
 // and wrappers. It keeps fixed bounds, independent of any admission limits: its
 // text stops at 64 MiB, and each resource it writes is parsed within 64 MiB,
 // 1,000,000 nodes and 10,000 levels.
+/// Fixed text ceiling for generated SDK programs and their bounded planning.
+pub const PROGRAM_TEXT_LIMIT: usize = 64 * 1024 * 1024;
 const PROJECTION_LIMITS: openbindings_internal_json::JsonLimits =
     openbindings_internal_json::JsonLimits {
-        max_bytes: 64 * 1024 * 1024,
+        max_bytes: PROGRAM_TEXT_LIMIT,
         max_depth: 10_000,
         max_nodes: 1_000_000,
     };
@@ -171,9 +181,9 @@ pub enum ChildShape {
     /// One subschema.
     Single,
 }
-/// The child shape of a 2020-12 applicator keyword, or `None` for keywords whose
-/// values a projection copies unchanged. `then` and `else` are projected only
-/// beside `if`.
+/// Schema-child shape for a 2020-12 value applicator. Declaration and content
+/// positions are inventoried separately. Callers decide applicability, including
+/// whether `if` activates `then` and `else`.
 pub fn child_shape(keyword: &str) -> Option<ChildShape> {
     Some(match keyword {
         "properties" | "patternProperties" | "dependentSchemas" => ChildShape::Map,
@@ -196,11 +206,12 @@ pub struct SchemaSpace {
     pub document: RawDocument,
     pub supplied: Supplied,
     // The document and the supplied resources, in that order. The packaged
-    // meta-schemas follow them as one immutable layer that every space in the
-    // process shares.
+    // meta-schemas follow them in a shared immutable catalog. Supplemental
+    // bodies and indexes initialize only when accessed.
     local: Layer,
-    packaged: &'static Layer,
-    inspection: std::sync::OnceLock<library::Inspection>,
+    identity_bytes: usize,
+    packaged: &'static catalog::Packaged,
+    custom: custom::Custom,
 }
 // The packaged layer numbers its nodes, resources and sources from here, so
 // its entries hold their final identifiers in every space. Local identifiers
@@ -209,16 +220,14 @@ const PACKAGED: usize = 1 << (usize::BITS - 1);
 // The nodes, resources and sources of one layer, with the names they declare.
 #[derive(Default)]
 struct Layer {
+    // A stopped identifier scope may hide claims to any supplied/standard
+    // identity. It cannot displace the complete contained OBI inventory.
+    uncertain_identifiers: bool,
     base: usize,
     nodes: Vec<SpaceNode>,
     resources: Vec<Resource>,
     sources: Vec<Source>,
     names: BTreeMap<String, NameSelection>,
-    // How inspection reaches each reference's carrier, for the packaged layer.
-    lookups: std::sync::OnceLock<Vec<library::PackagedLookup>>,
-    // For the packaged layer: every name its references look up and every
-    // base of its resources, sorted.
-    claimable: std::sync::OnceLock<Vec<String>>,
 }
 impl std::fmt::Debug for SchemaSpace {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -308,8 +317,21 @@ impl Layer {
         value: JsonValue,
         index: &SchemaIndex,
         origin: ResourceOrigin,
-        protected: &HashSet<String>,
+        protected: &BTreeSet<String>,
     ) {
+        self.add_source_controlled(retrieval, value, index, origin, protected, &|| false)
+            .expect("uncancelled assembly");
+    }
+    fn add_source_controlled(
+        &mut self,
+        retrieval: Option<String>,
+        value: JsonValue,
+        index: &SchemaIndex,
+        origin: ResourceOrigin,
+        protected: &BTreeSet<String>,
+        control: &dyn Control,
+    ) -> Result<(), Failure> {
+        control.check()?;
         let source = self.base + self.sources.len();
         let start = self.nodes.len();
         let mut resources = HashMap::new();
@@ -319,9 +341,10 @@ impl Layer {
             root: None,
             base: retrieval
                 .as_deref()
-                .and_then(crate::input_policy::canonical_uri),
+                .and_then(|name| uri::compared_id(None, name)),
             anonymous: retrieval.is_none(),
             dialect: Some(DIALECT.into()),
+            profile: index.profile(0),
             anchors: BTreeMap::new(),
             origin,
             eligible: true,
@@ -333,7 +356,9 @@ impl Layer {
         self.nodes.reserve(index.nodes.len());
         let mut positions = HashMap::with_capacity(index.nodes.len());
         for (at, node) in index.nodes.iter().enumerate() {
+            control.check()?;
             let value = index.value(node);
+            let profile = index.profile(at);
             let resource = if let Some(&id) = resources.get(&(node.resource as usize)) {
                 id
             } else {
@@ -344,35 +369,66 @@ impl Layer {
                 resources.insert(node.resource as usize, id);
                 let dialect = declared_dialect(value, self.resource(parent).dialect.as_deref());
                 let base = value.get("$id").and_then(|v| v.as_str()).and_then(|id| {
-                    crate::input_policy::resolve_identifier(
-                        self.resource(parent).base.as_deref(),
-                        id,
-                    )
+                    // Preserve the resolved spelling for contained-resource
+                    // comparison, including references originating externally.
+                    // Input associations retain their separate alias policy.
+                    uri::compared_id(self.resource(parent).base.as_deref(), id)
                 });
                 self.resources.push(Resource {
                     root: Some(self.base + self.nodes.len()),
                     base,
                     anonymous: false,
                     dialect,
+                    profile,
                     anchors: BTreeMap::new(),
                     origin,
                     eligible: true,
                 });
                 id
             };
+            if origin != ResourceOrigin::Contained
+                && profile.is_none()
+                && self
+                    .resource(resource)
+                    .dialect
+                    .as_deref()
+                    .and_then(crate::dialect::Dialect::from_uri)
+                    .is_some()
+            {
+                self.uncertain_identifiers = true;
+            }
             let id = self.base + self.nodes.len();
             positions.insert(node.id as usize, id);
             self.nodes.push(SpaceNode {
+                profile,
                 value: value.to_owned(),
                 resource,
                 source,
                 depth: node.depth as usize,
             });
-            for keyword in ["$anchor", "$dynamicAnchor"] {
-                if let Some(name) = value
-                    .get(keyword)
+            if profile
+                == Some(crate::dialect::Profile::standard(
+                    crate::dialect::Dialect::Draft7,
+                ))
+                && !profile.unwrap().reference_object(value)
+                && let Some(name) = value
+                    .get("$id")
                     .and_then(|v| v.as_str())
-                    .filter(|s| crate::schema_index::plain_name(s))
+                    .and_then(|s| s.strip_prefix('#'))
+                    .filter(|name| crate::dialect::draft7_name(name))
+            {
+                self.resource_mut(resource)
+                    .anchors
+                    .entry(name.into())
+                    .or_default()
+                    .push((id, false));
+            }
+            for keyword in ["$anchor", "$dynamicAnchor"] {
+                if profile.is_some_and(|d| d.active(keyword) && !d.reference_object(value))
+                    && let Some(name) = value
+                        .get(keyword)
+                        .and_then(|v| v.as_str())
+                        .filter(|s| profile.is_some_and(|d| d.anchor_name(s)))
                 {
                     self.resource_mut(resource)
                         .anchors
@@ -404,11 +460,26 @@ impl Layer {
             value,
             positions,
         });
+        Ok(())
     }
-    fn add_name(&mut self, name: String, resource: usize, protected: &HashSet<String>) {
-        let Some(name) = crate::input_policy::canonical_uri(&name) else {
+    fn add_name(&mut self, name: String, resource: usize, protected: &BTreeSet<String>) {
+        let Some(canonical) = crate::input_policy::canonical_uri(&name) else {
             return;
         };
+        let contained = self.resource(resource).origin == ResourceOrigin::Contained;
+        if contained && name != canonical {
+            self.associate_name(name, resource, true, protected);
+        }
+        let exact = contained && self.resource(resource).base.as_deref() == Some(&canonical);
+        self.associate_name(canonical, resource, exact, protected);
+    }
+    fn associate_name(
+        &mut self,
+        name: String,
+        resource: usize,
+        exact_contained: bool,
+        protected: &BTreeSet<String>,
+    ) {
         let origin = self.resource(resource).origin;
         if origin == ResourceOrigin::Supplied
             && protected.contains(&name)
@@ -422,6 +493,7 @@ impl Layer {
                 NameSelection {
                     origin,
                     carrier: None,
+                    exact_contained: false,
                 },
             );
             return;
@@ -439,18 +511,25 @@ impl Layer {
                 ) {
                     selected.origin = ResourceOrigin::Supplied;
                     selected.carrier = None;
-                } else if origin < selected.origin {
+                } else if origin < selected.origin
+                    || (origin == selected.origin && exact_contained && !selected.exact_contained)
+                {
                     *selected = NameSelection {
                         origin,
                         carrier: Some(resource),
+                        exact_contained,
                     };
-                } else if origin == selected.origin && selected.carrier != Some(resource) {
+                } else if origin == selected.origin
+                    && exact_contained == selected.exact_contained
+                    && selected.carrier != Some(resource)
+                {
                     selected.carrier = None;
                 }
             })
             .or_insert(NameSelection {
                 origin,
                 carrier: Some(resource),
+                exact_contained,
             });
     }
     // Finalize once, after every alias and canonical association is known.
@@ -469,36 +548,29 @@ impl Layer {
             if !resource.anonymous
                 && let Some(name) = &resource.base
             {
-                resource.eligible = select(names, name).and_then(|name| name.carrier) == Some(id);
+                let canonical;
+                let association = if resource.origin == ResourceOrigin::Contained {
+                    name.as_str()
+                } else {
+                    canonical = crate::input_policy::canonical_uri(name);
+                    canonical.as_deref().unwrap_or(name)
+                };
+                resource.eligible =
+                    select(names, association).and_then(|name| name.carrier) == Some(id);
             }
         }
     }
 }
-// The packaged meta-schemas as one layer, built once per process from their
-// pinned, immutable documents and URIs. It holds no caller URI or result.
-// Resource eligibility here is among the packaged resources alone; a space
-// withdraws it from a packaged resource whose identifier a local one claims.
-fn packaged() -> &'static Layer {
-    static LAYER: std::sync::OnceLock<Layer> = std::sync::OnceLock::new();
-    LAYER.get_or_init(|| {
-        let mut layer = Layer {
-            base: PACKAGED,
-            ..Layer::default()
-        };
-        let unprotected = HashSet::new();
-        for resource in embedded_resources() {
-            let index = SchemaIndex::supplied_nodes(&resource.document);
-            layer.add_source(
-                Some(resource.uri.clone()),
-                resource.document.clone(),
-                &index,
-                ResourceOrigin::Standard,
-                &unprotected,
-            );
-        }
-        layer.finalize(|names, name| names.get(name).copied());
-        layer
-    })
+// The shared catalog holds no caller URI or result. Its normative core initializes
+// once; supplemental bodies/indexes initialize on access. Constant inventory
+// extents preserve numbering and admission independently of initialization.
+fn packaged() -> &'static catalog::Packaged {
+    static LAYER: std::sync::OnceLock<catalog::Packaged> = std::sync::OnceLock::new();
+    LAYER.get_or_init(catalog::Packaged::new)
+}
+// Identity policy needs only the pinned names, never parsed catalog bodies.
+pub(crate) fn standard_identifier(name: &str) -> bool {
+    catalog::contains(name)
 }
 // A name's selection in a space. The packaged names count as added after
 // every local name, under `Layer::add_name`'s rules: a local contained
@@ -506,45 +578,107 @@ fn packaged() -> &'static Layer {
 // without a single carrier.
 fn select(
     local: &BTreeMap<String, NameSelection>,
-    packaged: &Layer,
+    packaged: &catalog::Packaged,
     name: &str,
 ) -> Option<NameSelection> {
-    match (local.get(name), packaged.names.get(name)) {
+    match (local.get(name), packaged.name(name)) {
         (Some(selected), Some(_)) if selected.origin == ResourceOrigin::Supplied => {
             Some(NameSelection {
                 origin: ResourceOrigin::Supplied,
                 carrier: None,
+                exact_contained: false,
             })
         }
         (Some(selected), _) => Some(*selected),
-        (None, packaged) => packaged.copied(),
+        (None, packaged) => packaged,
     }
 }
 
 impl SchemaSpace {
-    pub fn new(document: RawDocument, supplied: Supplied) -> Self {
+    pub fn new(document: RawDocument, supplied: Supplied) -> Result<Self, Failure> {
+        Self::new_bounded(document, supplied, usize::MAX, usize::MAX, &|| false)
+    }
+    /// Assemble original sources with a node bound and cooperative cancellation.
+    /// Incomplete work never enters the shared resolution cache.
+    pub fn new_bounded(
+        document: RawDocument,
+        supplied: Supplied,
+        maximum: usize,
+        maximum_identity: usize,
+        control: &dyn Control,
+    ) -> Result<Self, Failure> {
+        Self::assemble(document, supplied, maximum, maximum_identity, control)?.complete_custom(
+            maximum,
+            maximum_identity,
+            control,
+        )
+    }
+    fn assemble(
+        document: RawDocument,
+        supplied: Supplied,
+        maximum: usize,
+        maximum_identity: usize,
+        control: &dyn Control,
+    ) -> Result<Self, Failure> {
+        control.check()?;
         let packaged = packaged();
+        let remaining = maximum
+            .checked_sub(packaged.node_count())
+            .and_then(|count| count.checked_sub(document.schema_index().nodes.len()))
+            .ok_or_else(|| {
+                Failure::new(
+                    FailureReason::LimitExceeded,
+                    "schema-nodes",
+                    "schema inventory exceeds its configured node limit",
+                )
+            })?;
+        let supplied_nodes = supplied.nodes_bounded(remaining, control)?;
+        let local_nodes = supplied_nodes
+            .iter()
+            .try_fold(document.schema_index().nodes.len(), |count, index| {
+                count.checked_add(index.nodes.len())
+            })
+            .ok_or_else(crate::identity_budget::exceeded)?;
+        // Per-node layer/index/maps overhead, including temporary base-length
+        // analysis. Shared packaged/source bytes are not newly allocated here.
+        control.charge_allocation(local_nodes.saturating_add(1).saturating_mul(2048))?;
+        let packaged_bytes = packaged.identity_bytes();
+        let reserved = supplied
+            .policy
+            .identity_bytes
+            .checked_add(packaged_bytes)
+            .filter(|bytes| *bytes <= maximum_identity)
+            .ok_or_else(crate::identity_budget::exceeded)?;
+        let document_bytes = crate::identity_budget::measure(
+            document.schema_index(),
+            None,
+            maximum_identity - reserved,
+            control,
+        )?;
+        let identity_bytes = reserved + document_bytes;
+        crate::preparation::identities(identity_bytes, control)?;
         let mut local = Layer::default();
         let protected = &supplied.policy.protected;
-        local.add_source(
+        local.add_source_controlled(
             None,
             document.value().clone(),
             document.schema_index(),
             ResourceOrigin::Contained,
             protected,
-        );
-        for (resource, index) in supplied.iter().zip(supplied.nodes()) {
-            local.add_source(
+            control,
+        )?;
+        for (resource, index) in supplied.iter().zip(supplied_nodes) {
+            local.add_source_controlled(
                 Some(resource.uri.clone()),
                 resource.document.clone(),
                 index,
                 ResourceOrigin::Supplied,
                 protected,
-            );
+                control,
+            )?;
         }
-        // Canonical/retrieval associations and protected standard identities
-        // originate in the immutable supplied-resource input policy.
         for (name, holders) in &supplied.policy.names {
+            control.check()?;
             for &(source, node) in holders {
                 if let Some(&id) = local.sources[source + 1].positions.get(&node) {
                     let resource = local.nodes[id].resource;
@@ -553,13 +687,23 @@ impl SchemaSpace {
             }
         }
         local.finalize(|names, name| select(names, packaged, name));
-        Self {
+        control.check()?;
+        Ok(Self {
             document,
             supplied,
             local,
+            identity_bytes,
             packaged,
-            inspection: std::sync::OnceLock::new(),
-        }
+            custom: custom::Custom::default(),
+        })
+    }
+    /// Conservative expanded-identity spelling cost established before allocation.
+    pub fn identity_bytes(&self) -> usize {
+        self.identity_bytes
+    }
+    /// Completed inventory footprint, available without walking a cache hit.
+    pub fn node_count(&self) -> usize {
+        self.local.nodes.len() + self.packaged.node_count()
     }
     // Local identifiers index the local layer directly; any other identifier
     // is the packaged layer's.
@@ -568,7 +712,7 @@ impl SchemaSpace {
     pub fn node(&self, id: usize) -> &SpaceNode {
         match self.local.nodes.get(id) {
             Some(node) => node,
-            None => &self.packaged.nodes[id - PACKAGED],
+            None => self.packaged.node(id),
         }
     }
     /// The resource with this identifier.
@@ -576,7 +720,7 @@ impl SchemaSpace {
     pub fn resource(&self, id: usize) -> &Resource {
         match self.local.resources.get(id) {
             Some(resource) => resource,
-            None => &self.packaged.resources[id - PACKAGED],
+            None => self.packaged.resource(id),
         }
     }
     /// The source with this identifier.
@@ -584,7 +728,7 @@ impl SchemaSpace {
     pub fn source(&self, id: usize) -> &Source {
         match self.local.sources.get(id) {
             Some(source) => source,
-            None => &self.packaged.sources[id - PACKAGED],
+            None => self.packaged.source(id),
         }
     }
     /// Every schema node with its identifier: the document's, each supplied
@@ -633,9 +777,7 @@ impl SchemaSpace {
     fn name(&self, name: &str) -> Option<NameSelection> {
         select(&self.local.names, self.packaged, name)
     }
-    fn has_name(&self, name: &str) -> bool {
-        self.local.names.contains_key(name) || self.packaged.names.contains_key(name)
-    }
+
     pub fn check_resource(&self, resource: usize, at: usize) -> Result<(), Failure> {
         if self.eligible(resource) {
             return Ok(());
@@ -645,6 +787,7 @@ impl SchemaSpace {
             "resource-identity-conflict",
             "the reached resource is not the selected carrier of its canonical identifier",
         );
+        detail.query_failure = Some(Box::new(QueryFailure::IdentityConflict));
         // Refusal is independent of optional diagnostic text. Measure original
         // pointers and retrieval provenance before any location allocation.
         const LOCATION_BYTES: usize = 64 * 1024;
@@ -701,87 +844,88 @@ impl SchemaSpace {
         &self,
         node: usize,
         reason: FailureReason,
-        code: &str,
-        message: impl Into<String>,
+        code: impl Into<std::borrow::Cow<'static, str>>,
+        message: impl Into<std::borrow::Cow<'static, str>>,
     ) -> Failure {
         Failure::new(reason, code, message).located(self.location(node))
     }
     pub fn resolve(&self, holder: usize, reference: &str) -> Result<Target, Failure> {
         self.resolve_with_missing(holder, reference, &mut |_| {})
     }
-    fn malformed_reference_scope(&self, holder: usize) -> bool {
-        let resource = self.resource(self.node(holder).resource);
-        resource.base.is_some()
-            && resource
-                .root
-                .is_some_and(|root| self.node(root).value.get("$id").is_some())
-    }
+    /// Select the original target without compiling its source or siblings.
+    /// The caller still checks each reached schema before interpreting it.
     pub fn resolve_with_missing(
         &self,
         holder: usize,
         reference: &str,
         missing: &mut impl FnMut(&str),
     ) -> Result<Target, Failure> {
-        let at = self.node(holder);
-        let resource = self.resource(at.resource);
-        let fail = |code: &str, message: String| {
-            self.failure(
-                holder,
-                FailureReason::ConservativePreparation,
-                code,
-                message,
-            )
-        };
-        if !uri::valid(reference) {
-            if self.malformed_reference_scope(holder) {
-                // The repaired inspection carrier must still prepare: an
-                // unsupported sibling identifier cannot become a semantic hole.
-                return self.library_target(holder, reference, missing);
-            }
-            return Err(fail(
-                "invalid-reference",
-                "reference is not a well-formed URI reference".into(),
-            ));
-        }
-        if resource.anonymous && !uri::absolute(reference) {
-            if !reference.is_empty() && !reference.starts_with('#') {
-                return Err(fail(
-                    "anonymous-relative-reference",
-                    "the anonymous document resource has no named base".into(),
-                ));
-            }
-            return match self
-                .document
-                .schema_index()
-                .same_document(self.document.value(), reference)
-            {
-                crate::schema_index::SameDocument::Found(value) => {
-                    let node = self.document_node(&value).ok_or_else(|| {
-                        fail(
-                            "unindexed-target",
-                            "target is outside the schema index".into(),
-                        )
-                    })?;
-                    self.check_resource(self.node(node).resource, holder)?;
-                    let name =
-                        uri::decode_fragment(reference.strip_prefix('#').unwrap_or(reference))
-                            .filter(|s| !s.is_empty() && !s.starts_with('/'));
-                    let dynamic_name = name.filter(|s| {
-                        value.get("$dynamicAnchor").and_then(|v| v.as_str()) == Some(s.as_str())
-                    });
-                    Ok(Target { node, dynamic_name })
+        self.query(holder, reference).map_err(|cause| {
+            use QueryFailure as Q;
+            let (reason, code, message) = match &cause {
+                Q::InvalidExternalSchema => (
+                    FailureReason::ConservativePreparation,
+                    "invalid-schema",
+                    "the external schema has an invalid interpretation declaration",
+                ),
+                Q::ResourceUnavailable(uri) => {
+                    missing(uri);
+                    (
+                        FailureReason::ResourceUnavailable,
+                        "resource-unavailable",
+                        "resolution requires a resource that was not supplied",
+                    )
                 }
-                crate::schema_index::SameDocument::Ambiguous => Err(fail(
-                    "ambiguous-anchor",
-                    "the document resource declares this name more than once".into(),
-                )),
-                crate::schema_index::SameDocument::Missing => Err(fail(
+                Q::UnsupportedCapability(capability) => (
+                    FailureReason::UnsupportedCapability,
+                    *capability,
+                    "the original inventory cannot interpret this identifier form",
+                ),
+                Q::UnsupportedDialect(_) => (
+                    FailureReason::UnsupportedCapability,
+                    "schema-dialect",
+                    "the resource dialect is outside the supported inventory",
+                ),
+                Q::MalformedReference => (
+                    FailureReason::ConservativePreparation,
+                    "invalid-reference",
+                    "reference or its fragment is malformed",
+                ),
+                Q::MissingTarget => (
+                    FailureReason::ConservativePreparation,
+                    "missing-target",
+                    "the pointer identifies no value in the original source",
+                ),
+                Q::NonSchemaTarget => (
+                    FailureReason::ConservativePreparation,
                     "non-schema-target",
-                    "the same-document reference identifies no schema at an OBI position".into(),
-                )),
+                    "the target is not an original schema position",
+                ),
+                Q::MissingAnchor => (
+                    FailureReason::ConservativePreparation,
+                    "anchor-missing",
+                    "the resource declares no such anchor",
+                ),
+                Q::AmbiguousAnchor => (
+                    FailureReason::ConservativePreparation,
+                    "ambiguous-anchor",
+                    "the resource declares this anchor more than once",
+                ),
+                Q::InvalidIdentifier => (
+                    FailureReason::ConservativePreparation,
+                    "invalid-identifier",
+                    "the reference has no valid resolution base",
+                ),
+                Q::IdentityConflict => (
+                    FailureReason::ConservativePreparation,
+                    "resource-identity-conflict",
+                    "the resource identity has competing carriers",
+                ),
             };
-        }
-        self.library_target(holder, reference, missing)
+            let mut failure = self.failure(holder, reason, code, message);
+            failure.query_failure = Some(Box::new(cause));
+            failure
+        })
     }
 
     pub fn references(&self, control: &dyn Control) -> ReferenceReport {
@@ -790,7 +934,22 @@ impl SchemaSpace {
             complete: true,
             limitation: None,
         };
-        for (id, node) in self.local.nodes().filter(|(_, n)| n.source == 0) {
+        let mut pending = VecDeque::new();
+        let mut supplied = HashMap::<usize, Vec<usize>>::new();
+        for (id, node) in self.local.nodes() {
+            if let Err(reason) = control.check() {
+                report.complete = false;
+                report.limitation = Some(reason);
+                return report;
+            }
+            if node.source == 0 {
+                pending.push_back(id);
+            } else if self.resource(node.resource).origin == ResourceOrigin::Supplied {
+                supplied.entry(node.source).or_default().push(id);
+            }
+        }
+        while let Some(id) = pending.pop_front() {
+            let node = self.node(id);
             if let Err(reason) = control.check() {
                 report.complete = false;
                 report.limitation = Some(reason);
@@ -823,11 +982,18 @@ impl SchemaSpace {
                         })
                         .and_then(|s| self.resolve(id, s));
                     let resolution = match target {
-                        Ok(target) => ReferenceResolution::Located {
-                            target: self.location(target.node),
-                            dynamic_lookup: keyword == "$dynamicRef"
-                                && target.dynamic_name.is_some(),
-                        },
+                        Ok(target) => {
+                            // Visit a supplied source and its nested resources
+                            // once, even when references cycle or share targets.
+                            if let Some(nodes) = supplied.remove(&self.node(target.node).source) {
+                                pending.extend(nodes);
+                            }
+                            ReferenceResolution::Located {
+                                target: self.location(target.node),
+                                dynamic_lookup: keyword == "$dynamicRef"
+                                    && target.dynamic_name.is_some(),
+                            }
+                        }
                         Err(detail) => ReferenceResolution::Unresolved { detail },
                     };
                     let mut location = self.location(id);
@@ -1180,7 +1346,20 @@ impl SchemaSpace {
     ) -> Result<Definitions<'_>, Failure> {
         control.check()?;
         let reach = self.reach_unchecked(entry, control)?;
-        let in_place_cycle = match self.check_cycles(&reach, control) {
+        self.program_definitions_reached(entry, &reach, control)
+    }
+    /// Lower the same bounded definitions using completed original reach facts
+    /// from this space and entry. The version-locked companion supplies its
+    /// admitted closed graph; this does not resolve or reinterpret references.
+    /// Text, node, depth and cycle guards remain those of program_definitions.
+    pub fn program_definitions_reached(
+        &self,
+        entry: usize,
+        reach: &Reach,
+        control: &dyn Control,
+    ) -> Result<Definitions<'_>, Failure> {
+        control.check()?;
+        let in_place_cycle = match self.check_cycles(reach, control) {
             Ok(()) => false,
             Err(failure) if failure.reason == FailureReason::ConservativePreparation => true,
             Err(failure) => return Err(failure),
@@ -1199,7 +1378,7 @@ impl SchemaSpace {
             if !std::mem::replace(written, true) {
                 self.projection(
                     entry,
-                    &reach,
+                    reach,
                     control,
                     namespace,
                     false,
@@ -1228,7 +1407,7 @@ impl SchemaSpace {
                 Some(value) => (Schema::Boolean(value), node.value.text().len(), 1usize),
                 None => {
                     let fields =
-                        self.fields(id, &reach, namespace, true, &mut values, &mut separated)?;
+                        self.fields(id, reach, namespace, true, &mut values, &mut separated)?;
                     let mut bound = 2usize;
                     let mut count = 1usize;
                     for (keyword, field) in &fields {
@@ -1340,16 +1519,59 @@ impl SchemaSpace {
             ));
         }
         self.check_resource(node.resource, id)?;
+        if let Some(Err(cause)) = self.custom_meta(node.resource) {
+            let mut failure = Failure::new(
+                FailureReason::UnsupportedCapability,
+                "custom-meta-selection",
+                "the resource's custom interpretation could not be established",
+            );
+            failure.query_failure = Some(Box::new(cause));
+            return Err(failure);
+        }
+        if node.profile.is_none()
+            && resource
+                .dialect
+                .as_deref()
+                .and_then(crate::dialect::Dialect::from_uri)
+                .is_some()
+        {
+            let mut failure = self.failure(
+                id,
+                FailureReason::UnsupportedCapability,
+                "schema-identifier-form",
+                "the original inventory cannot interpret this identifier form",
+            );
+            failure.query_failure = Some(Box::new(QueryFailure::UnsupportedCapability(
+                "schema-identifier-form",
+            )));
+            return Err(failure);
+        }
+        if node
+            .profile
+            .is_some_and(|d| d.is_custom() || d.edition() != crate::dialect::Dialect::Draft202012)
+        {
+            return Err(self.failure(
+                id,
+                FailureReason::UnsupportedCapability,
+                "foreign-dialect-projection",
+                "this compiled projection supports only the 2020-12 interpretation",
+            ));
+        }
         if !matches!(
             resource.dialect.as_deref(),
             Some(DIALECT) | Some("https://json-schema.org/draft/2020-12/schema#")
         ) {
-            return Err(self.failure(
+            let mut failure = self.failure(
                 id,
                 FailureReason::UnsupportedCapability,
                 "schema-dialect",
                 "the resource does not use the supported 2020-12 dialect",
-            ));
+            );
+            failure.query_failure = Some(Box::new(match &resource.dialect {
+                Some(uri) => QueryFailure::UnsupportedDialect(Some(uri.clone())),
+                None => QueryFailure::UnsupportedDialect(None),
+            }));
+            return Err(failure);
         }
         // annotations, literal values and child schemas are not interpreted
         // by this node. Children receive their own reached-node checks.
@@ -1627,23 +1849,8 @@ impl std::fmt::Debug for Reach {
 }
 
 /// Borrow pinned original meta-schema snapshots for source-location lookup.
-pub fn embedded_resources() -> &'static [ProjectedResource] {
-    static RESOURCES: std::sync::OnceLock<Vec<ProjectedResource>> = std::sync::OnceLock::new();
-    RESOURCES.get_or_init(|| {
-        let files = crate::fixed_schema::META_FILES;
-        files
-            .into_iter()
-            .map(|text| {
-                let document = JsonValue::parse(text).expect("pinned meta-schema is JSON");
-                let uri = document
-                    .get("$id")
-                    .and_then(|v| v.as_str())
-                    .expect("pinned meta-schema identifier")
-                    .into();
-                ProjectedResource { uri, document }
-            })
-            .collect()
-    })
+pub fn embedded_resources() -> impl ExactSizeIterator<Item = &'static ProjectedResource> {
+    catalog::resources()
 }
 
 #[cfg(test)]
@@ -1684,7 +1891,7 @@ mod projection_tests {
                 } else {
                     Supplied::default()
                 };
-                let space = SchemaSpace::new(document, supplied);
+                let space = SchemaSpace::new(document, supplied).unwrap();
                 let entry = space
                     .document_node(
                         &space
@@ -1696,13 +1903,20 @@ mod projection_tests {
                     )
                     .unwrap();
                 let refusal = space.reach(entry, &control).expect_err("malformed reach");
-                assert!(
-                    matches!(
-                        refusal.code.as_str(),
-                        "invalid-schema" | "lone-surrogate-schema"
-                    ),
-                    "{schema} {reference:?}: {refusal:?}"
-                );
+                if schema == "17" && reference.is_some() {
+                    assert_eq!(
+                        refusal.query_failure.as_deref(),
+                        Some(&QueryFailure::NonSchemaTarget)
+                    );
+                } else {
+                    assert!(
+                        matches!(
+                            refusal.code.as_ref(),
+                            "invalid-schema" | "lone-surrogate-schema"
+                        ),
+                        "{schema} {reference:?}: {refusal:?}"
+                    );
+                }
                 let projected = space
                     .program(entry, &control)
                     .expect_err("malformed program");
@@ -1734,7 +1948,8 @@ mod projection_tests {
         }
         meta.finish();
         assert!(!index.schemas_checked());
-        let space = SchemaSpace::new(RawDocument::shared(index.clone()), Supplied::default());
+        let space =
+            SchemaSpace::new(RawDocument::shared(index.clone()), Supplied::default()).unwrap();
         let entry = space
             .document_node(&malformed.at("/operations/op/input").unwrap().to_owned())
             .unwrap();
@@ -1796,11 +2011,8 @@ mod projection_tests {
         // meta-schemas added to every space as sources after the supplied
         // resources' names, with eligibility finalized over all of them.
         fn flat(document: RawDocument, supplied: Supplied) -> Self {
-            static NONE: std::sync::OnceLock<Layer> = std::sync::OnceLock::new();
-            let packaged = NONE.get_or_init(|| Layer {
-                base: PACKAGED,
-                ..Layer::default()
-            });
+            static NONE: std::sync::OnceLock<catalog::Packaged> = std::sync::OnceLock::new();
+            let packaged = NONE.get_or_init(catalog::Packaged::empty);
             let mut local = Layer::default();
             let protected = &supplied.policy.protected;
             local.add_source(
@@ -1843,8 +2055,9 @@ mod projection_tests {
                 document,
                 supplied,
                 local,
+                identity_bytes: 0,
                 packaged,
-                inspection: std::sync::OnceLock::new(),
+                custom: custom::Custom::default(),
             }
         }
     }
@@ -1969,7 +2182,7 @@ mod projection_tests {
                 if flat {
                     SchemaSpace::flat(document, supplied)
                 } else {
-                    SchemaSpace::new(document, supplied)
+                    SchemaSpace::new(document, supplied).unwrap()
                 }
             };
             let (layered, flat) = (space(false), space(true));
@@ -2018,9 +2231,15 @@ mod projection_tests {
                 .local
                 .names
                 .keys()
-                .chain(layered.packaged.names.keys())
+                .map(String::as_str)
+                .chain(layered.packaged.names())
                 .collect();
-            assert!(names.iter().copied().eq(flat.local.names.keys()));
+            assert!(
+                names
+                    .iter()
+                    .copied()
+                    .eq(flat.local.names.keys().map(String::as_str))
+            );
             for name in flat.local.names.keys() {
                 let (selected, original) = (layered.name(name).unwrap(), flat.name(name).unwrap());
                 assert_eq!(selected.origin, original.origin, "{name}");
@@ -2029,7 +2248,7 @@ mod projection_tests {
                     original.carrier,
                     "{name}"
                 );
-                assert!(layered.has_name(name));
+                assert!(layered.name(name).is_some());
             }
             // Every document schema projects identically, refusals included.
             assert_eq!(
@@ -2066,7 +2285,7 @@ mod projection_tests {
                 .unwrap(),
         }])
         .unwrap();
-        let space = SchemaSpace::new(document, resources);
+        let space = SchemaSpace::new(document, resources).unwrap();
         let entry = space
             .document_node(
                 &space
@@ -2128,7 +2347,7 @@ mod projection_tests {
             .unwrap(),
         }])
         .unwrap();
-        let space = SchemaSpace::new(document, resources);
+        let space = SchemaSpace::new(document, resources).unwrap();
         let entry = space
             .document_node(
                 &space
@@ -2168,7 +2387,7 @@ mod projection_tests {
     fn generated_name_changes_preserve_dynamic_scope_annotations_opaque_strings_and_locations() {
         let document=RawDocument::parse(r##"{"openbindings":"0.2.0","operations":{"op":{"input":{"$ref":"#/schemas/strict"}}},"schemas":{"strict":{"$dynamicAnchor":"node","$ref":"https://example.invalid/tree","unevaluatedProperties":false}}}"##).unwrap();
         let resources=Supplied::new([ProjectedResource{uri:"https://example.invalid/tree".into(),document:JsonValue::parse(r##"{"$dynamicAnchor":"node","type":"object","properties":{"children":{"type":"array","items":{"$dynamicRef":"#node"}},"literal":{"const":"https://sdk-program.openbindings.invalid/r0#/$defs/n0"}}}"##).unwrap()}]).unwrap();
-        let space = SchemaSpace::new(document, resources);
+        let space = SchemaSpace::new(document, resources).unwrap();
         let entry = space
             .document_node(
                 &space

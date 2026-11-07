@@ -1,0 +1,8 @@
+{
+  "independent_integer": 0,
+  "integer_predicate_preserves_numeric_admission_and_exact_answers": 0,
+  "independent_hot_path_ownership": 0,
+  "review_exact_operands": 0,
+  "a_permissive_custom_meta_can_admit_an_empty_type_union": 0,
+  "frame_backing_growth_has_an_exact_requested_byte_gate": 0
+}

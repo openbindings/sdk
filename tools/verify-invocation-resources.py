@@ -30,7 +30,13 @@ def main():
     output = (args.output or target / "invocation-resources/receipt.json").resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
     output.unlink(missing_ok=True)
-    hashed = [Path(__file__).resolve(), ROOT / "Cargo.toml", PROBE / "Cargo.toml", PROBE / "Cargo.lock", ROOT / "crates/openbindings-invocation/Cargo.toml", *sorted((PROBE / "src").glob("*.rs")), *sorted((ROOT / "crates/openbindings-invocation/src").glob("*.rs"))]
+    hashed = [Path(__file__).resolve(), ROOT / "Cargo.toml", ROOT / "Cargo.lock",
+              PROBE / "Cargo.toml", PROBE / "Cargo.lock", *sorted((PROBE / "src").rglob("*.rs"))]
+    for name in ["openbindings", "openbindings-context", "openbindings-internal-json",
+                 "openbindings-internal-schema", "openbindings-internal-cancellation", "openbindings-invocation"]:
+        directory = ROOT / "crates" / name
+        hashed.extend([directory / "Cargo.toml", *sorted((directory / "src").rglob("*"))])
+    hashed = sorted({path for path in hashed if path.is_file()})
     hashes = {str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest() for path in hashed}
 
     def run(label, command):
@@ -81,6 +87,7 @@ def main():
         baseline = {
             "recorded_at": datetime.now(timezone.utc).isoformat(), "host": host, "rustc": rustc,
             "git_head": git_head, "source_sha256": hashes,
+            "measurement_format": measurements["format"],
             "budget_policy": "Provisional same-host ns/call ceiling: max(3 times initial ns/call, initial ns/call + 2000 ns); timing enforcement is opt-in",
             "measurements": {row["name"]: {"ns_per_call": row["ns_per_call"], "budget_ns_per_call": max(3 * row["ns_per_call"], row["ns_per_call"] + 2000)} for row in rows},
         }
@@ -88,6 +95,8 @@ def main():
         args.baseline.write_text(json.dumps(baseline, indent=2) + "\n")
     if args.check_timing:
         baseline = json.loads(args.baseline.read_text())
+        if baseline.get("measurement_format", "openbindings-invocation-resource-probe-v1") != measurements["format"]:
+            raise SystemExit("Timing baseline uses retired invocation workloads; qualify a matched current baseline explicitly")
         if baseline["host"] != host:
             raise SystemExit("Timing baseline is from a different host platform; run structural gates without --check-timing")
         timing["within_budget"] = {row["name"]: row["ns_per_call"] <= baseline["measurements"][row["name"]]["budget_ns_per_call"] for row in rows}
@@ -99,7 +108,7 @@ def main():
         "gates": gates, "passed": all(gates.values()), "timing": timing,
         "limits_of_evidence": [
             "Allocator counts describe System requests in one synthetic process, not allocator usable sizes or RSS.",
-            "Both paths use the same exact-value semantic fixture; checked path includes boxed provider future, safe test executor, and SDK lifecycle.",
+            "Both paths use the same exact-value semantic fixture; checked path includes boxed provider future, safe test async runtime, and SDK lifecycle.",
             "Queue/pending maxima require separate SDK unit instrumentation; public capacities here are configuration, not observed queue maxima.",
             "Logical delivery bytes do not bound retained backing owners; a one-byte value here retains a one-MiB source.",
         ],
