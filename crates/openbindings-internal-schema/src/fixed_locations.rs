@@ -5,7 +5,7 @@ use crate::{JsonKind, JsonRef};
 use jsonschema::{Validator, ValidatorMap};
 use openbindings_internal_json::backend::{self, FlatJson};
 use serde_json::Value;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 struct Shape {
     pointer: String,
@@ -51,7 +51,7 @@ fn require_single_resource(root: &Value) -> Result<(), String> {
     use crate::schema_index::{SCHEMA_SELECTORS, SchemaSelector};
 
     let mut pending = vec![("#".to_owned(), root)];
-    let mut seen = HashSet::new();
+    let mut seen = BTreeSet::new();
     while let Some((pointer, schema)) = pending.pop() {
         if !seen.insert(pointer.clone()) {
             continue;
@@ -127,7 +127,7 @@ fn location_plan(
 ) -> Result<LocationPlan, String> {
     let mut keys: Vec<_> = validators.keys().map(str::to_owned).collect();
     keys.sort();
-    let ids: HashMap<_, _> = keys
+    let ids: BTreeMap<_, _> = keys
         .iter()
         .enumerate()
         .map(|(i, k)| (k.as_str(), i))

@@ -61,6 +61,12 @@ from the lock. When the lock changes `playwright-core`, update the tag and diges
 together; `docker buildx imagetools inspect mcr.microsoft.com/playwright:v<version>-noble`
 prints the index digest.
 
+Hash tables must never use input-chosen content as keys, including content hashes
+and tuples containing text or bytes. Use ordered maps, ordered sets or sorted
+sequences so worst-case work needs no secret seed or host entropy; SDK-assigned
+positions and content-free identities may still use hash tables. Fingerprints
+may select sorted candidates only when exact comparisons are charged.
+
 ## Resolver implementation
 
 The bundled resolver and default evaluator give a unique contained declared ID

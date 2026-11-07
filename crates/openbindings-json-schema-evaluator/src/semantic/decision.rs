@@ -2,7 +2,7 @@
 //! Constant bounds are universal proofs. Dependence additionally needs coherent
 //! effect identities and an exact model; a wide interval is never a witness.
 use openbindings::{NoVerdict, NoVerdictReason, WorkControl};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 pub(super) type Formula = u32;
 pub(super) const FALSE: Formula = 0;
@@ -27,7 +27,7 @@ struct Node {
     low: Formula,
     high: Formula,
 }
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum Op {
     And,
     Or,
@@ -37,8 +37,8 @@ enum Op {
 pub(super) struct Graph<'a> {
     nodes: Vec<Node>,
     classes: Vec<Class>,
-    unique: HashMap<(u32, Formula, Formula), Formula>,
-    applied: HashMap<(Op, Formula, Formula), Formula>,
+    unique: BTreeMap<(u32, Formula, Formula), Formula>,
+    applied: BTreeMap<(Op, Formula, Formula), Formula>,
     bytes: usize,
     maximum_bytes: usize,
     steps: usize,
@@ -83,8 +83,8 @@ impl<'a> Graph<'a> {
         Self {
             nodes: Vec::new(),
             classes: Vec::new(),
-            unique: HashMap::new(),
-            applied: HashMap::new(),
+            unique: BTreeMap::new(),
+            applied: BTreeMap::new(),
             bytes: 0,
             maximum_bytes: bytes,
             steps: 0,

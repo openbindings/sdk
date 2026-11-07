@@ -128,7 +128,7 @@ fn shared_scope_identity_is_content_based_and_preserves_ambiguity() {
         instance: 7,
         context,
     };
-    let mut map = HashMap::new();
+    let mut map = BTreeMap::new();
     map.insert(key(a), 1);
     assert_eq!(map.get(&key(b)), Some(&1));
     assert_eq!(map.get(&key(Arc::new(vec![("a".into(), Some(2))]))), None);

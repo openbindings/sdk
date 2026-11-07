@@ -2,14 +2,14 @@
 //! for reached-resource admission, so an unused collision does not poison a job.
 use crate::*;
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, BTreeSet},
     sync::{Arc, OnceLock},
 };
 #[derive(Clone, Default)]
 pub struct InputPolicy {
     pub(crate) identity_bytes: usize,
     pub(crate) names: BTreeMap<String, Vec<(usize, usize)>>,
-    pub(crate) protected: HashSet<String>,
+    pub(crate) protected: BTreeSet<String>,
 }
 /// Admitted supplied resources with their identity policy. Clones share both,
 /// and the resources' schema positions once a schema space first walks them.

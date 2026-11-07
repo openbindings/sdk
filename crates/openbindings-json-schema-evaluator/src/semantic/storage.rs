@@ -1,7 +1,7 @@
 //! Call-local backing allocations with an explicit requested-size ledger.
 //! Indexed entries support bounded lookup, append/pop and in-place value access.
 use super::{Graph, NoVerdict, decision::limit};
-use std::hash::{DefaultHasher, Hash, Hasher};
+use std::collections::BTreeMap;
 
 /// Borrowed per-operation accounting; the storage never retains a control or
 /// prescribes whether an exhaustion belongs to preparation or evaluation.
@@ -52,31 +52,40 @@ pub(super) fn reserve<T, L: Ledger>(
         .try_reserve_exact(capacity - values.len())
         .map_err(|_| ledger.allocation_limit())
 }
-const NONE: usize = usize::MAX;
 struct Entry<K, V> {
     key: K,
     value: V,
-    hash: u64,
-    prior: usize,
+    /// The newest earlier entry with an equal key, restored by a pop.
+    shadowed: Option<usize>,
 }
 pub(super) struct Entries<K, V = ()> {
     entries: Vec<Entry<K, V>>,
-    buckets: Vec<usize>,
+    newest: BTreeMap<K, usize>,
+    /// The most entries held at once; the index's storage is charged once for
+    /// each, so a push after a pop pays nothing again.
+    charged: usize,
 }
 impl<K, V> Default for Entries<K, V> {
     fn default() -> Self {
         Self {
             entries: Vec::new(),
-            buckets: Vec::new(),
+            newest: BTreeMap::new(),
+            charged: 0,
         }
     }
 }
-impl<K: Hash + Eq, V> Entries<K, V> {
-    fn hash<L: Ledger>(key: &K, work: usize, ledger: &mut L) -> Result<u64, L::Error> {
-        ledger.work(work)?;
-        let mut hasher = DefaultHasher::new();
-        key.hash(&mut hasher);
-        Ok(hasher.finish())
+impl<K: Ord + Clone, V> Entries<K, V> {
+    // A search reads at most eleven keys in each node of a tree at most about
+    // log6(n) tall, and never more keys than there are. `work` is the cost of
+    // comparing two keys.
+    fn search_work(&self, work: usize) -> usize {
+        let len = self.entries.len();
+        let height = (len + 1).ilog2() as usize / 2 + 1;
+        height
+            .saturating_mul(11)
+            .min(len.max(1))
+            .saturating_mul(work)
+            .saturating_add(1)
     }
     pub(super) fn find<L: Ledger>(
         &self,
@@ -84,20 +93,8 @@ impl<K: Hash + Eq, V> Entries<K, V> {
         work: usize,
         ledger: &mut L,
     ) -> Result<Option<usize>, L::Error> {
-        let hash = Self::hash(key, work, ledger)?;
-        if self.buckets.is_empty() {
-            return Ok(None);
-        }
-        let mut index = self.buckets[hash as usize & (self.buckets.len() - 1)];
-        while index != NONE {
-            let entry = &self.entries[index];
-            ledger.work(work)?;
-            if entry.hash == hash && entry.key == *key {
-                return Ok(Some(index));
-            }
-            index = entry.prior;
-        }
-        Ok(None)
+        ledger.work(self.search_work(work))?;
+        Ok(self.newest.get(key).copied())
     }
     pub(super) fn push<L: Ledger>(
         &mut self,
@@ -106,45 +103,25 @@ impl<K: Hash + Eq, V> Entries<K, V> {
         work: usize,
         ledger: &mut L,
     ) -> Result<(), L::Error> {
-        let hash = Self::hash(&key, work, ledger)?;
         let needed = self
             .entries
             .len()
             .checked_add(1)
             .ok_or_else(|| ledger.allocation_limit())?;
+        // Pay for this insertion and for its eventual pop.
+        ledger.work(self.search_work(work).saturating_mul(2))?;
         reserve(&mut self.entries, needed, ledger)?;
-        if needed
-            .checked_mul(2)
-            .ok_or_else(|| ledger.allocation_limit())?
-            > self.buckets.len()
-        {
-            let count = self
-                .buckets
-                .len()
-                .checked_mul(2)
-                .ok_or_else(|| ledger.allocation_limit())?
-                .max(8);
-            reserve(&mut self.buckets, count, ledger)?;
-            let work = count
-                .checked_add(self.entries.len())
-                .ok_or_else(|| ledger.allocation_limit())?;
-            ledger.work(work)?;
-            self.buckets.resize(count, NONE);
-            self.buckets.fill(NONE);
-            for (index, entry) in self.entries.iter_mut().enumerate() {
-                let bucket = entry.hash as usize & (count - 1);
-                entry.prior = self.buckets[bucket];
-                self.buckets[bucket] = index;
-            }
+        if needed > self.charged {
+            // A half-full leaf holds five entries, and branches add under a
+            // fifth more, so this covers a node's share per entry.
+            ledger.allocation(3 * (size_of::<K>() + size_of::<usize>()) + 16)?;
+            self.charged = needed;
         }
-        let bucket = hash as usize & (self.buckets.len() - 1);
-        let prior = self.buckets[bucket];
-        self.buckets[bucket] = self.entries.len();
+        let shadowed = self.newest.insert(key.clone(), self.entries.len());
         self.entries.push(Entry {
             key,
             value,
-            hash,
-            prior,
+            shadowed,
         });
         Ok(())
     }
@@ -159,13 +136,12 @@ impl<K: Hash + Eq, V> Entries<K, V> {
     }
     pub(super) fn pop(&mut self) -> Option<(K, V)> {
         let entry = self.entries.pop()?;
-        let bucket = entry.hash as usize & (self.buckets.len() - 1);
-        assert_eq!(
-            self.buckets[bucket],
-            self.entries.len(),
-            "ordered path bucket head"
-        );
-        self.buckets[bucket] = entry.prior;
+        match entry.shadowed {
+            Some(prior) => *self.newest.get_mut(&entry.key).expect("a listed key") = prior,
+            None => {
+                self.newest.remove(&entry.key);
+            }
+        }
         Some((entry.key, entry.value))
     }
     pub(super) fn suffix(&self, start: usize) -> impl Iterator<Item = (&K, &V)> {
@@ -175,7 +151,7 @@ impl<K: Hash + Eq, V> Entries<K, V> {
     }
     pub(super) fn clear(&mut self) {
         self.entries.clear();
-        self.buckets.fill(NONE);
+        self.newest.clear();
     }
 }
 
@@ -183,44 +159,43 @@ impl<K: Hash + Eq, V> Entries<K, V> {
 mod tests {
     use super::*;
     use std::sync::atomic::AtomicBool;
-    #[derive(PartialEq, Eq)]
-    struct Collision(usize);
-    impl Hash for Collision {
-        fn hash<H: Hasher>(&self, state: &mut H) {
-            0usize.hash(state);
-        }
-    }
+    #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+    struct Key(usize);
     #[test]
-    fn collisions_rehash_pop_and_clear_preserve_exact_path_positions() {
+    fn ordered_lookup_pop_and_clear_preserve_exact_path_positions() {
         let control = AtomicBool::new(false);
         let mut graph = Graph::new(1 << 20, None, 0, &control);
         let mut path = Entries::default();
         for key in 0..80 {
-            path.push(Collision(key), key, 1, &mut graph).unwrap();
+            path.push(Key(key), key, 1, &mut graph).unwrap();
             for existing in 0..=key {
                 assert_eq!(
-                    path.find(&Collision(existing), 1, &mut graph).unwrap(),
+                    path.find(&Key(existing), 1, &mut graph).unwrap(),
                     Some(existing)
                 );
             }
         }
-        assert_eq!(path.find(&Collision(90), 1, &mut graph).unwrap(), None);
+        assert_eq!(path.find(&Key(90), 1, &mut graph).unwrap(), None);
         for key in (20..80).rev() {
             assert_eq!(path.pop().unwrap().1, key);
-            assert_eq!(path.find(&Collision(key), 1, &mut graph).unwrap(), None);
-            assert_eq!(path.find(&Collision(19), 1, &mut graph).unwrap(), Some(19));
+            assert_eq!(path.find(&Key(key), 1, &mut graph).unwrap(), None);
+            assert_eq!(path.find(&Key(19), 1, &mut graph).unwrap(), Some(19));
         }
         assert_eq!(
             path.suffix(15).map(|(_, v)| *v).collect::<Vec<_>>(),
             (15..20).collect::<Vec<_>>()
         );
+        path.push(Key(19), 100, 1, &mut graph).unwrap();
+        assert_eq!(path.find(&Key(19), 1, &mut graph).unwrap(), Some(20));
+        assert_eq!(path.pop().unwrap().1, 100);
+        assert_eq!(path.find(&Key(19), 1, &mut graph).unwrap(), Some(19));
         path.clear();
-        path.push(Collision(19), 99, 1, &mut graph).unwrap();
-        assert_eq!(path.find(&Collision(19), 1, &mut graph).unwrap(), Some(0));
-        assert_eq!(path.find(&Collision(18), 1, &mut graph).unwrap(), None);
+        path.push(Key(19), 99, 1, &mut graph).unwrap();
+        assert_eq!(path.find(&Key(19), 1, &mut graph).unwrap(), Some(0));
+        assert_eq!(path.find(&Key(18), 1, &mut graph).unwrap(), None);
     }
     #[test]
-    fn growth_refuses_before_allocation_and_collision_work_is_bounded() {
+    fn growth_refuses_before_allocation_and_search_work_is_bounded() {
         let control = AtomicBool::new(false);
         let mut values = Vec::<u64>::new();
         let bytes = 4 * size_of::<u64>();
@@ -245,15 +220,20 @@ mod tests {
         let mut graph = Graph::new(1 << 20, None, 0, &control);
         let mut path = Entries::default();
         for key in 0..20 {
-            path.push(Collision(key), (), 1, &mut graph).unwrap();
+            path.push(Key(key), (), 1, &mut graph).unwrap();
         }
         assert!(
-            path.find(&Collision(99), 1, &mut Graph::new(0, Some(10), 0, &control))
+            path.find(&Key(99), 1, &mut Graph::new(0, Some(20), 0, &control))
                 .is_err()
+        );
+        assert_eq!(
+            path.find(&Key(99), 1, &mut Graph::new(0, Some(21), 0, &control))
+                .unwrap(),
+            None
         );
         assert!(
             path.find(
-                &Collision(99),
+                &Key(99),
                 1,
                 &mut Graph::new(0, None, 0, &AtomicBool::new(true))
             )

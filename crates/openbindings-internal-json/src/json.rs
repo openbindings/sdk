@@ -3,7 +3,7 @@ use crate::Pointer;
 use crate::decimal::Decimal;
 use crate::raw::{Arena, Id, Kind, Limits, Problem};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::{collections::HashMap, fmt, sync::Arc};
+use std::{collections::BTreeMap, fmt, sync::Arc};
 
 /// Finite input limits. Nesting counts arrays and objects, including the root.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -639,7 +639,7 @@ impl<'a> JsonRef<'a> {
     }
 }
 /// A string's exact text: its scalar text, or, for one holding an unpaired
-/// unit, its UTF-16 units read from its token, compared and hashed as read.
+/// unit, its UTF-16 units read from its token, compared as read.
 enum Key<'a> {
     Scalar(&'a str),
     Units(crate::raw::Utf16<'a>),
@@ -654,18 +654,20 @@ impl PartialEq for Key<'_> {
     }
 }
 impl Eq for Key<'_> {}
-impl std::hash::Hash for Key<'_> {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        match self {
-            Key::Scalar(text) => text.hash(state),
-            Key::Units(units) => {
-                for unit in units.clone() {
-                    state.write_u16(unit);
-                }
-                // Units end where no scalar text's hash does.
-                state.write_u8(0xff);
-            }
+impl Ord for Key<'_> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        use std::cmp::Ordering;
+        match (self, other) {
+            (Key::Scalar(a), Key::Scalar(b)) => a.as_bytes().cmp(b.as_bytes()),
+            (Key::Units(a), Key::Units(b)) => a.clone().cmp(b.clone()),
+            (Key::Scalar(_), Key::Units(_)) => Ordering::Less,
+            (Key::Units(_), Key::Scalar(_)) => Ordering::Greater,
         }
+    }
+}
+impl PartialOrd for Key<'_> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
     }
 }
 fn key(value: JsonRef<'_>) -> Key<'_> {
@@ -713,7 +715,7 @@ pub(crate) fn equal(left: JsonRef<'_>, right: JsonRef<'_>) -> bool {
                 if left.len() != right.len() {
                     return false;
                 }
-                let index: HashMap<_, _> = right
+                let index: BTreeMap<_, _> = right
                     .members()
                     .unwrap()
                     .map(|m| (key(m.name), m.value))

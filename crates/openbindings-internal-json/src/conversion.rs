@@ -4,7 +4,7 @@ use serde::{
     Serialize, Serializer,
     ser::{self, SerializeMap, SerializeSeq},
 };
-use std::{borrow::Cow, collections::HashSet, fmt};
+use std::{borrow::Cow, collections::BTreeSet, fmt};
 const DIAGNOSTIC_LIMIT: usize = 4096;
 const SERDE_MAX_DEPTH: usize = 128;
 // Qualified against the pinned serde_json arbitrary_precision Number protocol.
@@ -389,7 +389,7 @@ struct Compound<'a> {
     raw_token: bool,
     index: usize,
     key: Option<Cow<'static, str>>,
-    seen: HashSet<Cow<'static, str>>,
+    seen: BTreeSet<Cow<'static, str>>,
     variant_parent: Option<(usize, bool)>,
 }
 impl Compound<'_> {
@@ -629,7 +629,7 @@ fn compound(state: &mut State, object: bool) -> Result<Compound<'_>, ValueConver
         raw_token: false,
         index: 0,
         key: None,
-        seen: HashSet::new(),
+        seen: BTreeSet::new(),
         variant_parent: None,
     })
 }
@@ -760,7 +760,7 @@ impl<'a> Serializer for &'a mut State {
                 raw_token: name == RAW_TOKEN,
                 index: 0,
                 key: None,
-                seen: HashSet::new(),
+                seen: BTreeSet::new(),
                 variant_parent: None,
             });
         }

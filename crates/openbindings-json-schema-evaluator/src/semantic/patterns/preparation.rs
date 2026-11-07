@@ -68,11 +68,19 @@ impl Programs {
             #[cfg(test)]
             let hash = self.forced_hash.get().unwrap_or(hash);
             let forms = self.forms.borrow();
-            let Some(form) = forms
-                .get(&(source.len(), hash))
-                .and_then(|bucket| bucket.iter().find(|form| form.text.as_ref() == source))
-                .filter(|_| source.len() <= limits.pattern_bytes)
-            else {
+            let mut found = None;
+            if source.len() <= limits.pattern_bytes
+                && let Some(bucket) = forms.get(&(source.len(), hash))
+            {
+                for form in bucket {
+                    control.charge_work(source.len().saturating_add(1))?;
+                    if form.text.as_ref() == source {
+                        found = Some(form);
+                        break;
+                    }
+                }
+            }
+            let Some(form) = found else {
                 return Ok(None);
             };
             let Program::Simple { matcher, .. } = form.program.as_ref() else {

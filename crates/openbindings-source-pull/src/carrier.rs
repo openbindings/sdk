@@ -1,5 +1,5 @@
 use openbindings::{JsonKind, JsonObject, JsonRef, JsonStringRef, JsonValue};
-use std::{collections::HashSet, fmt};
+use std::{collections::BTreeSet, fmt};
 
 /// Invalid local carrier shape or proposal authority, not an OBI finding.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -55,7 +55,7 @@ pub(crate) fn object(value: JsonValue) -> Result<JsonObject, CarrierError> {
     let object = value
         .as_object()
         .map_err(|_| CarrierError::ExpectedObject)?;
-    let mut names = HashSet::new();
+    let mut names = BTreeSet::new();
     for member in value.view().members().expect("object") {
         if !names.insert(
             member
@@ -117,7 +117,7 @@ pub(crate) fn details(object: &JsonObject) -> Result<(), CarrierError> {
 }
 pub(crate) fn uses(object: &JsonObject) -> Result<(), CarrierError> {
     if let Some(values) = object.value().get("uses") {
-        let mut labels = HashSet::new();
+        let mut labels = BTreeSet::new();
         for value in values.elements().ok_or(CarrierError::FieldType("uses"))? {
             let label = string(value, "uses", true)?;
             if !labels.insert(label.utf16_units().collect::<Vec<_>>()) {
@@ -181,7 +181,7 @@ pub(crate) fn labels(object: &JsonObject, name: &'static str) -> Result<(), Carr
 pub(crate) fn removals(object: &JsonObject, allowed: &[&str]) -> Result<(), CarrierError> {
     labels(object, "remove")?;
     if let Some(value) = object.value().get("remove") {
-        let mut seen = HashSet::new();
+        let mut seen = BTreeSet::new();
         for value in value.elements().expect("removal list") {
             let name = value.as_str().ok_or(CarrierError::FieldType("remove"))?;
             if !allowed.contains(&name) || !seen.insert(name) || object.value().get(name).is_some()

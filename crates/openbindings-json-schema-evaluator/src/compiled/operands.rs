@@ -34,7 +34,7 @@ pub(crate) struct Operands {
     // Each matcher's index by its form, or by the reason the evaluator does
     // not match its pattern, while preparing. A form is kept once, shared with
     // its matcher.
-    indices: std::collections::HashMap<Arc<str>, usize>,
+    indices: std::collections::BTreeMap<Arc<str>, usize>,
 }
 // A `const` value, or an `enum` keyword's choices. Both are views of the
 // projection's separated literals.

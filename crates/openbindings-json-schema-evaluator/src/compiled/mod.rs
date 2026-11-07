@@ -32,7 +32,10 @@ use openbindings::*;
 use openbindings_internal_json::backend::{self, FlatJson};
 use openbindings_internal_schema::Definitions;
 use serde_json::Value;
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet, HashMap},
+    sync::Arc,
+};
 #[derive(Clone, Debug)]
 struct Limits {
     compile_json_depth: usize,
@@ -50,7 +53,7 @@ impl Default for Limits {
 }
 struct Compiler {
     limits: Limits,
-    readings: HashMap<Arc<str>, pattern::Reading>,
+    readings: BTreeMap<Arc<str>, pattern::Reading>,
 }
 struct ConstructionControl<'a> {
     caller: &'a dyn WorkControl,
@@ -449,7 +452,7 @@ fn patterns<'a>(
     schema: &mut Value,
     source: Option<std::borrow::Cow<'a, str>>,
     limits: &Limits,
-    readings: &HashMap<Arc<str>, pattern::Reading>,
+    readings: &BTreeMap<Arc<str>, pattern::Reading>,
     operands: &mut operands::Operands,
     kept: &mut Kept<'a>,
 ) -> Result<(), (&'static str, NoVerdict)> {
@@ -551,7 +554,7 @@ struct Kept<'a> {
     matched: usize,
     // The value written for each `pattern` already read, by its source, so a
     // repeated pattern is read once.
-    read: HashMap<std::borrow::Cow<'a, str>, String>,
+    read: BTreeMap<std::borrow::Cow<'a, str>, String>,
 }
 fn unsupported_pattern(reason: pattern::Unsupported, _keyword: &str) -> NoVerdict {
     match reason {
@@ -737,7 +740,7 @@ fn share_names(
     let Some(Value::Object(definitions)) = document.get("$defs") else {
         return Err(program_failure());
     };
-    let mut seen = std::collections::HashSet::new();
+    let mut seen = BTreeSet::new();
     let mut forms = Vec::new();
     for schema in definitions.values() {
         if let Some(Value::Object(names)) = schema.get("patternProperties") {

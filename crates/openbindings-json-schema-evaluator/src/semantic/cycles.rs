@@ -79,7 +79,7 @@ impl Run<'_> {
     ) -> Result<Option<Visit>, NoVerdict> {
         self.context_copy(incoming)?;
         let mut context = incoming.clone();
-        let mut seen = HashSet::new();
+        let mut seen = BTreeSet::new();
         loop {
             self.graph.tick()?;
             context = self.enter(node, &context)?;
@@ -163,7 +163,7 @@ impl Run<'_> {
         self.context_copy(&root.context)?;
         self.graph.charge(768)?;
         let mut nodes = vec![root.clone()];
-        let mut indices = HashMap::from([(root.clone(), 0usize)]);
+        let mut indices = BTreeMap::from([(root.clone(), 0usize)]);
         let mut reverse = vec![Vec::<usize>::new()];
         let mut cursor = 0;
         while cursor < nodes.len() {

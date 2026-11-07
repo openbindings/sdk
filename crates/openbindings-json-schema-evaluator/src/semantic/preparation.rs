@@ -133,7 +133,7 @@ pub(super) fn check_from(
     let mut queue = VecDeque::from([entry]);
     let mut visited = HashSet::new();
     let mut resources = HashSet::new();
-    let mut missing = HashSet::new();
+    let mut missing = BTreeSet::new();
     let mut dynamic = BTreeMap::<String, BTreeSet<usize>>::new();
     let mut used = BTreeSet::<String>::new();
     let mut readings = PreparedPatterns::new();

@@ -154,7 +154,7 @@ fn part(index: usize) -> &'static Part {
             resource.document.clone(),
             &inventory,
             ResourceOrigin::Standard,
-            &HashSet::new(),
+            &BTreeSet::new(),
         );
         layer.finalize(|names, name| names.get(name).copied());
         let entry = &ENTRIES[index];
@@ -211,7 +211,7 @@ impl Packaged {
                 resource.document.clone(),
                 &inventory,
                 ResourceOrigin::Standard,
-                &HashSet::new(),
+                &BTreeSet::new(),
             );
         }
         core.finalize(|names, name| names.get(name).copied());
@@ -368,7 +368,7 @@ mod tests {
                 resource.document.clone(),
                 &inventory,
                 ResourceOrigin::Standard,
-                &HashSet::new(),
+                &BTreeSet::new(),
             );
             assert_eq!(layer.resources.len(), 2);
             assert_eq!(layer.sources.len(), 1);

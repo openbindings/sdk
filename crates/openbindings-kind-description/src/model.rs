@@ -1,6 +1,6 @@
 use openbindings::{JsonKind, JsonObject, JsonRef, JsonStringRef, JsonValue};
 use openbindings_context::Context;
-use std::{collections::HashSet, fmt};
+use std::{collections::BTreeSet, fmt};
 
 /// A carrier field or local carrier relationship is invalid.
 /// Diagnostics never include provider data, descriptions, context or kind names.
@@ -62,7 +62,7 @@ pub(crate) fn object(
     let object = value
         .as_object()
         .map_err(|_| CarrierError::ExpectedObject)?;
-    let mut names = HashSet::new();
+    let mut names = BTreeSet::new();
     for member in value.view().members().expect("object") {
         let name = member.name.as_string().expect("member name");
         if !names.insert(name.utf16_units().collect::<Vec<_>>()) {
@@ -111,7 +111,7 @@ fn supports(object: &JsonObject) -> Result<(), CarrierError> {
     let values = values
         .elements()
         .ok_or(CarrierError::FieldType("supports"))?;
-    let mut seen = HashSet::new();
+    let mut seen = BTreeSet::new();
     for value in values {
         let name = string(value, "supports", true)?;
         if !seen.insert(name.utf16_units().collect::<Vec<_>>()) {

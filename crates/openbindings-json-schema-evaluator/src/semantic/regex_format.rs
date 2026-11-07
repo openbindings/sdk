@@ -4,7 +4,7 @@
 //! Input is exact UTF-16 and the parser uses an explicit group stack.
 use super::{Graph, NoVerdict};
 use openbindings::JsonStringRef;
-use std::collections::HashSet;
+use std::collections::BTreeSet;
 
 enum Error {
     Syntax,
@@ -30,7 +30,7 @@ pub(super) fn valid(value: JsonStringRef<'_>, graph: &mut Graph<'_>) -> Result<b
         at: 0,
         graph,
         named,
-        names: HashSet::new(),
+        names: BTreeSet::new(),
         references: Vec::new(),
         groups: Vec::new(),
         quantifiable: false,
@@ -71,7 +71,7 @@ struct Parser<'a, 'b> {
     at: usize,
     graph: &'a mut Graph<'b>,
     named: bool,
-    names: HashSet<Vec<u16>>,
+    names: BTreeSet<Vec<u16>>,
     references: Vec<Vec<u16>>,
     groups: Vec<bool>,
     quantifiable: bool,

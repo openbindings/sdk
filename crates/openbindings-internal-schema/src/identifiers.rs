@@ -7,16 +7,15 @@
 //! up to and including its last `/`), the last segment, the query and the
 //! fragment. Directories form a trie whose edges are runs of whole segments,
 //! each run a span of one `$id`'s text however many segments it holds. Each
-//! declaration adds at most three edges and one leaf, and copies text only
-//! when dot segments interrupt the run it writes, then once and never more
-//! than its own `$id`. [`Identifiers::duplicates`] finds the handles that share
-//! a string and orders them as their strings compare, so callers keep string
-//! semantics.
+//! declaration adds at most three edges and one leaf. Directory runs copy text
+//! only when dot segments interrupt the run, never more than the own `$id`.
+//! Ordered child lookup interns each distinct first segment once.
+//! [`Identifiers::duplicates`] finds handles that share a string and orders
+//! them as their strings compare, so callers keep string semantics.
 use fluent_uri::UriRef;
 use std::{
     cmp::Ordering,
-    collections::{HashMap, HashSet, hash_map::RandomState},
-    hash::BuildHasher,
+    collections::{BTreeMap, HashMap, HashSet},
 };
 
 const NONE: u32 = u32::MAX;
@@ -54,9 +53,8 @@ struct Node<'a> {
     top: u32,
     /// Segments from the root.
     depth: usize,
-    /// The keyed hash of the parent and the label's first segment, which
-    /// finds this node among its parent's children.
-    key: u64,
+    /// Interned first segment, reused when an edge is split.
+    key: u32,
     /// The segments after the parent's string, `/` between them and implied
     /// after the last.
     label: Label<'a>,
@@ -73,14 +71,6 @@ struct Leaf<'a> {
     /// segment.
     authority: u32,
 }
-/// The children whose parent and first segment share a hash: one, or a list
-/// in `collisions`.
-#[derive(Clone, Copy, Debug)]
-enum Bucket {
-    One(u32),
-    Many(u32),
-}
-
 #[derive(Debug)]
 pub(crate) struct Identifiers<'a> {
     nodes: Vec<Node<'a>>,
@@ -95,12 +85,11 @@ pub(crate) struct Identifiers<'a> {
     /// At least the length of the identifiers still to come, which bounds
     /// the text they can copy: no walk copies more than its own `$id`.
     budget: usize,
-    children: HashMap<u64, Bucket>,
-    collisions: Vec<Vec<u32>>,
-    hasher: RandomState,
+    children: BTreeMap<(u32, u32), u32>,
+    segment_ids: BTreeMap<Box<str>, u32>,
     /// Schemes, interned.
     schemes: Vec<&'a str>,
-    scheme_ids: HashMap<&'a str, u32>,
+    scheme_ids: BTreeMap<&'a str, u32>,
     /// Queries and fragments; a query an identifier takes from its base is
     /// that base's.
     pieces: Vec<&'a str>,
@@ -300,11 +289,10 @@ impl<'a> Identifiers<'a> {
             copied_from: 0,
             retired: Vec::new(),
             budget,
-            children: HashMap::new(),
-            collisions: Vec::new(),
-            hasher: RandomState::new(),
+            children: BTreeMap::new(),
+            segment_ids: BTreeMap::new(),
             schemes: Vec::new(),
-            scheme_ids: HashMap::new(),
+            scheme_ids: BTreeMap::new(),
             pieces: Vec::new(),
             leaves: Vec::new(),
             invalid_authorities: HashSet::new(),
@@ -348,49 +336,30 @@ impl<'a> Identifiers<'a> {
     fn piece_text(&self, piece: u32) -> Option<&'a str> {
         (piece != NONE).then(|| self.pieces[piece as usize])
     }
-    fn candidates(&self, key: u64) -> &[u32] {
-        match self.children.get(&key) {
-            None => &[],
-            Some(Bucket::One(child)) => std::slice::from_ref(child),
-            Some(&Bucket::Many(list)) => &self.collisions[list as usize],
+    fn segment(&mut self, label: Label<'a>) -> u32 {
+        let text = self.text(label);
+        let segment = &text[..text.find('/').unwrap_or(text.len())];
+        if let Some(&id) = self.segment_ids.get(segment) {
+            return id;
         }
-    }
-    fn key(&self, parent: u32, segment: &str) -> u64 {
-        self.hasher.hash_one((parent, segment))
+        let segment: Box<str> = segment.into();
+        let id =
+            u32::try_from(self.segment_ids.len()).expect("segments are bounded by directory nodes");
+        self.segment_ids.insert(segment, id);
+        id
     }
     /// The child of `parent` whose label begins with the segment `segment`.
     fn child(&self, parent: u32, segment: &str) -> Option<u32> {
-        let key = self.key(parent, segment);
-        self.candidates(key).iter().copied().find(|&child| {
-            let label = self.label(child).as_bytes();
-            self.nodes[child as usize].parent == parent
-                && label.starts_with(segment.as_bytes())
-                && label.get(segment.len()).is_none_or(|&c| c == b'/')
-        })
-    }
-    fn insert_child(&mut self, key: u64, child: u32) {
-        let bucket = match self.children.get(&key) {
-            None => Bucket::One(child),
-            Some(&Bucket::One(first)) => {
-                let list = u32::try_from(self.collisions.len())
-                    .expect("collisions are bounded by the node count");
-                self.collisions.push(vec![first, child]);
-                Bucket::Many(list)
-            }
-            Some(&Bucket::Many(list)) => {
-                self.collisions[list as usize].push(child);
-                return;
-            }
-        };
-        self.children.insert(key, bucket);
+        let key = self.segment_ids.get(segment)?;
+        self.children.get(&(parent, *key)).copied()
     }
     /// A new child of `parent` labelled `label`.
     fn add_node(&mut self, parent: u32, label: Label<'a>) -> u32 {
         let id =
             u32::try_from(self.nodes.len()).expect("directories are bounded by the node count");
         let text = self.text(label);
-        let key = self.key(parent, &text[..text.find('/').unwrap_or(text.len())]);
         let segments = 1 + text.bytes().filter(|&c| c == b'/').count();
+        let key = self.segment(label);
         let above = self.nodes[parent as usize];
         let top = match parent {
             AUTH => id,
@@ -405,7 +374,7 @@ impl<'a> Identifiers<'a> {
             key,
             label,
         });
-        self.insert_child(key, id);
+        self.children.insert((parent, key), id);
         id
     }
     /// Split `node`'s label at the `/` at byte `at`, which ends its first
@@ -426,24 +395,12 @@ impl<'a> Identifiers<'a> {
         });
         // The upper part keeps the parent and first segment, so it takes
         // `node`'s place.
-        match self.children.get_mut(&old.key) {
-            Some(Bucket::One(child)) => *child = id,
-            Some(&mut Bucket::Many(list)) => {
-                let list = &mut self.collisions[list as usize];
-                let at = list
-                    .iter()
-                    .position(|&c| c == node)
-                    .expect("a listed child");
-                list[at] = id;
-            }
-            None => unreachable!("a child is listed"),
-        }
+        self.children.insert((old.parent, old.key), id);
         let label = old.label.sub(at + 1, length);
-        let text = self.text(label);
-        let key = self.key(id, &text[..text.find('/').unwrap_or(text.len())]);
+        let key = self.segment(label);
         let lower = &mut self.nodes[node as usize];
         (lower.parent, lower.key, lower.label) = (id, key, label);
-        self.insert_child(key, node);
+        self.children.insert((id, key), node);
         id
     }
     /// The directory `node`'s string is without its last `up` segments.
@@ -1402,6 +1359,27 @@ mod tests {
                 assert_eq!(pair.0[0].0 == pair.0[1].0, pair.1[0].0 == pair.1[1].0);
             }
         }
+    }
+
+    #[test]
+    fn splitting_shared_long_segments_interns_their_text_once() {
+        let long = "z".repeat(16_384);
+        let text = format!("https://example.test/{long}/{}", "x/".repeat(256));
+        let mut ids = Identifiers::new(text.len());
+        let handle = ids.compared(None, &text).unwrap();
+        let mut directory = ids.leaves[handle as usize].dir;
+        for _ in 0..256 {
+            directory = ids.up(directory, 1);
+        }
+        assert_eq!(ids.spelled(handle), text);
+        assert_eq!(
+            ids.segment_ids
+                .keys()
+                .filter(|s| s.as_ref() == long)
+                .count(),
+            1
+        );
+        assert!(ids.segment_ids.keys().map(|s| s.len()).sum::<usize>() <= long.len() + 32);
     }
 
     #[test]

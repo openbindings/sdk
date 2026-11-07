@@ -6,7 +6,7 @@ use openbindings_internal_schema::Control;
 
 const MAX_KEYS: usize = 1024;
 
-#[derive(Hash, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 struct Key<'s> {
     resource: usize,
     profile_known: bool,

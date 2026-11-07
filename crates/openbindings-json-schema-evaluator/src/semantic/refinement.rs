@@ -48,7 +48,7 @@ impl Run<'_> {
         self.context_copy(&root.context)?;
         self.graph.charge(512)?;
         let mut pending = vec![(root.schema, root.context.clone())];
-        let mut visited = HashSet::new();
+        let mut visited = BTreeSet::new();
         let mut support = Support::default();
         while let Some((node, incoming)) = pending.pop() {
             self.graph.tick()?;
@@ -397,7 +397,7 @@ impl Run<'_> {
         if self.pending_facts.is_empty() {
             return Ok(false);
         }
-        for (key, next) in self.pending_facts.drain() {
+        for (key, next) in std::mem::take(&mut self.pending_facts) {
             self.graph
                 .work(1 + next.properties.len() + next.items.len())?;
             self.graph.charge(256)?;

@@ -1,6 +1,10 @@
 //! Per-value dependence analysis over original schema locations.
 //! Local effects and applicator annotations preserve the meaning and identity
 //! of the authored schema. Undefined is never inferred from failed bounds.
+#![expect(
+    clippy::disallowed_types,
+    reason = "Fingerprints select sorted candidates and every exact comparison is charged"
+)]
 mod construction;
 mod counts;
 mod cycles;
@@ -30,7 +34,7 @@ use openbindings_internal_schema::{
     dialect::{Dialect, Profile},
 };
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     sync::Arc,
 };
 
@@ -351,18 +355,18 @@ impl Plan {
             graph,
             atoms: Vec::new(),
             values: values::Values::default(),
-            effects: HashMap::new(),
+            effects: BTreeMap::new(),
             active: storage::Entries::default(),
             alias_path: storage::Entries::default(),
             empty_context: Arc::new(Vec::new()),
-            opaque_cycles: HashSet::new(),
-            pending_cycles: HashSet::new(),
+            opaque_cycles: BTreeSet::new(),
+            pending_cycles: BTreeSet::new(),
             cuts: HashSet::new(),
-            provisional: HashSet::new(),
-            memo: HashMap::new(),
-            facts: HashMap::new(),
-            pending_facts: HashMap::new(),
-            supports: HashMap::new(),
+            provisional: BTreeSet::new(),
+            memo: BTreeMap::new(),
+            facts: BTreeMap::new(),
+            pending_facts: BTreeMap::new(),
+            supports: BTreeMap::new(),
             support_memo_count: 0,
             patterns: storage::Entries::default(),
         };
@@ -509,24 +513,24 @@ fn context_work(context: &Context) -> usize {
         work.saturating_add(name.len().saturating_mul(16).saturating_add(16))
     })
 }
-// Shared scopes do not copy their owned names. Their semantic hash/equality
+// Shared scopes do not copy their owned names. Their semantic order/equality
 // still reads those names, so every key operation retains a work charge.
 fn reserve_context(graph: &mut Graph<'_>, context: &Context) -> Result<(), NoVerdict> {
     graph.work(context_work(context))
 }
-#[derive(Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 struct Visit {
     schema: usize,
     instance: usize,
     context: Context,
 }
-#[derive(Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 enum Subject {
     Instance(usize),
     Text(Vec<u16>),
     Member(usize, Vec<u16>),
 }
-#[derive(Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 struct Effect {
     node: usize,
     predicate: String,
@@ -615,18 +619,18 @@ struct Run<'a> {
     graph: Graph<'a>,
     atoms: Vec<Atom>,
     values: values::Values,
-    effects: HashMap<Effect, Formula>,
+    effects: BTreeMap<Effect, Formula>,
     active: storage::Entries<Visit>,
     alias_path: AliasPath,
     empty_context: Context,
-    opaque_cycles: HashSet<Visit>,
-    pending_cycles: HashSet<Visit>,
+    opaque_cycles: BTreeSet<Visit>,
+    pending_cycles: BTreeSet<Visit>,
     cuts: HashSet<u32>,
-    provisional: HashSet<Visit>,
-    memo: HashMap<Visit, State>,
-    facts: HashMap<Visit, refinement::Facts>,
-    pending_facts: HashMap<Visit, refinement::Facts>,
-    supports: HashMap<Visit, Arc<Option<refinement::Support>>>,
+    provisional: BTreeSet<Visit>,
+    memo: BTreeMap<Visit, State>,
+    facts: BTreeMap<Visit, refinement::Facts>,
+    pending_facts: BTreeMap<Visit, refinement::Facts>,
+    supports: BTreeMap<Visit, Arc<Option<refinement::Support>>>,
     support_memo_count: usize,
     patterns: storage::Entries<(usize, usize), patterns::Search>,
 }
@@ -681,7 +685,7 @@ impl Run<'_> {
             return Ok(true);
         }
         let mut progress = false;
-        for visit in self.pending_cycles.drain() {
+        for visit in std::mem::take(&mut self.pending_cycles) {
             if !self.memo.contains_key(&visit) {
                 progress |= self.opaque_cycles.insert(visit);
             }
@@ -957,7 +961,7 @@ impl Run<'_> {
         let mut path = std::mem::take(&mut self.alias_path);
         debug_assert_eq!(path.len(), 0);
         // Save every returned result before cleanup: no fallible branch may
-        // leave path membership behind. Reverse pops restore bucket heads
+        // leave path membership behind. Reverse pops restore earlier positions
         // without filling the capacity retained by an earlier long traversal.
         let result = self.alias_walk(node, incoming, &mut path);
         while path.pop().is_some() {}

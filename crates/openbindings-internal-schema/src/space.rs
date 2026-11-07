@@ -12,7 +12,7 @@ use openbindings_internal_json::backend::{
     relative_pointer,
 };
 pub use original::QueryFailure;
-use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 
 pub struct SpaceNode {
     pub profile: Option<crate::dialect::Profile>,
@@ -317,7 +317,7 @@ impl Layer {
         value: JsonValue,
         index: &SchemaIndex,
         origin: ResourceOrigin,
-        protected: &HashSet<String>,
+        protected: &BTreeSet<String>,
     ) {
         self.add_source_controlled(retrieval, value, index, origin, protected, &|| false)
             .expect("uncancelled assembly");
@@ -328,7 +328,7 @@ impl Layer {
         value: JsonValue,
         index: &SchemaIndex,
         origin: ResourceOrigin,
-        protected: &HashSet<String>,
+        protected: &BTreeSet<String>,
         control: &dyn Control,
     ) -> Result<(), Failure> {
         control.check()?;
@@ -462,7 +462,7 @@ impl Layer {
         });
         Ok(())
     }
-    fn add_name(&mut self, name: String, resource: usize, protected: &HashSet<String>) {
+    fn add_name(&mut self, name: String, resource: usize, protected: &BTreeSet<String>) {
         let Some(canonical) = crate::input_policy::canonical_uri(&name) else {
             return;
         };
@@ -478,7 +478,7 @@ impl Layer {
         name: String,
         resource: usize,
         exact_contained: bool,
-        protected: &HashSet<String>,
+        protected: &BTreeSet<String>,
     ) {
         let origin = self.resource(resource).origin;
         if origin == ResourceOrigin::Supplied

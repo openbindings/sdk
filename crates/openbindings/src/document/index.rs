@@ -26,11 +26,11 @@ pub(super) struct OperationEntry {
 }
 pub(super) struct Operations {
     pub entries: BTreeMap<Arc<str>, OperationEntry>,
-    pub names: HashMap<Arc<str>, Arc<str>>,
+    pub names: BTreeMap<Arc<str>, Arc<str>>,
 }
 impl Operations {
     pub fn new(value: JsonRef<'_>) -> Self {
-        let mut names = HashMap::new();
+        let mut names = BTreeMap::new();
         let entries = namespace(value, "operations")
             .expect("conformant operations")
             .into_iter()
@@ -64,12 +64,12 @@ impl Operations {
 
 pub(super) struct Bindings {
     pub entries: Option<Namespace>,
-    pub operations: HashMap<Arc<str>, Vec<Arc<str>>>,
+    pub operations: BTreeMap<Arc<str>, Vec<Arc<str>>>,
 }
 impl Bindings {
     pub fn new(value: JsonRef<'_>) -> Self {
         let entries = namespace(value, "bindings");
-        let mut operations: HashMap<Arc<str>, Vec<Arc<str>>> = HashMap::new();
+        let mut operations: BTreeMap<Arc<str>, Vec<Arc<str>>> = BTreeMap::new();
         if let Some(entries) = &entries {
             for (key, value) in entries {
                 let operation = value

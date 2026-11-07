@@ -9,7 +9,7 @@ pub use edit::{Edit, EditError, PointerRef};
 use index::NamespaceCache;
 pub use model::{Binding, Dependency, Example, Operation, Source};
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     fmt,
     sync::{Arc, Mutex, OnceLock, PoisonError, Weak},
 };

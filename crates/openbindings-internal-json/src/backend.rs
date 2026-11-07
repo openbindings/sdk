@@ -59,9 +59,10 @@ pub fn member_at(value: crate::JsonRef<'_>, index: usize) -> Option<crate::JsonM
     })
 }
 
-/// Borrow candidate members from the arena's existing name index. Hashes only
-/// select candidates: the caller must compare each name exactly. Work is charged
-/// before lookup and between bounded UTF-16 hashing chunks; no key is copied.
+/// Borrow candidate members from the arena's ordered name index. The caller
+/// compares each candidate exactly. Work is prepaid and cancellation checked on
+/// every search step. A name holding unpaired units is copied first, with a
+/// check every 1,024 UTF-16 units; other names are compared where they are.
 pub fn member_candidates<'a, E>(
     object: crate::JsonRef<'a>,
     name: crate::JsonRef<'_>,
@@ -69,6 +70,7 @@ pub fn member_candidates<'a, E>(
 ) -> Result<MemberCandidates<'a>, E> {
     let members = object.owner.member_candidates(
         object.id,
+        name.as_str(),
         name.as_string().expect("member name").utf16_units(),
         name.text().len(),
         &mut work,
@@ -652,8 +654,12 @@ fn subtree_end(arena: &Arena, mut id: Id) -> Id {
 impl ArrayView<'_> {
     // Hash every node of the elements, `first..end`, charging each, and
     // compare the elements whose hashes repeat. Each check is its own frame,
-    // so a check holds only its own table on the stack.
+    // so a check holds only its own buffers on the stack.
     #[inline(never)]
+    #[expect(
+        clippy::disallowed_types,
+        reason = "Fingerprints only select sorted candidates; exact comparisons are charged"
+    )]
     fn hashed_unique(&self, first: Id, end: Id, counting: bool) -> bool {
         use std::{collections::hash_map::RandomState, hash::BuildHasher};
         let hasher = RandomState::new();
@@ -752,51 +758,22 @@ impl ArrayView<'_> {
         }
         true
     }
-    // Hashes only select candidates: an element is compared, in array order,
-    // with every earlier element of its hash, each comparison charged and
-    // verified exactly. Equal elements hash alike, but unequal ones may too:
-    // objects holding one name twice, which equality reads by the name's first
-    // occurrence while the hash counts every member, and collisions of keyed
-    // 64-bit hashes. While no hash repeats, only the hashes seen are kept. The
-    // first repeat finds its candidates by one scan; unless it ends the check,
-    // the elements are then grouped by hash once, so that every later
-    // element's candidates are listed directly, for work linear in the
-    // comparisons charged. The table grows as usual while small, so an early
-    // repeat costs little; past that it grows once, to hold every element
-    // left, rather than keeping old and new tables while doubling.
-    // `hash_of` reads the hash of the element at a position.
+    // Fingerprints select candidates; every candidate is compared exactly and
+    // charged, in original array order. A small array scans its fingerprints
+    // without allocating. A larger one sorts them into groups.
     fn unique_by_hash(&self, hash_of: &impl Fn(usize) -> u64, counting: bool) -> bool {
-        const DOUBLING: usize = 4096;
-        // A small array finds its first repeated hash by scanning the earlier
-        // ones, as the table would find it.
-        if self.1.len() <= SMALL {
-            for at in 1..self.1.len() {
-                let hash = hash_of(at);
-                if (0..at).any(|prior| hash_of(prior) == hash) {
-                    let earlier = (0..at).filter(|&prior| hash_of(prior) == hash);
-                    return match self.repeats(at, earlier, counting) {
-                        Some(unique) => unique,
-                        None => self.unique_by_groups(at + 1, hash_of, counting),
-                    };
-                }
-            }
-            return true;
+        if self.1.len() > SMALL {
+            return self.unique_by_groups(0, hash_of, counting);
         }
-        let mut seen = std::collections::HashSet::new();
-        for at in 0..self.1.len() {
+        for at in 1..self.1.len() {
             let hash = hash_of(at);
-            if seen.len() == seen.capacity() && seen.len() >= DOUBLING {
-                seen.reserve(self.1.len() - at);
+            if (0..at).any(|prior| hash_of(prior) == hash) {
+                let earlier = (0..at).filter(|&prior| hash_of(prior) == hash);
+                return match self.repeats(at, earlier, counting) {
+                    Some(unique) => unique,
+                    None => self.unique_by_groups(at + 1, hash_of, counting),
+                };
             }
-            if seen.insert(hash) {
-                continue;
-            }
-            drop(seen);
-            let earlier = (0..at).filter(|&prior| hash_of(prior) == hash);
-            return match self.repeats(at, earlier, counting) {
-                Some(unique) => unique,
-                None => self.unique_by_groups(at + 1, hash_of, counting),
-            };
         }
         true
     }

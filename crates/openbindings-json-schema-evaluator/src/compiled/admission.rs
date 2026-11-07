@@ -4,6 +4,7 @@ use openbindings_internal_schema::{
     Control, OriginalEnvironment,
     dialect::{Dialect, Profile},
 };
+use std::collections::BTreeSet;
 
 #[derive(Clone, Default)]
 pub(super) struct Features {
@@ -19,7 +20,7 @@ pub(super) struct Features {
     pub advancing: bool,
     pub recursive: bool,
     pub recursive_allocation_free: bool,
-    pub readings: HashMap<Arc<str>, pattern::Reading>,
+    pub readings: BTreeMap<Arc<str>, pattern::Reading>,
 }
 
 pub(super) struct Admitted {
@@ -92,8 +93,8 @@ pub(super) fn select(
             )
         })
         .collect();
-    let mut forms = std::collections::HashSet::new();
-    let mut accounted_sources = std::collections::HashSet::new();
+    let mut forms = BTreeSet::new();
+    let mut accounted_sources = BTreeSet::new();
     let mut pattern_bytes = 0usize;
     let mut compiled_patterns = 0usize;
     let mut matched_bytes = 0usize;
@@ -290,7 +291,7 @@ pub(super) fn select(
             .get(value, "patternProperties")
             .and_then(|v| v.members())
         {
-            let mut names: HashMap<(usize, u64), Vec<&str>> = HashMap::new();
+            let mut names = BTreeSet::new();
             for pattern in patterns {
                 let Some(pattern) = pattern.name.as_str() else {
                     return Ok(Err("exact-pattern-name"));
@@ -303,19 +304,19 @@ pub(super) fn select(
                     attempt
                         .charge_work(linear.form.len().saturating_add(1))
                         .map_err(PreparationFailure::from)?;
-                    let mut hash = std::hash::DefaultHasher::new();
-                    std::hash::Hasher::write(&mut hash, linear.form.as_bytes());
-                    let key = (linear.form.len(), std::hash::Hasher::finish(&hash));
-                    let bucket = names.entry(key).or_default();
-                    for prior in bucket.iter() {
-                        attempt
-                            .charge_work(linear.form.len().saturating_add(1))
-                            .map_err(PreparationFailure::from)?;
-                        if features.readings[*prior].form == linear.form {
-                            return Ok(Err("normalized-property-name-alias"));
-                        }
+                    let height = names.len().checked_ilog2().unwrap_or(0) as usize + 1;
+                    attempt
+                        .charge_work(
+                            linear
+                                .form
+                                .len()
+                                .saturating_add(1)
+                                .saturating_mul(12 * height),
+                        )
+                        .map_err(PreparationFailure::from)?;
+                    if !names.insert(linear.form.clone()) {
+                        return Ok(Err("normalized-property-name-alias"));
                     }
-                    bucket.push(pattern);
                     pattern_bytes = pattern_bytes.saturating_add(linear.form.len());
                     compiled_patterns += 1;
                 }
@@ -409,7 +410,7 @@ pub(super) fn select(
 fn read_pattern(
     source: &str,
     attempt: &dyn Control,
-    readings: &mut HashMap<Arc<str>, pattern::Reading>,
+    readings: &mut BTreeMap<Arc<str>, pattern::Reading>,
     reading: &dyn Fn(&str) -> Result<Option<crate::pattern::Shared>, PreparationFailure>,
     property_name: bool,
 ) -> Result<bool, PreparationFailure> {

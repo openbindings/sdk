@@ -4,13 +4,28 @@
 use super::{Graph, NoVerdict, storage};
 use openbindings::{JsonKind, JsonRef};
 use openbindings_internal_json::{backend, decimal::Decimal};
-use std::collections::HashMap;
+use std::{
+    cmp::Ordering,
+    collections::{BTreeMap, HashMap},
+};
 
-#[derive(PartialEq, Eq, Hash)]
+#[derive(PartialEq, Eq)]
+struct Number(Decimal);
+impl Ord for Number {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.0.compare(&other.0)
+    }
+}
+impl PartialOrd for Number {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
 enum Value {
     Null,
     Boolean(bool),
-    Number(Decimal),
+    Number(Number),
     String(Vec<u16>),
     Array(Vec<usize>),
     Object(Vec<(usize, usize)>),
@@ -18,7 +33,7 @@ enum Value {
 #[derive(Default)]
 pub(super) struct Values {
     occurrences: HashMap<(usize, usize), usize>,
-    values: HashMap<Value, usize>,
+    values: BTreeMap<Value, usize>,
 }
 impl Values {
     pub(super) fn intern(
@@ -64,7 +79,7 @@ impl Values {
                     let text = current.number_text().expect("number");
                     graph.work(text.len().saturating_mul(16).saturating_add(1))?;
                     graph.charge(text.len().saturating_mul(16))?;
-                    Value::Number(Decimal::parse(text))
+                    Value::Number(Number(Decimal::parse(text)))
                 }
                 JsonKind::String => {
                     let bound = current.text().len();

@@ -1,5 +1,9 @@
 //! Borrowed exact equality and uniqueness. These predicates need no persistent
 //! semantic identities; effect correlation continues to use `values::Values`.
+#![expect(
+    clippy::disallowed_types,
+    reason = "Fingerprints select sorted candidates and every exact comparison is charged"
+)]
 use super::{Graph, NoVerdict, decision, storage};
 use openbindings::{JsonKind, JsonRef};
 use openbindings_internal_json::{backend, decimal::Decimal};

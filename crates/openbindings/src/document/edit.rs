@@ -402,7 +402,7 @@ impl<'a> Address<'a> {
 // An inserted member's name: decoded text, or the JSON string token of a name
 // holding an unpaired UTF-16 unit, which only a `\u` escape can write. A token
 // never denotes the same name as text.
-#[derive(PartialEq, Eq, Hash)]
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
 enum Name {
     Text(String),
     Token(String),
@@ -685,7 +685,7 @@ impl Document {
                 }
             }
         }
-        let mut inserted = HashSet::new();
+        let mut inserted = BTreeSet::new();
         for splice in &splices {
             if let Some(Insertion { key: Some(key), .. }) = &splice.insertion
                 && !inserted.insert((splice.range.start, key))

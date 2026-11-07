@@ -110,8 +110,8 @@ spellings to qualify preparation heap. The `unevaluated-patterns` fixture sends 
 subschemas; its `eval` retained heap shows any copy of those subschemas a walk keeps.
 The diagnostic allocator regression also bounds cache storage growth when URI
 suffixes grow from 256 to 1,024 bytes.
-Hash collisions are forced by the adapter's unit test; random benchmark hashes
-are never treated as a deterministic collision fixture.
+Fingerprint collisions are forced by the evaluator's unit tests; random benchmark
+hashes are never treated as a deterministic collision fixture.
 
 `eval` retains both contract and parsed instance; `context` retains the public
 context but prepares a fresh contract. `compile` includes document proof,

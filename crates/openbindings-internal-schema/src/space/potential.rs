@@ -6,7 +6,7 @@ use std::collections::BTreeSet;
 
 /// Source *record* and original JSON node. Reusing one arena in two supplied
 /// records does not make their carriers identical.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(super) struct Original {
     pub source: usize,
     pub node: usize,
@@ -17,7 +17,7 @@ pub(super) struct Potential {
     pub unknown_namespace: bool,
     requests: BTreeSet<String>,
     names: BTreeMap<String, HashSet<Original>>,
-    anchors: HashMap<(Original, String), HashSet<Original>>,
+    anchors: BTreeMap<(Original, String), HashSet<Original>>,
     positions: usize,
     bytes: usize,
 }

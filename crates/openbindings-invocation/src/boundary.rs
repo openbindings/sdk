@@ -1,7 +1,7 @@
 //! Local invocation admission and bounded encoding, separate from wire failures.
 use openbindings::{JsonKind, JsonLimits, JsonRef, JsonValue};
 use serde::Serialize;
-use std::{collections::HashSet, fmt};
+use std::{collections::BTreeSet, fmt};
 
 /// A local request, provider-result or resource-policy failure.
 /// This record never becomes portable invocation error data.
@@ -81,7 +81,7 @@ pub(crate) fn object(
     let fields = value
         .members()
         .ok_or_else(|| failure(BoundaryFailureKind::ExpectedObject, path))?;
-    let mut seen = HashSet::new();
+    let mut seen = BTreeSet::new();
     for field in fields {
         let name = string(field.name, path)?;
         if !allowed.contains(&name) {

@@ -52,11 +52,11 @@ fn literal_handoff_keeps_exact_budgets_cancellation_and_collision_identity() {
     programs.forced_hash.set(Some(0));
     let budget = compiler::profile::Budget::default();
     let limits = Limits::default();
-    for source in ["^a$", "^b$"] {
+    for (index, source) in ["^a$", "^b$"].into_iter().enumerate() {
         let program = programs.add(source, &limits, &budget, &|| false).unwrap();
-        // The established literal handoff charges its scan, Reader reservation
-        // and the two Attempt checks, even though it now shares the result.
-        let work = 4 * source.len() + 515;
+        // Pay for the scan, Reader reservation, Attempt checks and every
+        // exact candidate comparison in the forced fingerprint group.
+        let work = 4 * source.len() + 515 + (index + 1) * (source.len() + 1);
         let allocation = 2 * source.len() + 512;
         let read = |work, allocation| {
             Attempt::run(work, allocation, &|| false, |a| {

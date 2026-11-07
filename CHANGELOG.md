@@ -46,6 +46,12 @@ independent. This entry describes the current feature-branch implementation;
 [the alignment checkpoint](docs/alignment-checkpoint.md) records its validation
 and remaining work. Earlier development APIs have no compatibility guarantee.
 
+### Security
+
+- Replace input-keyed hash tables with ordered storage, including JSON member
+  lookup, uniqueness grouping and schema indexes. Parsing and lookup require no
+  entropy and retain exact keys, duplicate locations and first-occurrence lookup.
+
 ### Added
 
 - Exact OpenBindings documents with immutable edits, owning domain entries and a

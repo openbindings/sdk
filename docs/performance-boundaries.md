@@ -774,10 +774,10 @@ that each reference the final schema.
 | Schema references | 25,000 | 913,942 | 29.480 |
 | Schema references | 40,000 | 1,468,942 | 47.743 |
 
-Duplicate detection and object lookup use indexed decoded names. Ordinary hashes
-produce work proportional to source/key size; deliberate collisions can require
-more exact comparisons. Caller byte and node limits still bound admission. These
-fixtures do not characterize arbitrary schema evaluation or cold compilation.
+Duplicate detection and object lookup use decoded names in sorted order, so their
+work grows as `n log n` comparisons whatever names the input chooses, with no
+secret seed. Caller byte and node limits still bound admission. These fixtures do
+not characterize arbitrary schema evaluation or cold compilation.
 
 ### Memory at the default limits
 
@@ -794,18 +794,21 @@ the input it allocates:
   surrogate escape keeps no decoded copy: its UTF-16 units are read from its
   token when asked for.
 - The parsed tree: 32 bytes per node, 4 per array element or member name, 8 per
-  escaped string, and for an object of 16 or more members a name index of 17
-  bytes per slot, at most about 39 per member.
+  escaped string, and for an object of 16 or more members a name index of 16
+  bytes per member and one record per such object, 16 bytes on `wasm32` and 32
+  on 64-bit targets.
 - Validation state: 12 bytes per schema position and 8 per position still to
   visit, plus 4 per position once a same-document pointer is resolved; 8 bytes
   per resource and 4 per compared `$id` declaration; for compared identifiers,
   a 40-byte record per declaration and 16 bytes per query or fragment, and at
-  most three 48-byte directories with a 17-byte index slot each, whatever the
-  length of the identifier, since a directory holds a run of whole segments as
-  a span of one `$id`'s text, plus once the text of a path whose removed dot
-  segments separate its segments; for a `uniqueItems` check, 8 bytes per node
-  of the array and 9 per slot of its hash table, and 8 more per element once
-  unequal elements share a hash; 9 bytes per alias; and at most 4,096 findings
+  most three 48-byte directories with an ordered index entry of at most 26
+  bytes each, whatever the length of the identifier, since a directory holds a
+  run of whole segments as a span of one `$id`'s text, plus once the text of a
+  path whose removed dot segments separate its segments, plus each distinct
+  first segment once, at most 42 bytes and its text; for a `uniqueItems` check,
+  8 bytes per node of the array and, past 16 elements, 8 per element for its
+  sorted positions; 9
+  bytes per alias; and at most 4,096 findings
   and 8 MiB of their pointers, with a table of 4 bytes per node (8 when an
   unpaired surrogate occurs) once one finding's pointer has not fitted. The
   fixed checks read every string in place: they would escape U+E000 only beside
