@@ -55,13 +55,14 @@ pub(super) fn productive(
 struct Weight {
     exact: usize,
     applications: usize,
+    coefficient: usize,
 }
 
 pub(super) fn fold(
     nodes: &[usize],
     edges: &HashMap<usize, Vec<Edge>>,
     productive: &HashSet<usize>,
-    own: &HashMap<usize, usize>,
+    own: &HashMap<usize, expansion::Own>,
     entries: &[usize],
     control: &dyn Control,
 ) -> Result<Option<Proof>, PreparationFailure> {
@@ -80,14 +81,21 @@ pub(super) fn fold(
             if leaving {
                 active.remove(&node);
                 let mut weight = Weight {
-                    exact: *own.get(&node).unwrap_or(&0),
+                    exact: own.get(&node).map_or(0, |w| w.scratch),
                     applications: 1,
+                    coefficient: own.get(&node).map_or(1, |w| w.applications),
                 };
+                let mut exclusive = 0;
                 for edge in children.iter().filter(retained) {
                     control.check().map_err(PreparationFailure::from)?;
                     let Some(next) = complete.get(&edge.to) else {
                         return Ok(None);
                     };
+                    if edge.exclusive {
+                        exclusive = exclusive.max(next.coefficient);
+                    } else {
+                        weight.coefficient = weight.coefficient.saturating_add(next.coefficient);
+                    }
                     let Some(exact) = weight.exact.checked_add(next.exact) else {
                         return Ok(None);
                     };
@@ -97,6 +105,7 @@ pub(super) fn fold(
                         .saturating_add(next.applications)
                         .min(MAXIMUM_NODES + 1);
                 }
+                weight.coefficient = weight.coefficient.saturating_add(exclusive);
                 complete.insert(node, weight);
             } else {
                 if !active.insert(node) {
@@ -114,6 +123,7 @@ pub(super) fn fold(
     }
     let mut exact = 0usize;
     let mut applications = 0usize;
+    let mut coefficient = 0usize;
     // Different entry types may send terminal paths from different ancestors
     // to the same subject. Sum their path weights; max would undercount them.
     for entry in entries {
@@ -125,19 +135,29 @@ pub(super) fn fold(
             return Ok(None);
         };
         exact = sum;
+        coefficient = coefficient.saturating_add(weight.coefficient);
         applications = applications.saturating_add(weight.applications);
         if applications > MAXIMUM_NODES {
             return Ok(None);
         }
     }
-    Ok(Some(Proof { exact }))
+    #[cfg(test)]
+    entries::record_expansion(applications);
+    Ok(Some(Proof {
+        exact,
+        applications: coefficient,
+    }))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     fn edge(to: usize, advances: bool) -> Edge {
-        Edge { to, advances }
+        Edge {
+            to,
+            advances,
+            exclusive: false,
+        }
     }
     #[test]
     fn sinks_keep_cycle_predecessors_and_mixed_edge_occurrences() {
@@ -151,7 +171,13 @@ mod tests {
         ]);
         let productive = productive(&nodes, &edges, &|| false).unwrap().unwrap();
         assert_eq!(productive, HashSet::from([0, 1, 2, 6]));
-        let own = HashMap::from([(1, 1)]);
+        let own = HashMap::from([(
+            1,
+            expansion::Own {
+                scratch: 1,
+                applications: 1,
+            },
+        )]);
         assert_eq!(
             fold(&nodes, &edges, &productive, &own, &[6], &|| false)
                 .unwrap()
@@ -170,7 +196,13 @@ mod tests {
             (2, vec![edge(3, false), edge(0, true)]),
         ]);
         let p = productive(&nodes, &edges, &|| false).unwrap().unwrap();
-        let own = HashMap::from([(3, 1)]);
+        let own = HashMap::from([(
+            3,
+            expansion::Own {
+                scratch: 1,
+                applications: 1,
+            },
+        )]);
         assert_eq!(
             fold(&nodes, &edges, &p, &own, &[0, 2], &|| false)
                 .unwrap()
@@ -184,7 +216,13 @@ mod tests {
                 &[0, 1],
                 &repeated,
                 &HashSet::new(),
-                &HashMap::from([(1, 1)]),
+                &HashMap::from([(
+                    1,
+                    expansion::Own {
+                        scratch: 1,
+                        applications: 1
+                    }
+                )]),
                 &[0],
                 &|| false
             )
@@ -228,7 +266,13 @@ mod tests {
                 &[0, 1],
                 &overflow,
                 &HashSet::new(),
-                &HashMap::from([(1, usize::MAX)]),
+                &HashMap::from([(
+                    1,
+                    expansion::Own {
+                        scratch: usize::MAX,
+                        applications: 1
+                    }
+                )]),
                 &[0],
                 &|| false
             )
@@ -249,6 +293,7 @@ mod control_tests {
             vec![Edge {
                 to: 0,
                 advances: true,
+                exclusive: false,
             }],
         )]);
         for storage in [false, true] {
@@ -321,12 +366,19 @@ mod cancellation_tests {
                     vec![Edge {
                         to: (n + 1) % 32,
                         advances: true,
+                        exclusive: false,
                     }],
                 )
             })
             .collect();
         let productive_set: HashSet<_> = nodes.iter().copied().collect();
-        let own = HashMap::from([(0, 1)]);
+        let own = HashMap::from([(
+            0,
+            expansion::Own {
+                scratch: 1,
+                applications: 1,
+            },
+        )]);
         for stage in [0, 1] {
             let polls = AtomicUsize::new(0);
             let cancel = || polls.fetch_add(1, Ordering::SeqCst) >= 10;

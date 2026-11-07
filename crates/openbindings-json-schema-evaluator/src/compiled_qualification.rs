@@ -5,7 +5,9 @@ use openbindings_schema_evaluator_test_support::{run, suite};
 use serde_json::json;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 static HEALTHY: AtomicBool = AtomicBool::new(false);
+mod expansion;
 mod literal_scratch;
+mod product_corpus;
 
 /// Independent preparation of the pinned current original-schema Plan. It does
 /// not construct a compiled owner and then disable it.

@@ -3,16 +3,23 @@
 mod admission;
 mod bundle;
 mod depth;
+mod expansion;
 mod operands;
 mod pass;
 mod pattern;
 mod recursion;
 pub(super) const MAXIMUM_NODES: usize = 100_000;
+// A pre-entry work estimate, independent of scratch and caller work controls.
+// 10 million lost a valid source-puller verdict. 40 million keeps the corpus
+// maximum coefficient (39) compiled at the default million-node parser limit.
+pub(super) const MAXIMUM_EVALUATION_APPLICATIONS: usize = 40_000_000;
 #[cfg(test)]
 pub(super) mod entries {
     use std::cell::Cell;
     thread_local! {
         static COUNTS: Cell<[usize; 3]> = const { Cell::new([0; 3]) };
+        static EXPANSION: Cell<Option<usize>> = const { Cell::new(None) };
+        static APPLICATIONS: Cell<Option<usize>> = const { Cell::new(None) };
     }
     pub(crate) fn record(stage: usize) {
         COUNTS.with(|counts| {
@@ -26,6 +33,18 @@ pub(super) mod entries {
     }
     pub(crate) fn snapshot() -> [usize; 3] {
         COUNTS.with(Cell::get)
+    }
+    pub(crate) fn record_expansion(applications: usize) {
+        EXPANSION.with(|count| count.set(Some(applications)));
+    }
+    pub(crate) fn take_expansion() -> Option<usize> {
+        EXPANSION.with(|count| count.replace(None))
+    }
+    pub(crate) fn record_applications(applications: usize) {
+        APPLICATIONS.with(|count| count.set(Some(applications)));
+    }
+    pub(crate) fn take_applications() -> Option<usize> {
+        APPLICATIONS.with(|count| count.replace(None))
     }
 }
 use openbindings::*;
@@ -145,6 +164,19 @@ pub(super) struct Prepared {
 }
 impl Lane {
     #[cfg(test)]
+    pub(super) fn without_application_bound(&self) -> Self {
+        let Self::Compiled(prepared) = self else {
+            return self.clone();
+        };
+        let mut features = prepared.features.clone();
+        features.applications = 0;
+        Self::Compiled(Arc::new(Prepared {
+            inner: prepared.inner.clone(),
+            features,
+            reservation: prepared.reservation,
+        }))
+    }
+    #[cfg(test)]
     pub(super) fn qualified_depth(&self) -> Option<usize> {
         match self {
             Self::Original(_) => None,
@@ -234,6 +266,16 @@ impl Lane {
             return None;
         }
         let features = &prepared.features;
+        // Root node_count is constant time. Saturation also declines overflow
+        // on wasm32. Keep this estimate before any synchronous backend work,
+        // after the existing cancellation and inherited-stop precedence.
+        if features
+            .applications
+            .saturating_mul(backend::node_count(value.view()))
+            > MAXIMUM_EVALUATION_APPLICATIONS
+        {
+            return None;
+        }
         if features.recursive && features.integer {
             // Integer typing is separate from allocation-free scalar literals.
             // Plain integer tokens use the backend's allocation-free lexical

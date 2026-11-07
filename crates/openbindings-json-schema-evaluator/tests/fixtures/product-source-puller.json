@@ -1,0 +1,466 @@
+{
+  "openbindings": "0.2.0",
+  "schemas": {
+    "OpenBindingsInterface": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "PullContext": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "PullSourceInput": {
+      "type": "object",
+      "properties": {
+        "interface": {
+          "$ref": "#/schemas/OpenBindingsInterface"
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "context": {
+          "$ref": "#/schemas/PullContext"
+        }
+      },
+      "required": [
+        "interface",
+        "source"
+      ],
+      "additionalProperties": false
+    },
+    "Binding": {
+      "type": "object",
+      "properties": {
+        "operation": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "data": {},
+        "idempotent": {
+          "type": "boolean"
+        },
+        "preference": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "description": {
+          "type": "string"
+        },
+        "deprecated": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "operation",
+        "source"
+      ],
+      "additionalProperties": true
+    },
+    "JSONSchemaValue": {
+      "type": [
+        "object",
+        "boolean"
+      ]
+    },
+    "PullAdditions": {
+      "type": "object",
+      "properties": {
+        "operations": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object"
+          }
+        },
+        "schemas": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/schemas/JSONSchemaValue"
+          }
+        },
+        "bindings": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/schemas/Binding"
+          }
+        }
+      }
+    },
+    "PullUses": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "PullLoss": {
+      "type": "object",
+      "properties": {
+        "reasonCode": {
+          "type": "string",
+          "minLength": 1
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "reasonCode",
+        "message"
+      ]
+    },
+    "PullAddedEntry": {
+      "type": "object",
+      "properties": {
+        "binding": {
+          "type": "string",
+          "minLength": 1
+        },
+        "operation": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reused": {
+          "const": true
+        },
+        "uses": {
+          "$ref": "#/schemas/PullUses"
+        },
+        "lossy": {
+          "$ref": "#/schemas/PullLoss"
+        }
+      },
+      "required": [
+        "binding",
+        "operation"
+      ]
+    },
+    "PullBindingProposal": {
+      "type": "object",
+      "properties": {
+        "data": {},
+        "input": {
+          "$ref": "#/schemas/JSONSchemaValue"
+        },
+        "output": {
+          "$ref": "#/schemas/JSONSchemaValue"
+        },
+        "uses": {
+          "$ref": "#/schemas/PullUses"
+        }
+      },
+      "anyOf": [
+        {
+          "required": [
+            "data"
+          ]
+        },
+        {
+          "required": [
+            "input"
+          ]
+        },
+        {
+          "required": [
+            "output"
+          ]
+        }
+      ]
+    },
+    "PullSourceProposal": {
+      "type": "object",
+      "properties": {
+        "data": {}
+      },
+      "required": [
+        "data"
+      ]
+    },
+    "PullExistingEntry": {
+      "type": "object",
+      "properties": {
+        "binding": {
+          "type": "string",
+          "minLength": 1
+        },
+        "schema": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "current",
+            "stale",
+            "unmatched"
+          ]
+        },
+        "change": {
+          "type": "string",
+          "enum": [
+            "breaking",
+            "dangerous",
+            "non-breaking"
+          ]
+        },
+        "proposal": {},
+        "reasonCode": {
+          "type": "string",
+          "minLength": 1
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "allOf": [
+        {
+          "oneOf": [
+            {
+              "required": [
+                "binding"
+              ],
+              "properties": {
+                "schema": false,
+                "source": false,
+                "proposal": {
+                  "$ref": "#/schemas/PullBindingProposal"
+                }
+              }
+            },
+            {
+              "required": [
+                "schema"
+              ],
+              "properties": {
+                "binding": false,
+                "source": false,
+                "proposal": {
+                  "$ref": "#/schemas/JSONSchemaValue"
+                }
+              }
+            },
+            {
+              "required": [
+                "source"
+              ],
+              "properties": {
+                "binding": false,
+                "schema": false,
+                "proposal": {
+                  "$ref": "#/schemas/PullSourceProposal"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "oneOf": [
+            {
+              "properties": {
+                "status": {
+                  "const": "current"
+                },
+                "proposal": false,
+                "change": false,
+                "reasonCode": false,
+                "message": false,
+                "details": false
+              }
+            },
+            {
+              "properties": {
+                "status": {
+                  "const": "stale"
+                }
+              },
+              "required": [
+                "proposal",
+                "change"
+              ]
+            },
+            {
+              "properties": {
+                "status": {
+                  "const": "unmatched"
+                },
+                "proposal": false,
+                "change": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "PullOmittedEntry": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "excluded",
+            "invalid",
+            "implementation-unsupported",
+            "conflict"
+          ]
+        },
+        "reasonCode": {
+          "type": "string",
+          "minLength": 1
+        },
+        "message": {
+          "type": "string"
+        },
+        "rule": {
+          "type": "string",
+          "minLength": 1
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "status",
+        "reasonCode",
+        "message"
+      ],
+      "oneOf": [
+        {
+          "properties": {
+            "status": {
+              "const": "excluded"
+            }
+          },
+          "required": [
+            "rule"
+          ]
+        },
+        {
+          "properties": {
+            "status": {
+              "enum": [
+                "invalid",
+                "implementation-unsupported",
+                "conflict"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "PullLimitation": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ]
+    },
+    "PullReport": {
+      "type": "object",
+      "properties": {
+        "exhaustive": {
+          "type": "boolean"
+        },
+        "limitation": {
+          "$ref": "#/schemas/PullLimitation"
+        },
+        "added": {
+          "type": "array",
+          "items": {
+            "$ref": "#/schemas/PullAddedEntry"
+          }
+        },
+        "existing": {
+          "type": "array",
+          "items": {
+            "$ref": "#/schemas/PullExistingEntry"
+          }
+        },
+        "omitted": {
+          "type": "array",
+          "items": {
+            "$ref": "#/schemas/PullOmittedEntry"
+          }
+        }
+      },
+      "required": [
+        "exhaustive",
+        "added"
+      ],
+      "oneOf": [
+        {
+          "properties": {
+            "exhaustive": {
+              "const": true
+            }
+          }
+        },
+        {
+          "properties": {
+            "exhaustive": {
+              "const": false
+            }
+          },
+          "required": [
+            "limitation"
+          ]
+        }
+      ]
+    },
+    "PullSourceResult": {
+      "type": "object",
+      "properties": {
+        "additions": {
+          "$ref": "#/schemas/PullAdditions"
+        },
+        "report": {
+          "$ref": "#/schemas/PullReport"
+        }
+      },
+      "required": [
+        "additions",
+        "report"
+      ]
+    }
+  },
+  "operations": {
+    "op": {
+      "input": {
+        "$ref": "#/schemas/PullSourceResult"
+      }
+    }
+  }
+}

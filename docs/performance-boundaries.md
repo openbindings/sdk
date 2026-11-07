@@ -41,6 +41,66 @@ estimate pays for that scan. A decimal, exponent or wider integer stays declined
 recursive admission and `uniqueItems` keep their existing rules. This is a
 scratch selection rule, not a time bound or total memory measurement.
 
+At preparation, an acyclic graph must also fit the recursive proof's existing
+100,000-application finite-expansion ceiling. A memoized fold counts one for
+each reached schema plus the weights of every outgoing reference and active
+applicator occurrence, preserving duplicate paths. Counts saturate at 100,001;
+the fold takes time linear in graph nodes and edges. Over the ceiling, selection
+returns `acyclic-finite-expansion-profile` and retains the Original lane before
+projection or compiler entry. This preparation rule, recursive admission,
+scratch charges, public limits and defaults are unchanged.
+
+Before evaluating a value, the compiled lane also requires
+`schema_applications * value_nodes <= MAXIMUM_EVALUATION_APPLICATIONS`.
+The ceiling is 40,000,000. The retained schema coefficient counts one per
+application plus one per enum choice, because this lane compares choices
+linearly. A parsed root's node count is constant time and includes member-name
+tokens. Saturating multiplication declines overflow. Above the ceiling the
+value selects Original before `is_valid`; cancellation and inherited-stop
+checks retain precedence. This estimate is separate from the scratch estimate
+and caller work cap so a future selection policy can reuse it.
+
+The backend shares compiled targets but does not memoize their answers.
+References and same-instance applicators sum every occurrence. Within one
+schema node, sibling `properties` and `prefixItems` select disjoint subtrees,
+so the coefficient uses their largest weight. Object and array selectors are
+also mutually exclusive. Separate applicator sites, `patternProperties`,
+`contains` and other potentially overlapping selectors still sum, including
+repeated paths through ancestors. Recursive schemas retain the weighted finite
+cut-DAG count, summed across productive entries, from their existing proof.
+
+`required` rejects an object shorter than its list before lookups; its remaining
+lookups are bounded by the value's member count. Wide `properties` walks value
+members and small property/required scans have fixed cutoffs. They do not add
+an independent schema-width multiplier. This is a bound on weighted application
+expansion times value size, not all keyword cost or elapsed time. Pattern work,
+comparison length, indexed lookup and exact arithmetic still affect latency.
+The initial 10,000,000 candidate lost a valid 10 MB source-puller verdict on
+Original. The final 40,000,000 ceiling keeps all 879 corpus slots below the
+product boundary for every value the default one-million-node parser admits:
+the largest tightened coefficient is 39. At the measured 20 ns per ordinary
+application this permits about 800 ms of uncancellable compiled work. Original
+observes caller controls; its default work cap remains unset as described in
+[support.md](support.md).
+
+A two-reference `allOf` diamond with an operation input reference has
+`4 * 2^levels - 2` expanded applications: 14 levels fit the preparation ceiling,
+and 15 levels select Original. Timeout-protected tests decide 40 and 64 levels
+with object, bounded integer and string-enum leaves, also under `anyOf`, `oneOf`,
+`not` and `if`, at default and explicit limits. Original reuses completed
+applications; the tests check passing and failing values against an independent
+Boolean recurrence and pin 100,000 versus 100,001 applications exactly.
+
+The 2026-11-07 comparison moved zero routes in 879 production schema slots,
+the 1,546-case qualification kit and 35 protocol schema fixtures. The largest
+structural acyclic production count measured by admission was 480. Enum
+weighting raises that slot to 650 before disjoint-selector tightening and 26
+after it. Across all 879 slots, the tightened median is 4, the 90th percentile
+is 10 and the maximum is 39. At five bytes per node, none crosses the initial
+10,000,000 candidate below 1 MB after tightening; 33 would before it. A separate shallow
+schema with 4,096 properties referencing one shared definition counts 8,193
+applications and stays compiled.
+
 On 2026-10-15, paired release measurements against revision `3fd152c` on macOS
 arm64 / Rust 1.99.0 produced the following medians, including shared carrier inspection
 and compact reference routing. Preparation includes schema parsing, minimal document proof, resource
@@ -207,12 +267,14 @@ explanation takes about twice a check's stack per level, so explanations are
 built only within half that nesting. The stack table below gives each host's
 margins.
 
-Evaluation time has no default bound. It grows with the schema and the value,
-and for some schemas exponentially: 30 levels of `anyOf` that each name the
-next level twice, ending in `false` (under 2 KB), take about 2.5 s to check
-`{}`, 28 levels 1.1 s and 26 levels 0.29 s (measured 2026-10-21 on revision
-`2b45ce5`). `evaluation_steps` bounds it; a cap of 1,000,000 stops the
-30-level check with `evaluation-work-limit` in about 20 ms. The same nest of
+Evaluation time has no default wall-clock bound. The historical compiler on
+revision `2b45ce5` took about 2.5 s for 30 levels of `anyOf` that each name the
+next level twice, ending in `false` (under 2 KB), checking `{}`; 28 levels took
+1.1 s and 26 levels 0.29 s (measured 2026-10-21). Those diamonds now exceed
+the preparation-time expansion ceiling above and take Original, whose completed
+application reuse avoids the exponential traversal. In that historical revision,
+`evaluation_steps` capped the 30-level check at 1,000,000 work units with
+`evaluation-work-limit` in about 20 ms. The same nest of
 `unevaluatedProperties` holders no longer reaches evaluation: from 8 levels its
 annotation walk weighs more than the evaluator admits and preparation refuses
 it (`unevaluated-walk-limit`) in under 1 ms, and 7 levels prepare and check

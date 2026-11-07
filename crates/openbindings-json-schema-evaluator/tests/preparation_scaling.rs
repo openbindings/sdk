@@ -280,6 +280,36 @@ fn resource_diamonds_reuse_completed_applications() {
 }
 
 #[test]
+fn default_resource_diamonds_at_hostile_depths_finish_without_a_work_cap() {
+    let (send, receive) = std::sync::mpsc::channel();
+    let worker = std::thread::spawn(move || {
+        for levels in [40, 64] {
+            for (leaf, yes, no) in [
+                (r#""type":"object""#, "{}", "1"),
+                (r#""type":"integer","minimum":0"#, "1", "-1"),
+                (r#""enum":["a","b"]"#, "\"a\"", "\"c\""),
+            ] {
+                let contract = prepare(&diamonds_ending(levels, leaf)).unwrap();
+                assert!(matches!(
+                    contract.evaluate_json(yes).unwrap(),
+                    ValueOutcome::Satisfies
+                ));
+                assert!(matches!(
+                    contract.evaluate_json(no).unwrap(),
+                    ValueOutcome::Fails { .. }
+                ));
+            }
+        }
+        send.send(()).unwrap();
+    });
+    // A missing admission guard must fail, never join an exponential pass.
+    receive
+        .recv_timeout(std::time::Duration::from_secs(20))
+        .expect("default-limits resource diamonds exceeded 20 seconds");
+    worker.join().unwrap();
+}
+
+#[test]
 fn layered_models_reuse_original_schemas_across_resources() {
     // Supplied as separate resources, or as `$id` resources in the document,
     // a layered model reaches its deepest schemas along hundreds of paths.

@@ -9,6 +9,7 @@ use std::collections::BTreeSet;
 #[derive(Clone, Default)]
 pub(super) struct Features {
     pub scratch: bool,
+    pub applications: usize,
     pub integer: bool,
     pub literals: bool,
     pub noninteger_bound: bool,
@@ -125,6 +126,7 @@ pub(super) fn select(
                     .map(|&to| recursion::Edge {
                         to,
                         advances: false,
+                        exclusive: false,
                     })
                     .collect(),
             )
@@ -168,6 +170,7 @@ pub(super) fn select(
             return Ok(Err("original-annotation-or-recursive-scope"));
         }
         let mut weight = 0usize;
+        let mut applications = 1usize;
         let scalar_start = scalar_literals.nodes;
         if let Some(types) = profile.get(value, "type") {
             let integer = types.as_str() == Some("integer")
@@ -207,6 +210,7 @@ pub(super) fn select(
         }
         if let Some(choices) = profile.get(value, "enum").and_then(|v| v.elements()) {
             for literal in choices {
+                applications = applications.saturating_add(1);
                 recursive_scalar_only &=
                     !matches!(literal.kind(), JsonKind::Array | JsonKind::Object);
                 recursive_allocation_free &= matches!(
@@ -228,10 +232,26 @@ pub(super) fn select(
             features.literals = true;
             weight = weight.saturating_add(1);
         }
-        own.insert(node, weight);
+        // Enum choices are linear alternatives even for a scalar subject.
+        // Required first rejects objects shorter than its list, so its lookups
+        // are bounded by value member count (small scans have a fixed cutoff).
+        // Wide properties walks value members; small properties has a fixed
+        // cutoff too. Neither adds schema-width work independent of value size.
+        // String comparison, indexed lookup and regex cost remain outside this
+        // application coefficient, as do other constant keyword factors.
+        own.insert(
+            node,
+            expansion::Own {
+                scratch: weight,
+                applications,
+            },
+        );
         scratch_own.insert(
             node,
-            weight.saturating_sub(scalar_literals.nodes - scalar_start),
+            expansion::Own {
+                scratch: weight.saturating_sub(scalar_literals.nodes - scalar_start),
+                applications,
+            },
         );
         // Reuse resolved reference targets, and add original active child
         // applications. Keep same-instance edges for projection and every edge
@@ -292,6 +312,10 @@ pub(super) fn select(
                     edges.entry(node).or_default().push(recursion::Edge {
                         to: target,
                         advances: !in_place,
+                        // Distinct names or indices within this one applicator
+                        // select disjoint subtrees. Different applicator sites,
+                        // patterns, contains and references still add.
+                        exclusive: matches!(keyword, "properties" | "prefixItems"),
                     });
                 }
             }
@@ -364,44 +388,15 @@ pub(super) fn select(
             return Ok(Err("restored-private-pattern-profile"));
         }
     }
-    // Acyclic paths retain their cumulative exact-scratch bound. Productive
-    // recursion has a separate pre-entry qualification, never a constant
-    // substituted for that cumulative bound.
-    let mut weights = HashMap::<usize, usize>::new();
-    let mut visiting = std::collections::HashSet::new();
-    let mut recursive = false;
-    'weights: for &root in &nodes {
-        let mut pending = vec![(root, false)];
-        while let Some((node, leaving)) = pending.pop() {
-            attempt.check().map_err(PreparationFailure::from)?;
-            if weights.contains_key(&node) {
-                continue;
-            }
-            let edges = edges.get(&node).map(Vec::as_slice).unwrap_or(&[]);
-            if leaving {
-                visiting.remove(&node);
-                let sum = edges
-                    .iter()
-                    .fold(*scratch_own.get(&node).unwrap_or(&0), |total, child| {
-                        total.saturating_add(*weights.get(&child.to).unwrap_or(&0))
-                    });
-                weights.insert(node, sum);
-                features.multiplier = features.multiplier.max(sum);
-            } else {
-                if !visiting.insert(node) {
-                    recursive = true;
-                    break 'weights;
-                }
-                pending.push((node, true));
-                for child in edges {
-                    if !weights.contains_key(&child.to) {
-                        pending.push((child.to, false));
-                    }
-                }
-            }
+    if let Some(weight) = expansion::fold(&nodes, &edges, &scratch_own, attempt)? {
+        #[cfg(test)]
+        entries::record_expansion(weight.applications);
+        if weight.applications > MAXIMUM_NODES {
+            return Ok(Err("acyclic-finite-expansion-profile"));
         }
-    }
-    if recursive {
+        features.multiplier = weight.scratch;
+        features.applications = weight.coefficient;
+    } else {
         // Recursion qualification and its exact weight retain every original
         // literal charge. Restore those operands for its existing estimate too.
         // Only the acyclic fold discounts allocation-free scalar literals.
@@ -428,7 +423,10 @@ pub(super) fn select(
         // Discard the partial acyclic fold; only the complete cut-DAG proof
         // supplies this multiplier, summed across distinct productive entries.
         features.multiplier = proof.exact;
+        features.applications = proof.applications;
     }
+    #[cfg(test)]
+    entries::record_applications(features.applications);
     features.multiplier = features.multiplier.max(1);
     // SDK conversion/index owners have their own coarse reservation. Opaque
     // dependency construction is admitted by the retained baseline profile and

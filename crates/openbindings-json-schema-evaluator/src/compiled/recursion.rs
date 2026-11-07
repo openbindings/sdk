@@ -9,9 +9,11 @@ mod graph;
 pub(super) struct Edge {
     pub to: usize,
     pub advances: bool,
+    pub exclusive: bool,
 }
 pub(super) struct Proof {
     pub exact: usize,
+    pub applications: usize,
 }
 
 pub(super) fn qualifies(
@@ -20,7 +22,7 @@ pub(super) fn qualifies(
     nodes: &[usize],
     reach: &Reach,
     applications: &HashMap<usize, Vec<Edge>>,
-    own: &HashMap<usize, usize>,
+    own: &HashMap<usize, expansion::Own>,
     control: &dyn Control,
 ) -> Result<Result<Proof, &'static str>, PreparationFailure> {
     // Cycle reachability, reverse edges, finite folds and entry sets are

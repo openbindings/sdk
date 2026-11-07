@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-11-07 compiled expansion selection (unreleased)
+
+- Bound acyclic compiled schema expansion at preparation using the recursive
+  proof's existing 100,000-application ceiling. Larger graphs take the Original
+  lane with reason `acyclic-finite-expansion-profile` before compiler entry.
+- Count repeated reference and applicator paths with a saturating memoized fold.
+  Shared definitions remain shared during preparation.
+- Before compiled evaluation, bound weighted schema expansion times value node
+  count. Over 40,000,000 applications selects Original before backend entry.
+  Include enum choices, use the largest disjoint sibling property or prefix-item
+  weight, and retain overlapping paths. Recursive admission, scratch charges,
+  public limits and defaults are unchanged.
+
 ## 2026-11-07 compiled scratch selection (unreleased)
 
 - String, boolean and null literals no longer inflate the acyclic compiled
