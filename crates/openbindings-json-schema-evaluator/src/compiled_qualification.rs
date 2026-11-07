@@ -8,6 +8,7 @@ static HEALTHY: AtomicBool = AtomicBool::new(false);
 mod expansion;
 mod literal_scratch;
 mod product_corpus;
+mod regex_search;
 
 /// Independent preparation of the pinned current original-schema Plan. It does
 /// not construct a compiled owner and then disable it.

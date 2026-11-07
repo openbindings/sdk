@@ -326,7 +326,9 @@ export interface Reference {
       };
 }
 
-/** Original-context reference inspection, separate from normative proof and preparation. complete describes traversal completion; a complete report can still contain unresolved reference results. */
+/** Original-context reference inspection, separate from normative proof and preparation. complete describes traversal completion; a complete report can still contain unresolved reference results.
+ * Retains at most 8 MiB of aggregate generated-pointer bytes across reference, target and refusal locations: UTF-8, or two bytes per UTF-16 unit through an unpaired name. The first entry that does not fit stops traversal, sets complete to false and reports a limit-exceeded limitation with code `reference-pointer-bytes` and no omitted location.
+ */
 export interface ReferenceReport {
   /** Retained reference observations in traversal order. */
   references: readonly Reference[];

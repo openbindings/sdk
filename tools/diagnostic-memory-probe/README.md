@@ -45,6 +45,22 @@ The verifier rejects diagnostic API calls in the two fixed-check modules. It als
 requires exact agreement between validity-only and fixed-check verdicts/refusals
 for every sample.
 
+## Reference report pointers
+
+The verifier also runs `tests/reference_report_bytes.rs`, a separate test binary
+whose global allocator refuses live allocations above 256 MiB. Its conformant
+long-key and shared-long-target documents contain 20,000 references. Both public
+inspection routes retain exactly eight entries totaling 8 MiB, then stop. Removing
+the report bound hits the allocator ceiling before the unbounded report can
+retain about 20 GiB. The binary also runs the existing reference-inspection
+fixtures unchanged and checks UTF-16 keyword suffixes and unresolved locations.
+
+Successful pointer measurement is linear in retained pointer content (at most
+8 MiB), plus the first omitted entry's paths and constant per-entry work. Traversal stops there, so no suffix of deep
+omitted references is repeatedly walked and no per-source size table is needed.
+The measure is relative to the source root and uses constant scratch space.
+Pointer construction retains its existing ancestor scratch and output cost.
+
 ## Near misses
 
 The fixed checks have no work budget: their patterns run on the library's

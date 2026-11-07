@@ -957,6 +957,9 @@ pub fn pointer_size(value: crate::JsonRef<'_>, limit: usize) -> Option<usize> {
     Some(size)
 }
 
+/// Shared aggregate generated-pointer allowance for diagnostic reports.
+pub const MAX_REPORT_POINTER_BYTES: usize = 8 * 1024 * 1024;
+
 /// Bound the bytes a retained location's exact pointer keeps before
 /// constructing it: its UTF-8 bytes, or two bytes per UTF-16 unit when an
 /// ancestor's name holds an unpaired unit. None means the budget is exceeded.

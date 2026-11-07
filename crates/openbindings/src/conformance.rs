@@ -405,7 +405,7 @@ fn input_limit_message(code: &str, limits: JsonLimits, bytes: usize) -> String {
     )
 }
 const MAX_FINDINGS: usize = 4096;
-const MAX_FINDING_POINTER_BYTES: usize = 8 * 1024 * 1024;
+const MAX_FINDING_POINTER_BYTES: usize = backend::MAX_REPORT_POINTER_BYTES;
 struct Checks<'a> {
     evidence: [Evidence; 14],
     findings: Vec<Finding>,

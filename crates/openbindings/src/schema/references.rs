@@ -245,6 +245,11 @@ impl std::fmt::Debug for Reference {
 }
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 /// Bounded original-context reference inspection, not conformance proof or successful schema preparation.
+/// Retains at most 8 MiB of aggregate generated-pointer bytes, including reference,
+/// target and refusal locations: UTF-8, or two bytes per UTF-16 unit through a
+/// name with an unpaired surrogate. The first entry that does not fit stops
+/// traversal, sets `complete` to false and reports `LimitExceeded` with code
+/// `reference-pointer-bytes`, without a location for the omitted entry.
 /// Later versions may add fields: read them by name and match with `..`.
 #[non_exhaustive]
 pub struct ReferenceReport {

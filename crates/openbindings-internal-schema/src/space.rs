@@ -8,8 +8,8 @@ use crate::{
     uri, *,
 };
 use openbindings_internal_json::backend::{
-    has_unpaired, location_pointer_size, node_id, pointer_into, push_pointer, ref_id,
-    relative_pointer,
+    MAX_REPORT_POINTER_BYTES, has_unpaired, location_pointer_size, node_id, pointer_into,
+    push_pointer, ref_id, relative_pointer, relative_pointer_size,
 };
 pub use original::QueryFailure;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
@@ -288,6 +288,11 @@ impl std::fmt::Debug for Reference {
 }
 #[derive(Clone, Debug, Serialize)]
 /// Bounded original-context reference inspection, not conformance proof or successful schema preparation.
+/// Retains at most 8 MiB of aggregate generated-pointer bytes, including reference,
+/// target and refusal locations: UTF-8, or two bytes per UTF-16 unit through a
+/// name with an unpaired surrogate. The first entry that does not fit stops
+/// traversal, sets `complete` to false and reports `LimitExceeded` with code
+/// `reference-pointer-bytes`, without a location for the omitted entry.
 pub struct ReferenceReport {
     /// Retained reference observations in traversal order.
     pub references: Vec<Reference>,
@@ -860,6 +865,19 @@ impl SchemaSpace {
         reference: &str,
         missing: &mut impl FnMut(&str),
     ) -> Result<Target, Failure> {
+        self.resolve_unlocated(holder, reference, missing)
+            .map_err(|mut failure| {
+                failure.location = Some(self.location(holder));
+                failure
+            })
+    }
+    // Report inspection measures every retained pointer before locating failures.
+    fn resolve_unlocated(
+        &self,
+        holder: usize,
+        reference: &str,
+        missing: &mut impl FnMut(&str),
+    ) -> Result<Target, Failure> {
         self.query(holder, reference).map_err(|cause| {
             use QueryFailure as Q;
             let (reason, code, message) = match &cause {
@@ -922,7 +940,7 @@ impl SchemaSpace {
                     "the resource identity has competing carriers",
                 ),
             };
-            let mut failure = self.failure(holder, reason, code, message);
+            let mut failure = Failure::new(reason, code, message);
             failure.query_failure = Some(Box::new(cause));
             failure
         })
@@ -933,6 +951,22 @@ impl SchemaSpace {
             references: Vec::new(),
             complete: true,
             limitation: None,
+        };
+        let mut pointer_bytes = MAX_REPORT_POINTER_BYTES;
+        let measure = |id: usize, remaining| {
+            let node = self.node(id);
+            relative_pointer_size(
+                node.value.view(),
+                self.source(node.source).value.view(),
+                remaining,
+            )
+        };
+        let pointer_limit = || {
+            Failure::new(
+                FailureReason::LimitExceeded,
+                "reference-pointer-bytes",
+                "reference inspection stops at 8 MiB of generated pointer bytes",
+            )
         };
         let mut pending = VecDeque::new();
         let mut supplied = HashMap::<usize, Vec<usize>>::new();
@@ -957,14 +991,19 @@ impl SchemaSpace {
             }
             if node.depth > 256 {
                 report.complete = false;
-                report.limitation.get_or_insert_with(|| {
-                    self.failure(
+                if report.limitation.is_none() {
+                    let Some(bytes) = measure(id, pointer_bytes) else {
+                        report.limitation = Some(pointer_limit());
+                        break;
+                    };
+                    pointer_bytes -= bytes;
+                    report.limitation = Some(self.failure(
                         id,
                         FailureReason::LimitExceeded,
                         "schema-depth",
                         "reference inspection stops below 256 schema levels",
-                    )
-                });
+                    ));
+                }
                 continue;
             }
             for keyword in ["$ref", "$dynamicRef"] {
@@ -973,14 +1012,34 @@ impl SchemaSpace {
                     let target = spelling
                         .as_deref()
                         .ok_or_else(|| {
-                            self.failure(
-                                id,
+                            Failure::new(
                                 FailureReason::ConservativePreparation,
                                 "reference-type",
                                 "reference is not a string",
                             )
                         })
-                        .and_then(|s| self.resolve(id, s));
+                        .and_then(|s| self.resolve_unlocated(id, s, &mut |_| {}));
+                    // Measure the keyword itself so UTF-16 pointers charge the
+                    // suffix in the same representation as their ancestor names.
+                    let bytes = relative_pointer_size(
+                        value,
+                        self.source(node.source).value.view(),
+                        pointer_bytes,
+                    )
+                    .and_then(|source_bytes| {
+                        let target_id = target.as_ref().map_or(id, |target| target.node);
+                        measure(target_id, pointer_bytes - source_bytes)
+                            .map(|target_bytes| source_bytes + target_bytes)
+                    });
+                    let Some(bytes) = bytes else {
+                        report.complete = false;
+                        report.limitation = Some(pointer_limit());
+                        // Unlike conformance, no independent verdict remains to
+                        // establish. All successful walks are charged to the
+                        // retained bytes; only this first omitted entry adds work.
+                        return report;
+                    };
+                    pointer_bytes -= bytes;
                     let resolution = match target {
                         Ok(target) => {
                             // Visit a supplied source and its nested resources
@@ -994,7 +1053,10 @@ impl SchemaSpace {
                                     && target.dynamic_name.is_some(),
                             }
                         }
-                        Err(detail) => ReferenceResolution::Unresolved { detail },
+                        Err(mut detail) => {
+                            detail.location = Some(self.location(id));
+                            ReferenceResolution::Unresolved { detail }
+                        }
                     };
                     let mut location = self.location(id);
                     // Reference keywords need no escape.

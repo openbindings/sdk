@@ -90,6 +90,32 @@ fn supplied_resource_references_are_reported_transitively_once() {
     assert!(report.complete);
     assert!(report.limitation.is_none());
     assert_eq!(report.references.len(), 4);
+    // Freeze every field of this existing small transitive fixture, including
+    // traversal order and the separately owned unresolved location.
+    let origin = |source: Option<&str>, pointer: &str| serde_json::json!({"source_uri":source,"pointer":pointer});
+    let located = |source, pointer, spelling, target| {
+        serde_json::json!({
+            "location":origin(source, pointer),"keyword":"$ref","spelling":spelling,
+            "resolution":{"status":"located","target":origin(Some(target), ""),"dynamic_lookup":false}
+        })
+    };
+    assert_eq!(
+        serde_json::to_value(&report).unwrap(),
+        serde_json::json!({
+            "complete":true,"limitation":null,"references":[
+                located(None, "/operations/op/input/$ref", "https://example.test/a", "https://example.test/a"),
+                located(Some("https://example.test/a"), "/$ref", "b", "https://example.test/b"),
+                located(Some("https://example.test/b"), "/allOf/0/$ref", "a", "https://example.test/a"),
+                {"location":origin(Some("https://example.test/b"), "/allOf/1/$ref"),"keyword":"$ref","spelling":"missing",
+                 "resolution":{"status":"unresolved","detail":{
+                    "reason":"resource-unavailable","code":"resource-unavailable",
+                    "message":"resolution requires a resource that was not supplied",
+                    "location":origin(Some("https://example.test/b"), "/allOf/1"),
+                    "resource_uri":"https://example.test/missing"
+                 }}}
+            ]
+        })
+    );
     assert!(
         report.references[..3]
             .iter()

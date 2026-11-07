@@ -42,9 +42,50 @@ for each level of the derived schema's finite depth. The admission limits
 therefore bound each check's work; its memory is the stored document, a bounded
 matcher cache and the capped findings; and its stack depth follows the fixed
 schemas, not the instance (`document_stack` runs 12,000-deep schemas on a
-256 KiB thread). The library catches the regex crate's known search panic
-(rust-lang/regex#1344) only under `panic = "unwind"`; no fixed pattern has
-reached it in the differential's matches.
+256 KiB thread). The library catches regex's known search panic
+([rust-lang/regex#1344](https://github.com/rust-lang/regex/issues/1344)) only under
+`panic = "unwind"`. The pinned SDK settings make that panic unreachable for
+customer patterns as well as the small fixed patterns; this does not depend on
+unwinding on wasm32.
+
+The meta engine exposes the bounded backtracker only for a span no longer than
+`max_haystack_len()`. With its default 256 KiB visited bitmap, the wrapper's
+unwrap can fail only for an empty span and more than 2,097,152 final NFA states.
+The SDK's `COMPILED_SIZE` is 32 MiB. The pinned Thompson builder charges every
+builder state plus its heap payload and rejects excess before returning an NFA;
+conversion never increases state count. Builder states are 32 bytes on native
+64-bit and 16 on wasm32, so even ignoring payload the respective upper bounds
+are 1,048,576 and 2,097,152 states. The latter is inclusive and the panic needs
+strictly more. Final states are 24 and 20 bytes respectively; those sizes are
+not the sizes charged by builder admission.
+
+Actual customer admission is much tighter. Original preparation first requires
+at most 65,536 dispatch pressure and 1 MiB helper payload per pattern, together
+with its AST and translation profile. Limited programs cannot select compiled
+evaluation. Compiled admission also excludes names containing `{` and excludes
+such value patterns without a Simple matcher. Searching concatenations and
+alternations of Unicode classes, astral ranges, dot and negated classes found
+180,332 final states for 16,382 literal `[U+0081-U+80001]` classes concatenated
+without quantifiers. That is a measured maximum among the searched shapes,
+not an exhaustive maximum over patterns. Its margin is 1,916,820 states on both
+native and wasm32. A nullable variant of 16,379 classes followed by `|` has
+180,300 states, a margin of 1,916,852, and exercises an empty match without a
+minimum-length rejection.
+
+`compiled_qualification::regex_search::dense_customer_patterns_keep_empty_search_below_backtracker_capacity`
+counts the normalized forms with the Thompson configuration used by
+`regex::RegexBuilder`: UTF-8 syntax and empty matches, forward construction,
+all captures, no shrinking, and the same 32 MiB size limit. It checks the
+bounded backtracker directly and, through public preparation, checks an empty
+string and an empty member name for both patterns. Route counters require
+compiled construction and evaluation. One more class must select Original
+before backend entry. `packages/typescript/test/regex-search-boundary.test.mjs`
+repeats the public searches in Wasm. State counts are target-independent for
+these forms and pinned compiler settings; builder layout, memory usage, stack
+headroom and panic behavior are target-dependent. Recheck the argument, sizes,
+counts, admission boundaries and both tests whenever any regex-family dependency
+or the Original pattern profile changes. The evaluator pins regex exactly to
+1.13.1 alongside regex-automata 0.4.18 and regex-syntax 0.8.11.
 
 Three regressions guard these facts:
 

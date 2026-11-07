@@ -2,6 +2,11 @@
 
 ## 2026-11-07 compiled expansion selection (unreleased)
 
+- Bound reference reports to the same 8 MiB generated-pointer allowance as
+  conformance findings. Stop at the first omitted entry with
+  `reference-pointer-bytes`, including located targets and refusal locations.
+- Pin regex 1.13.1 exactly and qualify dense admitted customer patterns on empty
+  strings and member names against the bounded-backtracker search panic.
 - Run the compiled lane's release-only stack boundary tests on every host; they
   had been ignored in debug builds and selected by no release command.
 - Qualify compiled depth fallback through the public Wasm API with shared Node,
