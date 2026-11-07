@@ -49,7 +49,8 @@ def main():
             (subject / "src/compiled" / name).write_bytes(previous)
     source = (subject / "src/lib.rs").read_text()
     source = source.replace("#![forbid(unsafe_code)]\n", "")
-    source += f'\n#[path = "{root / "tools/literal-scratch/measure.rs"}"]\nmod literal_scratch_measure;\n'
+    measure = (root / "tools/literal-scratch/measure.rs").as_posix()
+    source += f'\n#[path = "{measure}"]\nmod literal_scratch_measure;\n'
     (subject / "src/allocation_main.rs").write_text(source)
     compiled = subject / "src/compiled/mod.rs"
     with compiled.open("a") as output:
