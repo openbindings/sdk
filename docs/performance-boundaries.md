@@ -152,29 +152,6 @@ these builds, with instruction-identical hot functions at other alignments; with
 `full` rows of 20,000-item arrays measured about 1–2% slower while their
 preparation, parse and evaluation rows measured 0.99–1.00.
 
-On 2026-10-20, composing the default evaluator over the unmodified library was
-compared with `94b6991`, where core already used the unmodified library, by the
-benchmark harness's cross-API pairs (macOS arm64, Rust 1.99.0, two batches of 20
-adjacent randomized pairs). Over the 85 compared rows the geometric mean time
-ratio was 0.88: first use 0.75 to 0.91, preparation 0.89 to 1.17 (geometric
-mean 0.96) and evaluation 0.27 to 1.48 (geometric mean 0.78); document rows
-were unchanged. Eleven rows declare a changed outcome (a missing resource's
-no-verdict now names it, an absent pointer target refuses preparation instead
-of being undefined, a megabyte string fails instead of exhausting the former
-regex allowance, explanations without schema details) and make no timing or
-memory decision. The `unevaluated-patterns` preparation rows exceed the heap
-and allocation policy: they take 1.16 to 1.18 times as long (2.57 ms to
-2.99 ms), with 9 to 10% more allocations, 11 to 13% more requested bytes and
-18 to 20% more transient peak heap (323 KB), while the prepared value contract
-retains 12% less. That residual is the cost of the unevaluated-walk transform
-on this shape, where the library's walk compiles the `true` subschemas the
-transform leaves once for each walk; the harness declares it accepted, with
-bounds just above these ratios, and the enforced comparison passes. The
-workload's evaluation row, which the stack guard covers, measured 1.00.
-`work-stop`, evaluating under a 16-unit cap, stops 71 ns later. Process heap
-retained with a prepared value contract before any timed operation fell by about
-458 KB.
-
 On 2026-10-24, preparation was compared with `8be7fe3` by the benchmark
 harness's identical instrument pairs (macOS arm64, Rust 1.99.0, two batches of
 20 adjacent randomized pairs, one-minute load 1.6 to 6.8). Preparation now
@@ -206,79 +183,33 @@ the SDK's validation and preparation of a document from its bytes went from
 790-byte object, an array of such objects, a `propertyNames` map and a
 recursive tree; median of ten fresh processes, one-minute load 2.1 to 3.4).
 
-No evaluation work cap applies by default, so values as large as the default
-1,000,000-node admission limit are decided, in time that grows with the schema
-and the value. A cap set with `Limits::evaluation_steps` charges a unit for each
-schema a reference enters and for each element, member and literal comparison
-step, and stops a pass with `evaluation-work-limit` once it spends the cap; a
-700,000-integer array against a referenced item schema spends two units per
-element (`evaluation_budgets`). Preparing with a cap places a marker keyword
-before every reference, wrapping each reference in one more schema, so a capped
-value contract's validator is slightly larger, and each reference a value's
-evaluation follows nests one more schema evaluation. The depth bound below counts
-those evaluations, so within the same stack a recursive value contract decides
-fewer levels with a cap, at worst about half as many: an array nested through one
-subschema reference per level nests five schema evaluations per level instead of
-three, and at the default stack decides 203 levels instead of 340.
+No caller evaluation work cap applies by default. Setting
+`Limits::evaluation_sdk_work_units` selects Original and bounds SDK-defined
+work debits. These units are not a wall-clock deadline. The default evaluation
+storage reservation is 48 MiB; exhaustion returns a limit no-verdict.
 
-Evaluation depth is bounded before evaluation, from the stack the host gives
-(`Limits::stack_bytes`, 256 KiB by default). Preparation derives from the
-bundled value contract's references a bound on the schema objects an evaluation path
-can hold for a value of a given depth, and a value whose bound exceeds the
-nesting the stack holds at 256 bytes for each schema evaluation (1,024 at the
-default) gets `evaluation-depth-limit` without being evaluated, with a message
-giving the deepest level the value contract evaluates and the setting to raise. The
-bound is the lesser of two: one from the reference graph's
-strongly connected components, and one from its descents (a path holds at most
-the entry's same-instance run, then for each level of the value one descent
-and one same-instance run), so a long chain of descents admits shallow values.
-The check reads the value's node count, scans its nesting only when the count
-does not settle it, stops at the first container nested too deep, and
-allocates nothing for a value nested at most 32 levels. The bound is static,
-so a deep value contract whose paths only some values follow refuses the others too
-(a same-instance chain of 400 `anyOf` levels refuses every value).
+Compiled evaluation recurses in the backend library. Preparation computes a
+static bound on simultaneously held schema evaluations from the bundled
+reference graph, and `depth::bound(...).deepest(1024)` sets its maximum value
+depth. The figure is fixed, independent of caller settings and host stack size.
+`Compiled::nests_within` tests the node count, then container nesting if needed.
+A deeper value returns `None` from compiled selection and runs on Original;
+crossing this boundary does not itself produce a no-verdict. Compiled execution
+has no run-time stack guard. Its static bound requires separate qualification
+on each host and build.
 
-The library's `unevaluatedProperties` and `unevaluatedItems` validators take
-larger frames and recurse through the schemas they read, about 1 KiB per
-level for one recursing through its own subschema beside an `anyOf` and up to
-about 18 KiB per level for one whose walk follows a 30-reference chain,
-against about 330 bytes for `additionalProperties`; the static bound does not
-model that. So a value contract holding one is guarded as it evaluates: every read
-the library makes of a child instance already passes through the SDK's value
-adapter, which compares the stack address it runs at with the address the
-pass started at (each level of the value is such a read). A pass that has
-used more than half of `stack_bytes`, 128 KiB at the default, stops with
-`evaluation-depth-limit`: from then on every read fails,
-so the library stops descending and its answer is discarded. The guard bounds
-the stack's bytes, not a depth: how deep a value it admits depends on the
-frames the code takes, so the deepest admitted values below vary with the build
-and the host, and what each host qualifies is the margin in the stack table.
-The guard adds
-no schema keyword, so preparation is unchanged; each read pays an address
-comparison. Checking a 20,000-integer array took 131 µs instead of 100 µs, and
-a 100-level object 9.8 µs instead of 9.5 µs, against a value contract holding an
-unevaluated keyword that does not apply to the value, compared with the same
-value contract without it. Release builds prepare 39 recursive value contract shapes,
-including both reviews' unevaluated chains, and check and explain their deepest
-admitted values on threads of 192 KiB, 256 KiB and 1 MiB with the evaluator
-sized for each (`evaluation_stack`); at the default the deepest admitted range
-from 7 levels, for a 24-reference walk at every level, to 340. Building an
-explanation takes about twice a check's stack per level, so explanations are
-built only within half that nesting. The stack table below gives each host's
-margins.
+Original evaluates with heap frames. It samples stack addresses against
+`SAMPLED_STACK_BYTES` (256 KiB) and can return `evaluation-stack-limit`.
+Samples are an additional observation, not a bound on helper peaks or on an
+engine's native call stack. Explain always uses Original. The internal JSON
+`work::guard` currently has no production caller, so the compiled
+`Stop::Stack` to `evaluation-depth-limit` mapping is unreachable through the
+SDK's current production paths. There is no public stack-byte setting.
+See [Stack](#stack) for current native and Wasm evidence.
 
-Evaluation time has no default wall-clock bound. The historical compiler on
-revision `2b45ce5` took about 2.5 s for 30 levels of `anyOf` that each name the
-next level twice, ending in `false` (under 2 KB), checking `{}`; 28 levels took
-1.1 s and 26 levels 0.29 s (measured 2026-10-21). Those diamonds now exceed
-the preparation-time expansion ceiling above and take Original, whose completed
-application reuse avoids the exponential traversal. In that historical revision,
-`evaluation_steps` capped the 30-level check at 1,000,000 work units with
-`evaluation-work-limit` in about 20 ms. The same nest of
-`unevaluatedProperties` holders no longer reaches evaluation: from 8 levels its
-annotation walk weighs more than the evaluator admits and preparation refuses
-it (`unevaluated-walk-limit`) in under 1 ms, and 7 levels prepare and check
-`{}` in about 4 ms.
+Evaluation has no default wall-clock bound. Graphs exceeding the compiled
+expansion ceiling take Original, whose completed-application reuse avoids
+repeating the same application along exponential reference diamonds.
 
 Patterns nested to the default depth of 32 prepare, and values are checked
 against them, within a 256 KiB thread stack in release builds. The regex
@@ -475,97 +406,84 @@ the 4,000-resource chain the entry cap refused, and now refuse too.
 | The same with 8,000 resources | 244.7 MiB | refused |
 | 1,000 resources sharing one with `required` of 100,000 names, with a reachable dynamic anchor | under 1 KiB | prepared |
 
-Preparation has no work charge of its own. Core's projection refuses a value contract
-reaching more than 100,000 schema positions (`schema-node-limit`), which bounds
-its time and memory; that bound is core's, shared with its fixed document
-checks. Within it, two library behaviors grow faster than
-the value contract. Each time the library defers a nested `$ref` target it copies
-every in-progress reference placeholder, so a long same-document reference chain
-prepares in time quadratic in its length. An `unevaluatedProperties` keyword
-walks the schemas it can reach once for each schema holding it, and compiles
-that walk by recursion, so preparation weighs each walk and refuses one that
-weighs more than `stack_bytes` admits (`unevaluated-walk-limit`, at the
-keyword): a fifth of the stack is left to the caller's frames, 99 KiB to the
-rest of preparation, and each unit of weight takes 1 KiB, so 105 at the default
-256 KiB, 54 at 192 KiB and 310 at 512 KiB. A reference
-weighs 4, each `allOf`, `anyOf` or `oneOf` on its path 5 more, each `if`,
-`then`, `else` or `dependentSchemas` 7 more, and reaching another holder 1 more,
-since the library compiles that holder's walk there, so each level of a walk
-weighs at least the KiB of stack it takes on every host measured (a `$ref` takes
-at most 3.8 KiB, an `allOf` level 12.2 KiB and a `then` or `dependentSchemas`
-level 13.3 KiB). The default admits 26 direct `$ref`s (21 when every level also
-holds `unevaluatedProperties`), 8 levels of `allOf: [{"$ref": ...}]` inheritance
-(7), and 7 levels through `then`, `else` or `dependentSchemas` (6). The library
-also compiles up to eight `$ref` targets on the stack before it defers the next,
-and those it is compiling when it reaches the holder add up to 48 KiB, which
-the 99 KiB holds together with preparation's other frames and the stack a
-Windows thread keeps for itself.
+Preparation uses the shared original-schema inventory and its work and storage
+allowances. Unevaluated keywords select Original before compiled entry. The
+outgoing compiler's stack-sized annotation-walk policy and its margin tables
+no longer describe this code and have been removed.
 
 ### Stack
 
-`walk_stack` prepares the longest walk of each kind below 0 to 40 levels of
-enclosing `properties` on threads of 192 KiB, 256 KiB and 512 KiB, with a fifth
-of each already in use and the evaluator sized for it, so every host keeps that
-much headroom; one level more refuses. Release builds with Rust 1.99.0 on
-GitHub's hosted runners, 2026-10-21: the most stack that can already be in use
-on a 256 KiB thread when the longest admitted walk still prepares at its worst
-enclosing depth, giving each row's kind with the least to spare (the thread
-itself leaves 249.5 KiB usable on Linux, 225.5 KiB on Windows and 255.5 KiB on
-macOS):
+At `1d8b757`, the three compiled boundary release lib tests exercise satisfying
+and failing linear chains at the deepest admitted compiled value and the next
+reachable value depth on native threads of 256 KiB and 1 MiB. They cover the
+recursive integer array, named, enum, binary, minimum, additional and union
+shapes. The verifier and package CI run those exact tests in release mode.
+The tests passed on macOS arm64 with Rust 1.99.0 on 2026-11-07. This is a
+survival qualification at those thread sizes, not a measurement of unused bytes.
 
-| Walk | Levels admitted | Linux x86_64 | Windows x86_64 | macOS arm64 |
-| --- | --- | --- | --- | --- |
-| `$ref` | 26 | 91.5 KiB, 36% | 57.0 KiB, 22% | 108.0 KiB, 42% |
-| `allOf`, `anyOf` or `oneOf` inheritance | 8 | 91.5 KiB, 36% | 57.0 KiB, 22% | 107.5 KiB, 42% |
-| `then` or `else` | 7 | 97.0 KiB, 38% | 61.5 KiB, 24% | 113.0 KiB, 44% |
-| `dependentSchemas` | 7 | 93.0 KiB, 36% | 58.5 KiB, 23% | 109.0 KiB, 43% |
-| A holder at every level | 21, 7 or 6 | 103.0 KiB, 40% | 69.0 KiB, 27% | 119.5 KiB, 47% |
+| Shape | Compiled check maximum container depth | Chain depth at that boundary |
+| --- | ---: | ---: |
+| Recursive integer array | 203 | 203 |
+| Named | 340 | 170 |
+| Enum | 340 | 170 |
+| Binary | 340 | 340 |
+| Minimum | 340 | 340 |
+| Additional | 340 | 340 |
+| Union | 203 | 102 |
 
-The same measurement at each stack size, giving the kind with the least to
-spare; the walk limit and the direct `$ref`s it admits follow from the size:
+Explain always runs on Original, so it has no compiled admission boundary.
+The native tests compute these bounds with `qualified_depth()`; the Wasm
+walk uses only public TypeScript APIs at default limits. Its shared module is
+[`compiled-depth.mjs`](../packages/typescript/test/compiled-depth.mjs), used by
+Node and the Chromium/WebKit harness and importable by a plain Worker after
+SDK initialization. It checks both verdicts with `evaluate` and `explain`,
+accepting only the expected verdict or a `limit-exceeded` no-verdict. Any
+thrown error fails the walk.
 
-| `stack_bytes` and thread | Walk limit | `$ref`s | Linux x86_64 | Windows x86_64 | macOS arm64 |
-| --- | --- | --- | --- | --- | --- |
-| 128 KiB | 3 | 0 | no walk through a reference | no walk through a reference | no walk through a reference |
-| 192 KiB | 54 | 13 | 74.5 KiB, 39% | 40.5 KiB, 21% | 91.0 KiB, 47% |
-| 256 KiB | 105 | 26 | 91.5 KiB, 36% | 57.0 KiB, 22% | 107.5 KiB, 42% |
-| 384 KiB | 208 | 52 | 125.0 KiB, 33% | 87.5 KiB, 23% | 141.0 KiB, 37% |
-| 512 KiB | 310 | 77 | 163.5 KiB, 32% | 123.5 KiB, 24% | 179.0 KiB, 35% |
-| 1 MiB | 720 | 180 | 304.0 KiB, 30% | 254.5 KiB, 25% | 317.5 KiB, 31% |
-| 2 MiB | 1,539 | 384 | 589.0 KiB, 29% | 518.0 KiB, 25% | 598.5 KiB, 29% |
+A linear chain's evaluation path at one depth is a prefix of the next, so its
+stack use grows with depth and the deepest admitted compiled value is the one
+that can overflow. The walk covers every chain length from 64 links below
+each compiled boundary through 128 links beyond it, shallower lengths every
+16 links, and from there every 1,024 links to the default parser ceiling of
+10,000 container levels, where the Original lane keeps its frames on the
+heap. Named and enum chains have two container levels per node and only even
+depths. Union uses both a leaf object and an empty branch terminal to cover
+odd and even depths. The report retains both units, and every shape reaches
+10,000 container levels. A Rust test pins each shape's compiled boundary to
+the figure the walk is centred on.
 
-The share falls toward about a quarter as the stack grows, because each unit's
-measured cost stays below the KiB it is charged and the 99 KiB matters less;
-it is least at small stacks on Windows, whose thread keeps about 30 KiB for
-itself. Evaluation, measured the same way from the top of the thread for the
-39 shapes `evaluation_stack` covers (those whose walk the size admits), gives the
-most stack that can already be in use when each shape's deepest admitted value
-is still checked and explained and one level more refused:
+On 2026-11-07, Node v22.19.0 / V8 12.4.254.21-node.29 on macOS arm64 ran
+the walk from the Wasm artifact built from `1d8b757` in 13.6 seconds; an
+earlier version that walked every depth to the compiled boundary and every
+128 links beyond made 12,968 calls in 48.9 seconds with the same results.
+Every call returned the expected verdict, with no no-verdict codes or thrown
+errors. Each shape's deepest sampled check and explanation, for both
+satisfying and failing values, was 10,000 container levels. These are deepest
+observed verdicts, not a claim that evaluation stops there. The dense walk
+crosses compiled selection; explanations and deeper checks exercise Original.
 
-| `stack_bytes` and thread | Nested evaluations | Shapes prepared | Linux x86_64 | Windows x86_64 | macOS arm64 |
-| --- | --- | --- | --- | --- | --- |
-| 128 KiB | 512 | 8 | 53.0 KiB, 41% | 13.5 KiB, 11% | 68.0 KiB, 53% |
-| 192 KiB | 768 | 19 | 87.0 KiB, 45% | 35.0 KiB, 18% | 97.0 KiB, 51% |
-| 256 KiB | 1,024 | 29 | 114.0 KiB, 45% | 58.5 KiB, 23% | 126.5 KiB, 49% |
-| 384 KiB | 1,536 | 32 | 174.0 KiB, 45% | 103.5 KiB, 27% | 185.0 KiB, 48% |
-| 512 KiB | 2,048 | 35 | 228.0 KiB, 45% | 150.0 KiB, 29% | 244.0 KiB, 48% |
-| 1 MiB | 4,096 | 39 | 460.0 KiB, 45% | 329.5 KiB, 32% | 479.0 KiB, 47% |
-| 2 MiB | 8,192 | 39 | 979.0 KiB, 48% | 692.5 KiB, 34% | 948.0 KiB, 46% |
+The same walk also passed with `--stack-size=512`, `256` and `192` KiB.
+At 160 KiB, compiled binary evaluation threw `RangeError` at depth 288;
+at 144 and 128 KiB, compiled integer-array evaluation threw at depths 201
+and 178. This Node build reports an 864 KiB default, so the passing 192 KiB
+run demonstrates 672 KiB of headroom in the configured V8 stack budget.
+It does not measure exact live stack bytes or cover extra caller frames.
+The reduced-stack probes are outside the test suite.
 
-The derivations are qualified from 128 KiB to 2 MiB on these hosts; outside
-that range they follow the same arithmetic but are not measured. Subschemas
-written in place rather than referenced weigh less and keep more:
-11 levels of `allOf` and 9 of `then` or `dependentSchemas` are admitted at the
-default, and keep at least 24% on Windows. `unevaluatedItems` walks take less
-stack than `unevaluatedProperties` walks of the same kind and keep at least 37%.
-The previous weighting, measured on macOS alone, admitted 16 levels of `allOf`
-inheritance, which overflowed a 256 KiB thread on Linux. The stack guard bounds
-validation, not this compilation. In the Wasm build, the stack the guard
-measures is the module's own 1 MiB stack, while the JavaScript engine's call
-stack bounds how deep the module's calls go: Node 22 checks and explains the
-deepest admitted values of the shapes probed at up to 512 KiB, and at 1 MiB a
-guarded value contract's deepest admitted value overflowed the engine's stack, which
-the guard does not see.
+The artifact's shadow stack starts at 1 MiB in linear memory. V8 separately
+limits native call depth, which the Original sampler cannot observe. A Wasm
+trap does not unwind Rust frames or restore their stack-pointer updates;
+continuing with that instance is not a recovery strategy.
+
+Local workerd 2026-11-04 (compatibility date 2026-09-28) ran the same module
+from a plain Worker on 2026-11-07 and passed at its default stack and with
+`--stack-size=512` and `256` KiB, in 14 seconds. At 192 KiB compiled binary
+evaluation threw `RangeError` at depth 318, at 160 KiB at depth 257, and at
+128 KiB compiled integer-array evaluation at depth 129, so a Worker needs
+between 192 and 256 KiB of V8 stack for the deepest admitted values, more
+than Node does. Cloudflare's production stack size was not measured. Hosted
+CI runs the module in Chromium and WebKit; these results are specific to the
+hosts named.
 
 Release measurements on macOS arm64, Rust 1.99.0, 2026-10-20, against `b6ef531`
 (minimum of three preparations in one fresh process per shape; peak resident
@@ -798,8 +716,10 @@ value the run matcher matches it.
 A host that prepares schemas from
 untrusted parties should prepare them in an isolated worker or process with
 an operating-system memory limit, as it would with any JSON Schema library.
-Values checked against trusted schemas stay bounded by `stack_bytes`
-and, when the host sets one, `evaluation_steps`.
+Value evaluation uses the compiled static admission bound or Original heap
+frames and sampled stack observation, plus SDK storage reservations and any
+caller-selected `evaluation_sdk_work_units` cap. These do not bound total
+process memory or elapsed time.
 
 ## Stand-ins
 
@@ -1050,7 +970,8 @@ The absolute full-validation peak was 17,949,677 bytes. Value cases exercise
 1,000- and 50,000-element arrays, directly, through a reference and under a work
 cap. These are bounds
 for the recorded fixtures, not all inputs. Document findings separately retain at
-most 4,096 entries and 8 MiB of pointers. Value explanations have the library's
-allocation limits and are made only within half the evaluation depth limit. See
+most 4,096 entries and 8 MiB of pointers. Value explanations use Original and share its evaluation storage and work
+allowances; exhausted diagnostics preserve an established failure with
+incomplete problems. See
 [allocation methodology](../tools/diagnostic-memory-probe/README.md) and
 [MSRV and stack qualifications](support.md).

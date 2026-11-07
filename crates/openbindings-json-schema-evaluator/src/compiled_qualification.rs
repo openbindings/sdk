@@ -762,6 +762,12 @@ fn a_skipped_active_carrier_cannot_disappear_from_shared_compiler_facts() {
 }
 
 const RECURSIVE_INTEGER_ARRAY: &str = r##"{"$defs":{"node":{"anyOf":[{"type":"integer"},{"type":"array","items":{"$ref":"#/$defs/node"}}]},"unused":{"const":false}},"$ref":"#/$defs/node"}"##;
+const ORDINARY_NAMED: &str = r##"{"type":"object","properties":{"name":{"type":"string"},"children":{"type":"array","items":{"$ref":"#"}}},"required":["name","children"],"additionalProperties":false}"##;
+const ORDINARY_ENUM: &str = r##"{"type":"object","properties":{"name":{"type":"string"},"kind":{"enum":["branch","leaf"]},"children":{"type":"array","items":{"$ref":"#"}}},"required":["name","kind","children"],"additionalProperties":false}"##;
+const ORDINARY_BINARY: &str = r##"{"type":["object","null"],"properties":{"left":{"$ref":"#"},"right":{"$ref":"#"}},"required":["left","right"],"additionalProperties":false}"##;
+const PRODUCTIVE_MINIMUM: &str = r##"{"type":["object","null"],"properties":{"value":{"type":"integer","minimum":0},"left":{"$ref":"#"},"right":{"$ref":"#"}},"required":["value","left","right"],"additionalProperties":false}"##;
+const PRODUCTIVE_ADDITIONAL: &str = r##"{"type":"object","properties":{"name":{"type":"string"}},"required":["name"],"additionalProperties":{"$ref":"#"}}"##;
+const PRODUCTIVE_UNION: &str = r##"{"oneOf":[{"type":"object","properties":{"kind":{"const":"leaf"},"value":{"type":"integer"}},"required":["kind","value"],"additionalProperties":false},{"type":"object","properties":{"kind":{"const":"branch"},"children":{"type":"array","items":{"$ref":"#"}}},"required":["kind","children"],"additionalProperties":false}]}"##;
 fn nested(leaf: &str, depth: usize) -> JsonValue {
     JsonValue::parse(format!("{}{leaf}{}", "[".repeat(depth), "]".repeat(depth))).unwrap()
 }
@@ -1028,18 +1034,9 @@ fn compiled_scalar_equality_preserves_an_enclosing_preparation_work_stop() {
 )]
 fn ordinary_recursive_boundaries_run_on_qualified_native_threads() {
     let schemas = [
-        (
-            "named",
-            r##"{"type":"object","properties":{"name":{"type":"string"},"children":{"type":"array","items":{"$ref":"#"}}},"required":["name","children"],"additionalProperties":false}"##,
-        ),
-        (
-            "enum",
-            r##"{"type":"object","properties":{"name":{"type":"string"},"kind":{"enum":["branch","leaf"]},"children":{"type":"array","items":{"$ref":"#"}}},"required":["name","kind","children"],"additionalProperties":false}"##,
-        ),
-        (
-            "binary",
-            r##"{"type":["object","null"],"properties":{"left":{"$ref":"#"},"right":{"$ref":"#"}},"required":["left","right"],"additionalProperties":false}"##,
-        ),
+        ("named", ORDINARY_NAMED),
+        ("enum", ORDINARY_ENUM),
+        ("binary", ORDINARY_BINARY),
     ];
     let mut rows = Vec::new();
     for (name, schema) in schemas {
@@ -1568,9 +1565,9 @@ fn recursive_scalar_reservation_boundary_selects_before_backend_entry() {
     ignore = "release-only productive scalar recursion stack qualification"
 )]
 fn productive_scalar_recursive_boundaries_fit_qualified_threads() {
-    let minimum = r##"{"type":["object","null"],"properties":{"value":{"type":"integer","minimum":0},"left":{"$ref":"#"},"right":{"$ref":"#"}},"required":["value","left","right"],"additionalProperties":false}"##;
-    let additional = r##"{"type":"object","properties":{"name":{"type":"string"}},"required":["name"],"additionalProperties":{"$ref":"#"}}"##;
-    let union = r##"{"oneOf":[{"type":"object","properties":{"kind":{"const":"leaf"},"value":{"type":"integer"}},"required":["kind","value"],"additionalProperties":false},{"type":"object","properties":{"kind":{"const":"branch"},"children":{"type":"array","items":{"$ref":"#"}}},"required":["kind","children"],"additionalProperties":false}]}"##;
+    let minimum = PRODUCTIVE_MINIMUM;
+    let additional = PRODUCTIVE_ADDITIONAL;
+    let union = PRODUCTIVE_UNION;
     let mut rows = Vec::new();
     for (name, schema) in [
         ("minimum", minimum),
@@ -1853,4 +1850,31 @@ fn recursive_wide_schema_exponents_fund_each_subject_before_entry() {
         "recursive-schema-exponent-boundary.json",
         &json!({"rows":rows,"default_reservation_bytes":limit,"full_observations_equal":true,"largest_operand_funded_and_next_byte_original_before_entry":true}),
     );
+}
+
+// `packages/typescript/test/compiled-depth.mjs` walks the Wasm build densely
+// around these compiled boundaries, in container levels. Change both together.
+#[test]
+fn wasm_depth_walk_bounds_match_native_selection() {
+    for (schema, expected) in [
+        (RECURSIVE_INTEGER_ARRAY, 203),
+        (ORDINARY_NAMED, 340),
+        (ORDINARY_ENUM, 340),
+        (ORDINARY_BINARY, 340),
+        (PRODUCTIVE_MINIMUM, 340),
+        (PRODUCTIVE_ADDITIONAL, 340),
+        (PRODUCTIVE_UNION, 203),
+    ] {
+        let (selected, _) = owners(
+            schema,
+            &ExternalSchemas::default(),
+            Limits::default(),
+            PreparationLimits::default(),
+        );
+        assert_eq!(
+            selected.compiled.qualified_depth(),
+            Some(expected),
+            "{schema}"
+        );
+    }
 }

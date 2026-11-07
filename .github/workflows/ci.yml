@@ -103,6 +103,7 @@ jobs:
         run: |
           cargo test --locked -p openbindings --test document_stack
           cargo test --locked --release -p openbindings-json-schema-evaluator --test pattern_stack --test evaluation_stack --test walk_stack
+          cargo test --locked --release -p openbindings-json-schema-evaluator --lib -- --exact compiled_qualification::recursive_compiled_boundary_runs_on_qualified_native_threads compiled_qualification::ordinary_recursive_boundaries_run_on_qualified_native_threads compiled_qualification::productive_scalar_recursive_boundaries_fit_qualified_threads compiled_qualification::wasm_depth_walk_bounds_match_native_selection compiled_qualification::expansion::product_default_large_diamonds_finish_without_backend_entry
       - name: Check out the SDK's declared specification
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:

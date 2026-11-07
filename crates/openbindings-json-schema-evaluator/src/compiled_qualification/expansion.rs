@@ -429,12 +429,26 @@ fn product_boundary_preserves_cancellation_and_both_verdicts() {
 fn product_default_large_diamonds_finish_without_backend_entry() {
     // Each case gets its own deadline. A removed check enters the uncancellable
     // backend and fails hard, including if it eventually returns a true verdict.
+    // Debug builds run the Original fallback unoptimized, so they use a value
+    // just over the ceiling for both leaves (4,095 applications times 20,001
+    // nodes) and a smaller enum. Release builds, which tools/verify.py and the
+    // package CI job run, check the measured sizes and the 1,024-choice enum.
+    let (counts, choices): (&[usize], usize) = if cfg!(debug_assertions) {
+        (&[20_000], 64)
+    } else {
+        (&[100_000, 500_000], 1024)
+    };
+    // The ladder's 1,023 inner applications and 1,024 leaf paths, each paying
+    // one application and one per choice.
+    let enum_applications = 4095 + 1024 * choices;
+    let last = format!("\"v{}\"", choices - 1);
     for enumeration in [false, true] {
-        for count in [100_000, 500_000] {
+        for &count in counts {
+            let last = last.clone();
             timely_with_deadline(
                 move || {
                     let leaf = if enumeration {
-                        json!({"enum":(0..1024).map(|i| format!("v{i}")).collect::<Vec<_>>()})
+                        json!({"enum":(0..choices).map(|i| format!("v{i}")).collect::<Vec<_>>()})
                     } else {
                         json!({"type":"integer","minimum":0})
                     };
@@ -449,7 +463,7 @@ fn product_default_large_diamonds_finish_without_backend_entry() {
                     .unwrap();
                     assert_eq!(
                         compiled::entries::take_applications(),
-                        Some(if enumeration { 1_052_671 } else { 4095 })
+                        Some(if enumeration { enum_applications } else { 4095 })
                     );
                     assert!(matches!(selected.compiled, compiled::Lane::Compiled(_)));
                     let original = prepare_document(
@@ -459,7 +473,7 @@ fn product_default_large_diamonds_finish_without_backend_entry() {
                         &PreparationLimits::default(),
                     )
                     .unwrap();
-                    let value = array_value(if enumeration { "\"v1023\"" } else { "1" }, count);
+                    let value = array_value(if enumeration { &last } else { "1" }, count);
                     compiled::entries::take();
                     let start = Instant::now();
                     let actual = selected.evaluate(&value, Detail::Outcome, &HEALTHY);
@@ -472,7 +486,7 @@ fn product_default_large_diamonds_finish_without_backend_entry() {
                         "outcome":serialized(actual)}),
                     );
                     for (item, valid) in [
-                        (if enumeration { "\"v1023\"" } else { "1" }, true),
+                        (if enumeration { last.as_str() } else { "1" }, true),
                         (if enumeration { "\"absent\"" } else { "-1" }, false),
                     ] {
                         let small = array_value(item, 2);

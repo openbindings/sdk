@@ -82,6 +82,10 @@ files.set(
   await fs.readFile(path.join(packageRoot, "test/execution-frames.mjs")),
 );
 files.set(
+  "/compiled-depth.mjs",
+  await fs.readFile(path.join(packageRoot, "test/compiled-depth.mjs")),
+);
+files.set(
   "/reference-preparation.mjs",
   await fs.readFile(path.join(packageRoot, "test/reference-preparation.mjs")),
 );
@@ -171,6 +175,7 @@ try {
           "/diagnostic-budget-cases.mjs"
         );
       const { executionFrameCases } = await import("/execution-frames.mjs");
+      const { compiledDepthCases } = await import("/compiled-depth.mjs");
       const { referencePreparationCases } = await import(
         "/reference-preparation.mjs"
       );
@@ -191,6 +196,7 @@ try {
         core: run(requests.core),
         suite: run(requests.suite),
         executionFrames: executionFrameCases(sdk),
+        compiledDepth: compiledDepthCases(sdk),
         referencePreparation: referencePreparationCases(sdk),
         syntaxFacts: syntaxFactCases(sdk, syntaxInput),
         originalExplain: (
@@ -271,6 +277,10 @@ try {
   await fs.writeFile(
     path.join(output, "execution-frames.json"),
     JSON.stringify(result.executionFrames, null, 2),
+  );
+  await fs.writeFile(
+    path.join(output, "compiled-depth.json"),
+    JSON.stringify(result.compiledDepth, null, 2),
   );
   await fs.writeFile(
     path.join(output, "reference-preparation.json"),

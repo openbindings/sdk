@@ -58,6 +58,14 @@ run(['cargo', 'build', '--locked', '--release', '--workspace'])
 run(['cargo', 'test', '--locked', '--release', '-p', 'openbindings-json-schema-evaluator', '--test', 'pattern_stack'])
 run(['cargo', 'test', '--locked', '--release', '-p', 'openbindings-json-schema-evaluator', '--test', 'evaluation_stack'])
 run(['cargo', 'test', '--locked', '--release', '-p', 'openbindings-json-schema-evaluator', '--test', 'walk_stack'])
+# Compiled recursion witnesses and the large diamond values are lib tests run
+# in release on every host.
+run(['cargo', 'test', '--locked', '--release', '-p', 'openbindings-json-schema-evaluator', '--lib', '--', '--exact',
+     'compiled_qualification::recursive_compiled_boundary_runs_on_qualified_native_threads',
+     'compiled_qualification::ordinary_recursive_boundaries_run_on_qualified_native_threads',
+     'compiled_qualification::productive_scalar_recursive_boundaries_fit_qualified_threads',
+     'compiled_qualification::wasm_depth_walk_bounds_match_native_selection',
+     'compiled_qualification::expansion::product_default_large_diamonds_finish_without_backend_entry'])
 # Original-node frames have separate native stack witnesses; they are not covered
 # by the outgoing compiler's three integration-test targets above.
 run(['cargo', 'test', '--locked', '--release', '-p', 'openbindings-json-schema-evaluator', '--lib',

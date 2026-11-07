@@ -2,6 +2,10 @@
 
 ## 2026-11-07 compiled expansion selection (unreleased)
 
+- Run the compiled lane's release-only stack boundary tests on every host; they
+  had been ignored in debug builds and selected by no release command.
+- Qualify compiled depth fallback through the public Wasm API with shared Node,
+  browser and Worker cases, and replace obsolete stack-setting documentation.
 - Bound acyclic compiled schema expansion at preparation using the recursive
   proof's existing 100,000-application ceiling. Larger graphs take the Original
   lane with reason `acyclic-finite-expansion-profile` before compiler entry.
