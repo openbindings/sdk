@@ -1,6 +1,6 @@
 use openbindings::{ConformantDocument, Document, Edit, JsonRef, JsonValue};
 use openbindings_source_pull::*;
-use source_pull_consumer::{Embedded, Fixed};
+use source_pull_consumer::{Embedded, Fixed, using_the_result::keep_part};
 use std::{
     future::Future,
     sync::atomic::AtomicBool,
@@ -304,7 +304,7 @@ fn a_caller_can_keep_part_of_a_pull_by_following_schema_references() {
         .get("a")
         .unwrap()
         .to_owned();
-    // keep follows this input reference without requiring a uses label.
+    // keep_part follows this input reference without requiring a uses label.
     assert_eq!(
         operation
             .get("input")
@@ -314,14 +314,14 @@ fn a_caller_can_keep_part_of_a_pull_by_following_schema_references() {
             .as_str(),
         Some("#/schemas/S")
     );
-    let selected = result
-        .keep(
-            &request,
-            ["a"],
-            &PullLimits::default(),
-            &AtomicBool::new(false),
-        )
-        .unwrap();
+    let selected = keep_part(
+        &result,
+        &request,
+        &["a"],
+        &PullLimits::default(),
+        &AtomicBool::new(false),
+    )
+    .unwrap();
     assert!(
         selected
             .value()

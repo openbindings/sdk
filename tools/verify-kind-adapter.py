@@ -20,11 +20,15 @@ LOCAL = [
 def check_snippets():
     guide = (ROOT / "docs/writing-a-kind.md").read_text()
     snippets = re.findall(r'<!-- guide:([a-z]+) -->\n```rust\n(.*?)```', guide, re.S)
-    expected = {"setup", "invoke", "describe", "pull", "application"}
+    expected = {"setup", "invoke", "describe", "pull", "application", "partial", "proposals", "updates"}
     assert {name for name, _ in snippets} == expected and len(snippets) == len(expected)
     assert len(re.findall(r'^```rust\s*$', guide, re.M)) == len(snippets), "unverified Rust fence"
     for name, body in snippets:
-        source = FIXTURE / ("tests/adapter.rs" if name == "application" else "src/lib.rs")
+        source = FIXTURE / "src/lib.rs"
+        if name == "application":
+            source = FIXTURE / "tests/adapter.rs"
+        elif name in {"partial", "proposals", "updates"}:
+            source = ROOT / "examples/source-pull-consumer/src/using_the_result.rs"
         match = re.search(rf'// guide:{name}:start\n(.*?)// guide:{name}:end', source.read_text(), re.S)
         assert match and match[1] == body, f"guide snippet differs from compiled source: {name}"
     print(f"Guide: {len(snippets)} verbatim compiled snippets", flush=True)

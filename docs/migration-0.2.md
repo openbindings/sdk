@@ -101,12 +101,9 @@ claim is implied by this checkpoint.
 The current interfaces rule makes `uses` a list of additions needed by binding
 data only. Schema proposals carry `{schema}`. The SDK checks label shape,
 existence, uniqueness and self labels, and validates all additions together;
-it no longer requires `uses` to repeat schema-reference closure. Callers use
-`PullResult::keep` to select added bindings: it validates the full result, follows
-schema references and each reached binding's added operation and `uses`, and
-validates the selected document. Only `keep` and `RelationshipError::KeptBinding`
-are added to the public API; proposals remain manual edits and default limits
-are unchanged. The published pull-report corpus now has 38 cases, with 15 kind
+it no longer checks report or schema-reference closure. A caller keeping part
+of a pull follows schema references and each reached binding's operation and
+`uses`. The published pull-report corpus now has 38 cases, with 15 kind
 descriptor cases and five source-puller examples unchanged in count. The
 specification pin and historical alignment records are unchanged.
 

@@ -8,6 +8,7 @@ use openbindings_source_pull::*;
 use std::{collections::BTreeMap, future::Future, pin::Pin};
 
 mod kinds;
+pub mod using_the_result;
 pub use kinds::KindCatalog;
 
 fn json(text: &str) -> JsonValue {

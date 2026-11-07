@@ -698,17 +698,198 @@ out of `uses`. Their references already show the targets. A schema proposal is
 `{schema}` and has no list of needs. An addition may exist for a proposal even
 when no added binding needs it.
 
-Callers use `PullResult::keep` with the chosen added binding keys. It follows
-schema references and reached bindings' operations and `uses`, then returns a
-validated document, as the draft's
-[Using the result](https://github.com/openbindings/interfaces/blob/3e3dc453a93b611a8e9ea1813ec63a2216830f45/source-puller/README.md#using-the-result)
-describes.
+To keep part of a pull:
+
+1. Choose the `added` entries to keep and insert their bindings.
+2. Insert each binding's operation when it is an addition, and the additions
+   its `uses` names.
+3. Follow schema references from what you keep. Insert each target that is an
+   addition. Follow references through existing entries too.
+4. For every added binding reached along the way, insert its operation when
+   added and what its own `uses` names. Repeat until nothing new comes in.
+5. Validate the edited document before adopting it.
+
+These steps are application code. `validate_for` returns the document holding
+every addition, where references resolve, and its `references` report follows
+`$id` and anchors:
+
+<!-- guide:partial -->
+```rust
+/// Keep chosen added bindings and what they reach.
+pub fn keep_part(
+    result: &PullResult,
+    request: &PullRequest,
+    bindings: &[&str],
+    limits: &PullLimits,
+    control: &dyn WorkControl,
+) -> Result<ConformantDocument, Error> {
+    // References resolve in the document holding every addition.
+    let everything = result.validate_for(request, limits, control)?;
+    let references = everything.references();
+    if !references.complete {
+        return Err("reference inspection stopped early".into());
+    }
+
+    let additions = result.additions();
+    let is_addition = |pointer: &str| additions.value().value().at(pointer).is_some();
+    let mut wanted: Vec<String> = bindings
+        .iter()
+        .map(|key| format!("/bindings/{key}"))
+        .collect();
+    if let Some(unknown) = wanted.iter().find(|pointer| !is_addition(pointer)) {
+        return Err(format!("{unknown} is not an added binding").into());
+    }
+
+    let mut seen = BTreeSet::new();
+    while let Some(pointer) = wanted.pop() {
+        // A reference into an addition keeps the whole entry.
+        let entry = pointer.split('/').take(3).collect::<Vec<_>>().join("/");
+        let root = if is_addition(&entry) { entry } else { pointer };
+        if !seen.insert(root.clone()) {
+            continue;
+        }
+        // An added binding needs its added operation and what its `uses` names.
+        if let Some(key) = root.strip_prefix("/bindings/")
+            && let Some(added) = result
+                .report()
+                .added()
+                .find(|added| added.binding() == key)
+        {
+            if !added.reused() {
+                wanted.push(format!(
+                    "/operations/{}",
+                    added.operation().as_str().unwrap()
+                ));
+            }
+            for label in added.uses().into_iter().flatten() {
+                wanted.push(format!("/{}", label.as_str().unwrap()));
+            }
+        }
+        // Everything this entry refers to, through additions and existing entries.
+        let inside = format!("{root}/");
+        for reference in &references.references {
+            let from = reference.location.pointer.as_str().unwrap_or_default();
+            if let (true, ReferenceResolution::Located { target, .. }) =
+                (from.starts_with(&inside), &reference.resolution)
+                && target.source_uri.is_none()
+            {
+                wanted.push(target.pointer.as_str().unwrap().to_owned());
+            }
+        }
+    }
+
+    // `Edit::set` needs its parent, and one batch cannot create a map and fill it.
+    let mut document = request.interface().document().clone();
+    for map in ["schemas", "bindings"] {
+        let prefix = format!("/{map}/");
+        let needed = seen
+            .iter()
+            .any(|pointer| pointer.starts_with(&prefix) && is_addition(pointer));
+        if needed && document.value().get(map).is_none() {
+            document = document.edit(&[Edit::set(&[map], JsonValue::parse("{}")?)])?;
+        }
+    }
+    let edits: Vec<Edit> = seen
+        .iter()
+        .filter_map(|pointer| Some((pointer, additions.value().value().at(pointer)?)))
+        .map(|(pointer, value)| Edit::set_at(pointer.as_str(), value.to_owned()))
+        .collect();
+    if edits.is_empty() {
+        return Ok(request.interface().clone());
+    }
+    let edited = document.edit(&edits)?.validate()?;
+    edited
+        .conformant()
+        .ok_or_else(|| "the kept document does not conform".into())
+}
+```
+
+This walk sets no work limits of its own, which suits a source you trust.
 
 When applying a proposal, copy its permitted fields and remove what `remove`
-names. Follow schema references from its proposed schemas and, for a binding
-proposal, the additions its `uses` names; repeat for each reached addition and
-validate the edited document. This remains a manual edit; `keep` does not apply
-proposals. Retaining unknown proposal metadata gives it no edit authority.
+names. Retaining unknown proposal metadata gives it no edit authority.
+
+<!-- guide:proposals -->
+```rust
+/// One proposal as document edits: what it carries, copied onto the existing
+/// entry, and what its `remove` names. Unknown proposal metadata is not copied.
+pub fn proposal_edits(request: &PullRequest, entry: &ExistingEntry) -> Vec<Edit> {
+    let mut edits = Vec::new();
+    match (entry.target(), entry.proposal()) {
+        (ExistingTarget::Binding(key), Some(Proposal::Binding(proposal))) => {
+            let key = key.as_str().unwrap();
+            let binding = request.interface().binding(key).unwrap();
+            let operation = binding.operation_key();
+            if let Some(data) = proposal.data() {
+                edits.push(Edit::set(&["bindings", key, "data"], data));
+            }
+            if let Some(input) = proposal.input() {
+                edits.push(Edit::set(&["operations", operation, "input"], input));
+            }
+            if let Some(output) = proposal.output() {
+                edits.push(Edit::set(&["operations", operation, "output"], output));
+            }
+            for field in proposal.remove().into_iter().flatten() {
+                edits.push(match field.as_str().unwrap() {
+                    "data" => Edit::remove(&["bindings", key, "data"]),
+                    field => Edit::remove(&["operations", operation, field]),
+                });
+            }
+        }
+        (ExistingTarget::Schema(key), Some(Proposal::Schema(proposal))) => {
+            edits.push(Edit::set(
+                &["schemas", key.as_str().unwrap()],
+                proposal.schema(),
+            ));
+        }
+        (ExistingTarget::Source(key), Some(Proposal::Source(proposal))) => {
+            let key = key.as_str().unwrap();
+            edits.push(match proposal.data() {
+                Some(data) => Edit::set(&["sources", key, "data"], data),
+                None => Edit::remove(&["sources", key, "data"]),
+            });
+        }
+        _ => {}
+    }
+    edits
+}
+```
+
+After taking everything a pull offers, what a proposal needs is already in the
+document, so there is nothing to follow:
+
+<!-- guide:updates -->
+```rust
+/// Take everything the pull offers, then every non-breaking update. Every
+/// addition is present, so what a proposal needs is already there.
+pub fn take_non_breaking_updates(
+    result: &PullResult,
+    request: &PullRequest,
+    limits: &PullLimits,
+    control: &dyn WorkControl,
+) -> Result<ConformantDocument, Error> {
+    let everything = result.validate_for(request, limits, control)?;
+    let edits: Vec<Edit> = result
+        .report()
+        .existing()
+        .into_iter()
+        .flatten()
+        .filter(|entry| entry.change() == Some(Change::NonBreaking))
+        .flat_map(|entry| proposal_edits(request, &entry))
+        .collect();
+    let edited = everything.document().edit(&edits)?.validate()?;
+    edited
+        .conformant()
+        .ok_or_else(|| "the edited document does not conform".into())
+}
+```
+
+Two proposals can write one place when their bindings share an operation.
+`Document::edit` refuses that with `overlapping-edits` even when they agree, so
+choose which to apply. To apply a proposal while keeping only part of a pull,
+apply it first and inspect references in that edited document, since a report of
+the original cannot see inside a proposal. Then start the steps above from its
+proposed schemas and, for a binding proposal, what its `uses` names.
 
 Existing binding entries use `references` to name what their data refers to in
 the input document. That list also leaves out what schema references show in
@@ -731,12 +912,10 @@ conformance alone does not establish those kind-owned claims.
 
 `PullResult::validate_for` performs the same validation for a supplied result
 without dispatching a pull. It returns the prospective conformant document,
-which the application may explicitly adopt. For partial adoption, `PullResult::keep`
-performs the same checks, follows the selected bindings' needs and validates the
-selected document. It refuses keys absent from `added` with
-`RelationshipError::KeptBinding`. Apply proposal fields through explicit document
-edits, then revalidate. Do not copy the entire proposal as a binding or overwrite
-unrelated author fields.
+which the application may explicitly adopt. For partial adoption, insert only
+the selected entries and their required additions. Apply proposal fields through
+explicit document edits, then revalidate. Do not copy the entire proposal as a
+binding or overwrite unrelated author fields.
 
 ## Run the application and tests
 

@@ -178,12 +178,6 @@ impl<'a> Attempt<'a> {
     }
 }
 
-impl WorkControl for Attempt<'_> {
-    fn is_cancelled(&self) -> bool {
-        self.control.is_cancelled()
-    }
-}
-
 fn btree_levels(entries: usize) -> usize {
     let mut levels = 1;
     let mut minimum = 1usize;
