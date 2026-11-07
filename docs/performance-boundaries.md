@@ -27,6 +27,20 @@ document and `ExternalSchemas` also saves work, but still prepares a fresh contr
 each `prepare` call. The SDK does not transparently cache arbitrary custom
 evaluator results.
 
+The compiled lane reserves a conservative scratch estimate before exact
+arithmetic and composite equality. Its default ceiling remains 48 MiB.
+For acyclic schemas, string, boolean and null literals add no scratch charge.
+Their SDK comparisons borrow parsed text and reject different kinds without
+traversing containers. The library's string-enum threshold does not apply to
+these SDK keyword overrides.
+
+A composite value over that estimate still enters when the remaining sources
+are integer typing and i64 bounds, with no number or composite literal or
+`multipleOf`, and every number token parses as i64. Only a value over the
+estimate pays for that scan. A decimal, exponent or wider integer stays declined. Duplicate names, unpaired surrogates, depth selection,
+recursive admission and `uniqueItems` keep their existing rules. This is a
+scratch selection rule, not a time bound or total memory measurement.
+
 On 2026-10-15, paired release measurements against revision `3fd152c` on macOS
 arm64 / Rust 1.99.0 produced the following medians, including shared carrier inspection
 and compact reference routing. Preparation includes schema parsing, minimal document proof, resource

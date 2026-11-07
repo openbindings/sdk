@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-11-07 compiled scratch selection (unreleased)
+
+- String, boolean and null literals no longer inflate the acyclic compiled
+  scratch estimate. Recursive admission retains its existing weights.
+- Composite values over the estimate still enter when every number fits i64 and
+  their remaining scratch sources are integer typing and i64 bounds. Values
+  within the estimate are not scanned. Limits and exact arithmetic are unchanged.
+- Run the compiled lane's allocation proof in the verifier.
+
 ## 2026-11-07 clearer carrier errors (unreleased)
 
 - Carrier errors name the carrier when several share a field name, such as

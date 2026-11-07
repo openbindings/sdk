@@ -23,6 +23,41 @@ pub(super) struct Features {
     pub readings: BTreeMap<Arc<str>, pattern::Reading>,
 }
 
+#[derive(Default)]
+struct ScalarLiterals {
+    bytes: usize,
+    nodes: usize,
+}
+impl ScalarLiterals {
+    fn record(&mut self, literal: JsonRef<'_>) -> bool {
+        if !matches!(
+            literal.kind(),
+            JsonKind::Null | JsonKind::Boolean | JsonKind::String
+        ) {
+            return false;
+        }
+        self.bytes = self.bytes.saturating_add(literal.text().len());
+        self.nodes = self.nodes.saturating_add(1);
+        true
+    }
+    fn restore(&self, features: &mut Features) {
+        features.scratch |= self.nodes != 0;
+        features.literals |= self.nodes != 0;
+        features.literal_bytes = features.literal_bytes.saturating_add(self.bytes);
+        features.literal_nodes = features.literal_nodes.saturating_add(self.nodes);
+    }
+}
+impl Features {
+    fn literal(&mut self, literal: JsonRef<'_>) {
+        self.scratch = true;
+        self.literals = true;
+        self.literal_bytes = self.literal_bytes.saturating_add(literal.text().len());
+        self.literal_nodes = self
+            .literal_nodes
+            .saturating_add(backend::node_count(literal));
+    }
+}
+
 pub(super) struct Admitted {
     pub features: Features,
     pub reach: openbindings_internal_schema::Reach,
@@ -77,6 +112,8 @@ pub(super) fn select(
     let mut nodes: Vec<_> = reach.nodes.iter().copied().collect();
     nodes.sort_unstable();
     let mut own = HashMap::new();
+    let mut scratch_own = HashMap::new();
+    let mut scalar_literals = ScalarLiterals::default();
     let mut edges: HashMap<_, Vec<_>> = reach
         .edges
         .iter()
@@ -131,6 +168,7 @@ pub(super) fn select(
             return Ok(Err("original-annotation-or-recursive-scope"));
         }
         let mut weight = 0usize;
+        let scalar_start = scalar_literals.nodes;
         if let Some(types) = profile.get(value, "type") {
             let integer = types.as_str() == Some("integer")
                 || types
@@ -162,17 +200,12 @@ pub(super) fn select(
                 literal.kind(),
                 JsonKind::Null | JsonKind::Boolean | JsonKind::String
             );
-            features.scratch = true;
-            features.literals = true;
-            features.literal_bytes = features.literal_bytes.saturating_add(literal.text().len());
-            features.literal_nodes = features
-                .literal_nodes
-                .saturating_add(backend::node_count(literal));
+            if !scalar_literals.record(literal) {
+                features.literal(literal);
+            }
             weight = weight.saturating_add(1);
         }
         if let Some(choices) = profile.get(value, "enum").and_then(|v| v.elements()) {
-            features.scratch = true;
-            features.literals = true;
             for literal in choices {
                 recursive_scalar_only &=
                     !matches!(literal.kind(), JsonKind::Array | JsonKind::Object);
@@ -181,11 +214,9 @@ pub(super) fn select(
                     JsonKind::Null | JsonKind::Boolean | JsonKind::String
                 );
                 attempt.check().map_err(PreparationFailure::from)?;
-                features.literal_bytes =
-                    features.literal_bytes.saturating_add(literal.text().len());
-                features.literal_nodes = features
-                    .literal_nodes
-                    .saturating_add(backend::node_count(literal));
+                if !scalar_literals.record(literal) {
+                    features.literal(literal);
+                }
                 weight = weight.saturating_add(1);
             }
         }
@@ -198,6 +229,10 @@ pub(super) fn select(
             weight = weight.saturating_add(1);
         }
         own.insert(node, weight);
+        scratch_own.insert(
+            node,
+            weight.saturating_sub(scalar_literals.nodes - scalar_start),
+        );
         // Reuse resolved reference targets, and add original active child
         // applications. Keep same-instance edges for projection and every edge
         // for the cumulative scratch bound, including repeated child paths.
@@ -347,7 +382,7 @@ pub(super) fn select(
                 visiting.remove(&node);
                 let sum = edges
                     .iter()
-                    .fold(*own.get(&node).unwrap_or(&0), |total, child| {
+                    .fold(*scratch_own.get(&node).unwrap_or(&0), |total, child| {
                         total.saturating_add(*weights.get(&child.to).unwrap_or(&0))
                     });
                 weights.insert(node, sum);
@@ -367,6 +402,10 @@ pub(super) fn select(
         }
     }
     if recursive {
+        // Recursion qualification and its exact weight retain every original
+        // literal charge. Restore those operands for its existing estimate too.
+        // Only the acyclic fold discounts allocation-free scalar literals.
+        scalar_literals.restore(&mut features);
         // Scalar exact predicates have one subject. Container equality and
         // uniqueness add internal value traversals outside this graph proof.
         if !recursive_scalar_only {

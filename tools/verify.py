@@ -51,6 +51,7 @@ run([sys.executable, 'tools/verify-invocation.py'])
 run([sys.executable, 'tools/verify-kind-adapter.py'])
 run([sys.executable, 'tools/verify-invocation-resources.py'])
 run([sys.executable, 'tools/verify-diagnostics.py'])
+run([sys.executable, 'tools/literal-scratch/run.py'])
 run([sys.executable, 'tools/test-interface-verifiers.py'])
 run(['cargo', 'build', '--locked', '--release', '--workspace'])
 # Release builds carry the pattern stack qualification on every host, Windows included.

@@ -1,0 +1,649 @@
+{
+  "$ref": "#/$defs/s464",
+  "$defs": {
+    "s464": {
+      "type": "object",
+      "properties": {
+        "uniqueId": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "language": {
+          "type": "string",
+          "enum": [
+            "nl",
+            "en",
+            "de",
+            "fr"
+          ]
+        },
+        "layout": {
+          "$ref": "#/$defs/s467"
+        },
+        "permissions": {
+          "$ref": "#/$defs/s475"
+        },
+        "breadcrumb": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/s473"
+          }
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "draft",
+            "published"
+          ],
+          "description": "Stored publication status. A page with a publish date is governed by that date instead \u2014 see effectivePublishState."
+        },
+        "effectivePublishState": {
+          "type": "string",
+          "enum": [
+            "draft",
+            "scheduled",
+            "published",
+            "expired"
+          ],
+          "description": "Effective publication state, evaluated live from the stored status plus the configured publish/expiration MetaVox dates. Only 'published' is visible to readers; the other states are hidden from them but returned to users with write permission."
+        },
+        "publicationDateActive": {
+          "type": "boolean",
+          "description": "True when a publish or expiration date is set for this page, meaning that date governs publication and the manual draft/published status is ignored."
+        },
+        "parentId": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Unique id of the parent page; null at the language root."
+        },
+        "modified": {
+          "type": "integer",
+          "description": "Unix timestamp of the last write."
+        },
+        "baseVersion": {
+          "type": "integer",
+          "description": "Optimistic-locking token: the file's mtime when this copy was read. Send it back on PUT and the write is refused with 409 if someone else saved in the meantime. TRANSPORT ONLY \u2014 it is never stored, and it is regenerated on every read."
+        }
+      },
+      "additionalProperties": true,
+      "description": "A page as stored, plus fields computed at read time.\n\nThe properties below are the ones a client can rely on. The object is deliberately open: the body is the saved page document, so optional keys (parentId, modified, department, and anything a future widget adds) appear when present. Do not generate a strict model that discards unknown fields.",
+      "required": [
+        "uniqueId",
+        "title",
+        "language",
+        "layout",
+        "permissions"
+      ]
+    },
+    "s473": {
+      "type": "object",
+      "properties": {
+        "uniqueId": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        }
+      }
+    },
+    "s475": {
+      "type": "object",
+      "properties": {
+        "canRead": {
+          "type": "boolean"
+        },
+        "canWrite": {
+          "type": "boolean"
+        },
+        "canCreate": {
+          "type": "boolean"
+        },
+        "canDelete": {
+          "type": "boolean"
+        },
+        "canShare": {
+          "type": "boolean"
+        },
+        "raw": {
+          "type": "integer",
+          "description": "Nextcloud permissions bitmask"
+        }
+      }
+    },
+    "s467": {
+      "type": "object",
+      "properties": {
+        "columns": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "headerRow": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "backgroundColor": {
+              "type": "string"
+            },
+            "widgets": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/s470"
+              }
+            }
+          }
+        },
+        "rows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/s468"
+          }
+        },
+        "sideColumns": {
+          "type": "object",
+          "properties": {
+            "left": {
+              "$ref": "#/$defs/s469"
+            },
+            "right": {
+              "$ref": "#/$defs/s469"
+            }
+          }
+        }
+      }
+    },
+    "s469": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "backgroundColor": {
+          "type": "string"
+        },
+        "widgets": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/s470"
+          }
+        }
+      }
+    },
+    "s470": {
+      "type": "object",
+      "description": "A widget on an IntraVox page. The set of properties that are honored by the server-side sanitizer depends on `type` \u2014 see `WidgetConfig` for the widget-specific schemas.",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "description": "Widget type \u2014 must be one of the values accepted by PageService::ALLOWED_WIDGET_TYPES. Unknown types are dropped on save.",
+          "enum": [
+            "text",
+            "heading",
+            "image",
+            "links",
+            "divider",
+            "video",
+            "news",
+            "people",
+            "calendar",
+            "feed",
+            "photo-story",
+            "file-story"
+          ]
+        },
+        "column": {
+          "type": "integer",
+          "description": "Column position within the row (1-based, clamped to row width)."
+        },
+        "order": {
+          "type": "integer",
+          "description": "Sort order within the column."
+        },
+        "content": {
+          "type": "string",
+          "description": "Body \u2014 used by text/heading widgets only."
+        },
+        "level": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 6,
+          "description": "Heading level (1\u20136) \u2014 heading widget only."
+        },
+        "src": {
+          "type": "string",
+          "description": "Source URL/filename \u2014 image/video widgets."
+        },
+        "alt": {
+          "type": "string",
+          "description": "Alt text \u2014 image widget."
+        },
+        "url": {
+          "type": "string",
+          "description": "Target URL \u2014 link widget."
+        },
+        "text": {
+          "type": "string",
+          "description": "Display text \u2014 link widget."
+        },
+        "items": {
+          "type": "array",
+          "description": "List items \u2014 links widget.",
+          "items": {
+            "type": "object"
+          }
+        },
+        "columns": {
+          "type": "integer",
+          "description": "Column count \u2014 links / news / photo-story."
+        },
+        "backgroundColor": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Whitelisted CSS variable or 'transparent' \u2014 links / news / people / calendar / feed."
+        },
+        "title": {
+          "type": "string",
+          "description": "Widget header \u2014 news / video / people / calendar / feed."
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Max items to render \u2014 news / people / calendar / feed / photo-story / file-story."
+        },
+        "sortBy": {
+          "type": "string",
+          "description": "Sort field \u2014 news / people / photo-story / file-story."
+        },
+        "sortOrder": {
+          "type": "string",
+          "enum": [
+            "asc",
+            "desc"
+          ],
+          "description": "Sort direction."
+        },
+        "layout": {
+          "type": "string",
+          "description": "Layout variant \u2014 news (list/grid/carousel), feed (list/grid), people (card/list)."
+        },
+        "showImage": {
+          "type": "boolean",
+          "description": "news / feed."
+        },
+        "showDate": {
+          "type": "boolean",
+          "description": "news / feed."
+        },
+        "showExcerpt": {
+          "type": "boolean",
+          "description": "news / feed."
+        },
+        "excerptLength": {
+          "type": "integer",
+          "description": "news / feed character cap."
+        },
+        "autoplayInterval": {
+          "type": "integer",
+          "description": "Carousel autoplay seconds (0 = off) \u2014 news."
+        },
+        "filters": {
+          "type": "array",
+          "description": "MetaVox filter rows \u2014 news / people.",
+          "items": {
+            "type": "object"
+          }
+        },
+        "filterOperator": {
+          "type": "string",
+          "enum": [
+            "AND",
+            "OR"
+          ],
+          "description": "MetaVox filter join logic \u2014 news / people."
+        },
+        "sourcePath": {
+          "type": "string",
+          "description": "Folder path \u2014 news source."
+        },
+        "sourcePageId": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Page UUID \u2014 news source via PageTreeSelect."
+        },
+        "config": {
+          "$ref": "#/$defs/s471",
+          "description": "Widget-specific nested config (photo-story / file-story)."
+        },
+        "provider": {
+          "type": "string",
+          "description": "video: embed / local."
+        },
+        "autoplay": {
+          "type": "boolean",
+          "description": "video."
+        },
+        "loop": {
+          "type": "boolean",
+          "description": "video."
+        },
+        "muted": {
+          "type": "boolean",
+          "description": "video."
+        },
+        "style": {
+          "type": "string",
+          "enum": [
+            "solid",
+            "dashed",
+            "dotted"
+          ],
+          "description": "Divider line style."
+        },
+        "color": {
+          "type": "string",
+          "description": "Divider color (whitelisted CSS var)."
+        },
+        "height": {
+          "type": "string",
+          "description": "Divider height (e.g. '2px', '1rem')."
+        },
+        "calendarIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "calendar."
+        },
+        "externalIcsUrls": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "calendar."
+        },
+        "dateRange": {
+          "type": "string",
+          "description": "calendar."
+        },
+        "showTime": {
+          "type": "boolean",
+          "description": "calendar."
+        },
+        "showLocation": {
+          "type": "boolean",
+          "description": "calendar."
+        },
+        "feedUrl": {
+          "type": "string",
+          "description": "feed."
+        },
+        "connectionId": {
+          "type": "string",
+          "description": "feed (LMS / external connector)."
+        },
+        "courseId": {
+          "type": "string",
+          "description": "feed (LMS)."
+        },
+        "showSource": {
+          "type": "boolean",
+          "description": "feed."
+        },
+        "openInNewTab": {
+          "type": "boolean",
+          "description": "feed."
+        },
+        "sourceType": {
+          "type": "string",
+          "description": "feed (rss / lms / \u2026)."
+        },
+        "selectionMode": {
+          "type": "string",
+          "description": "people (manual / filter)."
+        },
+        "selectedUsers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "people."
+        },
+        "showFields": {
+          "type": "object",
+          "description": "people \u2014 per-field visibility booleans."
+        },
+        "viewerFilters": {
+          "$ref": "#/$defs/s489"
+        }
+      }
+    },
+    "s489": {
+      "type": "object",
+      "description": "Viewer-side facet configuration. When enabled, readers can narrow the widget's own results. Never applied on public share links.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Whether visitors may filter this widget's results.",
+          "default": false
+        },
+        "facets": {
+          "type": "array",
+          "maxItems": 12,
+          "description": "Fields offered as filter groups, in display order.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "field": {
+                "type": "string",
+                "description": "Profile field name."
+              },
+              "label": {
+                "type": "string",
+                "description": "Label shown to visitors; falls back to the field's own label."
+              },
+              "limit": {
+                "type": "integer",
+                "minimum": 5,
+                "maximum": 100,
+                "default": 8,
+                "description": "Values shown before 'Show all'."
+              },
+              "collapsed": {
+                "type": "boolean",
+                "default": false,
+                "description": "Start this group collapsed."
+              }
+            }
+          }
+        },
+        "searchFields": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "type": "string"
+          },
+          "description": "Fields the free-text box searches. Display name is always included."
+        },
+        "searchEnabled": {
+          "type": "boolean",
+          "default": true
+        },
+        "layout": {
+          "type": "string",
+          "enum": [
+            "sidebar",
+            "top"
+          ],
+          "default": "sidebar",
+          "description": "Panel beside or above the results."
+        }
+      }
+    },
+    "s471": {
+      "type": "object",
+      "description": "Nested config used by widgets with rich configuration surfaces. Currently photo-story and file-story.",
+      "properties": {
+        "folderPath": {
+          "type": "string",
+          "description": "Source folder path."
+        },
+        "mode": {
+          "type": "string",
+          "description": "Layout mode. photo-story: timeline/highlights/grid/on-this-day. file-story: timeline/tiles/list/grouped."
+        },
+        "style": {
+          "type": "string",
+          "enum": [
+            "magazine",
+            "apple",
+            "travelogue"
+          ],
+          "description": "photo-story timeline style. Values: magazine, apple (shown in the UI as \"Clean grid\", the default), travelogue."
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Optional total cap on rows/photos, applied in both pagination modes (photo-story + file-story). Blank = all."
+        },
+        "paginationMode": {
+          "type": "string",
+          "enum": [
+            "infinite",
+            "pages"
+          ],
+          "description": "Long-list handling (photo-story + file-story): infinite scroll (default) or Previous/Next page buttons. Page buttons apply where the widget paginates \u2014 file-story list/tiles, photo-story single-folder timeline/grid."
+        },
+        "pageSize": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 500,
+          "description": "Documents/photos per page in paginationMode=pages (photo-story + file-story). Default 20 (file-story) / 30 (photo-story)."
+        },
+        "columns": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 5,
+          "description": "photo-story grid columns."
+        },
+        "showCaptions": {
+          "type": "boolean",
+          "description": "photo-story."
+        },
+        "showMap": {
+          "type": "boolean",
+          "description": "photo-story."
+        },
+        "showDayMaps": {
+          "type": "boolean",
+          "description": "photo-story (per-day mini-maps in timeline)."
+        },
+        "sortOrder": {
+          "type": "string",
+          "enum": [
+            "asc",
+            "desc"
+          ]
+        },
+        "sortBy": {
+          "type": "string",
+          "description": "mtime / name / size / any MetaVox field name."
+        },
+        "allMetaVoxFolders": {
+          "type": "boolean",
+          "description": "photo-story cross-folder mode (legacy flag, synced with empty folderPath)."
+        },
+        "metaVoxFilters": {
+          "type": "array",
+          "description": "Filter rows.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "field": {
+                "type": "string"
+              },
+              "op": {
+                "type": "string",
+                "enum": [
+                  "equals",
+                  "contains",
+                  "in",
+                  "year_equals"
+                ]
+              },
+              "value": {
+                "description": "string or string[]"
+              }
+            }
+          }
+        },
+        "granularity": {
+          "type": "string",
+          "enum": [
+            "day",
+            "month",
+            "year"
+          ],
+          "description": "file-story timeline bucket size."
+        },
+        "groupBy": {
+          "type": "string",
+          "description": "file-story group-by field (category / MetaVox field name)."
+        },
+        "dateField": {
+          "type": "string",
+          "description": "file-story: mtime or taken_at."
+        },
+        "visibleColumns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "file-story visible-columns multi-select (date / size / path)."
+        },
+        "tileSize": {
+          "type": "string",
+          "enum": [
+            "small",
+            "medium",
+            "large"
+          ],
+          "description": "file-story tiles mode."
+        },
+        "viewerFilters": {
+          "$ref": "#/$defs/s489"
+        }
+      }
+    },
+    "s468": {
+      "type": "object",
+      "properties": {
+        "columns": {
+          "type": "integer"
+        },
+        "backgroundColor": {
+          "type": "string"
+        },
+        "widgets": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/s470"
+          }
+        }
+      }
+    }
+  }
+}

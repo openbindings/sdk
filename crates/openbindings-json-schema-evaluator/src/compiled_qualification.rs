@@ -5,6 +5,7 @@ use openbindings_schema_evaluator_test_support::{run, suite};
 use serde_json::json;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 static HEALTHY: AtomicBool = AtomicBool::new(false);
+mod literal_scratch;
 
 /// Independent preparation of the pinned current original-schema Plan. It does
 /// not construct a compiled owner and then disable it.
@@ -1531,25 +1532,31 @@ fn recursive_scalar_reservation_boundary_selects_before_backend_entry() {
     //16/256 schedule yields64*raw_bytes+15296, including its512-byte tail.
     const RAW_AT_LIMIT: usize = (48 * 1024 * 1024 - 15296) / 64;
     let template = r#"{"n":0,"padding":"","next":null}"#;
-    for extra in [0, 1] {
-        let text = format!(
-            r#"{{"n":0,"padding":"{}","next":null}}"#,
-            "a".repeat(RAW_AT_LIMIT - template.len() + extra)
-        );
-        assert_eq!(text.len(), RAW_AT_LIMIT + extra);
-        let value = JsonValue::parse(text).unwrap();
-        assert_eq!(
-            openbindings_internal_json::backend::node_count(value.view()),
-            7
-        );
-        assert_eq!(
-            compare(&selected, &original, &value).0,
-            if extra == 0 { "compiled" } else { "original" }
-        );
+    for (token, needs_scratch) in [("0", false), ("9223372036854775808", true)] {
+        for extra in [0, 1] {
+            let text = format!(
+                r#"{{"n":{token},"padding":"{}","next":null}}"#,
+                "a".repeat(RAW_AT_LIMIT - template.len() - (token.len() - 1) + extra)
+            );
+            assert_eq!(text.len(), RAW_AT_LIMIT + extra);
+            let value = JsonValue::parse(text).unwrap();
+            assert_eq!(
+                openbindings_internal_json::backend::node_count(value.view()),
+                7
+            );
+            assert_eq!(
+                compare(&selected, &original, &value).0,
+                if needs_scratch && extra == 1 {
+                    "original"
+                } else {
+                    "compiled"
+                }
+            );
+        }
     }
     write(
         "recursive-reservation-boundary.json",
-        &json!({"default_bytes":48*1024*1024,"exact_bound_compiled":true,"one_raw_byte_above_original_before_entry":true,"raw_bytes_at_bound":RAW_AT_LIMIT}),
+        &json!({"default_bytes":48*1024*1024,"exact_bound_compiled":true,"wide_integer_one_raw_byte_above_original_before_entry":true,"i64_above_bound_compiled":true,"raw_bytes_at_bound":RAW_AT_LIMIT}),
     );
 }
 

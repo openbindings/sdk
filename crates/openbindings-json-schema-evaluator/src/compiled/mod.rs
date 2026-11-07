@@ -293,38 +293,34 @@ impl Lane {
             }
         }
         if features.scratch && (!features.recursive || !features.recursive_allocation_free) {
-            // Type-only integral tokens and i64 comparisons allocate no exact
-            // decimal scratch. Other SDK-owned equality/uniqueness/numeric work
-            // receives a conservative subtree-and-visit reservation before entry.
-            let scalar_free = !features.literals
-                && !features.noninteger_bound
-                && match value.kind() {
-                    JsonKind::Null | JsonKind::Boolean | JsonKind::String => true,
-                    JsonKind::Number => value
-                        .view()
-                        .number_text()
-                        .is_some_and(|n| n.parse::<i64>().is_ok()),
-                    _ => false,
-                };
-            if !scalar_free {
-                let value_nodes = backend::node_count(value.view());
-                // A schema operand below an advancing application can be used
-                // at every value occurrence, including a wide bound whose
-                // exponent scratch is larger than the inspected scalar.
-                let operand_visits = if features.advancing { value_nodes } else { 1 };
-                let bytes = value
-                    .bytes()
-                    .len()
-                    .saturating_add(features.literal_bytes.saturating_mul(operand_visits));
-                let nodes = value_nodes
-                    .saturating_add(features.literal_nodes.saturating_mul(operand_visits));
-                let reservation = bytes
-                    .saturating_mul(16)
-                    .saturating_add(nodes.saturating_mul(256))
-                    .saturating_mul(features.multiplier)
-                    .saturating_add(512);
-                if reservation > prepared.reservation {
-                    return None;
+            let value_nodes = backend::node_count(value.view());
+            // A schema operand below an advancing application can be used
+            // at every value occurrence, including a wide bound whose
+            // exponent scratch is larger than the inspected scalar.
+            let operand_visits = if features.advancing { value_nodes } else { 1 };
+            let bytes = value
+                .bytes()
+                .len()
+                .saturating_add(features.literal_bytes.saturating_mul(operand_visits));
+            let nodes =
+                value_nodes.saturating_add(features.literal_nodes.saturating_mul(operand_visits));
+            let reservation = bytes
+                .saturating_mul(16)
+                .saturating_add(nodes.saturating_mul(256))
+                .saturating_mul(features.multiplier)
+                .saturating_add(512);
+            if reservation > prepared.reservation {
+                // Integer typing and i64 bounds need no exact decimal scratch
+                // when every number token fits i64, including within composite
+                // values. Only a value over the estimate pays for this scan.
+                match prepared.allocation_free(value, control) {
+                    Ok(true) => {}
+                    Ok(false) => return None,
+                    Err(detail) => {
+                        return Some(ValueOutcome::NoVerdict {
+                            detail: detail.into(),
+                        });
+                    }
                 }
             }
         }
@@ -351,6 +347,35 @@ impl Lane {
                 problems_complete: false,
             }
         })
+    }
+}
+impl Prepared {
+    fn allocation_free(
+        &self,
+        value: &JsonValue,
+        control: &dyn WorkControl,
+    ) -> Result<bool, Cancelled> {
+        if self.features.literals || self.features.noninteger_bound {
+            return Ok(false);
+        }
+        if !matches!(value.kind(), JsonKind::Array | JsonKind::Object) {
+            return Ok(value
+                .view()
+                .number_text()
+                .is_none_or(|token| token.parse::<i64>().is_ok()));
+        }
+        // Preserve the existing scalar exemption for multipleOf. Composite
+        // multipleOf values keep their previous reservation and domain checks.
+        if self.features.multiple {
+            return Ok(false);
+        }
+        for token in backend::number_nodes(value) {
+            control.check()?;
+            if token.is_some_and(|token| token.parse::<i64>().is_err()) {
+                return Ok(false);
+            }
+        }
+        Ok(true)
     }
 }
 // Only the closed value program is lowered here. Original admission,
