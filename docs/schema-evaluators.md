@@ -118,10 +118,13 @@ shares equivalent programs within one preparation Attempt. Whole-source resource
 performance and host qualification remains separate; older exact dependency-
 accounting receipts do not define the current public contract.
 
-The built-in evaluator's `Limits::evaluation_sdk_work_units` and
+On the Original path, the built-in evaluator's `Limits::evaluation_sdk_work_units` and
 `Limits::evaluation_sdk_reservation_bytes` apply to each value invocation. Verdict
 and diagnostic passes share its remaining allowance; repeated evaluations start
-fresh. Required custom-meta evaluation debits both its evaluation allowance and
+fresh. Default Outcome calls can instead use the compiled lane with static
+admission and peak scratch accounting; any non-default limit selects Original.
+See [execution paths](../crates/openbindings-json-schema-evaluator/README.md#execution-paths).
+Required custom-meta evaluation debits both its evaluation allowance and
 the enclosing preparation Attempt, so either exhaustion can return a preparation
 Limit. Immutable pattern representation retains its separate limits. SDK work
 and reservation units do not count all dependency work or physical allocation.

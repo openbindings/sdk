@@ -3,14 +3,16 @@
 For a complete protocol implementation walkthrough, read
 [writing a binding kind adapter](https://github.com/openbindings/sdk/blob/main/docs/writing-a-kind.md).
 
-This unpublished companion is being implemented against source-puller version
+This unpublished companion implements source-puller version
 0.1.0 at interfaces revision `3e3dc453a93b611a8e9ea1813ec63a2216830f45`.
 It carries additions to one original document and the report of pulling one
 selected source. Kind implementations own source interpretation and projection.
 A report is a producer claim, not proof of live availability or fidelity.
 
 The carriers preserve exact JSON, allowed output metadata and absence versus null.
-Proposals carry restricted edit authority; retaining unknown metadata does not
+`OmittedEntry` borrows `item`, `existing`, `also_identifies`, `offered`, `through`
+and `identifier` through accessors using the interface's field meanings; absent
+members stay `None`. Proposals carry restricted edit authority; retaining unknown metadata does not
 authorize copying it into a document. No TypeScript interface API is implied.
 
 `PullRequest` retains a complete `ConformantDocument`, selected source key and

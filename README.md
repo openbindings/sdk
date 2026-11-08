@@ -33,7 +33,9 @@ for operation in conformant.operations() {
 `validate_document` judges the bytes as they are: text that is not JSON is an
 OBI-01 violation in the report, located like any other finding, and only an
 unsupported version is an `Err`. Continue with [Rust first use](docs/rust-first-use.md) to prepare a schema,
-validate input, edit opaque values and retain prepared work. Rust needs no runtime
+validate input, edit opaque values and retain prepared work.
+[Document to typed result](docs/document-to-typed-result.md) adds a complete call
+through a local adapter, failure handling and Rust output decoding. Rust needs no runtime
 initialization. Canonical operations expose contextual `Schema` owners.
 `schema.prepare(&evaluator, &external_schemas, &preparation_limits)` returns a
 prepared validator or a preparation failure, separately from value results.
@@ -96,9 +98,6 @@ Read [capabilities and limits](CAPABILITIES.md), [host support](docs/support.md)
 [API reference](docs/api-reference.md). This SDK applies OpenBindings 0.2.
 Applied specification revision: `c1419c9fc3ae5a00c2b83da710c11bf67dab7934`.
 Package and specification versions are independent.
-
-The [current 0.2 alignment checkpoint](docs/alignment-checkpoint.md) records
-implemented boundaries, independent reviews and remaining qualification gates.
 
 Repository build and verification instructions are in
 [the maintainer guide](docs/maintainers.md).

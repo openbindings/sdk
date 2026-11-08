@@ -152,11 +152,8 @@ Deterministic document fixtures contain 1, 50 and 1,000 operations. The largest
 shares a schema's `$defs` through references; all have aliases, escaped Unicode
 descriptions, tags and varying contract presence. A non-conformant fixture has
 six findings across shape, name, alias and schema rules. Explain fixtures have
-one and 64 independent type violations. The current evaluator returns only the
-first problem, so both expect **one reported problem**, with incomplete
-diagnostics. The many-violation case does not measure producing a 64-problem
-list. Supporting that list requires a separate evaluator change and revised
-expectations.
+one and 64 independent type violations. They require one and 64 reported problems,
+respectively, with complete diagnostics and original code and locations.
 
 The driver runs three warmup children, adapts each variant to at least 200 ms,
 then takes 20 adjacent randomized pairs per batch, twice. Cold first use always

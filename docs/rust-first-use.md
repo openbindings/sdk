@@ -1,9 +1,25 @@
 # First useful result in Rust
 
 Validate an interface document's bytes, read an operation and prepare its input
-schema. Select `openbindings` and `openbindings-json-schema-evaluator` from
-an exact checkout or local archives through [source replay](REPLAY.md). Packages
-are unpublished; Rust needs no runtime initialization.
+schema. Rust needs no runtime initialization. For a complete call, continue to
+[document to typed result](document-to-typed-result.md), which defines its own
+small adapter and handles invocation and output decoding.
+
+Packages are unpublished. In an application beside an exact SDK checkout named
+`sdk`, use these dependencies (adjust the paths for extracted crate archives):
+
+```toml
+[dependencies]
+openbindings = { path = "../sdk/crates/openbindings" }
+openbindings-json-schema-evaluator = { path = "../sdk/crates/openbindings-json-schema-evaluator" }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+```
+
+For packaged unpublished siblings, the archive provider must also supply local
+Cargo patches for the internal dependency closure; see the
+[candidate procedure](release-candidate.md). [Source replay](REPLAY.md) is for
+maintainers building and qualifying those artifacts.
 
 Run the packaged examples:
 
@@ -189,7 +205,7 @@ batch changes nothing. Untouched extension members, number tokens, member order
 and whitespace remain exact; inserted members use compact punctuation. Sibling
 insertions at one boundary coalesce in request order. Adjacent removals, up to
 every member of a container, share their separators. Overlapping replacements
-and removals are refused. Default byte, node and depth limits apply to the result;
+and removals are refused. The document's retained byte, node and depth limits apply to the result;
 byte preflight happens before replacement allocation.
 
 Construct operations, bindings, sources, dependencies and examples through exact

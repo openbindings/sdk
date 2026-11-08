@@ -23,7 +23,7 @@ Build integrations around the current responsibilities:
 | Invoke a binding or operation | `BindingInvoker` with checked `invoke` or `DefaultOperationInvoker` with a caller-selected provider; operation invocation adds declared schema gates. |
 
 The TypeScript facade currently exposes exact documents, schema evaluation and HTTP
-discovery. Rust supplies the interface interface implementations. A fixture's Wasm bridge
+discovery. Rust supplies the interface implementations. A fixture's Wasm bridge
 does not imply a public TypeScript interface API.
 
 Start with [Rust first use](rust-first-use.md), the

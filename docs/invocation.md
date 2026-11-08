@@ -1,5 +1,8 @@
 # Invocation lifecycle
 
+Start with [document to typed result](document-to-typed-result.md) for a complete
+application with an in-process adapter.
+
 `BindingInvoker` runs an explicitly named binding from an owned conformant
 interface. Import `BindingInvokerExt` to call its checked methods directly.
 `OperationInvoker` describes operation invocation; `DefaultOperationInvoker<P,E>`
@@ -23,55 +26,11 @@ without serialization. The full handle and its input/output/control split are re
 
 ## Call an operation
 
-```rust
-use openbindings::{ConformantDocument, Detail, ExternalSchemas, JsonValue};
-use openbindings_invocation::{BindingInvoker, CancellationToken, InvocationSupport,
-    DefaultOperationInvoker, OperationRequest, OutputEvent,
-    operation::ValidationEvidence};
-use openbindings_json_schema_evaluator::DefaultEvaluator;
-
-async fn call<P: BindingInvoker + InvocationSupport>(
-    interface: ConformantDocument, provider: P, value: JsonValue,
-) -> Result<Vec<JsonValue>, Box<dyn std::error::Error>> {
-    let invoker = DefaultOperationInvoker::new(provider, DefaultEvaluator::default(), ExternalSchemas::default())
-        .with_validation_detail(Detail::Explain);
-    let request = OperationRequest::binding(interface, "echo.binding");
-    let (mut input, mut output) = invoker.invoke(request, CancellationToken::new())?.split();
-    // A single value fits the default input queue. Streaming writers and readers
-    // must be polled concurrently in the application's runtime.
-    input.send(value).await?;
-    input.close();
-    let control = output.control();
-    let mut values = Vec::new();
-    while let Some(event) = output.next().await {
-        match event {
-            OutputEvent::Output(value) => values.push(value),
-            OutputEvent::InputClosed => (),
-            OutputEvent::Complete => {
-                // Even success may leave accepted input undelivered.
-                println!("undelivered inputs: {}", control.undelivered_inputs().unwrap());
-                return Ok(values);
-            }
-            OutputEvent::Error(error) => {
-                if let Some(failure) = control.validation_failure() {
-                    println!("validation failed at {}", failure.direction().as_str());
-                    match failure.evidence() {
-                        ValidationEvidence::Preparation(cause) => eprintln!("{cause}"),
-                        ValidationEvidence::Evaluation(outcome) => {
-                            if let openbindings::ValueOutcome::Fails { problems, problems_complete, .. } = outcome {
-                                println!("{} problems; complete: {problems_complete}", problems.len());
-                            }
-                        }
-                    }
-                }
-                return Err(error.into());
-            }
-            _ => (),
-        }
-    }
-    Err("invocation ended without a terminal event".into())
-}
-```
+The [complete walkthrough](document-to-typed-result.md) constructs an adapter,
+prepares schemas, sends input, observes the terminal and decodes a typed output.
+For a lazy call, use `invoker.invoke(request, control)` instead of preparing first;
+it prepares each declared direction on its first value within that attempt.
+The invoker itself does not cache validators between attempts.
 
 Requests own the original `ConformantDocument`, address and optional opaque
 `openbindings_context::Context`. No source/binding carrier is copied or sliced on
@@ -85,7 +44,10 @@ checking that **every** key belongs to the operation. Repeated keys are permitte
 `binding(interface, key)` derives the operation and bypasses support selection.
 No preference, deprecation flag, key order or registration order silently breaks
 ambiguity. The optional native `InvocationSupport` facet supplies routing knowledge;
-it is not a portable kind-description query. A binding-only provider needs no facet.
+it is not a portable kind-description query. `BindingInvokerExt` needs no facet, but the current
+`DefaultOperationInvoker` constructor, invocation, preflight and preparation
+methods require `P: BindingInvoker + InvocationSupport`, even for explicit
+bindings. `PreparedOperation::invoke` has the same bound.
 
 ## Driving, closure and cancellation
 
@@ -101,8 +63,7 @@ After the invocation ends, `control.undelivered_inputs()` returns `Some(count)`
 for accepted values never returned by a provider receive, including on `Complete`,
 error or cancellation. It returns `None` while the invocation is unsettled.
 For example, if two sends succeed and the provider receives only the first
-before completing, the count is `Some(1)`. The call example above checks it even
-on success. Delivery alone does not establish processing or effects.
+before completing, the count is `Some(1)`. The walkthrough checks it even on success. Delivery alone does not establish processing or effects.
 
 Caller input closure drains previously accepted values. Provider input closure
 declines further values and may emit `InputClosed` while output continues. Terminal

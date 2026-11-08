@@ -1,24 +1,21 @@
 # Performance and allocation boundaries
 
-The document-validation and diagnostic-allocation tables retain measurements of
-engine revision `a2e5a380018754bf8b96ffebadd4545fec0a07cb`, with documentation
-and measurement harness changes only. The host was macOS 26.6.2 arm64, Rust
-1.99.0. Wasm used wasm-bindgen 0.2.129. Timings are examples, not latency
-guarantees or CI thresholds. Prepared value contract measurements were updated on
-2026-10-15 and, with the preparation and pattern sections, on 2026-10-20 below;
-the compiled-pattern memory and the exponential evaluation example were measured
-on 2026-10-21, and preparation and the Wasm size on 2026-10-24. Use the locked
-dependencies and release profile to reproduce them.
+This page retains dated measurements and implementation history for maintainers.
+It is not a current latency guarantee or a release qualification. Use
+[current capabilities](../CAPABILITIES.md) and the
+[evaluator execution policy](../crates/openbindings-json-schema-evaluator/README.md#execution-paths)
+for supported APIs, routing and limits.
 
-The 0.2 alignment work now routes static references directly through the bounded
-original schema inventory. The older carrier-inspection caches described with
-these historical measurements have been removed. Their timing and allocation
-tables are historical evidence, not measurements of this implementation. The
-matched-toolchain comparison against the pinned SDK baseline remains a release
-gate; no current performance conclusion is implied by those tables. The older
-API names, preparation algorithms and limit policies below describe those measured
-revisions. Use [current capabilities](../CAPABILITIES.md) and the
-[evaluator guide](../crates/openbindings-json-schema-evaluator/README.md) for current behavior.
+The November sections describe the restored compiled lane's current admission
+rules and their recorded experiments. The October measurements describe older
+revisions, including removed API names, caches and preparation algorithms. In
+those historical sections, "now", "current", "before" and "after" refer to the
+measured revision, not this checkout. No old limit setting is an integration
+instruction. The document-validation and diagnostic-allocation tables retain
+measurements of engine `a2e5a380018754bf8b96ffebadd4545fec0a07cb` on macOS 26.6.2
+arm64, Rust 1.99.0 and wasm-bindgen 0.2.129, with later dates stated locally.
+Matched candidate performance and final hosted-platform qualification require
+separate runs. The performance workflow's timing remains advisory.
 
 ## Prepared value contracts
 
@@ -158,6 +155,8 @@ is 10 and the maximum is 39. At five bytes per node, none crosses the initial
 schema with 4,096 properties referencing one shared definition counts 8,193
 applications and stays compiled.
 
+### Historical prepared-contract measurements (October 2026)
+
 On 2026-10-15, paired release measurements against revision `3fd152c` on macOS
 arm64 / Rust 1.99.0 produced the following medians, including shared carrier inspection
 and compact reference routing. Preparation includes schema parsing, minimal document proof, resource
@@ -240,10 +239,13 @@ the SDK's validation and preparation of a document from its bytes went from
 790-byte object, an array of such objects, a `propertyNames` map and a
 recursive tree; median of ten fresh processes, one-minute load 2.1 to 3.4).
 
+### Current execution and stack policy
+
 No caller evaluation work cap applies by default. Setting
 `Limits::evaluation_sdk_work_units` selects Original and bounds SDK-defined
 work debits. These units are not a wall-clock deadline. The default evaluation
-storage reservation is 48 MiB; exhaustion returns a limit no-verdict.
+storage reservation is 48 MiB. Original exhaustion returns a limit no-verdict;
+compiled scratch admission can select Original before backend execution.
 
 Compiled evaluation recurses in the backend library. Preparation computes a
 static bound on simultaneously held schema evaluations from the bundled
@@ -268,7 +270,9 @@ Evaluation has no default wall-clock bound. Graphs exceeding the compiled
 expansion ceiling take Original, whose completed-application reuse avoids
 repeating the same application along exponential reference diamonds.
 
-Patterns nested to the default depth of 32 prepare, and values are checked
+### Historical pattern and cache measurements (October 2026)
+
+Patterns nested to the then-default depth of 32 prepare, and values are checked
 against them, within a 256 KiB thread stack in release builds. The regex
 crate's parser and compiler recurse at each group level; a debug build needs up
 to about 1 MiB to compile 32 nested quantified groups, so the pattern stack test
@@ -368,9 +372,9 @@ measures document validation directly from bytes (including the conformant
 proof), conformant operation/text reads and full available failure diagnostics.
 Document scales are 1, 50 and 1,000 operations, with shared `$defs` references in
 the largest, plus a document with six findings. Explain inputs contain one and
-64 independent violations; today's evaluator reports only the first problem.
-Checks cover that count and its original code and instance/schema locations.
-The many-violation input does not qualify the cost of returning many problems.
+64 independent violations. The current harness requires all 64 problems,
+complete diagnostics and original code and instance/schema locations; the
+one-violation input requires one problem.
 
 Each mode's operation is selected before timing and runs in its own non-inlined
 timed loop, so a change cannot recompile the loop of a mode it does not reach,
@@ -422,7 +426,7 @@ dedicated runners use >10% / >1.10. Timing regressions, inconclusive timing and
 RSS verification flags do not fail the job. Noise requests a rerun. See the
 harness for exact floors, confirmation and calibration policy.
 
-## Preparation
+## Historical preparation (October 2026)
 
 Preparation projects the value contract, bundles its definitions into one resource and
 compiles that resource with the library once, so every reached schema compiles
@@ -541,6 +545,8 @@ between 192 and 256 KiB of V8 stack for the deepest admitted values, more
 than Node does. Cloudflare's production stack size was not measured. Hosted
 CI runs the module in Chromium and WebKit; these results are specific to the
 hosts named.
+
+### Historical preparation memory (October 2026)
 
 Release measurements on macOS arm64, Rust 1.99.0, 2026-10-20, against `b6ef531`
 (minimum of three preparations in one fresh process per shape; peak resident
@@ -778,7 +784,7 @@ frames and sampled stack observation, plus SDK storage reservations and any
 caller-selected `evaluation_sdk_work_units` cap. These do not bound total
 process memory or elapsed time.
 
-## Stand-ins
+## Historical stand-ins
 
 A value contract with a stand-in compiles a bounds program beside its own
 program (the current evaluator's [semantic dependence policy](../crates/openbindings-json-schema-evaluator/README.md#results-and-semantic-dependence)
@@ -971,7 +977,7 @@ take 5 ms; one operation name of U+E000 filling 64 MiB took 1.02 s, copied with
 each character doubled, and now takes 0.17 s. On the probe's frozen suite the largest
 complete-validation peak fell from 17,949,677 to 8,738,243 bytes.
 
-## Pattern matching
+## Historical pattern matching
 
 Patterns match on the regex crate's finite automata, in time linear in the
 string, so there is no regex step allowance. In the benchmark, `[A-Z]+[0-9]+`

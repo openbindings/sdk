@@ -24,7 +24,8 @@ there. The package check installs a real archive and runs its README and package
 examples. `python3 tools/verify.py --browser` adds browser checks.
 
 `tools/verify-api-reference.py` checks Rust documentation and TypeScript reference
-contracts. `tools/verify-rust-snippets.py` executes prose examples.
+contracts. `tools/verify-rust-snippets.py` executes prose examples, including
+the external document-to-typed-result walkthrough.
 `tools/verify-kind-adapter.py` checks the adapter guide's verbatim Rust blocks
 against its external example, then tests and lints that example with its lockfile.
 Add `--wasm` to build its library for `wasm32-unknown-unknown`.
@@ -51,7 +52,7 @@ Wasm qualification and the TypeScript tests on Node 22.23.0, and hands
 `packages/typescript/dist` to the `browser` and `node-floors` jobs. The
 `node-floors` job runs the TypeScript tests on that build at the other
 supported lines' floors, Node 24.17.0 and 26.2.0.
-That job runs the Chromium and WebKit replay and judges inside Microsoft's
+The `browser` job runs the Chromium and WebKit replay and judges inside Microsoft's
 Playwright image, which already contains the browsers and their system packages,
 so CI installs no browser dependencies. The image is pinned by its
 multi-architecture index digest at the `playwright-core` version in
@@ -81,16 +82,21 @@ borrows the original catalog. `SchemaOrigin::source_uri` records original retrie
 provenance, which need not be the winning lookup association for that URI. Replacing
 resources requires a new immutable set and preparation; retained schemas keep their inputs.
 OBI-13 retains exact identifier comparison; ordinary JSON Schema resolution uses
-the library normalization policy.
+the original resource inventory and compact identifier comparisons.
 
 
-Ordinary resolution inside identified and supplied resources uses the dependency's
-documented API. Core retains OpenBindings embedding rules. See
-[architecture](architecture.md) for package boundaries and the
-[dependency maintenance contract](../DEPENDENCY-MAINTENANCE.md) for how the default
-evaluator bundles, specializes and transforms projected schemas before the library
-compiles them. Those are evaluator implementation details, not an application
-readiness API.
+Core retains OpenBindings embedding rules and original reference meaning. The
+compiled evaluator lowers established references into a private bundle; Original
+uses the retained schema environment directly. See
+[architecture](architecture.md) and the
+[dependency maintenance contract](../DEPENDENCY-MAINTENANCE.md) for ownership,
+projection and upgrade checks.
+
+The separate performance workflow enforces outcome and allocation checks;
+timing is advisory and it is not part of the required `ci` aggregate. Local
+workerd measurements likewise do not constitute a required hosted workerd job.
+Candidate performance and deployment qualification need recorded runs of their
+own; see [performance boundaries](performance-boundaries.md).
 
 ## Findings and allocation qualification
 

@@ -43,6 +43,33 @@ from the four value outcomes. To reuse admitted values or choose parsing limits,
 use `JsonValue::parse_with_limits` followed by `PreparedSchema::evaluate`.
 Duplicate instance member names produce `NoVerdict` after parsing.
 
+## Execution paths
+
+Every prepared validator retains an Original semantic plan. At default evaluator
+and `PreparationLimits` settings, an eligible subset also gets a projected schema
+compiled by jsonschema. `evaluate` tries that compiled lane; `explain` always uses
+Original, including for satisfying values. Changing any limit from its default
+selects Original, even when the new limit is larger. Route selection is private.
+
+Compiled admission requires established static references, standard 2020-12
+interpretation and supported patterns. Dynamic references, unevaluated keywords,
+foreign/custom dialects and unresolved effects select Original. Acyclic expansion
+is capped at 100,000 applications; supported productive recursion has a separate
+finite-expansion proof. Value admission checks exact-text compatibility, static
+stack depth, arithmetic/scratch bounds and a weighted schema-application count
+times value nodes of at most 40,000,000. A value outside that profile uses Original;
+selection alone is not a refusal. Failure during compiled construction can still
+refuse preparation.
+
+Original uses heap frames, cooperative work checks and cumulative SDK storage
+reservations. Compiled evaluation recurses in the library, with static admission
+and a conservative peak scratch estimate within the default 48 MiB allowance.
+It checks cancellation before and after the library call, not inside that call.
+The application-count ceiling is not a CPU deadline. Neither path promises total
+heap, process RSS or host-stack bounds. Hard interruption requires an isolated
+Worker or process with a responsive supervisor. Both paths retain exact primitive
+semantics; they may differ in ability to finish within their resource policies.
+
 ## Results and semantic dependence
 
 `Satisfies` and `Fails` are established validity results. `Undefined` means validity
@@ -50,7 +77,7 @@ depends on a known undefined result under OpenBindings §5.5, with coherent oppo
 interpretations. Unsupported features, unavailable resources, exhausted budgets
 and cancellation alone do not establish undefinedness.
 
-The evaluator uses one prepared plan over original schema locations, combining
+The Original plan reasons over original schema locations, combining
 predicate results with evaluated-property and evaluated-item annotations. Repeated
 original predicates share the same exact JSON value identity; pattern predicates
 share the same original site and tested UTF-16 text. Numeric spellings and object
@@ -119,9 +146,9 @@ fn prepare_bounded(schema: &Schema, resources: &ExternalSchemas)
 | `pattern_depth` | 32 | Pattern group nesting |
 | `total_pattern_bytes` | 4 MiB | Unique normalized pattern forms across values and property names |
 | `total_pattern_memory` | 64 MiB | Immutable pattern-program representation |
-| `evaluation_sdk_reservation_bytes` | 48 MiB | Cumulative SDK proof, memo, scratch, search-cache and diagnostic storage reservations |
+| `evaluation_sdk_reservation_bytes` | 48 MiB | Original cumulative SDK storage reservations; compiled peak scratch admission at defaults |
 
-Each value invocation starts a fresh evaluation allowance. Verdict and diagnostic
+Each Original value invocation starts a fresh evaluation allowance. Verdict and diagnostic
 passes share what remains; diagnostic exhaustion preserves an established failure
 with incomplete problems. Required custom-meta evaluation debits both its own
 evaluation allowance and the enclosing preparation Attempt, so either exhaustion
@@ -138,7 +165,7 @@ and decision-graph storage are charged, including custom meta-schema admission
 and retries after discovering a recursive component. Supported pattern matching borrows the input string;
 unknown matches reserve their exact text-key allowance before constructing it.
 
-Evaluation work covers traversal, predicate work and nontrivial logical reasoning.
+Original evaluation work covers traversal, predicate work and nontrivial logical reasoning.
 Simple Boolean identities reuse an existing result without another proof-work
 unit. Growing annotation and match-count loops keep explicit cooperative checks;
 a fast result never clears an exhausted shared preparation attempt.
@@ -154,7 +181,7 @@ Final matched-toolchain performance qualification remains part of the migration.
 
 Symbolic reasoning supports at most 64 distinct effects in one proof, including
 selected meta-schema and diagnostic passes. This is separate from concrete schema
-or instance depth. The implementation also samples stack use against a private
+or instance depth. Original also samples stack use against a private
 256 KiB guard; this is an additional refusal check, not a guarantee about a host's
 available stack. The former compiler-depth and stack-byte options are removed and
 rejected as unknown settings. Build-specific physical-stack qualification remains
@@ -207,8 +234,8 @@ response sends schema facts. An app with a private contract should forward only
 before copying them, pattern diagnostics do not echo authored regex text, and an
 unavailable resource has no invented source coordinate.
 
-Prepared validators retain one immutable original schema environment, prepared
-primitive operands and shared pattern programs. Each call owns its mutable proof
+Prepared validators retain an immutable original schema environment, prepared
+primitive operands and shared pattern programs, plus backend state when compiled. Each call owns its mutable proof
 state and search caches. No caller borrow is retained.
 See [custom evaluators](https://github.com/openbindings/sdk/blob/main/docs/schema-evaluators.md),
 [first use](https://github.com/openbindings/sdk/blob/main/crates/openbindings-json-schema-evaluator/examples/first_use.rs), and [replacement](https://github.com/openbindings/sdk/blob/main/crates/openbindings-json-schema-evaluator/examples/replacement.rs).

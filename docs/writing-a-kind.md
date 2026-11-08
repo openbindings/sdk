@@ -11,8 +11,8 @@ An adapter crate is a Rust library that implements those rules using the SDK's
 optional interface traits. It supplies protocol behavior. The application
 constructs it with host configuration, chooses which binding to invoke or source
 to pull, supplies runtime context, and decides which document edits to adopt.
-The SDK supplies checked calls and exact JSON. It supplies no transport,
-credential store, adapter registry or automatic retry policy.
+The SDK supplies checked calls and exact JSON. Applications supply kind-specific
+transports, credential storage and routing, and decide retries.
 
 This page targets the current unpublished `0.2.0-alpha.1` SDK and its interface
 revision `3e3dc453a93b611a8e9ea1813ec63a2216830f45`. The document model is
@@ -579,8 +579,11 @@ flush a transport there. Synchronous `Drop` can release resources held by the
 future. Dropping invocation output also releases the driver and adapter future.
 Pull, description, check and preflight calls follow the same future-drop model.
 
-The token passed to a hook belongs to that attempt. The SDK cancels it before
-releasing pending work; it does not cancel the caller's token on drop. The token
+The token passed to a hook belongs to that attempt. Invocation, pull, description
+and source-check cancellation revoke it before releasing pending provider work.
+Preflight currently drops its pending provider future before its drop guard
+cancels the token, so its destructor must not rely on the token already being
+cancelled. None of these drops cancels the caller's token. The token
 is useful for independently polled or detached work and for synchronous loops
 that periodically test `is_cancelled()`. Those loops must still yield if the
 host needs other tasks to run. The token cannot interrupt arbitrary synchronous

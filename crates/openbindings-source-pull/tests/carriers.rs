@@ -412,3 +412,79 @@ fn a_pull_request_takes_a_source_key_in_the_usual_string_forms() {
     assert_eq!(PullRequest::new(document.clone(), "s").source(), "s");
     assert_eq!(PullRequest::new(document, key).source(), "s");
 }
+
+#[test]
+fn omitted_entry_borrows_all_contract_fields_without_losing_exact_data() {
+    let entry = OmittedEntry::from_json(json(
+        r#"{
+        "status":"conflict","reasonCode":"example.conflict","message":"",
+        "item":"operations/offered","existing":"operations/first",
+        "alsoIdentifies":["operations/second","operations/third"],
+        "offered":{"input":{"const":9007199254740993},"x-unit":"\ud800"},
+        "through":["schemas/S","operations/other/output"],"identifier":"urn:example:S"
+    }"#,
+    ))
+    .unwrap();
+    assert_eq!(entry.item().unwrap().as_str(), Some("operations/offered"));
+    assert_eq!(entry.existing().unwrap().as_str(), Some("operations/first"));
+    assert_eq!(
+        entry
+            .also_identifies()
+            .unwrap()
+            .map(|s| s.as_str().unwrap())
+            .collect::<Vec<_>>(),
+        ["operations/second", "operations/third"]
+    );
+    assert_eq!(
+        entry
+            .through()
+            .unwrap()
+            .map(|s| s.as_str().unwrap())
+            .collect::<Vec<_>>(),
+        ["schemas/S", "operations/other/output"]
+    );
+    assert_eq!(entry.identifier().unwrap().as_str(), Some("urn:example:S"));
+    let offered = entry.offered().unwrap();
+    assert_eq!(
+        offered
+            .get("input")
+            .unwrap()
+            .get("const")
+            .unwrap()
+            .number_text(),
+        Some("9007199254740993")
+    );
+    assert_eq!(
+        offered
+            .get("x-unit")
+            .unwrap()
+            .as_string()
+            .unwrap()
+            .utf16_units()
+            .collect::<Vec<_>>(),
+        [0xd800]
+    );
+    // The borrowed view points at the original carrier's bytes, not a copy.
+    assert_eq!(
+        offered.text().as_ptr(),
+        entry
+            .value()
+            .value()
+            .get("offered")
+            .unwrap()
+            .text()
+            .as_ptr()
+    );
+    let minimal = OmittedEntry::from_json(json(
+        r#"{"status":"invalid","reasonCode":"r","message":""}"#,
+    ))
+    .unwrap();
+    assert!(minimal.item().is_none());
+    assert!(minimal.existing().is_none());
+    assert!(minimal.also_identifies().is_none());
+    assert!(minimal.offered().is_none());
+    assert!(minimal.through().is_none());
+    assert!(minimal.identifier().is_none());
+    let boolean = OmittedEntry::from_json(json(r#"{"status":"conflict","reasonCode":"r","message":"","existing":"schemas/S","offered":false}"#)).unwrap();
+    assert_eq!(boolean.offered().unwrap().as_bool(), Some(false));
+}

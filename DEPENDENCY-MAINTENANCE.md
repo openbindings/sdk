@@ -3,13 +3,15 @@
 Core and the default evaluator both use the unmodified jsonschema 0.58.6
 library from the registry, under its own name. Core keeps the library's default
 pattern engine (jsonschema-regex 0.58.6 and fancy-regex 0.19.2) for its fixed
-checks (OBI-02 and OBI-10) and uses the library for the resource identity and
-reference resolution of its reference inspection. The evaluator matches schema
+checks (OBI-02 and OBI-10). Reference inspection uses the SDK's original resource
+inventory and compact identifier resolver; supplied-resource admission also uses
+the library's URI resolution. The evaluator matches schema
 patterns with immutable regex-automata 0.4.18 NFAs or its own simple matcher,
 using regex-syntax 0.8.11 after strict ECMA interpretation. jsonschema-value 0.58.6, referencing 0.58.6 and
 serde_json 1.0.151 are unmodified too. The SDK carries no fork, vendored crate
 or patch of any dependency: every adaptation is SDK code, a fixed-schema transformation, or a documented
-extension point. User schemas are evaluated at their original locations.
+extension point. Original schema meaning and provenance remain SDK-owned on both
+evaluator paths.
 `docs/dependency-isolation.json` records the nine upstream archive checksums
 and complete Rust source digests. `tools/verify-dependency-isolation.py` checks
 those sources, the single-serde graph, absence of SDK-requested arbitrary
@@ -108,16 +110,20 @@ Three regressions guard these facts:
 
 The source digests of jsonschema, jsonschema-regex and fancy-regex are recorded,
 so an upgrade of any of them fails the isolation check until it is reviewed: run
-the three regressions above, the 440-case specification corpus, and the document
+the three regressions above, the current pinned specification corpus, and the document
 validation differential against the previous release, then refresh the records.
 
 ## The default evaluator and dependency boundaries
 
-The default evaluator prepares one immutable plan over original schema locations.
-It does not compile a projected user schema through jsonschema. Original resource
-identity, reference queries, dialects and dynamic scope remain SDK-owned. Explicit
-heap frames apply concrete keywords; bounded symbolic reasoning handles undefined
-predicates, missing content and incomplete capabilities without conflating them.
+The default evaluator retains an Original semantic plan and, for an admitted
+subset at default limits, a compiled jsonschema validator. The public
+[execution policy](crates/openbindings-json-schema-evaluator/README.md#execution-paths)
+is the caller-facing account of selection, cancellation and limits.
+`DefaultValidator::evaluate` tries compiled only for `Detail::Outcome`;
+Explain always uses Original. `compiled/admission.rs` rejects non-default
+preparation or evaluator limits and unsupported schema shapes before projection.
+`compiled::Lane::outcome` admits each value before synchronous `is_valid`.
+Both paths use SDK-owned original resource identity, dialect and reference facts.
 
 - `semantic/construction.rs` shares preparation ownership across the root plan and
   selected meta-schema plans. Completed syntax and reference facts are reused.
@@ -150,17 +156,27 @@ predicates, missing content and incomplete capabilities without conflating them.
   stack guard is a refusal check, not a portable physical-stack guarantee. Actual
   native and Wasm stacks require qualification for each build.
 
-The evaluator still uses jsonschema for fixed SDK-owned format validators, with
-retrieval denied. Core uses it for the fixed document/local meta-schema checks
-above. Neither path compiles arbitrary user schemas as an evaluator substitute.
-`FlatJson` implements the shared jsonschema-value traits without exposing upstream
-library types through public SDK APIs. Internal JSON reads observe work only in
-an evaluator scope; core-only consumers do not acquire the evaluator dependency.
+The evaluator also uses jsonschema for fixed SDK-owned format validators, with
+retrieval denied. Core uses it for fixed document/local meta-schema checks.
+`FlatJson` implements jsonschema-value traits without exporting vendor types.
+Internal JSON work checks are active only in an evaluator scope; core-only
+consumers do not depend on the evaluator companion.
 
-The outgoing bounds, bundle, cycle-unfolding, stand-in, depth-estimation and
-unevaluated-walk transforms are deleted. Their historical measurements describe
-older revisions, not requirements to preserve those implementations or quotas.
-The original unevaluated-placement workload remains a semantic regression test.
+The current compiled path lives in `compiled/`: `admission.rs` and `recursion.rs`
+select finite schema graphs, `expansion.rs` computes application bounds,
+`bundle.rs` lowers references, `operands.rs` preserves exact keyword operands,
+`pattern.rs` handles admitted patterns, and `depth.rs` bounds recursive backend
+depth. `Lane::outcome` also checks scratch and the 40,000,000 weighted-application
+product. Backend construction failures remain preparation failures. Compiled
+checking has no internal cancellation polling; its before/after checks do not
+make it preemptible. Historical retirement receipts describe an earlier state.
+
+Changes to keyword semantics, reference lowering, exact operands, patterns or
+selection require both Original and default-lane comparisons. Run
+`compiled_qualification` (including its required release stack and expansion
+controls), the generated default-limit differential, the evaluator kit and
+actual Wasm tests. Positive route counters ensure tests really enter compiled
+construction and evaluation; passing Original-only tests cannot qualify it.
 
 Refresh both attribution inventories and notices offline with
 `python3 tools/attribution.py`; verify with `--check`. The native inventory is the
@@ -194,7 +210,7 @@ uniqueness share this implementation.
 
 `numeric.rs` holds exact comparisons and division; each library's adapter
 registers them with its documented `with_keyword` / `Keyword` APIs. The
-evaluator's `operands.rs` replaces numeric bounds with positive handles and
+evaluator's `compiled/operands.rs` replaces numeric bounds with positive handles and
 const/enum with handles into exact flat storage.
 Every size operand, including minContains/maxContains, is normalized to a
 nonnegative u64, saturating only above the physically realizable collection
@@ -204,22 +220,15 @@ overrides; fixed schemas use exact comparisons with their trusted small integer
 operands, and assert no `multipleOf` (a test checks every position).
 Original schemas are validated before substitution.
 
-Inspection resources substitute numeric leaves without changing their shape.
-Their pointer-identity table is built alongside each stable boxed copy, paired
-structurally with original occurrences, never inferred from JSON equality.
-Runtime diagnostic schema facts use the projection's original-source provenance.
+Value explanations use Original and its original-source witnesses, never backend
+error payloads. Fixed document findings have their own bounded location walk.
 
 The private FlatJson adapter redacts cold Node::to_value/JsonNumber::to_number
-payloads. These documented cold APIs cannot represent every exact JSON number.
-They are never the source of a verdict or a reported instance/schema fact:
-equality, uniqueness, integer classification and numeric keywords have exact
-implementations. The SDK does not expose library error Display/Debug or payloads. An
-explanation reads only the library error's kind, instance path and keyword
-location, and words its message as fixed text for that kind. The cheap check
-never requests library errors. An explanation retains the library's documented
-allocation exposure; building the error takes about twice a check's stack per
-level, so the evaluator explains a value only within half its evaluation depth
-limit.
+payloads. These cold APIs cannot represent every exact JSON number. They are
+never the source of a verdict or reported instance/schema fact: equality,
+uniqueness, integer classification and numeric keywords have exact implementations.
+Compiled cheap checks use `is_valid` and collect no library error tree. Original
+explanation shares its evaluation work/storage allowance and caps retained problems.
 
 Shared serde_json enables raw_value and unbounded_depth for exact RawValue
 interoperation and admitted schema decoding. Upstream jsonschema/value additionally
@@ -245,7 +254,7 @@ cached resolvable graph, not a crates.io-head claim.
 Keep exact input in the SDK's flat immutable arena. Do not convert values through
 f64 or serde_json::Value as an authoritative convenience path. The private
 compiler projection can strip annotations only because the declared evaluator is
-a validity evaluator with format assertion disabled; original SDK documents and
+an admitted standard-2020-12 validity subset with optional format assertion disabled; original SDK documents and
 diagnostics preserve original content. The evaluator's const/enum and numeric
 keywords preserve exact values.
 
@@ -259,27 +268,19 @@ prove the traps work.
 The recorded source digests make the isolation check fail on any dependency
 upgrade until it is reviewed. Before adopting one:
 
-1. Read the upstream changes against what the SDK relies on: the documented
-   `with_keyword`, `PatternOptions` and build APIs, the walk the
-   unevaluated-walk transform depends on, jsonschema-regex's translation of the
-   evaluator's pattern forms, and the regex crate's syntax and Unicode
-   semantics.
-2. Run the unevaluated-walk tests and act on either failure as above.
-3. Re-run the full pinned 440-case OpenBindings corpus and the evaluator kit's
-   1,564 observations, with its exact-case refusal and capability declarations,
-   natively and in real Wasm (`python3 tools/verify.py --browser`), and the
-   pattern differentials: `pattern_correctness` checks seeded generated
-   patterns and lone-surrogate escapes against results recorded from V8 through
-   `pattern` and `patternProperties`, and the TypeScript suite derives the
-   generated rows' results from V8 again; core's fixed-pattern regressions are
-   above.
-   Run the no-I/O feature-unification traps, dynamic-scope, cancellation, deep
-   value, exact arithmetic and stack tests. The release stack test re-checks
-   the depth bound's frame model, the stack guard's headroom and the walk
-   limit that keeps preparation on a 256 KiB thread: a library whose frames
-   grow fails it, and the guard's budget or the walk limit changes with the
-   library. The missing-resource and stand-in tests check stand-in verdicts
-   against every completion.
+1. Read upstream changes against the documented `with_keyword`, `PatternOptions`,
+   build, reference and jsonschema-value APIs the SDK uses. Review the compiled
+   lowering and depth assumptions, jsonschema-regex translation and regex-family
+   syntax, Unicode, allocation and search behavior.
+2. Run Original and compiled differentials, generated default-limit comparisons,
+   exact-operand controls and the fixed-pattern tests above. Recheck the customer
+   regex empty-search argument and route witnesses after regex-family changes.
+3. Re-run the current pinned core corpus and the 1,546-case evaluator suite,
+   natively and in actual Wasm (`python3 tools/verify.py --browser`). Run no-I/O
+   feature-unification traps, dynamic scope, cancellation, deep-value, exact
+   arithmetic and the required release stack/expansion controls. Preserve the
+   original-location and retained-owner checks. Capability refusal is not a pass
+   where the fixture requires a verdict.
 4. Repeat the frozen representative performance and memory series
    (`tools/evaluator-bench`, `tools/verify-diagnostics.py`) and the packed
    consumer tests. A verdict becoming a refusal is a regression unless the

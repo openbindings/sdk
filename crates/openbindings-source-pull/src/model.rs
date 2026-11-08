@@ -1,5 +1,5 @@
 use crate::carrier::{self, CarrierError};
-use openbindings::{JsonKind, JsonObject, JsonStringRef, JsonValue};
+use openbindings::{JsonKind, JsonObject, JsonRef, JsonStringRef, JsonValue};
 use std::fmt;
 
 macro_rules! carrier {
@@ -501,6 +501,31 @@ impl OmittedEntry {
     pub fn status(&self) -> OmittedStatus {
         OmittedStatus::read(self.0.value().get("status").expect("status")).expect("admitted status")
     }
+    optional_text!(item, "item", "Borrow the omitted source item's label.");
+    optional_text!(
+        existing,
+        "existing",
+        "Borrow the input-document label touched by the omission; required on conflicts."
+    );
+    labels_accessor!(
+        also_identifies,
+        "alsoIdentifies",
+        "Borrow the additional identified operation labels in their reported order."
+    );
+    /// Borrow the offered operation shape or schema; present on conflicts only.
+    pub fn offered(&self) -> Option<JsonRef<'_>> {
+        self.0.value().get("offered")
+    }
+    labels_accessor!(
+        through,
+        "through",
+        "Borrow the labels through which a conflict differs, in reported order."
+    );
+    optional_text!(
+        identifier,
+        "identifier",
+        "Borrow the identifier that the offered additions would declare again."
+    );
     required_text!(
         reason_code,
         "reasonCode",

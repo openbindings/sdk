@@ -32,8 +32,7 @@ editor drafts, and refuses text that is not JSON as an `InputError`;
 editing does not fabricate intermediate containers.
 `edit(&[Edit])` commits one atomic batch with one splice and one parse. Sibling
 insertions coalesce in batch order; untouched bytes remain exact. The byte budget
-is checked before allocating replacement bytes. Final parsing enforces the default
-JSON limits. Both successful and failed batches leave the original document unchanged. Retain the returned document to use an edit.
+is checked before allocating replacement bytes. Final parsing enforces the JSON limits retained by the document. Both successful and failed batches leave the original document unchanged. Retain the returned document to use an edit.
 
 A `ConformantDocument` has infallible reads and no mutable access. Use
 `document()` for exact draft reads, or consume it with `into_inner()` to keep the underlying snapshot. Clones, views, validation reports and proofs retain their own revision;

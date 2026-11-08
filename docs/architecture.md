@@ -43,21 +43,21 @@ value evaluator.
 
 ## Default evaluation implementation
 
-The optional `openbindings-json-schema-evaluator` uses one prepared semantic plan
-over original schema locations. It
-keeps exact values, typed reference effects, conditional evaluation annotations
-and supported recursive proofs together. Prepared original queries and pattern
-readings are immutable; mutable matching and proof state belongs to each call.
-No completed artifact retains a caller's preparation control.
+The optional `openbindings-json-schema-evaluator` retains an Original semantic
+plan over original locations and may additionally compile a projected subset
+through unmodified jsonschema. Outcome checks use compiled evaluation when both
+schema and value admission permit it; Explain always uses Original. Non-default
+evaluator or preparation limits select Original. Both paths preserve exact
+primitive semantics and original reference meaning. See the
+[evaluator execution policy](../crates/openbindings-json-schema-evaluator/README.md#execution-paths)
+for selection and cancellation boundaries.
 
-The outgoing projection compiler and its adaptation code have been removed.
-Pattern construction uses checked structural admission, a defined retained
-footprint and cooperative SDK work/storage budgets. These policies do not promise
-full accounting of dependency allocations or total process memory.
-See the [saved checkpoint](alignment-checkpoint.md) for actual completed increments
-and remaining gates. Default workload and performance qualification remain required.
-The SDK uses unmodified dependencies; maintenance details are
-in [DEPENDENCY-MAINTENANCE.md](../DEPENDENCY-MAINTENANCE.md).
+Original queries and pattern programs are immutable; mutable proof/search state
+belongs to each value call. Compiled validators retain their backend state too.
+Preparation controls are not retained in completed owners. SDK work/storage
+budgets and dependency construction limits are distinct from total process
+memory. The [dependency maintenance contract](../DEPENDENCY-MAINTENANCE.md)
+records the implementation map and upgrade checks.
 
 ## Current interfaces
 

@@ -1,5 +1,8 @@
 # OpenBindings invocation
 
+For an application call with schema gates and typed output, read
+[document to typed result](https://github.com/openbindings/sdk/blob/main/docs/document-to-typed-result.md).
+
 For a complete protocol implementation walkthrough, read
 [writing a binding kind adapter](https://github.com/openbindings/sdk/blob/main/docs/writing-a-kind.md).
 
@@ -111,7 +114,11 @@ facet. Every ordered selection key must belong to that operation, including keys
 after the first usable choice. An explicit binding bypasses support selection.
 No preference, deprecation flag, key order or registration order silently chooses
 among multiple candidates. This routing facet is not a portable kind-description
-operation; a `BindingInvoker` needs no descriptor to run an explicit binding.
+operation. Direct `BindingInvokerExt` calls need only `BindingInvoker` and do
+not validate operation schemas. `DefaultOperationInvoker` currently requires
+`BindingInvoker + InvocationSupport` for construction, invocation, preflight and
+preparation, even with an explicit binding; `PreparedOperation::invoke` also
+requires both traits.
 
 `DefaultOperationInvoker` requires an explicit `SchemaEvaluator` and `ExternalSchemas`.
 Lazy invocation prepares each declared direction when its first value reaches the

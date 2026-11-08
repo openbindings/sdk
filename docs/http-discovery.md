@@ -54,8 +54,11 @@ URL that tower-http's WHATWG join resolved, never the raw Location. A Location
 that is not an RFC 3986 URI-reference is therefore recovered, as RFC 9110
 section 10.2.2 permits: a space is percent-encoded and a backslash is read as a
 slash, so `/tar get` is requested as `/tar%20get` and `\target` as `/target`.
-Portable Rust and TypeScript discovery refuse such a Location as a
-redirect-policy failure before a second request. Every path that sees a hop
+Portable Rust validates RFC 3986 URI-reference syntax. TypeScript rejects
+whitespace, non-ASCII characters and backslashes, then uses WHATWG resolution;
+it does not validate the full URI-reference grammar and can admit malformed
+percent escapes such as `/document%ZZ`. Both refuse spaces and backslashes
+before a second request. Every path that sees a hop
 admits the URL actually requested, so the selected HTTP policy, embedded-credential,
 downgrade and hop-limit rules are the same on each.
 
@@ -95,9 +98,9 @@ The byte limit protects the process, so it is on by default. A body within it
 is validated under admission limits whose byte limit is the bound when that
 exceeds the default 32 MiB, with the default 1,000,000 nodes and any nesting, so
 raising the bound admits larger documents, which keep those limits. A body past
-the nodes is undetermined, and its findings name validating the retained body
-with `validate_document_with_limits` (`validateDocument` with `limits` in
-TypeScript) and a larger node limit. A deadline only
+the nodes is undetermined, with `node-limit` findings at the parser offset.
+Validate the retained body with `validate_document_with_limits`
+(`validateDocument` with `limits` in TypeScript) and a larger node limit to admit it. A deadline only
 bounds time, so it is the application's choice: an attempt has no deadline
 unless `ClientOptions::timeout` sets one, and without one it runs until it
 completes or the caller cancels it. A host that needs a bound, such as an
@@ -135,7 +138,7 @@ It requests Fetch `redirect: "manual"`. Where the host returns the redirect
 response itself, as Node does, the SDK checks every hop before dispatching it,
 with the policy of the Rust checked paths: it follows 301, 302, 303, 307 and 308,
 resolves relative Location values against the URL it dispatched, refuses a
-Location that is not a URI-reference as portable Rust does, refuses every
+Location containing whitespace, non-ASCII characters or backslashes, refuses every
 HTTPS-to-HTTP hop, any destination the origin rules above refuse and an eleventh
 redirect, and reports the URL it last dispatched as `finalUrl`. A transport that
 reports another URL or a followed response did not honor manual mode, which is a

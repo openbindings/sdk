@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-11-08 newcomer docs and omitted-entry accessors (unreleased)
+
+- Add borrowed `OmittedEntry` accessors for `item`, `existing`, `also_identifies`,
+  `offered`, `through` and `identifier`, preserving exact values and absence.
+- Add a document-to-typed-result walkthrough with an in-process binding adapter,
+  preparation, failure handling and Serde output decoding. Verify its exact
+  source and external example crate through the Rust snippet verifier and CI.
+- Correct evaluator routing, limits, discovery and package documentation; remove
+  duplicated migration status and capability detail.
+- Correct the documented `InvocationSupport` requirement. Its bound is unchanged:
+  runtime operation/binding address variants share one entry point, so a pure
+  conditional relaxation needs a separately designed public API.
+
 ## 2026-11-08 TypeScript report hand-off (unreleased)
 
 - Serialize reports from the Wasm engine in one Serde pass instead of

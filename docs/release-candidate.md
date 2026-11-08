@@ -39,8 +39,8 @@ or dirty Wasm build identity, installs the npm tarball in a fresh project, and
 runs Rust examples and the ordinary-Serde compatibility matrix exclusively from
 extracted Cargo archives. Local Cargo patches resolve unpublished siblings; they
 are temporary qualification infrastructure, not the eventual public quickstart.
-The explicit artifact inventory covers all seven supported Rust libraries, the
-internal JSON, schema, cancellation and interfaces packages, and the build-only
+The explicit artifact inventory covers all nine supported Rust libraries, the
+internal JSON, schema and cancellation packages, and the build-only
 Wasm crate. Missing or unclassified packages fail the check.
 The JSON manifest records artifacts, hashes, source identity, and the publication
 order (`publicationOrder`). That order puts each crate after every local crate its
@@ -115,7 +115,7 @@ This component release does not migrate applications, retire legacy SDKs, or
 promote an OpenBindings project cohort.
 
 The internal cancellation delivery package is included in the Rust archive closure
-for all four async companions. Its Apache-2.0 license and notice ship in its archive;
+for the invocation, kind-description and source-pull companions. Its Apache-2.0 license and notice ship in its archive;
 its token and future are imported through the companion interfaces. The default core
 and evaluator graphs do not depend on this package.
 

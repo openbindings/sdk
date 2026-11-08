@@ -6,14 +6,14 @@ WebAssembly. Applications need no Rust toolchain.
 
 Kind description, source pulling and binding/operation invocation are Rust
 companion APIs. Their coverage claims and provider streams are not exported by
-this TypeScript facade; the facade exposes document operations and HTTP discovery.
+this TypeScript facade; the facade exposes document operations, value evaluation and HTTP discovery.
 
 ## First useful result
 
 This `0.2.0-alpha.1` package is unpublished. Install a locally built archive;
 registry releases use the legacy API. Build the archive from a checkout of this
 repository with Rust 1.99.0 and its `wasm32-unknown-unknown` target,
-wasm-bindgen-cli 0.2.129 and Node 22.23.0 or later ([source replay](https://github.com/openbindings/sdk/blob/main/docs/REPLAY.md)
+wasm-bindgen-cli 0.2.129 and a Node version in `^22.23.0 || ^24.17.0 || >=26.2.0` ([source replay](https://github.com/openbindings/sdk/blob/main/docs/REPLAY.md)
 lists the toolchain):
 
 ```sh
@@ -207,6 +207,8 @@ with a larger `maxNodes` admits it. `Document.create()`, `ExactJson.from`,
 value use the defaults. To evaluate a value beyond those defaults, admit it with
 `parseJson` and explicit limits, then pass the resulting `ExactJson` to `evaluate`.
 
+## Evaluate values
+
 External schemas are explicit and immutable. Pass `ExternalSchemas` to
 `schema.prepare({ resources })`; no reference causes a fetch. A prepared schema
 retains the meaning of that resource snapshot, so replacing resources requires a
@@ -235,9 +237,14 @@ for supported semantics and remaining limitations.
 | `patternDepth` | 32 | Pattern group nesting |
 | `totalPatternBytes` | 4 MiB | Unique normalized pattern forms across both pattern keywords |
 | `totalPatternMemory` | 64 MiB | Immutable pattern-program representation |
-| `evaluationSdkReservationBytes` | 48 MiB | Cumulative SDK proof, memo, scratch, search-cache and diagnostic storage reservations |
+| `evaluationSdkReservationBytes` | 48 MiB | Original cumulative SDK storage reservations; compiled peak scratch admission at defaults |
 
-Each value invocation starts a fresh evaluation allowance. Verdict and diagnostic
+At default limits, Outcome checks may use a compiled jsonschema lane. Changing
+any evaluator limit selects Original; `explain` always uses Original. Compiled
+checks observe cancellation before and after the synchronous backend call.
+See the [execution policy](https://github.com/openbindings/sdk/blob/main/crates/openbindings-json-schema-evaluator/README.md#execution-paths).
+
+Each Original value invocation starts a fresh evaluation allowance. Verdict and diagnostic
 passes share what remains; diagnostic exhaustion preserves an established failure
 with incomplete problems. Required custom-meta evaluation debits its own evaluation
 allowance and the shared preparation allowance, so either exhaustion can return a
@@ -247,10 +254,10 @@ requests, live heap or immutable pattern-program size.
 The original schema environment also has preparation footprint, work and
 allocation bounds, using Rust's default `PreparationLimits` in this facade.
 Those preparation settings are not currently exposed as TypeScript options.
-Evaluation work covers traversal, predicate work and nontrivial logical reasoning;
+Original evaluation work covers traversal, predicate work and nontrivial logical reasoning;
 simple Boolean identities add no proof-work unit. Growing loops retain cooperative
 checks, and fast results do not reset shared preparation budgets.
-Budgets are not deadlines or process-memory measurements. The evaluator uses
+Budgets are not deadlines or process-memory measurements. Original uses
 original schema locations and explicit evaluation frames, with a fixed supported
 maximum of 64 distinct symbolic effects per proof. The retired `stackBytes` and
 `compileJsonDepth` options are rejected. Host-specific stack and performance

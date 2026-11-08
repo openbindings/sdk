@@ -31,10 +31,11 @@ admission limits are a setting at `validate_document_with_limits`,
 `Document::parse_with_limits` and `JsonValue::parse_with_limits` (`JsonLimits`),
 and at TypeScript's `validateDocument`, `Document.parse` and `parseJson`
 (`limits`). `Document::new`, `Document::from_json`, `JsonValue::parse`,
-`JsonValue::string`, `Publication::from_bytes` and `PreparedSchema::evaluate_json` use the
+`JsonValue::string` and `PreparedSchema::evaluate_json` use the
 defaults, as do TypeScript's `Document.create()`, `ExactJson.from`,
 `evaluateJson` and a prepared schema's `evaluate` and `explain` of an ordinary
-value.
+value. `Publication::from_bytes` uses whole-document validation admission,
+including no nesting cap.
 A document keeps the limits it was admitted under, and its edits apply them to
 the edited document. Discovery raises only the byte limit, to its configured
 body bound; a body past the default nodes comes back undetermined and is admitted
@@ -44,46 +45,22 @@ bounds through `PreparationLimits` (`max_sdk_work_units`,
 `max_sdk_reservation_bytes`). These are not allocator-wide or CPU accounting for
 dependencies and custom callbacks. Dependency construction needs separate
 structural admission and measured resource qualification,
-plus the selected evaluator's capability and execution limits. Every
-admission and edit limit refusal names how to admit more, including the route
-for calls that take no limits.
-Ordinary Rust Serde conversion has a 128-container ceiling. Document reports retain at
-most 4,096 findings and 8 MiB of pointers. Truncation leaves rule evidence
-intact. Document validation's memory grows linearly with the document: its copy
-of the text, the decoded text of its escaped strings, its tree, and validation
-state per schema position, `$id` declaration and retained finding. Compared
-identifiers share runs of the `$id` texts, so a long or deeply nested `$id`
-costs memory and time linear in the document. At the default limits the
-diagnostic memory probe validates 34 documents, most filling the byte or node
-limit, with structures that grow these terms, and fails if one allocates more
-than 300 MiB beyond the caller's input, counting every reallocation as holding
-its old and new blocks at once. The largest, a third of a million escaped
-`$id`s, each with its own authority, a query, a fragment and a dot segment that
-makes its path a copy, allocates 256.0 MiB, against 364.9 MiB at the former
-64 MiB default. A caller that hands over its buffer, through
-`validate_document_owned`, `Document::parse_owned`, their `_with_limits` forms
-or `JsonValue::parse_owned_with_limits`, gives the document or value that
-buffer as its text, saving the copy: the same document then allocates
-224.3 MiB beyond the buffer. The TypeScript package always hands over the
-module's copy of its input. See
-[performance and allocation boundaries](docs/performance-boundaries.md).
-OBI-02's whole-document check and each embedded schema's OBI-10 meta-schema
-check run on the unmodified jsonschema 0.58.6 library with its default pattern
-engine. Every fixed pattern is regular, so that engine matches it on a finite
-automaton in time linear in the string, with the results of ECMAScript's `u`-mode
-RegExp. The derived schema has no recursive reference and the meta-schema check
-cuts its recursive edges, so every document the admission limits admit, default
-or caller-selected, gets OBI-02 and OBI-10 verdicts, with work linear in those
-limits and no work budget of the checks' own. A SemVer near miss, the costliest
-input per byte, took about 0.35 seconds at the default 32 MiB limit, 0.6 seconds
-at 60 MB and 0.7 seconds at 64 MiB in a release build on an Apple M1 Max; peak
-memory was the input text and the stored document, and the checks' own memory
-does not grow with the string. The admission byte limit is how a caller bounds that time:
-`validate_document_with_limits` with a smaller `max_bytes` admits less. A
-meta-schema check reads its schema's own members and only the type of each
-subschema, so a node is read by at most two checks and their work together stays
-linear in those limits. A failing schema's members are read once more to locate
-OBI-10 findings at the keywords whose values fail.
+plus the selected evaluator's capability and execution limits. Parser-limit
+findings use `byte-limit`, `depth-limit` or `node-limit` and describe the limit
+without API advice. The [Rust guide](docs/rust-first-use.md) explains how to
+choose admission limits. Ordinary Rust Serde conversion has a 128-container
+ceiling. Document reports retain at most 4,096 findings and 8 MiB of pointers;
+truncation leaves rule evidence intact. OBI-02 findings include fixed-schema
+keyword, origin and optional facts, as documented in the
+[API reference](docs/api-reference.md#document-finding-codes).
+
+Reference inspection works on drafts, including missing or malformed version
+declarations, under 0.2's rules and throughout the admitted depth. Unsupported
+versions and duplicate names produce incomplete reports. `resource_root` names
+the site's resource origin, absent exactly for the document resource. An 8 MiB
+retained-text allowance can stop inspection with `reference-report-bytes`.
+See [reference inspection](docs/api-reference.md#schemas-and-value-results) for
+completion, resources and accounting details.
 
 ## Schema evaluation
 
@@ -95,67 +72,31 @@ acquisition. Core alone supplies no value verdict, even for a Boolean schema.
 See the [evaluator integration guide](docs/schema-evaluators.md).
 
 The optional [default evaluator](crates/openbindings-json-schema-evaluator/README.md)
-uses one bounded semantic plan over original schema locations, with exact
-primitive comparisons. It distinguishes `Satisfies`, `Fails`, `Undefined`
-and `NoVerdict`. A known invalid Unicode pattern or a supported non-consuming
-alias cycle may establish Undefined when the value's validity depends on it.
-Missing content, an unsupported predicate, cancellation and an exhausted limit
-are not known undefined effects. Decisive surrounding logic may establish a
-result despite an effect elsewhere.
+retains an Original semantic plan and, for an admitted subset at default limits,
+a compiled jsonschema validator. Outcome checks may use the compiled lane;
+Explain always uses Original. Any non-default evaluator or preparation limit
+selects Original. The [execution policy](crates/openbindings-json-schema-evaluator/README.md#execution-paths)
+explains value selection, cancellation and storage accounting.
 
-Repeated original predicates share exact value identity. Applicator reasoning
-tracks evaluated properties and items as well as validity; effects do not invent
-annotations. Unknown external content may correlate with addressable predicates.
-The anonymous document resource has a distinct privacy boundary. Recursive
-summaries are reusable only when validity and every evaluated annotation are
-independent of provisional cuts; unresolved components remain conservative.
-Finite successful tests are not a claim of unrestricted recursive completeness.
+Results are `Satisfies`, `Fails`, `Undefined` and `NoVerdict`. Undefined requires
+semantic dependence on a known undefined result. Missing content, unsupported
+features, exhausted limits and cancellation alone do not establish it. Original
+reasoning tracks validity and evaluated properties/items; unresolved recursive
+components can remain conservative. Finite passing tests do not establish
+unrestricted recursive completeness.
 
-The evaluator uses exact decimal comparisons and the SDK's ECMA-262 11th-edition
-Unicode-pattern handling. Admitted patterns use immutable literal matchers or
-capture-free forward NFAs, with a separate search cache for each value call.
-The jsonschema dependency remains part of the fixed document and meta-schema
-checks, not a second value-evaluation path. Unsupported valid pattern
-features yield NoVerdict where required; invalid patterns participate in semantic
-dependence analysis. Optional `format` assertion remains disabled. External
-draft-07 and 2019-09 resources now use their own inventory, assertions and
-annotations. Draft-07 reference siblings are ignored;
-2019-09 recursive references and contains annotations retain their dialect's
-behavior. Unsupported identifier forms retain explicit capability refusals,
-including external identity selection when a stopped inventory could hide names.
-Supported custom vocabulary combinations and required format assertion use the
-original meta-schema and vocabulary declarations; unknown required vocabularies
-and format attributes have explicit preparation refusals.
+The evaluator preserves exact numeric comparisons and ECMA-262 11th-edition
+Unicode-pattern semantics within its supported subset. Optional format assertion
+is disabled. Standard draft-07, 2019-09 and 2020-12 external resources and supported
+custom vocabularies retain their own dialect interpretation. Preparation failure
+is separate from a per-value result; replacing external resources requires new
+preparation. Prepared owners retain the original schema environment.
 
-Construction and evaluation honor explicit resource/work limits and cooperative
-cancellation. The plan charges its decision graph, annotations, value
-identity and proof work, including retries. Original diagnostics are bounded
-before copying long paths; supported pattern matching borrows input text.
-Pattern construction has checked structural admission and representation limits;
-SDK reservations do not count every dependency allocation or promise a process-RSS
-cap. Exact `multipleOf` retains its arithmetic
-bound; some Unicode-text operations cannot interpret unpaired UTF-16 units.
-See the evaluator guide's limit table for the individual policies.
-
-Preparation failure is separate from a per-value outcome. A failed or cancelled
-attempt does not poison cached preparation. A prepared validator retains the
-immutable original schema environment needed for evaluation and source evidence.
-`evaluate` requests an outcome; `explain` may provide bounded
-original-location evidence. Missing diagnostic detail never changes the verdict.
-
-The saved migration checkpoint passes all 505 required core cases and 1,546
-required evaluator cases on the qualified native and browser runs, including
-custom vocabulary and format cases. Independent recursive controls and the finite
-describe/check/pull/adopt/invoke journey also pass. This is bounded evidence:
-matched-toolchain performance and final hosted-platform qualification remain open.
-The portable replay, bounded actual API/map audit and local host gates pass their
-recorded scopes. The original-engine replacement is implemented;
-native stack controls and independent construction, capacity and Explain reviews
-have passed their recorded scopes. The selected resource contract uses structural
-limits and cooperative SDK budgets, not a full dependency-allocation ledger.
-See the [current checkpoint](docs/alignment-checkpoint.md)
-for receipts and the remaining sequence. Earlier measurements in
-[performance boundaries](docs/performance-boundaries.md) remain historical evidence.
+Explicit limits cover SDK work and reservations, not all dependency allocations,
+CPU time or process RSS. Explanations have bounded original-location evidence;
+missing detail does not weaken an established failure. See the evaluator guide
+for the supported profiles and individual limits. Historical measurements and
+qualification scopes are recorded in [performance boundaries](docs/performance-boundaries.md).
 
 ## Schema comparison
 
@@ -166,12 +107,12 @@ caller roots, bases and resource records govern references; it performs no fetch
 and does not reuse core `$id` interpretation or value evaluation. Its Equal answer
 is profile identity, not general schema equivalence or a verified reuse claim.
 
-All 14 ordinary and 10 exact identity fixture groups pass. The 88 directional
-groups remain outside this API's scope. Missing/cyclic references, unsupported
-plain-name anchors, repeated-first-enum intersection ambiguity, resource exhaustion
+The comparison fixture harness covers 27 ordinary and 10 exact identity groups. The 88 directional
+groups remain outside this API's scope. Missing/cyclic references, repeated-first-enum intersection ambiguity, resource exhaustion
 and cancellation are failures with no identity verdict. Defaults are 20 million
 work units, 64 MiB cumulative allocation reservations and depth 128; the depth
-ceiling cannot be raised. Comparison remains independent of core conformance.
+ceiling cannot be raised. Plain-name anchors and nested resource bases are supported.
+Comparison remains independent of core conformance.
 
 ## Discovery and kind implementations
 
@@ -204,9 +145,8 @@ offered-schema identity or opaque dependency closure, and it never applies
 proposals. Default handoffs are 32 MiB; relationship indexing has separate entry,
 work and allocation bounds. These do not cover provider work or core prospective
 rebuild/validation internals, which retain core limits. Cancellation is checked
-around those synchronous core calls. Independent implementation review passes. External source/archive and Node/Wasm
-consumers exercise the current interfaces. Obsolete inspection/synthesis companions
-and their shared records have been removed; final whole-SDK qualification remains open.
+around those synchronous core calls. These checks do not qualify an application
+or adapter for deployment.
 
 ## Runtime qualifications
 

@@ -54,9 +54,10 @@ Native discovery checks redirect policy before each hop and runs on a Tokio
 runtime with timers enabled. It keeps
 reqwest's redirect execution, which recovers a Location that is not an RFC 3986
 URI-reference, as RFC 9110 section 10.2.2 permits: a space is percent-encoded and
-a backslash is read as a slash. Portable transports and TypeScript refuse such a
-Location before a second request; every path admits the URL each hop actually
-requests. Applications
+a backslash is read as a slash. Portable Rust rejects non-URI-references;
+TypeScript rejects whitespace, non-ASCII characters and backslashes, but its
+WHATWG resolution can admit other malformed references such as `/document%ZZ`.
+Every path admits the URL each hop actually requests. Applications
 own TLS roots, proxies, network-address restrictions and credentials, including
 which origins receive them across redirects. Portable transports must honor the
 supplied URL, decoded-byte, redirect and cancellation contracts. Browser Fetch
