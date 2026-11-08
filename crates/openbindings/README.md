@@ -95,3 +95,50 @@ See [support](https://github.com/openbindings/sdk/blob/main/docs/support.md) and
 Use the crate's type and method documentation for ownership, error and limit
 interfaces. The [API reference guide](https://github.com/openbindings/sdk/blob/main/docs/api-reference.md)
 explains how to build the full reference locally.
+
+## Document finding codes
+
+`Finding.code` uses the stable identifiers below in Rust and TypeScript document
+conformance reports. Read it together with `rule` and `status`; one code can
+apply to several rules. These are document findings, separate from input/edit
+errors and schema-instance value problems. Input limits emit inconclusive findings
+for all rules; a fixed-schema check that cannot finish emits one for its rule.
+The other codes describe violations. Unsupported declared versions are separate
+refusals, not finding codes.
+
+| Code | Rule | Meaning |
+| --- | --- | --- |
+| `bom` | OBI-01 | JSON text begins with a forbidden byte-order mark. |
+| `colon` | OBI-01 | An object member name is not followed by a colon. |
+| `comma-or-close` | OBI-01 | A container needs a comma or its closing delimiter. |
+| `escape` | OBI-01 | A string contains an invalid JSON escape. |
+| `exponent` | OBI-01 | A number exponent lacks a required digit. |
+| `fraction` | OBI-01 | A decimal point lacks a following digit. |
+| `literal` | OBI-01 | A token does not spell `true`, `false` or `null`. |
+| `number` | OBI-01 | A number token violates JSON number syntax. |
+| `object-key` | OBI-01 | An object needs a quoted member name. |
+| `string-control` | OBI-01 | A string contains an unescaped control character. |
+| `trailing-token` | OBI-01 | Content follows the complete JSON value. |
+| `unicode-escape` | OBI-01 | A Unicode escape lacks four hexadecimal digits. |
+| `unterminated-string` | OBI-01 | A string lacks its closing quote. |
+| `utf8` | OBI-01 | Source bytes are not valid UTF-8. |
+| `value` | OBI-01 | A JSON value is required at this position. |
+| `duplicate-member` | OBI-01 | An object repeats a decoded member name. |
+| `unpaired-surrogate` | OBI-01 | A member name or string contains an unpaired UTF-16 surrogate. |
+| `input-limit` | OBI-01 through OBI-14 | A byte, node or nesting admission limit prevents assessment. |
+| `schema-mismatch` | OBI-02, OBI-10 | The document or a contained schema violates its fixed normative schema. |
+| `fixed-schema-limit-or-failure` | OBI-02, OBI-10 | A fixed normative schema check cannot establish a result. |
+| `semver` | OBI-03 | The `openbindings` member is not a SemVer 2.0.0 string. |
+| `missing-version` | OBI-03 | The required `openbindings` member is absent. |
+| `name-grammar` | OBI-04 | An entry key, operation alias or example key violates the name grammar. |
+| `duplicate-operation-name` | OBI-05 | An operation alias duplicates a primary key or another alias. |
+| `unknown-operation` | OBI-06, OBI-08 | A binding or dependency operation reference does not name a primary operation key. |
+| `unknown-source` | OBI-07 | A binding source reference does not name a source key. |
+| `schema-dialect` | OBI-09 | A contained schema declares a dialect other than JSON Schema 2020-12. |
+| `absolute-schema-id` | OBI-11 | A document-resource `$id` is not an absolute URI. |
+| `reference-type` | OBI-11 | A document-resource schema reference is not a string. |
+| `reference-form` | OBI-11 | A document-resource reference is not a valid absolute or same-document URI-reference. |
+| `reference-target` | OBI-12 | A reference into the document or a contained resource identifies no contained schema. |
+| `duplicate-anchor` | OBI-13 | A plain anchor name is declared repeatedly in the document resource. |
+| `duplicate-schema-id` | OBI-13 | Contained schemas declare the same compared identifier. |
+| `document-dynamic-anchor` | OBI-14 | A dynamic anchor appears outside an identified schema resource. |

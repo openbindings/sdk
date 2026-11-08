@@ -157,7 +157,8 @@ impl std::fmt::Debug for Finding {
             | "reference-form"
             | "reference-target"
             | "duplicate-anchor"
-            | "duplicate-schema-id" => self.code,
+            | "duplicate-schema-id"
+            | "document-dynamic-anchor" => self.code,
             _ => "<redacted>",
         };
         f.debug_struct("Finding")

@@ -37,6 +37,11 @@ and `uses`, as the [adapter guide](writing-a-kind.md#what-goes-in-uses) explains
 
 ## Exact documents and conformance
 
+Rust `JsonValue::semantic_eq(&other)` compares exact JSON values without
+floating-point conversion. It returns `Some(true)` for `1e400` and `10e399`,
+`Some(false)` for unequal values, and `None` if either value contains duplicate
+object member names. Token spelling is preserved independently of value equality.
+
 | Operation | Contract |
 | --- | --- |
 | Rust `Document::parse`, TypeScript `Document.parse` | Admit exact JSON and retain an immutable snapshot, including nonconformant drafts. Syntax, encoding and admission failures are separate from document findings. |
@@ -58,6 +63,12 @@ neither document conformance nor value decidability.
 `Conformance` is conformant, nonconformant or undetermined. Findings explain rule
 evidence; omitted findings do not erase an established violation. Use rule IDs,
 codes and evidence for logic, and treat explanatory messages as display text.
+
+### Document finding codes
+
+The [complete finding-code table](../crates/openbindings/README.md#document-finding-codes)
+lists every stable `Finding.code`, its OBI rule and its meaning. It applies to
+Rust and TypeScript conformance reports, including parsing and admission limits.
 
 ## Canonical entries
 

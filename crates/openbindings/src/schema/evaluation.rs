@@ -235,7 +235,7 @@ pub struct SchemaOrigin {
     pub pointer: Pointer,
 }
 impl SchemaOrigin {
-    /// A location in the document (`resource` `None`) or in the supplied resource
+    /// A location in the document (`source_uri` `None`) or in the supplied resource
     /// with this URI. [`SchemaNode::origin`] builds one for a schema node an
     /// evaluator was given.
     pub fn new(source_uri: Option<String>, pointer: Pointer) -> Self {

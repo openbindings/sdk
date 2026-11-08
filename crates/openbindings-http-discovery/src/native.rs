@@ -54,20 +54,21 @@ impl Client {
         validate_options(options)?;
         let http = builder
             .redirect(reqwest::redirect::Policy::custom(|attempt| {
+                // Keep a refused hop's response so discovery can retain its
+                // status and Location before reporting the policy failure.
                 if attempt.previous().len() > MAX_REDIRECTS {
-                    return attempt.error("discovery redirect limit exceeded");
+                    return attempt.stop();
                 }
                 if let Some(previous) = attempt.previous().last()
-                    && let Err(message) = admit_redirect(previous, attempt.url())
+                    && admit_redirect(previous, attempt.url()).is_err()
                 {
-                    return attempt.error(message);
+                    return attempt.stop();
                 }
                 if let (Some(first), Some(previous)) =
                     (attempt.previous().first(), attempt.previous().last())
                     && credential_replay_hop(first, previous, attempt.url())
                 {
-                    return attempt
-                        .error("redirect would replay original credentials to a foreign origin");
+                    return attempt.stop();
                 }
                 attempt.follow()
             }))

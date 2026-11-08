@@ -102,6 +102,11 @@ admission limits or repeated checks. `JsonValue::from_serializable` checks Rust
 data, including nested `JsonValue` fields, but cannot recover precision already lost by application code. It preserves
 embedded number tokens and string units, and refuses duplicate object members.
 
+Use `JsonValue::semantic_eq(&other)` for value equality without floating-point
+conversion: `1e400` and `10e399` compare as `Some(true)` despite different tokens.
+The result is `Some(false)` for unequal values and `None` when either value
+contains duplicate object member names, so equality is ambiguous.
+
 Exact values can hold an unpaired UTF-16 surrogate or a number outside
 `serde_json::Value`'s range. Passing one to `serde_json::json!` can panic;
 conversion through a host value can also lose number precision. Compose values
@@ -147,7 +152,7 @@ object members and `/-` appends to arrays. Use exact JSON values to preserve
 number spellings and escaped UTF-16. A pointer is escaped text or an exact
 `Pointer`, so a finding's location addresses the member it reports, including a
 name holding an unpaired UTF-16 unit: `document.remove(&pointer)`, or
-`Edit::Remove { pointer: (&pointer).into() }` in a batch.
+`Edit::remove_at(&pointer)` in a batch.
 
 ```rust,edition2024
 use openbindings::{Document, Edit, JsonValue};
@@ -207,7 +212,8 @@ interrupted evaluation leaves an existing validator available for another call.
 Document findings refer to the assessed revision using exact pointers, zero-based
 UTF-8 byte offsets and one-based lines and byte columns. Quote untrusted pointers
 for display. Finding truncation leaves rule evidence intact. Use codes and evidence
-for program logic and messages for explanation.
+for program logic and messages for explanation. The API reference lists every
+[document finding code](api-reference.md#document-finding-codes) with its rule.
 
 Value problems name the failing instance and original schema coordinate.
 `JsonValue::locate`, `ConformantDocument::locate` and `ExternalSchemas::locate` compute

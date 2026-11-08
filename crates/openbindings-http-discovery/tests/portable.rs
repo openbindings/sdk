@@ -898,7 +898,19 @@ async fn portable_redirects_obey_statuses_relative_location_limit_and_total_time
                 }
             }
         ));
-        assert_eq!(calls.get(), 1, "downgrade was dispatched");
+        assert_eq!(calls.get(), 1, "refused hop was dispatched");
+        let metadata = r.metadata.as_ref().unwrap();
+        assert_eq!(
+            metadata.requested_url,
+            "https://example.test/.well-known/openbindings"
+        );
+        assert_eq!(
+            metadata.final_url.as_deref(),
+            Some(metadata.requested_url.as_str())
+        );
+        assert_eq!(metadata.status, 302);
+        assert_eq!(metadata.header("location"), Some(location.as_bytes()));
+        assert!(r.body.is_none());
     }
     for slow in [false, true] {
         let clock = Clock::default();

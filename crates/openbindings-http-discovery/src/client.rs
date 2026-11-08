@@ -354,14 +354,14 @@ impl ClientOptions {
                 metadata.final_url = Some(current.as_str().into());
             }
             let metadata = &*metadata;
-            // F2: a host-following transport must not return a redirect with Location.
-            // tower-http can do this for malformed Location without consulting reqwest's policy.
+            // A stopped native policy preserves the refused response here.
+            // A delegated host or malformed Location can also leave a visible
+            // redirect unfollowed. All retain metadata and refuse the hop.
             if !individual_hops
                 && matches!(response.status, 301 | 302 | 303 | 307 | 308)
                 && metadata.header("location").is_some()
             {
-                result.outcome =
-                    policy_failure("host did not follow the observed redirect Location");
+                result.outcome = policy_failure("redirect destination or redirect limit refused");
                 return Ok(result);
             }
             if individual_hops

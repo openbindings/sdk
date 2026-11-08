@@ -16,7 +16,7 @@ calling a `handle_*` method explicitly bypasses those checks. Custom handoff
 limits are arguments to `invoke_with_limits` and `preflight_with_limits`.
 Invalid limits return `BoundaryFailureKind::InvalidLimits` before provider work.
 
-This implementation targets the binding-invoker and operation-invoker **0.1**
+This implementation targets the binding-invoker and operation-invoker **0.1.0**
 interfaces at revision `3e3dc453a93b611a8e9ea1813ec63a2216830f45`, independently of
 OpenBindings core **0.2** and the package version.
 

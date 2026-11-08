@@ -76,8 +76,8 @@ name. A reached carrier must itself own its canonical ID: aliases, pointers and
 direct applicators into a competing carrier conservatively refuse preparation.
 Unused conflicts do not poison other schemas, and an independently named nested
 resource retains its original base and dialect. No schema-body comparison, alias
-transfer or missing-fragment fallback occurs. `EvaluationRequest::supplied_resources()`
-retains the original catalog. `SchemaOrigin.resource` records original retrieval
+transfer or missing-fragment fallback occurs. `EvaluationRequest::external_schemas`
+borrows the original catalog. `SchemaOrigin::source_uri` records original retrieval
 provenance, which need not be the winning lookup association for that URI. Replacing
 resources requires a new immutable set and preparation; retained schemas keep their inputs.
 OBI-13 retains exact identifier comparison; ordinary JSON Schema resolution uses

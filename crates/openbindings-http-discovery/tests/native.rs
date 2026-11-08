@@ -569,7 +569,7 @@ async fn tls_uses_private_ca_and_downgrade_chain_is_refused_before_plaintext_dis
     )
     .unwrap();
     let r = client.discover(&tls.origin).await.unwrap();
-    assert_redirect_refusal(&r.outcome, "HTTPS to HTTP discovery redirect refused");
+    assert_redirect_refusal(&r);
     assert!(
         plain.records.lock().unwrap().is_empty(),
         "plaintext downgrade was dispatched"
@@ -612,32 +612,106 @@ async fn safe_native_constructor_follows_five_statuses_relative_locations_and_te
     .unwrap();
     let r = client.discover(&server.origin).await.unwrap();
     // A cycle back to the same URL ends at the limit.
-    assert_redirect_refusal(&r.outcome, "discovery redirect limit exceeded");
+    assert_redirect_refusal(&r);
     assert_eq!(server.records.lock().unwrap().len(), MAX_REDIRECTS + 1);
 }
 
-// A refused redirect keeps its kind, and its message names the rule that refused it.
-fn assert_redirect_refusal(outcome: &DiscoveryOutcome, rule: &str) {
-    let DiscoveryOutcome::TransportError { error } = outcome else {
-        panic!("{outcome:?}")
+// Refused hops retain the response and use the portable outcome shape.
+fn assert_redirect_refusal(result: &DiscoveryResult) {
+    let DiscoveryOutcome::TransportError { error } = &result.outcome else {
+        panic!("{:?}", result.outcome)
     };
     assert_eq!(error.kind, ErrorKind::RedirectPolicy);
-    assert_eq!(error.message, format!("error following redirect: {rule}"));
+    assert_eq!(
+        error.message,
+        "redirect destination or redirect limit refused"
+    );
+    let metadata = result.metadata.as_ref().unwrap();
+    assert!(matches!(metadata.status, 301 | 302 | 303 | 307 | 308));
+    assert!(metadata.header("location").is_some());
+    assert!(result.body.is_none());
+}
+
+async fn refused_hop_matches_portable(location: &str) {
+    struct UnreadBody;
+    impl ResponseBody for UnreadBody {
+        async fn read(&mut self, _: &mut [u8]) -> Result<usize, RequestError> {
+            panic!("a refused redirect body must not be read")
+        }
+    }
+    struct UnusedTimer;
+    impl DiscoveryTimer for UnusedTimer {
+        fn now(&self) -> Duration {
+            Duration::ZERO
+        }
+        async fn sleep_until(&self, _: Duration) {
+            panic!("no timeout was configured")
+        }
+    }
+
+    let server = Server::new();
+    for status in [301, 302, 303, 307, 308] {
+        server.records.lock().unwrap().clear();
+        let client = native::Client::new(
+            http(
+                &format!("redirect-{status}"),
+                &[("x-location", location)],
+                reqwest::redirect::Policy::none(),
+            ),
+            ClientOptions::default(),
+        )
+        .unwrap();
+        let native = client.discover(&server.origin).await.unwrap();
+        let mut calls = 0;
+        let portable = discover(
+            &server.origin,
+            &ClientOptions::default(),
+            &CancellationToken::new(),
+            &UnusedTimer,
+            |request| {
+                calls += 1;
+                std::future::ready(Ok(HttpResponse {
+                    final_url: Some(request.url),
+                    status,
+                    headers: vec![Header::new("location", location)],
+                    body: UnreadBody,
+                }))
+            },
+        )
+        .await
+        .unwrap();
+        assert_redirect_refusal(&native);
+        assert_redirect_refusal(&portable);
+        assert_eq!(calls, 1, "portable dispatched a refused hop");
+        assert_eq!(server.records.lock().unwrap().len(), 1);
+        let expected_url = endpoint(&server.origin).unwrap();
+        for result in [&native, &portable] {
+            let metadata = result.metadata.as_ref().unwrap();
+            assert_eq!(metadata.requested_url, expected_url);
+            assert_eq!(metadata.final_url.as_deref(), Some(expected_url.as_str()));
+            assert_eq!(metadata.status, status);
+            assert_eq!(metadata.header("location"), Some(location.as_bytes()));
+        }
+    }
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn native_redirect_destination_refusals_name_the_rule() {
+async fn refused_http_hop_matches_portable() {
+    refused_hop_matches_portable("http://example.test/refused").await;
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn refused_foreign_scheme_hop_matches_portable() {
+    refused_hop_matches_portable("ftp://example.test/refused").await;
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn native_redirect_destination_refusals_retain_response() {
     let server = Server::new();
     let port = server.origin.rsplit(':').next().unwrap();
-    for (location, rule) in [
-        (
-            format!("http://localhost:{port}/done"),
-            "discovery requires HTTPS except for literal IPv4 127/8 or IPv6 ::1",
-        ),
-        (
-            format!("http://user:hop-secret@127.0.0.1:{port}/done"),
-            "discovery destination must have a host and no credentials",
-        ),
+    for location in [
+        format!("http://localhost:{port}/done"),
+        format!("http://user:hop-secret@127.0.0.1:{port}/done"),
     ] {
         server.records.lock().unwrap().clear();
         let client = native::Client::new(
@@ -650,7 +724,11 @@ async fn native_redirect_destination_refusals_name_the_rule() {
         )
         .unwrap();
         let r = client.discover(&server.origin).await.unwrap();
-        assert_redirect_refusal(&r.outcome, rule);
+        assert_redirect_refusal(&r);
+        assert_eq!(
+            r.metadata.as_ref().unwrap().header("location"),
+            Some(location.as_bytes())
+        );
         assert_eq!(server.records.lock().unwrap().len(), 1, "{location}");
     }
 }
@@ -920,9 +998,15 @@ async fn credential_origin_chains_refuse_only_cross_origin_then_same_origin() {
             );
         }
         if chain == "A-B-B" {
-            assert_redirect_refusal(
-                &r.outcome,
-                "redirect would replay original credentials to a foreign origin",
+            assert_redirect_refusal(&r);
+            let metadata = r.metadata.as_ref().unwrap();
+            assert_eq!(
+                metadata.final_url.as_deref(),
+                Some(format!("{}/first", b.origin).as_str())
+            );
+            assert_eq!(
+                metadata.header("location"),
+                Some(format!("{}/done", b.origin).as_bytes())
             );
         } else {
             assert!(

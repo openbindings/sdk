@@ -25,6 +25,9 @@ chains must use `Client::with_delegated_policy` and own credential policy across
 every hop, as well as the scheme and redirect-limit obligations. A visible
 301/302/303/307/308 with Location left unfollowed by the native host is a typed
 redirect-policy refusal, including malformed Location that bypassed its callback.
+SDK-owned refusals retain `ResponseMetadata` with the observed 3xx status,
+the responding URL and the original `Location` header, just as portable discovery
+does. The refused target is never dispatched and no document body is retained.
 An already-built client is accepted only by `Client::with_delegated_policy`.
 Observing a final HTTPS URL cannot prove that all intermediate hops used HTTPS.
 
