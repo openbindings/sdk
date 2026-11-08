@@ -42,8 +42,16 @@ absence; 401 and 403 mean gated discovery. HTTP status, transport failure,
 cancellation, timeout and document validation remain distinct. Complete bounded
 response bytes and observed metadata survive validation refusal.
 
-Native discovery requires HTTPS except literal loopback, checks redirect policy
-before each hop and runs on a Tokio runtime with timers enabled. It keeps
+Native and portable discovery require HTTPS except literal IPv4 127/8 or IPv6
+::1 by default. Set `ClientOptions::allow_http` to `true` to admit named or other
+plain HTTP origins and HTTP-to-HTTP redirects. Plain HTTP exposes requests,
+credentials and documents to network observation and modification. Every
+HTTPS-to-HTTP redirect is still refused; credential and other admission rules
+are unchanged. `endpoint(origin)` keeps the default policy; `options.endpoint(origin)`
+uses the selected policy. A refused plain-HTTP origin keeps code `origin-policy`.
+
+Native discovery checks redirect policy before each hop and runs on a Tokio
+runtime with timers enabled. It keeps
 reqwest's redirect execution, which recovers a Location that is not an RFC 3986
 URI-reference, as RFC 9110 section 10.2.2 permits: a space is percent-encoded and
 a backslash is read as a slash. Portable transports and TypeScript refuse such a
@@ -52,7 +60,10 @@ requests. Applications
 own TLS roots, proxies, network-address restrictions and credentials, including
 which origins receive them across redirects. Portable transports must honor the
 supplied URL, decoded-byte, redirect and cancellation contracts. Browser Fetch
-cannot expose all hops or peer addresses.
+cannot expose all hops or peer addresses. TypeScript uses `allowHttp: true`;
+when enabled, a hidden redirect is a `redirect-policy` transport error without
+automatic following. Browser and Worker host restrictions still apply, including
+mixed-content blocking; a rejected Fetch request is a network transport error.
 
 Publication defaults to `Access-Control-Allow-Origin: *`. Authentication,
 credentialed CORS and preflight belong to application middleware. Synchronous

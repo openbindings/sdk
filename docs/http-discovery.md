@@ -5,10 +5,27 @@ name such as `https://bücher.example` is refused in Rust and TypeScript, so pas
 its IDNA A-label form, `https://xn--bcher-kva.example`. An admitted origin is
 then parsed and serialized with the same WHATWG `url` implementation as reqwest.
 It must have no credentials, resource path, query or fragment; a root slash is
-accepted. HTTPS is required except for normalized literal IPv4 127/8 and IPv6
+accepted. By default, HTTPS is required except for normalized literal IPv4 127/8 and IPv6
 `::1`. Names such as `localhost`, `.localhost` or `127.example` do not
 establish loopback. Alternate IP spellings are normalized before admission and
 `requested_url` records the normalized URL actually supplied to the transport.
+
+An application can set `ClientOptions { allow_http: true, ..Default::default() }`
+to admit plain HTTP origins by name or address, including `http://localhost`,
+and HTTP-to-HTTP redirect hops on both native and portable discovery; TypeScript
+uses `allowHttp`. The default is `false`. Plain HTTP exposes requests, credentials and documents
+to network observation and modification. This is an application security
+choice, not a requirement of the HTTP Discovery specification. HTTPS-to-HTTP
+redirects are always refused, including after an HTTP-to-HTTPS upgrade.
+Credentials in URLs, foreign schemes, origin framing, the ten-redirect cap and
+the native credential-replay rule are unchanged.
+
+`endpoint(origin)` keeps the default policy. Use `options.endpoint(origin)` to
+construct a URL with the selected `ClientOptions` policy without I/O. A refused
+plain-HTTP origin still returns `ConfigurationError` with code `origin-policy`;
+its message states that client policy refused a plain-http discovery URL and
+contains no API advice. Refused redirects still return a `TransportError` with
+`ErrorKind::RedirectPolicy` and the observed redirect metadata.
 
 The safe native constructor accepts the application's `ClientBuilder`, installs
 the SDK redirect policy last and builds a reusable client. It follows 301, 302,
@@ -22,7 +39,8 @@ next scheme, host or port differs from the immediately preceding hop. Thus
 A -> B -> B is refused before the second request to B. A -> B, A -> A -> B and
 A -> B -> A retain their ordinary behavior. Applications needing the refused
 chains must use `Client::with_delegated_policy` and own credential policy across
-every hop, as well as the scheme and redirect-limit obligations. A visible
+every hop, as well as the scheme and redirect-limit obligations for the selected
+`allow_http` policy. Delegation never permits an HTTPS-to-HTTP hop. A visible
 301/302/303/307/308 with Location left unfollowed by the native host is a typed
 redirect-policy refusal, including malformed Location that bypassed its callback.
 SDK-owned refusals retain `ResponseMetadata` with the observed 3xx status,
@@ -38,7 +56,7 @@ section 10.2.2 permits: a space is percent-encoded and a backslash is read as a
 slash, so `/tar get` is requested as `/tar%20get` and `\target` as `/target`.
 Portable Rust and TypeScript discovery refuse such a Location as a
 redirect-policy failure before a second request. Every path that sees a hop
-admits the URL actually requested, so the scheme, loopback, embedded-credential,
+admits the URL actually requested, so the selected HTTP policy, embedded-credential,
 downgrade and hop-limit rules are the same on each.
 
 The application scopes credentials on redirects. On a cross-origin hop, reqwest
@@ -132,7 +150,8 @@ every admitted hop.
 
 Browsers hide redirects from manual mode, answering with an opaqueredirect, and
 only that observed response tells the SDK a transport cannot expose hops; it never
-detects the host otherwise, and Node never answers this way. The SDK then repeats
+detects the host otherwise, and Node never answers this way. With the default
+`allowHttp: false`, the SDK then repeats
 the request with `redirect: "follow"` and remembers the observation for that
 transport for the life of the module: the supplied callback, or the host `fetch`
 function when none is supplied. Later discoveries through the same transport use
@@ -151,6 +170,20 @@ opaqueredirect after a followed hop, are typed policy failures because policy
 cannot be established, never absence or document violations. A supplied Fetch
 callback must honor the URL, redirect mode and cancellation contract. A standard
 TimeoutError caller signal is a timeout; ordinary abort is cancellation.
+
+TypeScript exposes the same opt-in as
+`discover(origin, { allowHttp: true })`; URL-only callers can use
+`discoveryEndpoint(origin, { allowHttp: true })`. Node and Worker transports that
+expose manual redirect responses apply it to the first URL and every hop. With
+`allowHttp: true`, a hidden redirect instead returns a `transport-error` with
+kind `redirect-policy`, without retrying in follow mode, even if that transport
+previously hid redirects on a default-policy request. This preserves downgrade
+refusal when the host cannot expose the chain. Nonredirected responses can still
+succeed. Browser and Worker mixed-content, CORS, private-network and other host
+restrictions remain in force: if Fetch rejects a request, discovery returns a
+network `transport-error`. The option grants SDK admission only; it cannot make
+a host send plain HTTP or reveal hidden redirects. There is no proxy or automatic
+following workaround for an opted-in request.
 
 Timers cannot preempt a blocking Rust poll or synchronous Wasm validation. Each
 path checks monotonic time and cancellation at validation boundaries and discards

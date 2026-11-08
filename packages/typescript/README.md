@@ -329,11 +329,22 @@ decoded body limit. An attempt has no deadline unless you pass `timeoutMs`; a
 host that needs a bound sets it. Where the host exposes
 redirect responses, as Node does, the SDK checks every hop before dispatching it
 and calls a supplied Fetch callback once per hop, so the callback scopes
-credentials to each URL's origin; browsers follow redirects under their own
-policy and the SDK checks the final URL. Only 404 means absence;
+credentials to each URL's origin; with the default policy, browsers follow
+redirects under their own policy and the SDK checks the final URL. Only 404 means absence;
 401 and 403 mean gated discovery. Dispose returned document owners. Publication
 copies conformant document bytes and defaults to CORS `*`; application middleware owns
 authentication and credentialed CORS.
+
+HTTP is admitted only for literal IPv4 127/8 or IPv6 ::1 by default, excluding
+names such as `localhost`. Pass `{ allowHttp: true }` to `discover` or
+`discoveryEndpoint` to admit plain HTTP origins and HTTP-to-HTTP hops. Plain HTTP
+exposes requests, credentials and documents to network observation and
+modification. HTTPS-to-HTTP redirects remain refused. With this option enabled,
+a browser or Worker that hides a redirect gets a `redirect-policy`
+`transport-error`, without automatic following, even if earlier discoveries used
+follow mode. Hosts that expose hops, including Node, check each one. Host
+mixed-content, CORS and network restrictions still apply; a rejected Fetch
+request returns a network `transport-error`. The default behavior is unchanged.
 
 See [HTTP policy](https://github.com/openbindings/sdk/blob/main/docs/http-discovery.md),
 [capabilities](https://github.com/openbindings/sdk/blob/main/CAPABILITIES.md),

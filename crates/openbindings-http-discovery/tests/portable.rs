@@ -1237,3 +1237,168 @@ fn transports_report_failures_with_the_request_error_constructor() {
     assert_eq!(error.message, "hop refused");
     assert_eq!(error.to_string(), "hop refused");
 }
+
+#[test]
+fn plain_http_option_changes_only_scheme_admission() {
+    assert!(!ClientOptions::default().allow_http);
+    let options = ClientOptions {
+        allow_http: true,
+        ..Default::default()
+    };
+    for origin in [
+        "http://localhost",
+        "http://example.test",
+        "http://192.0.2.1",
+        "http://[2001:db8::1]",
+    ] {
+        assert_eq!(endpoint(origin).unwrap_err().code, "origin-policy");
+        assert_eq!(
+            options.endpoint(origin).unwrap(),
+            format!("{origin}{WELL_KNOWN_PATH}")
+        );
+    }
+    for origin in [
+        "ftp://example.test",
+        "file://example.test",
+        "http://user:secret@example.test",
+        "http://@example.test",
+        "http://example.test/document.json",
+        "http://example.test?",
+        "http://example.test#",
+        "http://example.test\\next",
+        "http://bücher.example",
+        "http://example.test:",
+        "http://exa mple.test",
+    ] {
+        assert_eq!(
+            options.endpoint(origin).unwrap_err(),
+            endpoint(origin).unwrap_err(),
+            "{origin}"
+        );
+    }
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn portable_plain_http_policy_is_checked_before_dispatch() {
+    for allow_http in [false, true] {
+        let options = ClientOptions {
+            allow_http,
+            ..Default::default()
+        };
+        let mut calls = 0;
+        let origin = discover(
+            "http://localhost",
+            &options,
+            &CancellationToken::new(),
+            &Clock::default(),
+            |request| {
+                calls += 1;
+                let mut r = response(200, DOCUMENT, Rc::default());
+                r.final_url = Some(request.url);
+                std::future::ready(Ok(r))
+            },
+        )
+        .await;
+        if allow_http {
+            assert!(matches!(
+                origin.unwrap().outcome,
+                DiscoveryOutcome::Found { .. }
+            ));
+            assert_eq!(calls, 1);
+        } else {
+            let error = origin.unwrap_err();
+            assert_eq!(error.code, "origin-policy");
+            assert_eq!(
+                error.message,
+                "client policy refused a plain-http discovery URL"
+            );
+            assert_eq!(calls, 0);
+        }
+        for (origin, target, admitted) in [
+            ("http://127.0.0.1", "http://localhost/done", allow_http),
+            ("https://example.test", "http://localhost/done", false),
+            ("https://example.test", "http://127.0.0.1/done", false),
+            ("http://127.0.0.1", "ftp://example.test/done", false),
+            (
+                "http://127.0.0.1",
+                "http://user:secret@localhost/done",
+                false,
+            ),
+        ] {
+            let mut calls = 0;
+            let result = discover(
+                origin,
+                &options,
+                &CancellationToken::new(),
+                &Clock::default(),
+                |request| {
+                    calls += 1;
+                    let mut r =
+                        response(if calls == 1 { 302 } else { 200 }, DOCUMENT, Rc::default());
+                    r.final_url = Some(request.url);
+                    if calls == 1 {
+                        r.headers.push(Header::new("location", target));
+                    }
+                    std::future::ready(Ok(r))
+                },
+            )
+            .await
+            .unwrap();
+            if admitted {
+                assert!(matches!(result.outcome, DiscoveryOutcome::Found { .. }));
+                assert_eq!(calls, 2);
+                assert_eq!(result.metadata.unwrap().final_url.as_deref(), Some(target));
+            } else {
+                assert!(matches!(
+                    result.outcome,
+                    DiscoveryOutcome::TransportError {
+                        error: RequestError {
+                            kind: ErrorKind::RedirectPolicy,
+                            ..
+                        }
+                    }
+                ));
+                assert_eq!(calls, 1);
+                assert_eq!(result.metadata.as_ref().unwrap().status, 302);
+                assert_eq!(
+                    result.metadata.as_ref().unwrap().header("location"),
+                    Some(target.as_bytes())
+                );
+                assert!(result.body.is_none());
+            }
+        }
+    }
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn portable_plain_http_opt_in_keeps_redirect_cap() {
+    let mut calls = 0;
+    let result = discover(
+        "http://localhost",
+        &ClientOptions {
+            allow_http: true,
+            ..Default::default()
+        },
+        &CancellationToken::new(),
+        &Clock::default(),
+        |request| {
+            calls += 1;
+            let mut r = response(302, DOCUMENT, Rc::default());
+            r.final_url = Some(request.url);
+            r.headers.push(Header::new("location", "/loop"));
+            std::future::ready(Ok(r))
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(calls, MAX_REDIRECTS + 1);
+    assert!(matches!(
+        result.outcome,
+        DiscoveryOutcome::TransportError {
+            error: RequestError {
+                kind: ErrorKind::RedirectPolicy,
+                ..
+            }
+        }
+    ));
+}

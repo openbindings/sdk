@@ -34,11 +34,16 @@ export function discoveryPolicy(): DiscoveryPolicy {
   return decode(wasm.discoveryPolicy());
 }
 
-/** Construct the fixed discovery URL from an absolute HTTP(S) origin. The origin must be ASCII: a non-ASCII domain name is refused, so pass its IDNA A-label form. Refuses credentials, resource paths, query and fragment; accepts an optional root slash. Does not fetch. The transport owns connection and redirect policy. */
-export function discoveryEndpoint(origin: string): string {
+/** Construct the fixed discovery URL from an absolute HTTP(S) origin. The origin must be ASCII: a non-ASCII domain name is refused, so pass its IDNA A-label form. Refuses credentials, resource paths, query and fragment; accepts an optional root slash. HTTP requires literal loopback unless allowHttp is true. Does not fetch. */
+export function discoveryEndpoint(
+  origin: string,
+  options: Pick<DiscoveryOptions, "allowHttp"> = {},
+): string {
   requireReady();
   scalar(origin);
-  return sdkCall(() => wasm.discoveryEndpoint(origin));
+  return sdkCall(() =>
+    wasm.discoveryEndpoint(origin, options.allowHttp ?? false),
+  );
 }
 
 /** A local asynchronous Fetch callback; native function overloads are not required. Called once per hop with that hop's URL; it must scope any credentials it adds by that URL, because the SDK cannot strip headers the callback adds itself. */
@@ -47,15 +52,17 @@ export type DiscoveryFetch = (
   init: RequestInit,
 ) => Promise<Response>;
 
-/** One discovery attempt with an SDK-owned AbortController, and an SDK-owned timer when `timeoutMs` sets a deadline. Where the host exposes redirect responses, the SDK checks and follows each hop itself; a host that hides them follows redirects under its own policy and the SDK checks only the final URL. */
+/** One discovery attempt with an SDK-owned AbortController, and an SDK-owned timer when `timeoutMs` sets a deadline. Where the host exposes redirect responses, the SDK checks and follows each hop itself; with the default policy, a host that hides them follows redirects under its own policy and the SDK checks only the final URL. With allowHttp enabled, hidden redirects are refused. */
 export interface DiscoveryOptions {
+  /** Admit plain HTTP origins and HTTP-to-HTTP redirects beyond literal loopback. Defaults to false. Plain HTTP exposes requests, credentials and documents to network observation and modification. HTTPS-to-HTTP redirects remain refused. Host mixed-content and network restrictions still apply; blocked Fetch requests return a network transport-error. With this option on, hidden redirects return a redirect-policy transport-error without automatic following, since their downgrade policy cannot be checked. */
+  allowHttp?: boolean;
   /** Decoded-body byte limit; omitted selects 1 MiB. Must be a positive safe integer; zero is refused. Bounds accepted/retained document bytes; Fetch may deliver a larger chunk before overflow is detected, so this does not bound host buffering. */
   maxDocumentBytes?: number;
   /** Whole-attempt deadline in milliseconds. Omitted, the attempt has no deadline and runs until it completes or `signal` aborts it: a deadline only bounds time, so it is the application's choice. When set it must be positive and finite; zero is refused. Headers, followed redirects, decoded reads and validation boundaries share it. */
   timeoutMs?: number;
   /** Caller cancellation; aborts I/O and is checked around synchronous assessment. */
   signal?: AbortSignal;
-  /** Local asynchronous Fetch-compatible callback; omitted uses host fetch. Honor the supplied normalized URL, redirect mode and cancellation; configure credentials and connection restrictions here. The callback is called once per hop: the SDK requests redirect: "manual" and calls it again for each admitted redirect, including one to another origin, passing only Accept. It must scope any credentials it adds by the URL it is given, as the Rust portable callback must: the SDK cannot strip headers the callback adds itself, so a credential added unconditionally reaches every admitted hop. When this callback answers manual mode with an opaqueredirect, as browser fetch does, the SDK repeats that request with redirect: "follow" and remembers the observation for this callback, so later discoveries through it use follow directly; Fetch then removes Authorization on a cross-origin redirect but keeps other request headers. */
+  /** Local asynchronous Fetch-compatible callback; omitted uses host fetch. Honor the supplied normalized URL, redirect mode and cancellation; configure credentials and connection restrictions here. The callback is called once per hop: the SDK requests redirect: "manual" and calls it again for each admitted redirect, including one to another origin, passing only Accept. It must scope any credentials it adds by the URL it is given, as the Rust portable callback must: the SDK cannot strip headers the callback adds itself, so a credential added unconditionally reaches every admitted hop. With the default allowHttp: false, when this callback answers manual mode with an opaqueredirect, as browser fetch does, the SDK repeats that request with redirect: "follow" and remembers the observation for this callback, so later discoveries through it use follow directly; Fetch then removes Authorization on a cross-origin redirect but keeps other request headers. With allowHttp enabled, hidden redirects are refused without automatic following. */
   fetch?: DiscoveryFetch;
 }
 
@@ -159,27 +166,32 @@ const hidesRedirects = new WeakSet<object>();
 
 const redirectStatuses = [301, 302, 303, 307, 308];
 
-/** HTTPS, or HTTP to normalized literal IPv4 127/8 or IPv6 ::1, without credentials. */
-function admitUrl(url: URL): boolean {
+/** HTTPS, or HTTP allowed by the selected policy, without credentials. */
+function admitUrl(url: URL, allowHttp: boolean): boolean {
   const loopback =
     url.hostname === "[::1]" || /^127\.\d+\.\d+\.\d+$/.test(url.hostname);
   return (
     !url.username &&
     !url.password &&
-    (url.protocol === "https:" || (url.protocol === "http:" && loopback))
+    (url.protocol === "https:" ||
+      (url.protocol === "http:" && (allowHttp || loopback)))
   );
 }
 
 /** Destination admission plus refusal of every HTTPS-to-HTTP hop, as in Rust. */
-function admitRedirect(previous: URL, next: URL): boolean {
+function admitRedirect(previous: URL, next: URL, allowHttp: boolean): boolean {
   return (
     !(previous.protocol === "https:" && next.protocol === "http:") &&
-    admitUrl(next)
+    admitUrl(next, allowHttp)
   );
 }
 
 /** Resolve a visible Location against the dispatched URL; undefined when refused. */
-function redirectTarget(current: string, location: string): string | undefined {
+function redirectTarget(
+  current: string,
+  location: string,
+  allowHttp: boolean,
+): string | undefined {
   // As portable Rust discovery: printable ASCII without backslashes, then WHATWG resolution.
   if (!/^[\x21-\x7e]*$/.test(location) || location.includes("\\"))
     return undefined;
@@ -191,7 +203,7 @@ function redirectTarget(current: string, location: string): string | undefined {
     return undefined;
   }
   next.hash = "";
-  return admitRedirect(previous, next) ? next.href : undefined;
+  return admitRedirect(previous, next, allowHttp) ? next.href : undefined;
 }
 
 /** Whether a response URL names the dispatched URL; parses only a differing spelling. */
@@ -244,14 +256,17 @@ function interruptible<T>(
  * opaqueredirect, as browsers do; the SDK then repeats the request with redirect: "follow" and
  * checks the final URL, and later discoveries through the same transport use follow directly.
  * Per-hop mixed-content and private-network rules then belong to the browser, and an HTTPS
- * final URL proves no hop history.
+ * final URL proves no hop history. With `allowHttp: true`, hidden redirects are
+ * refused without automatic following so an uncheckable downgrade is never dispatched.
+ * Host mixed-content blocking still applies and returns a network transport-error.
  */
 export async function discover(
   origin: string,
   options: DiscoveryOptions = {},
 ): Promise<DiscoveryResult> {
   requireReady();
-  const requestedUrl = discoveryEndpoint(origin),
+  const allowHttp = options.allowHttp ?? false;
+  const requestedUrl = discoveryEndpoint(origin, { allowHttp }),
     policy = discoveryPolicy();
   const configured = options.maxDocumentBytes ?? policy.defaultMaxDocumentBytes;
   if (!Number.isSafeInteger(configured) || configured <= 0)
@@ -325,10 +340,9 @@ export async function discover(
   let phase: "transport" | "body" | "assessment" = "transport";
   try {
     let current = requestedUrl,
-      // A transport already seen hiding redirects follows them without the repeated request.
-      redirect: "manual" | "follow" = hidesRedirects.has(transport)
-        ? "follow"
-        : "manual",
+      // Under the default policy, a known hiding transport follows without a repeated request.
+      redirect: "manual" | "follow" =
+        !allowHttp && hidesRedirects.has(transport) ? "follow" : "manual",
       followed = 0,
       response: Response;
     while (true) {
@@ -348,10 +362,11 @@ export async function discover(
       );
       response = observed;
       const release = () => void observed.body?.cancel().catch(() => {});
-      // The host hides this redirect, so no hop can be checked before dispatch:
-      // let the host follow under its own policy and check the final URL.
+      // Only the default policy delegates hidden redirects to the host.
+      // The HTTP opt-in requires visible hops to prevent any hidden downgrade.
       if (
         redirect === "manual" &&
+        !allowHttp &&
         followed === 0 &&
         observed.type === "opaqueredirect"
       ) {
@@ -401,7 +416,7 @@ export async function discover(
           );
         metadata.finalUrl = current;
         if (location === null) break;
-        const next = redirectTarget(current, location);
+        const next = redirectTarget(current, location, allowHttp);
         if (!next || followed >= maxRedirects)
           return policyRefusal(
             "Redirect destination or redirect limit refused.",
@@ -421,7 +436,7 @@ export async function discover(
             "Final response URL cannot establish discovery policy.",
           );
         }
-        if (!admitRedirect(new URL(requestedUrl), final))
+        if (!admitRedirect(new URL(requestedUrl), final, allowHttp))
           return policyRefusal(
             "Final response URL violates discovery destination or downgrade policy.",
           );

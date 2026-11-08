@@ -779,3 +779,99 @@ test("EOF expiry retains complete bytes while interrupted prefixes stay absent",
     });
   }
 });
+
+test("allowHttp admits named origins and HTTP hops but preserves other URL rules", async () => {
+  for (const allowHttp of [false, true]) {
+    const origin = "http://localhost";
+    const endpoint = `${origin}/.well-known/openbindings`;
+    const { calls, fetch } = transport({
+      [endpoint]: () => redirectTo("http://example.test/done"),
+      "http://example.test/done": () => new Response(text),
+    });
+    if (allowHttp) {
+      assert.equal(
+        discovery.discoveryEndpoint(origin, { allowHttp }),
+        endpoint,
+      );
+      const result = await discovery.discover(origin, { allowHttp, fetch });
+      assert.equal(result.status, "found");
+      assert.equal(result.metadata.finalUrl, "http://example.test/done");
+      assert.equal(calls.length, 2);
+      result.document.dispose();
+    } else {
+      await assert.rejects(discovery.discover(origin, { allowHttp, fetch }), {
+        code: "origin-policy",
+        message: "client policy refused a plain-http discovery URL",
+      });
+      assert.equal(calls.length, 0);
+    }
+    for (const origin of [
+      "http://user:secret@localhost",
+      "http://localhost/path",
+      "http://localhost?",
+      "http://localhost#",
+      "ftp://localhost",
+    ]) {
+      assert.throws(() => discovery.discoveryEndpoint(origin, { allowHttp }));
+    }
+    for (const [origin, target] of [
+      ["https://example.test", "http://localhost/done"],
+      ["https://example.test", "http://127.0.0.1/done"],
+      ["http://127.0.0.1", "ftp://localhost/done"],
+      ["http://127.0.0.1", "http://user:secret@localhost/done"],
+    ]) {
+      const { calls, fetch } = transport({
+        [`${origin}/.well-known/openbindings`]: () => redirectTo(target),
+      });
+      const result = await discovery.discover(origin, { allowHttp, fetch });
+      assert.equal(result.status, "transport-error");
+      assert.equal(result.error.kind, "redirect-policy");
+      assert.equal(result.metadata.status, 302);
+      assert.equal(result.metadata.headers.location, target);
+      assert.equal(calls.length, 1);
+    }
+  }
+});
+
+test("allowHttp refuses hidden redirects even after the transport previously hid hops", async () => {
+  for (const cached of [false, true]) {
+    const modes = [];
+    const fetch = async (url, init) => {
+      modes.push(init.redirect);
+      return init.redirect === "manual"
+        ? hidden()
+        : responseUrl(new Response(text), "https://example.test/done");
+    };
+    if (cached) {
+      const result = await discovery.discover("https://example.test", {
+        fetch,
+      });
+      assert.equal(result.status, "found");
+      result.document.dispose();
+      modes.length = 0;
+    }
+    for (const origin of ["http://localhost", "https://example.test"]) {
+      modes.length = 0;
+      const result = await discovery.discover(origin, {
+        allowHttp: true,
+        fetch,
+      });
+      assert.equal(result.status, "transport-error");
+      assert.equal(result.error.kind, "redirect-policy");
+      assert.equal(result.metadata.finalUrl, null);
+      assert.equal(result.body, undefined);
+      assert.deepEqual(modes, ["manual"]);
+    }
+  }
+});
+
+test("allowHttp leaves host network refusals observable", async () => {
+  const result = await discovery.discover("http://localhost", {
+    allowHttp: true,
+    fetch: async () => {
+      throw new TypeError("Failed to fetch");
+    },
+  });
+  assert.equal(result.status, "transport-error");
+  assert.equal(result.error.kind, "network");
+});

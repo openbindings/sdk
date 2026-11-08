@@ -343,6 +343,11 @@ void inventedDiscoveryDecode;
 type DiscoveryOptions = import("../dist/http-discovery.js").DiscoveryOptions;
 const boundedDiscovery: DiscoveryOptions = { timeoutMs: 30_000 };
 const openDiscovery: DiscoveryOptions = {};
+const plainHttpDiscovery: DiscoveryOptions = { allowHttp: true };
+// @ts-expect-error HTTP admission is a boolean, not a string.
+const invalidHttpDiscovery: DiscoveryOptions = { allowHttp: "true" };
+void plainHttpDiscovery;
+void invalidHttpDiscovery;
 // @ts-expect-error Omit timeoutMs for no deadline; there is no "unbounded" spelling.
 const unboundedDiscovery: DiscoveryOptions = { timeoutMs: "unbounded" };
 void [boundedDiscovery, openDiscovery, unboundedDiscovery];

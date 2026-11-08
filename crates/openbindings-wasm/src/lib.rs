@@ -1333,8 +1333,13 @@ pub fn evaluator_limits() -> String {
 }
 
 #[wasm_bindgen(js_name=discoveryEndpoint)]
-pub fn discovery_endpoint(origin: &str) -> Result<String, JsValue> {
-    openbindings_http_discovery::endpoint(origin).map_err(|e| error(e.code, e))
+pub fn discovery_endpoint(origin: &str, allow_http: Option<bool>) -> Result<String, JsValue> {
+    openbindings_http_discovery::ClientOptions {
+        allow_http: allow_http.unwrap_or(false),
+        ..Default::default()
+    }
+    .endpoint(origin)
+    .map_err(|e| error(e.code, e))
 }
 #[wasm_bindgen(js_name=discoveryPolicy)]
 pub fn discovery_policy() -> String {

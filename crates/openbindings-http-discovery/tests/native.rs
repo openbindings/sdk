@@ -578,42 +578,50 @@ async fn tls_uses_private_ca_and_downgrade_chain_is_refused_before_plaintext_dis
 
 #[tokio::test(flavor = "current_thread")]
 async fn safe_native_constructor_follows_five_statuses_relative_locations_and_ten_hops() {
-    // SDK policy is installed last, overriding a builder's old redirect policy.
-    let server = Server::new();
-    for status in [301, 302, 303, 307, 308] {
+    for allow_http in [false, true] {
+        // SDK policy is installed last, overriding a builder's old redirect policy.
+        let server = Server::new();
+        for status in [301, 302, 303, 307, 308] {
+            let mut headers = reqwest::header::HeaderMap::new();
+            headers.insert("x-case", format!("redirect-{status}").parse().unwrap());
+            headers.insert("x-location", "../done".parse().unwrap());
+            let client = native::Client::new(
+                reqwest::Client::builder()
+                    .no_proxy()
+                    .default_headers(headers)
+                    .redirect(reqwest::redirect::Policy::none()),
+                ClientOptions {
+                    allow_http,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            let r = client.discover(&server.origin).await.unwrap();
+            assert!(matches!(r.outcome, DiscoveryOutcome::Found { .. }));
+            assert_eq!(
+                r.metadata.unwrap().final_url,
+                Some(format!("{}/done", server.origin))
+            );
+        }
+        server.records.lock().unwrap().clear();
         let mut headers = reqwest::header::HeaderMap::new();
-        headers.insert("x-case", format!("redirect-{status}").parse().unwrap());
-        headers.insert("x-location", "../done".parse().unwrap());
+        headers.insert("x-case", "redirect-302".parse().unwrap());
+        headers.insert("x-location", WELL_KNOWN_PATH.parse().unwrap());
         let client = native::Client::new(
             reqwest::Client::builder()
                 .no_proxy()
-                .default_headers(headers)
-                .redirect(reqwest::redirect::Policy::none()),
-            ClientOptions::default(),
+                .default_headers(headers),
+            ClientOptions {
+                allow_http,
+                ..Default::default()
+            },
         )
         .unwrap();
         let r = client.discover(&server.origin).await.unwrap();
-        assert!(matches!(r.outcome, DiscoveryOutcome::Found { .. }));
-        assert_eq!(
-            r.metadata.unwrap().final_url,
-            Some(format!("{}/done", server.origin))
-        );
+        // A cycle back to the same URL ends at the limit.
+        assert_redirect_refusal(&r);
+        assert_eq!(server.records.lock().unwrap().len(), MAX_REDIRECTS + 1);
     }
-    server.records.lock().unwrap().clear();
-    let mut headers = reqwest::header::HeaderMap::new();
-    headers.insert("x-case", "redirect-302".parse().unwrap());
-    headers.insert("x-location", WELL_KNOWN_PATH.parse().unwrap());
-    let client = native::Client::new(
-        reqwest::Client::builder()
-            .no_proxy()
-            .default_headers(headers),
-        ClientOptions::default(),
-    )
-    .unwrap();
-    let r = client.discover(&server.origin).await.unwrap();
-    // A cycle back to the same URL ends at the limit.
-    assert_redirect_refusal(&r);
-    assert_eq!(server.records.lock().unwrap().len(), MAX_REDIRECTS + 1);
 }
 
 // Refused hops retain the response and use the portable outcome shape.
@@ -935,95 +943,100 @@ async fn native_cancellation_wins_when_timer_and_caller_are_ready_together() {
 
 #[tokio::test(flavor = "current_thread")]
 async fn credential_origin_chains_refuse_only_cross_origin_then_same_origin() {
-    // never replay A's default credentials on B -> B.
-    let a = Server::new();
-    let b = Server::new();
-    for chain in ["A-B-B", "A-B", "A-A-B", "A-B-A"] {
-        a.redirects.lock().unwrap().clear();
-        b.redirects.lock().unwrap().clear();
-        a.records.lock().unwrap().clear();
-        b.records.lock().unwrap().clear();
-        let initial_target = if chain == "A-A-B" {
-            format!("{}/first", a.origin)
-        } else if chain == "A-B" {
-            format!("{}/done", b.origin)
-        } else {
-            format!("{}/first", b.origin)
-        };
-        a.redirects
-            .lock()
-            .unwrap()
-            .insert(WELL_KNOWN_PATH.into(), initial_target);
-        match chain {
-            "A-B-B" => {
-                b.redirects
-                    .lock()
-                    .unwrap()
-                    .insert("/first".into(), format!("{}/done", b.origin));
+    for allow_http in [false, true] {
+        // never replay A's default credentials on B -> B.
+        let a = Server::new();
+        let b = Server::new();
+        for chain in ["A-B-B", "A-B", "A-A-B", "A-B-A"] {
+            a.redirects.lock().unwrap().clear();
+            b.redirects.lock().unwrap().clear();
+            a.records.lock().unwrap().clear();
+            b.records.lock().unwrap().clear();
+            let initial_target = if chain == "A-A-B" {
+                format!("{}/first", a.origin)
+            } else if chain == "A-B" {
+                format!("{}/done", b.origin)
+            } else {
+                format!("{}/first", b.origin)
+            };
+            a.redirects
+                .lock()
+                .unwrap()
+                .insert(WELL_KNOWN_PATH.into(), initial_target);
+            match chain {
+                "A-B-B" => {
+                    b.redirects
+                        .lock()
+                        .unwrap()
+                        .insert("/first".into(), format!("{}/done", b.origin));
+                }
+                "A-A-B" => {
+                    a.redirects
+                        .lock()
+                        .unwrap()
+                        .insert("/first".into(), format!("{}/done", b.origin));
+                }
+                "A-B-A" => {
+                    b.redirects
+                        .lock()
+                        .unwrap()
+                        .insert("/first".into(), format!("{}/done", a.origin));
+                }
+                _ => {}
             }
-            "A-A-B" => {
-                a.redirects
-                    .lock()
-                    .unwrap()
-                    .insert("/first".into(), format!("{}/done", b.origin));
+            let client = native::Client::new(
+                http(
+                    "document",
+                    &[
+                        ("authorization", "Bearer source-secret"),
+                        ("cookie", "source-secret=1"),
+                        ("proxy-authorization", "Basic source-secret"),
+                    ],
+                    reqwest::redirect::Policy::default(),
+                ),
+                ClientOptions {
+                    allow_http,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            let r = client.discover(&a.origin).await.unwrap();
+            let b_log = b.records.lock().unwrap();
+            assert_eq!(b_log.len(), 1, "{chain}: a second request reached B");
+            for header in ["authorization", "cookie", "proxy-authorization"] {
+                assert!(
+                    !b_log[0].headers.contains_key(header),
+                    "{chain}: B received {header}"
+                );
             }
-            "A-B-A" => {
-                b.redirects
-                    .lock()
-                    .unwrap()
-                    .insert("/first".into(), format!("{}/done", a.origin));
-            }
-            _ => {}
-        }
-        let client = native::Client::new(
-            http(
-                "document",
-                &[
-                    ("authorization", "Bearer source-secret"),
-                    ("cookie", "source-secret=1"),
-                    ("proxy-authorization", "Basic source-secret"),
-                ],
-                reqwest::redirect::Policy::default(),
-            ),
-            ClientOptions::default(),
-        )
-        .unwrap();
-        let r = client.discover(&a.origin).await.unwrap();
-        let b_log = b.records.lock().unwrap();
-        assert_eq!(b_log.len(), 1, "{chain}: a second request reached B");
-        for header in ["authorization", "cookie", "proxy-authorization"] {
-            assert!(
-                !b_log[0].headers.contains_key(header),
-                "{chain}: B received {header}"
-            );
-        }
-        if chain == "A-B-B" {
-            assert_redirect_refusal(&r);
-            let metadata = r.metadata.as_ref().unwrap();
-            assert_eq!(
-                metadata.final_url.as_deref(),
-                Some(format!("{}/first", b.origin).as_str())
-            );
-            assert_eq!(
-                metadata.header("location"),
-                Some(format!("{}/done", b.origin).as_bytes())
-            );
-        } else {
-            assert!(
-                matches!(r.outcome, DiscoveryOutcome::Found { .. }),
-                "{chain}: {:?}",
-                r.outcome
-            );
-            let a_log = a.records.lock().unwrap();
-            assert_eq!(
-                a_log[0].headers.get("authorization").map(String::as_str),
-                Some("Bearer source-secret")
-            );
-            if chain == "A-A-B" {
-                assert!(a_log[1].headers.contains_key("authorization"));
-            }
-            if chain == "A-B-A" {
-                assert!(!a_log[1].headers.contains_key("authorization"));
+            if chain == "A-B-B" {
+                assert_redirect_refusal(&r);
+                let metadata = r.metadata.as_ref().unwrap();
+                assert_eq!(
+                    metadata.final_url.as_deref(),
+                    Some(format!("{}/first", b.origin).as_str())
+                );
+                assert_eq!(
+                    metadata.header("location"),
+                    Some(format!("{}/done", b.origin).as_bytes())
+                );
+            } else {
+                assert!(
+                    matches!(r.outcome, DiscoveryOutcome::Found { .. }),
+                    "{chain}: {:?}",
+                    r.outcome
+                );
+                let a_log = a.records.lock().unwrap();
+                assert_eq!(
+                    a_log[0].headers.get("authorization").map(String::as_str),
+                    Some("Bearer source-secret")
+                );
+                if chain == "A-A-B" {
+                    assert!(a_log[1].headers.contains_key("authorization"));
+                }
+                if chain == "A-B-A" {
+                    assert!(!a_log[1].headers.contains_key("authorization"));
+                }
             }
         }
     }
@@ -1130,4 +1143,226 @@ async fn truncated_native_body_is_network_without_coding_evidence() {
     }
     assert_eq!(r.metadata.unwrap().status, 200);
     assert!(r.body.is_none());
+}
+
+// Exercise the portable path against the same real one-hop reqwest transport
+// and loopback fixtures as native discovery. Test responses are small and finite.
+async fn discover_fixture(
+    builder: reqwest::ClientBuilder,
+    options: ClientOptions,
+    origin: &str,
+    portable: bool,
+) -> Result<DiscoveryResult, ConfigurationError> {
+    if !portable {
+        return native::Client::new(builder, options)
+            .unwrap()
+            .discover(origin)
+            .await;
+    }
+    struct FixtureBody(std::io::Cursor<Vec<u8>>);
+    impl ResponseBody for FixtureBody {
+        async fn read(&mut self, output: &mut [u8]) -> Result<usize, RequestError> {
+            Ok(std::io::Read::read(&mut self.0, output).unwrap())
+        }
+    }
+    struct UnusedTimer;
+    impl DiscoveryTimer for UnusedTimer {
+        fn now(&self) -> Duration {
+            panic!("no timeout was configured")
+        }
+        async fn sleep_until(&self, _: Duration) {
+            panic!("no timeout was configured")
+        }
+    }
+    let http = builder
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .unwrap();
+    discover(
+        origin,
+        &options,
+        &CancellationToken::new(),
+        &UnusedTimer,
+        |request| {
+            let http = &http;
+            async move {
+                let response = http
+                    .get(request.url)
+                    .header("accept", request.accept)
+                    .send()
+                    .await
+                    .unwrap();
+                let status = response.status().as_u16();
+                let final_url = Some(response.url().to_string());
+                let headers = response
+                    .headers()
+                    .iter()
+                    .map(|(k, v)| Header::new(k.as_str(), v.as_bytes()))
+                    .collect();
+                let body = FixtureBody(std::io::Cursor::new(
+                    response.bytes().await.unwrap().to_vec(),
+                ));
+                Ok(HttpResponse {
+                    status,
+                    final_url,
+                    headers,
+                    body,
+                })
+            }
+        },
+    )
+    .await
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn plain_http_named_origins_require_opt_in_on_native_and_portable() {
+    let server = Server::new();
+    let address = server.origin.trim_start_matches("http://").parse().unwrap();
+    for portable in [false, true] {
+        for host in ["localhost", "discovery.test"] {
+            let origin = server.origin.replace("127.0.0.1", host);
+            for allow_http in [false, true] {
+                server.records.lock().unwrap().clear();
+                let result = discover_fixture(
+                    reqwest::Client::builder().no_proxy().resolve(host, address),
+                    ClientOptions {
+                        allow_http,
+                        ..Default::default()
+                    },
+                    &origin,
+                    portable,
+                )
+                .await;
+                if allow_http {
+                    let result = result.unwrap();
+                    assert!(matches!(result.outcome, DiscoveryOutcome::Found { .. }));
+                    let expected = format!("{origin}{WELL_KNOWN_PATH}");
+                    let metadata = result.metadata.unwrap();
+                    assert_eq!(metadata.requested_url, expected);
+                    assert_eq!(metadata.final_url.as_deref(), Some(expected.as_str()));
+                    assert_eq!(server.records.lock().unwrap().len(), 1);
+                } else {
+                    let error = result.unwrap_err();
+                    assert_eq!(error.code, "origin-policy");
+                    assert_eq!(
+                        error.message,
+                        "client policy refused a plain-http discovery URL"
+                    );
+                    assert!(server.records.lock().unwrap().is_empty());
+                }
+            }
+        }
+    }
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn plain_http_redirects_require_opt_in_on_native_and_portable() {
+    let server = Server::new();
+    let address = server.origin.trim_start_matches("http://").parse().unwrap();
+    let named = server.origin.replace("127.0.0.1", "discovery.test");
+    let target = format!("{named}/done");
+    for portable in [false, true] {
+        for allow_http in [false, true] {
+            for status in [301, 302, 303, 307, 308] {
+                server.records.lock().unwrap().clear();
+                let result = discover_fixture(
+                    http(
+                        &format!("redirect-{status}"),
+                        &[("x-location", &target)],
+                        reqwest::redirect::Policy::none(),
+                    )
+                    .resolve("discovery.test", address),
+                    ClientOptions {
+                        allow_http,
+                        ..Default::default()
+                    },
+                    &server.origin,
+                    portable,
+                )
+                .await
+                .unwrap();
+                if allow_http {
+                    assert!(matches!(result.outcome, DiscoveryOutcome::Found { .. }));
+                    assert_eq!(
+                        result.metadata.unwrap().final_url.as_deref(),
+                        Some(target.as_str())
+                    );
+                    assert_eq!(server.records.lock().unwrap().len(), 2);
+                } else {
+                    assert_redirect_refusal(&result);
+                    assert_eq!(
+                        result.metadata.unwrap().header("location"),
+                        Some(target.as_bytes())
+                    );
+                    assert_eq!(server.records.lock().unwrap().len(), 1);
+                }
+            }
+        }
+    }
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn plain_http_opt_in_never_allows_tls_downgrade_on_native_or_portable() {
+    let tls = TlsServer::new();
+    let plain = Server::new();
+    for portable in [false, true] {
+        for allow_http in [false, true] {
+            for host in ["127.0.0.1", "localhost"] {
+                let target = format!("{}/done", plain.origin.replace("127.0.0.1", host));
+                let mut headers = reqwest::header::HeaderMap::new();
+                headers.insert("x-case", "downgrade-chain".parse().unwrap());
+                headers.insert("x-location", target.parse().unwrap());
+                let result = discover_fixture(
+                    tls.builder().default_headers(headers),
+                    ClientOptions {
+                        allow_http,
+                        ..Default::default()
+                    },
+                    &tls.origin,
+                    portable,
+                )
+                .await
+                .unwrap();
+                assert_redirect_refusal(&result);
+                let metadata = result.metadata.unwrap();
+                assert_eq!(metadata.status, 302);
+                assert_eq!(
+                    metadata.final_url.as_deref(),
+                    Some(format!("{}{WELL_KNOWN_PATH}", tls.origin).as_str())
+                );
+                assert_eq!(metadata.header("location"), Some(target.as_bytes()));
+                assert!(
+                    plain.records.lock().unwrap().is_empty(),
+                    "plaintext downgrade was dispatched"
+                );
+            }
+        }
+    }
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn plain_http_opt_in_keeps_other_destination_refusals() {
+    let server = Server::new();
+    for portable in [false, true] {
+        for target in ["ftp://localhost/done", "http://user:secret@localhost/done"] {
+            server.records.lock().unwrap().clear();
+            let result = discover_fixture(
+                http(
+                    "redirect-302",
+                    &[("x-location", target)],
+                    reqwest::redirect::Policy::none(),
+                ),
+                ClientOptions {
+                    allow_http: true,
+                    ..Default::default()
+                },
+                &server.origin,
+                portable,
+            )
+            .await
+            .unwrap();
+            assert_redirect_refusal(&result);
+            assert_eq!(server.records.lock().unwrap().len(), 1);
+        }
+    }
 }

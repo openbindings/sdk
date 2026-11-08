@@ -127,77 +127,84 @@ const withCredentials = (url, init) =>
   });
 
 test("Node refuses an HTTPS to plaintext to HTTPS chain before the plaintext hop", async () => {
-  const trust = await privateTls();
-  let secure, plain;
-  try {
-    plain = await serve(() => moved(`${secure.origin}/done`));
-    secure = await serve(
-      (url) => (url === "/done" ? found() : moved(`${plain.origin}/hop`)),
-      trust.server,
-    );
-    const result = await discovery.discover(secure.origin, {
-      timeoutMs: 5000,
-      fetch: withCredentials,
-    });
-    assert.equal(result.status, "transport-error");
-    assert.equal(result.error.kind, "redirect-policy");
-    assert.equal(result.metadata.status, 302);
-    assert.equal(
-      result.metadata.finalUrl,
-      `${secure.origin}/.well-known/openbindings`,
-    );
-    // The plaintext origin never received a request, so no caller header reached it.
-    assert.deepEqual(plain.requests, []);
-    assert.deepEqual(
-      secure.requests.map((request) => request.url),
-      ["/.well-known/openbindings"],
-    );
-    // The trusted chain itself is reachable: an HTTP loopback hop may upgrade to HTTPS.
-    const upgraded = await serve(() => moved(`${secure.origin}/done`, 307));
+  for (const allowHttp of [false, true]) {
+    const trust = await privateTls();
+    let secure, plain;
     try {
-      const result = await discovery.discover(upgraded.origin, {
+      plain = await serve(() => moved(`${secure.origin}/done`));
+      secure = await serve(
+        (url) => (url === "/done" ? found() : moved(`${plain.origin}/hop`)),
+        trust.server,
+      );
+      const result = await discovery.discover(secure.origin, {
         timeoutMs: 5000,
+        allowHttp,
+        fetch: withCredentials,
       });
-      assert.equal(result.status, "found");
-      assert.equal(result.metadata.finalUrl, `${secure.origin}/done`);
-      result.document.dispose();
+      assert.equal(result.status, "transport-error");
+      assert.equal(result.error.kind, "redirect-policy");
+      assert.equal(result.metadata.status, 302);
+      assert.equal(
+        result.metadata.finalUrl,
+        `${secure.origin}/.well-known/openbindings`,
+      );
+      // The plaintext origin never received a request, so no caller header reached it.
+      assert.deepEqual(plain.requests, []);
+      assert.deepEqual(
+        secure.requests.map((request) => request.url),
+        ["/.well-known/openbindings"],
+      );
+      // The trusted chain itself is reachable: an HTTP loopback hop may upgrade to HTTPS.
+      const upgraded = await serve(() => moved(`${secure.origin}/done`, 307));
+      try {
+        const result = await discovery.discover(upgraded.origin, {
+          timeoutMs: 5000,
+          allowHttp,
+        });
+        assert.equal(result.status, "found");
+        assert.equal(result.metadata.finalUrl, `${secure.origin}/done`);
+        result.document.dispose();
+      } finally {
+        await upgraded.close();
+      }
     } finally {
-      await upgraded.close();
+      trust.restore();
+      await secure?.close();
+      await plain?.close();
     }
-  } finally {
-    trust.restore();
-    await secure?.close();
-    await plain?.close();
   }
 });
 
 test("Node follows at most ten redirects and never dispatches the next hop", async () => {
-  let length = 0;
-  const chain = await serve((url) => {
-    const hop = Number(url.split("/hop/")[1] ?? 0);
-    return hop < length ? moved(`/hop/${hop + 1}`) : found();
-  });
-  try {
-    for (const hops of [10, 11]) {
-      length = hops;
-      chain.requests.length = 0;
-      const result = await discovery.discover(chain.origin, {
-        timeoutMs: 5000,
-      });
-      // The initial request plus ten followed redirects, in either case.
-      assert.equal(chain.requests.length, 11);
-      if (hops === 10) {
-        assert.equal(result.status, "found");
-        assert.equal(result.metadata.finalUrl, `${chain.origin}/hop/10`);
-        result.document.dispose();
-      } else {
-        assert.equal(result.status, "transport-error");
-        assert.equal(result.error.kind, "redirect-policy");
-        assert.equal(result.metadata.finalUrl, `${chain.origin}/hop/10`);
+  for (const allowHttp of [false, true]) {
+    let length = 0;
+    const chain = await serve((url) => {
+      const hop = Number(url.split("/hop/")[1] ?? 0);
+      return hop < length ? moved(`/hop/${hop + 1}`) : found();
+    });
+    try {
+      for (const hops of [10, 11]) {
+        length = hops;
+        chain.requests.length = 0;
+        const result = await discovery.discover(chain.origin, {
+          timeoutMs: 5000,
+          allowHttp,
+        });
+        // The initial request plus ten followed redirects, in either case.
+        assert.equal(chain.requests.length, 11);
+        if (hops === 10) {
+          assert.equal(result.status, "found");
+          assert.equal(result.metadata.finalUrl, `${chain.origin}/hop/10`);
+          result.document.dispose();
+        } else {
+          assert.equal(result.status, "transport-error");
+          assert.equal(result.error.kind, "redirect-policy");
+          assert.equal(result.metadata.finalUrl, `${chain.origin}/hop/10`);
+        }
       }
+    } finally {
+      await chain.close();
     }
-  } finally {
-    await chain.close();
   }
 });
 
@@ -233,5 +240,43 @@ test("each admitted hop is a fresh request, so origin-scoped credentials stay ho
   } finally {
     await home?.close();
     await foreign?.close();
+  }
+});
+
+test("Node allowHttp admits a named origin and HTTP redirect only when enabled", async () => {
+  let named;
+  const server = await serve((url) =>
+    url === "/done" ? found() : moved(`${named}/done`),
+  );
+  named = server.origin.replace("127.0.0.1", "localhost");
+  try {
+    for (const allowHttp of [false, true]) {
+      for (const origin of [named, server.origin]) {
+        server.requests.length = 0;
+        if (!allowHttp && origin === named) {
+          await assert.rejects(discovery.discover(origin, { allowHttp }), {
+            code: "origin-policy",
+          });
+          assert.equal(server.requests.length, 0);
+          continue;
+        }
+        const result = await discovery.discover(origin, {
+          allowHttp,
+          timeoutMs: 5000,
+        });
+        if (allowHttp) {
+          assert.equal(result.status, "found");
+          assert.equal(result.metadata.finalUrl, `${named}/done`);
+          assert.equal(server.requests.length, 2);
+          result.document.dispose();
+        } else {
+          assert.equal(result.status, "transport-error");
+          assert.equal(result.error.kind, "redirect-policy");
+          assert.equal(server.requests.length, 1);
+        }
+      }
+    }
+  } finally {
+    await server.close();
   }
 });

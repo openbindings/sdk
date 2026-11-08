@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-11-08 application plain HTTP discovery policy (unreleased)
+
+- Add `ClientOptions::allow_http` and TypeScript `DiscoveryOptions.allowHttp`,
+  both false by default, to admit plain HTTP origins and HTTP-to-HTTP redirects.
+  Plain HTTP exposes requests, credentials and documents to network observation
+  and modification. HTTPS-to-HTTP hops remain refused, with other admission,
+  redirect-limit and credential rules unchanged.
+- Add `ClientOptions::endpoint` and an optional policy argument to TypeScript
+  `discoveryEndpoint`; the Rust free `endpoint` keeps the default policy.
+  Keep `origin-policy` for refused plain-HTTP origins and state the policy
+  refusal without API advice in its message.
+- Apply the choice in native and portable Rust and the Fetch facade. With the
+  option enabled, hidden Fetch redirects return `redirect-policy` without
+  automatic following. Browser and Worker restrictions still apply.
+
 ## 2026-11-08 conformance finding facts (unreleased)
 
 - Add OBI-02 `keyword`, published `schema` origin and optional `ValueProblemDetails`
