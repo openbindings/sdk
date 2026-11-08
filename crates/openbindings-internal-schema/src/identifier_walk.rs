@@ -265,6 +265,9 @@ pub(super) fn copied_text<'a>(
     }
 }
 
+// An inlined storage-trait trial preserved these layouts but needed node/leaf
+// views and per-store adapters. Specialization keeps validation's borrowed
+// fields and query overlays without those additional abstractions.
 macro_rules! identifier_methods {
     ($q:lifetime, [$($lt:lifetime)?], $input:ty, $label:ty, $leaf:ty,
      [$($bytes:ident)?], $count:literal, [$($spelling:meta)*]) => {
