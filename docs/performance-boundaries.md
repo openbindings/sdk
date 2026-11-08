@@ -34,12 +34,69 @@ Their SDK comparisons borrow parsed text and reject different kinds without
 traversing containers. The library's string-enum threshold does not apply to
 these SDK keyword overrides.
 
-A composite value over that estimate still enters when the remaining sources
-are integer typing and i64 bounds, with no number or composite literal or
-`multipleOf`, and every number token parses as i64. Only a value over the
-estimate pays for that scan. A decimal, exponent or wider integer stays declined. Duplicate names, unpaired surrogates, depth selection,
-recursive admission and `uniqueItems` keep their existing rules. This is a
-scratch selection rule, not a time bound or total memory measurement.
+A value over that estimate retains the existing allocation-free exemption for
+integer typing and i64 bounds. For an acyclic schema whose remaining scratch
+sources are integer typing and `minimum`, `maximum`, `exclusiveMinimum` or
+`exclusiveMaximum`, it can also enter when `4 * (V + B) + 512` fits the reservation.
+`V` is the longest value number token and `B` is the longest comparison bound
+in the reached schema closure. Using the whole closure conservatively includes
+every applicable bound. The scan borrows token lengths and checks caller control
+at every value node. Only values rejected by the old estimate and allocation-free
+exemption pay for it; values already admitted pay no new value scan.
+
+Each comparison borrows its prepared schema operand and drops its value decimal
+and adjusted exponents before the next comparison. The factor four covers
+overlapping coefficient and exponent buffers, including carry and realloc
+transitions; the fixed tail covers boxed metadata and machine-sized offsets.
+The [allocation proof](../tools/decimal-scratch/README.md) derives the bound from
+the code and measures breadth, token length and both operands. It runs in the
+regular verifier. A nearly 16 MiB exponent still exceeds the 48 MiB reservation
+and selects Original. No exponent is expanded into coefficient zeros; comparison
+work is linear in operand spelling lengths, with a fixed number of digit passes.
+
+`multipleOf`, number and composite literals, `uniqueItems`, recursion, duplicate
+names, unpaired surrogates and depth selection keep their existing rules. The
+peak proof does not cover division, equality traversal, uniqueness storage or
+recursive admission. This is a scratch selection rule, not a time bound, RSS
+measurement or total allocation traffic limit.
+
+Both lanes must agree whenever both decide. Original still charges decimal
+scratch cumulatively and can return `semantic-analysis-memory-limit` while the
+compiled lane completes within its peak allowance. A refusal from either lane
+is not a disagreement. Tests check newly admitted hostile decisions against
+independently prepared Original evaluation with a larger diagnostic allowance;
+production defaults and Original accounting are unchanged.
+
+Native release measurements on aarch64-apple-darwin with Rust 1.99.0 compare
+`53ab0d4` selection with the peak rule, retaining prepared owners and parsed
+values. These are nine-sample medians, not workerd or end-to-end measurements.
+
+| Value | Before ms | After ms | Outcome |
+| --- | ---: | ---: | --- |
+| 10 KB bounded decimals, already compiled | 0.011762 | 0.011695 | Satisfies in both |
+| 25 KB money records | 0.810792 | 0.093250 | Satisfies in both |
+| 100 KB money records | 3.290209 | 0.370250 | Satisfies in both |
+| 16 MiB money records | 29.888250 | 14.555083 | Original refusal, then compiled Satisfies |
+
+The 16 MiB records use longer SKU strings to fit the existing parser node cap.
+Hostile 16 MiB arrays of 1 MiB tokens show the cost of completing a decision
+after Original would refuse:
+
+| Token shape | Default Original refusal ms | Compiled decision ms | Worst paired compiled/Original |
+| --- | ---: | ---: | ---: |
+| Significant fractions | 2.007959 | 30.413333 | 15.272x |
+| Positive exponent spellings | 10.175125 | 76.284625 | 7.566x |
+| Negative exponent spellings | 0.119292 | 1.782791 | 15.284x |
+
+The worst median after/before ratio was **15.806x slower** for negative exponents,
+against the baseline refusal of 0.112792 ms. The worst paired ratio within the
+after run was **15.284x slower**. These compare completed decisions with early
+refusals, not equal completed work. Independent Original with a larger test-only
+allowance confirms each decision. A nearly value-sized exponent still selects
+Original (0.000916 ms after); the recursive depth-340 and depth-341 probes keep
+their Original route and take 0.381625 and 0.383125 ms after. Reproduce these
+observations with the harness's `--release --test hostile_costs`, adding
+`--baseline` for the previous selection. Parsing and preparation are excluded.
 
 At preparation, an acyclic graph must also fit the recursive proof's existing
 100,000-application finite-expansion ceiling. A memoized fold counts one for

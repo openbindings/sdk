@@ -13,6 +13,7 @@ pub(super) struct Features {
     pub integer: bool,
     pub literals: bool,
     pub noninteger_bound: bool,
+    pub longest_comparison_bound: usize,
     pub literal_bytes: usize,
     pub literal_nodes: usize,
     pub multiple: bool,
@@ -194,6 +195,9 @@ pub(super) fn select(
                     if !multiple_token(bound) || !inline_multiple_token(bound) {
                         return Ok(Err("multiple-of-arithmetic-domain"));
                     }
+                } else {
+                    features.longest_comparison_bound =
+                        features.longest_comparison_bound.max(bound.len());
                 }
             }
         }

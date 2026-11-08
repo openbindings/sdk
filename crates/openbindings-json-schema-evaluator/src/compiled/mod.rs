@@ -355,7 +355,13 @@ impl Lane {
                 // Integer typing and i64 bounds need no exact decimal scratch
                 // when every number token fits i64, including within composite
                 // values. Only a value over the estimate pays for this scan.
-                match prepared.allocation_free(value, control) {
+                match prepared.allocation_free(value, control).and_then(|free| {
+                    if free {
+                        Ok(true)
+                    } else {
+                        prepared.decimal_peak_fits(value, control)
+                    }
+                }) {
                     Ok(true) => {}
                     Ok(false) => return None,
                     Err(detail) => {
@@ -392,6 +398,35 @@ impl Lane {
     }
 }
 impl Prepared {
+    fn decimal_peak_fits(
+        &self,
+        value: &JsonValue,
+        control: &dyn WorkControl,
+    ) -> Result<bool, Cancelled> {
+        // The lifetime proof covers only acyclic bounds and integer typing.
+        // Preserve every existing admission for division, equality, uniqueness
+        // and recursion, including the earlier allocation-free exemptions.
+        if self.features.recursive
+            || self.features.multiple
+            || self.features.literals
+            || self.features.unique
+        {
+            return Ok(false);
+        }
+        let mut longest = 0;
+        for token in backend::number_nodes(value) {
+            control.check()?;
+            if let Some(token) = token {
+                longest = longest.max(token.len());
+                if decimal_peak(longest, self.features.longest_comparison_bound) > self.reservation
+                {
+                    return Ok(false);
+                }
+            }
+        }
+        Ok(true)
+    }
+
     fn allocation_free(
         &self,
         value: &JsonValue,
@@ -419,6 +454,21 @@ impl Prepared {
         }
         Ok(true)
     }
+}
+
+// ExactBound borrows the prepared bound and drops each value Decimal before
+// returning. For token lengths V and B, Decimal::read_wide holds at most V
+// coefficient bytes. Power::offset holds the old exponent, a working copy and
+// its boxed result (including carry growth); Wide::compare also holds the
+// first adjusted exponent while building the second. Four copies of V+B plus
+// 512 bytes cover those overlapping buffers, realloc transitions, the Wide
+// box and machine-sized formatted offsets. Integer classification only parses
+// one value. See tools/decimal-scratch/README.md for the code-derived bound.
+pub(super) fn decimal_peak(value_bytes: usize, bound_bytes: usize) -> usize {
+    value_bytes
+        .saturating_add(bound_bytes)
+        .saturating_mul(4)
+        .saturating_add(512)
 }
 // Only the closed value program is lowered here. Original admission,
 // reference resolution and diagnostics belong to the shared Plan facts.

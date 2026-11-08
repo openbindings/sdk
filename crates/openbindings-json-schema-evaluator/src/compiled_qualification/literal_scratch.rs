@@ -131,7 +131,7 @@ fn number_tokens_retain_lane_equivalence() {
         let small = JsonValue::parse(format!(r#"{{"n":0,"elsewhere":{token}}}"#)).unwrap();
         assert_eq!(compare(&selected, &original, &small).0, "compiled");
         let large = padded(16 * 1024 * 1024, &format!(r#""n":0,"elsewhere":{token}"#));
-        assert_eq!(compare(&selected, &original, &large).0, "original");
+        assert_eq!(compare(&selected, &original, &large).0, "compiled");
     }
 }
 
@@ -168,15 +168,32 @@ fn backend_unpaired(value: &JsonValue) -> bool {
 
 #[test]
 fn exact_work_and_nested_uniqueness_keep_their_guards() {
-    for (schema, fields) in [
-        (r#"{"properties":{"n":{"enum":[1,2]}}}"#, r#""n":1"#),
+    for (schema, fields, large_lane) in [
+        (
+            r#"{"properties":{"n":{"enum":[1,2]}}}"#,
+            r#""n":1"#,
+            "original",
+        ),
         (
             r#"{"properties":{"n":{"const":{"x":0}}}}"#,
             r#""n":{"x":0}"#,
+            "original",
         ),
-        (r#"{"properties":{"n":{"minimum":0}}}"#, r#""n":1.0"#),
-        (r#"{"properties":{"n":{"minimum":0.5}}}"#, r#""n":1"#),
-        (r#"{"properties":{"n":{"multipleOf":2}}}"#, r#""n":2"#),
+        (
+            r#"{"properties":{"n":{"minimum":0}}}"#,
+            r#""n":1.0"#,
+            "compiled",
+        ),
+        (
+            r#"{"properties":{"n":{"minimum":0.5}}}"#,
+            r#""n":1"#,
+            "compiled",
+        ),
+        (
+            r#"{"properties":{"n":{"multipleOf":2}}}"#,
+            r#""n":2"#,
+            "original",
+        ),
     ] {
         let (selected, original) = prepared(schema);
         assert_eq!(
@@ -185,7 +202,7 @@ fn exact_work_and_nested_uniqueness_keep_their_guards() {
         );
         assert_eq!(
             compare(&selected, &original, &padded(16 * 1024 * 1024, fields)).0,
-            "original"
+            large_lane
         );
     }
     let (selected, original) = prepared(r#"{"properties":{"n":{"uniqueItems":true}}}"#);
@@ -214,20 +231,16 @@ fn old_literal_estimate_boundary_now_enters_on_both_sides() {
 }
 
 #[test]
-fn i64_composites_skip_the_exact_byte_boundary_but_decimals_keep_it() {
+fn i64_and_decimal_composites_cross_the_old_exact_byte_boundary() {
     // Five value nodes and five one-byte bound visits, with multiplier one.
     const LAST: usize = (48 * 1024 * 1024 - 3152) / 16;
     assert_eq!(16 * (LAST + 5) + 256 * 10 + 512, 48 * 1024 * 1024);
     let (selected, original) = prepared(r#"{"properties":{"n":{"minimum":0}}}"#);
-    for (fields, exact) in [(r#""n":0"#, false), (r#""n":0.0"#, true)] {
+    for fields in [r#""n":0"#, r#""n":0.0"#] {
         for size in [LAST, LAST + 1] {
             assert_eq!(
                 compare(&selected, &original, &padded(size, fields)).0,
-                if exact && size > LAST {
-                    "original"
-                } else {
-                    "compiled"
-                }
+                "compiled"
             );
         }
     }

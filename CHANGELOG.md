@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-11-07 compiled decimal peak selection (unreleased)
+
+- Admit over-estimate acyclic bounded decimal values when one comparison's
+  conservative peak scratch fits the existing reservation. Include the longest
+  value number token and schema comparison bound; nearly 16 MiB exponent
+  spellings still select Original. Previously admitted values pay no new scan.
+- Preserve Original accounting, defaults and selection for division, number and
+  composite literals, uniqueness and recursion. Qualify decisive agreement with
+  independent Original diagnostics for hostile values and run the decimal
+  allocation proof in the verifier.
+
 ## 2026-11-07 compiled expansion selection (unreleased)
 
 - Generate boundary-biased schemas and values at default limits, comparing
