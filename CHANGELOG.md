@@ -1,5 +1,23 @@
 # Changelog
 
+## 2026-11-08 reference resource roots and report text (unreleased)
+
+### Added
+
+- Add `Reference::resource_root` and TypeScript `resourceRoot`: the original
+  location of the schema beginning the site's resource, absent exactly for the
+  document resource. This is a location, not a resolved base.
+
+### Changed
+
+- Rename the unreleased reference allowance code to `reference-report-bytes`.
+  One 8 MiB allowance now charges all retained generated and source text in each
+  reference entry, including every origin's source URI, resource-root pointers,
+  spellings, keywords, refusal codes/messages and resolved unavailable-resource
+  URIs. Admit the whole entry before copying its text or spelling a missing URI.
+  Stop at the first omitted entry with a location-free `LimitExceeded` limitation.
+  The allowance bounds text, not total heap usage.
+
 ## 2026-11-08 application plain HTTP discovery policy (unreleased)
 
 - Add `ClientOptions::allow_http` and TypeScript `DiscoveryOptions.allowHttp`,
@@ -76,9 +94,9 @@
 - Add five standalone cargo-fuzz targets, stable committed-corpus replay in the
   verifier, and a pinned weekly/manual workflow that preserves crash artifacts.
 
-- Bound reference reports to the same 8 MiB generated-pointer allowance as
-  conformance findings. Stop at the first omitted entry with
-  `reference-pointer-bytes`, including located targets and refusal locations.
+- Bound reference reports to an 8 MiB allowance for retained generated and source
+  text in entries. Stop at the first omitted entry with `reference-report-bytes`,
+  including all origins, reference text and refusal text.
 - Pin regex 1.13.1 exactly and qualify dense admitted customer patterns on empty
   strings and member names against the bounded-backtracker search panic.
 - Run the compiled lane's release-only stack boundary tests on every host; they

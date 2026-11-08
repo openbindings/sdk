@@ -9,8 +9,8 @@ use crate::{
     uri, *,
 };
 use openbindings_internal_json::backend::{
-    MAX_REPORT_POINTER_BYTES, has_unpaired, location_pointer_size, node_id, pointer_into,
-    push_pointer, ref_id, relative_pointer, relative_pointer_size,
+    has_unpaired, location_pointer_size, node_id, pointer_into, ref_id, relative_pointer,
+    relative_pointer_size,
 };
 pub use original::{QueryFailure, ReferenceResolver};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
@@ -279,6 +279,9 @@ pub enum ReferenceResolution {
 pub struct Reference {
     /// Original location of the reference keyword.
     pub location: Location,
+    /// Original location of the schema beginning the site's resource, not its
+    /// resolved base. None exactly for the document resource.
+    pub resource_root: Option<Location>,
     /// Reference keyword spelling, such as `$ref` or `$dynamicRef`.
     pub keyword: String,
     /// Original scalar reference string, or `None` when its value is not representable as one.
@@ -290,17 +293,22 @@ impl std::fmt::Debug for Reference {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Reference")
             .field("location", &self.location)
+            .field("resource_root", &self.resource_root)
             .field("resolution", &self.resolution)
             .finish_non_exhaustive()
     }
 }
 #[derive(Clone, Debug, Serialize)]
 /// Bounded original-context reference inspection, not conformance proof or successful schema preparation.
-/// Retains at most 8 MiB of aggregate generated-pointer bytes, including reference,
-/// target and refusal locations: UTF-8, or two bytes per UTF-16 unit through a
-/// name with an unpaired surrogate. The first entry that does not fit stops
-/// traversal, sets `complete` to false and reports `LimitExceeded` with code
-/// `reference-pointer-bytes`, without a location for the omitted entry.
+/// Retains at most 8 MiB of generated and source text in reference entries:
+/// all location, resource-root, target and refusal pointers, every origin's
+/// source URI, keywords, spellings, refusal codes/messages and unavailable-resource
+/// URIs. Text is counted in UTF-8 bytes; pointers through an unpaired name use
+/// two bytes per UTF-16 unit. This is a text allowance, not total heap usage.
+/// The whole entry is charged before its text is materialized or cloned. The
+/// first entry that does not fit stops traversal, sets `complete` to false and
+/// reports `LimitExceeded` with code `reference-report-bytes`, without a
+/// location for the omitted entry.
 pub struct ReferenceReport {
     /// Retained reference observations in traversal order.
     pub references: Vec<Reference>,
@@ -886,71 +894,75 @@ impl SchemaSpace {
         missing: &mut impl FnMut(&str),
     ) -> Result<Target, Failure> {
         query.map_err(|cause| {
-            use QueryFailure as Q;
-            let (reason, code, message) = match &cause {
-                Q::InvalidExternalSchema => (
-                    FailureReason::ConservativePreparation,
-                    "invalid-schema",
-                    "the external schema has an invalid interpretation declaration",
-                ),
-                Q::ResourceUnavailable(uri) => {
-                    missing(uri);
-                    (
-                        FailureReason::ResourceUnavailable,
-                        "resource-unavailable",
-                        "resolution requires a resource that was not supplied",
-                    )
-                }
-                Q::UnsupportedCapability(capability) => (
-                    FailureReason::UnsupportedCapability,
-                    *capability,
-                    "the original inventory cannot interpret this identifier form",
-                ),
-                Q::UnsupportedDialect(_) => (
-                    FailureReason::UnsupportedCapability,
-                    "schema-dialect",
-                    "the resource dialect is outside the supported inventory",
-                ),
-                Q::MalformedReference => (
-                    FailureReason::ConservativePreparation,
-                    "invalid-reference",
-                    "reference or its fragment is malformed",
-                ),
-                Q::MissingTarget => (
-                    FailureReason::ConservativePreparation,
-                    "missing-target",
-                    "the pointer identifies no value in the original source",
-                ),
-                Q::NonSchemaTarget => (
-                    FailureReason::ConservativePreparation,
-                    "non-schema-target",
-                    "the target is not an original schema position",
-                ),
-                Q::MissingAnchor => (
-                    FailureReason::ConservativePreparation,
-                    "anchor-missing",
-                    "the resource declares no such anchor",
-                ),
-                Q::AmbiguousAnchor => (
-                    FailureReason::ConservativePreparation,
-                    "ambiguous-anchor",
-                    "the resource declares this anchor more than once",
-                ),
-                Q::InvalidIdentifier => (
-                    FailureReason::ConservativePreparation,
-                    "invalid-identifier",
-                    "the reference has no valid resolution base",
-                ),
-                Q::IdentityConflict => (
-                    FailureReason::ConservativePreparation,
-                    "resource-identity-conflict",
-                    "the resource identity has competing carriers",
-                ),
-            };
-            let mut failure = Failure::new(reason, code, message);
+            if let QueryFailure::ResourceUnavailable(uri) = &cause {
+                missing(uri);
+            }
+            let mut failure = Self::query_failure(&cause);
             failure.query_failure = Some(Box::new(cause));
             failure
         })
+    }
+
+    fn query_failure(cause: &QueryFailure) -> Failure {
+        use QueryFailure as Q;
+        let (reason, code, message) = match cause {
+            Q::InvalidExternalSchema => (
+                FailureReason::ConservativePreparation,
+                "invalid-schema",
+                "the external schema has an invalid interpretation declaration",
+            ),
+            Q::ResourceUnavailable(_) => (
+                FailureReason::ResourceUnavailable,
+                "resource-unavailable",
+                "resolution requires a resource that was not supplied",
+            ),
+            Q::UnsupportedCapability(capability) => (
+                FailureReason::UnsupportedCapability,
+                *capability,
+                "the original inventory cannot interpret this identifier form",
+            ),
+            Q::UnsupportedDialect(_) => (
+                FailureReason::UnsupportedCapability,
+                "schema-dialect",
+                "the resource dialect is outside the supported inventory",
+            ),
+            Q::MalformedReference => (
+                FailureReason::ConservativePreparation,
+                "invalid-reference",
+                "reference or its fragment is malformed",
+            ),
+            Q::MissingTarget => (
+                FailureReason::ConservativePreparation,
+                "missing-target",
+                "the pointer identifies no value in the original source",
+            ),
+            Q::NonSchemaTarget => (
+                FailureReason::ConservativePreparation,
+                "non-schema-target",
+                "the target is not an original schema position",
+            ),
+            Q::MissingAnchor => (
+                FailureReason::ConservativePreparation,
+                "anchor-missing",
+                "the resource declares no such anchor",
+            ),
+            Q::AmbiguousAnchor => (
+                FailureReason::ConservativePreparation,
+                "ambiguous-anchor",
+                "the resource declares this anchor more than once",
+            ),
+            Q::InvalidIdentifier => (
+                FailureReason::ConservativePreparation,
+                "invalid-identifier",
+                "the reference has no valid resolution base",
+            ),
+            Q::IdentityConflict => (
+                FailureReason::ConservativePreparation,
+                "resource-identity-conflict",
+                "the resource identity has competing carriers",
+            ),
+        };
+        Failure::new(reason, code, message)
     }
 
     pub fn references(&self, control: &dyn Control) -> ReferenceReport {
@@ -966,22 +978,25 @@ impl SchemaSpace {
             complete: true,
             limitation: None,
         };
-        let mut pointer_bytes = MAX_REPORT_POINTER_BYTES;
-        let measure = |id: usize, remaining| {
+        const MAX_REPORT_BYTES: usize = 8 * 1024 * 1024;
+        let mut report_bytes = MAX_REPORT_BYTES;
+        let measure = |id: usize, remaining: usize| {
             let node = self.node(id);
-            relative_pointer_size(
-                node.value.view(),
-                self.source(node.source).value.view(),
-                remaining,
-            )
+            let source = self.source(node.source);
+            let remaining = remaining.checked_sub(source.uri.as_ref().map_or(0, String::len))?;
+            relative_pointer_size(node.value.view(), source.value.view(), remaining)
+                .map(|bytes| remaining - bytes)
         };
-        let pointer_limit = || {
+        let report_limit = || {
             Failure::new(
                 FailureReason::LimitExceeded,
-                "reference-pointer-bytes",
-                "reference inspection stops at 8 MiB of generated pointer bytes",
+                "reference-report-bytes",
+                "reference inspection stops at 8 MiB of retained generated and source text in entries",
             )
         };
+        // Reuse an already retained root origin for consecutive sites in one
+        // resource. This cache owns only node/index/length integers, no text.
+        let mut root_cache: Option<(usize, usize, usize)> = None;
         let mut pending = VecDeque::new();
         let mut supplied = HashMap::<usize, Vec<usize>>::new();
         for (id, node) in self.local.nodes() {
@@ -1005,38 +1020,93 @@ impl SchemaSpace {
             }
             for keyword in ["$ref", "$dynamicRef"] {
                 if let Some(value) = node.value.get(keyword) {
-                    let spelling = value.as_str().map(str::to_owned);
-                    let target = spelling
-                        .as_deref()
-                        .ok_or_else(|| {
-                            Failure::new(
-                                FailureReason::ConservativePreparation,
-                                "reference-type",
-                                "reference is not a string",
-                            )
-                        })
-                        .and_then(|s| Self::resolve_query(resolver.query(id, s), &mut |_| {}));
-                    // Measure the keyword itself so UTF-16 pointers charge the
-                    // suffix in the same representation as their ancestor names.
-                    let bytes = relative_pointer_size(
-                        value,
-                        self.source(node.source).value.view(),
-                        pointer_bytes,
-                    )
-                    .and_then(|source_bytes| {
-                        let target_id = target.as_ref().map_or(id, |target| target.node);
-                        measure(target_id, pointer_bytes - source_bytes)
-                            .map(|target_bytes| source_bytes + target_bytes)
-                    });
-                    let Some(bytes) = bytes else {
-                        report.complete = false;
-                        report.limitation = Some(pointer_limit());
-                        // Unlike conformance, no independent verdict remains to
-                        // establish. All successful walks are charged to the
-                        // retained bytes; only this first omitted entry adds work.
-                        return report;
+                    let spelling = value.as_str();
+                    let resource_root = self.resource(node.resource).root;
+                    let cached_root =
+                        root_cache.filter(|(root, _, _)| Some(*root) == resource_root);
+                    let mut root_bytes = 0;
+                    // Admission measures the whole entry while origins and source
+                    // strings are still borrowed. Missing identities are compact
+                    // handles until this same check has admitted their full length.
+                    let mut admit = |target: Result<&Target, &Failure>, missing_bytes: usize| {
+                        let remaining = (|| {
+                            let mut remaining = report_bytes
+                                .checked_sub(keyword.len())?
+                                .checked_sub(spelling.map_or(0, str::len))?
+                                .checked_sub(missing_bytes)?;
+                            let source = self.source(node.source);
+                            remaining = remaining
+                                .checked_sub(source.uri.as_ref().map_or(0, String::len))?;
+                            // Include the keyword in the pointer's representation,
+                            // including two bytes per UTF-16 unit through an unpaired name.
+                            remaining -=
+                                relative_pointer_size(value, source.value.view(), remaining)?;
+                            if let Some(root) = resource_root {
+                                root_bytes = match cached_root {
+                                    Some((_, _, bytes)) => bytes,
+                                    None => remaining - measure(root, remaining)?,
+                                };
+                                remaining = remaining.checked_sub(root_bytes)?;
+                            }
+                            match target {
+                                Ok(target) if Some(target.node) == resource_root => {
+                                    remaining.checked_sub(root_bytes)
+                                }
+                                Ok(target) => measure(target.node, remaining),
+                                Err(detail) => {
+                                    remaining = remaining
+                                        .checked_sub(detail.code.len())?
+                                        .checked_sub(detail.message.len())?;
+                                    measure(id, remaining)
+                                }
+                            }
+                        })()
+                        .ok_or_else(report_limit)?;
+                        report_bytes = remaining;
+                        Ok(())
                     };
-                    pointer_bytes -= bytes;
+                    let target = if let Some(spelling) = spelling {
+                        resolver
+                            .query_for_report(id, spelling, &mut |query, missing_bytes| {
+                                let retained_uri_bytes = match query {
+                                    Err(QueryFailure::ResourceUnavailable(uri)) => uri.len(),
+                                    _ => 0,
+                                };
+                                let target = query.as_ref().map_err(Self::query_failure);
+                                admit(
+                                    target.as_ref().copied(),
+                                    missing_bytes.saturating_add(retained_uri_bytes),
+                                )
+                            })
+                            .map(|query| Self::resolve_query(query, &mut |_| {}))
+                    } else {
+                        let failure = Failure::new(
+                            FailureReason::ConservativePreparation,
+                            "reference-type",
+                            "reference is not a string",
+                        );
+                        admit(Err(&failure), 0).map(|()| Err(failure))
+                    };
+                    let target = match target {
+                        Ok(target) => target,
+                        Err(limit) => {
+                            report.complete = false;
+                            report.limitation = Some(limit);
+                            // Only this first omitted entry adds unretained work.
+                            return report;
+                        }
+                    };
+                    let root_origin = resource_root.map(|root| {
+                        let origin = match cached_root {
+                            Some((_, index, _)) => report.references[index]
+                                .resource_root
+                                .clone()
+                                .expect("retained root"),
+                            None => self.location(root),
+                        };
+                        root_cache = Some((root, report.references.len(), root_bytes));
+                        origin
+                    });
                     let resolution = match target {
                         Ok(target) => {
                             // Visit a supplied source and its nested resources
@@ -1045,12 +1115,23 @@ impl SchemaSpace {
                                 pending.extend(nodes);
                             }
                             ReferenceResolution::Located {
-                                target: self.location(target.node),
+                                target: if Some(target.node) == resource_root {
+                                    root_origin.clone().expect("target is the resource root")
+                                } else {
+                                    self.location(target.node)
+                                },
                                 dynamic_lookup: keyword == "$dynamicRef"
                                     && target.dynamic_name.is_some(),
                             }
                         }
                         Err(mut detail) => {
+                            // Reports expose the refusal category, not a dialect
+                            // spelling. Do not retain that query-only source text.
+                            if let Some(QueryFailure::UnsupportedDialect(uri)) =
+                                detail.query_failure.as_deref_mut()
+                            {
+                                *uri = None;
+                            }
                             detail.location = Some(self.location(id));
                             #[cfg(test)]
                             if let Some(QueryFailure::ResourceUnavailable(name)) =
@@ -1061,13 +1142,16 @@ impl SchemaSpace {
                             ReferenceResolution::Unresolved { detail }
                         }
                     };
-                    let mut location = self.location(id);
-                    // Reference keywords need no escape.
-                    push_pointer(&mut location.pointer, &format!("/{keyword}"));
+                    let source = self.source(node.source);
+                    let location = Location {
+                        resource: source.uri.clone(),
+                        pointer: relative_pointer(value, source.value.view()),
+                    };
                     report.references.push(Reference {
                         location,
+                        resource_root: root_origin,
                         keyword: keyword.into(),
-                        spelling,
+                        spelling: spelling.map(str::to_owned),
                         resolution,
                     });
                 }

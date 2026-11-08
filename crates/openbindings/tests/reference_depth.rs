@@ -102,7 +102,7 @@ fn deep_relative_identifiers_stop_at_the_identity_budget_on_a_small_stack() {
 }
 
 #[test]
-fn deep_reference_locations_still_obey_the_aggregate_pointer_allowance() {
+fn deep_reference_locations_still_obey_the_aggregate_report_allowance() {
     let depth = 2_000;
     let references = 1_500;
     let text = format!(
@@ -115,7 +115,7 @@ fn deep_reference_locations_still_obey_the_aggregate_pointer_allowance() {
     assert!(!report.complete);
     let limitation = report.limitation.unwrap();
     assert_eq!(limitation.reason, ReferenceRefusalReason::LimitExceeded);
-    assert_eq!(limitation.code, "reference-pointer-bytes");
+    assert_eq!(limitation.code, "reference-report-bytes");
     assert!(limitation.location.is_none());
     assert!(!report.references.is_empty());
     assert!(report.references.len() < references);
@@ -129,8 +129,12 @@ fn deep_reference_locations_still_obey_the_aggregate_pointer_allowance() {
         assert_eq!(target.pointer, "/schemas/target");
         retained += reference.location.pointer.as_str().unwrap().len();
         retained += target.pointer.as_str().unwrap().len();
+        retained += reference.keyword.len() + reference.spelling.as_ref().unwrap().len();
     }
     let next = format!("{prefix}/{}/$ref", report.references.len());
     assert!(retained <= 8 * 1024 * 1024);
-    assert!(retained + next.len() + "/schemas/target".len() > 8 * 1024 * 1024);
+    assert!(
+        retained + next.len() + "/schemas/target".len() + "$ref".len() + "#/schemas/target".len()
+            > 8 * 1024 * 1024
+    );
 }

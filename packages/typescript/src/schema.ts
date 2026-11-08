@@ -304,6 +304,8 @@ export interface ReferenceRefusal {
 export interface Reference {
   /** Original reference-keyword location. */
   location: SchemaOrigin;
+  /** Original location of the schema beginning the site's resource, not the resolved base. Null exactly for the document resource. A supplied source's top resource uses its sourceUri and an empty pointer even without $id. Conformant Rust callers can use SchemaNode::resource_base for the base. */
+  resourceRoot: SchemaOrigin | null;
   /** Reference keyword spelling, such as $ref or $dynamicRef. */
   keyword: string;
   /** Original scalar string, or null when not representable. */
@@ -328,7 +330,7 @@ export interface Reference {
 
 /** Original-context reference inspection, separate from normative proof and preparation. complete describes traversal completion; a complete report can still contain unresolved reference results.
  * Missing or malformed openbindings declarations use 0.2's rules, matching validation of a text declaring no version. This adds no limitation; a complete traversal is complete. Well-formed unsupported declarations and duplicate member names still prevent inspection.
- * Retains at most 8 MiB of aggregate generated-pointer bytes across reference, target and refusal locations: UTF-8, or two bytes per UTF-16 unit through an unpaired name. The first entry that does not fit stops traversal, sets complete to false and reports a limit-exceeded limitation with code `reference-pointer-bytes` and no omitted location.
+ * Retains at most 8 MiB of generated and source text in reference entries: all location, resource-root, target and refusal pointers, every origin's sourceUri, keywords, spellings, refusal codes/messages and unavailable-resource URIs. Text uses UTF-8 bytes; pointers through an unpaired name use two bytes per UTF-16 unit. This is a text allowance, not total heap usage. Each whole entry is charged before materializing or cloning its text. The first entry that does not fit stops traversal, sets complete to false and reports a limit-exceeded limitation with code `reference-report-bytes` and no omitted location.
  */
 export interface ReferenceReport {
   /** Retained reference observations in traversal order. */

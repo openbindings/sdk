@@ -179,9 +179,22 @@ contain unresolved entries. Missing or malformed `openbindings` declarations use
 declares no version. This assumption adds no limitation; a complete traversal is
 complete. Well-formed unsupported versions and duplicate member names still
 produce empty, incomplete reports. Each `Reference` retains the original keyword
-location, spelling and static resolution result. Inspection has no separate schema
-nesting bound beyond document admission. The report retains its 8 MiB aggregate
-pointer allowance, including reference, target and refusal locations. For
+location, spelling and static resolution result. Its `resource_root` (TypeScript
+`resourceRoot`) is the original location of the schema beginning the site's
+resource, with `None`/`null` exactly for the document resource. A supplied source's
+top resource uses that source's URI and an empty pointer, even without `$id`.
+This is a location, not the resolved base; conformant Rust callers can use
+`SchemaNode::resource_base` for the base.
+
+Inspection has no separate schema nesting bound beyond document admission. One
+8 MiB allowance covers all generated and source text retained in reference
+entries: location, resource-root, target and refusal pointers, every origin's
+source URI, keywords, spellings, refusal codes/messages and unavailable-resource
+URIs. Text uses UTF-8 bytes; pointers through an unpaired name use two bytes per
+UTF-16 unit. This bounds text, not total heap usage. Each whole entry is charged
+before its text is materialized or cloned. The first entry that does not fit
+stops traversal with `complete` false and a `LimitExceeded` limitation (TypeScript
+`limit-exceeded`) with code `reference-report-bytes` and no omitted location. For
 unavailable resources, the refusal's `resource_uri` (TypeScript `resourceUri`)
 gives the resolved missing identity. Preparation can still succeed; evaluation
 reports `NoVerdict(ResourceUnavailable)` when it cannot decide without that

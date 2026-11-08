@@ -38,6 +38,7 @@ fn internal_rows(context: &JsonValue) -> Vec<Row> {
     };
     let reference = schema::Reference {
         location: location.clone(),
+        resource_root: Some(location.clone()),
         keyword: SECRET.into(),
         spelling: Some(SECRET.into()),
         resolution: schema::ReferenceResolution::Unresolved {

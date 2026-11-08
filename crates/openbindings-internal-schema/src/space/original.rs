@@ -75,6 +75,28 @@ impl ReferenceResolver<'_> {
         reference: &str,
         control: &dyn Control,
     ) -> Result<Result<Target, QueryFailure>, Failure> {
+        self.query_admitted(holder, reference, control, false, &mut |_, _| Ok(()))
+    }
+
+    /// Admit the entire report entry before spelling a missing identity. Even
+    /// absolute missing names use compact handles on this path.
+    pub(super) fn query_for_report(
+        &mut self,
+        holder: usize,
+        reference: &str,
+        admit: &mut impl FnMut(&Result<Target, QueryFailure>, usize) -> Result<(), Failure>,
+    ) -> Result<Result<Target, QueryFailure>, Failure> {
+        self.query_admitted(holder, reference, &|| false, true, admit)
+    }
+
+    fn query_admitted(
+        &mut self,
+        holder: usize,
+        reference: &str,
+        control: &dyn Control,
+        compact_missing: bool,
+        admit: &mut impl FnMut(&Result<Target, QueryFailure>, usize) -> Result<(), Failure>,
+    ) -> Result<Result<Target, QueryFailure>, Failure> {
         let space = self.space;
         let reserve = |length: usize, work: usize, reservation: usize| -> Result<(), Failure> {
             let bytes = length
@@ -122,7 +144,7 @@ impl ReferenceResolver<'_> {
             }
             // These resolutions cannot inherit any base text. Keep the string
             // resolver's input-sized path and avoid compact setup altogether.
-            if current.base.is_none() || uri::absolute(reference) {
+            if !compact_missing && (current.base.is_none() || uri::absolute(reference)) {
                 let name =
                     uri::compared_id(None, reference).ok_or(QueryFailure::InvalidIdentifier)?;
                 return space.named_resource(&name).map(Ok);
@@ -138,16 +160,21 @@ impl ReferenceResolver<'_> {
                     None => Err(handle),
                 })
         };
-        let resource = match query() {
-            Err(cause) => return Ok(Err(cause)),
-            Ok(Ok(resource)) => resource,
+        let result = match query() {
+            Err(cause) => Err(cause),
+            Ok(Ok(resource)) => space.query_fragment(resource, reference),
             Ok(Err(handle)) => {
                 let names = self.names.as_ref().expect("queried name inventory");
+                admit(
+                    &Err(QueryFailure::ResourceUnavailable(String::new())),
+                    names.length(handle),
+                )?;
                 reserve(names.length(handle), 0, 0)?;
                 return Ok(Err(QueryFailure::ResourceUnavailable(names.spell(handle))));
             }
         };
-        Ok(space.query_fragment(resource, reference))
+        admit(&result, 0)?;
+        Ok(result)
     }
 }
 

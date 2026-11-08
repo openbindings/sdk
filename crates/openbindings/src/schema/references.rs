@@ -72,6 +72,9 @@ impl SchemaSpace {
                 .into_iter()
                 .map(|r| Reference {
                     location: crate::schema::evaluation::original_location(r.location),
+                    resource_root: r
+                        .resource_root
+                        .map(crate::schema::evaluation::original_location),
                     keyword: r.keyword,
                     spelling: r.spelling,
                     resolution: match r.resolution {
@@ -186,8 +189,8 @@ fn reference_refusal(f: embedding::Failure) -> ReferenceRefusal {
         code: f.code.into_owned(),
         message: f.message.into_owned(),
         location: f.location.map(crate::schema::evaluation::original_location),
-        resource_uri: match f.query_failure.as_deref() {
-            Some(embedding::QueryFailure::ResourceUnavailable(uri)) => Some(uri.clone()),
+        resource_uri: match f.query_failure.map(|cause| *cause) {
+            Some(embedding::QueryFailure::ResourceUnavailable(uri)) => Some(uri),
             _ => None,
         },
     }
@@ -230,6 +233,12 @@ pub enum ReferenceResolution {
 pub struct Reference {
     /// Original location of the reference keyword.
     pub location: SchemaOrigin,
+    /// Original location of the schema beginning the resource containing this site.
+    /// `None` exactly for the document resource. A supplied source's top resource
+    /// uses that source's URI and an empty pointer, even without an `$id`.
+    /// This is a location, not the resolved base. A conformant caller can use
+    /// [`SchemaNode::resource_base`] for the base.
+    pub resource_root: Option<SchemaOrigin>,
     /// Reference keyword spelling, such as `$ref` or `$dynamicRef`.
     pub keyword: String,
     /// Original scalar reference string, or `None` when its value is not representable as one.
@@ -241,6 +250,7 @@ impl std::fmt::Debug for Reference {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Reference")
             .field("location", &self.location)
+            .field("resource_root", &self.resource_root)
             .field("resolution", &self.resolution)
             .finish_non_exhaustive()
     }
@@ -252,11 +262,15 @@ impl std::fmt::Debug for Reference {
 /// limitation: a complete traversal of such a draft is complete. Well-formed
 /// unsupported declarations and duplicate member names still prevent inspection.
 /// Inspection has no separate schema nesting bound beyond document admission.
-/// Retains at most 8 MiB of aggregate generated-pointer bytes, including reference,
-/// target and refusal locations: UTF-8, or two bytes per UTF-16 unit through a
-/// name with an unpaired surrogate. The first entry that does not fit stops
-/// traversal, sets `complete` to false and reports `LimitExceeded` with code
-/// `reference-pointer-bytes`, without a location for the omitted entry.
+/// Retains at most 8 MiB of generated and source text in reference entries:
+/// all location, resource-root, target and refusal pointers, every origin's
+/// source URI, keywords, spellings, refusal codes/messages and unavailable-resource
+/// URIs. Text is counted in UTF-8 bytes; pointers through an unpaired name use
+/// two bytes per UTF-16 unit. This is a text allowance, not total heap usage.
+/// The whole entry is charged before its text is materialized or cloned. The
+/// first entry that does not fit stops traversal, sets `complete` to false and
+/// reports `LimitExceeded` with code `reference-report-bytes`, without a
+/// location for the omitted entry.
 /// Later versions may add fields: read them by name and match with `..`.
 #[non_exhaustive]
 pub struct ReferenceReport {

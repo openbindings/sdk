@@ -17,6 +17,10 @@
             "source_uri": null
           }
         },
+        "resource_root": {
+          "pointer": "/schemas/entry/not/not/not/not/not/not/not/not",
+          "source_uri": null
+        },
         "spelling": "#"
       },
       {
@@ -37,6 +41,10 @@
             "resource_uri": "https://e.test/a/a/a/a/a/a/a/a/s0"
           },
           "status": "unresolved"
+        },
+        "resource_root": {
+          "pointer": "/schemas/entry/not/not/not/not/not/not/not/not",
+          "source_uri": null
         },
         "spelling": "s0"
       }
@@ -60,6 +68,10 @@
             "source_uri": null
           }
         },
+        "resource_root": {
+          "pointer": "/schemas/entry/not/not/not/not/not/not/not/not",
+          "source_uri": null
+        },
         "spelling": "#"
       },
       {
@@ -76,6 +88,10 @@
             "source_uri": "https://e.test/a/a/a/a/a/a/a/a/s0"
           }
         },
+        "resource_root": {
+          "pointer": "/schemas/entry/not/not/not/not/not/not/not/not",
+          "source_uri": null
+        },
         "spelling": "s0"
       },
       {
@@ -91,6 +107,10 @@
             "pointer": "/$defs/target",
             "source_uri": "https://e.test/a/a/a/a/a/a/a/a/s0"
           }
+        },
+        "resource_root": {
+          "pointer": "",
+          "source_uri": "https://e.test/a/a/a/a/a/a/a/a/s0"
         },
         "spelling": "#/$defs/target"
       }
@@ -114,6 +134,10 @@
             "source_uri": null
           }
         },
+        "resource_root": {
+          "pointer": "/schemas/entry",
+          "source_uri": null
+        },
         "spelling": "#/$defs/s0"
       },
       {
@@ -130,6 +154,10 @@
             "source_uri": null
           }
         },
+        "resource_root": {
+          "pointer": "/schemas/entry",
+          "source_uri": null
+        },
         "spelling": "#/$defs/s1"
       },
       {
@@ -145,6 +173,10 @@
             "pointer": "/schemas/entry/$defs/s2",
             "source_uri": null
           }
+        },
+        "resource_root": {
+          "pointer": "/schemas/entry",
+          "source_uri": null
         },
         "spelling": "#/$defs/s2"
       }
@@ -168,6 +200,10 @@
             "source_uri": null
           }
         },
+        "resource_root": {
+          "pointer": "/schemas/entry",
+          "source_uri": null
+        },
         "spelling": "#/$defs/s0"
       },
       {
@@ -184,6 +220,10 @@
             "source_uri": null
           }
         },
+        "resource_root": {
+          "pointer": "/schemas/entry",
+          "source_uri": null
+        },
         "spelling": "#/$defs/s1"
       },
       {
@@ -199,6 +239,10 @@
             "pointer": "/schemas/entry/$defs/s2",
             "source_uri": null
           }
+        },
+        "resource_root": {
+          "pointer": "/schemas/entry",
+          "source_uri": null
         },
         "spelling": "#/$defs/s2"
       }
@@ -222,6 +266,10 @@
             "source_uri": null
           }
         },
+        "resource_root": {
+          "pointer": "/schemas/entry",
+          "source_uri": null
+        },
         "spelling": "#"
       },
       {
@@ -238,6 +286,10 @@
             "source_uri": null
           }
         },
+        "resource_root": {
+          "pointer": "/schemas/entry",
+          "source_uri": null
+        },
         "spelling": "#"
       },
       {
@@ -253,6 +305,10 @@
             "pointer": "/schemas/entry",
             "source_uri": null
           }
+        },
+        "resource_root": {
+          "pointer": "/schemas/entry",
+          "source_uri": null
         },
         "spelling": "#"
       }
@@ -276,6 +332,10 @@
             "source_uri": null
           }
         },
+        "resource_root": {
+          "pointer": "/schemas/entry",
+          "source_uri": null
+        },
         "spelling": "#"
       },
       {
@@ -292,6 +352,10 @@
             "source_uri": null
           }
         },
+        "resource_root": {
+          "pointer": "/schemas/entry",
+          "source_uri": null
+        },
         "spelling": "#"
       },
       {
@@ -307,6 +371,10 @@
             "pointer": "/schemas/entry",
             "source_uri": null
           }
+        },
+        "resource_root": {
+          "pointer": "/schemas/entry",
+          "source_uri": null
         },
         "spelling": "#"
       }
@@ -335,6 +403,10 @@
           },
           "status": "unresolved"
         },
+        "resource_root": {
+          "pointer": "/schemas/entry",
+          "source_uri": null
+        },
         "spelling": "s0"
       },
       {
@@ -356,6 +428,10 @@
           },
           "status": "unresolved"
         },
+        "resource_root": {
+          "pointer": "/schemas/entry",
+          "source_uri": null
+        },
         "spelling": "s1"
       },
       {
@@ -376,6 +452,10 @@
             "resource_uri": "https://e.test/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/s2"
           },
           "status": "unresolved"
+        },
+        "resource_root": {
+          "pointer": "/schemas/entry",
+          "source_uri": null
         },
         "spelling": "s2"
       }
@@ -399,6 +479,10 @@
             "source_uri": "https://e.test/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/s0"
           }
         },
+        "resource_root": {
+          "pointer": "/schemas/entry",
+          "source_uri": null
+        },
         "spelling": "s0"
       },
       {
@@ -414,6 +498,10 @@
             "pointer": "",
             "source_uri": "https://e.test/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/s1"
           }
+        },
+        "resource_root": {
+          "pointer": "/schemas/entry",
+          "source_uri": null
         },
         "spelling": "s1"
       },
@@ -431,6 +519,10 @@
             "source_uri": "https://e.test/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/s2"
           }
         },
+        "resource_root": {
+          "pointer": "/schemas/entry",
+          "source_uri": null
+        },
         "spelling": "s2"
       },
       {
@@ -446,6 +538,10 @@
             "pointer": "/$defs/target",
             "source_uri": "https://e.test/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/s0"
           }
+        },
+        "resource_root": {
+          "pointer": "",
+          "source_uri": "https://e.test/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/s0"
         },
         "spelling": "#/$defs/target"
       },
@@ -463,6 +559,10 @@
             "source_uri": "https://e.test/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/s1"
           }
         },
+        "resource_root": {
+          "pointer": "",
+          "source_uri": "https://e.test/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/s1"
+        },
         "spelling": "#/$defs/target"
       },
       {
@@ -478,6 +578,10 @@
             "pointer": "/$defs/target",
             "source_uri": "https://e.test/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/s2"
           }
+        },
+        "resource_root": {
+          "pointer": "",
+          "source_uri": "https://e.test/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/s2"
         },
         "spelling": "#/$defs/target"
       }
@@ -506,6 +610,10 @@
           },
           "status": "unresolved"
         },
+        "resource_root": {
+          "pointer": "/schemas/entry",
+          "source_uri": null
+        },
         "spelling": "s0"
       },
       {
@@ -527,6 +635,10 @@
           },
           "status": "unresolved"
         },
+        "resource_root": {
+          "pointer": "/schemas/entry",
+          "source_uri": null
+        },
         "spelling": "s1"
       },
       {
@@ -547,6 +659,10 @@
             "resource_uri": "https://e.test/s2"
           },
           "status": "unresolved"
+        },
+        "resource_root": {
+          "pointer": "/schemas/entry",
+          "source_uri": null
         },
         "spelling": "s2"
       }
@@ -570,6 +686,10 @@
             "source_uri": "https://e.test/s0"
           }
         },
+        "resource_root": {
+          "pointer": "/schemas/entry",
+          "source_uri": null
+        },
         "spelling": "s0"
       },
       {
@@ -585,6 +705,10 @@
             "pointer": "",
             "source_uri": "https://e.test/s1"
           }
+        },
+        "resource_root": {
+          "pointer": "/schemas/entry",
+          "source_uri": null
         },
         "spelling": "s1"
       },
@@ -602,6 +726,10 @@
             "source_uri": "https://e.test/s2"
           }
         },
+        "resource_root": {
+          "pointer": "/schemas/entry",
+          "source_uri": null
+        },
         "spelling": "s2"
       },
       {
@@ -617,6 +745,10 @@
             "pointer": "/$defs/target",
             "source_uri": "https://e.test/s0"
           }
+        },
+        "resource_root": {
+          "pointer": "",
+          "source_uri": "https://e.test/s0"
         },
         "spelling": "#/$defs/target"
       },
@@ -634,6 +766,10 @@
             "source_uri": "https://e.test/s1"
           }
         },
+        "resource_root": {
+          "pointer": "",
+          "source_uri": "https://e.test/s1"
+        },
         "spelling": "#/$defs/target"
       },
       {
@@ -649,6 +785,10 @@
             "pointer": "/$defs/target",
             "source_uri": "https://e.test/s2"
           }
+        },
+        "resource_root": {
+          "pointer": "",
+          "source_uri": "https://e.test/s2"
         },
         "spelling": "#/$defs/target"
       }

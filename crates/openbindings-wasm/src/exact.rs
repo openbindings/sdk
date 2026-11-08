@@ -101,7 +101,7 @@ record!(ReferenceRefusal, v, {
     "location": json(&v.location), "resource_uri": &v.resource_uri,
 });
 record!(Reference, v, {
-    "location": json(&v.location), "keyword": &v.keyword,
+    "location": json(&v.location), "resource_root": json(&v.resource_root), "keyword": &v.keyword,
     "spelling": &v.spelling, "resolution": json(&v.resolution),
 });
 record!(ReferenceReport, v, {

@@ -249,6 +249,7 @@ fn debug_redacts_caller_text_at_every_boundary() {
     reference_refusal.message = SECRET.into();
     reference_refusal.location = Some(location());
     reference_item.location = location();
+    reference_item.resource_root = Some(location());
     reference_item.keyword = SECRET.into();
     reference_item.spelling = Some(reference.clone());
     reference_item.resolution = ReferenceResolution::Unresolved {

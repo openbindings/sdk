@@ -97,6 +97,58 @@ mod tests {
     use super::*;
 
     #[test]
+    fn report_admission_precedes_missing_uri_spelling() {
+        for absolute in [false, true] {
+            let base = format!("https://e.test/{}/", "a".repeat(1024 * 1024));
+            let document =
+                RawDocument::parse(format!(r#"{{"schemas":{{"entry":{{"$id":"{base}"}}}}}}"#))
+                    .unwrap();
+            let space = SchemaSpace::new(document, Supplied::default()).unwrap();
+            let holder = space.local_nodes().next().unwrap().0;
+            let mut resolver = space.reference_resolver();
+            let reference = if absolute {
+                format!("{base}s0")
+            } else {
+                "s0".into()
+            };
+            // Warm the name inventory and identical compact query input.
+            resolver
+                .query_for_report(holder, &reference, &mut |_, _| Ok(()))
+                .unwrap()
+                .unwrap_err();
+            crate::resolution_work::take();
+            let mut length = 0;
+            let refused = resolver.query_for_report(holder, &reference, &mut |query, bytes| {
+                assert!(
+                    matches!(query, Err(QueryFailure::ResourceUnavailable(uri)) if uri.is_empty())
+                );
+                length = bytes;
+                Err(Failure::new(
+                    FailureReason::LimitExceeded,
+                    "test-limit",
+                    "test admission",
+                ))
+            });
+            assert_eq!(refused.unwrap_err().code, "test-limit");
+            assert_eq!(length, base.len() + 2);
+            let omitted_work = crate::resolution_work::take();
+            let retained = resolver
+                .query_for_report(holder, &reference, &mut |_, bytes| {
+                    assert_eq!(bytes, length);
+                    Ok(())
+                })
+                .unwrap()
+                .unwrap_err();
+            let retained_work = crate::resolution_work::take();
+            assert_eq!(
+                retained,
+                QueryFailure::ResourceUnavailable(format!("{base}s0"))
+            );
+            assert_eq!(retained_work - omitted_work, length);
+        }
+    }
+
+    #[test]
     fn input_sized_queries_never_initialize_the_compact_inventory() {
         let document = RawDocument::parse(r##"{"openbindings":"0.2.0","operations":{},"schemas":{"anonymous":true,"named":{"$id":"https://e.test/base"}}}"##).unwrap();
         let space = SchemaSpace::new(document, Supplied::default()).unwrap();
@@ -176,11 +228,19 @@ mod tests {
                         })
                             .map(|i| ProjectedResource {
                                 uri: if shape == "directory-supplied" {
-                                    format!("{base}s{i}")
+                                    format!("https://fetch.test/s{i}")
                                 } else {
                                     format!("https://e.test/s{i}")
                                 },
-                                document: JsonValue::parse("true").unwrap(),
+                                // Keep retrieval coordinates short so this work
+                                // probe still inspects every reference under the
+                                // report allowance. The resolved identity stays long.
+                                document: JsonValue::parse(if shape == "directory-supplied" {
+                                    format!(r#"{{"$id":"{base}s{i}"}}"#)
+                                } else {
+                                    "true".into()
+                                })
+                                .unwrap(),
                             }),
                     )
                     .unwrap()

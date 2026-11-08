@@ -4,6 +4,7 @@ import {
   Document,
   parseJson,
   type JsonInput,
+  type SchemaOrigin,
   type ValueOutcome,
   type ValueCheck,
   type SchemaPreparation,
@@ -19,6 +20,9 @@ export async function referenceExample(wasmBytes: Uint8Array, source: string) {
   const parsed = Document.parse(source);
   if (parsed.status !== "parsed") return parsed.error;
   using document = parsed.value;
+  for (const reference of document.references().references) {
+    reference.resourceRoot satisfies SchemaOrigin | null;
+  }
   // Every access returns its own owner; this one is scoped independently.
   using original = document.value();
   const copy: Uint8Array = original.bytes;
