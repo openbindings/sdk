@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-11-08 TypeScript report hand-off (unreleased)
+
+- Serialize reports from the Wasm engine in one Serde pass instead of
+  assembling nested JSON text per record, and translate each field name once
+  per decoded report. Inspecting 10,000 references in Node takes about 28 to
+  61 ms instead of 125 to 183 ms; a 4,096-finding validation report decodes in
+  about 14 ms instead of 44. Public types, values, field order and exact
+  pointers are unchanged, and returned objects stay independent.
+
 ## 2026-11-08 reference resource roots and report text (unreleased)
 
 ### Added

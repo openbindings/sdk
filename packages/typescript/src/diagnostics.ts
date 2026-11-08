@@ -39,21 +39,36 @@ export interface SourceLocation {
   byteColumn: number;
 }
 
-function camel(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(camel);
-  if (value && typeof value === "object")
-    return Object.fromEntries(
-      Object.entries(value).map(([key, v]) => [
-        key.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase()),
-        camel(v),
-      ]),
-    );
+function camel(value: unknown, keys: Map<string, string>): unknown {
+  if (Array.isArray(value)) return value.map((v) => camel(v, keys));
+  if (value && typeof value === "object") {
+    const result: Record<string, unknown> = {};
+    for (const key of Object.keys(value)) {
+      let name = keys.get(key);
+      if (name === undefined) {
+        name = key.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase());
+        keys.set(key, name);
+      }
+      const member = camel((value as Record<string, unknown>)[key], keys);
+      if (name === "__proto__")
+        Object.defineProperty(result, name, {
+          value: member,
+          enumerable: true,
+          configurable: true,
+          writable: true,
+        });
+      else result[name] = member;
+    }
+    return result;
+  }
   return value;
 }
 
 /** @internal */
 export function decode<T>(text: string): T {
-  return camel(JSON.parse(text)) as T;
+  // Field names repeat across large reports. Keep translations for this decode
+  // only, without sharing any of the caller's returned objects.
+  return camel(JSON.parse(text), new Map()) as T;
 }
 
 /** Thrown SDK misuse or configuration failure. Expected parse, conformance and schema outcomes use result unions. Messages explain; codes identify. */

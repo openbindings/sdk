@@ -2,32 +2,44 @@
 //! Ordinary Rust serialization deliberately replaces unpaired pointer units.
 use super::encoded;
 use openbindings::*;
+use serde::{Serialize, Serializer, ser::SerializeMap};
 use serde_json::value::RawValue;
 
-pub(super) fn json<T: Exact + ?Sized>(value: &T) -> Box<RawValue> {
-    RawValue::from_string(value.exact()).expect("exact metadata is JSON")
+// Borrow metadata into the enclosing serializer. Only an unpaired pointer
+// needs a raw JSON token; records and arrays never build intermediate text.
+pub(super) fn json<T: Exact + ?Sized>(value: &T) -> Json<'_, T> {
+    Json(value)
 }
 
+pub(super) struct Json<'a, T: ?Sized>(&'a T);
+impl<T: Exact + ?Sized> Serialize for Json<'_, T> {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.0.exact(serializer)
+    }
+}
 pub(super) trait Exact {
-    fn exact(&self) -> String;
+    fn exact<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error>;
 }
 impl<T: Exact + ?Sized> Exact for &T {
-    fn exact(&self) -> String {
-        (*self).exact()
+    fn exact<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        (*self).exact(serializer)
     }
 }
 impl<T: Exact> Exact for Option<T> {
-    fn exact(&self) -> String {
-        self.as_ref().map_or_else(|| "null".into(), Exact::exact)
+    fn exact<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.as_ref().map(json).serialize(serializer)
     }
 }
 impl<T: Exact> Exact for Vec<T> {
-    fn exact(&self) -> String {
-        encoded(self.iter().map(json).collect::<Vec<_>>())
+    fn exact<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.collect_seq(self.iter().map(json))
     }
 }
 impl Exact for Pointer {
-    fn exact(&self) -> String {
+    fn exact<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        if let Some(text) = self.as_str() {
+            return serializer.serialize_str(text);
+        }
         let mut token = String::from("\"");
         for unit in char::decode_utf16(self.utf16_units()) {
             match unit {
@@ -42,16 +54,25 @@ impl Exact for Pointer {
             }
         }
         token.push('"');
-        token
+        RawValue::from_string(token)
+            .expect("exact pointer is JSON")
+            .serialize(serializer)
     }
 }
 
+macro_rules! fields {
+    ($serializer:ident; $($key:literal: $value:expr),* $(,)?) => {{
+        let mut map = $serializer.serialize_map(None)?;
+        $(map.serialize_entry($key, &$value)?;)*
+        map.end()
+    }};
+}
 macro_rules! record {
     ($kind:ty, $v:ident, {$($key:literal: $field:expr),* $(,)?}) => {
         impl Exact for $kind {
-            fn exact(&self) -> String {
+            fn exact<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
                 let $v = self;
-                object!($($key: $field),*)
+                fields!(serializer; $($key: $field),*)
             }
         }
     };
@@ -64,22 +85,22 @@ record!(SchemaOrigin, v, {
     "source_uri": &v.source_uri, "pointer": json(&v.pointer),
 });
 impl Exact for Finding {
-    fn exact(&self) -> String {
+    fn exact<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         #[derive(serde::Serialize)]
         struct Fields<'a> {
             rule: &'a str,
             status: Evidence,
             code: &'a str,
-            location: Box<RawValue>,
+            location: Json<'a, Option<SourceLocation>>,
             message: &'a str,
             #[serde(skip_serializing_if = "Option::is_none")]
             keyword: Option<&'a str>,
             #[serde(skip_serializing_if = "Option::is_none")]
-            schema: Option<Box<RawValue>>,
+            schema: Option<Json<'a, SchemaOrigin>>,
             #[serde(skip_serializing_if = "Option::is_none")]
             details: Option<&'a ValueProblemDetails>,
         }
-        encoded(Fields {
+        Fields {
             rule: self.rule,
             status: self.status,
             code: self.code,
@@ -88,7 +109,8 @@ impl Exact for Finding {
             keyword: self.keyword,
             schema: self.schema.as_ref().map(json),
             details: self.details.as_ref(),
-        })
+        }
+        .serialize(serializer)
     }
 }
 record!(ValidationReport, v, {
@@ -116,44 +138,47 @@ record!(UndefinedResult, v, {
     "code": &v.code, "message": &v.message, "location": json(&v.location),
 });
 impl Exact for ReferenceResolution {
-    fn exact(&self) -> String {
+    fn exact<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         match self {
             Self::Located {
                 target,
                 dynamic_lookup,
-            } => object!(
+            } => fields!(serializer;
                 "status": "located", "target": json(target), "dynamic_lookup": dynamic_lookup,
             ),
-            Self::Unresolved { detail } => object!("status": "unresolved", "detail": json(detail)),
+            Self::Unresolved { detail } => {
+                fields!(serializer; "status": "unresolved", "detail": json(detail))
+            }
         }
     }
 }
 impl Exact for PreparationFailure {
-    fn exact(&self) -> String {
+    fn exact<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         #[derive(serde::Serialize)]
         struct Fields<'a> {
             #[serde(flatten)]
             kind: &'a PreparationFailureKind,
-            origin: Box<RawValue>,
+            origin: Json<'a, Option<SchemaOrigin>>,
         }
-        encoded(Fields {
+        Fields {
             kind: &self.kind,
             origin: json(&self.origin),
-        })
+        }
+        .serialize(serializer)
     }
 }
 impl Exact for ValueProblem {
-    fn exact(&self) -> String {
+    fn exact<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         #[derive(serde::Serialize)]
         struct Fields<'a> {
-            instance: Box<RawValue>,
-            schema: Box<RawValue>,
+            instance: Json<'a, Pointer>,
+            schema: Json<'a, SchemaOrigin>,
             code: &'a str,
             message: &'a str,
             #[serde(skip_serializing_if = "Option::is_none")]
             details: &'a Option<ValueProblemDetails>,
         }
-        encoded(Fields {
+        Fields {
             instance: json(&self.instance),
             schema: json(&self.schema),
             code: &self.code,
@@ -162,23 +187,28 @@ impl Exact for ValueProblem {
             // JSON tokens. Serialize them as strings, never as parsed numbers
             // or enum values; only the pointer fields need UTF-16 encoding.
             details: &self.details,
-        })
+        }
+        .serialize(serializer)
     }
 }
 impl Exact for ValueOutcome {
-    fn exact(&self) -> String {
+    fn exact<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         match self {
-            Self::Satisfies => object!("status": "satisfies"),
+            Self::Satisfies => fields!(serializer; "status": "satisfies"),
             Self::Fails {
                 message,
                 problems,
                 problems_complete,
-            } => object!(
+            } => fields!(serializer;
                 "status": "fails", "message": message, "problems": json(problems),
                 "problems_complete": problems_complete,
             ),
-            Self::Undefined { detail } => object!("status": "undefined", "detail": json(detail)),
-            Self::NoVerdict { detail } => object!("status": "no-verdict", "detail": json(detail)),
+            Self::Undefined { detail } => {
+                fields!(serializer; "status": "undefined", "detail": json(detail))
+            }
+            Self::NoVerdict { detail } => {
+                fields!(serializer; "status": "no-verdict", "detail": json(detail))
+            }
         }
     }
 }
@@ -188,7 +218,18 @@ mod tests {
     use super::*;
 
     fn agrees(value: &(impl Exact + serde::Serialize)) {
-        assert_eq!(value.exact(), serde_json::to_string(value).unwrap());
+        assert_eq!(encoded(json(value)), serde_json::to_string(value).unwrap());
+    }
+
+    #[test]
+    fn pointer_tokens_keep_controls_pairs_and_unpaired_units() {
+        let value = JsonValue::parse(r#"{"a/~\"\n😀\ud800\udc00\ud800x\udc00":0}"#).unwrap();
+        let member = value.at("").unwrap().members().unwrap().next().unwrap();
+        assert_eq!(
+            encoded(json(&member.value.location().pointer)),
+            r#""/a~1~0\"\n😀𐀀\ud800x\udc00""#,
+        );
+        agrees(&Pointer::from_utf16(&[b'/' as u16, 0, 8, 9, 10, 12, 13, 31]).unwrap());
     }
 
     #[test]
@@ -275,7 +316,7 @@ mod tests {
             "assertion failed",
         );
         agrees(&problem);
-        assert!(!problem.exact().contains("\"details\""));
+        assert!(!encoded(json(&problem)).contains("\"details\""));
         for details in [
             ValueProblemDetails::Type {
                 expected: vec!["integer".into(), "null".into()],
@@ -302,7 +343,7 @@ mod tests {
             problem.details = Some(details);
             agrees(&problem);
             assert_eq!(
-                serde_json::from_str::<serde_json::Value>(&problem.exact()).unwrap()["details"],
+                serde_json::from_str::<serde_json::Value>(&encoded(json(&problem))).unwrap()["details"],
                 serde_json::to_value(&problem.details).unwrap(),
             );
             agrees(&ValueOutcome::Fails {
