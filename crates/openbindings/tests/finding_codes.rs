@@ -78,15 +78,16 @@ fn documented_finding_codes_match_source() {
             }
         }
     }
-    let table = REFERENCE
-        .split_once("## Document finding codes\n")
-        .unwrap()
-        .1
-        .split("\n## ")
-        .next()
-        .unwrap();
+    // `lines` strips both line endings, so a CRLF checkout reads the same table.
+    let table: Vec<_> = REFERENCE
+        .lines()
+        .skip_while(|line| *line != "## Document finding codes")
+        .skip(1)
+        .take_while(|line| !line.starts_with("## "))
+        .collect();
+    assert!(!table.is_empty(), "finding-code section missing");
     let mut documented = BTreeSet::new();
-    for row in table.lines().filter(|line| line.starts_with("| `")) {
+    for row in table.iter().filter(|line| line.starts_with("| `")) {
         let columns: Vec<_> = row.split('|').map(str::trim).collect();
         assert_eq!(columns.len(), 5, "malformed code row: {row}");
         assert!(columns[2].starts_with("OBI-"), "missing rule: {row}");
