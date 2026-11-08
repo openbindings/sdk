@@ -185,7 +185,8 @@ The older work-capped reference-placement test remains separate.
 
 `tools/verify.py` also runs the [fuzz harness](../fuzz/README.md)'s committed seed
 corpus on stable: `cargo test --locked --manifest-path fuzz/seeds/Cargo.toml --test seed_corpus`.
-For coverage-guided runs, install `nightly-2026-11-01` and `cargo-fuzz` 0.13.1, then
+For coverage-guided runs, install `nightly-2026-11-01`, and `cargo-fuzz` 0.13.2 with the
+repository's stable toolchain (its locked dependencies do not build on that nightly), then
 run `cargo +nightly-2026-11-01 fuzz run lanes -- -max_total_time=120 -max_len=16384`
 from the repository root. Substitute `document`, `json_value`, `decimal` or
 `pattern` for the other targets. Crashes go to `fuzz/artifacts/<target>/`; the

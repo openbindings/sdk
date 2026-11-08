@@ -9,7 +9,7 @@ of the workspace. `tools/verify.py` replays every committed corpus file.
 ```sh
 cargo test --locked --manifest-path fuzz/seeds/Cargo.toml --test seed_corpus
 rustup toolchain install nightly-2026-11-01
-cargo +nightly-2026-11-01 install cargo-fuzz --version 0.13.1 --locked
+cargo install cargo-fuzz --version 0.13.2 --locked
 cargo +nightly-2026-11-01 fuzz run lanes -- -max_total_time=120 -max_len=16384
 ```
 

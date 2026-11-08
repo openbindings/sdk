@@ -26,11 +26,28 @@ jobs:
       FUZZ_NIGHTLY: nightly-2026-11-01
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Read Rust toolchain
+        id: rust-version
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import os, tomllib
+          with open('rust-toolchain.toml', 'rb') as source:
+              version = tomllib.load(source)['toolchain']['channel']
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write('version=' + version + '\n')
+          PY
+      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # master
+        with:
+          toolchain: ${{ steps.rust-version.outputs.version }}
       - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # master
         with:
           toolchain: nightly-2026-11-01
+      # cargo-fuzz itself builds on the SDK's stable toolchain: its locked
+      # dependencies include a rustix that a current nightly refuses. Only the
+      # fuzz targets need nightly.
       - name: Install pinned cargo-fuzz
-        run: cargo +"$FUZZ_NIGHTLY" install cargo-fuzz --version 0.13.1 --locked
+        run: cargo +"${{ steps.rust-version.outputs.version }}" install cargo-fuzz --version 0.13.2 --locked
       - name: Build all fuzz targets
         run: cargo +"$FUZZ_NIGHTLY" fuzz build
       - name: Run every target for two minutes
