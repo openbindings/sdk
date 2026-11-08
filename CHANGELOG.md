@@ -5,7 +5,10 @@
 - Inspect drafts with missing or malformed `openbindings` declarations under
   0.2's rules, matching validation. A complete traversal is complete without an
   assumed-version limitation. Keep refusal of well-formed unsupported versions
-  and duplicate member names, and retain the existing depth and pointer bounds.
+  and duplicate member names, and retain the existing pointer allowance.
+- Inspect references beyond 256 schema levels, within document admission and
+  the existing identity and pointer allowances. Keep preparation's separate
+  depth guard. Qualify deep targets and identity refusal on a 256 KiB stack.
 - Qualify matching reference order, targets, dynamic lookup and unresolved
   results with and without supplied resources in Rust and TypeScript.
 

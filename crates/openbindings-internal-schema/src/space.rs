@@ -989,23 +989,6 @@ impl SchemaSpace {
                 report.limitation = Some(reason);
                 break;
             }
-            if node.depth > 256 {
-                report.complete = false;
-                if report.limitation.is_none() {
-                    let Some(bytes) = measure(id, pointer_bytes) else {
-                        report.limitation = Some(pointer_limit());
-                        break;
-                    };
-                    pointer_bytes -= bytes;
-                    report.limitation = Some(self.failure(
-                        id,
-                        FailureReason::LimitExceeded,
-                        "schema-depth",
-                        "reference inspection stops below 256 schema levels",
-                    ));
-                }
-                continue;
-            }
             for keyword in ["$ref", "$dynamicRef"] {
                 if let Some(value) = node.value.get(keyword) {
                     let spelling = value.as_str().map(str::to_owned);

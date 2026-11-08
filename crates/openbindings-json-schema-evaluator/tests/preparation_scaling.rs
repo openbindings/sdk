@@ -730,8 +730,8 @@ fn a_schema_nested_more_than_256_levels_deep_refuses_whatever_the_limits() {
             ));
         }
     }
-    // Reference inspection skips the references nested past the same depth:
-    // a reference 256 schemas below the input is reported, one 257 below is not.
+    // Inspection has its own inventory and representation allowances. Both
+    // references remain visible across preparation's independent depth bound.
     let inspect = |levels: usize| {
         let inner = (0..levels).fold(
             r#"{"$ref":"https://depth.test/inner"}"#.to_owned(),
@@ -740,17 +740,15 @@ fn a_schema_nested_more_than_256_levels_deep_refuses_whatever_the_limits() {
         let input = format!(r#"{{"$ref":"https://depth.test/r","allOf":[{inner}]}}"#);
         Document::parse(document(&[], &input)).unwrap().references()
     };
-    let report = inspect(255);
-    assert!(report.complete && report.limitation.is_none());
-    assert_eq!(report.references.len(), 2);
-    let report = inspect(256);
-    assert!(!report.complete);
-    let limitation = report.limitation.expect("a limitation");
-    assert_eq!(
-        (limitation.reason, limitation.code.as_str()),
-        (ReferenceRefusalReason::LimitExceeded, "schema-depth")
-    );
-    assert_eq!(report.references.len(), 1);
+    for levels in [255, 256] {
+        let report = inspect(levels);
+        assert!(report.complete && report.limitation.is_none());
+        assert_eq!(report.references.len(), 2);
+        assert_eq!(
+            report.references[1].spelling.as_deref(),
+            Some("https://depth.test/inner")
+        );
+    }
     // A supplied resource counts from its own root.
     let input = document(&[], r#"{"$ref":"https://depth.test/r"}"#);
     let supplied = |levels| resources(vec![("https://depth.test/r".into(), not(levels))]);

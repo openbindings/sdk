@@ -251,6 +251,7 @@ impl std::fmt::Debug for Reference {
 /// rules, as specified for texts declaring no version. This assumption adds no
 /// limitation: a complete traversal of such a draft is complete. Well-formed
 /// unsupported declarations and duplicate member names still prevent inspection.
+/// Inspection has no separate schema nesting bound beyond document admission.
 /// Retains at most 8 MiB of aggregate generated-pointer bytes, including reference,
 /// target and refusal locations: UTF-8, or two bytes per UTF-16 unit through a
 /// name with an unpaired surrogate. The first entry that does not fit stops
@@ -264,8 +265,6 @@ pub struct ReferenceReport {
     /// Whether traversal completed; individual unresolved references may still occur in a complete report.
     pub complete: bool,
     /// Traversal-level cause when inspection is incomplete, distinct from per-reference refusals.
-    /// Inspection skips the references of a schema nested more than 256 schemas below the
-    /// schema position that holds it, with a `LimitExceeded` limitation (`schema-depth`).
     pub limitation: Option<ReferenceRefusal>,
 }
 use serde::Serialize;

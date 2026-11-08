@@ -212,7 +212,7 @@ fn supplied_resource_references_are_reported_transitively_once() {
 }
 
 #[test]
-fn reached_supplied_schemas_keep_the_existing_depth_limit() {
+fn reached_supplied_schemas_report_references_beyond_256_levels() {
     let draft = Document::parse(r#"{"openbindings":"0.2.0","operations":{"op":{"input":{"$ref":"https://example.test/a"}}}}"#).unwrap();
     let text = format!(
         "{}{{\"$ref\":\"https://example.test/missing\"}}{}",
@@ -225,14 +225,25 @@ fn reached_supplied_schemas_keep_the_existing_depth_limit() {
     }])
     .unwrap();
     let report = draft.references_with_resources(resources, &AtomicBool::new(false));
-    assert!(!report.complete);
-    assert_eq!(report.references.len(), 1);
-    let limitation = report.limitation.unwrap();
-    assert_eq!(limitation.reason, ReferenceRefusalReason::LimitExceeded);
-    assert_eq!(limitation.code, "schema-depth");
+    assert!(report.complete);
+    assert!(report.limitation.is_none());
+    assert_eq!(report.references.len(), 2);
+    let reached = &report.references[1];
     assert_eq!(
-        limitation.location.unwrap().source_uri.as_deref(),
+        reached.location.source_uri.as_deref(),
         Some("https://example.test/a")
+    );
+    assert_eq!(
+        reached.location.pointer,
+        format!("{}/$ref", "/not".repeat(257))
+    );
+    let ReferenceResolution::Unresolved { detail } = &reached.resolution else {
+        panic!("missing resource")
+    };
+    assert_eq!(detail.reason, ReferenceRefusalReason::ResourceUnavailable);
+    assert_eq!(
+        detail.resource_uri.as_deref(),
+        Some("https://example.test/missing")
     );
 }
 

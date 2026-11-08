@@ -335,7 +335,7 @@ export interface ReferenceReport {
   references: readonly Reference[];
   /** Whether traversal completed; unresolved entries can occur even when true. */
   complete: boolean;
-  /** Traversal-level limitation when incomplete, otherwise null. Inspection skips the references of a schema nested more than 256 schemas below the schema position that holds it, with a limit-exceeded limitation (`schema-depth`). */
+  /** Traversal-level limitation when incomplete, otherwise null. Inspection has no separate schema nesting bound beyond document admission. */
   limitation: ReferenceRefusal | null;
 }
 
