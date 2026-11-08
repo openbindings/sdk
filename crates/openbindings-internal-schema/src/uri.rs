@@ -3,9 +3,11 @@
 use fluent_uri::UriRef;
 
 pub fn absolute(text: &str) -> bool {
+    crate::resolution_work::text(text.len());
     UriRef::parse(text).is_ok_and(|u| u.scheme().is_some())
 }
 pub fn valid(text: &str) -> bool {
+    crate::resolution_work::text(text.len());
     UriRef::parse(text).is_ok()
 }
 pub fn fragment(text: &str) -> Option<&str> {
@@ -15,6 +17,7 @@ pub fn fragment(text: &str) -> Option<&str> {
 /// Resolve against an explicitly named base. Inputs must be URI references;
 /// `base` must be absolute. Component spelling and defined emptiness survive.
 pub fn resolve(base: &str, reference: &str) -> Option<String> {
+    crate::resolution_work::text(base.len().saturating_add(reference.len()));
     let b = UriRef::parse(base).ok()?;
     let r = UriRef::parse(reference).ok()?;
     b.scheme()?;
@@ -117,6 +120,7 @@ fn remove_dots(mut input: &str) -> String {
 }
 
 pub fn decode_fragment(fragment: &str) -> Option<String> {
+    crate::resolution_work::text(fragment.len());
     let mut out = Vec::with_capacity(fragment.len());
     let src = fragment.as_bytes();
     let mut i = 0;

@@ -270,7 +270,6 @@ impl Packaged {
                 .flatten()
         })
     }
-    #[cfg(test)]
     pub(super) fn names(&self) -> impl Iterator<Item = &str> {
         let supplemental = self.supplemental;
         self.core.names.keys().map(String::as_str).chain(

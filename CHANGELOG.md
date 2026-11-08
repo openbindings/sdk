@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-11-08 compact reference resolution (unreleased)
+
+- Resolve a relative reference against a named base through validation's
+  compact identifier walk instead of spelling the base for every reference.
+  Inspecting a 1 MiB `$id` with 10,000 fragment references takes about 24 ms
+  natively instead of 14 s. Reports, their order and completion are unchanged.
+- Absolute references and references without a named base keep the string
+  resolver. The environment builds one immutable inventory of its own names on
+  first need; each request's query inputs are released when the request ends.
+- Preparation charges a resolution for its own reference text, plus a missing
+  name only when the result retains one. Many distinct fragment references
+  under a long base now prepare under default limits instead of refusing with
+  `preparation-sdk-work-units`. No allowance value changed.
+- Guard per-reference resolution work with a deterministic byte count at 1 KiB,
+  64 KiB and 1 MiB bases, and freeze the original resolver's reports for five
+  reference shapes with and without supplied resources.
+
 ## 2026-11-07 draft reference inspection (unreleased)
 
 - Inspect drafts with missing or malformed `openbindings` declarations under

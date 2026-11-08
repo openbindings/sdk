@@ -1,6 +1,7 @@
 //! Original-context resource graph. No URI here acquires bytes.
 mod catalog;
 mod custom;
+mod names;
 mod original;
 mod potential;
 use crate::{
@@ -11,7 +12,7 @@ use openbindings_internal_json::backend::{
     MAX_REPORT_POINTER_BYTES, has_unpaired, location_pointer_size, node_id, pointer_into,
     push_pointer, ref_id, relative_pointer, relative_pointer_size,
 };
-pub use original::QueryFailure;
+pub use original::{QueryFailure, ReferenceResolver};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 
 pub struct SpaceNode {
@@ -37,6 +38,9 @@ pub struct Resource {
     pub origin: ResourceOrigin,
     // Read through `SchemaSpace::eligible`, which accounts for local claims.
     eligible: bool,
+    // An empty-path, no-query reference preserves this named resource's
+    // identity. Compute this fact once while its base is already materialized.
+    fragment_base: bool,
 }
 impl std::fmt::Debug for Resource {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -210,6 +214,10 @@ pub struct SchemaSpace {
     // bodies and indexes initialize only when accessed.
     local: Layer,
     identity_bytes: usize,
+    // Own-name storage only, constructed once on the first named relative
+    // query. The identity spelling and per-node index reservations cover it.
+    // Request inputs and trie splits live in ReferenceResolver instead.
+    names: std::sync::OnceLock<Box<names::Inventory>>,
     packaged: &'static catalog::Packaged,
     custom: custom::Custom,
 }
@@ -342,11 +350,13 @@ impl Layer {
         let mut resources = HashMap::new();
         let initial = self.base + self.resources.len();
         resources.insert(0, initial);
+        let base = retrieval
+            .as_deref()
+            .and_then(|name| uri::compared_id(None, name));
         self.resources.push(Resource {
             root: None,
-            base: retrieval
-                .as_deref()
-                .and_then(|name| uri::compared_id(None, name)),
+            fragment_base: base.as_ref().is_some_and(|base| !base.contains('#')),
+            base,
             anonymous: retrieval.is_none(),
             dialect: Some(DIALECT.into()),
             profile: index.profile(0),
@@ -381,6 +391,7 @@ impl Layer {
                 });
                 self.resources.push(Resource {
                     root: Some(self.base + self.nodes.len()),
+                    fragment_base: base.as_ref().is_some_and(|base| !base.contains('#')),
                     base,
                     anonymous: false,
                     dialect,
@@ -698,6 +709,7 @@ impl SchemaSpace {
             supplied,
             local,
             identity_bytes,
+            names: std::sync::OnceLock::new(),
             packaged,
             custom: custom::Custom::default(),
         })
@@ -865,20 +877,15 @@ impl SchemaSpace {
         reference: &str,
         missing: &mut impl FnMut(&str),
     ) -> Result<Target, Failure> {
-        self.resolve_unlocated(holder, reference, missing)
-            .map_err(|mut failure| {
-                failure.location = Some(self.location(holder));
-                failure
-            })
+        self.reference_resolver()
+            .resolve_with_missing(holder, reference, missing)
     }
     // Report inspection measures every retained pointer before locating failures.
-    fn resolve_unlocated(
-        &self,
-        holder: usize,
-        reference: &str,
+    fn resolve_query(
+        query: Result<Target, QueryFailure>,
         missing: &mut impl FnMut(&str),
     ) -> Result<Target, Failure> {
-        self.query(holder, reference).map_err(|cause| {
+        query.map_err(|cause| {
             use QueryFailure as Q;
             let (reason, code, message) = match &cause {
                 Q::InvalidExternalSchema => (
@@ -947,6 +954,13 @@ impl SchemaSpace {
     }
 
     pub fn references(&self, control: &dyn Control) -> ReferenceReport {
+        self.references_with(&mut self.reference_resolver(), control)
+    }
+    fn references_with(
+        &self,
+        resolver: &mut ReferenceResolver<'_>,
+        control: &dyn Control,
+    ) -> ReferenceReport {
         let mut report = ReferenceReport {
             references: Vec::new(),
             complete: true,
@@ -1001,7 +1015,7 @@ impl SchemaSpace {
                                 "reference is not a string",
                             )
                         })
-                        .and_then(|s| self.resolve_unlocated(id, s, &mut |_| {}));
+                        .and_then(|s| Self::resolve_query(resolver.query(id, s), &mut |_| {}));
                     // Measure the keyword itself so UTF-16 pointers charge the
                     // suffix in the same representation as their ancestor names.
                     let bytes = relative_pointer_size(
@@ -1038,6 +1052,12 @@ impl SchemaSpace {
                         }
                         Err(mut detail) => {
                             detail.location = Some(self.location(id));
+                            #[cfg(test)]
+                            if let Some(QueryFailure::ResourceUnavailable(name)) =
+                                detail.query_failure.as_deref()
+                            {
+                                crate::resolution_work::retained(name.len());
+                            }
                             ReferenceResolution::Unresolved { detail }
                         }
                     };
@@ -1671,6 +1691,7 @@ impl SchemaSpace {
     }
     /// What [`Self::reach`] reaches, without refusing an in-place cycle.
     pub fn reach_unchecked(&self, entry: usize, control: &dyn Control) -> Result<Reach, Failure> {
+        let mut resolver = self.reference_resolver();
         let mut out = Reach::default();
         let mut queue = VecDeque::from([entry]);
         while let Some(id) = queue.pop_front() {
@@ -1719,7 +1740,7 @@ impl SchemaSpace {
                                 "reference is not a string",
                             )
                         })?;
-                        let target = self.resolve(id, reference)?;
+                        let target = resolver.resolve_with_missing(id, reference, &mut |_| {})?;
                         out.targets
                             .insert((id, keyword == "$dynamicRef"), target.clone());
                         out.edges.entry(id).or_default().push(target.node);
@@ -2101,6 +2122,7 @@ mod projection_tests {
                 supplied,
                 local,
                 identity_bytes: 0,
+                names: std::sync::OnceLock::new(),
                 packaged,
                 custom: custom::Custom::default(),
             }

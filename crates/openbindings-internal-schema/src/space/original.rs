@@ -17,33 +17,141 @@ pub enum QueryFailure {
     UnsupportedCapability(&'static str),
 }
 
+/// Compact identifier work owned by one inspection or preparation run.
+/// Dropping this resolver releases its query inputs, even when the source
+/// environment is kept for later requests. It does not cache query results.
+pub struct ReferenceResolver<'a> {
+    space: &'a SchemaSpace,
+    pub(super) names: Option<Box<names::Names<'a>>>,
+}
+impl std::fmt::Debug for ReferenceResolver<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ReferenceResolver").finish_non_exhaustive()
+    }
+}
+
 impl SchemaSpace {
+    pub fn reference_resolver(&self) -> ReferenceResolver<'_> {
+        ReferenceResolver {
+            space: self,
+            names: None,
+        }
+    }
+    /// Resolve one reference without retaining its query inputs in the space.
+    pub fn query(&self, holder: usize, reference: &str) -> Result<Target, QueryFailure> {
+        self.reference_resolver().query(holder, reference)
+    }
+}
+
+impl ReferenceResolver<'_> {
+    pub fn space(&self) -> &SchemaSpace {
+        self.space
+    }
+    pub(super) fn resolve_with_missing(
+        &mut self,
+        holder: usize,
+        reference: &str,
+        missing: &mut impl FnMut(&str),
+    ) -> Result<Target, Failure> {
+        SchemaSpace::resolve_query(self.query(holder, reference), missing).map_err(|mut failure| {
+            failure.location = Some(self.space.location(holder));
+            failure
+        })
+    }
     /// Resolve any URI reference, including a dialect URI that is not the
     /// value of a reference keyword. No registry projection or I/O is involved.
     /// Unknown dialect roots are observable; dialect-dependent inventory
     /// queries refuse rather than assuming 2020-12 positions.
-    pub fn query(&self, holder: usize, reference: &str) -> Result<Target, QueryFailure> {
-        if !uri::valid(reference) {
-            return Err(QueryFailure::MalformedReference);
-        }
-        self.query_identifier_interpretation(holder)?;
-        let current = self.resource(self.node(holder).resource);
-        if !self.eligible(self.node(holder).resource) {
-            return Err(QueryFailure::IdentityConflict);
-        }
-        let resource = if current.anonymous && !uri::absolute(reference) {
-            if !reference.is_empty() && !reference.starts_with('#') {
-                return Err(QueryFailure::InvalidIdentifier);
-            }
-            self.node(holder).resource
-        } else {
-            let absolute = uri::compared_id(current.base.as_deref(), reference)
-                .ok_or(QueryFailure::InvalidIdentifier)?;
-            self.named_resource(&absolute)?
-        };
-        self.query_fragment(resource, reference)
+    pub fn query(&mut self, holder: usize, reference: &str) -> Result<Target, QueryFailure> {
+        self.query_controlled(holder, reference, &|| false)
+            .expect("unbounded query control")
     }
 
+    /// Reserve compact query input and any owned missing name before doing the
+    /// corresponding work. The environment already reserves its identity index.
+    pub fn query_controlled(
+        &mut self,
+        holder: usize,
+        reference: &str,
+        control: &dyn Control,
+    ) -> Result<Result<Target, QueryFailure>, Failure> {
+        let space = self.space;
+        let reserve = |length: usize, work: usize, reservation: usize| -> Result<(), Failure> {
+            let bytes = length
+                .checked_mul(16)
+                .and_then(|n| n.checked_add(reservation))
+                .ok_or_else(|| {
+                    control.allocation_limit_reached();
+                    Failure::new(
+                        FailureReason::LimitExceeded,
+                        "preparation-sdk-reservation-bytes",
+                        "reference resolution reservation overflow",
+                    )
+                })?;
+            control.charge_work(bytes - reservation + work)?;
+            control.charge_allocation(bytes)
+        };
+        reserve(reference.len(), 1, 512)?;
+        let mut query = || -> Result<_, QueryFailure> {
+            if !uri::valid(reference) {
+                return Err(QueryFailure::MalformedReference);
+            }
+            space.query_identifier_interpretation(holder)?;
+            let resource = space.node(holder).resource;
+            let current = space.resource(resource);
+            if !space.eligible(resource) {
+                return Err(QueryFailure::IdentityConflict);
+            }
+            if current.anonymous && !uri::absolute(reference) {
+                if !reference.is_empty() && !reference.starts_with('#') {
+                    return Err(QueryFailure::InvalidIdentifier);
+                }
+                return Ok(Ok(resource));
+            }
+            // Eligibility already proves this carrier owns its base name.
+            // A fragment-only reference preserves that name. This also avoids
+            // building a namespace index for a deep chain with one local ref.
+            if current.fragment_base && (reference.is_empty() || reference.starts_with('#')) {
+                return space
+                    .selected_resource(Some(NameSelection {
+                        origin: current.origin,
+                        carrier: Some(resource),
+                        exact_contained: current.origin == ResourceOrigin::Contained,
+                    }))
+                    .map(|selected| Ok(selected.expect("eligible base carrier")));
+            }
+            // These resolutions cannot inherit any base text. Keep the string
+            // resolver's input-sized path and avoid compact setup altogether.
+            if current.base.is_none() || uri::absolute(reference) {
+                let name =
+                    uri::compared_id(None, reference).ok_or(QueryFailure::InvalidIdentifier)?;
+                return space.named_resource(&name).map(Ok);
+            }
+            let names = self
+                .names
+                .get_or_insert_with(|| Box::new(names::Names::new(space)));
+            let (handle, selected) = names.select(resource, current.base.as_deref(), reference)?;
+            space
+                .selected_resource(selected)
+                .map(|selected| match selected {
+                    Some(resource) => Ok(resource),
+                    None => Err(handle),
+                })
+        };
+        let resource = match query() {
+            Err(cause) => return Ok(Err(cause)),
+            Ok(Ok(resource)) => resource,
+            Ok(Err(handle)) => {
+                let names = self.names.as_ref().expect("queried name inventory");
+                reserve(names.length(handle), 0, 0)?;
+                return Ok(Err(QueryFailure::ResourceUnavailable(names.spell(handle))));
+            }
+        };
+        Ok(space.query_fragment(resource, reference))
+    }
+}
+
+impl SchemaSpace {
     /// One selection implementation for ordinary references and custom dialect
     /// certificates. A certificate does not acquire a second alias registry.
     pub(super) fn named_resource(&self, absolute: &str) -> Result<usize, QueryFailure> {
@@ -55,6 +163,14 @@ impl SchemaSpace {
         let normalized =
             || crate::input_policy::canonical_uri(name).and_then(|name| self.name(&name));
         let selected = exact.or_else(normalized);
+        self.selected_resource(selected)?
+            .ok_or_else(|| QueryFailure::ResourceUnavailable(name.into()))
+    }
+
+    fn selected_resource(
+        &self,
+        selected: Option<NameSelection>,
+    ) -> Result<Option<usize>, QueryFailure> {
         // Additional opaque claims cannot erase a conflict already established
         // by the original carriers. Preserve that determinate evidence before
         // refusing selections that would require proving namespace absence.
@@ -83,9 +199,9 @@ impl SchemaSpace {
             Some(NameSelection {
                 carrier: Some(resource),
                 ..
-            }) if self.eligible(resource) => Ok(resource),
+            }) if self.eligible(resource) => Ok(Some(resource)),
             Some(_) => Err(QueryFailure::IdentityConflict),
-            None => Err(QueryFailure::ResourceUnavailable(name.into())),
+            None => Ok(None),
         }
     }
 

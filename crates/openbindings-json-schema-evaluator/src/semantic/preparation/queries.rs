@@ -29,13 +29,13 @@ impl Ledger for Preparation<'_> {
 }
 
 pub(super) struct Queries<'s> {
-    space: &'s SchemaSpace,
+    resolver: openbindings_internal_schema::ReferenceResolver<'s>,
     entries: Entries<Key<'s>, ReferenceQuery>,
 }
 impl<'s> Queries<'s> {
     pub(super) fn new(space: &'s SchemaSpace) -> Self {
         Self {
-            space,
+            resolver: space.reference_resolver(),
             entries: Entries::default(),
         }
     }
@@ -46,7 +46,7 @@ impl<'s> Queries<'s> {
         control: &dyn Control,
     ) -> Result<ReferenceQuery, PreparationFailure> {
         let mut ledger = Preparation(control);
-        let space = self.space;
+        let space = self.resolver.space();
         let original = space.node(node);
         // query() reads these holder-dependent facts, then the immutable
         // resource/namespace/fragment inventories. Do not normalize the key.
@@ -62,21 +62,9 @@ impl<'s> Queries<'s> {
         if let Some(index) = self.entries.find(&key, work, &mut ledger)? {
             return Ok(self.entries.value(index).clone());
         }
-        // Misses retain the full URI parsing/normalization reservation. The
-        // fixed envelope includes the query-result Arc and resolver headers.
-        let base = space
-            .resource(original.resource)
-            .base
-            .as_ref()
-            .map_or(0, String::len);
-        let bytes = base
-            .checked_add(reference.len())
-            .and_then(|n| n.checked_mul(16))
-            .and_then(|n| n.checked_add(512))
-            .ok_or_else(|| ledger.allocation_limit())?;
-        control.charge_work(bytes - 511)?;
-        control.charge_allocation(bytes)?;
-        let query = Arc::new(space.query(node, reference));
+        // The original resolver reserves its compact input, then reserves an
+        // expanded name only if the query result will own that missing URI.
+        let query = Arc::new(self.resolver.query_controlled(node, reference, control)?);
         // Saturating this optimization does not refuse otherwise admissible
         // schemas. Existing hits remain useful; new keys use the ordinary path.
         if self.entries.len() < MAX_KEYS {
