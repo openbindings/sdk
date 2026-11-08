@@ -1,7 +1,0 @@
-{
-  "wasm_sha256": "e15c7282a6dd3e35dfbb24024060cff3805f65ae81255542a5e100a2d5da5b71",
-  "linear_stack_bytes": 1048576,
-  "wrapper_sha256": "c3719a99037d9f51abf8bc8af7530a4c8364fd0cc12bbaee920255ae55ec2479",
-  "copied_library_sha256": "03d5e9dd96ce8b0b26a26a722bfaeb20d18830c9e287501ce62346f3f1325853",
-  "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)\nbinary: rustc\ncommit-hash: b940084d7eb6a299eb4bfeb8e34901bc051e7ac4\ncommit-date: 2026-09-28\nhost: aarch64-apple-darwin\nrelease: 1.99.0\nLLVM version: 23.1.1\n"
-}

@@ -1,7 +1,0 @@
-+ node /Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/packages/typescript/scripts/check-api-reference.mjs
-{
-  "uniqueExports": 69,
-  "checkedEntries": 426,
-  "failures": []
-}
-+ node /Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/packages/typescript/node_modules/typescript/bin/tsc --noEmit --strict --target ES2022 --module NodeNext --lib ES2022,DOM,DOM.Iterable,ESNext.Disposable --skipLibCheck /Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/packages/typescript/test/reference.types.ts

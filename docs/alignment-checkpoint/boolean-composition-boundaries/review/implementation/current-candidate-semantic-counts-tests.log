@@ -1,8 +1,0 @@
-
-running 3 tests
-test semantic::counts::tests::concrete_count_needs_no_formula_allocation_and_keeps_exact_bounds ... ok
-test semantic::counts::tests::original_engine_completes_concrete_contains_and_required_annotations ... ok
-test semantic::counts::tests::promotion_keeps_shared_and_complementary_effects_correlated ... ok
-
-test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 228 filtered out; finished in 0.05s
-

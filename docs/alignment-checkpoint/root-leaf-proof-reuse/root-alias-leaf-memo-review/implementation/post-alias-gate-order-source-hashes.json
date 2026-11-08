@@ -1,9 +1,0 @@
-{
-  "status": "static design GO; not implementation or performance qualification",
-  "files": {
-    "sdk/crates/openbindings-json-schema-evaluator/src/semantic/execution/mod.rs": "60c64c3f2689ff30ce412a3f184795532b7682b042d929d909fbba672766d588",
-    "sdk/crates/openbindings-json-schema-evaluator/src/semantic/readings.rs": "1a2663e4a817422c165ebf1592a017dc2d3f56ee1dd1a54daf035505344bc0e9",
-    "sdk/crates/openbindings-json-schema-evaluator/src/semantic/mod.rs": "160cdb7dc2f39a613542b49bd87c037d8fa76e34411ebda71909c29db15f4473",
-    "sdk/crates/openbindings-internal-json/src/backend.rs": "51ef071db4faa20b1a8ab6f975b1f69bc49823a6c317b0ffc32edf0cf99d286e"
-  }
-}

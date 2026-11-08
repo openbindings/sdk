@@ -1,7 +1,0 @@
-{
-  "sdk/crates/openbindings-json-schema-evaluator/src/semantic/value_predicates.rs": "29b5bc69a1f3c7f693ffd5ffd93de9df19a26f8a3da65d85f5933f54807e6eff",
-  "sdk/crates/openbindings-json-schema-evaluator/src/semantic/primitive.rs": "d6e78283099ea2d1139d4e4f745d52f1fcf1575e9528f4f1b3d664a4d8708f1d",
-  "sdk/crates/openbindings-json-schema-evaluator/src/semantic/decision.rs": "ced2edf6266de31bdc8f71dc2a3b5c40a80fc748797d971044f27d90096c2c3a",
-  "sdk/crates/openbindings-internal-json/src/decimal.rs": "48bbb2be0f662e4ef3bccf2449428aa4314d9317f2e557644c4ea7ae2a3ecafb",
-  "sdk/crates/openbindings-json-schema-evaluator/src/semantic/readings.rs": "7eac54dc4ec9c58e203434b72555a499fa218c82f5d5853f6bede5364358aff7"
-}

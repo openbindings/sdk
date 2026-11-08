@@ -1,9 +1,0 @@
-# Narrow integer predicate checkpoint
-
-The integer type predicate now returns true after a successful i64 parse, without constructing an unneeded Decimal. The original ordered work charge precedes parsing. Every other token retains the same reservation and exact Decimal fallback. Number-kind guards, type-union traversal, literal equality, uniqueness, limits and ownership are unchanged. No compiler inlining experiment is retained.
-
-The independent bounded review passes on Rust 1.99 and 1.88: 52 frozen exact-token answers, 520 budget/pre-spent rows and 520 direct interruption comparisons per version; 106 unchanged complete public observations; 36 identical work/storage/control traces and 617 public stop traces. All 52 paired old/new allocator cases agree within each build and release their storage. Five cross-compiler wide-fallback allocation differences occur on both implementations; they are preserved rather than incorrectly attributed to this change.
-
-Parent validation passes the five value-predicate unit tests (including differential policy and exact/one-below controls), six exact-operand integration tests, warnings-denied lint and all 1,546 required value observations. Selected paired evaluation medians against `5cf704e` improve integer arrays about 5% and large objects about 6%; other selected jobs change little. Preparation is also sampled. These incremental measurements do not close G6 or establish recovery against the original SDK baseline.
-
-Receipts pin the actual source, compiler and executables; binaries and bulk source copies stay in the coordinator. Historical commands refer to that layout, not a standalone runner in this directory. Final whole-workspace, package, release/host and complete performance qualification remain required. The feature branch is a development checkpoint, not a release or merge.

@@ -1,9 +1,0 @@
-{
-  "source": "crates/openbindings-json-schema-evaluator/src/pattern/identifier/ranges.rs",
-  "original_bytes": 33205,
-  "checkout_bytes": 33205,
-  "changed": false,
-  "crlf_count": 0,
-  "original_sha256": "75449a76dd96fd8e7842b2f73f3fee5a39537147e35990af10392a7400813110",
-  "checkout_sha256": "75449a76dd96fd8e7842b2f73f3fee5a39537147e35990af10392a7400813110"
-}

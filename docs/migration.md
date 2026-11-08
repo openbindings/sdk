@@ -34,6 +34,6 @@ Use current examples and type documentation rather than translating old names
 mechanically. Absence of an input/output schema, a present boolean schema, JSON
 null, and a preparation refusal have distinct meanings.
 
-The [alignment checkpoint](alignment-checkpoint.md) records implemented work,
-exact authority pins and remaining qualification gates. This development branch
+Historical implementation and qualification records are kept in the project's
+[alignment checkpoint records](https://github.com/openbindings/project/tree/main/records/history/sdk-alignment-checkpoint-2026-11-08). This development branch
 is not a release or a completed whole-SDK alignment claim.

@@ -1,8 +1,0 @@
-{
-  "base": "5cf704eb6cbd8f0d36b916ba53c1def4ebb20d0a",
-  "files": {
-    "src/semantic/value_predicates.rs": "e1731c39927b297201afe4715ee6386aa670fff2ea5eb75f69cfd54a485a2b2a",
-    "src/semantic/primitive.rs": "7d619cea1d032cf9df1ec87b18d1f4b680744de9a82999afe34290e82f3ca0a1"
-  },
-  "unchanged_readings": "7eac54dc4ec9c58e203434b72555a499fa218c82f5d5853f6bede5364358aff7"
-}

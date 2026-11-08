@@ -1,8 +1,0 @@
-
-running 3 tests
-test review_semantic_interruption::direct_validator_checks_cancellation_before_inspecting_duplicates ... ok
-test review_semantic_interruption::every_recursive_refinement_and_certificate_stop_keeps_clean_retries ... ok
-test review_semantic_interruption::interruption_does_not_poison_a_prepared_predicate ... ok
-
-test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 242 filtered out; finished in 2.06s
-

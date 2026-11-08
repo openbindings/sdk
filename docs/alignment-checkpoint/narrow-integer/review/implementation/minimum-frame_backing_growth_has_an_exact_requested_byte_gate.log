@@ -1,7 +1,0 @@
-
-running 1 test
-test semantic::execution::tests::frame_backing_growth_has_an_exact_requested_byte_gate ... frame_bytes=256 phase_bytes=144 state_bytes=64 witness_bytes=32 initial_backing_bytes=1024
-ok
-
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 263 filtered out; finished in 0.00s
-

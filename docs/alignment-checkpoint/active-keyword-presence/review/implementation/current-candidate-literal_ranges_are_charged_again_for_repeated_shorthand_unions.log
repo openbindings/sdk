@@ -1,6 +1,0 @@
-
-running 1 test
-test semantic::patterns::preparation::tests::literal_ranges_are_charged_again_for_repeated_shorthand_unions ... ok
-
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 257 filtered out; finished in 0.00s
-

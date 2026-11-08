@@ -1,7 +1,0 @@
-{
-  "crates/openbindings-source-pull/src/client.rs": "bbb561b9d02192bcb12b641b854fed826f417aeac582e0bf8cf8306c0a2e48bd",
-  "crates/openbindings-source-pull/tests/clients.rs": "fb539f987f0608e5f26be4cdfae8646acbe46a0ee1ec6b1a7e37152fa21a0f08",
-  "crates/openbindings-kind-description/src/client.rs": "d78f92482bbf17a9924852b3b0f4d8282bfcba543deef40240916928bc2683ce",
-  "crates/openbindings-kind-description/tests/borrowed_send.rs": "370c90fee63315da88663367d71926c1040a98e36d75a1deedd4602ef963e5c7",
-  "crates/openbindings-internal-cancellation/src/lib.rs": "b8b51860a0890dd6d69a4e3752d9e11e2dd05ab1d6dce5ce80f9e2656028e486"
-}

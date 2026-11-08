@@ -1,7 +1,0 @@
-{
-  "rows": 11245,
-  "failures": [],
-  "input_sha256": "194810d2edaf332c21c29516b6bb1a4298c5b69d18f382bdc77b6758574d9a6b",
-  "binary_sha256": "6f6482f104197460205a40fa295760150c3e90e42285656d2763fba6bd6bf3ab",
-  "scope": "Exact structural quantities vs frozen independent source model; no time or allocation promise"
-}

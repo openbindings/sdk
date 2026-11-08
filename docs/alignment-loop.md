@@ -35,6 +35,6 @@ dependency.
 ## Status and evidence
 
 Use [current integration guidance](migration.md) for the supported responsibilities
-and the [historical checkpoint](alignment-checkpoint.md) for dated evidence.
+and the [alignment checkpoint records](https://github.com/openbindings/project/tree/main/records/history/sdk-alignment-checkpoint-2026-11-08) for dated evidence.
 Qualification of a candidate requires its own source, commands and results;
 previous checkpoint totals do not qualify a later candidate.

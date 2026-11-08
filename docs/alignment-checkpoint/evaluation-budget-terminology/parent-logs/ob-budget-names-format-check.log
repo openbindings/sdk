@@ -1,3 +1,0 @@
-Checking formatting...
-[warn] packages/typescript/test/conformant-access.test.mjs
-[warn] Code style issues found in the above file. Run Prettier with --write to fix.

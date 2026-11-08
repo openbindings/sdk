@@ -1,9 +1,0 @@
-{
-  "crates/openbindings-json-schema-evaluator/src/semantic/patterns.rs": "3e8c01647453af5717ae12a7d9becc3badf8ec8597e03cb092506b0a5e7c0fa9",
-  "crates/openbindings-json-schema-evaluator/src/semantic/patterns/cache.rs": "c5ba521c8c91d206886efd324214325f67d66918e679581ef02413e93865b6bd",
-  "crates/openbindings-json-schema-evaluator/src/semantic/patterns/cache/tests.rs": "420e44a8f7932094cdbad08883f6de251edb849d9f4e07d126055da95ebe1d1c",
-  "crates/openbindings-json-schema-evaluator/src/semantic/decision.rs": "b9535c18bf1af59e9cc3e2fb07e5f9a8e5f6d532bfc2190329fe1ba046c29c62",
-  "packages/typescript/test/pattern-cache.mjs": "a7d65e845f4950a2e2d6504ea3fc101c60414fab96549bf8b3f7eeb71fc95ca0",
-  "packages/typescript/test/pattern-cache.test.mjs": "2d2368bdde56452d68f98ca5872393c1371d9174a80b64e5c237149696465d5e",
-  "packages/typescript/test/browser.mjs": "1b74064d53991257afae3f1cabbad5bee39a23838a35b5b26fb88f229991475d"
-}

@@ -1,8 +1,0 @@
-   Compiling openbindings-schema-evaluator-test-support v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-schema-evaluator-test-support)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.44s
-     Running `/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/debug/examples/replay`
-Evaluator replay: executing all value cases
-Evaluator replay: 1546 value observations; collecting document admission evidence
-Evaluator replay: serializing the complete receipt
-Evaluator replay: writing 3201274 receipt bytes
-Evaluator replay: receipt written; checking success

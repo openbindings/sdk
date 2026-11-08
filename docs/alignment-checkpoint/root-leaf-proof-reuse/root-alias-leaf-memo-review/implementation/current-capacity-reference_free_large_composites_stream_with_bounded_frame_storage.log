@@ -1,8 +1,0 @@
-
-running 1 test
-test semantic::summary_tests::reference_free_large_composites_stream_with_bounded_frame_storage ... reference_free branches=6 items=4096 work=627259
-reference_free branches=29 items=4096 work=2699835
-ok
-
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 235 filtered out; finished in 0.69s
-

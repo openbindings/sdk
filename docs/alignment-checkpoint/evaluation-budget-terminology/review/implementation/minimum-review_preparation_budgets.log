@@ -1,8 +1,0 @@
-
-running 3 tests
-test review_preparation_budgets::a_cached_inventory_does_not_reset_the_remaining_compiler_work ... ok
-test review_preparation_budgets::neither_compiled_nor_semantic_preparation_can_ignore_an_exhausted_attempt ... ok
-test review_preparation_budgets::original_meta_matching_obeys_each_attempt_and_retries_without_poisoning ... ok
-
-test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 208 filtered out; finished in 0.42s
-

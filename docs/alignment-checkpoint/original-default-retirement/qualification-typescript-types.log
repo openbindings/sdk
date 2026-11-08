@@ -1,4 +1,0 @@
-
-> @openbindings/sdk@0.2.0-alpha.1 test:types
-> tsc -p tsconfig.types.json
-

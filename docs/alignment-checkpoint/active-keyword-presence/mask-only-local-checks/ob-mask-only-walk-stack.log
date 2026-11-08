@@ -1,9 +1,0 @@
-   Compiling openbindings-json-schema-evaluator v0.2.0-alpha.1 (/Users/matt/Code/ob-pj/openbindings/sdk-migration/sdk/crates/openbindings-json-schema-evaluator)
-    Finished `release` profile [optimized] target(s) in 13.76s
-     Running tests/walk_stack.rs (/Users/matt/Code/ob-pj/openbindings/sdk-migration/target/alignment/release/deps/walk_stack-519585e9beac7f8e)
-
-running 1 test
-test the_longest_admitted_walks_prepare_on_a_stack_of_the_size_given ... ok
-
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
-

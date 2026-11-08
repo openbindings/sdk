@@ -1,7 +1,0 @@
-
-running 2 tests
-test semantic::summary_tests::prepared_operand_aggregate_fallback_and_comparison_costs_remain_real ... ok
-test semantic::summary_tests::prepared_operand_fallback_preserves_large_unused_and_reached_counts ... ok
-
-test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 253 filtered out; finished in 0.20s
-
