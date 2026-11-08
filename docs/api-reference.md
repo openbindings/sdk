@@ -145,7 +145,14 @@ Changing resources requires a new preparation.
 
 `references_with_resources` inspects document references and transitively reached
 supplied resources within its existing traversal limits. A complete report can
-contain unresolved entries. For unavailable resources, the refusal's `resource_uri`
+contain unresolved entries. Missing or malformed `openbindings` declarations use
+0.2's schema positions and resolution rules, matching validation of a text that
+declares no version. This assumption adds no limitation; a complete traversal is
+complete. Well-formed unsupported versions and duplicate member names still
+produce empty, incomplete reports. Each `Reference` retains the original keyword
+location, spelling and static resolution result. The report retains its existing
+256-schema depth stop and 8 MiB aggregate pointer allowance, including reference,
+target and refusal locations. For unavailable resources, the refusal's `resource_uri`
 (TypeScript `resourceUri`) gives the resolved missing identity. Preparation can
 still succeed; evaluation reports `NoVerdict(ResourceUnavailable)` when it cannot
 decide without that content, with the original reference location when known.

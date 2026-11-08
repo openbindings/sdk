@@ -243,7 +243,7 @@ abstract class DocumentSnapshot extends Managed {
       maxDepth: maxDepth!,
     });
   }
-  /** Inspect original schema references without fetching resources or claiming conformance. */
+  /** Inspect original schema references without fetching resources or claiming conformance. Missing or malformed openbindings declarations use 0.2's rules without adding a limitation; well-formed unsupported versions and duplicate member names are refused. */
   references(options: ReferenceOptions = {}): ReferenceReport {
     const resources = options.resources,
       empty = resources ? undefined : new ExternalSchemas();

@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-11-07 draft reference inspection (unreleased)
+
+- Inspect drafts with missing or malformed `openbindings` declarations under
+  0.2's rules, matching validation. A complete traversal is complete without an
+  assumed-version limitation. Keep refusal of well-formed unsupported versions
+  and duplicate member names, and retain the existing depth and pointer bounds.
+- Qualify matching reference order, targets, dynamic lookup and unresolved
+  results with and without supplied resources in Rust and TypeScript.
+
 ## 2026-11-07 compiled decimal peak selection (unreleased)
 
 - Admit over-estimate acyclic bounded decimal values when one comparison's

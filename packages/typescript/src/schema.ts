@@ -300,7 +300,7 @@ export interface ReferenceRefusal {
   resourceUri: string | null;
 }
 
-/** One reference keyword in a supported schema position. Opaque content is not interpreted as schema; located is static resolution, and dynamicLookup still requires evaluation-time scope handling. */
+/** One reference keyword in a supported schema position. Missing or malformed openbindings declarations use 0.2's schema positions and resolution rules. Opaque content is not interpreted as schema; located is static resolution, and dynamicLookup still requires evaluation-time scope handling. */
 export interface Reference {
   /** Original reference-keyword location. */
   location: SchemaOrigin;
@@ -327,6 +327,7 @@ export interface Reference {
 }
 
 /** Original-context reference inspection, separate from normative proof and preparation. complete describes traversal completion; a complete report can still contain unresolved reference results.
+ * Missing or malformed openbindings declarations use 0.2's rules, matching validation of a text declaring no version. This adds no limitation; a complete traversal is complete. Well-formed unsupported declarations and duplicate member names still prevent inspection.
  * Retains at most 8 MiB of aggregate generated-pointer bytes across reference, target and refusal locations: UTF-8, or two bytes per UTF-16 unit through an unpaired name. The first entry that does not fit stops traversal, sets complete to false and reports a limit-exceeded limitation with code `reference-pointer-bytes` and no omitted location.
  */
 export interface ReferenceReport {

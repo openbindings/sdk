@@ -223,6 +223,8 @@ pub enum ReferenceResolution {
 }
 #[derive(Clone, PartialEq, Eq, Serialize)]
 /// One `$ref` or `$dynamicRef` encountered in supported schema positions; opaque JSON content is not traversed as schema.
+/// Drafts with a missing or malformed `openbindings` declaration use the 0.2
+/// schema positions and resolution rules, just as document validation does.
 /// Later versions may add fields: read them by name and match with `..`.
 #[non_exhaustive]
 pub struct Reference {
@@ -245,6 +247,10 @@ impl std::fmt::Debug for Reference {
 }
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 /// Bounded original-context reference inspection, not conformance proof or successful schema preparation.
+/// A missing or malformed `openbindings` declaration is inspected under 0.2's
+/// rules, as specified for texts declaring no version. This assumption adds no
+/// limitation: a complete traversal of such a draft is complete. Well-formed
+/// unsupported declarations and duplicate member names still prevent inspection.
 /// Retains at most 8 MiB of aggregate generated-pointer bytes, including reference,
 /// target and refusal locations: UTF-8, or two bytes per UTF-16 unit through a
 /// name with an unpaired surrogate. The first entry that does not fit stops
@@ -266,8 +272,9 @@ use serde::Serialize;
 
 impl Document {
     /// Inspect schema references in an admitted draft without claiming conformance.
-    /// Opaque data is not traversed. No resource is fetched. An unsupported or
-    /// malformed version, duplicate member names, cancellation and traversal
+    /// Opaque data is not traversed. No resource is fetched. A missing or malformed
+    /// version uses 0.2's rules without adding a limitation. A well-formed
+    /// unsupported version, duplicate member names, cancellation and traversal
     /// limits produce an incomplete report with a structured limitation.
     pub fn references(&self) -> ReferenceReport {
         self.references_with_resources(ExternalSchemas::default(), &crate::control::NeverCancelled)
@@ -294,17 +301,6 @@ impl Document {
                 ResolverFailure,
                 "duplicate-members",
                 "duplicate member names prevent unambiguous reference inspection",
-            ))
-        } else if self
-            .value()
-            .get("openbindings")
-            .and_then(JsonRef::as_str)
-            .is_none_or(|version| check_version(version) != VersionDecision::Supported)
-        {
-            Some((
-                ResolverFailure,
-                "malformed-version",
-                "reference inspection requires a valid specification version declaration",
             ))
         } else {
             None

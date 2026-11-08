@@ -9,17 +9,12 @@ fn diagnostic_inspection_refuses_document_preconditions_without_schema_locations
             ReferenceRefusalReason::UnsupportedCapability,
         ),
         (
-            r#"{"operations":{}}"#,
-            "malformed-version",
-            ReferenceRefusalReason::ResolverFailure,
-        ),
-        (
-            r#"{"openbindings":1,"operations":{}}"#,
-            "malformed-version",
-            ReferenceRefusalReason::ResolverFailure,
-        ),
-        (
             r#"{"openbindings":"0.2.0","operations":{},"x":1,"x":2}"#,
+            "duplicate-members",
+            ReferenceRefusalReason::ResolverFailure,
+        ),
+        (
+            r#"{"openbindings":5,"openbindings":"0.2.0","operations":{}}"#,
             "duplicate-members",
             ReferenceRefusalReason::ResolverFailure,
         ),
@@ -39,6 +34,84 @@ fn diagnostic_inspection_refuses_document_preconditions_without_schema_locations
             ReferenceRefusalReason::Cancelled
         );
         assert_eq!(document.as_bytes(), text.as_bytes());
+    }
+}
+
+#[test]
+fn missing_or_malformed_versions_inspect_under_0_2_without_a_limitation() {
+    let body = r##""operations":{"op":{"input":{"allOf":[
+        {"$ref":"#/schemas/target"},
+        {"$dynamicRef":"#target"},
+        {"$ref":"#/schemas/missing"},
+        {"$ref":"https://example.test/external"}
+    ]}}},"schemas":{"target":{"$dynamicAnchor":"target"}},
+    "sources":{"s":{"kind":"k","data":{"$ref":"opaque"}}}"##;
+    let resources = ExternalSchemas::new([ExternalSchema {
+        uri: "https://example.test/external".into(),
+        document: JsonValue::parse(r##"{"$defs":{"target":true},"$ref":"#/$defs/target"}"##)
+            .unwrap(),
+    }])
+    .unwrap();
+    let control = AtomicBool::new(false);
+    let valid = Document::parse(format!(r#"{{"openbindings":"0.2.0",{body}}}"#)).unwrap();
+    let expected = valid.references();
+    let supplied = valid.references_with_resources(resources.clone(), &control);
+    assert!(expected.complete && supplied.complete);
+    assert!(expected.limitation.is_none() && supplied.limitation.is_none());
+    assert_eq!(expected.references.len(), 4);
+    assert_eq!(supplied.references.len(), 5);
+    assert!(matches!(
+        &supplied.references[0].resolution,
+        ReferenceResolution::Located { target, dynamic_lookup: false }
+            if target.pointer == "/schemas/target"
+    ));
+    assert!(matches!(
+        &supplied.references[1].resolution,
+        ReferenceResolution::Located { target, dynamic_lookup: true }
+            if target.pointer == "/schemas/target"
+    ));
+    assert!(matches!(
+        &supplied.references[2].resolution,
+        ReferenceResolution::Unresolved { detail }
+            if detail.reason == ReferenceRefusalReason::MissingTarget
+    ));
+    assert!(matches!(
+        &supplied.references[4].resolution,
+        ReferenceResolution::Located { target, dynamic_lookup: false }
+            if target.source_uri.as_deref() == Some("https://example.test/external")
+                && target.pointer == "/$defs/target"
+    ));
+    for declaration in [None, Some("1"), Some("5"), Some("null"), Some(r#""bad""#)] {
+        let member = declaration.map_or(String::new(), |v| format!(r#""openbindings":{v},"#));
+        let text = format!("{{{member}{body}}}");
+        let draft = Document::parse(&text).unwrap();
+        let validation = draft.validate().unwrap();
+        assert_eq!(validation.report().evidence["OBI-03"], Evidence::Violated);
+        assert_eq!(validation.report().evidence["OBI-12"], Evidence::Violated);
+        assert_eq!(draft.references(), expected);
+        assert_eq!(
+            draft.references_with_resources(resources.clone(), &control),
+            supplied
+        );
+        assert_eq!(
+            draft
+                .references_with_resources(resources.clone(), &AtomicBool::new(true))
+                .limitation
+                .unwrap()
+                .reason,
+            ReferenceRefusalReason::Cancelled
+        );
+        assert_eq!(draft.as_bytes(), text.as_bytes());
+    }
+    // Retain the earlier minimal precondition fixtures, now as complete reports.
+    for text in [
+        r#"{"operations":{}}"#,
+        r#"{"openbindings":1,"operations":{}}"#,
+    ] {
+        let report = Document::parse(text).unwrap().references();
+        assert!(report.complete);
+        assert!(report.references.is_empty());
+        assert!(report.limitation.is_none());
     }
 }
 #[test]
