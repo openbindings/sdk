@@ -1,0 +1,1 @@
+[{"required":["a"],"patternProperties":{"^a$":{"type":"integer"}},"additionalProperties":false},{"a":0,"b":1}]

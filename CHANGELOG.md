@@ -2,6 +2,11 @@
 
 ## 2026-11-07 compiled expansion selection (unreleased)
 
+- Generate boundary-biased schemas and values at default limits, comparing
+  evaluate and explain verdicts with an asserted compiled-route comparison floor.
+- Add five standalone cargo-fuzz targets, stable committed-corpus replay in the
+  verifier, and a pinned weekly/manual workflow that preserves crash artifacts.
+
 - Bound reference reports to the same 8 MiB generated-pointer allowance as
   conformance findings. Stop at the first omitted entry with
   `reference-pointer-bytes`, including located targets and refusal locations.

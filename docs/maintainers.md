@@ -172,3 +172,22 @@ The resource probe records warmed binding-versus-operation overhead and owner
 release; it does not claim HTTP parity, browser memory bounds, or arbitrary schema
 throughput.
 
+## Generated lane comparisons and fuzzing
+
+Run the seeded default-limit differential with
+`cargo test -p openbindings-json-schema-evaluator --lib default_limit_lane_differential -- --nocapture`.
+It generates 1,008 schemas, probes their boundaries, and prints verdict and
+compiled-route counts. The test asserts a compiled comparison floor. For a larger
+reproducible run, prefix the command with `OB_DIFFERENTIAL_CASES=20000` and
+`OB_DIFFERENTIAL_SEEDS=2f6b95d1c0a47e33,1,deadbeef,9e3779b97f4a7c15`.
+A disagreement prints the seed, case, exact schema/value and both outcomes.
+The older work-capped reference-placement test remains separate.
+
+`tools/verify.py` also runs the [fuzz harness](../fuzz/README.md)'s committed seed
+corpus on stable: `cargo test --locked --manifest-path fuzz/seeds/Cargo.toml --test seed_corpus`.
+For coverage-guided runs, install `nightly-2026-11-01` and `cargo-fuzz` 0.13.1, then
+run `cargo +nightly-2026-11-01 fuzz run lanes -- -max_total_time=120 -max_len=16384`
+from the repository root. Substitute `document`, `json_value`, `decimal` or
+`pattern` for the other targets. Crashes go to `fuzz/artifacts/<target>/`; the
+weekly/manual `Fuzz` workflow uploads them as `fuzz-artifacts-<run-id>`.
+See the harness guide for replay, minimization and campaign cost.

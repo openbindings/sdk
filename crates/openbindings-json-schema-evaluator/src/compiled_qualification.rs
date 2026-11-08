@@ -6,6 +6,7 @@ use serde_json::json;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 static HEALTHY: AtomicBool = AtomicBool::new(false);
 mod expansion;
+mod generated;
 mod literal_scratch;
 mod product_corpus;
 mod regex_search;

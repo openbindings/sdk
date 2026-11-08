@@ -1,0 +1,22 @@
+# Compile the identical target bodies without resolving a fuzz runtime on stable.
+[package]
+name = "openbindings-fuzz-seeds"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[lib]
+name = "openbindings_fuzz"
+path = "../src/lib.rs"
+
+[[test]]
+name = "seed_corpus"
+path = "tests/seed_corpus.rs"
+
+[dependencies]
+openbindings = { path = "../../crates/openbindings" }
+openbindings-internal-json = { path = "../../crates/openbindings-internal-json" }
+openbindings-json-schema-evaluator = { path = "../../crates/openbindings-json-schema-evaluator" }
+serde_json = "1.0.151"
