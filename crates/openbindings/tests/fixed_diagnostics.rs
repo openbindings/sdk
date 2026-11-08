@@ -398,7 +398,7 @@ fn independent_container_findings_keep_children_and_truthful_omissions() {
         ),
         (
             r#"{"openbindings":"0.2.0","operations":{},"bindings":{"b":{"description":42}}}"#,
-            vec!["/bindings/b/description", "/bindings/b"],
+            vec!["/bindings/b/description", "/bindings/b", "/bindings/b"],
         ),
         (
             r#"{"openbindings":"0.2.0","operations":{"op":{"aliases":[false,false]}}}"#,
@@ -429,5 +429,150 @@ fn independent_container_findings_keep_children_and_truthful_omissions() {
             })
             .collect();
         assert_eq!(actual, pointers);
+    }
+}
+
+#[test]
+fn fixed_schema_facts_are_exact_and_do_not_copy_document_values() {
+    use serde_json::json;
+    for (text, pointer, keyword, schema, details) in [
+        (
+            r#"{"openbindings":"0.2.0","operations":{"op":{}},"bindings":{"b":{"operation":"op"}}}"#,
+            "/bindings/b",
+            "required",
+            "/$defs/BindingEntry/required",
+            Some(json!({"kind":"required","member":"source"})),
+        ),
+        (
+            r#"{"openbindings":"0.2.0","operations":{"op":{"PRIVATE-key":"PRIVATE-value"}}}"#,
+            "/operations/op/PRIVATE-key",
+            "additionalProperties",
+            "/$defs/Operation/additionalProperties",
+            None,
+        ),
+        (
+            r#"{"openbindings":"0.2.0","operations":{"op":{"deprecated":"PRIVATE-value"}}}"#,
+            "/operations/op/deprecated",
+            "type",
+            "/$defs/Operation/properties/deprecated/type",
+            Some(json!({"kind":"type","expected":["boolean"]})),
+        ),
+        (
+            r#"{"openbindings":"0.2.0","operations":{"op":{"input":"PRIVATE-value"}}}"#,
+            "/operations/op/input",
+            "anyOf",
+            "/$defs/JSONSchema/anyOf",
+            None,
+        ),
+        (
+            r#"{"openbindings":"0.2.0","operations":{"op":{"input":{"$schema":"PRIVATE-value"}}}}"#,
+            "/operations/op/input",
+            "anyOf",
+            "/$defs/JSONSchema/anyOf",
+            None,
+        ),
+        (
+            r#"{"openbindings":"0.2.0","operations":{},"version":""}"#,
+            "/version",
+            "minLength",
+            "/properties/version/minLength",
+            Some(json!({"kind":"size-bound","bound":"1"})),
+        ),
+        (
+            r#"{"openbindings":"0.2.0","operations":{},"bindings":{"b":{"operation":"x","source":"s","preference":9007199254740992}}}"#,
+            "/bindings/b/preference",
+            "maximum",
+            "/$defs/BindingEntry/properties/preference/maximum",
+            Some(json!({"kind":"numeric-bound","bound":"9007199254740991"})),
+        ),
+    ] {
+        let validation = validate_document(text).unwrap();
+        let findings: Vec<_> = validation
+            .report()
+            .findings
+            .iter()
+            .filter(|f| f.rule == "OBI-02")
+            .collect();
+        assert_eq!(findings.len(), 1, "{text}");
+        let finding = findings[0];
+        assert_eq!(
+            finding.location.as_ref().unwrap().pointer.as_ref().unwrap(),
+            pointer
+        );
+        assert_eq!(finding.keyword, Some(keyword));
+        let origin = finding.schema.as_ref().unwrap();
+        assert_eq!(
+            origin.source_uri.as_deref(),
+            Some("https://openbindings.com/schema/openbindings-0.2.0.json")
+        );
+        assert_eq!(origin.pointer, schema);
+        assert_eq!(
+            finding
+                .details
+                .as_ref()
+                .map(|d| serde_json::to_value(d).unwrap()),
+            details
+        );
+        let facts =
+            serde_json::to_string(&(&finding.keyword, &finding.schema, &finding.details)).unwrap();
+        assert!(!facts.contains("PRIVATE"));
+        assert!(facts.len() <= 199);
+        assert_eq!(
+            validation.report(),
+            validate_document(text).unwrap().report()
+        );
+    }
+}
+
+#[test]
+fn missing_members_remain_distinct_and_many_fixed_facts_stay_bounded() {
+    for count in [1, 2048, 2049] {
+        let bindings = (0..count)
+            .map(|i| format!(r#""b{i}":{{}}"#))
+            .collect::<Vec<_>>()
+            .join(",");
+        let text =
+            format!(r#"{{"openbindings":"0.2.0","operations":{{}},"bindings":{{{bindings}}}}}"#);
+        let validation = validate_document(text).unwrap();
+        let report = validation.report();
+        assert_eq!(report.findings.len(), (2 * count).min(4096));
+        assert_eq!(report.findings_truncated, count > 2048);
+        assert_eq!(report.evidence["OBI-02"], Evidence::Violated);
+        let mut bytes = 0;
+        for pair in report.findings.as_chunks::<2>().0 {
+            for (finding, member) in pair.iter().zip(["operation", "source"]) {
+                assert_eq!(
+                    finding.details,
+                    Some(openbindings::ValueProblemDetails::Required {
+                        member: member.into()
+                    })
+                );
+                assert_eq!(finding.keyword, Some("required"));
+                let size =
+                    serde_json::to_vec(&(&finding.keyword, &finding.schema, &finding.details))
+                        .unwrap()
+                        .len();
+                assert!(size <= 199);
+                bytes += size;
+            }
+            assert_eq!(pair[0].location, pair[1].location);
+        }
+        assert!(bytes <= 4096 * 199);
+        let pointer_bytes: usize = report
+            .findings
+            .iter()
+            .map(|f| {
+                f.location
+                    .as_ref()
+                    .unwrap()
+                    .pointer
+                    .as_ref()
+                    .unwrap()
+                    .as_str()
+                    .unwrap()
+                    .len()
+            })
+            .sum();
+        assert!(pointer_bytes <= 8 * 1024 * 1024);
     }
 }

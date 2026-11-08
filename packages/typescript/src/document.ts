@@ -45,6 +45,7 @@ import type {
   ReferenceOptions,
   ReferenceReport,
   SchemaOrigin,
+  ValueProblemDetails,
 } from "./schema.js";
 
 /** Closed per-rule evidence partition: met establishes the rule; violated establishes a counterexample; inconclusive lacks proof; not-applicable records a failed prerequisite. Findings explain evidence but do not replace it. */
@@ -56,15 +57,21 @@ export interface Finding {
   rule: string;
   /** Evidence expressed by this finding; consult the report map for aggregate rule evidence. */
   status: Evidence;
-  /** Stable detailed diagnostic identifier. */
+  /** Stable detailed diagnostic identifier. Admission limits use byte-limit, depth-limit or node-limit. */
   code: string;
-  /** Original source coordinate, null only for a finding about no particular position, such as an input limit. */
+  /** Original source coordinate, null only when no position is available. Admission limits carry the parser offset with a null pointer. */
   location: SourceLocation | null;
   /** Human-readable explanation; render as text rather than HTML. */
   message: string;
+  /** Failed OBI-02 keyword from the published fixed schema; failed unions name the applicator. */
+  keyword?: string;
+  /** Keyword location in the published fixed schema, identified by sourceUri. */
+  schema?: SchemaOrigin;
+  /** Complete published-schema facts; never rejected document values. One required fact per missing member. Disallowed members use location alone; anyOf/oneOf, pattern and uniqueItems have no details. The pinned 0.2 schema's largest keyword/schema/details tuple is 198 serialized JSON bytes (199 in Rust JSON), guarded by an exhaustive schema test without a runtime fact-size cap. */
+  details?: ValueProblemDetails;
 }
 
-/** Normative OBI assessment at an exact specification revision. All rules retain independent evidence even if findings are omitted. Presentation retains at most 4096 findings and 8 MiB aggregate generated-pointer bytes (UTF-8, or two per UTF-16 unit for a pointer through a name with an unpaired surrogate); findingsTruncated records omissions without changing the conclusion. */
+/** Normative OBI assessment at an exact specification revision. All rules retain independent evidence even if findings are omitted. Presentation retains at most 4096 findings and 8 MiB aggregate generated-pointer bytes (UTF-8, or two per UTF-16 unit for a pointer through a name with an unpaired surrogate); the pinned 0.2 schema's largest keyword/schema/details tuple is 198 serialized JSON bytes (199 in Rust JSON), guarded by an exhaustive schema test without a runtime fact-size cap. findingsTruncated records omissions without changing the conclusion. */
 export interface ValidationReport {
   /** Applied specification release. */
   release: string;
@@ -178,7 +185,7 @@ function operationRaw(owner: Operation): wasm.WasmOperation {
   return raw;
 }
 
-/** Assess all normative document rules directly from exact source, including invalid JSON. Unsupported declared versions return version-refused; parse/limit failures become truthful evidence. Without `limits`, admits 32 MiB UTF-8 and 1,000,000 nodes at any nesting, as Rust's `validate_document` does; with them, as `validate_document_with_limits` does, unspecified entries keeping the JsonLimits defaults, including the 10,000-level nesting cap. A document past a limit leaves every rule inconclusive with input-limit findings naming the limit. Returns plain data with no handle to dispose. Malformed limits or options throw SdkError invalid-json-limits; initialization, wrong input types and literal unpaired UTF-16 text throw; represent unpaired units with JSON escapes or exact UTF-8 bytes. */
+/** Assess all normative document rules directly from exact source, including invalid JSON. Unsupported declared versions return version-refused; parse/limit failures become truthful evidence. Without `limits`, admits 32 MiB UTF-8 and 1,000,000 nodes at any nesting, as Rust's `validate_document` does; with them, as `validate_document_with_limits` does, unspecified entries keeping the JsonLimits defaults, including the 10,000-level nesting cap. A document past a limit leaves every rule inconclusive with byte-limit, depth-limit or node-limit findings at the parser offset. To admit more, pass limits.maxBytes, limits.maxDepth or limits.maxNodes respectively; messages contain no API advice. Returns plain data with no handle to dispose. Malformed limits or options throw SdkError invalid-json-limits; initialization, wrong input types and literal unpaired UTF-16 text throw; represent unpaired units with JSON escapes or exact UTF-8 bytes. */
 export function validateDocument(
   input: ExactInput,
   options: {

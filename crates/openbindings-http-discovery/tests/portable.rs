@@ -394,8 +394,8 @@ async fn a_raised_body_limit_validates_bodies_past_the_default_byte_limit() {
         }
     );
     // Only the bytes follow the bound: a body past the default nodes is
-    // undetermined, and its findings name validating the retained body with
-    // larger limits, which admits it.
+    // undetermined with node-limit findings at the parser offset. Validating
+    // the retained body with larger limits admits it.
     let nodes = format!(
         r#"{{"openbindings":"0.2.0","operations":{{}},"x-a":[{}0]}}"#,
         "0,".repeat(default.max_nodes)
@@ -404,11 +404,11 @@ async fn a_raised_body_limit_validates_bodies_past_the_default_byte_limit() {
     let DiscoveryOutcome::Undetermined { validation } = r.outcome else {
         panic!("expected an undetermined body, got {:?}", r.outcome)
     };
+    let parser = openbindings::JsonValue::parse(&nodes).unwrap_err();
     assert!(validation.report().findings.iter().all(|f| {
-        f.message.ends_with(
-            "; validate it with validate_document_with_limits and a larger JsonLimits::max_nodes \
-         (validateDocument with a larger limits.maxNodes in TypeScript)",
-        )
+        f.code == "node-limit"
+            && f.location.as_ref().unwrap().byte_offset == parser.byte_offset()
+            && f.message == "the document exceeds the admission limit of 1000000 JSON nodes"
     }));
     let body = r.body.expect("the body is retained");
     let raised = openbindings::validate_document_with_limits(
@@ -619,7 +619,7 @@ fn publication_refuses_every_unestablished_conformance_state() {
     let report = validation.report();
     assert_eq!(report.conclusion, Conformance::Undetermined);
     assert!(!report.findings.is_empty());
-    assert!(report.findings.iter().all(|f| f.code == "input-limit"));
+    assert!(report.findings.iter().all(|f| f.code == "node-limit"));
     // Publication applies the core document boundary, including opaque content.
     let error = Publication::from_bytes(
         br#"{"openbindings":"0.2.0","operations":{},"x-value":"\ud800"}"#,

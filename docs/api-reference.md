@@ -69,6 +69,35 @@ codes and evidence for logic, and treat explanatory messages as display text.
 The [complete finding-code table](../crates/openbindings/README.md#document-finding-codes)
 lists every stable `Finding.code`, its OBI rule and its meaning. It applies to
 Rust and TypeScript conformance reports, including parsing and admission limits.
+The former `input-limit` finding is now `byte-limit`, `depth-limit` or `node-limit`.
+Every rule remains inconclusive and carries the parser offset (no pointer).
+Messages describe the reached limit without API advice. To admit more, use
+`validate_document_with_limits` with a larger `JsonLimits::max_bytes`, `max_depth`
+or `max_nodes`, or `validateDocument` with `limits.maxBytes`, `maxDepth` or `maxNodes`.
+
+OBI-02 findings add optional `keyword`, `schema: SchemaOrigin` and
+`details: ValueProblemDetails`. The origin points into the published fixed schema
+at `https://openbindings.com/schema/openbindings-0.2.0.json`. For example, a binding
+missing `source` has keyword `required`, schema pointer `/$defs/BindingEntry/required`
+and details `{ "kind": "required", "member": "source" }`. Each missing member gets
+its own finding in required-array order. Type facts carry complete expected types;
+numeric/size bounds and enum choices use exact schema JSON token strings.
+Disallowed members are located by the finding pointer, with keyword
+`additionalProperties` and no detail containing the rejected name or value.
+
+Failed `anyOf` and `oneOf` stop at their applicator with no branch details, following
+the value evaluator's policy. In particular, a schema that is neither object nor
+boolean fails `/$defs/JSONSchema/anyOf`; guessing a branch would lose its constraints.
+The pinned OBI-02 schema has no `oneOf`. `pattern` and `uniqueItems` have no matching
+detail variant either. Guidance never copies document values or evaluates example
+or caller values. If keyword guidance is unavailable, the generic finding remains.
+
+`ValidationReport` retains at most 4096 findings and 8 MiB of source-pointer bytes.
+The pinned 0.2 schema's largest complete serialized `[keyword, schema, details]`
+tuple is 199 bytes in Rust JSON (198 in TypeScript JSON). An exhaustive schema
+test guards this fixed property; there is no runtime fact-size cap. Count and
+source-pointer omissions set `findings_truncated` (`findingsTruncated`), leaving
+rule evidence intact.
 
 ## Canonical entries
 

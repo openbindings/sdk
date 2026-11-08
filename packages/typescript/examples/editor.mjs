@@ -129,7 +129,7 @@ export function formatEditorResult(result) {
         `Document conformance: ${result.report.conclusion}.`,
         ...result.report.findings.map(
           (finding) =>
-            `${finding.rule}/${finding.code} (${finding.status}); ${sourceLocation(finding.location)}: ${finding.message}`,
+            `${finding.rule}/${finding.code} (${finding.status}); ${sourceLocation(finding.location)}: ${finding.message}${finding.keyword ? `; ${finding.keyword} at ${schemaLocation(finding.schema)}${finding.details ? `; ${JSON.stringify(finding.details)}` : ""}` : ""}`,
         ),
         ...(result.report.findingsTruncated
           ? [

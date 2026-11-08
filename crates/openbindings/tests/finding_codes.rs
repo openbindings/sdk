@@ -63,8 +63,17 @@ fn documented_finding_codes_match_source() {
     // Debug enumerates the parser codes forwarded to OBI-01 as well as fixed
     // emissions. Scan emission sites too, so a code Debug would redact fails here.
     let debug = quoted_strings(debug);
+    assert!(!debug.contains("input-limit"));
+    for code in ["byte-limit", "depth-limit", "node-limit"] {
+        assert!(debug.contains(code), "missing parser limit code: {code}");
+    }
     let mut emitted = debug.clone();
-    for (method, index) in [(".violation(", 2), (".mark(", 2), (".mark_at(", 3)] {
+    for (method, index) in [
+        (".violation(", 2),
+        (".mark(", 2),
+        (".mark_at(", 3),
+        (".mark_at_fact(", 3),
+    ] {
         for call in production.split(method).skip(1) {
             let code = argument(call, index);
             match code {

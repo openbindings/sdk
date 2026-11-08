@@ -99,38 +99,43 @@ fn native_names_compare_decoded_pairs_even_when_grammar_is_violated() {
 fn assessment_admission_is_caller_selected_and_precedes_version() {
     // all three limits precede a complete version declaration.
     let text = r#"{"openbindings":"0.3.0","operations":{},"x":[0]}"#;
-    for (limits, setting) in [
+    for (limits, code) in [
         (
             JsonLimits {
                 max_bytes: 10,
                 ..JsonLimits::default()
             },
-            "JsonLimits::max_bytes",
+            "byte-limit",
         ),
         (
             JsonLimits {
                 max_nodes: 2,
                 ..JsonLimits::default()
             },
-            "JsonLimits::max_nodes",
+            "node-limit",
         ),
         (
             JsonLimits {
                 max_depth: 1,
                 ..JsonLimits::default()
             },
-            "JsonLimits::max_depth",
+            "depth-limit",
         ),
     ] {
         let validation = validate_document_with_limits(text, limits).unwrap();
-        // Each refusal names the setting that raises its limit.
-        assert!(
-            validation
-                .report()
-                .findings
-                .iter()
-                .all(|f| f.message.contains(setting))
-        );
+        let parser = JsonValue::parse_with_limits(text, limits).unwrap_err();
+        assert_eq!(parser.code(), code);
+        for finding in &validation.report().findings {
+            assert_eq!(finding.code, code);
+            let at = finding.location.as_ref().unwrap();
+            assert_eq!(at.byte_offset, parser.byte_offset());
+            assert_eq!(at.line, 1);
+            assert_eq!(at.byte_column, at.byte_offset + 1);
+            assert_eq!(at.pointer, None);
+            assert!(!finding.message.contains("validate"));
+            assert!(!finding.message.contains("JsonLimits"));
+            assert!(!finding.message.contains("TypeScript"));
+        }
         assert_eq!(validation.report().conclusion, Conformance::Undetermined);
         assert!(
             validation
@@ -139,13 +144,7 @@ fn assessment_admission_is_caller_selected_and_precedes_version() {
                 .values()
                 .all(|v| *v == Evidence::Inconclusive)
         );
-        assert!(
-            validation
-                .report()
-                .findings
-                .iter()
-                .all(|f| f.code == "input-limit")
-        );
+        assert!(validation.report().findings.iter().all(|f| f.code == code));
     }
     assert!(validate_document_with_limits(text, JsonLimits::default()).is_err());
     let text = format!(
@@ -168,7 +167,7 @@ fn assessment_admission_is_caller_selected_and_precedes_version() {
 }
 
 #[test]
-fn the_default_byte_limit_admits_32_mib_and_names_its_setting_past_it() {
+fn the_default_byte_limit_admits_32_mib_and_locates_its_refusal() {
     let limit = JsonLimits::default().max_bytes;
     assert_eq!(limit, 32 * 1024 * 1024);
     let document = padded;
@@ -182,14 +181,15 @@ fn the_default_byte_limit_admits_32_mib_and_names_its_setting_past_it() {
     assert_eq!(report.conclusion, Conformance::Undetermined);
     assert_eq!(report.findings.len(), DOCUMENT_RULES.len());
     for finding in &report.findings {
-        assert_eq!(finding.code, "input-limit");
-        assert_eq!(finding.location, None);
+        assert_eq!(finding.code, "byte-limit");
+        let at = finding.location.as_ref().unwrap();
+        assert_eq!(at.byte_offset, limit);
+        assert_eq!(at.line, 1);
+        assert_eq!(at.byte_column, limit + 1);
+        assert_eq!(at.pointer, None);
         assert_eq!(
             finding.message,
-            "the document's 33554433 bytes exceed the 33554432-byte admission limit; \
-             validate it with validate_document_with_limits and a larger \
-             JsonLimits::max_bytes (validateDocument with a larger limits.maxBytes in \
-             TypeScript)"
+            "the document's 33554433 bytes exceed the 33554432-byte admission limit"
         );
     }
     // Raising the named setting admits the same document.
@@ -234,9 +234,7 @@ fn a_raised_byte_limit_admits_documents_to_it_and_they_keep_it_for_edits() {
     assert_eq!(refused.report().conclusion, Conformance::Undetermined);
     assert!(refused.report().findings.iter().all(|f| f.message
         == format!(
-            "the document's {} bytes exceed the {}-byte admission limit; validate it \
-             with validate_document_with_limits and a larger JsonLimits::max_bytes \
-             (validateDocument with a larger limits.maxBytes in TypeScript)",
+            "the document's {} bytes exceed the {}-byte admission limit",
             raised.max_bytes + 1,
             raised.max_bytes
         )));

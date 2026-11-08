@@ -29,7 +29,7 @@ export type ParseResult<T> =
 
 /** Coordinates in original UTF-8 source. byteOffset is zero-based; line and byteColumn are one-based. A byte column is not a JavaScript UTF-16 editor column: convert against the original source. Pointers are untrusted display data and repeated keys may share a pointer. */
 export interface SourceLocation {
-  /** Exact RFC 6901 pointer: from the value, document or resource a locate() call was asked of, or from the source's root for findings and metadata; empty string means that root. A member name with an unpaired UTF-16 unit keeps it, as a JavaScript string can. null only when the location precedes any value, as a syntax error does. Use byteOffset to distinguish duplicate key occurrences. */
+  /** Exact RFC 6901 pointer: from the value, document or resource a locate() call was asked of, or from the source's root for findings and metadata; empty string means that root. A member name with an unpaired UTF-16 unit keeps it, as a JavaScript string can. null for parser syntax errors and admission limits, where no value pointer is established. Use byteOffset to distinguish duplicate key occurrences. */
   pointer: string | null;
   /** Zero-based original UTF-8 byte offset. */
   byteOffset: number;

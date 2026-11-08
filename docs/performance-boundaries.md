@@ -862,8 +862,10 @@ the input it allocates:
   8 bytes per node of the array and, past 16 elements, 8 per element for its
   sorted positions; 9
   bytes per alias; and at most 4,096 findings
-  and 8 MiB of their pointers, with a table of 4 bytes per node (8 when an
-  unpaired surrogate occurs) once one finding's pointer has not fitted. The
+  and 8 MiB of their pointers. The pinned 0.2 schema's largest serialized OBI-02
+  keyword/schema/details tuple is 199 bytes (198 in TypeScript), guarded by an
+  exhaustive schema test with no runtime fact-size cap. A table of 4 bytes per node (8 when an
+  unpaired surrogate occurs) is built once one finding's pointer has not fitted. The
   fixed checks read every string in place: they would escape U+E000 only beside
   an unpaired surrogate, and a document holding one fails OBI-01 before they
   run.
@@ -1027,7 +1029,10 @@ The absolute full-validation peak was 17,949,677 bytes. Value cases exercise
 1,000- and 50,000-element arrays, directly, through a reference and under a work
 cap. These are bounds
 for the recorded fixtures, not all inputs. Document findings separately retain at
-most 4,096 entries and 8 MiB of pointers. Value explanations use Original and share its evaluation storage and work
+most 4,096 entries and 8 MiB of source pointers. OBI-02 keyword/schema/details
+tuples have a measured maximum of 199 serialized JSON bytes in the pinned 0.2
+schema (198 in TypeScript). An exhaustive schema test guards this property;
+there is no runtime fact-size cap. Value explanations use Original and share its evaluation storage and work
 allowances; exhausted diagnostics preserve an established failure with
 incomplete problems. See
 [allocation methodology](../tools/diagnostic-memory-probe/README.md) and

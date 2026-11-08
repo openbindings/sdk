@@ -289,10 +289,29 @@ Result records may gain properties: read the properties needed by the applicatio
 
 Document findings use exact JSON Pointers and UTF-8 byte coordinates in the assessed revision.
 A pointer keeps a member name's unpaired UTF-16 unit, as a JavaScript string can,
-and is null only for a syntax error. Render
+and is null for parser syntax errors and admission limits. Render
 pointers as text and convert byte offsets before selecting text in a JavaScript
-editor. Findings are capped at 4,096 and 8 MiB of pointers; `findingsTruncated`
-leaves rule evidence available. The [editor example](examples/editor.html)
+editor. OBI-02 findings carry `keyword`, `schema: SchemaOrigin` and optional
+`details: ValueProblemDetails` from the published fixed schema. Its `sourceUri` is
+`https://openbindings.com/schema/openbindings-0.2.0.json`; the pointer identifies
+the failing keyword. Required details name one missing member per finding in
+schema-array order, and type details list all expected types. Disallowed members
+use the finding pointer and `additionalProperties`, with no rejected name or value
+in details. Failed `anyOf` and `oneOf` stay at their applicator without branch
+facts. The pinned OBI-02 schema contains `anyOf` only. `pattern` and `uniqueItems`
+also have no detail variant. Numeric/size bounds and complete enum choices use
+exact schema JSON token strings. Core does not evaluate example or caller values.
+
+Admission limits emit `byte-limit`, `depth-limit` or `node-limit` for every rule,
+with the parser offset and null pointer. Messages contain plain limit explanations,
+without API advice. To admit more, call `validateDocument` with a larger
+`limits.maxBytes`, `limits.maxDepth` or `limits.maxNodes`, respectively.
+
+Findings are capped at 4,096 and 8 MiB of source pointers. The pinned 0.2 schema's
+largest serialized `[keyword, schema, details]` tuple is 198 bytes in TypeScript
+JSON (199 in Rust JSON). An exhaustive schema test guards this fixed property;
+there is no runtime fact-size cap. `findingsTruncated` records count and
+source-pointer omissions, leaving rule evidence available. The [editor example](examples/editor.html)
 shows source correction, Worker scheduling and coordinate conversion.
 
 Parsing, inspection, preparation and value validation run synchronously. An

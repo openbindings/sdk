@@ -47,6 +47,8 @@ fn internal_rows(context: &JsonValue) -> Vec<Row> {
     let problem = schema::fixed_schema::Problem {
         at: context.view(),
         message: SECRET.into(),
+        // Facts carry only a plan index; source operands are never copied here.
+        fact: Some(0),
     };
     vec![
         row("internal Location", &location),

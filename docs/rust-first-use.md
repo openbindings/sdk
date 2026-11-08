@@ -14,7 +14,8 @@ cargo run -p openbindings-json-schema-evaluator --example replacement
 
 The first example adds exact values and verdict handling. The replacement example
 keeps old work usable while a new document and resource set are installed.
-This caller diagnoses an unexpected document field, corrects it and prepares input:
+This caller diagnoses an unexpected document field, corrects it and prepares input.
+It uses `serde_json` to render structured finding facts:
 
 ```rust
 use openbindings::{validate_document, ExternalSchemas, PreparationLimits};
@@ -29,6 +30,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("{}/{} ({:?}) at {:?}: {}",
             finding.rule, finding.code, finding.status,
             pointer.map(ToString::to_string), finding.message);
+        if let Some(keyword) = &finding.keyword {
+            println!("Schema fact: {}", serde_json::to_string(&(
+                keyword, &finding.schema, &finding.details))?);
+        }
     }
     if validation.report().findings_truncated {
         println!("More findings were omitted; rule evidence remains available.");
@@ -70,6 +75,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 `validate_document` returns a document report or an unsupported-version refusal.
 It judges the bytes as they are: invalid UTF-8, a byte order mark or a JSON syntax
 error is an OBI-01 violation in the report, located like any other finding.
+Admission limits leave every rule inconclusive with `byte-limit`, `depth-limit` or
+`node-limit`, at the parser's byte offset and without a pointer. Messages describe
+the reached limit. To admit more, use `validate_document_with_limits` and raise
+`JsonLimits::max_bytes`, `max_depth` or `max_nodes`, respectively.
 A report can be conformant, non-conformant or undetermined. Only established
 conformance yields a `ConformantDocument`. Its typed field reads are infallible;
 raw editor reads retain the exact draft. `operations()` returns canonical `Operation`
@@ -211,7 +220,14 @@ interrupted evaluation leaves an existing validator available for another call.
 
 Document findings refer to the assessed revision using exact pointers, zero-based
 UTF-8 byte offsets and one-based lines and byte columns. Quote untrusted pointers
-for display. Finding truncation leaves rule evidence intact. Use codes and evidence
+for display. OBI-02 adds the failing `keyword`, a `schema` origin in the published
+fixed schema, and optional `ValueProblemDetails`: a missing required member,
+expected types or exact bounds. Disallowed members use the source pointer alone.
+Failed unions stay at `anyOf`/`oneOf` without speculative branch details.
+Facts never copy rejected document values. The pinned 0.2 schema's largest
+serialized `[keyword, schema, details]` tuple is 199 bytes, guarded by an exhaustive
+schema test with no runtime fact-size cap. Reports retain at most 4096 findings
+and 8 MiB of source pointers. Finding truncation leaves rule evidence intact. Use codes and evidence
 for program logic and messages for explanation. The API reference lists every
 [document finding code](api-reference.md#document-finding-codes) with its rule.
 

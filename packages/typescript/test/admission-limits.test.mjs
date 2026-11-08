@@ -17,9 +17,7 @@ const head = '{"openbindings":"0.2.0","operations":{},"x-fill":"';
 const padded = (bytes) => head + "a".repeat(bytes - head.length - 2) + '"}';
 const empty = '{"openbindings":"0.2.0","operations":{}}';
 const exceeded = (bytes, limit) =>
-  `the document's ${bytes} bytes exceed the ${limit}-byte admission limit; ` +
-  "validate it with validate_document_with_limits and a larger JsonLimits::max_bytes " +
-  "(validateDocument with a larger limits.maxBytes in TypeScript)";
+  `the document's ${bytes} bytes exceed the ${limit}-byte admission limit`;
 const editRefusal = (limit, rust, typescript) =>
   `document edit refused: the edited document exceeds its ${limit} limit; ` +
   `admit the document with a larger JsonLimits::${rust} (limits.${typescript} in TypeScript)`;
@@ -27,13 +25,19 @@ const parsed = (result) => {
   assert.equal(result.status, "parsed");
   return result.value;
 };
-// Every rule inconclusive, each finding an unlocated input-limit with `message`.
-const undetermined = (report, message) => {
+// Every rule is inconclusive at the parser offset, with its specific code.
+const undetermined = (report, message, code, byteOffset) => {
   assert.equal(report.conclusion, "undetermined");
   assert.equal(report.findings.length, 14);
   for (const finding of report.findings) {
-    assert.equal(finding.code, "input-limit");
-    assert.equal(finding.location, null);
+    assert.equal(finding.code, code);
+    assert.deepEqual(finding.location, {
+      byteOffset,
+      line: 1,
+      byteColumn: byteOffset + 1,
+      pointer: null,
+    });
+    assert.doesNotMatch(finding.message, /validate|JsonLimits|TypeScript/);
     assert.equal(finding.message, message);
   }
 };
@@ -49,13 +53,15 @@ const refusedEdit = (call, code, message) =>
       e.inputPointer === null,
   );
 
-test("validateDocument admits 32 MiB and names the byte limit's setting one byte past it", () => {
+test("validateDocument admits 32 MiB and locates the byte limit one byte past it", () => {
   const within = sdk.validateDocument(padded(DEFAULT_BYTES));
   assert.equal(within.status, "report");
   assert.equal(within.report.conclusion, "conformant");
   undetermined(
     sdk.validateDocument(padded(DEFAULT_BYTES + 1)).report,
     exceeded(DEFAULT_BYTES + 1, DEFAULT_BYTES),
+    "byte-limit",
+    DEFAULT_BYTES,
   );
 });
 
@@ -71,6 +77,8 @@ test("a raised byte limit admits documents and values to it and refuses one byte
   undetermined(
     sdk.validateDocument(over, { limits }).report,
     exceeded(limit + 1, limit),
+    "byte-limit",
+    limit,
   );
   const document = parsed(sdk.Document.parse(at, { limits }));
   assert.deepEqual(document.limits, {
@@ -100,9 +108,9 @@ test("unspecified limits keep the JsonLimits defaults, and malformed limits thro
   assert.equal(sdk.validateDocument(deep).report.conclusion, "conformant");
   undetermined(
     sdk.validateDocument(deep, { limits: {} }).report,
-    "the document nests containers deeper than the 10000 levels admitted; " +
-      "validate it with validate_document_with_limits and a larger JsonLimits::max_depth " +
-      "(validateDocument with a larger limits.maxDepth in TypeScript)",
+    "the document nests containers deeper than the 10000 levels admitted",
+    "depth-limit",
+    sdk.Document.parse(deep).error.byteOffset,
   );
   assert.equal(
     sdk.validateDocument(deep, { limits: { maxDepth: NO_DEPTH_CAP } }).report
@@ -352,17 +360,19 @@ test("discovery with a raised body limit validates a body past the default byte 
     maxDocumentBytes: DEFAULT_BYTES,
   });
   assert.equal(limited.status, "body-limit");
-  // A body past the node limit is undetermined, and its findings name
-  // validating it again with larger limits, which admits it.
+  // A body past the node limit is undetermined with a located node-limit.
+  // Validating it again with larger limits admits it.
   const nodes = `{"openbindings":"0.2.0","operations":{},"x-a":[${Array(1_000_000).fill("0").join(",")}]}`;
   const many = await discovery.discover("https://example.test", {
     fetch: async () => new Response(nodes),
     maxDocumentBytes: 8 * MIB,
   });
   assert.equal(many.status, "undetermined");
-  assert.match(
-    many.report.findings[0].message,
-    /; validate it with validate_document_with_limits and a larger JsonLimits::max_nodes \(validateDocument with a larger limits\.maxNodes in TypeScript\)$/,
+  undetermined(
+    many.report,
+    "the document exceeds the admission limit of 1000000 JSON nodes",
+    "node-limit",
+    sdk.Document.parse(nodes).error.byteOffset,
   );
   assert.equal(
     sdk.validateDocument(nodes, {
@@ -418,3 +428,29 @@ function replaceDocument(previous, next) {
   previous.dispose();
   return next;
 }
+
+test("each conformance admission limit preserves its parser offset without API advice", () => {
+  const text = '{"openbindings":"0.3.0",\n"operations":{},"x-a":[0]}';
+  for (const [limits, code] of [
+    [{ maxBytes: 30 }, "byte-limit"],
+    [{ maxDepth: 1 }, "depth-limit"],
+    [{ maxNodes: 5 }, "node-limit"],
+  ]) {
+    const parser = sdk.Document.parse(text, { limits }).error;
+    const report = sdk.validateDocument(text, { limits }).report;
+    assert.equal(report.conclusion, "undetermined");
+    assert.equal(report.findings.length, 14);
+    for (const finding of report.findings) {
+      assert.equal(finding.code, code);
+      assert.equal(finding.location.byteOffset, parser.byteOffset);
+      const prefix = text.slice(0, parser.byteOffset);
+      assert.equal(finding.location.line, prefix.split("\n").length);
+      assert.equal(
+        finding.location.byteColumn,
+        prefix.length - prefix.lastIndexOf("\n"),
+      );
+      assert.equal(finding.location.pointer, null);
+      assert.doesNotMatch(finding.message, /validate|JsonLimits|TypeScript/);
+    }
+  }
+});

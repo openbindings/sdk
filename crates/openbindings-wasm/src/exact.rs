@@ -63,10 +63,34 @@ record!(SourceLocation, v, {
 record!(SchemaOrigin, v, {
     "source_uri": &v.source_uri, "pointer": json(&v.pointer),
 });
-record!(Finding, v, {
-    "rule": v.rule, "status": v.status, "code": v.code,
-    "location": json(&v.location), "message": &v.message,
-});
+impl Exact for Finding {
+    fn exact(&self) -> String {
+        #[derive(serde::Serialize)]
+        struct Fields<'a> {
+            rule: &'a str,
+            status: Evidence,
+            code: &'a str,
+            location: Box<RawValue>,
+            message: &'a str,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            keyword: Option<&'a str>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            schema: Option<Box<RawValue>>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            details: Option<&'a ValueProblemDetails>,
+        }
+        encoded(Fields {
+            rule: self.rule,
+            status: self.status,
+            code: self.code,
+            location: json(&self.location),
+            message: &self.message,
+            keyword: self.keyword,
+            schema: self.schema.as_ref().map(json),
+            details: self.details.as_ref(),
+        })
+    }
+}
 record!(ValidationReport, v, {
     "release": v.release, "revision": v.revision, "conclusion": v.conclusion,
     "evidence": &v.evidence, "findings": json(&v.findings),
@@ -187,6 +211,17 @@ mod tests {
         report.findings[0].location = Some(location);
         agrees(&report.findings[0]);
         agrees(&report);
+        for text in [
+            "{}",
+            r#"{"openbindings":"0.2.0","operations":{"op":{"input":null}}}"#,
+            "[0,]",
+        ] {
+            let validation = validate_document(text).unwrap();
+            for finding in &validation.report().findings {
+                agrees(finding);
+            }
+            agrees(validation.report());
+        }
 
         let document = Document::parse(r#"{"openbindings":"0.2.0","operations":{"op":{"input":{"$ref":"https://example.test/missing"}}}}"#).unwrap();
         let mut references = document.references();

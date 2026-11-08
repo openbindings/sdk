@@ -128,6 +128,14 @@ fn probe_finding(
     finding.code = code;
     finding.location = location;
     finding.message = SECRET.into();
+    finding.keyword = Some(SECRET);
+    finding.schema = Some(SchemaOrigin::new(
+        Some(SECRET.into()),
+        format!("/{SECRET}").parse().unwrap(),
+    ));
+    finding.details = Some(ValueProblemDetails::Required {
+        member: SECRET.into(),
+    });
     finding
 }
 /// Accepts every value, so a prepared schema exists to inspect.
@@ -490,7 +498,7 @@ fn debug_redacts_caller_text_at_every_boundary() {
                 max_bytes: 0,
                 ..Default::default()
             },
-            "input-limit",
+            "byte-limit",
         ),
     ] {
         let decision = validate_document_with_limits(input, limits).unwrap();

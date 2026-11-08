@@ -48,6 +48,8 @@ pub struct Problems<'a> {
 pub struct Problem<'a> {
     pub at: JsonRef<'a>,
     pub message: Cow<'static, str>,
+    /// Index into the pinned location plan's immutable fact templates.
+    pub fact: Option<usize>,
 }
 impl std::fmt::Debug for Problem<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -173,6 +175,11 @@ fn locations() -> &'static Result<super::fixed_locations::LocationMap, String> {
     static LOCATIONS: OnceLock<Result<super::fixed_locations::LocationMap, String>> =
         OnceLock::new();
     LOCATIONS.get_or_init(compile_locations)
+}
+/// Fixed operands for preparing public fact fields once. A fact index is only
+/// offered after this same plan compiled successfully.
+pub fn fact_templates() -> &'static [(&'static str, String, Value)] {
+    locations().as_ref().map_or(&[], |map| map.facts())
 }
 /// One fixed validator's verdict on `at`, under the fixed-string presentation
 /// the caller has entered.
@@ -519,13 +526,24 @@ impl<'a> ProblemCollector<'a> {
         expanded: bool,
         already_retained: &impl Fn(JsonRef<'a>, &str) -> bool,
     ) -> bool {
+        self.offer_fact(at, message, expanded, already_retained, None)
+    }
+    fn offer_fact(
+        &mut self,
+        at: JsonRef<'a>,
+        message: Cow<'static, str>,
+        expanded: bool,
+        already_retained: &impl Fn(JsonRef<'a>, &str) -> bool,
+        fact: Option<usize>,
+    ) -> bool {
         self.violated = true;
         let identity = occurrence(at);
-        if already_retained(at, &message)
+        if (fact.is_none() && already_retained(at, &message))
             || self.retained.get(&identity).is_some_and(|indices| {
-                indices
-                    .iter()
-                    .any(|&index| self.entries[index].message == message)
+                indices.iter().any(|&index| {
+                    let entry = &self.entries[index];
+                    entry.message == message && entry.fact == fact
+                })
             })
         {
             return true;
@@ -550,7 +568,7 @@ impl<'a> ProblemCollector<'a> {
             .entry(identity)
             .or_default()
             .push(self.entries.len());
-        self.entries.push(Problem { at, message });
+        self.entries.push(Problem { at, message, fact });
         true
     }
     fn finish(self) -> Problems<'a> {
@@ -600,9 +618,9 @@ pub fn check_with_retained<'a>(
         }
         if let Ok(map) = locations().as_ref() {
             let mut offered = false;
-            let limited = map.locate(value, |at| {
+            let limited = map.locate_fact_indices(value, |at, fact| {
                 offered = true;
-                collector.offer(at, GENERIC_MESSAGE.into(), true, &already_retained)
+                collector.offer_fact(at, GENERIC_MESSAGE.into(), true, &already_retained, fact)
                     && !collector.expansion_exhausted
             });
             collector.truncated |= limited;

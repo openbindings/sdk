@@ -146,8 +146,8 @@ fn observe(request: &Value) -> String {
     }
     out.to_string()
 }
-// Findings in the frozen protocol's vocabulary, written as JSON text: an exact
-// pointer through a member name with an unpaired unit has no `Value` form.
+// Findings in the frozen protocol's vocabulary. Public serialization replaces
+// unpaired pointer units with U+FFFD, consistently with other Rust reports.
 fn with_findings(out: Value, findings: &[Finding]) -> String {
     let rows: Vec<String> = findings
         .iter()
@@ -163,13 +163,12 @@ fn with_findings(out: Value, findings: &[Finding]) -> String {
                 }
                 (_, code) => code,
             };
-            format!(
-                r#"{{"code":{},"location":{},"message":{},"rule":{},"status":{status}}}"#,
-                serde_json::to_string(code).unwrap(),
-                serde_json::to_string(&finding.location).unwrap(),
-                serde_json::to_string(&finding.message).unwrap(),
-                serde_json::to_string(finding.rule).unwrap(),
-            )
+            // Preserve every current finding field, including schema facts,
+            // while translating only the frozen protocol's status/code names.
+            let mut row = serde_json::to_value(finding).unwrap();
+            row["status"] = status;
+            row["code"] = json!(code);
+            row.to_string()
         })
         .collect();
     extended(

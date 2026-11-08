@@ -228,7 +228,8 @@ pub enum NoVerdictReason {
 /// Later versions may add fields: read them by name and match with `..`.
 #[non_exhaustive]
 pub struct SchemaOrigin {
-    /// Original source's supplied retrieval URI, or `None` for the OpenBindings
+    /// Original source's supplied retrieval URI, or the published fixed-schema URI
+    /// for an OBI-02 [`Finding`]. `None` denotes the OpenBindings
     /// document. This is not the resource base established by a nested `$id`.
     pub source_uri: Option<String>,
     /// Exact RFC 6901 pointer from the source's root; an empty pointer denotes the root. Escape for presentation without changing `~0`/`~1` semantics.
@@ -346,7 +347,8 @@ impl fmt::Debug for UndefinedResult {
 #[derive(Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
 #[non_exhaustive]
-/// Optional schema facts. Treat source operands as sensitive; none contain a
+/// Optional schema facts, also used by OBI-02 [`Finding`] details from the
+/// published fixed schema. Treat application-schema source operands as sensitive; none contain a
 /// rejected instance value. Numeric bounds and enum choices are exact JSON token
 /// strings. Every variant contains complete facts. The default evaluator includes
 /// these in explanations when representable within its diagnostic allowance.

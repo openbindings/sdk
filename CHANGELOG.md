@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-11-08 conformance finding facts (unreleased)
+
+- Add OBI-02 `keyword`, published `schema` origin and optional `ValueProblemDetails`
+  to Rust and TypeScript findings. Required members get individual findings;
+  disallowed members are identified by source pointer without copied document data.
+- Keep failed `anyOf` and `oneOf` at the applicator without branch details.
+  Core conformance continues to check documents only.
+- Guard the pinned 0.2 schema's measured maximum fact tuple of 199 serialized JSON
+  bytes (198 in TypeScript) with an exhaustive schema test. Keep the existing
+  4096-finding and 8 MiB source-pointer caps without a runtime fact-size check.
+- Replace conformance `input-limit` with `byte-limit`, `depth-limit` and `node-limit`,
+  preserving parser offsets. Move Rust and TypeScript API advice from finding
+  messages into documentation. This changes visible codes before publication.
+
 ## 2026-11-08 compact reference resolution (unreleased)
 
 - Resolve a relative reference against a named base through validation's

@@ -28,6 +28,13 @@ fn print_findings(report: &ValidationReport) {
             "{}/{} ({:?}) at {at}: {}",
             finding.rule, finding.code, finding.status, finding.message
         );
+        if let Some(keyword) = &finding.keyword {
+            println!(
+                "Schema fact: {}",
+                serde_json::to_string(&(keyword, &finding.schema, &finding.details))
+                    .expect("serializable finding facts")
+            );
+        }
     }
     if report.findings_truncated {
         println!("More findings were omitted; the report's rule evidence remains available.");

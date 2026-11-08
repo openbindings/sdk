@@ -130,8 +130,8 @@ def fixtures():
         expected=dict(status='non-conformant', finding_count=6), modes=['document'])
     # The complete report: each finding's rule, code, original location and
     # message, so a changed message or location is a declared outcome change.
-    def finding(rule, code, pointer, offset, message):
-        return dict(rule=rule, status='violated', code=code, message=message,
+    def finding(rule, code, pointer, offset, message, **facts):
+        return dict(**facts,rule=rule, status='violated', code=code, message=message,
                     location=dict(pointer=pointer, byte_offset=offset, line=1, byte_column=offset + 1))
     fixed = 'value violates the fixed normative schema'
     rows['document-invalid']['expected']['report'] = dict(
@@ -139,9 +139,9 @@ def fixtures():
         conclusion='non-conformant',
         evidence={f'OBI-{rule:02d}': 'violated' if rule in (2, 4, 5, 10) else 'met' for rule in range(1, 15)},
         findings=[
-            finding('OBI-02', 'schema-mismatch', '/operations/bad name', 38, fixed),
-            finding('OBI-02', 'schema-mismatch', '/operations/bad name/input', 58, fixed),
-            finding('OBI-02', 'schema-mismatch', '/operations/bad name/tags', 70, fixed),
+            finding('OBI-02', 'schema-mismatch', '/operations/bad name', 38, fixed, keyword='pattern', schema=dict(source_uri='https://openbindings.com/schema/openbindings-0.2.0.json', pointer='/properties/operations/propertyNames/pattern')),
+            finding('OBI-02', 'schema-mismatch', '/operations/bad name/input', 58, fixed, keyword='anyOf', schema=dict(source_uri='https://openbindings.com/schema/openbindings-0.2.0.json', pointer='/$defs/JSONSchema/anyOf')),
+            finding('OBI-02', 'schema-mismatch', '/operations/bad name/tags', 70, fixed, keyword='type', schema=dict(source_uri='https://openbindings.com/schema/openbindings-0.2.0.json', pointer='/$defs/Operation/properties/tags/type'), details=dict(kind='type', expected=['array'])),
             finding('OBI-04', 'name-grammar', '/operations/bad name', 38,
                     'a name must be a nonempty ASCII string: start with a letter, digit or underscore; '
                     'then use letters, digits, underscores, dots or hyphens'),

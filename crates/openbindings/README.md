@@ -82,7 +82,18 @@ at any nesting. A host that needs other limits passes `JsonLimits` to
 (`Document::limits`) for its edits.
 Checked ordinary Serde conversion has a 128-container ceiling. Exact parsing is
 the route for existing JSON tokens. Findings retain at most 4,096 entries and
-8 MiB of pointers; truncation leaves rule evidence intact. Use codes and evidence
+8 MiB of pointers. OBI-02 also carries `keyword`, `schema` (a `SchemaOrigin` in
+`https://openbindings.com/schema/openbindings-0.2.0.json`) and optional `details`
+using `ValueProblemDetails`. Required facts name one missing member per finding;
+type facts list expected types. Disallowed members use their source pointer and
+`additionalProperties`, without copying their names or values into details.
+Failed `anyOf` and `oneOf` report at the applicator, without branch facts, matching
+value explanations. The pinned document schema uses `anyOf`, not `oneOf`.
+`pattern` and `uniqueItems` also have no detail variant. Numeric and size bounds
+use exact schema token strings; enum facts contain the complete choices.
+The pinned 0.2 schema's largest serialized keyword/schema/details tuple is 199
+bytes. An exhaustive schema test guards this property; no runtime fact-size cap
+is needed. Finding-count and source-pointer truncation leave rule evidence intact. Use codes and evidence
 for program logic. Messages are advisory; locations refer to the assessed revision's UTF-8 bytes.
 
 This unpublished package requires Rust 1.88. The 256 KiB document stack regression
@@ -102,7 +113,10 @@ explains how to build the full reference locally.
 conformance reports. Read it together with `rule` and `status`; one code can
 apply to several rules. These are document findings, separate from input/edit
 errors and schema-instance value problems. Input limits emit inconclusive findings
-for all rules; a fixed-schema check that cannot finish emits one for its rule.
+for all rules at the parser offset with no pointer. Their messages explain the
+reached limit without API advice. To admit more, use `validate_document_with_limits`
+with a larger `JsonLimits::max_bytes`, `max_depth` or `max_nodes`, respectively.
+A fixed-schema check that cannot finish emits one for its rule.
 The other codes describe violations. Unsupported declared versions are separate
 refusals, not finding codes.
 
@@ -125,7 +139,9 @@ refusals, not finding codes.
 | `value` | OBI-01 | A JSON value is required at this position. |
 | `duplicate-member` | OBI-01 | An object repeats a decoded member name. |
 | `unpaired-surrogate` | OBI-01 | A member name or string contains an unpaired UTF-16 surrogate. |
-| `input-limit` | OBI-01 through OBI-14 | A byte, node or nesting admission limit prevents assessment. |
+| `byte-limit` | OBI-01 through OBI-14 | The byte admission limit prevents assessment, at the parser offset. |
+| `depth-limit` | OBI-01 through OBI-14 | The container nesting admission limit prevents assessment, at the parser offset. |
+| `node-limit` | OBI-01 through OBI-14 | The JSON node admission limit prevents assessment, at the parser offset. |
 | `schema-mismatch` | OBI-02, OBI-10 | The document or a contained schema violates its fixed normative schema. |
 | `fixed-schema-limit-or-failure` | OBI-02, OBI-10 | A fixed normative schema check cannot establish a result. |
 | `semver` | OBI-03 | The `openbindings` member is not a SemVer 2.0.0 string. |

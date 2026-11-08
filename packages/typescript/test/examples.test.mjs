@@ -64,6 +64,12 @@ test("source editor requires conformance and retains prepared partial snapshots"
     assert.equal(finding.code, "schema-mismatch");
     assert.equal(finding.message, "value violates the fixed normative schema");
     assert.match(formatEditorResult(rejected), /UTF-8 byte column/);
+    assert.match(formatEditorResult(rejected), /additionalProperties/);
+    assert.equal(
+      finding.schema.pointer,
+      "/$defs/Operation/additionalProperties",
+    );
+    assert.equal(finding.details, undefined);
     assert.equal(editor.snapshot(), undefined);
 
     const accepted = editor.update(corrected);

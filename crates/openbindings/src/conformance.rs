@@ -82,7 +82,10 @@ pub enum Conformance {
     Undetermined,
 }
 #[derive(Clone, PartialEq, Eq, Serialize)]
-/// One explanatory normative-rule finding. Findings may be bounded; the report's independent rule evidence determines its conclusion. Serializes pointer fields as ordinary JSON strings, replacing unpaired UTF-16 units with U+FFFD; the stored [`Pointer`] stays exact for locating and editing.
+/// One explanatory normative-rule finding. OBI-02 carries the failed fixed-schema
+/// keyword, its published schema origin and optional [`ValueProblemDetails`].
+/// Core still checks only document conformance, never example or caller values.
+/// Findings may be bounded; the report's independent rule evidence determines its conclusion. Serializes pointer fields as ordinary JSON strings, replacing unpaired UTF-16 units with U+FFFD; the stored [`Pointer`] stays exact for locating and editing.
 ///
 /// Only validation builds findings. Later versions may add fields: read them by
 /// name and match with `..`.
@@ -111,10 +114,25 @@ pub struct Finding {
     pub status: Evidence,
     /// Stable machine-readable diagnostic identifier; prefer it over message matching.
     pub code: &'static str,
-    /// Original-source coordinates, absent only for a finding about no particular position, such as an input limit. Pointers are exact, are data and must be escaped for display; byte columns are not UTF-16 editor columns.
+    /// Original-source coordinates, absent only for a finding about no particular position, without a parser offset. Admission limits carry the parser offset and no pointer. Pointers are exact, are data and must be escaped for display; byte columns are not UTF-16 editor columns.
     pub location: Option<SourceLocation>,
     /// Human-facing explanation; display as text and use `rule`, `code` and `status` for logic.
     pub message: String,
+    /// Failed OBI-02 keyword in the published fixed schema. Absent for other rules
+    /// or when keyword guidance is unavailable. Failed unions name the applicator.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub keyword: Option<&'static str>,
+    /// Keyword location in the published fixed schema, identified by its URI.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub schema: Option<SchemaOrigin>,
+    /// Complete schema facts using the value evaluator's vocabulary. Required
+    /// emits one finding per missing member. Disallowed members are identified
+    /// only by `location`; anyOf/oneOf, pattern and uniqueItems have no detail.
+    /// Never copies rejected document values. The keyword/schema/details tuple
+    /// has a measured maximum of 199 serialized JSON bytes in the pinned 0.2
+    /// schema, guarded by an exhaustive schema test rather than a runtime cap.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub details: Option<ValueProblemDetails>,
 }
 impl std::fmt::Debug for Finding {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -123,7 +141,7 @@ impl std::fmt::Debug for Finding {
         } else {
             "<redacted>"
         };
-        // Fixed Checks emissions and the non-limit parser codes forwarded to OBI-01.
+        // Fixed Checks emissions and parser codes forwarded by admission.
         let code = match self.code {
             "bom"
             | "colon"
@@ -140,7 +158,9 @@ impl std::fmt::Debug for Finding {
             | "unterminated-string"
             | "utf8"
             | "value"
-            | "input-limit"
+            | "byte-limit"
+            | "depth-limit"
+            | "node-limit"
             | "schema-mismatch"
             | "fixed-schema-limit-or-failure"
             | "duplicate-member"
@@ -172,6 +192,13 @@ impl std::fmt::Debug for Finding {
 
 #[derive(Clone, PartialEq, Eq, Serialize)]
 /// Assessment of all normative document rules at the pinned specification revision. At most 4096 findings and 8 MiB of aggregate generated-pointer bytes (UTF-8, or two per UTF-16 unit for a pointer through a name with an unpaired surrogate) are retained. Omitted findings set `findings_truncated`; rule evidence and the conclusion remain independent of presentation caps. Retained coordinates always refer to original source. Serializes pointer fields as ordinary JSON strings, replacing unpaired UTF-16 units with U+FFFD; the stored [`Pointer`] stays exact for locating and editing.
+///
+/// The pinned 0.2 schema's largest OBI-02 keyword/schema/details tuple is 199
+/// serialized JSON bytes. An exhaustive schema test guards this fixed property;
+/// there is no runtime fact-size cap. Facts are never partial.
+/// Failed anyOf/oneOf report the applicator with no branch detail. Missing required
+/// members produce separate findings in the published array order. Other keywords
+/// at one source position use fixed keyword order; source traversal is unchanged.
 ///
 /// Only validation builds reports. Later versions may add fields: read them by
 /// name and match with `..`.
@@ -308,6 +335,10 @@ fn validation_limits() -> JsonLimits {
 /// Admission precedes version selection: if parsing exceeds a limit, no complete
 /// declaration is established and all rules are inconclusive, even for another line.
 /// [`validate_document`] uses default byte/node limits and unlimited nesting.
+/// Limit findings use `byte-limit`, `depth-limit` or `node-limit`, with the parser's
+/// byte offset and no pointer. Their messages describe the limit without API advice.
+/// To admit more, call this function with a larger [`JsonLimits::max_bytes`],
+/// [`JsonLimits::max_depth`] or [`JsonLimits::max_nodes`], respectively.
 ///
 /// # Errors
 /// Returns a version refusal only for a well-formed declaration outside the supported line. Malformed input and other rule violations are returned as validation evidence, not as this error.
@@ -341,12 +372,13 @@ fn refused(bytes: &[u8], error: &InputError, limits: JsonLimits) -> DocumentVali
     let mut checks = Checks::new();
     if error.kind() == InputErrorKind::Limit {
         let message = input_limit_message(error.code(), limits, bytes.len());
+        let location = backend::input_location(bytes, error.byte_offset());
         for rule in Rule::ALL {
             checks.mark(
                 rule,
                 Evidence::Inconclusive,
-                "input-limit",
-                None,
+                error.code(),
+                Some(location.clone()),
                 message.as_str(),
             );
         }
@@ -379,31 +411,80 @@ pub(crate) fn version_refusal(value: &JsonValue) -> Option<VersionRefusal> {
     }
     VersionRefusal::new(declared)
 }
-// Which admission limit stopped parsing, and how to validate past it, in Rust
-// and in TypeScript. Parsing reports an exceeded limit as `byte-limit`,
-// `node-limit` or `depth-limit`.
+// Human-facing admission facts; recovery API advice belongs in API docs.
 fn input_limit_message(code: &str, limits: JsonLimits, bytes: usize) -> String {
-    let reached = match code {
+    match code {
         "byte-limit" => format!(
             "the document's {bytes} bytes exceed the {}-byte admission limit",
             limits.max_bytes
         ),
         "node-limit" => format!(
-            "the document holds more than the {} nodes admitted",
+            "the document exceeds the admission limit of {} JSON nodes",
             limits.max_nodes.min(u32::MAX as usize)
         ),
         _ => format!(
             "the document nests containers deeper than the {} levels admitted",
             limits.max_depth
         ),
-    };
-    let (rust, typescript) = backend::limit_setting(code).unwrap_or(("max_depth", "maxDepth"));
-    // The route works wherever a document is validated, discovered bodies and
-    // publication bytes included: validate it again with a larger limit.
-    format!(
-        "{reached}; validate it with validate_document_with_limits and a larger \
-         JsonLimits::{rust} (validateDocument with a larger limits.{typescript} in TypeScript)"
-    )
+    }
+}
+fn fixed_details(keyword: &str, operand: &serde_json::Value) -> Option<ValueProblemDetails> {
+    use ValueProblemDetails as D;
+    match keyword {
+        "required" => Some(D::Required {
+            member: operand.as_str()?.to_owned(),
+        }),
+        "type" => Some(D::Type {
+            expected: match operand {
+                serde_json::Value::String(name) => vec![name.clone()],
+                serde_json::Value::Array(names) => names
+                    .iter()
+                    .map(|n| n.as_str().map(str::to_owned))
+                    .collect::<Option<_>>()?,
+                _ => return None,
+            },
+        }),
+        "minimum" | "maximum" | "exclusiveMinimum" | "exclusiveMaximum" => Some(D::NumericBound {
+            bound: operand.to_string(),
+        }),
+        "minLength" | "maxLength" | "minItems" | "maxItems" => Some(D::SizeBound {
+            bound: operand.to_string(),
+        }),
+        "enum" => Some(D::Enum {
+            choices: operand
+                .as_array()?
+                .iter()
+                .map(ToString::to_string)
+                .collect(),
+        }),
+        _ => None,
+    }
+}
+struct FixedFact {
+    keyword: &'static str,
+    schema: SchemaOrigin,
+    details: Option<ValueProblemDetails>,
+}
+impl FixedFact {
+    fn new(keyword: &'static str, pointer: &str, operand: &serde_json::Value) -> Self {
+        Self {
+            keyword,
+            schema: SchemaOrigin::new(
+                Some("https://openbindings.com/schema/openbindings-0.2.0.json".into()),
+                pointer.parse().expect("fixed schema pointer"),
+            ),
+            details: fixed_details(keyword, operand),
+        }
+    }
+}
+fn fixed_facts() -> &'static [FixedFact] {
+    static FACTS: std::sync::OnceLock<Vec<FixedFact>> = std::sync::OnceLock::new();
+    FACTS.get_or_init(|| {
+        fixed_schema::fact_templates()
+            .iter()
+            .map(|(keyword, pointer, operand)| FixedFact::new(keyword, pointer, operand))
+            .collect()
+    })
 }
 const MAX_FINDINGS: usize = 4096;
 const MAX_FINDING_POINTER_BYTES: usize = backend::MAX_REPORT_POINTER_BYTES;
@@ -493,6 +574,9 @@ impl<'a> Checks<'a> {
                 code,
                 location,
                 message,
+                keyword: None,
+                schema: None,
+                details: None,
             });
         } else {
             self.truncated = true;
@@ -507,10 +591,47 @@ impl<'a> Checks<'a> {
         code: &'static str,
         message: M,
     ) {
+        self.mark_at_prepared_fact(rule, status, at, code, message, None);
+    }
+    #[cfg(test)]
+    fn mark_at_fact<M: AsRef<str> + Into<String>>(
+        &mut self,
+        rule: Rule,
+        status: Evidence,
+        at: JsonRef<'a>,
+        code: &'static str,
+        message: M,
+        fact: Option<(&'static str, String, serde_json::Value)>,
+    ) {
+        let fact =
+            fact.map(|(keyword, pointer, operand)| FixedFact::new(keyword, &pointer, &operand));
+        self.mark_at_prepared_fact(rule, status, at, code, message, fact.as_ref());
+    }
+    fn mark_at_prepared_fact<M: AsRef<str> + Into<String>>(
+        &mut self,
+        rule: Rule,
+        status: Evidence,
+        at: JsonRef<'a>,
+        code: &'static str,
+        message: M,
+        fact: Option<&FixedFact>,
+    ) {
         self.update_evidence(rule, status);
         // Identity is checked before either allowance. Only retained findings
         // have index entries, so omitted data never grows an all-seen set.
-        if self.contains_at(rule, status, at, code, message.as_ref()) {
+        if self
+            .retained_at
+            .get(&fixed_schema::occurrence(at))
+            .is_some_and(|indices| {
+                indices.iter().any(|&index| {
+                    let finding = &self.findings[index];
+                    self.same_finding(index, rule, status, code, message.as_ref())
+                        && finding.keyword == fact.map(|f| f.keyword)
+                        && finding.schema.as_ref() == fact.map(|f| &f.schema)
+                        && finding.details.as_ref() == fact.and_then(|f| f.details.as_ref())
+                })
+            })
+        {
             return;
         }
         if self.findings.len() >= MAX_FINDINGS {
@@ -538,12 +659,25 @@ impl<'a> Checks<'a> {
             .entry(fixed_schema::occurrence(at))
             .or_default()
             .push(index);
+        // Only the public report owns copies. Intermediate problems carry a
+        // plan index, and duplicate or omitted findings allocate no fact data.
+        let (keyword, schema, details) = match fact {
+            Some(fact) => (
+                Some(fact.keyword),
+                Some(fact.schema.clone()),
+                fact.details.clone(),
+            ),
+            None => (None, None, None),
+        };
         self.findings.push(Finding {
             rule: rule.id(),
             status,
             code,
             location: None,
             message: message.into(),
+            keyword,
+            schema,
+            details,
         });
     }
     fn violation<M: AsRef<str> + Into<String>>(
@@ -619,12 +753,13 @@ impl<'a> Checks<'a> {
                     self.evidence[rule as usize] = Evidence::Violated;
                 }
                 for problem in problems.entries {
-                    self.mark_at(
+                    self.mark_at_prepared_fact(
                         rule,
                         Evidence::Violated,
                         problem.at,
                         "schema-mismatch",
                         problem.message,
+                        problem.fact.map(|index| &fixed_facts()[index]),
                     );
                 }
             }
@@ -935,6 +1070,49 @@ pub(crate) fn assess_value(document: &Document) -> Result<ValidationReport, Vers
 #[cfg(test)]
 mod finding_identity_tests {
     use super::*;
+    #[test]
+    fn pinned_schema_bounds_every_public_finding_fact() {
+        let plan = fixed_schema::compile_locations().unwrap();
+        let value = JsonValue::parse("{}").unwrap();
+        let mut measured = Vec::new();
+        plan.visit_possible_facts(|keyword, pointer, operand| {
+            // Exercise the exact public conversion, including JSON escaping,
+            // schema origin and absent details, without selecting a document.
+            let mut checks = Checks::new();
+            checks.mark_at_fact(
+                Rule::Obi02,
+                Evidence::Violated,
+                value.view(),
+                "schema-mismatch",
+                "value violates the fixed normative schema",
+                Some((keyword, pointer.to_owned(), operand.clone())),
+            );
+            let report = checks.finish();
+            assert!(!report.findings_truncated);
+            assert_eq!(report.evidence["OBI-02"], Evidence::Violated);
+            assert_eq!(report.conclusion, Conformance::NonConformant);
+            let [finding] = report.findings.as_slice() else {
+                panic!("every schema fact must retain one complete finding");
+            };
+            let size = serde_json::to_vec(&(&finding.keyword, &finding.schema, &finding.details))
+                .unwrap()
+                .len();
+            measured.push((size, keyword, pointer.to_owned()));
+        });
+        measured.sort();
+        // Includes 61 Assertions (one anyOf) and all six forbidden shapes.
+        // A schema update must requalify this property, never truncate a fact.
+        assert_eq!(measured.len(), 67);
+        assert_eq!(
+            measured.last().unwrap(),
+            &(
+                199,
+                "minimum",
+                "/$defs/BindingEntry/properties/preference/minimum".into()
+            )
+        );
+    }
+
     #[test]
     fn each_rule_names_the_identifier_it_indexes() {
         for (index, rule) in Rule::ALL.into_iter().enumerate() {

@@ -37,7 +37,10 @@ bounds for arbitrary documents or value explanations.
 The location walk keeps depth frames and one child candidate list, never a library
 error tree or a vector of all instance children. Its schema plan is fixed at
 compilation. Retained findings are capped at 4,096 and aggregate source pointers
-at 8 MiB. The 10 MiB allowance leaves 2 MiB for traversal/collection/name scratch
+at 8 MiB. The pinned 0.2 schema's largest OBI-02 keyword/schema/details tuple is
+199 serialized JSON bytes (198 in TypeScript), guarded by an exhaustive schema
+test without a runtime fact-size cap. Facts are included in the SDK measurement. The fixture-specific thresholds remain unchanged. The 10 MiB
+allowance leaves 2 MiB for traversal/collection/name scratch
 on this suite; the complete SDK allowance adds 2 MiB for native checks and reports.
 The separately capped validity baseline also detects increases in the fixed schemas' validity allocation cost.
 

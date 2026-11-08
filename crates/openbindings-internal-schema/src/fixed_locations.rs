@@ -5,7 +5,7 @@ use crate::{JsonKind, JsonRef};
 use jsonschema::{Validator, ValidatorMap};
 use openbindings_internal_json::backend::{self, FlatJson};
 use serde_json::Value;
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 struct Shape {
     pointer: String,
@@ -18,12 +18,42 @@ struct Shape {
     items: Option<usize>,
     reference: Option<usize>,
     forbidden: bool,
+    forbidden_index: Option<usize>,
+    assertions: Vec<Assertion>,
+}
+
+// All operands and paths come from the fixed schema, never from an instance.
+struct Assertion {
+    fact: usize,
+    validator: usize,
+}
+
+pub(crate) type Fact = (&'static str, String, Value);
+
+impl Shape {
+    fn forbidden_fact(&self) -> Option<(&'static str, &str, &Value)> {
+        self.forbidden.then(|| {
+            let keyword = if self.pointer.ends_with("/additionalProperties") {
+                "additionalProperties"
+            } else if self.pointer.ends_with("/items") {
+                "items"
+            } else {
+                "falseSchema"
+            };
+            (keyword, &self.pointer[1..], &Value::Bool(false))
+        })
+    }
 }
 
 /// Internal compiled location plan; compilation depends only on the pinned schema.
 pub struct LocationMap {
-    validators: ValidatorMap<FlatJson>,
-    containers: ValidatorMap<FlatJson>,
+    // Keep the compiler maps with the indexed handles. Releasing their other
+    // entries on the first failure would move teardown into first-use latency.
+    _maps: (ValidatorMap<FlatJson>, ValidatorMap<FlatJson>),
+    validators: Vec<Validator<FlatJson>>,
+    containers: Vec<Option<Validator<FlatJson>>>,
+    assertion_validators: Vec<Validator<FlatJson>>,
+    facts: Vec<Fact>,
     shapes: Vec<Shape>,
     root: usize,
 }
@@ -120,6 +150,8 @@ struct LocationPlan {
     shapes: Vec<Shape>,
     root: usize,
     reachable: HashSet<usize>,
+    predicates: Vec<String>,
+    facts: Vec<Fact>,
 }
 fn location_plan(
     schema: &Value,
@@ -248,6 +280,8 @@ fn location_plan(
             items: optional("items")?,
             reference,
             forbidden: schema == &Value::Bool(false),
+            forbidden_index: None,
+            assertions: Vec::new(),
         });
     }
     let root = *ids.get("#").ok_or("missing root location validator")?;
@@ -268,6 +302,81 @@ fn location_plan(
         pending.extend(shape.items);
         pending.extend(shape.reference);
     }
+    let mut predicates = Vec::new();
+    let mut shared = HashMap::new();
+    let mut facts = Vec::new();
+    for container_id in (0..shapes.len()).filter(|id| reachable.contains(id)) {
+        let shape = &mut shapes[container_id];
+        if let Some((keyword, pointer, operand)) = shape.forbidden_fact() {
+            let index = facts.len();
+            facts.push((keyword, pointer.to_owned(), operand.clone()));
+            shape.forbidden_index = Some(index);
+        }
+        let schema = schema
+            .pointer(&shape.pointer[1..])
+            .ok_or("missing assertion schema")?;
+        let mut assertions = Vec::new();
+        for keyword in [
+            "type",
+            "required",
+            "pattern",
+            "minLength",
+            "maxLength",
+            "minItems",
+            "maxItems",
+            "uniqueItems",
+            "enum",
+            "minimum",
+            "maximum",
+            "exclusiveMinimum",
+            "exclusiveMaximum",
+            "anyOf",
+            "oneOf",
+        ] {
+            let Some(operand) = schema.get(keyword) else {
+                continue;
+            };
+            // One finding per missing member, in the published required order.
+            let operands = if keyword == "required" {
+                operand
+                    .as_array()
+                    .ok_or("invalid required operand")?
+                    .as_slice()
+            } else {
+                std::slice::from_ref(operand)
+            };
+            for operand in operands {
+                // All projections share this checked resource scope. Share only
+                // the predicate, keeping each assertion's origin and order.
+                let validator = *shared.entry((keyword, operand)).or_insert_with(|| {
+                    let index = predicates.len();
+                    let key = format!("{slot}fact{index}");
+                    let value = if keyword == "required" {
+                        serde_json::json!([operand])
+                    } else {
+                        operand.clone()
+                    };
+                    definitions.insert(key.clone(), serde_json::json!({keyword: value}));
+                    predicates.push(format!("#/$defs/{key}"));
+                    index
+                });
+                // Each pointer/keyword is visited once. Required members are
+                // unique in a valid schema, so these indices also identify the
+                // old (keyword, pointer, operand) equality classes exactly.
+                let index = facts.len();
+                facts.push((
+                    keyword,
+                    format!("{}/{keyword}", &shape.pointer[1..]),
+                    operand.clone(),
+                ));
+                assertions.push(Assertion {
+                    fact: index,
+                    validator,
+                });
+            }
+        }
+        shape.assertions = assertions;
+    }
     container_schemas
         .retain(|key, _| reachable.contains(&key.parse::<usize>().expect("shape index")));
     for (id, container) in container_schemas {
@@ -278,10 +387,40 @@ fn location_plan(
         shapes,
         root,
         reachable,
+        predicates,
+        facts,
     })
 }
 
 impl LocationMap {
+    /// Enumerate every fact reachable in the compiled plan, independently of
+    /// document failures, so the public conversion can qualify the pinned schema.
+    #[cfg(feature = "test-support")]
+    pub fn visit_possible_facts(&self, mut offer: impl FnMut(&'static str, &str, &Value)) {
+        let mut pending = vec![self.root];
+        let mut seen = HashSet::new();
+        while let Some(id) = pending.pop() {
+            if !seen.insert(id) {
+                continue;
+            }
+            let shape = &self.shapes[id];
+            if let Some((keyword, pointer, operand)) = shape.forbidden_fact() {
+                offer(keyword, pointer, operand);
+            }
+            for assertion in &shape.assertions {
+                let (keyword, pointer, operand) = &self.facts[assertion.fact];
+                offer(keyword, pointer, operand);
+            }
+            pending.extend(shape.properties.values().copied());
+            pending.extend(shape.patterns.iter().map(|(_, target)| *target));
+            pending.extend(shape.names);
+            pending.extend(shape.additional);
+            pending.extend(shape.prefix.iter().copied());
+            pending.extend(shape.items);
+            pending.extend(shape.reference);
+        }
+    }
+
     pub fn compile(schema: &Value) -> Result<Self, String> {
         require_single_resource(schema)?;
         let validators = super::fixed_schema::options(BTreeMap::new())
@@ -291,22 +430,46 @@ impl LocationMap {
         let containers = super::fixed_schema::options(BTreeMap::new())
             .build_map(&plan.schema)
             .map_err(|e| e.to_string())?;
+        let assertion_validators = plan
+            .predicates
+            .iter()
+            .map(|pointer| {
+                containers
+                    .get(pointer)
+                    .cloned()
+                    .ok_or_else(|| format!("unmapped assertion constraint: {pointer}"))
+            })
+            .collect::<Result<_, _>>()?;
         for id in plan.reachable {
             let shape = &plan.shapes[id];
             if containers.get(&shape.container_pointer).is_none() {
                 return Err(format!("unmapped container constraint: {}", shape.pointer));
             }
         }
+        // Bind plan indices once. Validation never needs to hash schema paths.
+        let indexed_validators = plan
+            .shapes
+            .iter()
+            .map(|shape| validators[&shape.pointer].clone())
+            .collect();
+        let indexed_containers = plan
+            .shapes
+            .iter()
+            .map(|shape| containers.get(&shape.container_pointer).cloned())
+            .collect();
         Ok(Self {
-            validators,
-            containers,
+            _maps: (validators, containers),
+            validators: indexed_validators,
+            containers: indexed_containers,
+            assertion_validators,
+            facts: plan.facts,
             shapes: plan.shapes,
             root: plan.root,
         })
     }
 
     fn valid(&self, id: usize, at: JsonRef<'_>) -> Result<bool, ()> {
-        let validator = self.validators.get(&self.shapes[id].pointer).ok_or(())?;
+        let validator = self.validators.get(id).ok_or(())?;
         Ok(super::fixed_schema::valid(validator, at))
     }
 
@@ -326,10 +489,7 @@ impl LocationMap {
         }
         let mut container_failed = false;
         for &id in &shapes {
-            let validator = self
-                .containers
-                .get(&self.shapes[id].container_pointer)
-                .ok_or(())?;
+            let validator = self.containers.get(id).and_then(Option::as_ref).ok_or(())?;
             if !super::fixed_schema::valid(validator, at) {
                 container_failed = true;
                 break;
@@ -455,8 +615,67 @@ impl LocationMap {
         root: JsonRef<'a>,
         mut offer: impl FnMut(JsonRef<'a>) -> bool,
     ) -> bool {
+        self.locate_with(root, |at, _| offer(at))
+    }
+
+    /// Offer each failed keyword, with only its fixed schema operand. Failed
+    /// anyOf/oneOf stop at the applicator, never speculative branch failures.
+    pub fn locate_facts<'a>(
+        &self,
+        root: JsonRef<'a>,
+        mut offer: impl FnMut(JsonRef<'a>, Option<(&'static str, &str, &Value)>) -> bool,
+    ) -> bool {
+        self.locate_fact_indices(root, |at, index| {
+            offer(
+                at,
+                index.map(|index| {
+                    let (keyword, pointer, operand) = &self.facts[index];
+                    (*keyword, pointer.as_str(), operand)
+                }),
+            )
+        })
+    }
+
+    pub(crate) fn facts(&self) -> &[Fact] {
+        &self.facts
+    }
+
+    pub(crate) fn locate_fact_indices<'a>(
+        &self,
+        root: JsonRef<'a>,
+        mut offer: impl FnMut(JsonRef<'a>, Option<usize>) -> bool,
+    ) -> bool {
+        self.locate_with(root, |at, shapes| {
+            let mut found = false;
+            for &id in shapes {
+                let shape = &self.shapes[id];
+                if let Some(fact) = shape.forbidden_index {
+                    found = true;
+                    if !offer(at, Some(fact)) {
+                        return false;
+                    }
+                }
+                for assertion in &shape.assertions {
+                    let validator = &self.assertion_validators[assertion.validator];
+                    if !super::fixed_schema::valid(validator, at) {
+                        found = true;
+                        if !offer(at, Some(assertion.fact)) {
+                            return false;
+                        }
+                    }
+                }
+            }
+            found || offer(at, None)
+        })
+    }
+
+    fn locate_with<'a>(
+        &self,
+        root: JsonRef<'a>,
+        mut offer: impl FnMut(JsonRef<'a>, &[usize]) -> bool,
+    ) -> bool {
         let Ok(frame) = self.frame(root, vec![self.root]) else {
-            offer(root);
+            offer(root, &[]);
             return true;
         };
         let mut stack = vec![frame];
@@ -465,25 +684,25 @@ impl LocationMap {
                 Ok(Some((at, failed))) => {
                     frame.found = true;
                     if stack.len() >= 1024 {
-                        offer(at);
+                        offer(at, &failed);
                         return true;
                     }
                     match self.frame(at, failed) {
                         Ok(child) => stack.push(child),
                         Err(()) => {
-                            offer(at);
+                            offer(at, &[]);
                             return true;
                         }
                     }
                 }
                 Ok(None) => {
                     let frame = stack.pop().expect("live frame");
-                    if (!frame.found || frame.container_failed) && !offer(frame.at) {
+                    if (!frame.found || frame.container_failed) && !offer(frame.at, &frame.shapes) {
                         return false;
                     }
                 }
                 Err(()) => {
-                    offer(frame.at);
+                    offer(frame.at, &frame.shapes);
                     return true;
                 }
             }
@@ -506,6 +725,78 @@ mod tests {
     use crate::JsonValue;
     use serde_json::json;
     use std::collections::BTreeSet;
+
+    #[test]
+    fn shared_predicates_keep_assertion_origins_and_required_order() {
+        let schema = json!({"properties": {
+            "a": {"type":"object", "required":["z", "a"]},
+            "b": {"type":"object", "required":["a", "z"]}
+        }});
+        let map = LocationMap::compile(&schema).unwrap();
+        assert_eq!(map.assertion_validators.len(), 3);
+        assert_eq!(
+            map.shapes.iter().map(|s| s.assertions.len()).sum::<usize>(),
+            6
+        );
+        let value = JsonValue::parse(r#"{"a":{},"b":{}}"#).unwrap();
+        let mut facts = Vec::new();
+        backend::fixed_strings(|| {
+            assert!(!map.locate_facts(value.view(), |_, fact| {
+                let (keyword, pointer, operand) = fact.unwrap();
+                facts.push((keyword, pointer.to_owned(), operand.clone()));
+                true
+            }));
+        });
+        assert_eq!(
+            facts,
+            [
+                ("required", "/properties/a/required".into(), json!("z")),
+                ("required", "/properties/a/required".into(), json!("a")),
+                ("required", "/properties/b/required".into(), json!("a")),
+                ("required", "/properties/b/required".into(), json!("z")),
+            ]
+        );
+        let pinned = crate::fixed_schema::compile_locations().unwrap();
+        assert_eq!(pinned.assertion_validators.len(), 18);
+        assert_eq!(
+            pinned
+                .shapes
+                .iter()
+                .map(|s| s.assertions.len())
+                .sum::<usize>(),
+            61
+        );
+    }
+
+    #[test]
+    fn failed_unions_report_only_the_applicator_fact() {
+        for (schema, input, keyword) in [
+            (
+                json!({"anyOf":[{"type":"object"},{"type":"boolean"}]}),
+                "0",
+                "anyOf",
+            ),
+            (json!({"oneOf":[{"type":"string"},false]}), "0", "oneOf"),
+            (json!({"oneOf":[true,true,false]}), "0", "oneOf"),
+        ] {
+            let map = LocationMap::compile(&schema).unwrap();
+            let value = JsonValue::parse(input).unwrap();
+            let mut facts = Vec::new();
+            let limited = backend::fixed_strings(|| {
+                map.locate_facts(value.view(), |at, fact| {
+                    let (keyword, pointer, _) = fact.unwrap();
+                    facts.push((
+                        at.location().pointer.unwrap().to_string(),
+                        keyword,
+                        pointer.to_owned(),
+                    ));
+                    true
+                })
+            });
+            assert!(!limited);
+            assert_eq!(facts, [(String::new(), keyword, format!("/{keyword}"))]);
+        }
+    }
 
     #[test]
     fn local_fragments_preserve_utf8_and_pointer_admission() {

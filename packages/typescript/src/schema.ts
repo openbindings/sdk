@@ -25,7 +25,7 @@ import { Managed, adopt, handle } from "./ownership.js";
 
 /** A keyword or schema in an original schema source, by source URI and exact pointer. sourceUri null denotes the OpenBindings document; supplied URIs identify explicit resources and never initiate acquisition. Private evaluator projection identities are not exposed. Line and column come from the source's holder: ConformantDocument.locate() for the document and ExternalSchemas.locate() for a supplied resource; prepared schemas may retain immutable original sources needed for evaluation. Keep the corresponding document or external-schema owner when explicit coordinate lookup is needed. */
 export interface SchemaOrigin {
-  /** Original source retrieval URI, or null for the OpenBindings document; distinct from a nested resource’s $id. */
+  /** Original source retrieval URI, the published fixed-schema URI for an OBI-02 finding, or null for the OpenBindings document; distinct from a nested resource’s $id. */
   sourceUri: string | null;
   /** Exact RFC 6901 pointer from that source's root; empty string denotes root. */
   pointer: string;
@@ -62,7 +62,7 @@ export interface UndefinedResult {
   location: SchemaOrigin | null;
 }
 
-/** Schema facts included by explain(), never copied from rejected instance data. Bounds and enum choices are exact JSON token strings: do not coerce them to Number. Serializing whole problems into a public response sends schema facts; an app with a private contract should forward only instance and code. Render facts as text. Each variant contains complete facts. */
+/** Schema facts included by explain() and OBI-02 findings from the published fixed schema, never copied from rejected instance data. Bounds and enum choices are exact JSON token strings: do not coerce them to Number. Serializing whole problems into a public response sends schema facts; an app with a private contract should forward only instance and code. Render facts as text. Each variant contains complete facts. */
 export type ValueProblemDetails =
   | {
       /** Complete expected JSON type names, drawn from the fixed JSON type vocabulary. */
