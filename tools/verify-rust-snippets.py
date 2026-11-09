@@ -48,6 +48,14 @@ def read_snippet(path):
     return snippets[0]
 
 
+def same_walkthrough(main_rs, fence):
+    # A Windows checkout may give either file CRLF line endings. The walkthrough
+    # must be the same program as the example crate, whatever its line endings.
+    def lf(text):
+        return text.replace(b'\r\n', b'\n')
+    return lf(main_rs) == lf(fence) + b'\n#[cfg(test)]\nmod tests;\n'
+
+
 def run(args, **kwargs):
     print('+ ' + ' '.join(map(str, args)), flush=True)
     return subprocess.run(list(map(str, args)), cwd=ROOT, check=True, **kwargs)
@@ -58,7 +66,7 @@ def main():
     sources = [(path, name, read_snippet(path)) for path, name in SNIPPETS]
     walkthrough = ROOT / 'examples/document-call'
     source = next(source for _, name, source in sources if name == 'document_call')
-    if (walkthrough / 'src/main.rs').read_bytes() != source + b'\n#[cfg(test)]\nmod tests;\n':
+    if not same_walkthrough((walkthrough / 'src/main.rs').read_bytes(), source):
         raise ValueError('Walkthrough fence differs from examples/document-call/src/main.rs')
     env = {**os.environ, 'CARGO_TARGET_DIR': str(Path(os.environ.get('CARGO_TARGET_DIR', ROOT / 'target')).resolve())}
     manifest = walkthrough / 'Cargo.toml'
