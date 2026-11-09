@@ -16,7 +16,7 @@ def main():
     parser.add_argument("--release", action="store_true")
     parser.add_argument("--baseline", action="store_true", help="Read the two guard files from 7fcc101")
     parser.add_argument("--bypass-estimate", action="store_true", help="Allocation precheck only")
-    parser.add_argument("--test", default="allocations_do_not_grow")
+    parser.add_argument("--test", default="allocation_samples_preserve_decisive_outcomes")
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[2]
     snapshot = root / "target/literal-scratch-snapshot"

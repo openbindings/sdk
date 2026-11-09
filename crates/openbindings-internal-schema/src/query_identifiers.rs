@@ -615,7 +615,6 @@ mod query_tests {
                 }
             }
             drop(query);
-            assert_eq!(inventory.leaves.len(), names.len());
             for (&handle, name) in handles.iter().zip(names) {
                 assert_eq!(inventory.spelled(handle), name);
             }

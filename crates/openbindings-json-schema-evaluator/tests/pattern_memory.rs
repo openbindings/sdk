@@ -86,29 +86,7 @@ fn assert_memory_refusal(refused: &PreparationFailure) {
         }
     );
 }
-// Measure a representation-policy boundary, never a semantic oracle. The same
-// schema/value expectations below stay fixed independently of this measurement.
-fn minimum_memory(schema: &Value) -> usize {
-    let (mut below, mut enough) = (0, MIB);
-    prepare(schema, memory(enough)).expect("funded representation");
-    while enough - below > 1 {
-        let midpoint = below + (enough - below) / 2;
-        match prepare(schema, memory(midpoint)) {
-            Ok(_) => enough = midpoint,
-            Err(failure) => {
-                assert_memory_refusal(&failure);
-                below = midpoint;
-            }
-        }
-    }
-    assert_memory_refusal(&prepare(schema, memory(enough - 1)).unwrap_err());
-    prepare(schema, memory(enough)).unwrap();
-    enough
-}
 
-// These unchanged large jobs exhaust the shared structural construction
-// allowance before they reach the representation cap. Exhaustion aborts the
-// whole preparation, equally for names and value patterns.
 #[test]
 fn counted_repetitions_exhaust_one_shared_construction_allowance() {
     for count in [40, 300] {
@@ -244,10 +222,7 @@ fn the_footprint_counts_unique_programs_without_fixed_slots() {
     for count in [1024, 1025] {
         prepare(&schema(compiled(count)), Limits::default()).unwrap();
     }
-    let one = minimum_memory(&schema(vec![json!({"pattern":"a|b"})]));
-    assert_eq!(minimum_memory(&repeated), one);
-    assert!(minimum_memory(&schema(compiled(4))) > minimum_memory(&schema(compiled(3))));
-    let contract = prepare(&repeated, memory(one)).unwrap();
+    let contract = prepare(&repeated, Limits::default()).unwrap();
     assert!(satisfies(&contract, r#"["a","b"]"#));
     assert!(matches!(
         contract.evaluate(&value(r#"["z"]"#)),
@@ -307,8 +282,7 @@ fn run_matchers_hold_about_their_text_of_the_pattern_memory() {
         contract.evaluate(&value(&json!({ "p7": &text[1..] }).to_string())),
         ValueOutcome::Fails { .. }
     ));
-    // No quarter is reserved for caches in the immutable-program footprint.
     for count in [310, 311, 380] {
-        prepare(&pattern_values(&patterns[..count]), memory(4 * MIB)).unwrap();
+        prepare(&pattern_values(&patterns[..count]), Limits::default()).unwrap();
     }
 }

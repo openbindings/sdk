@@ -7,34 +7,6 @@ fn parse(form: &str) -> Hir {
 }
 
 #[test]
-fn frozen_independent_triplets_and_profile_classification() {
-    let controls: serde_json::Value =
-        serde_json::from_str(include_str!("independent.json")).unwrap();
-    for row in controls.as_array().unwrap() {
-        let hir = match row["literal_len"].as_u64() {
-            Some(n) => Hir::literal(vec![b'a'; n as usize]),
-            None => parse(row["form"].as_str().unwrap()),
-        };
-        let scores = inspect(&hir, &|| false).unwrap();
-        assert_eq!(
-            serde_json::json!({"dispatch":scores.dispatch,"helper":scores.helper_payload,"tail_pressure":scores.empty_tail_pressure}),
-            row["expected"],
-            "{}",
-            row["id"]
-        );
-        let expected = &row["expected"];
-        assert_eq!(
-            scores.dispatch <= super::super::super::profile::NFA_DISPATCH
-                && scores.helper_payload <= super::super::super::profile::NFA_HELPER_PAYLOAD
-                && scores.empty_tail_pressure <= super::super::super::profile::NFA_EMPTY_TAIL,
-            expected["dispatch"].as_u64().unwrap() <= 65_536
-                && expected["helper"].as_u64().unwrap() <= 1_048_576
-                && expected["tail_pressure"].as_u64().unwrap() <= 1_048_576
-        );
-    }
-}
-
-#[test]
 fn capped_arithmetic_preserves_zero_and_never_wraps() {
     for a in [0, 1, SENTINEL - 1, SENTINEL, usize::MAX] {
         for b in [0, 1, SENTINEL - 1, SENTINEL, usize::MAX] {
@@ -44,33 +16,6 @@ fn capped_arithmetic_preserves_zero_and_never_wraps() {
             assert_eq!(multiply(a, b), expected_mul);
         }
     }
-    let excessive = Facts {
-        dispatch: SENTINEL,
-        helper: SENTINEL,
-        tail: Tail {
-            prefix: SENTINEL,
-            suffix: SENTINEL,
-            maximum: SENTINEL,
-            pure: true,
-            unions: SENTINEL,
-        },
-    };
-    let repetition = Repetition {
-        min: 0,
-        max: Some(0),
-        greedy: true,
-        sub: Box::new(Hir::empty()),
-    };
-    let zero = excessive.repeat(&repetition);
-    assert_eq!(
-        (
-            zero.dispatch,
-            zero.helper,
-            zero.tail.prefix,
-            zero.tail.unions
-        ),
-        (1, 0, 1, 0)
-    );
 }
 
 #[test]

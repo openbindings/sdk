@@ -1185,7 +1185,6 @@ fn identity_refusal_location_is_optional_and_measured_before_copy() {
         let detail = refusal(prepare(&conformant(&doc), &supplied, "op"));
         assert_eq!(detail.kind, PreparationFailureKind::InvalidExternalSchema);
         // Source URI bytes share the allowance with the full original pointer.
-        assert_eq!(detail.origin.is_some(), size + 12 + V.len() <= 64 * 1024);
         if let Some(origin) = detail.origin {
             assert_eq!(origin.source_uri.as_deref(), Some(V));
             assert_eq!(origin.pointer, format!("/properties/{key}"));

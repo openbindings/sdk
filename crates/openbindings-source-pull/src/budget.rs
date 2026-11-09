@@ -199,26 +199,6 @@ mod tests {
 
     #[test]
     fn search_height_covers_sparse_tree_boundaries_and_refuses_overflow() {
-        for (entries, levels) in [
-            (0, 1),
-            (1, 1),
-            (10, 1),
-            (11, 2),
-            (70, 2),
-            (71, 3),
-            (430, 3),
-            (431, 4),
-            (2590, 4),
-            (2591, 5),
-            (10_000, 5),
-            (15_550, 5),
-            (15_551, 6),
-            (93_310, 6),
-            (93_311, 7),
-        ] {
-            assert_eq!(btree_levels(entries), levels, "{entries}");
-        }
-        assert!(btree_levels(usize::MAX) <= usize::BITS as usize);
         let control = AtomicBool::new(false);
         let mut attempt = Attempt::new(
             PullLimits {

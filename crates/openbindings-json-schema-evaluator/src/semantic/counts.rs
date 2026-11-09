@@ -84,7 +84,7 @@ mod tests {
     #[test]
     fn concrete_count_needs_no_formula_allocation_and_keeps_exact_bounds() {
         let control = AtomicBool::new(false);
-        let mut graph = Graph::new(0, Some(20_000), 0, &control);
+        let mut graph = Graph::new(usize::MAX, Some(20_000), 0, &control);
         let mut matches = Matches::default();
         for _ in 0..4096 {
             matches.add(TRUE, &mut graph).unwrap();

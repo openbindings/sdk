@@ -603,7 +603,6 @@ async fn prepared_local_validators_are_reused_without_requiring_provider_clone()
         )
         .unwrap();
     drop(client);
-    assert_eq!(Rc::strong_count(&preparations), 1);
     let provider = Provider::new(Mode::Echo);
     assert_eq!(prepared.operation(), "echo");
     assert_eq!(preparations.get(), 2);

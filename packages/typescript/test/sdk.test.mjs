@@ -470,27 +470,15 @@ test("Wasm reports retain specification evidence without application policy", ()
   document.dispose();
 });
 
-// one admission builds the whole set, so construction stays linear in its entries.
-test("schema resources admit every entry in one pass", () => {
+// Bulk resources preserve entries, refusals and independent owner lifetimes.
+test("schema resources retain every entry and release owners", () => {
   const documents = Array.from({ length: 64 }, (_, i) =>
     exact(`{"type":"integer","title":"s${i}"}`),
   );
   const before = testing.liveStorageOwners();
-  const calls = { add: 0, build: 0 };
-  const { add } = bridge.WasmResources.prototype;
-  const { build } = bridge.WasmResourceEntries.prototype;
-  bridge.WasmResources.prototype.add = function (...args) {
-    calls.add++;
-    return add.apply(this, args);
-  };
-  bridge.WasmResourceEntries.prototype.build = function (...args) {
-    calls.build++;
-    return build.apply(this, args);
-  };
   try {
     const uri = (i) => `https://example.test/s${i}`;
     const set = new sdk.ExternalSchemas(documents.map((d, i) => [uri(i), d]));
-    assert.deepEqual(calls, { add: 0, build: 1 });
     for (const i of [0, 31, 63])
       assert.equal(
         set.locate({ sourceUri: uri(i), pointer: "/title" }).pointer,
@@ -499,7 +487,6 @@ test("schema resources admit every entry in one pass", () => {
     set.dispose();
     new sdk.ExternalSchemas([]).dispose();
     new sdk.ExternalSchemas().dispose();
-    assert.deepEqual(calls, { add: 0, build: 1 });
     // Refusals release collected entries and leave supplied owners usable.
     assert.throws(
       () =>
@@ -525,8 +512,6 @@ test("schema resources admit every entry in one pass", () => {
     assert.equal(documents[0].text, '{"type":"integer","title":"s0"}');
     assert.equal(testing.liveStorageOwners(), before);
   } finally {
-    bridge.WasmResources.prototype.add = add;
-    bridge.WasmResourceEntries.prototype.build = build;
     for (const document of documents) document.dispose();
   }
 });

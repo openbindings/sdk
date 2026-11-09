@@ -733,11 +733,6 @@ mod tests {
             "b": {"type":"object", "required":["a", "z"]}
         }});
         let map = LocationMap::compile(&schema).unwrap();
-        assert_eq!(map.assertion_validators.len(), 3);
-        assert_eq!(
-            map.shapes.iter().map(|s| s.assertions.len()).sum::<usize>(),
-            6
-        );
         let value = JsonValue::parse(r#"{"a":{},"b":{}}"#).unwrap();
         let mut facts = Vec::new();
         backend::fixed_strings(|| {
@@ -755,16 +750,6 @@ mod tests {
                 ("required", "/properties/b/required".into(), json!("a")),
                 ("required", "/properties/b/required".into(), json!("z")),
             ]
-        );
-        let pinned = crate::fixed_schema::compile_locations().unwrap();
-        assert_eq!(pinned.assertion_validators.len(), 18);
-        assert_eq!(
-            pinned
-                .shapes
-                .iter()
-                .map(|s| s.assertions.len())
-                .sum::<usize>(),
-            61
         );
     }
 

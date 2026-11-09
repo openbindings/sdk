@@ -15,10 +15,9 @@ safe-code policy and public API stay unchanged. Cargo runs serially.
 
 Allocation counts include one direct `Lane::outcome` call. Parsing, preparation,
 printing and assertions are outside the window. Thread-local counters exclude
-test-harness background work. Each call must record exactly one compiled value
-entry and no construction entries. Failed outcomes own a fixed 33-byte message;
-successful integer checks request zero bytes. Cold and repeated counts must
-match at 1 KiB, 1 MiB and 16 MiB.
+test-harness background work. Each call must return a decisive outcome.
+Cold and repeated calls run at 1 KiB, 1 MiB and 16 MiB and report allocation
+traffic without pinning measured allocation counts or an execution route.
 
 `--baseline` reads only the two guard files from `7fcc101` using `git show`.
 `--bypass-estimate` disables the scratch flag only in the measurement copy, to

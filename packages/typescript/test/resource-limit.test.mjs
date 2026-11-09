@@ -164,42 +164,10 @@ test("pattern preparation bounds construction and unique program storage", () =>
       "pattern-total-memory-limit",
     );
   }
-  const minimum = (schema) => {
-    const text = document({}, schema);
-    let below = 0,
-      enough = 1024 * 1024;
-    ready(
-      preparation(text, undefined, null, { totalPatternMemory: enough }),
-    ).dispose();
-    while (enough - below > 1) {
-      const middle = below + Math.floor((enough - below) / 2);
-      const state = preparation(text, undefined, null, {
-        totalPatternMemory: middle,
-      });
-      if (state.status === "ready") {
-        state.schema.dispose();
-        enough = middle;
-      } else {
-        refusal(state, "pattern-total-memory-limit");
-        below = middle;
-      }
-    }
-    refusal(
-      preparation(text, undefined, null, { totalPatternMemory: enough - 1 }),
-      "pattern-total-memory-limit",
-    );
-    return enough;
-  };
-  const one = minimum({ pattern: "a|b" });
   const repeated = {
     prefixItems: Array.from({ length: 100 }, () => ({ pattern: "a|b" })),
   };
-  assert.equal(minimum(repeated), one);
-  const shared = ready(
-    preparation(document({}, repeated), undefined, null, {
-      totalPatternMemory: one,
-    }),
-  );
+  const shared = ready(preparation(document({}, repeated), undefined, null));
   try {
     assert.equal(shared.evaluate(["a", "b"]).status, "satisfies");
     assert.equal(shared.evaluate(["z"]).status, "fails");

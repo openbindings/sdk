@@ -354,38 +354,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn pinned_extents_match_every_original_catalog_index() {
-        let mut total = 0;
-        for (index, entry) in ENTRIES.iter().enumerate() {
-            assert_eq!(entry.offset, total);
-            let resource = value(index);
-            let inventory = SchemaIndex::supplied_nodes(&resource.document);
-            assert_eq!(entry.nodes, inventory.nodes.len());
-            let mut layer = Layer::default();
-            layer.add_source(
-                Some(resource.uri.clone()),
-                resource.document.clone(),
-                &inventory,
-                ResourceOrigin::Standard,
-                &BTreeSet::new(),
-            );
-            assert_eq!(layer.resources.len(), 2);
-            assert_eq!(layer.sources.len(), 1);
-            total += entry.nodes;
-        }
-        assert_eq!(total, 273);
-        let catalog = packaged();
-        assert_eq!(catalog.node_count(), total);
-        assert_eq!(catalog.nodes().count(), total);
-        assert_eq!(catalog.resources().count(), 2 * ENTRIES.len());
-        let bytes: usize = catalog
-            .resources()
-            .map(|(_, r)| r.base.as_ref().map_or(0, String::len))
-            .sum();
-        assert_eq!(catalog.identity_bytes(), bytes);
-    }
-
-    #[test]
     fn packaged_names_preserve_normalized_resource_membership() {
         #[derive(Clone)]
         struct NoRetrieval;

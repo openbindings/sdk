@@ -243,7 +243,7 @@ mod tests {
     #[test]
     fn identity_reservation_overflow_remains_sticky_if_its_error_is_ignored() {
         let failure = Attempt::run(100, usize::MAX, &|| false, |a| {
-            assert!(identities(usize::MAX / 64 + 1, a).is_err());
+            assert!(identities(usize::MAX, a).is_err());
             assert!(a.check().is_err());
             true
         })

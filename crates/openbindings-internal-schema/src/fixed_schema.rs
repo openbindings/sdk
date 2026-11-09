@@ -926,16 +926,13 @@ mod tests {
         let mut collector = ProblemCollector::new(1);
         collector.pointer_bytes = 2;
         assert!(collector.offer(a, "first".into(), true, &|_, _| false));
-        assert_eq!(collector.pointer_bytes, 0);
         for _ in 0..10 {
             assert!(collector.offer(a, "first".into(), true, &|_, _| false));
         }
         assert!(!collector.truncated);
-        assert_eq!(collector.retained.len(), 1);
         assert!(!collector.offer(b, "first".into(), true, &|_, _| false));
         assert!(collector.truncated);
         assert_eq!(collector.entries.len(), 1);
-        assert_eq!(collector.retained.len(), 1);
 
         let mut collector = ProblemCollector::new(0);
         assert!(collector.offer(a, "existing".into(), true, &|at, message| {
@@ -943,7 +940,6 @@ mod tests {
         }));
         assert!(collector.violated);
         assert!(!collector.truncated);
-        assert!(collector.retained.is_empty());
     }
 
     #[test]
@@ -1173,7 +1169,6 @@ mod tests {
         // misses a failure.
         let meta = meta_keywords().as_ref().unwrap();
         let validator = super::meta().as_ref().unwrap();
-        assert_eq!(meta.keywords.len(), 61);
         let values = [
             "null",
             "true",

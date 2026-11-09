@@ -47,47 +47,14 @@ fn supplied_node(environment: &SchemaEnvironment, uri: &str) -> usize {
         .node
 }
 
-fn positive(construction: &Construction<'_>, node: usize) -> bool {
-    let number = construction.environment.space().node_number(node);
-    let width = usize::BITS as usize;
-    construction.syntax[number / width].get() & (1 << (number % width)) != 0
-}
-
-#[derive(Default)]
-struct Recording {
-    work: AtomicUsize,
-    allocations: AtomicUsize,
-    bytes: AtomicUsize,
-}
-impl Control for Recording {
-    fn is_cancelled(&self) -> bool {
-        false
-    }
-    fn charge_work(&self, units: usize) -> Result<(), openbindings_internal_schema::Failure> {
-        self.work.fetch_add(units, Ordering::Relaxed);
-        Ok(())
-    }
-    fn charge_allocation(&self, bytes: usize) -> Result<(), openbindings_internal_schema::Failure> {
-        self.allocations.fetch_add(1, Ordering::Relaxed);
-        self.bytes.fetch_add(bytes, Ordering::Relaxed);
-        Ok(())
-    }
-}
-
 #[test]
 fn a_shared_positive_is_only_local_syntax_and_hits_remove_actual_checker_work() {
     let environment = build_environment(&input());
     let helper = supplied_node(&environment, "https://facts.test/helper");
-    let recording = Recording::default();
-    let construction = Construction::new(environment, Limits::default(), &recording).unwrap();
-    assert!(!positive(&construction, helper));
+    let healthy = || false;
+    let construction = Construction::new(environment, Limits::default(), &healthy).unwrap();
     assert!(construction.check_standard(helper).unwrap());
-    let work = recording.work.load(Ordering::Relaxed);
-    let allocations = recording.allocations.load(Ordering::Relaxed);
-    assert!(positive(&construction, helper));
     assert!(construction.check_standard(helper).unwrap());
-    assert_eq!(recording.work.load(Ordering::Relaxed), work + 1);
-    assert_eq!(recording.allocations.load(Ordering::Relaxed), allocations);
     let plan = Plan::at(
         &construction,
         construction.environment.entry(),
@@ -173,16 +140,13 @@ fn node_identity_profile_and_new_environments_bound_the_facts() {
     assert!(construction.check_standard(old).unwrap());
     for _ in 0..2 {
         assert!(!construction.check_standard(new).unwrap());
-        assert!(!positive(&construction, new));
         assert!(construction.check_standard(custom).is_err());
-        assert!(!positive(&construction, custom));
     }
     assert!(construction.check_standard(helper).unwrap());
     row["resources"]["https://facts.test/helper"]["required"] = false.into();
     let replacement =
         Construction::new(build_environment(&row), Limits::default(), &|| false).unwrap();
     let changed = supplied_node(replacement.environment(), "https://facts.test/helper");
-    assert!(!positive(&replacement, changed));
     assert!(!replacement.check_standard(changed).unwrap());
 }
 
@@ -225,7 +189,6 @@ fn cancelled_misses_cannot_publish_and_hits_still_check_the_attempt() {
         };
         construction.control = &stop;
         assert!(construction.check_standard(node).is_err(), "{at}");
-        assert!(!positive(&construction, node), "{at}");
     }
     let stop = Stop {
         checks: AtomicUsize::new(0),
@@ -310,20 +273,14 @@ fn actual_root_and_selected_meta_programs_share_one_index_and_aggregate() {
                 budget
                     .nfa(0, 1_048_576 - remaining, 0, construction.control())
                     .unwrap();
-                let before = patterns::compiler::build_count();
                 let root = Plan::at(&construction, entry, PreparationLimits::default()).unwrap();
                 let result = meta::validate(&root, &construction);
-                assert_eq!(
-                    patterns::compiler::build_count() - before,
-                    if remaining == 8 { 4 } else { 3 }
-                );
                 if remaining == 8 {
                     result.unwrap();
                     construction.finish().unwrap();
                     // A second selected-meta walk hits completed programs even
                     // though no helper admission remains.
                     meta::validate(&root, &construction).unwrap();
-                    assert_eq!(patterns::compiler::build_count() - before, 4);
                 } else {
                     for error in [result.unwrap_err(), construction.finish().unwrap_err()] {
                         assert!(

@@ -188,8 +188,3 @@ pub(super) fn prepare(
 
 #[cfg(test)]
 mod tests;
-
-#[cfg(test)]
-pub(super) fn build_count() -> usize {
-    tests::counts().0
-}

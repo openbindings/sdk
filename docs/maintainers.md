@@ -186,7 +186,8 @@ It generates 1,008 schemas, probes their boundaries, and prints verdict and
 compiled-route counts. The test asserts a compiled comparison floor. For a larger
 reproducible run, prefix the command with `OB_DIFFERENTIAL_CASES=20000` and
 `OB_DIFFERENTIAL_SEEDS=2f6b95d1c0a47e33,1,deadbeef,9e3779b97f4a7c15`.
-A disagreement prints the seed, case, exact schema/value and both outcomes.
+The differential compares complete outcomes against independently prepared Original
+and retains seed and case coordinates for reproducing a disagreement.
 The older work-capped reference-placement test remains separate.
 
 `tools/verify.py` also runs the [fuzz harness](../fuzz/README.md)'s committed seed

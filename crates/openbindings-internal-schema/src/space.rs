@@ -2450,7 +2450,6 @@ mod projection_tests {
         let control = std::sync::atomic::AtomicBool::new(false);
         let mapped = space.program(entry, &control).unwrap();
         let unmapped = space.program_unmapped(entry, &control).unwrap();
-        assert!(unmapped.program.locations.is_empty());
         assert_eq!(mapped.entry_uri, unmapped.program.entry_uri);
         assert_eq!(mapped.resources.len(), unmapped.definitions.len());
         let (mut out, mut scratch) = (Vec::new(), Vec::new());

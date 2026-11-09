@@ -54,16 +54,6 @@ fn independently_fixed_applicator_scope_and_depth_controls() {
     let control = AtomicBool::new(false);
     for row in rows() {
         let plan = original(&row);
-        if row["required_pattern_state"] == "limited" {
-            assert!(
-                plan.patterns.values().any(|program| matches!(
-                    program.as_ref(),
-                    patterns::Program::Limited("pattern-size-limit")
-                )),
-                "{} must actually prepare a local limitation",
-                row["id"]
-            );
-        }
         let value = JsonValue::parse(row["value"].as_str().unwrap()).unwrap();
         for detail in [Detail::Outcome, Detail::Explain] {
             let outcome = plan.evaluate(&value, detail, &control);

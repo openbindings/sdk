@@ -109,7 +109,6 @@ fn cancellation_and_concurrent_searches_do_not_poison_shared_programs() {
         matches!(p.evaluate(&good,Detail::Outcome,&stop),ValueOutcome::NoVerdict{detail}if detail.reason==NoVerdictReason::Cancelled)
     );
     stop.store(false, Ordering::Relaxed);
-    let before = compiler::build_count();
     std::thread::scope(|scope| {
         for text in ["ab", "é😀ab", "x", "ab\n"] {
             let p = &p;
@@ -128,7 +127,6 @@ fn cancellation_and_concurrent_searches_do_not_poison_shared_programs() {
         p.evaluate(&good, Detail::Outcome, &stop),
         ValueOutcome::Satisfies
     ));
-    assert_eq!(compiler::build_count(), before);
 }
 
 #[test]

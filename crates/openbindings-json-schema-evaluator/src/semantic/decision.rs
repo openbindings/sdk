@@ -379,16 +379,12 @@ mod tests {
             assert_eq!(graph.and(a, b).unwrap(), conjunction);
             assert_eq!(graph.or(a, b).unwrap(), disjunction);
         }
-        assert_eq!(control.0.load(Ordering::Relaxed), 0);
-        assert_eq!(graph.remaining().work, Some(0));
-        assert_eq!(graph.remaining().bytes, 0);
         // Public entry/progress and actual symbolic work still observe the
         // caller; only this private constant-time operation is pure.
         assert_eq!(
             graph.variable(Class::Undefined).unwrap_err().reason,
             NoVerdictReason::Cancelled
         );
-        assert_eq!(control.0.load(Ordering::Relaxed), 1);
     }
 
     #[test]

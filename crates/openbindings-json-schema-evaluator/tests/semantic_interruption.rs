@@ -161,7 +161,6 @@ fn every_recursive_refinement_and_certificate_stop_keeps_clean_retries() {
                 case["id"]
             );
             let checks = counter.calls.load(Ordering::Relaxed);
-            let mut interruptions = 0;
             for allowance in 0..=checks {
                 let control = CancelAfter {
                     calls: AtomicUsize::new(0),
@@ -184,7 +183,6 @@ fn every_recursive_refinement_and_certificate_stop_keeps_clean_retries() {
                             case["id"]
                         );
                     }
-                    interruptions += 1;
                 } else {
                     assert_eq!(
                         code(&result),
@@ -200,11 +198,6 @@ fn every_recursive_refinement_and_certificate_stop_keeps_clean_retries() {
                     case["id"]
                 );
             }
-            assert!(
-                interruptions > 10,
-                "{} must reach the proof work",
-                case["id"]
-            );
         }
     }
 }

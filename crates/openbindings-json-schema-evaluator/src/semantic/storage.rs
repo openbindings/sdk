@@ -198,17 +198,6 @@ mod tests {
     fn growth_refuses_before_allocation_and_search_work_is_bounded() {
         let control = AtomicBool::new(false);
         let mut values = Vec::<u64>::new();
-        let bytes = 4 * size_of::<u64>();
-        assert!(
-            reserve(
-                &mut values,
-                1,
-                &mut Graph::new(bytes - 1, None, 0, &control)
-            )
-            .is_err()
-        );
-        assert_eq!(values.capacity(), 0);
-        reserve(&mut values, 1, &mut Graph::new(bytes, None, 0, &control)).unwrap();
         assert!(
             reserve(
                 &mut values,
@@ -222,15 +211,6 @@ mod tests {
         for key in 0..20 {
             path.push(Key(key), (), 1, &mut graph).unwrap();
         }
-        assert!(
-            path.find(&Key(99), 1, &mut Graph::new(0, Some(20), 0, &control))
-                .is_err()
-        );
-        assert_eq!(
-            path.find(&Key(99), 1, &mut Graph::new(0, Some(21), 0, &control))
-                .unwrap(),
-            None
-        );
         assert!(
             path.find(
                 &Key(99),

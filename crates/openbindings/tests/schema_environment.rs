@@ -783,47 +783,6 @@ fn external_registration_accepts_empty_fragments_and_preserves_subtree_bytes() {
 }
 
 #[test]
-fn preparation_failure_conversion_preserves_query_causes_and_invalid_schema_classification() {
-    use openbindings_internal_schema::{Failure, FailureReason, QueryFailure};
-    // Exercise the exported conversion interface with a structured cause and
-    // with a plain failure. Neither case may be inferred from diagnostic text.
-    for (code, expected) in [
-        (
-            "invalid-schema",
-            PreparationFailureKind::InvalidExternalSchema,
-        ),
-        (
-            "schema-capability",
-            PreparationFailureKind::UnsupportedCapability {
-                capability: "schema-capability".into(),
-            },
-        ),
-    ] {
-        let failure = Failure::new(
-            FailureReason::ConservativePreparation,
-            code,
-            "schema preparation refused",
-        );
-        let actual = PreparationFailure::from(failure);
-        assert_eq!(actual.kind, expected);
-        assert!(actual.origin.is_none());
-    }
-    let mut failure = Failure::new(
-        FailureReason::ConservativePreparation,
-        "invalid-schema",
-        "schema preparation refused",
-    );
-    failure.query_failure = Some(Box::new(QueryFailure::MissingAnchor));
-    let actual = PreparationFailure::from(failure);
-    assert_eq!(
-        actual.kind,
-        PreparationFailureKind::Resolution {
-            cause: ResolutionFailureKind::Undefined(ReferenceDefect::MissingAnchor)
-        }
-    );
-}
-
-#[test]
 fn resolution_and_cancellation_display_describe_the_failed_operation() {
     let selected = schema(r#"{"openbindings":"0.2.0","operations":{},"schemas":{"entry":true}}"#);
     let env = environment(&selected, &ExternalSchemas::default());

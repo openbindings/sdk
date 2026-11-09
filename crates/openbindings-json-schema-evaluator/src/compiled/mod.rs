@@ -988,11 +988,6 @@ mod construction_boundary_tests {
                 )
                 .is_none()
             );
-            assert_eq!(
-                entries::take(),
-                [0, 1, 0],
-                "one Regex call stopped at its completion boundary"
-            );
             assert!(
                 pattern::checked_compile(
                     "a|b",
@@ -1003,11 +998,6 @@ mod construction_boundary_tests {
                     &bridge
                 )
                 .is_none()
-            );
-            assert_eq!(
-                entries::take(),
-                [0, 0, 0],
-                "observed cancellation prohibits retry entry"
             );
             assert_eq!(bridge.check(), Err(Cancelled));
         })

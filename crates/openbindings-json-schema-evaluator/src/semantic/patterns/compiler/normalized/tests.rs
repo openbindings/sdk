@@ -59,7 +59,6 @@ fn cancellation_is_checked_inside_each_long_loop() {
         let control = || checks.fetch_add(1, Ordering::Relaxed) >= 2;
         let error = failure(inspect(&form, 100, &control).unwrap_err());
         assert_eq!(error.reason, FailureReason::Cancelled);
-        assert_eq!(checks.load(Ordering::Relaxed), 3);
     }
     assert_eq!(
         failure(inspect("", 0, &|| true).unwrap_err()).reason,

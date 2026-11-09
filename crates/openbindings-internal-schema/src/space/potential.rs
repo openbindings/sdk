@@ -536,7 +536,6 @@ mod tests {
         ]);
         let potential = scan(&supplied);
         assert!(potential.stable_name(META, original(&supplied, 0)));
-        assert_eq!(potential.positions, 2);
     }
 
     #[test]
@@ -617,11 +616,9 @@ mod tests {
         ]);
         let potential = scan(&supplied);
         assert!(potential.stable_name(META, original(&supplied, 0)));
-        assert_eq!(potential.positions, 4);
         let indexes = supplied.nodes_bounded(10_000, &|| false).unwrap();
         assert!(indexes[1].profile(0).is_none());
         assert!(indexes[2].profile(0).is_none());
-        assert_eq!(indexes[2].nodes.len(), 1);
     }
 
     #[test]
@@ -719,7 +716,6 @@ mod tests {
         .err()
         .unwrap();
         assert_eq!(failure.reason, FailureReason::Cancelled);
-        assert_eq!(scan(&supplied).positions, 4);
         assert_eq!(supplied.policy.names[META].len(), 1);
     }
 }

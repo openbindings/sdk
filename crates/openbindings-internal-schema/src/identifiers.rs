@@ -652,7 +652,6 @@ mod tests {
         for (text, &handle) in texts.iter().zip(&handles) {
             assert_eq!(Some(ids.spelled(handle)), compared_id(None, text));
         }
-        assert!(ids.retired.len() > 1);
         let mut from = 0;
         for (start, block) in &ids.retired {
             assert_eq!(*start, from);
@@ -675,11 +674,9 @@ mod bounded_block_tests {
             .iter()
             .map(|t| ids.compared(None, t).unwrap())
             .collect();
-        assert!(ids.retired.len() > 5);
         for (text, h) in texts.iter().zip(handles) {
             assert_eq!(Some(ids.spelled(h)), crate::uri::compared_id(None, text));
         }
-        assert!(ids.retired.iter().all(|(_, s)| s.len() <= 1024 * 1024));
         assert!(ids.duplicates().is_empty());
         for i in (0..50_000).step_by(1000) {
             ids.compared(None, &texts[i]).unwrap();

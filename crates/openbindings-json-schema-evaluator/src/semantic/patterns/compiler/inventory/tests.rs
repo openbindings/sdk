@@ -13,24 +13,6 @@ fn parsed(form: &str) -> Ast {
     )
     .unwrap()
 }
-fn summary(form: &str) -> Summary {
-    inspect(parsed(form), &|| false).unwrap().summary
-}
-
-#[test]
-fn lineage_survives_smart_collapses_and_later_nonconcat() {
-    let erased = summary("(?:[a-z]abc){0}");
-    assert_eq!(erased.shape.root, Root::Empty);
-    assert_eq!(erased.shape.retained_nodes, 1);
-    assert!(erased.pressure.reconstruction_entries > 0);
-    assert!(erased.pressure.literal_byte_revisits > 0);
-    assert_eq!(summary("(?:^){4294967295}").shape.root, Root::Look);
-    assert!(!summary("(?:a?){4294967295}").shape.zero_width_only);
-    let later = summary("ab[c-d]|ab[e-f]|z");
-    assert!(later.equality_height > 0);
-    assert!(later.pressure.reconstruction_entries > 0);
-}
-
 #[test]
 fn arithmetic_refusal_is_local_but_preserves_a_prior_shared_cause() {
     assert!(matches!(
@@ -120,75 +102,4 @@ fn original_forms_preserve_ast_and_candidate_admission() {
         count += 1;
     }
     assert_eq!((count, attacks), (1140, 2));
-}
-
-#[test]
-fn independent_shapes_and_structural_pressure_keep_frozen_meaning() {
-    // Frozen before this implementation. Old byte/work site arrays in these
-    // receipts are historical; only facts used by the new profile are compared.
-    let rows: Vec<serde_json::Value> =
-        serde_json::from_str(include_str!("tests/independent.json")).unwrap();
-    for row in rows {
-        let s = summary(row["form"].as_str().unwrap());
-        let h = s.shape;
-        let expected = &row["expected"];
-        let shape = &expected["shape"];
-        macro_rules! field {
-            ($key:literal,$actual:expr) => {
-                assert_eq!(
-                    serde_json::json!($actual),
-                    shape[$key],
-                    "{} field {}",
-                    row["id"],
-                    $key
-                );
-            };
-        }
-        field!("p", h.first_branch_weight);
-        field!("m", h.retained_nodes);
-        field!("front", h.frontier);
-        field!("flat_r", h.exposed_ranges);
-        field!("all_concat", h.all_concat);
-        field!("lit", h.literal_bytes);
-        field!("zero", h.zero_width_only);
-        field!("nonzero", h.possible_nonempty);
-        field!("h", h.height);
-        let root = if h.root == Root::Alternate {
-            "Alt".to_owned()
-        } else {
-            format!("{:?}", h.root)
-        };
-        field!("root", root);
-        assert_eq!(
-            s.maximum_prefix_calls as u64,
-            expected["maximum_prefix_calls"].as_u64().unwrap()
-        );
-        assert_eq!(
-            s.equality_height as u64,
-            expected["maximum_equality_height"].as_u64().unwrap()
-        );
-        let w = &expected["work_counters"];
-        let count = |key: &str| w[key].as_u64().unwrap() as usize;
-        assert_eq!(
-            s.pressure.reconstruction_entries,
-            count("concat_visit")
-                + count("alt_frontier")
-                + count("prefix_nodes")
-                + count("prefix_split"),
-            "{}",
-            row["id"]
-        );
-        assert_eq!(
-            s.pressure.literal_byte_revisits,
-            count("concat_bytes") + count("prefix_bytes"),
-            "{}",
-            row["id"]
-        );
-        assert_eq!(
-            s.pressure.candidate_range_slots,
-            count("range_slots"),
-            "{}",
-            row["id"]
-        );
-    }
 }

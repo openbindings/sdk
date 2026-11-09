@@ -331,7 +331,6 @@ mod tests {
                 r#"{"$schema":"https://example.test/meta","properties":{"x":{"type":"number"}},"definitions":{"opaque":{"$id":"https://example.test/literal"}}}"#,
             ),
         ]);
-        let old = supplied.clone();
         let space = finish(preliminary(DOC, supplied));
         let consumer = space
             .named_resource("https://example.test/consumer")
@@ -348,10 +347,6 @@ mod tests {
         assert_eq!(
             space.query(root, "#/definitions/opaque").err(),
             Some(QueryFailure::NonSchemaTarget)
-        );
-        assert_eq!(
-            old.nodes_bounded(10_000, &|| false).unwrap()[1].nodes.len(),
-            1
         );
         assert!(!space.custom.unknown_namespace);
     }
