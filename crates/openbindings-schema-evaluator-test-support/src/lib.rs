@@ -236,7 +236,7 @@ pub fn run<E: SchemaEvaluator + ?Sized>(evaluator: &E) -> Report {
             ));
             continue;
         };
-        let prepared = input.prepare(evaluator, &resources, &PreparationLimits::default());
+        let prepared = input.prepare(evaluator, &resources);
         for case in &group.cases {
             let value = JsonValue::parse(&case.value).expect("packaged instance JSON");
             let original = value.text().to_owned();

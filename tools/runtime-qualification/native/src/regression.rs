@@ -16,7 +16,6 @@ fn prepare(source: &str) -> PreparedSchema<openbindings_json_schema_evaluator::D
         .prepare(
             &DefaultEvaluator::new(),
             &openbindings::ExternalSchemas::default(),
-            &openbindings::PreparationLimits::default(),
         )
         .expect("contract must prepare")
 }

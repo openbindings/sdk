@@ -37,9 +37,10 @@ validate input, edit opaque values and retain prepared work.
 [Document to typed result](docs/document-to-typed-result.md) adds a complete call
 through a local adapter, failure handling and Rust output decoding. Rust needs no runtime
 initialization. Canonical operations expose contextual `Schema` owners.
-`schema.prepare(&evaluator, &external_schemas, &preparation_limits)` returns a
+`schema.prepare(&evaluator, &external_schemas)` returns a
 prepared validator or a preparation failure, separately from value results.
-`prepared.evaluate_json(input)?` admits and checks exact JSON; `explain(&value)`
+Parse exact JSON with `let value = JsonValue::parse(input)?`, then call
+`prepared.evaluate(&value)`; `explain(&value)`
 requests diagnostics at original instance and schema locations. The
 [TypeScript guide](packages/typescript/README.md) starts with a
 complete document-to-verdict example and covers initialization and disposal.

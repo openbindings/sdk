@@ -18,11 +18,7 @@ fn prepared(
         .expect("conformant document");
     let operation = doc.resolve_operation("op").expect("declared operation");
     let contract = operation.input().expect("declared input");
-    match contract.prepare(
-        &DefaultEvaluator::with_limits(limits),
-        &resources,
-        &openbindings::PreparationLimits::default(),
-    ) {
+    match contract.prepare(&DefaultEvaluator::with_limits(limits), &resources) {
         Ok(contract) => contract,
         Err(detail) => panic!("{detail:?}"),
     }
@@ -43,7 +39,6 @@ fn prepare_input(
         .prepare(
             &DefaultEvaluator::new(),
             &openbindings::ExternalSchemas::default(),
-            &openbindings::PreparationLimits::default(),
         )
 }
 #[test]

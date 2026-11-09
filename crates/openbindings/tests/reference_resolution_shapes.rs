@@ -63,7 +63,9 @@ fn probe_reports_preserve_the_original_resolver_results() {
             .unwrap();
             let draft =
                 document.references_with_resources(resources.clone(), &AtomicBool::new(false));
-            let conformant = proof.references_with_resources(resources, &AtomicBool::new(false));
+            let conformant = proof
+                .document()
+                .references_with_resources(resources, &AtomicBool::new(false));
             assert_eq!(draft, conformant, "{shape}/{supplied}");
             assert!(draft.complete);
             observed.insert(

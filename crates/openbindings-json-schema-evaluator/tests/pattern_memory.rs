@@ -30,7 +30,6 @@ fn prepare(
         .prepare(
             &DefaultEvaluator::with_limits(limits),
             &openbindings::ExternalSchemas::default(),
-            &openbindings::PreparationLimits::default(),
         )
 }
 fn memory(bytes: usize) -> Limits {

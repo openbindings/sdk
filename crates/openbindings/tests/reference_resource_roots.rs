@@ -45,7 +45,9 @@ fn resource_roots_agree_on_drafts_proofs_and_schema_nodes() {
         if case["conformant"] == true {
             let proof = document.validate().unwrap().conformant().unwrap();
             assert_eq!(
-                proof.references_with_resources(resources.clone(), &control),
+                proof
+                    .document()
+                    .references_with_resources(resources.clone(), &control),
                 expected_report
             );
             for reference in &expected_report.references {

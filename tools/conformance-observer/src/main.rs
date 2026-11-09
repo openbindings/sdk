@@ -226,11 +226,7 @@ fn prepare(
         operation.output()
     };
     match contract {
-        Some(contract) => Preparation::Prepared(contract.prepare(
-            evaluator,
-            resources,
-            &openbindings::PreparationLimits::default(),
-        )),
+        Some(contract) => Preparation::Prepared(contract.prepare(evaluator, resources)),
         None => Preparation::NoContract,
     }
 }

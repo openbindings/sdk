@@ -75,3 +75,7 @@ Descriptions carry `pull` exactly when `supports` names
 `InvokeDescription` retain each disclosure's sentence and `executes` flag.
 Unknown operation keys in `supports` remain valid claims. These disclosures do
 not grant permission to execute.
+
+Borrow an admitted carrier's exact object with `value()`; use `value().clone()`
+when an owned object is needed. On interface carriers, `to_json` means bounded
+encoding, as on invocation errors and requests.

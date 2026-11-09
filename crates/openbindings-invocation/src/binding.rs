@@ -48,6 +48,9 @@ pub trait BindingInvoker {
 }
 /// Optional SDK routing knowledge for operation-name selection. This is not a
 /// portable kind-support query. Explicit binding invocation does not consult it.
+/// A provider without routing knowledge implements `can_invoke` as `false`,
+/// never a blanket `true`. Operation-name selection then fails closed with
+/// `ERR_BINDING_NOT_FOUND`; explicit bindings are unaffected.
 pub trait InvocationSupport {
     /// Whether this configuration can attempt the source's exact kind identifier.
     fn can_invoke(&self, kind: &str) -> bool;

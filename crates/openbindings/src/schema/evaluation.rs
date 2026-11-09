@@ -640,7 +640,7 @@ pub(crate) fn original_location(at: openbindings_internal_schema::Location) -> S
 /// let document = Document::parse(r#"{"openbindings":"0.2.0","operations":{"run":{"input":true}}}"#)?;
 /// let proof = document.validate()?.conformant().unwrap();
 /// let schema = proof.resolve_operation("run").unwrap().input().unwrap();
-/// let prepared = schema.prepare(&TrueOnly, &ExternalSchemas::default(), &PreparationLimits::default())?;
+/// let prepared = schema.prepare(&TrueOnly, &ExternalSchemas::default())?;
 /// drop((schema, proof, document));
 /// assert!(matches!(prepared.evaluate(&JsonValue::null()), ValueOutcome::Satisfies));
 /// # Ok::<(), Box<dyn std::error::Error>>(())
@@ -706,38 +706,6 @@ impl<V: SchemaValidator> fmt::Debug for PreparedSchema<V> {
     }
 }
 impl<V: SchemaValidator> PreparedSchema<V> {
-    /// Admit exact JSON text or bytes under [`JsonLimits::default`], then validate.
-    /// Every [`ValueOutcome`] is returned as `Ok`, including undefined and
-    /// no-verdict. Duplicate members are retained by admission and yield
-    /// no-verdict during validation. Number tokens are never rounded.
-    ///
-    /// Use [`JsonValue::parse_with_limits`] and [`Self::evaluate`] for custom
-    /// admission limits or to retain exact values for repeated checks. Use
-    /// [`Self::evaluate_with_control`] for cooperative validation cancellation.
-    ///
-    /// # Errors
-    /// Returns [`InputError`] only when JSON admission fails, including invalid
-    /// UTF-8, a byte order mark, malformed JSON or an exceeded input limit.
-    pub fn evaluate_json(&self, input: impl AsRef<[u8]>) -> Result<ValueOutcome, InputError> {
-        self.evaluate_json_with_control(input, &crate::control::NeverCancelled)
-    }
-    /// Admit exact JSON under the default parse bounds, then evaluate with a
-    /// cooperative control. Parsing is bounded but is not interruptible by this
-    /// control. Malformed text remains an ingress error even after cancellation.
-    ///
-    /// # Errors
-    /// Returns [`InputError`] for invalid or over-budget JSON admission; valid
-    /// admitted input can yield a cancelled [`ValueOutcome::NoVerdict`].
-    pub fn evaluate_json_with_control(
-        &self,
-        input: impl AsRef<[u8]>,
-        control: &dyn WorkControl,
-    ) -> Result<ValueOutcome, InputError> {
-        let value = JsonValue::parse(input)
-            .map_err(openbindings_internal_json::backend::value_check_refusal)?;
-        Ok(self.evaluate_with_control(&value, control))
-    }
-
     /// Validate an admitted exact value, distinguishing satisfies, fails, undefined
     /// (the specification gives the value no defined validity) and no-verdict (the
     /// evaluator could not answer). For ordinary Rust data first use [`JsonValue::from_serializable`];
@@ -862,6 +830,10 @@ forward_validator!(Arc);
 forward_validator!(Rc);
 forward_validator!(Box);
 
+// An internal space check can refuse an invalid external schema as
+// `ConservativePreparation` with code `invalid-schema`; only internal entry
+// points reach it, and public preparation refuses that schema as
+// `InvalidExternalSchema` first. Map it here if a public path ever reaches it.
 #[doc(hidden)]
 impl From<openbindings_internal_schema::Failure> for PreparationFailure {
     fn from(failure: openbindings_internal_schema::Failure) -> Self {

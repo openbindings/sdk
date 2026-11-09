@@ -95,7 +95,7 @@ pub fn keep_part(
 ) -> Result<ConformantDocument, Error> {
     // References resolve in the document holding every addition.
     let everything = result.validate_for(request, limits, control)?;
-    let references = everything.references();
+    let references = everything.document().references();
     if !references.complete {
         return Err("reference inspection stopped early".into());
     }

@@ -106,3 +106,7 @@ Qualification includes the 38 pinned pull-report cases, five published examples,
 74 independently designed controls and two illustrative kind consumers. The old
 inspection/synthesis companions and consumers are removed; full SDK integration
 and final performance qualification remain separate work.
+
+Borrow an admitted carrier's exact object with `value()`; use `value().clone()`
+when an owned object is needed. On interface carriers, `to_json` means bounded
+encoding, as on invocation errors and requests.

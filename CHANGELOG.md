@@ -4,6 +4,13 @@
 
 ### Changed
 
+- Use default preparation limits and no cancellation in Rust
+  `Schema::prepare(&evaluator, &external)`; use `prepare_with_control` for explicit
+  limits or cancellation. Keep the evaluator trait and invoker unchanged.
+- Document fail-closed routing for providers without routing knowledge, the
+  diagnostic field/accessor rule and bounded carrier encoding.
+- Add `CheckRejection::value()` to borrow its exact admitted object.
+
 - Lift `InvocationSupport` from `DefaultOperationInvoker` construction,
   configuration and schema preparation; keep it on invocation and preflight.
 - Add `InvocationError::binding_not_found()` and use it in adapters and guides.
@@ -22,6 +29,17 @@
   Exclude allocator overhead and Wasm memory growth; document later cache growth.
 
 ### Removed
+
+- Remove Rust `PreparedSchema::evaluate_json` and `evaluate_json_with_control`;
+  parse with `JsonValue::parse` or `parse_with_limits`, then `evaluate` or `explain`.
+  TypeScript `evaluateJson` retains its admission limits, messages and behavior.
+- Remove `ConformantDocument::references` and `references_with_resources`; call
+  them through `proof.document()`.
+- Make `VersionRefusal::new` crate-internal; get refusals from validation and
+  classify standalone declarations with `check_version`.
+- Remove clone-only `to_json` from `ContextChallenge`, kind-description and
+  source-pull carriers and `CheckRejection`; borrow `value()` or clone explicitly.
+  Keep bounded invocation error and request encoders.
 
 - Remove `PreflightOutcome` and schema comparison's `Identity` enum.
 - Remove `PreparedSchema::into_validator`, `SchemaInput::standalone` and

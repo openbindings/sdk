@@ -41,7 +41,7 @@ fn direct_default_validator_refuses_ambiguous_instances() {
 #[test]
 fn unavailable_annotation_source_retains_its_resolution_cause() {
     let prepared = schema(r#"{"$id":"https://entry.test/","$ref":"https://missing.test/schema","unevaluatedProperties":false}"#)
-        .prepare(&DefaultEvaluator::new(), &ExternalSchemas::default(), &PreparationLimits::default()).unwrap();
+        .prepare(&DefaultEvaluator::new(), &ExternalSchemas::default()).unwrap();
     let ValueOutcome::NoVerdict { detail } =
         prepared.evaluate(&JsonValue::parse(r#"{"x":1}"#).unwrap())
     else {

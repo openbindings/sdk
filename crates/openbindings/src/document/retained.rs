@@ -52,7 +52,10 @@ impl Document {
     /// Estimate heap bytes retained by this snapshot's shared storage now.
     ///
     /// Includes original source text, parsed nodes and buffers, and currently
-    /// built document indexes, conformance reports and cached schema resolution.
+    /// built document indexes, conformance reports and the schema resolution
+    /// cached for preparation without supplied resources. A resolution built
+    /// with supplied resources is held by that [`ExternalSchemas`](crate::ExternalSchemas) set and is
+    /// not counted here.
     /// Uses existing capacities; it does not parse, validate or initialize caches.
     /// Clones and proofs share storage: charge a snapshot once, reaching it from
     /// a proof through [`ConformantDocument::document`]. Separately owned external

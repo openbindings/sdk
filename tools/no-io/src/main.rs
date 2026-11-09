@@ -13,11 +13,7 @@ fn evaluate(
         .expect("conformant document");
     let operation = proof.resolve_operation("op").expect("declared operation");
     let input = operation.input().expect("declared input");
-    let schema = input.prepare(
-        &DefaultEvaluator::new(),
-        &resources,
-        &PreparationLimits::default(),
-    )?;
+    let schema = input.prepare(&DefaultEvaluator::new(), &resources)?;
     Ok(schema.evaluate(&JsonValue::integer(7)))
 }
 

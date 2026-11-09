@@ -150,6 +150,8 @@ validity), `no-verdict` (the SDK could not answer) or `input-error` when ordinar
 JavaScript data cannot be admitted.
 `evaluate` reads a string as a JSON string value; check JSON text or bytes, such as
 a request body, with `evaluateJson`, which admits them as `parseJson` does.
+Admission uses the default limits and precedes cancellation observation; malformed
+JSON remains an `input-error` even when the signal is already aborted.
 
 ## Browser resource management
 
@@ -464,5 +466,5 @@ owned resources and validators, process-wide packaged schemas, and Wasm memory
 growth. It reads existing sizes without adding parse or validation work.
 
 Parse failures carry `error.line` and `error.byteColumn`, one-based coordinates
-in original UTF-8 bytes. A byte column is not a JavaScript UTF-16 column. Refusals
-before parsing report 1:1 without scanning unread bytes, even with a later refusal offset.
+in original UTF-8 bytes. A byte column is not a JavaScript UTF-16 column. Only a
+refusal of input that has no source text (an edit batch) reports line 1, column 1.

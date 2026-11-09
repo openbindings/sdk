@@ -33,7 +33,6 @@ fn prepare(
         .prepare(
             &DefaultEvaluator::with_limits(limits),
             &openbindings::ExternalSchemas::default(),
-            &openbindings::PreparationLimits::default(),
         )
 }
 fn refusal_resource(failure: PreparationFailure) -> String {
@@ -69,13 +68,14 @@ fn form_bytes(pattern: &str) -> usize {
         .unwrap()
         .input()
         .unwrap()
-        .prepare(
+        .prepare_with_control(
             &DefaultEvaluator::default(),
             &openbindings::ExternalSchemas::default(),
             &openbindings::PreparationLimits {
                 max_sdk_work_units: 20_000_000,
                 ..Default::default()
             },
+            &std::sync::atomic::AtomicBool::new(false),
         )
         .unwrap_err();
     assert_eq!(refusal_resource(limited), "preparation-sdk-work-units");

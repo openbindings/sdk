@@ -158,7 +158,9 @@ fn supplied_resource_references_are_reported_transitively_once() {
     let report = draft.references_with_resources(resources.clone(), &cancelled);
     assert_eq!(
         report,
-        proof.references_with_resources(resources, &cancelled)
+        proof
+            .document()
+            .references_with_resources(resources, &cancelled)
     );
     assert!(report.complete);
     assert!(report.limitation.is_none());

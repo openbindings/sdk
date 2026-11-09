@@ -1276,10 +1276,13 @@ impl WasmPrepared {
     }
     #[wasm_bindgen(js_name=evaluateJson)]
     pub fn evaluate_json(&self, bytes: &[u8], cancelled: bool) -> Result<String, JsValue> {
-        self.prepared
-            .evaluate_json_with_control(bytes, &control(cancelled))
-            .map(|outcome| encoded(exact::json(&outcome)))
-            .map_err(input_error)
+        let value = JsonValue::parse(bytes)
+            .map_err(openbindings_internal_json::backend::value_check_refusal)
+            .map_err(input_error)?;
+        let outcome = self
+            .prepared
+            .evaluate_with_control(&value, &control(cancelled));
+        Ok(encoded(exact::json(&outcome)))
     }
     /// As [`Self::evaluate_json`], for text encoded into module memory directly.
     #[wasm_bindgen(js_name=evaluateJsonText)]

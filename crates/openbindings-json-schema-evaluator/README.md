@@ -16,9 +16,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let proof = checked.conformant().ok_or("document is not conformant")?;
     let schema = proof.resolve_operation("lookup")
         .ok_or("operation is missing")?.input().ok_or("input schema is absent")?;
-    let prepared = schema.prepare(
-        &DefaultEvaluator::new(), &ExternalSchemas::default(), &PreparationLimits::default(),
-    )?;
+    let prepared = schema.prepare(&DefaultEvaluator::new(), &ExternalSchemas::default())?;
     let value = JsonValue::parse("7")?;
     match prepared.explain(&value) {
         ValueOutcome::Satisfies => println!("satisfies"),
@@ -37,19 +35,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-`evaluate`/`evaluate_json` is the yes/no check whose failure carries no problems;
+`evaluate` is the yes/no check whose failure carries no problems;
 use `explain` when you need failure diagnostics.
 
-`Schema::prepare` returns `Result<PreparedSchema<DefaultValidator>, PreparationFailure>`.
-A preparation failure judges no value. An absent operation or absent input/output
+`Schema::prepare(&evaluator, &external)` uses default `PreparationLimits` and no
+cancellation and returns `Result<PreparedSchema<DefaultValidator>, PreparationFailure>`.
+Use `prepare_with_control(&evaluator, &external, &limits, control)` for explicit
+preparation limits or cancellation. A preparation failure judges no value. An absent operation or absent input/output
 schema is a separate `None`. A prepared schema owns its evaluation state and can
 outlive the document and resource handles. Clone it for repeated evaluation;
 preparing again performs a new preparation. Supplying different external content
 requires a new preparation.
 
-`evaluate_json` parses exact text or bytes; parsing failure is an error distinct
-from the four value outcomes. To reuse admitted values or choose parsing limits,
-use `JsonValue::parse_with_limits` followed by `PreparedSchema::evaluate`.
+Parse exact text or bytes with `JsonValue::parse` or `parse_with_limits`, then call
+`PreparedSchema::evaluate` or `explain`. Parsing failure is an error distinct
+from the four value outcomes; retain the admitted value for repeated checks.
 Duplicate instance member names produce `NoVerdict` after parsing.
 
 ## Execution paths
@@ -143,7 +143,7 @@ fn prepare_bounded(schema: &Schema, resources: &ExternalSchemas)
         schema_resources: Some(1_000),
         ..Limits::default()
     });
-    schema.prepare(&evaluator, resources, &PreparationLimits::default())
+    schema.prepare(&evaluator, resources)
 }
 ```
 

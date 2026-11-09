@@ -23,11 +23,11 @@ fn prepare(
     let operation = document
         .resolve_operation("op")
         .expect("declared operation");
-    let Ok(contract) = operation.input().expect("declared input").prepare(
-        &DefaultEvaluator::new(),
-        &resources,
-        &openbindings::PreparationLimits::default(),
-    ) else {
+    let Ok(contract) = operation
+        .input()
+        .expect("declared input")
+        .prepare(&DefaultEvaluator::new(), &resources)
+    else {
         panic!("{text}")
     };
     contract

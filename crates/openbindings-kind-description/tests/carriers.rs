@@ -44,7 +44,7 @@ fn all_pinned_carrier_cases_keep_their_published_answers() {
 fn open_output_members_and_exact_schema_data_survive_without_reconstruction() {
     let text = r#"{"kind":"example.k@1","description":"kind","supports":[],"sourceData":{"const":9007199254740993},"bindingData":false,"future":{"n":1e999999,"unit":"\ud800"}}"#;
     let description = KindDescription::from_json(exact(text)).unwrap();
-    assert_eq!(description.to_json().value().text(), text);
+    assert_eq!(description.value().value().text(), text);
     assert_eq!(
         description
             .source_data()
@@ -74,7 +74,7 @@ fn source_data_absence_null_and_runtime_context_remain_distinct() {
         r#"{"kind":"example.k@1","data":null,"context":{"token":9007199254740993,"a":1,"a":2}}"#;
     let request = CheckSourceRequest::from_json(exact(text)).unwrap();
     assert_eq!(request.data().unwrap().kind(), JsonKind::Null);
-    assert_eq!(request.to_json().value().text(), text);
+    assert_eq!(request.value().value().text(), text);
     assert_eq!(
         request
             .context()
@@ -102,7 +102,7 @@ fn source_data_absence_null_and_runtime_context_remain_distinct() {
     assert_eq!(
         CheckedSource::from_json(exact(source))
             .unwrap()
-            .to_json()
+            .value()
             .value()
             .text(),
         source
@@ -144,7 +144,7 @@ fn outer_ambiguity_is_rejected_without_interpreting_opaque_nested_values() {
     assert_eq!(
         CheckedSource::from_json(exact(data))
             .unwrap()
-            .to_json()
+            .value()
             .value()
             .text(),
         data
@@ -159,7 +159,7 @@ fn check_disclosure_is_owned_and_is_not_permission() {
     assert!(check.executes());
     assert_eq!(check.description().as_str(), Some("starts a named program"));
     assert_eq!(
-        check.to_json().value().get("future").unwrap().kind(),
+        check.value().value().get("future").unwrap().kind(),
         JsonKind::Null
     );
     assert!(format!("{check:?}").contains("CheckDescription"));
@@ -185,7 +185,7 @@ fn explicit_check_claims_and_disclosure_cannot_contradict_each_other() {
 fn check_rejection_preserves_exact_message_data_and_reserved_challenge_boundary() {
     let text = r#"{"code":"SOURCE_INVALID","message":"bad \ud800","data":{"n":9007199254740993}}"#;
     let rejection = CheckRejection::from_json(exact(text)).unwrap();
-    assert_eq!(rejection.to_json().value().text(), text);
+    assert_eq!(rejection.value().value().text(), text);
     assert_eq!(rejection.code().as_str(), Some("SOURCE_INVALID"));
     assert_eq!(rejection.message().utf16_units().last(), Some(0xd800));
     assert_eq!(
@@ -211,7 +211,7 @@ fn check_rejection_preserves_exact_message_data_and_reserved_challenge_boundary(
 fn exact_extension_prefixes_do_not_claim_document_unicode_conformance() {
     let text = r#"{"kind":"k","x-\ud800":{}}"#;
     let source = CheckedSource::from_json(exact(text)).unwrap();
-    assert_eq!(source.to_json().value().text(), text);
+    assert_eq!(source.value().value().text(), text);
     assert_eq!(
         CheckedSource::from_json(exact(r#"{"kind":"k","\ud800x-":{}}"#)).unwrap_err(),
         CarrierError::UnexpectedMember

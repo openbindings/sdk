@@ -39,9 +39,9 @@ impl CheckRejection {
     pub fn data(&self) -> Option<JsonValue> {
         self.0.value().get("data").map(|value| value.to_owned())
     }
-    /// Retain this SDK record's exact original object.
-    pub fn to_json(&self) -> JsonObject {
-        self.0.clone()
+    /// Borrow this SDK record's exact original object.
+    pub fn value(&self) -> &JsonObject {
+        &self.0
     }
 }
 impl fmt::Debug for CheckRejection {

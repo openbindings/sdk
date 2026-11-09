@@ -147,7 +147,7 @@ impl InvocationError {
     pub fn challenge(challenge: ContextChallenge) -> Self {
         Self {
             code: "CONTEXT_REQUIRED".into(),
-            data: Some(challenge.to_json().into_value()),
+            data: Some(challenge.value().clone().into_value()),
         }
     }
 

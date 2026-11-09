@@ -213,11 +213,7 @@ fn contract(
         .unwrap()
         .input()
         .unwrap()
-        .prepare(
-            evaluator,
-            &resources,
-            &openbindings::PreparationLimits::default(),
-        )
+        .prepare(evaluator, &resources)
 }
 // Replay each formerly admitted shape at its retained depth and an additional
 // level. The old stack-derived refusal is no longer a semantic requirement.

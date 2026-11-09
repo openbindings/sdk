@@ -28,11 +28,10 @@ fn prepare(
     }])
     .unwrap();
     let operation = proof.resolve_operation("op").unwrap();
-    operation.input().unwrap().prepare(
-        &DefaultEvaluator::new(),
-        &resources,
-        &openbindings::PreparationLimits::default(),
-    )
+    operation
+        .input()
+        .unwrap()
+        .prepare(&DefaultEvaluator::new(), &resources)
 }
 
 /// `S`atisfies, `F`ails, or `D` for a refusal naming the unread dialect.
@@ -387,11 +386,7 @@ fn stopped_inventory_cannot_certify_external_names_but_contained_priority_surviv
             .unwrap()
             .input()
             .unwrap()
-            .prepare(
-                &DefaultEvaluator::new(),
-                &external,
-                &PreparationLimits::default(),
-            )
+            .prepare(&DefaultEvaluator::new(), &external)
     };
     for reference in [
         "https://dialects.test/shared",

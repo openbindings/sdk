@@ -50,11 +50,11 @@ fn cheap_property_name_failures_do_not_request_diagnostics() {
                 ..Default::default()
             },
         );
-        let Ok(contract) = operation.input().expect("declared input").prepare(
-            &evaluator,
-            &openbindings::ExternalSchemas::default(),
-            &openbindings::PreparationLimits::default(),
-        ) else {
+        let Ok(contract) = operation
+            .input()
+            .expect("declared input")
+            .prepare(&evaluator, &openbindings::ExternalSchemas::default())
+        else {
             panic!()
         };
         let outcome = contract.evaluate(&value);

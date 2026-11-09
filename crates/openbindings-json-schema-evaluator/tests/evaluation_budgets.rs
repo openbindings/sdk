@@ -21,7 +21,6 @@ fn prepared(
         .prepare(
             &DefaultEvaluator::with_limits(limits),
             &openbindings::ExternalSchemas::default(),
-            &openbindings::PreparationLimits::default(),
         )
         .unwrap()
 }

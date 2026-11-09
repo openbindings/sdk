@@ -54,11 +54,7 @@ fn dynamic_references_follow_each_paths_scope_through_reference_cycles() {
             .unwrap()
             .input()
             .unwrap()
-            .prepare(
-                &DefaultEvaluator::new(),
-                &resources,
-                &openbindings::PreparationLimits::default(),
-            )
+            .prepare(&DefaultEvaluator::new(), &resources)
             .unwrap_or_else(|detail| panic!("{}: {detail:?}", case.id));
         for (value, expected) in case.values.iter().zip(&case.expected) {
             let value = JsonValue::parse(value).unwrap();

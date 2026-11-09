@@ -81,7 +81,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     let input = input_schema.prepare(
         &DefaultEvaluator::new(),
         &openbindings::ExternalSchemas::default(),
-        &openbindings::PreparationLimits::default(),
     )?;
     // Ordinary values have checked Serde admission. Exact text preserves its tokens.
     let ordinary = JsonValue::from_serializable(&Input {

@@ -10,7 +10,7 @@ replacing an existing dependency.
 | Rust | MSRV 1.88, edition 2024; independent native/Wasm MSRV CI. Development toolchain 1.99; Linux, macOS, and Windows native CI. Core has no mandatory async runtime. |
 | Node | ESM on Node 22.23.0 or later in the 22 line, 24.17.0 or later in the 24 line, or 26.2.0 or later (`engines`: `^22.23.0 || ^24.17.0 || >=26.2.0`), the first releases whose bundled undici rejects a chunked body cut short as its connection closes ([nodejs/undici#5273](https://github.com/nodejs/undici/pull/5273)) instead of handing `discover` the prefix as a complete body. CI pins 22.23.0 and runs the TypeScript tests at the 24 and 26 floors too. Await `initialize()`; Node loads the packaged asset automatically. |
 | Browser | Desktop Chromium and WebKit with explicit initialization; use a Worker for potentially expensive work. Firefox, mobile devices, and particular framework/bundler versions require their own qualification. |
-| Worker service | Local workerd with a compiled Wasm module and initialization in an allowed request context. This is not evidence of deployed Cloudflare latency, quotas, or service availability. |
+| Worker service | Local workerd with a compiled Wasm module and initialization in an allowed request context. Validate and prepare inside request handling too: the schema library seeds its hash maps from the platform's random source, which Workers allow only inside a request, so validating at global scope or in a start hook stops the Worker from starting. This is not evidence of deployed Cloudflare latency, quotas, or service availability. |
 
 The current evaluator has Original and compiled execution paths. Non-default
 limits and all Explain calls use Original; eligible default Outcome checks may

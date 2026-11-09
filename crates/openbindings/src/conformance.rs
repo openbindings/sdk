@@ -238,11 +238,8 @@ pub struct VersionRefusal {
     pub supported: &'static str,
 }
 impl VersionRefusal {
-    /// The refusal of a declared version: `Some` for a well-formed version
-    /// outside the supported line, `None` when [`check_version`] finds it
-    /// supported or malformed. A tool that checks a declaration before any
-    /// document exists can use the same refusal record as validation.
-    pub fn new(declared: &str) -> Option<Self> {
+    /// Construct a refusal only for a well-formed unsupported declaration.
+    pub(crate) fn new(declared: &str) -> Option<Self> {
         (check_version(declared) == VersionDecision::Unsupported).then(|| Self {
             declared: declared.into(),
             supported: SUPPORTED_VERSIONS,

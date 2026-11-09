@@ -19,7 +19,6 @@ fn prepared(
     operation.input().unwrap().prepare(
         &DefaultEvaluator::new(),
         &openbindings::ExternalSchemas::default(),
-        &openbindings::PreparationLimits::default(),
     )
 }
 
@@ -91,11 +90,11 @@ fn patterns_at_the_default_depth_prepare_and_check_on_a_small_stack() {
                 );
                 let contract = prepared(&schema).unwrap();
                 assert!(matches!(
-                    contract.evaluate_json("null").unwrap(),
+                    contract.evaluate(&JsonValue::parse("null").unwrap()),
                     ValueOutcome::Satisfies
                 ));
                 assert!(matches!(
-                    contract.evaluate_json(r#""a""#).unwrap(),
+                    contract.evaluate(&JsonValue::parse(r#""a""#).unwrap()),
                     ValueOutcome::NoVerdict { detail }
                         if detail.reason == NoVerdictReason::LimitExceeded
                         && detail.code == "pattern-depth-limit"

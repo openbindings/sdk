@@ -195,11 +195,12 @@ impl Context {
     #[inline(always)]
     pub fn prepare_input(&self) -> Prepared {
         let operation = self.document.resolve_operation("op").unwrap();
-        Prepared(operation.input().unwrap().prepare(
-            &self.evaluator,
-            &self.resources,
-            &openbindings::PreparationLimits::default(),
-        ))
+        Prepared(
+            operation
+                .input()
+                .unwrap()
+                .prepare(&self.evaluator, &self.resources),
+        )
     }
 }
 impl Prepared {

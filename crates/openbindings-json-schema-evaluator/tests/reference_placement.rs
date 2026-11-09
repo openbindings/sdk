@@ -552,11 +552,7 @@ fn prepare(
         .unwrap()
         .input()
         .unwrap()
-        .prepare(
-            evaluator,
-            &resources,
-            &openbindings::PreparationLimits::default(),
-        )
+        .prepare(evaluator, &resources)
 }
 
 /// `Some(true)` satisfies, `Some(false)` fails, `None` reaches no verdict.

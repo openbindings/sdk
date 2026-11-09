@@ -52,7 +52,12 @@ fn neither_compiled_nor_semantic_preparation_can_ignore_an_exhausted_attempt() {
                 ),
             ] {
                 let failure = schema
-                    .prepare(&DefaultEvaluator::default(), &external, &limits)
+                    .prepare_with_control(
+                        &DefaultEvaluator::default(),
+                        &external,
+                        &limits,
+                        &std::sync::atomic::AtomicBool::new(false),
+                    )
                     .unwrap_err();
                 assert_eq!(
                     failure.kind,
@@ -62,11 +67,7 @@ fn neither_compiled_nor_semantic_preparation_can_ignore_an_exhausted_attempt() {
                 );
             }
             let prepared = schema
-                .prepare(
-                    &DefaultEvaluator::default(),
-                    &external,
-                    &PreparationLimits::default(),
-                )
+                .prepare(&DefaultEvaluator::default(), &external)
                 .unwrap();
             assert!(matches!(
                 prepared.evaluate(&JsonValue::parse("1").unwrap()),
@@ -97,7 +98,12 @@ fn a_cached_inventory_does_not_reset_the_remaining_compiler_work() {
         ..PreparationLimits::default()
     };
     let failure = schema
-        .prepare(&DefaultEvaluator::default(), &external, &limits)
+        .prepare_with_control(
+            &DefaultEvaluator::default(),
+            &external,
+            &limits,
+            &std::sync::atomic::AtomicBool::new(false),
+        )
         .unwrap_err();
     assert_eq!(
         failure.kind,
@@ -107,11 +113,7 @@ fn a_cached_inventory_does_not_reset_the_remaining_compiler_work() {
     );
     assert!(
         schema
-            .prepare(
-                &DefaultEvaluator::default(),
-                &external,
-                &PreparationLimits::default()
-            )
+            .prepare(&DefaultEvaluator::default(), &external)
             .is_ok()
     );
     drop(held);
@@ -153,11 +155,7 @@ fn original_meta_matching_obeys_each_attempt_and_retries_without_poisoning() {
         // The old fixed 128 KiB compiler reservation is no longer the contract:
         // programs are prepared once and dependency storage has structural gates.
         schema
-            .prepare(
-                &DefaultEvaluator::default(),
-                &resources,
-                &PreparationLimits::default(),
-            )
+            .prepare(&DefaultEvaluator::default(), &resources)
             .unwrap();
         for allocation in [false, true] {
             let defaults = PreparationLimits::default();
@@ -173,7 +171,12 @@ fn original_meta_matching_obeys_each_attempt_and_retries_without_poisoning() {
                 } else {
                     limits.max_sdk_work_units = allowance;
                 }
-                schema.prepare(&DefaultEvaluator::default(), &resources, &limits)
+                schema.prepare_with_control(
+                    &DefaultEvaluator::default(),
+                    &resources,
+                    &limits,
+                    &std::sync::atomic::AtomicBool::new(false),
+                )
             };
             let (mut low, mut high) = (
                 0,
@@ -208,11 +211,7 @@ fn original_meta_matching_obeys_each_attempt_and_retries_without_poisoning() {
                 }
             );
             let prepared = schema
-                .prepare(
-                    &DefaultEvaluator::default(),
-                    &resources,
-                    &PreparationLimits::default(),
-                )
+                .prepare(&DefaultEvaluator::default(), &resources)
                 .unwrap_or_else(|failure| panic!("retry failed: {:?}", failure.kind));
             assert!(matches!(
                 prepared.evaluate(&JsonValue::parse("null").unwrap()),

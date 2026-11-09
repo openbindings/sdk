@@ -27,11 +27,10 @@ fn prepare(
     }))
     .unwrap();
     let operation = proof.resolve_operation("op").unwrap();
-    operation.input().unwrap().prepare(
-        &DefaultEvaluator::new(),
-        &resources,
-        &openbindings::PreparationLimits::default(),
-    )
+    operation
+        .input()
+        .unwrap()
+        .prepare(&DefaultEvaluator::new(), &resources)
 }
 fn verdict(outcome: ValueOutcome) -> char {
     match outcome {
@@ -63,11 +62,7 @@ fn unavailable_resources_keep_the_original_reference_location() {
             .unwrap()
             .input()
             .unwrap()
-            .prepare(
-                &DefaultEvaluator::new(),
-                &resources,
-                &PreparationLimits::default(),
-            )
+            .prepare(&DefaultEvaluator::new(), &resources)
             .unwrap();
         let value = JsonValue::parse("1").unwrap();
         for outcome in [prepared.evaluate(&value), prepared.explain(&value)] {

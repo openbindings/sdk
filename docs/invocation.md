@@ -48,7 +48,9 @@ it is not a portable kind-description query. `BindingInvokerExt` needs no facet.
 `DefaultOperationInvoker` construction, configuration and `prepare` need only
 `BindingInvoker`; `invoke`, `preflight`, `PreparedOperation::invoke` and the
 `OperationInvoker` implementation require `BindingInvoker + InvocationSupport`,
-even for an explicit binding.
+even for an explicit binding. A provider without routing knowledge implements
+`can_invoke` as `false`, never a blanket `true`. Operation-name selection then
+fails closed with `ERR_BINDING_NOT_FOUND`; explicit bindings are unaffected.
 
 ## Driving, closure and cancellation
 
