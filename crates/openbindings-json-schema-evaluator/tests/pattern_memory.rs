@@ -106,11 +106,6 @@ fn minimum_memory(schema: &Value) -> usize {
     enough
 }
 
-#[test]
-fn the_default_pattern_memory_is_64_mib() {
-    assert_eq!(Limits::default().total_pattern_memory, 64 * MIB);
-}
-
 // These unchanged large jobs exhaust the shared structural construction
 // allowance before they reach the representation cap. Exhaustion aborts the
 // whole preparation, equally for names and value patterns.

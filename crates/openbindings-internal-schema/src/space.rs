@@ -2231,7 +2231,7 @@ mod projection_tests {
         }
     }
     #[test]
-    fn the_shared_packaged_layer_assembles_the_flat_space() {
+    fn packaged_resources_preserve_resolution_conflicts_and_original_origins() {
         const META: &str = "https://json-schema.org/draft/2020-12/schema";
         const CORE: &str = "https://json-schema.org/draft/2020-12/meta/core";
         let resource = |uri: &str, text: &str| ProjectedResource {

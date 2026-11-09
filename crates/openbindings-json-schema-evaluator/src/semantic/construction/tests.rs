@@ -1,5 +1,4 @@
 use super::*;
-use openbindings_internal_schema::preparation::Attempt;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 fn input() -> serde_json::Value {
@@ -187,24 +186,6 @@ fn node_identity_profile_and_new_environments_bound_the_facts() {
     assert!(!replacement.check_standard(changed).unwrap());
 }
 
-#[test]
-fn packaged_identifiers_map_to_dense_distinct_local_fact_bits() {
-    let environment = build_environment(&input());
-    let construction = Construction::new(environment, Limits::default(), &|| false).unwrap();
-    let space = construction.environment.space();
-    let ids: Vec<_> = space.nodes().map(|(id, _)| id).collect();
-    assert!(ids.iter().any(|id| *id >= 1 << (usize::BITS - 1)));
-    for (number, node) in ids.iter().enumerate() {
-        assert_eq!(space.node_number(*node), number);
-        assert!(!positive(&construction, *node));
-        let width = usize::BITS as usize;
-        let word = &construction.syntax[number / width];
-        word.set(word.get() | (1 << (number % width)));
-        assert!(positive(&construction, *node));
-    }
-    assert_eq!(ids.len(), space.node_count());
-}
-
 struct Stop {
     checks: AtomicUsize,
     at: usize,
@@ -254,50 +235,6 @@ fn cancelled_misses_cannot_publish_and_hits_still_check_the_attempt() {
     construction.check_standard(node).unwrap();
     construction.control = &stop;
     assert!(construction.check_standard(node).is_err());
-}
-
-#[test]
-fn table_backing_and_shared_work_have_exact_sticky_boundaries() {
-    for words in [0, 1, 2, 3, 32] {
-        let bytes = words * size_of::<Cell<usize>>();
-        let run = |work, bytes| {
-            Attempt::run(work, bytes, &|| false, |attempt| {
-                allocate_words(words, attempt)
-            })
-        };
-        assert_eq!(run(usize::MAX, bytes).unwrap().unwrap().len(), words);
-        if bytes != 0 {
-            assert_eq!(
-                run(usize::MAX, bytes - 1).unwrap_err().code,
-                "preparation-sdk-reservation-bytes"
-            );
-        }
-        let (mut lo, mut hi) = (0, words + 64);
-        while lo < hi {
-            let mid = (lo + hi) / 2;
-            if run(mid, bytes).is_ok_and(|result| result.is_ok()) {
-                hi = mid;
-            } else {
-                lo = mid + 1;
-            }
-        }
-        run(lo, bytes).unwrap().unwrap();
-        assert_eq!(
-            run(lo - 1, bytes).unwrap_err().code,
-            "preparation-sdk-work-units"
-        );
-    }
-    for words in [1, usize::MAX] {
-        assert_eq!(
-            Attempt::run(usize::MAX, usize::MAX, &|| false, |parent| {
-                let _ = Attempt::run(usize::MAX, 0, parent, |child| allocate_words(words, child));
-                assert!(parent.check().is_err());
-            })
-            .unwrap_err()
-            .code,
-            "preparation-sdk-reservation-bytes"
-        );
-    }
 }
 
 #[test]

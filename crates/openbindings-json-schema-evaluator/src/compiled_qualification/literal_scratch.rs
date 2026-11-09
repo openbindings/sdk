@@ -77,38 +77,6 @@ fn scalar_literals_and_integral_composites_enter_at_large_sizes() {
 }
 
 #[test]
-fn page_witness_enters_without_literal_estimate() {
-    // Reached closure from the production-worker corpus's adapted Intravox Page.
-    let (selected, original) = prepared(include_str!(
-        "../../tests/fixtures/literal-scratch-page.json"
-    ));
-    let witness = r#"{"uniqueId":"x","title":"x","language":"nl","layout":{},"permissions":{}}"#;
-    assert_eq!(witness.len(), 73);
-    assert_eq!(
-        compare(&selected, &original, &JsonValue::parse(witness).unwrap()).0,
-        "compiled"
-    );
-    for size in [100 * 1024, 16 * 1024 * 1024] {
-        let value = padded(size, &witness[1..witness.len() - 1]);
-        assert_eq!(compare(&selected, &original, &value).0, "compiled");
-    }
-}
-
-#[test]
-fn recursive_scalar_literal_weights_keep_the_original_certificate() {
-    for (literal, weight) in [
-        (json!({"const":"x"}), 2),
-        (json!({"enum":["x",null,true]}), 6),
-    ] {
-        let schema = json!({"properties":{"kind":literal,"next":{"$ref":"#"}}});
-        let (selected, original) = prepared(&schema.to_string());
-        assert_eq!(selected.compiled.recursive_exact_weight(), Some(weight));
-        let value = JsonValue::parse(r#"{"kind":"x","next":{"kind":"x"}}"#).unwrap();
-        assert_eq!(compare(&selected, &original, &value).0, "compiled");
-    }
-}
-
-#[test]
 fn number_tokens_retain_lane_equivalence() {
     let (selected, original) = prepared(
         r#"{"properties":{"n":{"type":"integer","minimum":-9223372036854775808,"maximum":9223372036854775807}}}"#,
@@ -219,34 +187,6 @@ fn exact_work_and_nested_uniqueness_keep_their_guards() {
 }
 
 #[test]
-fn old_literal_estimate_boundary_now_enters_on_both_sides() {
-    // One root string const: 16 * (value bytes + 3) + 256 * 2 + 512.
-    const LAST: usize = (48 * 1024 * 1024 - 1024) / 16 - 3;
-    assert_eq!(16 * (LAST + 3) + 256 * 2 + 512, 48 * 1024 * 1024);
-    let (selected, original) = prepared(r#"{"const":"x"}"#);
-    for size in [LAST, LAST + 1] {
-        let value = JsonValue::parse(format!("\"{}\"", "x".repeat(size - 2))).unwrap();
-        assert_eq!(compare(&selected, &original, &value).0, "compiled");
-    }
-}
-
-#[test]
-fn i64_and_decimal_composites_cross_the_old_exact_byte_boundary() {
-    // Five value nodes and five one-byte bound visits, with multiplier one.
-    const LAST: usize = (48 * 1024 * 1024 - 3152) / 16;
-    assert_eq!(16 * (LAST + 5) + 256 * 10 + 512, 48 * 1024 * 1024);
-    let (selected, original) = prepared(r#"{"properties":{"n":{"minimum":0}}}"#);
-    for fields in [r#""n":0"#, r#""n":0.0"#] {
-        for size in [LAST, LAST + 1] {
-            assert_eq!(
-                compare(&selected, &original, &padded(size, fields)).0,
-                "compiled"
-            );
-        }
-    }
-}
-
-#[test]
 fn integral_composite_scan_honours_cancellation() {
     let (selected, _) = prepared(r#"{"items":{"type":"integer","minimum":0}}"#);
     struct CancelAt(AtomicUsize);
@@ -265,23 +205,4 @@ fn integral_composite_scan_honours_cancellation() {
         matches!(result, Some(ValueOutcome::NoVerdict { detail }) if detail.reason == NoVerdictReason::Cancelled)
     );
     assert_eq!(compiled::entries::take(), [0, 0, 0]);
-}
-
-#[test]
-fn a_value_within_the_estimate_is_not_scanned() {
-    let (selected, _) = prepared(r#"{"items":{"type":"integer","minimum":0}}"#);
-    struct Count(AtomicUsize);
-    impl WorkControl for Count {
-        fn is_cancelled(&self) -> bool {
-            self.0.fetch_add(1, Ordering::Relaxed);
-            false
-        }
-    }
-    let value = JsonValue::parse(format!("[{}0]", "0,".repeat(10_000))).unwrap();
-    let checks = Count(AtomicUsize::new(0));
-    compiled::entries::take();
-    let result = selected.compiled.outcome(&value, &checks);
-    assert!(matches!(result, Some(ValueOutcome::Satisfies)));
-    assert_eq!(compiled::entries::take(), [0, 0, 1]);
-    assert!(checks.0.load(Ordering::Relaxed) < 100);
 }

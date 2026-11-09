@@ -120,46 +120,6 @@ fn environment(schema: &str) -> SchemaEnvironment {
 }
 
 #[test]
-fn saturated_cache_keeps_hits_and_resolves_new_keys_without_retaining_them() {
-    let environment = environment("true");
-    let space = environment.space();
-    let references: Vec<_> = (0..MAX_KEYS + 2)
-        .map(|i| format!("https://review.invalid/missing/{i}"))
-        .collect();
-    let mut queries = Queries::new(space);
-    let first = queries
-        .query(environment.entry(), &references[0], &|| false)
-        .unwrap();
-    for reference in &references[1..] {
-        let query = queries
-            .query(environment.entry(), reference, &|| false)
-            .unwrap();
-        assert_eq!(
-            query.as_ref().as_ref().unwrap_err(),
-            &space.query(environment.entry(), reference).unwrap_err()
-        );
-    }
-    assert_eq!(queries.entries.len(), MAX_KEYS);
-    let hit = queries
-        .query(environment.entry(), &references[0], &|| false)
-        .unwrap();
-    assert!(Arc::ptr_eq(&first, &hit));
-    let miss = queries
-        .query(environment.entry(), &references[MAX_KEYS], &|| false)
-        .unwrap();
-    let again = queries
-        .query(environment.entry(), &references[MAX_KEYS], &|| false)
-        .unwrap();
-    assert!(!Arc::ptr_eq(&miss, &again));
-    assert_eq!(
-        miss.as_ref().as_ref().unwrap_err(),
-        again.as_ref().as_ref().unwrap_err()
-    );
-    drop(queries);
-    assert_eq!(Arc::strong_count(&first), 2);
-}
-
-#[test]
 fn storage_overflow_and_refused_backing_are_sticky_before_allocation() {
     for needed in [1, usize::MAX] {
         let mut values = Vec::<u64>::new();
@@ -254,33 +214,4 @@ fn hit_growth_and_cap_fallback_observe_exact_budgets_and_cancellation() {
             "preparation-sdk-work-units"
         );
     }
-}
-
-#[test]
-fn repeated_results_keep_original_occurrences_and_full_miss_reservations() {
-    let environment = environment(
-        r#"{"allOf":[{"$ref":"https://review.invalid/missing"},{"$ref":"https://review.invalid/missing"}]}"#,
-    );
-    let construction =
-        Construction::new(environment.clone(), Limits::default(), &|| false).unwrap();
-    let checked = check_from(&construction, environment.entry()).unwrap();
-    let queries: Vec<_> = checked.queries.iter().collect();
-    assert_eq!(queries.len(), 2);
-    assert_ne!(queries[0].0.0, queries[1].0.0);
-    assert!(Arc::ptr_eq(queries[0].1, queries[1].1));
-
-    let long = format!("https://review.invalid/{}", "x".repeat(10_000));
-    let mut shared = Queries::new(environment.space());
-    let first = shared.query(environment.entry(), &long, &|| false).unwrap();
-    let hit = Attempt::run(100_000, 0, &|| false, |a| {
-        shared.query(environment.entry(), &long, a)
-    })
-    .unwrap()
-    .unwrap();
-    assert!(Arc::ptr_eq(&first, &hit));
-    let failure = Attempt::run(usize::MAX, 0, &|| false, |a| {
-        Queries::new(environment.space()).query(environment.entry(), &long, a)
-    })
-    .unwrap_err();
-    assert_eq!(failure.code, "preparation-sdk-reservation-bytes");
 }

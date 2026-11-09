@@ -71,7 +71,7 @@ fn deeply_nested_relative_identifiers_and_references_remain_admissible() {
 }
 
 #[test]
-fn adjudicated_historical_cases_are_rejected_at_document_admission() {
+fn invalid_documents_report_expected_rules_and_never_acquire_proof() {
     let fixture: serde_json::Value =
         serde_json::from_str(include_str!("../fixtures/foundation-admission.json")).unwrap();
     assert_eq!(fixture["specRevision"], APPLIED_SPEC_REVISION);
@@ -113,5 +113,39 @@ fn duplicate_resource_and_anchor_names_never_choose_a_winner() {
     let checked = validate_document(text).unwrap();
     for rule in ["OBI-12", "OBI-13"] {
         assert_eq!(checked.report().evidence[rule], Evidence::Violated);
+    }
+}
+
+#[test]
+fn document_resource_references_accept_only_valid_absolute_or_local_uris() {
+    for keyword in ["$ref", "$dynamicRef"] {
+        for (reference, valid) in [
+            ("https://example.test/schema", true),
+            ("", true),
+            ("#/schemas/target", true),
+            ("relative/path", false),
+            ("https://example.test/%", false),
+        ] {
+            let text = serde_json::json!({"openbindings":"0.2.0", "operations":{}, "schemas":{"entry":{keyword:reference}, "target":true}}).to_string();
+            let validation = Document::parse(text).unwrap().validate().unwrap();
+            assert_eq!(
+                validation.report().evidence["OBI-11"],
+                if valid {
+                    Evidence::Met
+                } else {
+                    Evidence::Violated
+                }
+            );
+            if !valid {
+                assert!(
+                    validation
+                        .report()
+                        .findings
+                        .iter()
+                        .any(|finding| finding.code == "reference-form")
+                );
+                assert!(validation.conformant().is_none());
+            }
+        }
     }
 }

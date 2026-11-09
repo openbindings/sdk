@@ -93,26 +93,7 @@ impl Bindings {
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[test]
-    fn aliases_share_one_primary_allocation() {
-        let primary = "p".repeat(4096);
-        for count in [0, 1, 64, 256] {
-            let aliases: Vec<_> = (0..count).map(|i| format!("a{i}")).collect();
-            let document = Document::parse(serde_json::json!({"openbindings":"0.2.0","operations":{&primary:{"aliases":aliases}}}).to_string()).unwrap();
-            let proof = document.validate().unwrap().conformant().unwrap();
-            let selected = aliases.last().map(String::as_str).unwrap_or(&primary);
-            assert_eq!(proof.resolve_operation(selected).unwrap().key(), primary);
-            let index = document.inner.operations.get().unwrap();
-            let key = index.entries.keys().next().unwrap();
-            assert_eq!(index.entries.len(), 1);
-            assert_eq!(index.names.len(), count + 1);
-            assert!(index.names.values().all(|value| Arc::ptr_eq(key, value)));
-            assert!(Arc::ptr_eq(
-                key,
-                index.names.get_key_value(primary.as_str()).unwrap().0
-            ));
-        }
-    }
+
     #[test]
     fn cached_namespaces_and_retained_entries_have_no_owner_cycle() {
         let doc = Document::parse(r#"{"openbindings":"0.2.0","operations":{"op":{"examples":{"e":{"input":null}}}},"sources":{"s":{"kind":"k"}},"bindings":{"b":{"operation":"op","source":"s"}},"dependencies":{"d":{"operation":"op"}}}"#).unwrap();

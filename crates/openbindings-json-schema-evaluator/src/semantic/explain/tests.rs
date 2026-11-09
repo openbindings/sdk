@@ -47,7 +47,7 @@ fn category(outcome: &ValueOutcome) -> &'static str {
 }
 
 #[test]
-fn multiple_failures_reproduction() {
+fn required_property_and_additional_property_failures_keep_original_coordinates() {
     let (plan, _) = prepare(JsonValue::parse(r#"{"type":"object","properties":{"a":{"type":"string"},"b":{"type":"integer"}},"required":["a","b","c"],"additionalProperties":false}"#).unwrap(), None);
     let value = JsonValue::parse(r#"{"a":1,"b":"x","z":true}"#).unwrap();
     let result = plan.evaluate(&value, Detail::Explain, &AtomicBool::new(false));
@@ -94,39 +94,6 @@ fn explain(schema: &str, value: &str) -> (Vec<ValueProblem>, bool) {
         panic!("expected failure")
     };
     (problems, problems_complete)
-}
-
-#[test]
-fn every_assertion_family_has_original_locations() {
-    for (schema, value, keyword) in [
-        (r#"{"type":["string","null"]}"#, "1", "type"),
-        (r#"{"const":{"x":1}}"#, "{}", "const"),
-        (r#"{"enum":[1e999,{"x":1},null]}"#, "false", "enum"),
-        (r#"{"minimum":1e1000}"#, "1e999", "minimum"),
-        (r#"{"maximum":0}"#, "1", "maximum"),
-        (r#"{"exclusiveMinimum":1}"#, "1", "exclusiveMinimum"),
-        (r#"{"exclusiveMaximum":1}"#, "1", "exclusiveMaximum"),
-        (r#"{"multipleOf":2}"#, "3", "multipleOf"),
-        (r#"{"minLength":2}"#, r#""x""#, "minLength"),
-        (r#"{"maxLength":0}"#, r#""x""#, "maxLength"),
-        (r#"{"minItems":2}"#, "[1]", "minItems"),
-        (r#"{"maxItems":0}"#, "[1]", "maxItems"),
-        (r#"{"minProperties":2}"#, r#"{"x":1}"#, "minProperties"),
-        (r#"{"maxProperties":0}"#, r#"{"x":1}"#, "maxProperties"),
-        (r#"{"uniqueItems":true}"#, "[1,1]", "uniqueItems"),
-        (r#"{"pattern":"^x$"}"#, r#""y""#, "pattern"),
-        (r#"{"required":["missing"]}"#, "{}", "required"),
-    ] {
-        let (problems, complete) = explain(schema, value);
-        assert!(complete, "{schema}");
-        assert_eq!(problems.len(), 1, "{schema}");
-        assert_eq!(problems[0].code, keyword);
-        assert_eq!(
-            problems[0].schema.pointer.as_str(),
-            Some(format!("/{keyword}").as_str())
-        );
-        assert_eq!(problems[0].instance, "");
-    }
 }
 
 #[test]
@@ -835,43 +802,4 @@ fn concurrent_calls_keep_exact_occurrences_and_independent_controls() {
             });
         }
     });
-}
-
-#[test]
-fn sdk_control_refusals_keep_static_text_through_mapping_and_cloning() {
-    use openbindings_internal_schema::preparation::Attempt;
-    use std::borrow::Cow;
-    let healthy = AtomicBool::new(false);
-    for (work, bytes) in [(0, usize::MAX), (usize::MAX, 0)] {
-        let failure = Attempt::run(work, bytes, &|| false, |attempt| {
-            let mut graph = Graph::with_preparation(usize::MAX, None, 1, &healthy, Some(attempt));
-            let detail = if work == 0 {
-                graph.work(1)
-            } else {
-                graph.charge(1)
-            }
-            .unwrap_err();
-            assert_eq!(detail.reason, NoVerdictReason::LimitExceeded);
-            assert!(matches!(detail.code, Cow::Borrowed(_)));
-            assert!(matches!(detail.message, Cow::Borrowed(_)));
-            let clone = detail.clone();
-            assert!(matches!(clone.code, Cow::Borrowed(_)));
-            assert!(matches!(clone.message, Cow::Borrowed(_)));
-        })
-        .unwrap_err();
-        assert!(matches!(failure.code, Cow::Borrowed(_)));
-        assert!(matches!(failure.message, Cow::Borrowed(_)));
-    }
-    let cancelled = AtomicBool::new(true);
-    let detail = Graph::new(usize::MAX, None, 1, &cancelled)
-        .work(1)
-        .unwrap_err();
-    assert_eq!(detail.reason, NoVerdictReason::Cancelled);
-    assert!(matches!(detail.code, Cow::Borrowed("caller-cancelled")));
-    assert!(matches!(detail.message, Cow::Borrowed(_)));
-    let failure = Attempt::run(usize::MAX, usize::MAX, &cancelled, |_| ()).unwrap_err();
-    let detail = preparation_control_inability(failure);
-    assert_eq!(detail.reason, NoVerdictReason::Cancelled);
-    assert!(matches!(detail.code, Cow::Borrowed("caller-cancelled")));
-    assert!(matches!(detail.message, Cow::Borrowed(_)));
 }

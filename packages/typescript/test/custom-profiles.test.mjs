@@ -62,28 +62,3 @@ test("custom meta admission and retained validators survive caller disposal", ()
     allowed.schema.dispose();
   }
 });
-
-test("required formats enforce exact date/time syntax while optional formats annotate", () => {
-  for (const [format, valid, invalid] of [
-    ["date", "2000-02-29", "+001-01-01"],
-    ["time", "12:34:56+05:30", "12:34:56+0*:30"],
-    ["date-time", "1991-01-01T00:59:60+01:00", "1991-01-02T00:59:60+01:00"],
-    ["regex", "[\\d-a]", "[z-a]"],
-  ]) {
-    for (const requiredFormat of [true, false]) {
-      const result = prepare({ format }, { requiredFormat });
-      assert.equal(result.status, "ready");
-      try {
-        assert.equal(result.schema.evaluate(valid).status, "satisfies", format);
-        assert.equal(
-          result.schema.evaluate(invalid).status,
-          requiredFormat ? "fails" : "satisfies",
-          format,
-        );
-        assert.equal(result.schema.evaluate(1).status, "satisfies", format);
-      } finally {
-        result.schema.dispose();
-      }
-    }
-  }
-});

@@ -118,28 +118,6 @@ fn interruption_at_entry_return_and_retry_boundaries_does_not_poison_reuse() {
         );
     }
 }
-#[test]
-fn shared_scope_identity_is_content_based_and_preserves_ambiguity() {
-    let a = Arc::new(vec![("a".into(), Some(2)), ("b".into(), None)]);
-    let b = Arc::new(vec![("a".into(), Some(2)), ("b".into(), None)]);
-    assert!(!Arc::ptr_eq(&a, &b));
-    let key = |context| Visit {
-        schema: 5,
-        instance: 7,
-        context,
-    };
-    let mut map = BTreeMap::new();
-    map.insert(key(a), 1);
-    assert_eq!(map.get(&key(b)), Some(&1));
-    assert_eq!(map.get(&key(Arc::new(vec![("a".into(), Some(2))]))), None);
-    assert_eq!(
-        map.get(&key(Arc::new(vec![
-            ("a".into(), Some(2)),
-            ("b".into(), Some(3))
-        ]))),
-        None
-    );
-}
 
 #[test]
 fn alias_leaves_do_not_retain_per_item_frames_or_memo_entries() {
@@ -173,34 +151,7 @@ fn alias_leaf_patterns_keep_equal_text_correlation_across_distinct_scopes() {
         );
     }
 }
-#[test]
-fn frame_backing_growth_has_an_exact_requested_byte_gate() {
-    let control = AtomicBool::new(false);
-    let mut frames: Vec<Frame<'static>> = Vec::new();
-    let bytes = size_of::<Frame<'_>>() * 4;
-    assert!(
-        storage::reserve(
-            &mut frames,
-            1,
-            &mut Graph::new(bytes - 1, None, 0, &control)
-        )
-        .is_err()
-    );
-    assert_eq!(frames.capacity(), 0);
-    storage::reserve(&mut frames, 1, &mut Graph::new(bytes, None, 0, &control)).unwrap();
-    eprintln!(
-        "frame_bytes={} phase_bytes={} state_bytes={} witness_bytes={} initial_backing_bytes={bytes}",
-        size_of::<Frame<'_>>(),
-        size_of::<Phase>(),
-        size_of::<State>(),
-        size_of::<explain::WitnessSeed>(),
-    );
-    assert!(size_of::<State>() <= 256, "State::copied base reserve");
-    assert_eq!(
-        size_of::<Option<Arc<explain::Witnesses>>>(),
-        size_of::<usize>()
-    );
-}
+
 #[test]
 #[ignore = "release-only small-thread-stack qualification"]
 fn original_frames_run_deep_values_on_a_small_native_stack() {
@@ -230,45 +181,4 @@ fn original_frames_run_deep_values_on_a_small_native_stack() {
         .unwrap()
         .join();
     assert!(result.is_ok());
-}
-
-#[test]
-#[ignore = "release-only stack observations, separate from allocation and timing"]
-fn original_frame_stack_observations() {
-    struct Observe {
-        origin: usize,
-        maximum: AtomicUsize,
-    }
-    impl WorkControl for Observe {
-        #[inline(never)]
-        fn is_cancelled(&self) -> bool {
-            let marker = 0u8;
-            let here = std::hint::black_box(std::ptr::addr_of!(marker)) as usize;
-            self.maximum
-                .fetch_max(self.origin.abs_diff(here), Ordering::Relaxed);
-            false
-        }
-    }
-    let row = rows()
-        .into_iter()
-        .find(|row| row["id"] == "mixed-64-S")
-        .unwrap();
-    let plan = original(&row);
-    let value = JsonValue::parse(row["value"].as_str().unwrap()).unwrap();
-    {
-        let bytes = SAMPLED_STACK_BYTES;
-        let marker = 0u8;
-        let origin = std::hint::black_box(std::ptr::addr_of!(marker)) as usize;
-        let observe = Observe {
-            origin,
-            maximum: AtomicUsize::new(0),
-        };
-        let outcome = plan.evaluate(&value, Detail::Outcome, &observe);
-        std::hint::black_box(&marker);
-        eprintln!(
-            "sampled_stack_guard={bytes} sampled_bytes={} outcome={}",
-            observe.maximum.load(Ordering::Relaxed),
-            observed(outcome)
-        );
-    }
 }

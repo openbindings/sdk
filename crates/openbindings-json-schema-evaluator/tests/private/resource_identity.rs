@@ -231,7 +231,7 @@ fn failed_location(contract: &PreparedSchema<ProbeValidator>, text: &str) -> Sch
 }
 
 #[test]
-fn ri01_03_b32_value_cases_use_current_data_members() {
+fn resource_identity_and_edited_binding_data_keep_value_contracts() {
     let expectations: Value = serde_json::from_str(include_str!(
         "../fixtures/resource-identity/B32-expectations.json"
     ))
@@ -329,7 +329,7 @@ fn ri01_03_b32_value_cases_use_current_data_members() {
     }
 }
 #[test]
-fn ri04_05_contained_authority_ignores_supplied_body_and_keeps_raw_catalog() {
+fn contained_resource_wins_without_rewriting_the_supplied_catalog() {
     let doc = one(owner(), json!({"$ref":U}));
     let observed = Arc::new(Mutex::new(Vec::new()));
     struct Catalog(Arc<Mutex<Vec<String>>>);
@@ -389,7 +389,7 @@ fn ri04_05_contained_authority_ignores_supplied_body_and_keeps_raw_catalog() {
     }
 }
 #[test]
-fn ri06_duplicate_contained_owners_refuse_lookup_and_direct_entry() {
+fn duplicate_contained_resource_owners_refuse_document_admission() {
     let doc = document(
         owner(),
         json!({"direct":{"input":{"$id":U,"type":"string"}},"lookup":{"input":{"$ref":U}},"pointer":{"input":{"$ref":"#/schemas/E"}}}),
@@ -404,7 +404,7 @@ fn ri06_duplicate_contained_owners_refuse_lookup_and_direct_entry() {
     unresolved_identity(&doc, &supplied, "/operations/pointer/input/$ref");
 }
 #[test]
-fn ri07_external_references_back_use_contained_target() {
+fn external_references_back_to_a_contained_resource_use_its_constraints() {
     let doc = one(owner(), json!({"$ref":A}));
     let supplied = resources(&[(A, json!({"$id":V,"$ref":U})), (U, json!(false))]);
     let contract = ready(&conformant(&doc), &supplied, "op");
@@ -416,7 +416,7 @@ fn ri07_external_references_back_use_contained_target() {
     helpers_ready(&doc, &supplied, "op");
 }
 #[test]
-fn ri08_12_aliases_cannot_bypass_canonical_conflicts() {
+fn retrieval_aliases_cannot_bypass_canonical_resource_conflicts() {
     for equal in [false, true] {
         let loser = if equal {
             owner()["E"].clone()
@@ -457,7 +457,7 @@ fn ri08_12_aliases_cannot_bypass_canonical_conflicts() {
     }
 }
 #[test]
-fn ri09_10_distinct_canonical_identity_preserves_alias_provenance_and_base() {
+fn distinct_canonical_identity_keeps_retrieval_origin_and_reference_base() {
     let canonical = "https://identity.example.invalid/canonical/V";
     for retrieval in [U, A] {
         let doc = document(
@@ -514,7 +514,7 @@ fn ri09_10_distinct_canonical_identity_preserves_alias_provenance_and_base() {
     }
 }
 #[test]
-fn ri11_31_invalid_resource_configuration_is_not_hidden_by_precedence() {
+fn invalid_and_duplicate_supplied_resources_refuse_registration() {
     for second in [
         U,
         "https://identity.example.invalid/U#",
@@ -552,7 +552,7 @@ fn ri11_31_invalid_resource_configuration_is_not_hidden_by_precedence() {
     }
 }
 #[test]
-fn ri13_15_unused_collisions_are_isolated_but_pointer_targets_refuse() {
+fn unused_identity_collisions_are_local_and_selected_pointer_collisions_refuse() {
     let doc = document(
         owner(),
         json!({"parent":{"input":{"$ref":V}},"child":{"input":{"$ref":format!("{V}#/$defs/child")}},"owner":{"input":{"$ref":U}}}),
@@ -578,7 +578,7 @@ fn ri13_15_unused_collisions_are_isolated_but_pointer_targets_refuse() {
     );
 }
 #[test]
-fn ri14_direct_applicators_refuse_competing_carriers() {
+fn direct_applicators_preserve_competing_resource_owner_refusals() {
     for (schema, is_properties) in [
         (json!({"properties":{"x":{"$id":U,"type":"string"}}}), true),
         (json!({"allOf":[{"$id":U,"type":"string"}]}), false),
@@ -626,7 +626,7 @@ fn ri14_direct_applicators_refuse_competing_carriers() {
     }
 }
 #[test]
-fn ri16_17_unique_nested_resources_survive_losing_lexical_ancestors() {
+fn unique_nested_resources_survive_shadowed_lexical_ancestors() {
     let nested_id = "https://identity.example.invalid/nested/W";
     let nested = json!({"$id":U,"$defs":{"child":{"$id":"nested/W","$ref":"child"}}});
     let ext = (
@@ -718,7 +718,7 @@ fn supplied_normalized_identity_peers_remain_ambiguous() {
 }
 
 #[test]
-fn ri18_19_uri_resolution_follows_the_library_and_contained_identity_wins() {
+fn resolved_uri_aliases_preserve_exact_contained_resource_priority() {
     let child = "https://identity.example.invalid/child";
     let schemas = json!({"Parent":{"$id":"https://identity.example.invalid/dir/parent","$defs":{"Child":{"$id":"../child","type":"integer"}}}});
     for uri in [
@@ -771,7 +771,7 @@ fn ri18_19_uri_resolution_follows_the_library_and_contained_identity_wins() {
     }
 }
 #[test]
-fn ri20_34_missing_winner_fragments_never_fall_back_to_loser() {
+fn missing_fragments_in_the_selected_owner_do_not_use_shadowed_content() {
     let supplied = resources(&[(
         U,
         json!({"$anchor":"ordinary","$defs":{"dynamic":{"$dynamicAnchor":"dynamic"},"target":true}}),
@@ -794,7 +794,7 @@ fn ri20_34_missing_winner_fragments_never_fall_back_to_loser() {
     }
 }
 #[test]
-fn ri21_sol02_winning_anchor_kind_controls_dynamic_dispatch_and_retained_owner() {
+fn selected_anchor_kind_preserves_dynamic_dispatch_and_retained_ownership() {
     let supplied = resources(&[(A, json!({"$id":U,"$dynamicAnchor":"node","type":"boolean"}))]);
     for dynamic in [false, true] {
         let keyword = if dynamic { "$dynamicAnchor" } else { "$anchor" };
@@ -857,7 +857,7 @@ fn assert_opaque_namespace(doc: &Document, supplied: &ExternalSchemas, operation
 }
 
 #[test]
-fn ri22_23_original_dialect_follows_selected_resource() {
+fn selected_original_resource_controls_dialect_and_namespace_certification() {
     let supplied = resources(&[(
         A,
         json!({"$id":U,"$schema":"https://identity.example.invalid/custom","$defs":{"Child":{"$id":W,"type":"integer"}}}),
@@ -946,7 +946,7 @@ fn ri22_23_original_dialect_follows_selected_resource() {
 }
 
 #[test]
-fn ri24_user_standard_names_do_not_replace_trusted_assessment() {
+fn user_claims_to_standard_schema_names_cannot_replace_trusted_assessment() {
     for uri in [
         "https://json-schema.org/draft/2020-12/schema",
         "https://openbindings.com/schema/openbindings-0.2.json",
@@ -992,7 +992,7 @@ fn ri24_user_standard_names_do_not_replace_trusted_assessment() {
     );
 }
 #[test]
-fn sol01_supplied_alias_and_canonical_names_are_strict_peers() {
+fn supplied_retrieval_and_canonical_names_are_equal_priority_claims() {
     let supplied = resources(&[
         (A, json!({"$id":V,"type":"string"})),
         (V, json!({"$id":W,"type":"integer"})),
@@ -1018,7 +1018,7 @@ fn sol01_supplied_alias_and_canonical_names_are_strict_peers() {
     );
 }
 #[test]
-fn ri25_27_preparations_and_retained_owners_are_independent() {
+fn preparations_and_retained_schema_owners_keep_independent_resource_snapshots() {
     let supplied = resources(&[(U, json!({"type":"string"}))]);
     let old = one(json!({}), json!({"$ref":U}));
     let d1 = one(owner(), json!({"$ref":U}));
@@ -1066,7 +1066,7 @@ fn ri25_27_preparations_and_retained_owners_are_independent() {
     );
 }
 #[test]
-fn ri28_29_conflicts_do_not_poison_healthy_preparation_or_become_holes() {
+fn identity_conflicts_do_not_poison_healthy_preparations_or_mimic_missing_content() {
     let supplied = resources(&[(A, json!({"$id":U,"type":"string"}))]);
     let doc = document(
         owner(),
@@ -1101,7 +1101,7 @@ fn ri28_29_conflicts_do_not_poison_healthy_preparation_or_become_holes() {
     ));
 }
 #[test]
-fn ri30_precancellation_and_fresh_retry_preserve_identity_policy() {
+fn precancelled_identity_queries_allow_healthy_independent_retries() {
     let doc = one(owner(), json!({"$ref":U}));
     let supplied = resources(&[(U, json!(false))]);
     let proof = conformant(&doc);
@@ -1130,7 +1130,7 @@ fn ri30_precancellation_and_fresh_retry_preserve_identity_policy() {
     verdicts(&ready(&proof, &supplied, "op"), &[("2", "satisfies")]);
 }
 #[test]
-fn ri30_oversized_supplied_closure_keeps_limits_and_healthy_catalog_entries() {
+fn oversized_supplied_closures_refuse_without_poisoning_healthy_entries() {
     let deep = format!("{}true{}", r#"{"items":"#.repeat(258), "}".repeat(258));
     let supplied = ExternalSchemas::new([
         ExternalSchema {
@@ -1193,7 +1193,7 @@ fn identity_refusal_location_is_optional_and_measured_before_copy() {
     }
 }
 #[test]
-fn ri32_selected_unsupported_or_invalid_owner_never_falls_back() {
+fn invalid_or_unsupported_selected_owners_do_not_use_shadowed_content() {
     for (schema, rule) in [
         (
             json!({"$id":U,"$schema":"https://identity.example.invalid/custom","type":"integer"}),
@@ -1217,7 +1217,7 @@ fn ri32_selected_unsupported_or_invalid_owner_never_falls_back() {
     }
 }
 #[test]
-fn ri33_anonymous_document_has_no_acquisition_or_generated_identity() {
+fn anonymous_document_resources_do_not_acquire_a_generated_identity() {
     for uri in [
         "https://identity.example.invalid/acquired-obi#/schemas/E",
         "https://sdk-program.openbindings.invalid/r0#/schemas/E",
@@ -1250,7 +1250,7 @@ fn ri33_anonymous_document_has_no_acquisition_or_generated_identity() {
 }
 
 #[test]
-fn ri28_unused_contained_and_supplied_peer_conflicts_are_local() {
+fn unused_resource_peer_conflicts_do_not_contaminate_other_selections() {
     for (schemas, supplied) in [
         (
             json!({"E":{"$id":U,"type":"integer"},"Duplicate":{"$id":U,"type":"string"}}),
@@ -1288,7 +1288,7 @@ fn ri28_unused_contained_and_supplied_peer_conflicts_are_local() {
 }
 
 #[test]
-fn ri16_nested_resource_does_not_invent_losing_parent_dynamic_scope() {
+fn nested_resources_do_not_inherit_shadowed_parent_dynamic_scope() {
     let supplied = resources(&[(
         A,
         json!({"$id":U,"$dynamicAnchor":"node","type":"string","$defs":{"Child":{"$id":W,"$dynamicRef":"#node","$defs":{"Node":{"$dynamicAnchor":"node","type":"integer"}}}}}),
@@ -1306,7 +1306,7 @@ fn ri16_nested_resource_does_not_invent_losing_parent_dynamic_scope() {
 }
 
 #[test]
-fn inherited_conservative_policy_case_has_both_value_controls() {
+fn contained_resource_priority_preserves_both_value_verdicts() {
     let uri = "https://ex.invalid/shared";
     let doc = one(
         json!({"S":{"$id":uri,"type":"integer"}}),

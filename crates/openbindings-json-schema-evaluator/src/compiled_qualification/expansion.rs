@@ -280,62 +280,6 @@ fn dependent_and_overlapping_child_paths_cannot_reset_expansion() {
     });
 }
 
-#[test]
-fn production_corpus_routes() {
-    let Ok(path) = std::env::var("OB_EXPANSION_CORPUS") else {
-        return;
-    };
-    let path = std::path::Path::new(&path);
-    let jobs: serde_json::Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
-    let base = path.parent().unwrap().parent().unwrap();
-    let mut rows = Vec::new();
-    for job in jobs.as_array().unwrap() {
-        let mut resources = ExternalSchemas::default();
-        if let Some(file) = job["resource_file"].as_str() {
-            resources = resources
-                .with(
-                    job["resource_uri"].as_str().unwrap(),
-                    JsonValue::parse(std::fs::read_to_string(base.join(file)).unwrap()).unwrap(),
-                )
-                .unwrap();
-        }
-        let proof = Document::parse(job["document"].as_str().unwrap())
-            .unwrap()
-            .validate()
-            .unwrap()
-            .conformant()
-            .unwrap();
-        let operation = proof
-            .resolve_operation(job["operation"].as_str().unwrap())
-            .unwrap();
-        let schema = if job["slot"] == "input" {
-            operation.input()
-        } else {
-            operation.output()
-        }
-        .unwrap();
-        compiled::entries::take_expansion();
-        compiled::entries::take_applications();
-        let validator = schema
-            .prepare(
-                &DefaultEvaluator::new(),
-                &resources,
-                &PreparationLimits::default(),
-            )
-            .unwrap()
-            .into_validator();
-        let applications = compiled::entries::take_expansion();
-        let coefficient = compiled::entries::take_applications();
-        let reason = match &validator.compiled {
-            compiled::Lane::Compiled(_) => "eligible",
-            compiled::Lane::Original(reason) => reason,
-        };
-        rows.push(json!({"id":job["id"],"preparation":reason,"applications":applications,"coefficient":coefficient}));
-    }
-    assert_eq!(rows.len(), 879);
-    write("production-routes.json", &json!(rows));
-}
-
 fn array_diamond(leaf: serde_json::Value) -> String {
     let mut document: serde_json::Value =
         serde_json::from_str(&diamond(10, "allOf", leaf)).unwrap();

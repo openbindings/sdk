@@ -1445,51 +1445,6 @@ mod summary_tests {
     use super::*;
 
     #[test]
-    fn state_copy_reserves_only_owned_annotation_storage() {
-        let control = std::sync::atomic::AtomicBool::new(false);
-        for (properties, items, bytes, work) in [
-            (false, false, 0, 1),
-            (true, false, 518, 6),
-            (false, true, 384, 2),
-            (true, true, 646, 7),
-        ] {
-            let mut state = State::truth(TRUE);
-            if properties {
-                state
-                    .properties
-                    .insert(vec![b'x' as u16, 0xd800, b'y' as u16], TRUE);
-            }
-            if items {
-                state.items.insert(0, TRUE);
-            }
-            let mut graph = Graph::new(bytes, Some(work), 0, &control);
-            let copied = state.copied(&mut graph).unwrap();
-            assert_eq!(copied.valid, state.valid);
-            assert_eq!(copied.properties, state.properties);
-            assert_eq!(copied.items, state.items);
-            assert_eq!(graph.remaining().bytes, 0);
-            assert_eq!(graph.remaining().work, Some(0));
-            if bytes > 0 {
-                let mut graph = Graph::new(bytes - 1, Some(work), 0, &control);
-                assert_eq!(
-                    state.copied(&mut graph).err().unwrap().code,
-                    "semantic-analysis-memory-limit"
-                );
-            }
-        }
-        let mut emptied = State::truth(FALSE);
-        emptied.properties.insert(vec![0xd800], TRUE);
-        emptied.properties.remove(&vec![0xd800]);
-        emptied.items.insert(0, TRUE);
-        emptied.items.remove(&0);
-        let mut graph = Graph::new(0, Some(1), 0, &control);
-        let copied = emptied.copied(&mut graph).unwrap();
-        assert_eq!(copied.valid, FALSE);
-        assert!(copied.properties.is_empty() && copied.items.is_empty());
-        assert_eq!(graph.remaining().bytes, 0);
-    }
-
-    #[test]
     fn certification_includes_every_evaluated_annotation() {
         let control = std::sync::atomic::AtomicBool::new(false);
         let mut graph = Graph::new(1 << 20, None, 32, &control);

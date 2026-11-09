@@ -704,7 +704,7 @@ pub(crate) fn validate_body(body: &[u8], max_bytes: usize) -> DiscoveryOutcome {
 }
 
 #[cfg(all(test, not(target_arch = "wasm32")))]
-mod review_tests {
+mod redirect_policy_tests {
     use super::*;
     struct Clock;
     impl DiscoveryTimer for Clock {

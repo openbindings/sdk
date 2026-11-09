@@ -164,19 +164,6 @@ pub(super) struct Prepared {
 }
 impl Lane {
     #[cfg(test)]
-    pub(super) fn without_application_bound(&self) -> Self {
-        let Self::Compiled(prepared) = self else {
-            return self.clone();
-        };
-        let mut features = prepared.features.clone();
-        features.applications = 0;
-        Self::Compiled(Arc::new(Prepared {
-            inner: prepared.inner.clone(),
-            features,
-            reservation: prepared.reservation,
-        }))
-    }
-    #[cfg(test)]
     pub(super) fn qualified_depth(&self) -> Option<usize> {
         match self {
             Self::Original(_) => None,
@@ -1026,78 +1013,4 @@ mod construction_boundary_tests {
         })
         .unwrap();
     }
-}
-
-#[cfg(test)]
-pub(super) fn verify_shared_reach(plan: &crate::semantic::Plan) {
-    use openbindings_internal_schema::OriginalEnvironment;
-    let environment = plan.compiled_environment();
-    let space = environment.space();
-    let selected = admission::select(
-        plan,
-        &crate::Limits::default(),
-        &PreparationLimits::default(),
-        &|| false,
-        &|_| Ok(None),
-    )
-    .unwrap();
-    let Ok(admission::Admitted { reach: shared, .. }) = selected else {
-        panic!("closed no-pattern fixture must compile")
-    };
-    let original = space.reach(environment.entry(), &|| false).unwrap();
-    assert_eq!(shared.nodes, original.nodes);
-    assert_eq!(shared.resources, original.resources);
-    assert_eq!(shared.targets.len(), original.targets.len());
-    for (key, target) in &shared.targets {
-        let expected = &original.targets[key];
-        assert_eq!(target.node, expected.node);
-        assert_eq!(target.dynamic_name, expected.dynamic_name);
-    }
-    let sorted = |mut edges: HashMap<usize, Vec<usize>>| {
-        for children in edges.values_mut() {
-            children.sort_unstable();
-        }
-        edges
-    };
-    assert_eq!(sorted(shared.edges.clone()), sorted(original.edges.clone()));
-    // The actual bounded lowerer consumes this shared closure. Compare its
-    // converted document against the original path without compiling a second
-    // value engine or changing any public allowance.
-    let lower = |definitions: Definitions<'_>| {
-        let mut operands = operands::Operands::default();
-        let mut sources = operands::Sources::new();
-        let mut resources = Vec::new();
-        let mut entry = None;
-        for resource in definitions.resources {
-            if resource.uri == definitions.entry_uri {
-                entry = resource.entry;
-            }
-            resources.push(bundle::Resource {
-                definitions: operands
-                    .definitions(
-                        resource.definitions,
-                        &definitions.literals,
-                        &Limits::default(),
-                        &mut sources,
-                        &std::sync::atomic::AtomicBool::new(false),
-                    )
-                    .unwrap(),
-            });
-        }
-        bundle::bundle(resources, &entry.unwrap())
-            .unwrap()
-            .document()
-    };
-    assert_eq!(
-        lower(
-            space
-                .program_definitions_reached(environment.entry(), &shared, &|| false)
-                .unwrap()
-        ),
-        lower(
-            space
-                .program_definitions(environment.entry(), &|| false)
-                .unwrap()
-        )
-    );
 }

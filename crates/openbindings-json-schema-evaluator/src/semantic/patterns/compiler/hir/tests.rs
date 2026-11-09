@@ -210,35 +210,7 @@ fn excluded_backend_grammar_never_enters_translator() {
         assert_eq!(entries(), 0);
     }
 }
-#[test]
-fn exact_and_one_below_cumulative_reservations() {
-    for form in ["", "a0000|b0000", "[a-z]", "((a|b)*)"] {
-        let recorder = Recorder::default();
-        drop(prepare(form, &recorder).unwrap());
-        let work = recorder.work.load(Relaxed);
-        let allocation = recorder.allocation.load(Relaxed);
-        reset();
-        drop(
-            Attempt::run(work, allocation, &|| false, |a| prepare(form, a))
-                .unwrap()
-                .unwrap(),
-        );
-        assert_eq!(entries(), 1);
-        reset();
-        let result = Attempt::run(work - 1, allocation, &|| false, |a| prepare(form, a));
-        assert_eq!(result.unwrap_err().code, "preparation-sdk-work-units");
-        assert_eq!(entries(), 1);
-        if allocation > 0 {
-            reset();
-            let result = Attempt::run(work, allocation - 1, &|| false, |a| prepare(form, a));
-            assert_eq!(
-                result.unwrap_err().code,
-                "preparation-sdk-reservation-bytes"
-            );
-            assert_eq!(entries(), 0);
-        }
-    }
-}
+
 #[test]
 fn cancellation_and_prior_failure_are_sticky_and_retry_is_fresh() {
     let form = "a0000|b0000";

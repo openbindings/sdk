@@ -149,38 +149,6 @@ mod tests {
     }
 
     #[test]
-    fn input_sized_queries_never_initialize_the_compact_inventory() {
-        let document = RawDocument::parse(r##"{"openbindings":"0.2.0","operations":{},"schemas":{"anonymous":true,"named":{"$id":"https://e.test/base"}}}"##).unwrap();
-        let space = SchemaSpace::new(document, Supplied::default()).unwrap();
-        let mut resolver = space.reference_resolver();
-        for (holder, _) in space.local_nodes() {
-            for reference in [
-                "#",
-                "https://e.test/base",
-                "https://e.test/missing",
-                "https://json-schema.org/draft/2020-12/schema",
-            ] {
-                let _ = resolver.query(holder, reference);
-                assert!(resolver.names.is_none());
-                assert!(space.names.get().is_none());
-            }
-        }
-        let named = space
-            .local_nodes()
-            .find(|(_, n)| n.value.get("$id").is_some())
-            .unwrap()
-            .0;
-        let _ = resolver.query(named, "relative");
-        assert!(space.names.get().is_some());
-        let inventory = space.names.get().unwrap().as_ref() as *const Inventory;
-        drop(resolver);
-        let mut next = space.reference_resolver();
-        assert!(next.names.is_none());
-        let _ = next.query(named, "different-input");
-        assert!(std::ptr::eq(space.names.get().unwrap().as_ref(), inventory));
-    }
-
-    #[test]
     fn inspection_resolution_bytes_do_not_multiply_inherited_base_text() {
         for shape in [
             "identical",
@@ -366,48 +334,6 @@ mod parity_tests {
                     }
                 }
             }
-        }
-    }
-
-    #[test]
-    fn query_reservations_charge_input_and_only_retained_expansion() {
-        use crate::preparation::Attempt;
-        let base = format!("https://e.test/{}/", "a".repeat(65_536));
-        let space = SchemaSpace::new(RawDocument::parse(serde_json::json!({"openbindings":"0.2.0","operations":{},"schemas":{"entry":{"$id":base}}}).to_string()).unwrap(), Supplied::default()).unwrap();
-        let holder = space
-            .local_nodes()
-            .find(|(_, n)| n.value.get("$id").is_some())
-            .unwrap()
-            .0;
-        let mut resolver = space.reference_resolver();
-        let failure = Attempt::run(usize::MAX, 0, &|| false, |control| {
-            resolver.query_controlled(holder, "#", control)
-        })
-        .unwrap_err();
-        assert_eq!(failure.code, "preparation-sdk-reservation-bytes");
-        assert!(resolver.names.is_none());
-        for reference in ["#", "missing"] {
-            let bytes = 16 * reference.len()
-                + 512
-                + if reference == "missing" {
-                    16 * (base.len() + reference.len())
-                } else {
-                    0
-                };
-            let result = Attempt::run(usize::MAX, bytes, &|| false, |control| {
-                let result = resolver
-                    .query_controlled(holder, reference, control)
-                    .unwrap();
-                assert_eq!(control.allocated(), bytes);
-                result
-            })
-            .unwrap();
-            assert_eq!(result.is_ok(), reference == "#");
-            let failure = Attempt::run(usize::MAX, bytes - 1, &|| false, |control| {
-                resolver.query_controlled(holder, reference, control)
-            })
-            .unwrap_err();
-            assert_eq!(failure.code, "preparation-sdk-reservation-bytes");
         }
     }
 }

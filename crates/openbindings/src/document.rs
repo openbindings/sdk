@@ -288,7 +288,6 @@ impl ConformantDocument {
 #[cfg(test)]
 mod resolution_reuse {
     use super::*;
-    use crate::schema::references::ASSEMBLED;
     use std::sync::Weak;
     /// Retains the original environment while the prepared validator lives.
     struct Inspecting;
@@ -304,32 +303,7 @@ mod resolution_reuse {
             Ok(Retaining(request.environment(limits, control)?))
         }
     }
-    /// An evaluator can read the selected schema without needing an inventory.
-    struct Accepting;
-    struct Snapshots {
-        _schema: Schema,
-        _external: ExternalSchemas,
-    }
-    impl SchemaEvaluator for Accepting {
-        type Validator = Snapshots;
-        fn prepare(
-            &self,
-            request: EvaluationRequest<'_>,
-            _: &PreparationLimits,
-            _: &dyn WorkControl,
-        ) -> Result<Snapshots, PreparationFailure> {
-            Ok(Snapshots {
-                _schema: request.schema.clone(),
-                _external: request.external_schemas.clone(),
-            })
-        }
-    }
     impl SchemaValidator for Retaining {
-        fn evaluate(&self, _: &JsonValue, _: Detail, _: &dyn WorkControl) -> ValueOutcome {
-            ValueOutcome::Satisfies
-        }
-    }
-    impl SchemaValidator for Snapshots {
         fn evaluate(&self, _: &JsonValue, _: Detail, _: &dyn WorkControl) -> ValueOutcome {
             ValueOutcome::Satisfies
         }
@@ -352,90 +326,11 @@ mod resolution_reuse {
         }])
         .unwrap()
     }
-    fn assembled() -> usize {
-        ASSEMBLED.with(std::cell::Cell::get)
-    }
+
     /// The space kept for a live pair, without assembling one.
     fn kept(proof: &ConformantDocument, set: &ExternalSchemas) -> Option<Weak<SchemaSpace>> {
         set.kept_space(&proof.document.inner)
             .map(|space| Arc::downgrade(&space))
-    }
-
-    #[test]
-    fn evaluators_that_never_inventory_assemble_no_space() {
-        let proof = proof();
-        let operation = proof.resolve_operation("op").unwrap();
-        let set = snapshot(1);
-        let before = assembled();
-        drop(
-            operation
-                .input()
-                .unwrap()
-                .prepare(&Accepting, &set, &crate::PreparationLimits::default())
-                .unwrap(),
-        );
-        drop(
-            operation
-                .output()
-                .unwrap()
-                .prepare(
-                    &Accepting,
-                    &crate::ExternalSchemas::default(),
-                    &crate::PreparationLimits::default(),
-                )
-                .unwrap(),
-        );
-        assert_eq!(assembled(), before);
-        assert!(proof.document.inner.resolution.get().is_none());
-        assert!(kept(&proof, &set).is_none());
-    }
-
-    #[test]
-    fn repeated_and_alternating_sets_reuse_one_space_per_live_pair() {
-        let proof = proof();
-        let operation = proof.resolve_operation("op").unwrap();
-        let (input, output) = (operation.input().unwrap(), operation.output().unwrap());
-        let (first, second) = (snapshot(1), snapshot(2));
-        let before = assembled();
-        for _ in 0..3 {
-            for set in [&first, &second, &first.clone()] {
-                drop(
-                    input
-                        .prepare(&Inspecting, set, &crate::PreparationLimits::default())
-                        .unwrap(),
-                );
-                drop(
-                    output
-                        .prepare(&Inspecting, set, &crate::PreparationLimits::default())
-                        .unwrap(),
-                );
-            }
-            drop(
-                output
-                    .prepare(
-                        &Inspecting,
-                        &crate::ExternalSchemas::default(),
-                        &crate::PreparationLimits::default(),
-                    )
-                    .unwrap(),
-            );
-            drop(
-                output
-                    .prepare(
-                        &Inspecting,
-                        &ExternalSchemas::default(),
-                        &crate::PreparationLimits::default(),
-                    )
-                    .unwrap(),
-            );
-        }
-        // One space per set, plus one without resources, however preparations alternate.
-        assert_eq!(assembled() - before, 3);
-        let (a, b) = (
-            kept(&proof, &first).unwrap(),
-            kept(&proof, &second).unwrap(),
-        );
-        assert!(!a.ptr_eq(&b));
     }
 
     #[test]

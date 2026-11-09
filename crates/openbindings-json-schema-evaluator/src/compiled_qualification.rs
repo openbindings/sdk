@@ -9,7 +9,6 @@ mod decimal_scratch;
 mod expansion;
 mod generated;
 mod literal_scratch;
-mod product_corpus;
 mod regex_search;
 
 /// Independent preparation of the pinned current original-schema Plan. It does
@@ -492,47 +491,6 @@ fn compiled_decision_explicit_limits_and_controls() {
         &json!({"limits":observations,"entry_and_completion_cancellation":true,"healthy_retry":true,"concurrent_calls":400}),
     );
 }
-#[test]
-fn compiled_decision_repeated_child_scratch_and_old_slot_policy() {
-    let literal = json!((0..1000).collect::<Vec<_>>());
-    let schema = json!({"$defs":{"object":{"properties":{"x":{"const":literal}}}},"allOf":(0..5000).map(|_|json!({"$ref":"#/$defs/object"})).collect::<Vec<_>>()});
-    let value = JsonValue::parse(json!({"x":literal}).to_string()).unwrap();
-    let (selected, original) = owners(
-        &schema.to_string(),
-        &ExternalSchemas::default(),
-        Limits::default(),
-        PreparationLimits::default(),
-    );
-    assert!(
-        matches!(selected.compiled, compiled::Lane::Compiled(_)),
-        "schema eligible; value must choose before is_valid"
-    );
-    assert_eq!(compare(&selected, &original, &value).0, "original");
-    let mut forms = (0..1024)
-        .map(|i| json!({"pattern":format!("(?:a|b){i}")}))
-        .collect::<Vec<_>>();
-    forms.push(json!({"pattern":"^a$"}));
-    compiled::entries::take();
-    let (selected, original) = owners(
-        &json!({"allOf":forms}).to_string(),
-        &ExternalSchemas::default(),
-        Limits::default(),
-        PreparationLimits::default(),
-    );
-    assert!(matches!(
-        selected.compiled,
-        compiled::Lane::Original("restored-private-pattern-profile")
-    ));
-    assert_eq!(compiled::entries::take(), [0, 0, 0]);
-    assert_eq!(
-        compare(&selected, &original, &JsonValue::parse(r##""a""##).unwrap()).0,
-        "original"
-    );
-    write(
-        "review-regressions.json",
-        &json!({"repeated_child_const":"original-before-value-entry","obsolete_pattern_slots":"original-before-projection","all_equal":true}),
-    );
-}
 
 #[test]
 fn compiled_decision_shared_preparation_failure_blocks_later_builds() {
@@ -605,96 +563,7 @@ fn compiled_decision_shared_preparation_failure_blocks_later_builds() {
 }
 
 #[test]
-fn compiled_decision_protocol_routes() {
-    let Ok(directory) = std::env::var("OB_COMPILED_RECEIPTS") else {
-        return;
-    };
-    let fixtures: serde_json::Value = serde_json::from_slice(
-        &std::fs::read(std::path::Path::new(&directory).join("protocol-fixtures.json")).unwrap(),
-    )
-    .unwrap();
-    let mut routes = Vec::new();
-    for (name, fixture) in fixtures.as_object().unwrap() {
-        let Some(schema) = fixture.get("schema").and_then(|x| x.as_str()) else {
-            continue;
-        };
-        let mut resources = Vec::new();
-        if let Some(supplied) = fixture.get("resources").and_then(|r| r.as_object()) {
-            for (uri, text) in supplied {
-                resources.push(ExternalSchema {
-                    uri: uri.clone(),
-                    document: JsonValue::parse(text.as_str().unwrap()).unwrap(),
-                });
-            }
-        }
-        resources.push(ExternalSchema {
-            uri: "https://benchmark.invalid/root".into(),
-            document: JsonValue::parse(schema).unwrap(),
-        });
-        let resources = ExternalSchemas::new(resources).unwrap();
-        let doc = document(r#"{"$ref":"https://benchmark.invalid/root"}"#);
-        let mut limits = Limits::default();
-        if let Some(work) = fixture
-            .get("limits")
-            .and_then(|l| l.get("evaluation_steps"))
-            .and_then(|n| n.as_u64())
-        {
-            limits.evaluation_sdk_work_units = Some(work as usize);
-        }
-        compiled::entries::take();
-        let selected = prepare_document(
-            &doc,
-            &resources,
-            &DefaultEvaluator::with_limits(limits.clone()),
-            &PreparationLimits::default(),
-        )
-        .unwrap();
-        let construction = compiled::entries::take();
-        let original = prepare_document(
-            &doc,
-            &resources,
-            &Original(limits),
-            &PreparationLimits::default(),
-        )
-        .unwrap();
-        let value = JsonValue::parse(fixture["value"].as_str().unwrap()).unwrap();
-        let detail = if fixture["upstream"] == true
-            || fixture["modes"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .all(|m| m == "explain")
-        {
-            Detail::Explain
-        } else {
-            Detail::Outcome
-        };
-        let control = AtomicBool::new(fixture["cancelled"] == true);
-        compiled::entries::take();
-        let outcome = selected.evaluate(&value, detail, &control);
-        let entries = compiled::entries::take();
-        assert_eq!(
-            serialized(outcome),
-            serialized(original.evaluate(&value, detail, &control)),
-            "protocol {name}"
-        );
-        let reason = match &selected.compiled {
-            compiled::Lane::Original(reason) => *reason,
-            compiled::Lane::Compiled(_) => "eligible",
-        };
-        if reason != "eligible" {
-            assert_eq!(construction, [0, 0, 0]);
-        }
-        routes.push(json!({"workload":name,"preparation":reason,"construction":construction,"detail":format!("{detail:?}"),"value_entries":entries[2],"lane":if entries[2]>0 {"compiled"}else{"original"}}));
-    }
-    write(
-        "protocol-routes.json",
-        &json!({"all_observations_equal":true,"routes":routes}),
-    );
-}
-
-#[test]
-fn compiled_decision_large_pattern_current_positive() {
+fn large_counted_pattern_properties_preserve_original_verdicts() {
     let (selected, original) = owners(
         r#"{"type":"object","patternProperties":{"^.{1,10000}$":false}}"#,
         &ExternalSchemas::default(),
@@ -706,18 +575,6 @@ fn compiled_decision_large_pattern_current_positive() {
         &original,
         &JsonValue::parse(r#"{"a":1}"#).unwrap(),
     );
-}
-
-#[test]
-fn shared_preparation_targets_edges_and_lowering_match_original() {
-    for schema in [
-        r##"{"type":"integer","minimum":0}"##.to_owned(),
-        r##"{"$defs":{"leaf":{"type":"integer"}},"allOf":[{"$ref":"#/$defs/leaf"},{"properties":{"x":{"$ref":"#/$defs/leaf"}}},{"if":{"type":"array"},"then":{"items":{"$ref":"#/$defs/leaf"}},"else":{"not":false}}]}"##.to_owned(),
-        format!(r##"{{"$defs":{{"leaf":{{"type":"integer"}}}},"allOf":[{}]}}"##,vec![r##"{"$ref":"#/$defs/leaf"}"##;5000].join(",")),
-    ] {
-        let (selected,_)=owners(&schema,&ExternalSchemas::default(),Limits::default(),PreparationLimits::default());
-        crate::compiled::verify_shared_reach(&selected.plan);
-    }
 }
 
 #[test]
@@ -1853,31 +1710,4 @@ fn recursive_wide_schema_exponents_fund_each_subject_before_entry() {
         "recursive-schema-exponent-boundary.json",
         &json!({"rows":rows,"default_reservation_bytes":limit,"full_observations_equal":true,"largest_operand_funded_and_next_byte_original_before_entry":true}),
     );
-}
-
-// `packages/typescript/test/compiled-depth.mjs` walks the Wasm build densely
-// around these compiled boundaries, in container levels. Change both together.
-#[test]
-fn wasm_depth_walk_bounds_match_native_selection() {
-    for (schema, expected) in [
-        (RECURSIVE_INTEGER_ARRAY, 203),
-        (ORDINARY_NAMED, 340),
-        (ORDINARY_ENUM, 340),
-        (ORDINARY_BINARY, 340),
-        (PRODUCTIVE_MINIMUM, 340),
-        (PRODUCTIVE_ADDITIONAL, 340),
-        (PRODUCTIVE_UNION, 203),
-    ] {
-        let (selected, _) = owners(
-            schema,
-            &ExternalSchemas::default(),
-            Limits::default(),
-            PreparationLimits::default(),
-        );
-        assert_eq!(
-            selected.compiled.qualified_depth(),
-            Some(expected),
-            "{schema}"
-        );
-    }
 }

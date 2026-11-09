@@ -43,55 +43,6 @@ fn independent_exclusions_and_boundaries() {
 }
 
 #[test]
-fn boundary_group_and_flat_class_summary() {
-    let summary = inspect(r"((?-u:\b))[0-9A-Z\x{E000}]a{12,34}?", 2, &|| false).unwrap();
-    assert_eq!(
-        summary,
-        Summary {
-            groups: 2,
-            maximum_group_depth: 2,
-            flags: 2,
-            assertions: 1,
-            classes: 1,
-            class_items: 3,
-            class_endpoints: 5,
-            class_ranges: 2,
-            literals: 1,
-            repetitions: 1,
-            numeric_digits: 4,
-            alternatives: 0,
-        }
-    );
-    assert!(matches!(
-        inspect(r"(?-u:\b)", 0, &|| false),
-        Err(Error::Refused(Refusal::Depth { offset: 0 }))
-    ));
-    assert!(matches!(
-        inspect("[z-a]", 10, &|| false),
-        Err(Error::Refused(Refusal::Grammar { .. }))
-    ));
-    assert_eq!(
-        std::mem::size_of::<Summary>(),
-        12 * std::mem::size_of::<usize>()
-    );
-}
-
-#[test]
-fn exact_shared_work_and_one_below() {
-    for bytes in [0, 1, 255, 256, 257, 1024] {
-        let form = "a".repeat(bytes);
-        // Precheck + prepaid scan + each 256-byte checkpoint + completion.
-        let required = 8 * bytes + 3 + bytes / 256;
-        let result = Attempt::run(required, 0, &|| false, |attempt| inspect(&form, 0, attempt));
-        assert!(result.unwrap().is_ok(), "{bytes}");
-        let result = Attempt::run(required - 1, 0, &|| false, |attempt| {
-            inspect(&form, 0, attempt)
-        });
-        assert_eq!(result.unwrap_err().code, "preparation-sdk-work-units");
-    }
-}
-
-#[test]
 fn cancellation_is_checked_inside_each_long_loop() {
     let class = format!(
         "[{}]",

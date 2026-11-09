@@ -2,11 +2,6 @@
 use crate::*;
 use openbindings_internal_schema as embedding;
 use std::ops::Deref;
-#[cfg(test)]
-thread_local! {
-    /// Resolution spaces assembled on this thread, for reuse tests.
-    pub(crate) static ASSEMBLED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-}
 // Holds snapshots of the document and the set's resources, never the set or
 // revision handles, so a set that keeps a space forms no ownership cycle.
 pub(crate) struct SchemaSpace {
@@ -35,8 +30,6 @@ impl SchemaSpace {
             maximum_identity,
             control,
         )?;
-        #[cfg(test)]
-        ASSEMBLED.with(|count| count.set(count.get() + 1));
         Ok(Self { inner })
     }
     pub(crate) fn check_inventory_limits(

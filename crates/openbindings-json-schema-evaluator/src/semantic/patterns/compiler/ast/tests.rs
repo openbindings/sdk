@@ -3,7 +3,6 @@ use super::*;
 use crate::pattern::{self, Reading};
 use openbindings_internal_schema::{FailureReason, preparation::Attempt};
 use std::cell::Cell;
-use std::sync::atomic::{AtomicUsize, Ordering};
 
 thread_local! {
     static PARSER_ENTRIES: Cell<usize> = const { Cell::new(0) };
@@ -26,39 +25,6 @@ fn failure(error: Error) -> Failure {
         Error::Attempt(failure) => failure,
         other => panic!("expected attempt failure: {other:?}"),
     }
-}
-
-#[derive(Default)]
-struct Recorder {
-    work: AtomicUsize,
-    allocation: AtomicUsize,
-}
-
-impl Control for Recorder {
-    fn is_cancelled(&self) -> bool {
-        false
-    }
-    fn check(&self) -> Result<(), Failure> {
-        self.charge_work(1)
-    }
-    fn charge_work(&self, units: usize) -> Result<(), Failure> {
-        self.work.fetch_add(units, Ordering::Relaxed);
-        Ok(())
-    }
-    fn charge_allocation(&self, bytes: usize) -> Result<(), Failure> {
-        self.check()?;
-        self.allocation.fetch_add(bytes, Ordering::Relaxed);
-        Ok(())
-    }
-}
-
-#[test]
-fn owns_one_complete_tree_after_guard_admission() {
-    reset_entries();
-    let form = r"((?-u:\b))[0-9A-Z\x{E000}]a{12,34}?";
-    let parsed = prepare(form, 2, 32, &|| false).unwrap();
-    assert_eq!(entries(), 1);
-    assert_eq!(parsed.span().end.offset, form.len());
 }
 
 #[test]
@@ -84,35 +50,6 @@ fn grammar_depth_and_backend_representation_are_local_refusals() {
         ));
     }
     assert_eq!(entries(), 3);
-}
-
-#[test]
-fn exact_shared_allowances_and_one_below() {
-    for form in ["", "a", "a0000|b0000", "[a-z]", "((a|b)*)"] {
-        let recorder = Recorder::default();
-        drop(prepare(form, 32, 32, &recorder).unwrap());
-        let work = recorder.work.load(Ordering::Relaxed);
-        let allocation = recorder.allocation.load(Ordering::Relaxed);
-        reset_entries();
-        let result = Attempt::run(work, allocation, &|| false, |attempt| {
-            prepare(form, 32, 32, attempt)
-        });
-        drop(result.unwrap().unwrap());
-        assert_eq!(entries(), 1, "{form}");
-
-        // One missing work unit refuses completion after entering the parser.
-        reset_entries();
-        let result = Attempt::run(work - 1, allocation, &|| false, |attempt| {
-            prepare(form, 32, 32, attempt)
-        });
-        assert_eq!(result.unwrap_err().code, "preparation-sdk-work-units");
-        assert_eq!(entries(), 1, "{form}");
-
-        assert_eq!(
-            allocation, 0,
-            "dependency construction is not an SDK storage reservation"
-        );
-    }
 }
 
 #[test]

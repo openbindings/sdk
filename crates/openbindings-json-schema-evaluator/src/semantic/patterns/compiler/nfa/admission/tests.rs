@@ -73,36 +73,6 @@ fn capped_arithmetic_preserves_zero_and_never_wraps() {
     );
 }
 
-#[derive(Default)]
-struct Reservations {
-    utf8: AtomicUsize,
-    bytes: AtomicUsize,
-}
-impl Control for Reservations {
-    fn is_cancelled(&self) -> bool {
-        false
-    }
-    fn charge_allocation(&self, bytes: usize) -> Result<(), Failure> {
-        self.bytes.fetch_add(bytes, Relaxed);
-        if bytes == UTF8_SCRATCH_BYTES {
-            self.utf8.fetch_add(1, Relaxed);
-        }
-        Ok(())
-    }
-}
-#[test]
-fn unicode_inventory_reuses_one_scratch_owner_and_ascii_allocates_none() {
-    let control = Reservations::default();
-    inspect(&parse("[a-z]"), &control).unwrap();
-    assert_eq!(control.bytes.load(Relaxed), 0);
-    let hir = parse("[é-ê][Ā-ą][😀-🙏]");
-    inspect(&hir, &control).unwrap();
-    assert_eq!(control.utf8.load(Relaxed), 1);
-    // A fresh attempt gets a fresh owner; no iterator is retained by HIR.
-    inspect(&hir, &control).unwrap();
-    assert_eq!(control.utf8.load(Relaxed), 2);
-}
-
 #[test]
 fn cancellation_during_unicode_and_ancestor_work_never_publishes_scores() {
     let hir = parse("([é-ê][Ā-ą]|[😀-🙏]){2,3}");

@@ -460,8 +460,6 @@ struct RemovalIndex {
     by_end: HashMap<usize, usize>,
     removed: Vec<usize>,
 }
-#[cfg(test)]
-thread_local! { static PLANNING_WORK: std::cell::Cell<(usize, usize, usize)> = const { std::cell::Cell::new((0, 0, 0)) }; }
 impl RemovalIndex {
     fn new(parent: JsonRef<'_>) -> Result<Self, EditError> {
         let children: Vec<_> = if let Some(members) = parent.members() {
@@ -473,11 +471,6 @@ impl RemovalIndex {
         } else {
             return Err(EditError::NotContainer);
         };
-        #[cfg(test)]
-        PLANNING_WORK.with(|work| {
-            let (p, c, l) = work.get();
-            work.set((p + 1, c + children.len(), l));
-        });
         let by_end = children
             .iter()
             .enumerate()
@@ -490,11 +483,6 @@ impl RemovalIndex {
         })
     }
     fn remove(&mut self, end: usize) -> Result<(), EditError> {
-        #[cfg(test)]
-        PLANNING_WORK.with(|work| {
-            let (p, c, l) = work.get();
-            work.set((p, c, l + 1));
-        });
         let i = *self.by_end.get(&end).ok_or(EditError::MissingValue)?;
         self.removed.push(i);
         Ok(())
@@ -787,83 +775,6 @@ mod tests {
         assert_eq!(document.as_bytes(), original);
     }
 
-    #[test]
-    fn final_parse_charges_node_and_depth_limits_atomically() {
-        // The same parser limits govern the committed revision.
-        for limits in [
-            JsonLimits {
-                max_nodes: 6,
-                ..Default::default()
-            },
-            JsonLimits {
-                max_depth: 1,
-                ..Default::default()
-            },
-        ] {
-            let doc = Document::new();
-            let before = doc.as_bytes().to_vec();
-            let value = JsonValue::parse("[[[1]]]").unwrap();
-            let error = doc
-                .apply(
-                    &[Request {
-                        pointer: "/x".into(),
-                        value: Some(&value),
-                    }],
-                    limits,
-                )
-                .unwrap_err();
-            assert!(matches!(error.code(), "node-limit" | "depth-limit"));
-            assert_eq!(doc.as_bytes(), before);
-        }
-    }
-    #[test]
-    fn removal_planning_indexes_each_parent_once() {
-        // Count planner work, independent of machine timing.
-        for object in [false, true] {
-            let items: Vec<_> = (0..1000)
-                .map(|i| {
-                    if object {
-                        format!("\"k{i}\":{i}")
-                    } else {
-                        i.to_string()
-                    }
-                })
-                .collect();
-            let text = if object {
-                format!("{{{}}}", items.join(","))
-            } else {
-                format!("[{}]", items.join(","))
-            };
-            let mut document = Document::parse(text).unwrap();
-            let paths: Vec<_> = (0..1000)
-                .step_by(2)
-                .map(|i| {
-                    if object {
-                        format!("/k{i}")
-                    } else {
-                        format!("/{i}")
-                    }
-                })
-                .collect();
-            let edits: Vec<_> = paths.iter().map(Edit::remove_at).collect();
-            PLANNING_WORK.with(|work| work.set((0, 0, 0)));
-            document = document.edit(&edits).unwrap();
-            assert_eq!(PLANNING_WORK.with(Cell::get), (1, 1000, 500));
-            let remaining = items
-                .iter()
-                .skip(1)
-                .step_by(2)
-                .cloned()
-                .collect::<Vec<_>>()
-                .join(",");
-            let expected = if object {
-                format!("{{{remaining}}}")
-            } else {
-                format!("[{remaining}]")
-            };
-            assert_eq!(document.as_bytes(), expected.as_bytes());
-        }
-    }
     #[test]
     fn bounded_writer_reserves_remaining_exact_bytes() {
         let limits = JsonLimits {

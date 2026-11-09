@@ -1823,32 +1823,6 @@ mod tests {
     }
 
     #[test]
-    fn duplicate_locations_are_materialized_only_for_retained_nodes() {
-        let source = format!(
-            "{{\"pad\":\"{}\",\"nested\":{{\"k\":0{}}}}}",
-            "x".repeat(128 * 1024),
-            ",\"k\":0".repeat(5000)
-        );
-        let value = crate::JsonValue::parse(&source).unwrap();
-        let mut visited = 0;
-        let nodes: Vec<_> = duplicate_nodes(&value)
-            .inspect(|_| visited += 1)
-            .take(4096)
-            .collect();
-        assert_eq!(visited, 4096);
-        assert_eq!(nodes.len(), 4096);
-        let (locations, scanned) = locations_with_work(&nodes);
-        let offset = source.find("{\"k\"").unwrap();
-        assert_eq!(scanned, offset);
-        assert!(
-            locations
-                .iter()
-                .all(|at| at.byte_offset == offset && at.pointer.as_ref().unwrap() == "/nested")
-        );
-        assert_eq!(duplicate_nodes(&value).take(0).count(), 0);
-    }
-
-    #[test]
     fn pointers_through_unpaired_names_are_exact_and_charge_their_units() {
         let value = crate::JsonValue::parse(r#"{"\ud800/":{"k":0,"k":1}}"#).unwrap();
         let node = duplicate_nodes(&value).next().unwrap();

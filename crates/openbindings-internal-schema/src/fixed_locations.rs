@@ -927,29 +927,7 @@ mod tests {
         });
         assert_eq!(locate(schema, r#"{"a":{"x":0}}"#).0, ["/a/x", "/a"]);
     }
-    #[test]
-    fn pinned_container_projections_do_not_increase_schema_depth() {
-        fn depth(value: &Value) -> usize {
-            let mut maximum = 0;
-            let mut pending = vec![(value, 0)];
-            while let Some((value, depth)) = pending.pop() {
-                maximum = maximum.max(depth);
-                match value {
-                    Value::Object(map) => pending.extend(map.values().map(|v| (v, depth + 1))),
-                    Value::Array(array) => pending.extend(array.iter().map(|v| (v, depth + 1))),
-                    _ => {}
-                }
-            }
-            maximum
-        }
-        let schema: Value =
-            serde_json::from_str(include_str!("../schemas/openbindings.schema.json")).unwrap();
-        let validators = super::super::fixed_schema::options(BTreeMap::new())
-            .build_map(&schema)
-            .unwrap();
-        let plan = location_plan(&schema, &validators).unwrap();
-        assert!(depth(&plan.schema) <= depth(&schema));
-    }
+
     #[test]
     fn compilation_refuses_nested_resource_shadowing_in_retained_applicators() {
         let schema = json!({

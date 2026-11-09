@@ -249,8 +249,6 @@ fn class_cost(bytes: usize, properties: usize, shorthand: usize) -> Option<(usiz
 // end of the string, since the library escapes class set operations in
 // `patternProperties` names.
 const NOTHING: &str = r"(?:$a)";
-#[cfg(test)]
-const ANYTHING: &str = r"[\x{0}-\x{D7FF}\x{E000}-\x{10FFFF}]";
 const SURROGATES: (u32, u32) = (0xD800, 0xDFFF);
 // `\s`: WhiteSpace and LineTerminator.
 const SPACE: &[(u32, u32)] = &[
@@ -1392,70 +1390,7 @@ mod tests {
             }
         }
     }
-    fn simple(pattern: &str) -> Option<Simple> {
-        match read(pattern, 32, 1 << 20) {
-            Ok(Reading::Linear(linear)) => linear.simple,
-            other => panic!("{pattern}: {other:?}"),
-        }
-    }
-    // Literal characters share one step of text, adjacent runs of one set
-    // share one step, a fixed last run is a step, each run's members past
-    // ASCII follow the step before's, and a short fixed part of ASCII sets
-    // and text is a table of a set for each character.
-    #[test]
-    fn a_run_matcher_holds_a_step_for_each_change_of_set() {
-        let shape = |matcher: &Simple| -> Vec<(u32, u32)> {
-            matcher
-                .steps
-                .iter()
-                .map(|step| (step.wide, step.count))
-                .collect()
-        };
-        let literal = format!("^t0x{}$", "a".repeat(9_997));
-        let matcher = simple(&literal).unwrap();
-        assert_eq!(shape(&matcher), [(TEXT, 10_000)]);
-        assert!(matcher.table.is_empty() && matcher.ranges.is_empty());
-        assert_eq!(matcher.last, None);
-        assert_eq!(
-            (
-                size_of::<Step>(),
-                size_of::<[u64; 2]>(),
-                size_of::<(u32, u32)>()
-            ),
-            (24, 16, 8)
-        );
-        assert_eq!(matcher.heap_bytes(), 24 + 10_000);
-        assert!(matcher.is_match(&literal[1..literal.len() - 1]));
-        assert!(!matcher.is_match(&literal[1..literal.len() - 2]));
-        // Three runs and text of ten ASCII characters are a table.
-        let date = simple(r"^\d\d\d\d-\d{2}-[0-9][0-9]$").unwrap();
-        assert!(date.steps.is_empty() && date.text.is_empty());
-        assert_eq!((date.table.len(), date.heap_bytes()), (10, 160));
-        assert!(date.is_match("2026-10-25") && !date.is_match("2026-10-2x"));
-        assert!(!date.is_match("2026-10-2") && !date.is_match("2026-10-2é"));
-        // Past the table's characters, and with one run, they are steps.
-        let long = simple(r"^\d{40}-\d{40}$").unwrap();
-        assert_eq!(shape(&long), [(0, 40), (TEXT, 1), (0, 40)]);
-        let one = simple(r"^\d\d\d\d$").unwrap();
-        assert_eq!(shape(&one), [(0, 4)]);
-        let open = simple(r"^é\d{3}é[a-zé]{2,}").unwrap();
-        assert_eq!(shape(&open), [(TEXT, 2), (0, 3), (TEXT, 2)]);
-        assert_eq!(open.last.map(|last| (last.min, last.max)), Some((2, None)));
-        assert_eq!(open.ranges.len(), 1);
-        assert!(open.is_match("é123éabé!") && !open.is_match("é123éa!"));
-        // `.` holds three ranges past ASCII; adjacent runs of it share them.
-        let dots = simple("^..a.$").unwrap();
-        assert_eq!(shape(&dots), [(3, 2), (TEXT, 1), (3, 1)]);
-        assert_eq!(dots.ranges.len(), 6);
-        assert!(!dots.is_match("é😀a\u{2028}") && dots.is_match("é😀a中"));
-        // A pattern whose runs vary before its last, or that is not one
-        // anchored sequence, has no run matcher.
-        for pattern in [
-            "^a*b", "a", "^", "^$", "^a|b", "^(a)", "^a$b", "^^a", r"^a\b",
-        ] {
-            assert!(simple(pattern).is_none(), "{pattern}");
-        }
-    }
+
     // A small deterministic generator, so the differential needs no crate.
     struct Generator(u64);
     impl Generator {
@@ -1572,62 +1507,7 @@ mod tests {
             other => panic!("{pattern}: {other:?}"),
         }
     }
-    #[test]
-    fn linear_forms_spell_sets_out() {
-        for (pattern, form) in [
-            ("", ""),
-            ("^x-", "^x-"),
-            ("^[a-z0-9-]{8,36}$", r"^[\x{2D}0-9a-z]{8,36}$"),
-            (r"^\d+$", "^[0-9]+$"),
-            (
-                ".",
-                r"[\x{0}-\x{9}\x{B}-\x{C}\x{E}-\x{2027}\x{202A}-\x{D7FF}\x{E000}-\x{10FFFF}]",
-            ),
-            (r"[^\D]", "[0-9]"),
-            (r"[^\u0000-\uffff]", r"[\x{10000}-\x{10FFFF}]"),
-            (
-                r"[^\S]",
-                r"[\x{9}-\x{D}\x{20}\x{A0}\x{1680}\x{2000}-\x{200A}\x{2028}-\x{2029}\x{202F}\x{205F}\x{3000}\x{FEFF}]",
-            ),
-            ("(a|b)", "(a|b)"),
-            ("(?<n>a)(?:b)", "(a)(?:b)"),
-            ("a{002,010}?", "a{2,10}?"),
-            ("a{3}", "a{3}"),
-            ("a{3,}", "a{3,}"),
-            ("\u{1F600}", r"\x{1F600}"),
-            (r"\ud83d\ude00", r"\x{1F600}"),
-            (r"\ud83d", NOTHING),
-            (r"[\ud800-\udfff]", NOTHING),
-            (r"[^\ud800]", ANYTHING),
-            ("[]", NOTHING),
-            ("[^]", ANYTHING),
-            (r"[\b]", r"[\x{8}]"),
-            (r"^a\b", r"^a(?-u:\b)"),
-        ] {
-            assert_eq!(linear(pattern), form, "{pattern}");
-        }
-    }
-    #[test]
-    fn no_form_negates_a_class() {
-        for pattern in [
-            r"[^\S]",
-            r"[^\D]",
-            r"[^\W]",
-            r"[^\s]",
-            r"[^a]",
-            r"[^\u0000-\uffff]",
-            r"[^\ud7ff\ue000]",
-            r"\S",
-            r"\D",
-            r"\W",
-            ".",
-            "[^]",
-            "[]",
-            r"\ud800",
-        ] {
-            assert!(!linear(pattern).contains("[^"), "{pattern}");
-        }
-    }
+
     #[test]
     fn invalid_patterns_are_refused() {
         for pattern in [

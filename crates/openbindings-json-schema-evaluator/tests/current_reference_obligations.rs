@@ -12,7 +12,7 @@ struct Historical {
     document: String,
 }
 #[test]
-fn historical_invalid_documents_remain_admission_negatives() {
+fn invalid_documents_refuse_admission_under_their_original_rule() {
     let cases: Vec<Historical> =
         serde_json::from_str(include_str!("fixtures/historical-admission-negatives.json")).unwrap();
     assert_eq!(cases.len(), 13);
@@ -67,7 +67,7 @@ fn auxiliary_cases_have_required_semantic_results() {
     check_values(cases);
 }
 #[test]
-fn semantic_review_counterexamples_keep_their_adjudicated_results() {
+fn unknown_and_undefined_dependencies_preserve_coherent_semantic_results() {
     let cases: Vec<Case> =
         serde_json::from_str(include_str!("fixtures/semantic-soundness.json")).unwrap();
     assert_eq!(cases.len(), 26);
@@ -81,7 +81,7 @@ fn recursive_summaries_preserve_validity_and_evaluated_annotations() {
     check_values(cases);
 }
 #[test]
-fn recursive_extension_meets_independently_adjudicated_results() {
+fn recursive_annotations_and_closed_undefined_components_preserve_semantic_results() {
     #[derive(Deserialize)]
     struct Controls {
         cases: Vec<Case>,

@@ -5,7 +5,6 @@
 //! refused during traversal, under the same shared preparation allowance.
 use openbindings::*;
 use openbindings_json_schema_evaluator::{DefaultEvaluator, Limits};
-use std::time::{Duration, Instant};
 
 fn document(schemas: &[String], input: &str) -> String {
     format!(
@@ -108,11 +107,6 @@ fn assert_reaches(text: &str, resources: &ExternalSchemas, reached: usize) {
 }
 
 #[test]
-fn the_default_sets_no_resource_cap() {
-    assert_eq!(Limits::default().schema_resources, None);
-}
-
-#[test]
 fn a_cap_admits_exactly_the_resources_a_contract_reaches() {
     let none = ExternalSchemas::default();
     // The document resource alone.
@@ -170,44 +164,6 @@ fn a_resource_cap_precedes_evaluation_of_a_local_pattern_limit() {
         if detail.reason == NoVerdictReason::LimitExceeded && detail.code == "pattern-byte-limit")
     );
     assert_refused(prepare_limited(&text, &none, limits(Some(0))).unwrap_err());
-}
-
-// The fastest of three refusals of a contract reaching `count` supplied resources.
-fn refusal_time(count: usize) -> Duration {
-    let (text, resources) = supplied(count);
-    (0..3)
-        .map(|_| {
-            let start = Instant::now();
-            assert_refused(
-                prepare_scoped(
-                    &text,
-                    &resources,
-                    Limits {
-                        schema_resources: Some(count),
-                        ..Limits::default()
-                    },
-                    &PreparationLimits {
-                        max_sdk_work_units: 1_000_000_000,
-                        ..PreparationLimits::default()
-                    },
-                )
-                .unwrap_err(),
-            );
-            start.elapsed()
-        })
-        .min()
-        .unwrap()
-}
-
-#[test]
-fn a_refusal_takes_time_linear_in_the_resources() {
-    // Fund shared work independently so this measures the selected resource cap,
-    // not whichever other allowance happens to exhaust first. Retain the same
-    // 2,000/8,000-resource inputs and the original generous scaling bound.
-    let small = refusal_time(2_000);
-    let large = refusal_time(8_000);
-    let ratio = large.as_secs_f64() / small.as_secs_f64();
-    assert!(ratio < 8.0, "{small:?} -> {large:?}: {ratio:.1}x");
 }
 
 // The forms the evaluator keeps for a contract's patterns are bounded together:

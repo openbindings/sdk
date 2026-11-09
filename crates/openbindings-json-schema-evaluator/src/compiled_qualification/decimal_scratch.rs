@@ -75,7 +75,7 @@ fn array(token: &str, size: usize) -> JsonValue {
 }
 
 #[test]
-fn money_records_cross_the_old_cliff() {
+fn large_money_record_arrays_preserve_exact_decimal_verdicts() {
     let schema = r#"{"type":"array","items":{"type":"object","required":["sku","price","tax","discount","status"],"properties":{"sku":{"type":"string"},"price":{"type":"number","minimum":0,"maximum":1000000},"tax":{"type":"number","minimum":0,"maximum":1000000},"discount":{"type":"number","minimum":0,"maximum":1000000},"status":{"enum":["open","paid","void"]}}}}"#;
     let (selected, original) = prepared(schema);
     let independent = diagnostic(schema);
@@ -101,7 +101,7 @@ fn money_records_cross_the_old_cliff() {
 }
 
 #[test]
-fn decimal_spellings_and_all_four_bounds_agree_above_the_old_estimate() {
+fn large_decimal_spellings_preserve_all_four_numeric_bound_verdicts() {
     let tokens = [
         "1.0".to_owned(),
         "1e3".into(),

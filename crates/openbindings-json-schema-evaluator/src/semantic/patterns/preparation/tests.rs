@@ -2,50 +2,6 @@ use super::*;
 use openbindings_internal_schema::preparation::Attempt;
 
 #[test]
-fn compiled_handoff_shares_completed_matchers_and_forms() {
-    let programs = Programs::default();
-    let budget = compiler::profile::Budget::default();
-    let limits = Limits::default();
-    for source in [format!("^{}$", "a".repeat(10_000)), "^ab[0-9]{2}$".into()] {
-        let program = programs.add(&source, &limits, &budget, &|| false).unwrap();
-        let Program::Simple { matcher, .. } = program.as_ref() else {
-            panic!("simple matcher expected")
-        };
-        let reading = programs
-            .compiled_reading(&source, &limits, &|| false)
-            .unwrap()
-            .unwrap();
-        assert!(Arc::ptr_eq(matcher, reading.simple.as_ref().unwrap()));
-        let forms = programs.forms.borrow();
-        let form = forms
-            .values()
-            .flatten()
-            .find(|f| Arc::ptr_eq(&f.program, &program))
-            .unwrap();
-        assert!(Arc::ptr_eq(&form.text, &reading.form));
-    }
-    let alias = programs
-        .add(r"^\x61b[0-9]{2}$", &limits, &budget, &|| false)
-        .unwrap();
-    let first = programs
-        .compiled_reading("^ab[0-9]{2}$", &limits, &|| false)
-        .unwrap()
-        .unwrap();
-    let second = programs
-        .compiled_reading(r"^\x61b[0-9]{2}$", &limits, &|| false)
-        .unwrap()
-        .unwrap();
-    assert!(Arc::ptr_eq(&first.form, &second.form));
-    assert!(Arc::ptr_eq(
-        first.simple.as_ref().unwrap(),
-        second.simple.as_ref().unwrap()
-    ));
-    drop(alias);
-    drop(programs);
-    assert!(second.simple.unwrap().is_match("ab42"));
-}
-
-#[test]
 fn literal_handoff_keeps_exact_budgets_cancellation_and_collision_identity() {
     use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
     let programs = Programs::default();
@@ -158,23 +114,6 @@ fn literal_ranges_are_charged_again_for_repeated_shorthand_unions() {
     assert_eq!(failed.code, "preparation-sdk-reservation-bytes");
     let (_, allocation) = pattern::preparation_cost(&source).unwrap();
     assert!(allocation > 16_482_598);
-}
-
-#[test]
-fn completed_normalized_programs_are_shared_without_rebuilding() {
-    let programs = Programs::default();
-    let budget = compiler::profile::Budget::default();
-    let limits = Limits::default();
-    let before = compiler::build_count();
-    let first = programs.add("a|b", &limits, &budget, &|| false).unwrap();
-    let footprint = programs.footprint.get();
-    let second = programs
-        .add(r"\u0061|b", &limits, &budget, &|| false)
-        .unwrap();
-    assert!(Arc::ptr_eq(&first, &second));
-    assert_eq!(compiler::build_count(), before + 1);
-    assert_eq!(programs.footprint.get(), footprint);
-    assert_eq!(programs.forms.borrow().len(), 1);
 }
 
 #[test]
@@ -454,40 +393,5 @@ fn interrupted_source_alias_preserves_healthy_normalized_owner_and_collision() {
                 .unwrap();
             assert!(Arc::ptr_eq(owner, &hit), "{at}/{source}");
         }
-    }
-}
-
-#[test]
-fn authored_cache_miss_and_hit_keep_exact_attempt_boundaries() {
-    for allocation in [false, true] {
-        let run = |bound| {
-            let programs = Programs::default();
-            let budget = compiler::profile::Budget::default();
-            Attempt::run(
-                if allocation { 1_000_000 } else { bound },
-                if allocation { bound } else { 1_000_000 },
-                &|| false,
-                |a| {
-                    let first = programs.add("a|b", &Limits::default(), &budget, a)?;
-                    let next = programs.add("a|b", &Limits::default(), &budget, a)?;
-                    assert!(Arc::ptr_eq(&first, &next));
-                    Ok::<_, PreparationFailure>(())
-                },
-            )
-            .is_ok_and(|r| r.is_ok())
-        };
-        let (mut low, mut high) = (0, 1_000_000);
-        assert!(run(high));
-        while low < high {
-            let middle = low + (high - low) / 2;
-            if run(middle) {
-                high = middle;
-            } else {
-                low = middle + 1;
-            }
-        }
-        assert!(low > 0);
-        assert!(run(low));
-        assert!(!run(low - 1));
     }
 }

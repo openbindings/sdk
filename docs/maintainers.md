@@ -160,9 +160,9 @@ release checklist records those SDK-specific outcomes separately from source lan
 
 ## Invocation qualification
 
-Maintained value and frame-shape tests cover the adopted interface; lifecycle
-and malformed-frame tests separately qualify this SDK's policy.
-The frame mapper is test-only and does not establish a new streaming fixture
+Maintained request-value and lifecycle tests cover the adopted interface and
+this SDK's cancellation, half-close, output ordering and terminal-event policy.
+The archived frame-mapper experiment does not establish a streaming fixture
 standard. The external Catalog consumer explicitly pulls, adopts additions, then
 invokes a selected binding or operation from its conformant document. The
 invoker-only consumer guards dependency isolation; the Node/Wasm probe qualifies

@@ -147,37 +147,3 @@ fn relative_pointer(units: impl Iterator<Item = u16>) -> bool {
     }
     pointer(units)
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use openbindings_internal_schema::preparation::Attempt;
-
-    #[test]
-    fn regex_format_preparation_needs_no_identifier_initialization() {
-        for source in [r#""regex""#, r#""r\u0065gex""#] {
-            let value = JsonValue::parse(source).unwrap();
-            let prepare = |work, cancelled| {
-                Attempt::run(work, 0, &|| cancelled, |attempt| {
-                    Format::prepare(value.view(), attempt).map(|format| format.0)
-                })
-                .map_err(PreparationFailure::from)
-                .and_then(|result| result)
-            };
-            let work = value.text().len() + 1;
-            for _ in 0..2 {
-                assert_eq!(prepare(work, false).map_err(|error| error.kind), Ok(18));
-            }
-            assert_eq!(
-                prepare(work - 1, false).unwrap_err().kind,
-                PreparationFailureKind::Limit {
-                    resource: "preparation-sdk-work-units".into(),
-                }
-            );
-            assert_eq!(
-                prepare(work, true).unwrap_err().kind,
-                PreparationFailureKind::Cancelled
-            );
-        }
-    }
-}

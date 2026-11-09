@@ -326,7 +326,7 @@ fn localization_changes_only_recursive_edges_and_identities() {
     assert_transformed(&original, &sibling, "");
 }
 #[test]
-fn reviewer_meta_cases_agree_with_original_and_local_checks() {
+fn nested_meta_keyword_shapes_preserve_normative_validity() {
     let resources = originals();
     let original = compile(&resources[crate::schema_index::DIALECT], resources.clone()).unwrap();
     let cases: Vec<(String, bool)> =

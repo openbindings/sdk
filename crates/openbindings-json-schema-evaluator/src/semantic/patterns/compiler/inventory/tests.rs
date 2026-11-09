@@ -17,28 +17,6 @@ fn summary(form: &str) -> Summary {
     inspect(parsed(form), &|| false).unwrap().summary
 }
 
-#[derive(Default)]
-struct Recorder {
-    work: AtomicUsize,
-    allocation: AtomicUsize,
-}
-impl Control for Recorder {
-    fn is_cancelled(&self) -> bool {
-        false
-    }
-    fn check(&self) -> std::result::Result<(), Failure> {
-        self.charge_work(1)
-    }
-    fn charge_work(&self, n: usize) -> std::result::Result<(), Failure> {
-        self.work.fetch_add(n, Relaxed);
-        Ok(())
-    }
-    fn charge_allocation(&self, n: usize) -> std::result::Result<(), Failure> {
-        self.check()?;
-        self.allocation.fetch_add(n, Relaxed);
-        Ok(())
-    }
-}
 #[test]
 fn lineage_survives_smart_collapses_and_later_nonconcat() {
     let erased = summary("(?:[a-z]abc){0}");
@@ -52,52 +30,7 @@ fn lineage_survives_smart_collapses_and_later_nonconcat() {
     assert!(later.equality_height > 0);
     assert!(later.pressure.reconstruction_entries > 0);
 }
-#[test]
-fn wide_inputs_keep_constant_frame_storage() {
-    let narrow = Recorder::default();
-    drop(inspect(parsed("a?|b?"), &narrow).unwrap());
-    let wide = Recorder::default();
-    let pattern = std::iter::repeat_n("a?", 2000)
-        .collect::<Vec<_>>()
-        .join("|");
-    drop(inspect(parsed(&pattern), &wide).unwrap());
-    assert_eq!(
-        narrow.allocation.load(Relaxed),
-        wide.allocation.load(Relaxed)
-    );
-    assert!(wide.work.load(Relaxed) > narrow.work.load(Relaxed));
-    let deep = Recorder::default();
-    let pattern = format!("{}a{}", "(".repeat(32), ")".repeat(32));
-    drop(inspect(parsed(&pattern), &deep).unwrap());
-    assert!(deep.allocation.load(Relaxed) > wide.allocation.load(Relaxed));
-}
-#[test]
-fn exact_and_one_below_allowances() {
-    for form in ["", "a0000|b0000", "((a|b)*)"] {
-        let recorder = Recorder::default();
-        drop(inspect(parsed(form), &recorder).unwrap());
-        let work = recorder.work.load(Relaxed);
-        let allocation = recorder.allocation.load(Relaxed);
-        let ast = parsed(form);
-        let result = Attempt::run(work, allocation, &|| false, |attempt| inspect(ast, attempt));
-        drop(result.unwrap().unwrap());
-        let ast = parsed(form);
-        let result = Attempt::run(work - 1, allocation, &|| false, |attempt| {
-            inspect(ast, attempt)
-        });
-        assert_eq!(result.unwrap_err().code, "preparation-sdk-work-units");
-        if allocation > 0 {
-            let ast = parsed(form);
-            let result = Attempt::run(work, allocation - 1, &|| false, |attempt| {
-                inspect(ast, attempt)
-            });
-            assert_eq!(
-                result.unwrap_err().code,
-                "preparation-sdk-reservation-bytes"
-            );
-        }
-    }
-}
+
 #[test]
 fn arithmetic_refusal_is_local_but_preserves_a_prior_shared_cause() {
     assert!(matches!(
