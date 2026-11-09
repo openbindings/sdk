@@ -1,413 +1,150 @@
-use openbindings::{Binding, JsonKind, JsonLimits, JsonValue, Preference, Source};
+//! Current document/key requests and shared context replace legacy copied carriers.
+use openbindings::{Document, JsonLimits, JsonValue};
 use openbindings_invocation::{
-    BindingInvocationInput, BindingRequest, BindingValue, ContextChallenge, InvocationError,
+    BindingRequest, BoundaryFailureKind, ContextChallenge, InvocationError,
 };
-
 fn json(text: &str) -> JsonValue {
     JsonValue::parse(text).unwrap()
 }
-
-fn challenge(
-    requirement: &str,
-) -> Result<ContextChallenge, openbindings_invocation::BoundaryError> {
-    ContextChallenge::new(json(&format!(
-        r#"{{"target":"","alternatives":[{{"requirements":[{requirement}]}}]}}"#
-    )))
-}
-
-#[test]
-fn empty_binding_and_optional_presence_are_distinct() {
-    let empty = BindingValue::from_json(&json("{}")).unwrap();
-    assert!(empty.operation.is_none());
-    assert!(empty.source.is_none());
-    assert!(empty.content.is_none());
-    assert_eq!(empty.to_json().unwrap().text(), "{}");
-    assert_eq!(BindingValue::default().to_json().unwrap().text(), "{}");
-
-    let present = BindingValue::from_json(&json(
-        r#"{"operation":"","source":"","content":null,"idempotent":false,"deprecated":false}"#,
+fn request(binding_data: &str, source_data: &str, context: &str) -> JsonValue {
+    json(&format!(
+        r#"{{"interface":{{"openbindings":"0.2.0","operations":{{"echo":{{}}}},"sources":{{"s":{{"kind":"fixture"{source_data}}}}},"bindings":{{"b":{{"operation":"echo","source":"s"{binding_data}}}}}}},"binding":"b"{context}}}"#
     ))
-    .unwrap();
-    assert_eq!(present.operation.as_deref(), Some(""));
-    assert_eq!(present.source.as_deref(), Some(""));
-    assert_eq!(present.content.as_ref().unwrap().kind(), JsonKind::Null);
-    let wire = present.to_json().unwrap();
-    assert_eq!(wire.get("operation").unwrap().as_str(), Some(""));
-    assert_eq!(wire.get("content").unwrap().kind(), JsonKind::Null);
-    assert_eq!(wire.get("idempotent").unwrap().as_bool(), Some(false));
-
-    let converted = BindingValue::from(&Binding::default());
-    assert_eq!(converted.operation.as_deref(), Some(""));
-    assert_eq!(converted.source.as_deref(), Some(""));
-    assert!(converted.content.is_none());
 }
-
 #[test]
-fn owned_input_preserves_opaque_exact_values_without_normalization() {
-    let original = json(
-        r#"{"source":{"kind":"private.Kind/v1","content":{"n":9007199254740993,"n":1e9999},"description":"source description","x-source":"\ud800"},"binding":{"content":{"n":-0.00e+2,"n":"\ud800"},"preference":7,"description":"binding description","x-binding":[1e-10000,9007199254740993]},"context":{"secret":null,"secret":false}}"#,
+fn owned_document_request_preserves_exact_payloads_and_owners() {
+    let original = request(
+        r#", "data":{"n":-0.00e+2,"unit":"\ud800\udc00"},"x-binding":[1e-10000,9007199254740993]"#,
+        r#", "data":{"n":9007199254740993,"large":1e9999},"x-source":"\ud800\udc00""#,
+        r#", "context":{"secret":null,"secret":false}"#,
     );
-    let input = BindingInvocationInput::from_json(&original).unwrap();
-    assert_eq!(input.source.kind, "private.Kind/v1");
+    let proof = Document::from_json(original.get("interface").unwrap().to_owned())
+        .validate()
+        .unwrap();
+    assert!(proof.conformant().is_some(), "{:?}", proof.report());
+    let input = BindingRequest::from_json(&original).unwrap();
+    let retained = input.interface.source("s").unwrap();
+    let wire = input.to_json().unwrap();
+    let again = BindingRequest::from_json(&wire).unwrap();
     assert_eq!(
-        input.source.content.as_ref().unwrap().text(),
-        r#"{"n":9007199254740993,"n":1e9999}"#
-    );
-    assert_eq!(
-        input.binding.content.as_ref().unwrap().text(),
-        r#"{"n":-0.00e+2,"n":"\ud800"}"#
-    );
-    assert_eq!(
-        input.source.additional_fields["x-source"].text(),
-        r#""\ud800""#
-    );
-    assert_eq!(
-        input.binding.extensions["x-binding"].text(),
-        "[1e-10000,9007199254740993]"
+        again.interface.value().text(),
+        input.interface.value().text()
     );
     assert_eq!(
-        input.context.as_ref().unwrap().text(),
+        again.context.as_ref().unwrap().value().value().text(),
         r#"{"secret":null,"secret":false}"#
     );
-    assert_eq!(input.binding.preference.unwrap().get(), 7);
-    let again = BindingInvocationInput::from_json(&input.to_json().unwrap()).unwrap();
+    assert_eq!(serde_json::to_string(&input).unwrap(), wire.text());
     assert_eq!(
-        again.binding.content.unwrap().text(),
-        input.binding.content.as_ref().unwrap().text()
+        input.interface.binding("b").unwrap().data().unwrap().text(),
+        r#"{"n":-0.00e+2,"unit":"\ud800\udc00"}"#
     );
-    let serde_wire = serde_json::to_string(&input).unwrap();
+    drop((original, input, wire, again));
     assert_eq!(
-        json(&serde_wire).get("context").unwrap().text(),
-        input.context.as_ref().unwrap().text()
-    );
-    let retained = input.source.content.unwrap();
-    drop(original);
-    assert_eq!(retained.get("n").unwrap().text(), "9007199254740993");
-}
-
-#[test]
-fn source_content_and_context_absence_survive_reencoding() {
-    for (suffix, present) in [("", false), (",\"context\":{}", true)] {
-        let input = BindingInvocationInput::from_json(&json(&format!(
-            r#"{{"source":{{"kind":"x"}},"binding":{{}}{suffix}}}"#
-        )))
-        .unwrap();
-        assert!(input.source.content.is_none());
-        assert_eq!(input.context.is_some(), present);
-        let encoded = input.to_json().unwrap();
-        assert_eq!(encoded.get("context").is_some(), present);
-        assert!(encoded.at("/source/content").is_none());
-    }
-    let input = BindingInvocationInput::from_json(&json(
-        r#"{"source":{"kind":"x","content":null},"binding":{}}"#,
-    ))
-    .unwrap();
-    assert_eq!(
-        input
-            .to_json()
-            .unwrap()
-            .at("/source/content")
-            .unwrap()
-            .kind(),
-        JsonKind::Null
+        retained.data().unwrap().text(),
+        r#"{"n":9007199254740993,"large":1e9999}"#
     );
 }
-
 #[test]
-fn interpreted_carriers_reject_malformed_duplicate_and_unknown_members() {
-    for input in [
-        "null",
-        "{}",
-        r#"{"source":{"kind":"x"}}"#,
-        r#"{"source":{"kind":"x"},"binding":{},"extra":0}"#,
-        r#"{"source":{"kind":"x"},"binding":{},"binding":{}}"#,
-        r#"{"source":[],"binding":{}}"#,
-        r#"{"source":{},"binding":{}}"#,
-        r#"{"source":{"kind":""},"binding":{}}"#,
-        r#"{"source":{"kind":null},"binding":{}}"#,
-        r#"{"source":{"kind":"x","kind":"y"},"binding":{}}"#,
-        r#"{"source":{"kind":"x","location":"legacy"},"binding":{}}"#,
-        r#"{"source":{"kind":"x","description":false},"binding":{}}"#,
-        r#"{"source":{"kind":"x","x-e":1,"x-e":2},"binding":{}}"#,
-        r#"{"source":{"kind":"x"},"binding":null}"#,
-        r#"{"source":{"kind":"x"},"binding":{"operation":false}}"#,
-        r#"{"source":{"kind":"x"},"binding":{"source":null}}"#,
-        r#"{"source":{"kind":"x"},"binding":{"selector":"legacy"}}"#,
-        r#"{"source":{"kind":"x"},"binding":{"content":1,"\u0063ontent":2}}"#,
-        r#"{"source":{"kind":"x"},"binding":{"idempotent":0}}"#,
-        r#"{"source":{"kind":"x"},"binding":{"deprecated":"false"}}"#,
-        r#"{"source":{"kind":"x"},"binding":{"description":{}}}"#,
-        r#"{"source":{"kind":"x"},"binding":{"x-e":1,"x-e":2}}"#,
-        r#"{"source":{"kind":"x"},"binding":{},"context":null}"#,
-        r#"{"source":{"kind":"x"},"binding":{},"context":[]}"#,
-        r#"{"source":{"kind":"\ud800"},"binding":{}}"#,
-    ] {
-        assert!(
-            BindingInvocationInput::from_json(&json(input)).is_err(),
-            "admitted {input}"
-        );
-    }
-}
-
-#[test]
-fn native_carriers_cannot_hide_illegal_or_shadowed_fields_in_extensions() {
-    for name in ["kind", "content", "location", "credential-secret"] {
-        let mut source = Source {
-            kind: "test".into(),
-            ..Source::default()
-        };
-        source.additional_fields.insert(name.into(), json("null"));
-        let input = BindingInvocationInput {
-            source,
-            binding: BindingValue::default(),
-            context: None,
-        };
-        assert!(input.to_json().is_err());
-    }
-    for name in ["operation", "content", "source", "preference", "selector"] {
-        let mut binding = BindingValue::default();
-        binding.extensions.insert(name.into(), json("null"));
-        assert!(binding.to_json().is_err());
-        assert!(serde_json::to_string(&binding).is_err());
-    }
-}
-
-#[test]
-fn preferences_use_exact_integer_math_and_the_interoperable_range() {
-    for (token, expected) in [
-        ("-9007199254740991", -9_007_199_254_740_991),
-        ("900719925474099100e-2", 9_007_199_254_740_991),
-        ("9.007199254740991e15", 9_007_199_254_740_991),
-        ("1.23000e2", 123),
-        ("12300e-2", 123),
-        ("-0.000e99999999999999999999999999", 0),
-        ("0e-99999999999999999999999999", 0),
-    ] {
-        let binding =
-            BindingValue::from_json(&json(&format!(r#"{{"preference":{token}}}"#))).unwrap();
-        assert_eq!(binding.preference, Preference::new(expected), "{token}");
-    }
-    for token in [
-        "1.1",
-        "9007199254740991.0000000001",
-        "9007199254740992",
-        "-9007199254740992",
-        "1e100000",
-        "1e-100000",
-        "1e999999999999999999999999",
-        "1e-999999999999999999999999",
-        "null",
-        "true",
-        "\"1\"",
-    ] {
-        assert!(
-            BindingValue::from_json(&json(&format!(r#"{{"preference":{token}}}"#))).is_err(),
-            "{token}"
-        );
-    }
-}
-
-// The by-value carrier keeps its own exact preference reader; it must accept
-// and read every spelling exactly as core's document validation does.
-#[test]
-fn binding_value_preference_reads_numbers_as_core_documents_do() {
-    fn core(token: &str) -> Option<i64> {
-        let text = format!(
-            r#"{{"openbindings":"0.2.0","operations":{{"o":{{}}}},"sources":{{"s":{{"kind":"k"}}}},"bindings":{{"b":{{"operation":"o","source":"s","preference":{token}}}}}}}"#
-        );
-        let proof = openbindings::Document::parse(text)
-            .ok()?
-            .validate()
-            .ok()?
-            .conformant()?;
-        proof.binding("b")?.preference().map(Preference::get)
-    }
-    fn carrier(token: &str) -> Option<i64> {
-        let value = JsonValue::parse(format!(r#"{{"preference":{token}}}"#)).ok()?;
-        BindingValue::from_json(&value)
-            .ok()?
-            .preference
-            .map(Preference::get)
-    }
-    let mut tokens: Vec<String> = [
-        "0",
-        "-0",
-        "1",
-        "1.0",
-        "1e0",
-        "1E+0",
-        "10e-1",
-        "100e-2",
-        "0.5",
-        "1.5",
-        "-1.0",
-        "9007199254740991",
-        "-9007199254740991",
-        "9007199254740992",
-        "-9007199254740992",
-        "9007199254740991.0",
-        "90071992547409910e-1",
-        "9.007199254740991e15",
-        "9.0071992547409910e15",
-        "0.9007199254740991e16",
-        "1e15",
-        "1e16",
-        "9e15",
-        "1e-0",
-        "0e5",
-        "0.0e-5",
-        "0.000e999",
-        "1e00000000000000000000000000000000000002",
-        "100000000000000000000e-20",
-        "0.00000000000000000001e20",
-        "1e-1",
-        "10000000000000000e-1",
-        "1000000000000000000e-3",
-        "12345678901234567890e-4",
-        "5e-324",
-        "1e400",
-        "123.4560e3",
-        "123.456e2",
-        "-0.0e0",
-        "0.1e1",
-        "0.10e1",
-        "0.01e2",
-        "-0.000e99999999999999999999999999",
-        "0e-99999999999999999999999999",
-        "9007199254740991.0000000001",
-        "1e100000",
-        "1e-100000",
-    ]
-    .map(str::to_owned)
-    .to_vec();
-    for digits in [
-        "9007199254740991",
-        "1",
-        "42",
-        "9007199254740990",
-        "1000000000000000",
-    ] {
-        for shift in 0..25 {
-            tokens.push(format!("0.{digits}e{}", digits.len()));
-            tokens.push(format!("{digits}{}e-{shift}", "0".repeat(shift)));
-            tokens.push(format!("{digits}.{}", "0".repeat(shift + 1)));
-            tokens.push(format!("-{digits}{}e-{shift}", "0".repeat(shift)));
-            if shift > 0 {
-                tokens.push(format!("{digits}e{shift}"));
-                tokens.push(format!("{digits}e-{shift}"));
-            }
-        }
-    }
-    let mut accepted = 0;
-    for token in &tokens {
-        let expected = core(token);
-        assert_eq!(carrier(token), expected, "{token}");
-        accepted += usize::from(expected.is_some());
-    }
-    assert!(
-        accepted > tokens.len() / 2,
-        "the comparison covers accepted spellings"
-    );
-}
-
-#[test]
-fn unknown_requirement_families_and_durable_presence_are_preserved() {
-    for flag in ["", ",\"durable\":false", ",\"durable\":true"] {
-        let requirement = format!(
-            r#"{{"type":"private.approval","name":"consent","opaque":{{"n":9007199254740993,"n":"\ud800"}}{flag}}}"#
-        );
-        let challenge = challenge(&requirement).unwrap();
-        assert_eq!(challenge.target(), "");
-        let requirement_value = challenge
-            .alternatives()
-            .element(0)
-            .unwrap()
-            .at("/requirements/0")
-            .unwrap();
-        assert_eq!(requirement_value.text(), requirement);
-        assert_eq!(requirement_value.get("durable").is_some(), !flag.is_empty());
-        let error = InvocationError::challenge(challenge);
-        assert_eq!(error.code(), "CONTEXT_REQUIRED");
-        assert_eq!(
-            error.context_required().unwrap().alternatives().len(),
-            Some(1)
-        );
-    }
-    // Exact unfamiliar fields need not have Unicode-scalar names.
-    assert!(challenge(r#"{"type":"extension","\ud800":1}"#).is_ok());
-}
-
-#[test]
-fn config_challenges_check_pointer_shape_and_admit_boolean_schemas() {
-    for path in [
-        "",
-        "/",
-        "/variables/region",
-        "/a~1b/~0key",
-        "/value",
-        "/00",
-        "/~01",
-    ] {
-        for schema in [
-            "true",
-            "false",
-            r#"{"enum":[9007199254740993],"x":1,"x":2}"#,
-        ] {
-            let requirement = format!(
-                r#"{{"type":"config.value","point":"server","path":"{path}","schema":{schema}}}"#
+fn data_and_context_absence_are_distinct_from_null_and_empty_object() {
+    for data in ["", r#", "data":null"#] {
+        for context in ["", r#", "context":{}"#] {
+            let input = BindingRequest::from_json(&request(data, data, context)).unwrap();
+            let wire = input.to_json().unwrap();
+            assert_eq!(
+                wire.at("/interface/bindings/b/data").is_some(),
+                !data.is_empty()
             );
-            assert!(challenge(&requirement).is_ok(), "{requirement}");
+            assert_eq!(
+                wire.at("/interface/sources/s/data").is_some(),
+                !data.is_empty()
+            );
+            assert_eq!(wire.get("context").is_some(), !context.is_empty());
+            assert!(wire.at("/interface/sources/s/content").is_none());
         }
     }
-    for requirement in [
-        r#"{"type":"config.value"}"#,
-        r#"{"type":"config.value","point":"server"}"#,
-        r#"{"type":"config.value","path":""}"#,
-        r#"{"type":"config.value","point":false,"path":""}"#,
-        r#"{"type":"config.value","point":"server","path":null}"#,
-        r#"{"type":"config.value","point":"server","path":"variables"}"#,
-        r#"{"type":"config.value","point":"server","path":"/~2"}"#,
-        r#"{"type":"config.value","point":"server","path":"/~"}"#,
-        r#"{"type":"config.value","point":"server","path":"","schema":null}"#,
-        r#"{"type":"config.value","point":"server","path":"","schema":[]}"#,
-    ] {
-        assert!(challenge(requirement).is_err(), "admitted {requirement}");
-    }
 }
-
 #[test]
-fn challenges_reject_closed_shape_violations_and_ambiguous_requirements() {
-    for value in [
-        "null",
-        r#"{"target":"","alternatives":[]}"#,
-        r#"{"target":"","alternatives":[{"requirements":[]}]}"#,
-        r#"{"target":"","alternatives":[{"requirements":[{"type":"x"}],"extra":0}]}"#,
-        r#"{"target":"","alternatives":[{"requirements":[{"type":"x"}]}],"extra":0}"#,
-        r#"{"target":"","target":"other","alternatives":[{"requirements":[{"type":"x"}]}]}"#,
-        r#"{"target":false,"alternatives":[{"requirements":[{"type":"x"}]}]}"#,
-        r#"{"target":"","alternatives":[{"requirements":[{"type":"x"}],"requirements":[{"type":"y"}]}]}"#,
+fn requests_reject_closed_shape_violations_and_require_document_conformance() {
+    let good = request("", "", "");
+    let doc = good.get("interface").unwrap().text();
+    for payload in [
+        "null".into(),
+        "{}".into(),
+        format!(r#"{{"interface":{doc}}}"#),
+        format!(r#"{{"interface":{doc},"binding":"b","binding":"b"}}"#),
+        format!(r#"{{"interface":{doc},"binding":"b","source":{{}}}}"#),
+        format!(r#"{{"interface":{doc},"binding":"b","context":null}}"#),
+        format!(r#"{{"interface":{doc},"binding":""}}"#),
+        r#"{"interface":{"openbindings":"0.2.0","unknown":0},"binding":"b"}"#.into(),
     ] {
         assert!(
-            ContextChallenge::new(json(value)).is_err(),
-            "admitted {value}"
+            BindingRequest::from_json(&json(&payload)).is_err(),
+            "{payload}"
         );
     }
-    for requirement in [
-        "null",
-        "{}",
-        r#"{"type":""}"#,
-        r#"{"type":7}"#,
-        r#"{"type":"x","type":"y"}"#,
-        r#"{"type":"x","name":""}"#,
-        r#"{"type":"x","description":false}"#,
-        r#"{"type":"x","durable":null}"#,
-        r#"{"type":"x","custom":1,"custom":2}"#,
-        r#"{"type":"x","\ud800":1,"\ud800":2}"#,
+    for fields in [
+        r#", "content":null"#,
+        r#", "source":"s""#,
+        r#", "selector":"old""#,
     ] {
-        assert!(challenge(requirement).is_err(), "admitted {requirement}");
+        assert!(BindingRequest::from_json(&request(fields, "", "")).is_err());
     }
 }
-
+#[test]
+fn document_preference_is_read_by_core_without_a_second_invocation_parser() {
+    for (token, expected) in [
+        ("-9007199254740991", Some(-9_007_199_254_740_991)),
+        ("900719925474099100e-2", Some(9_007_199_254_740_991)),
+        ("9.007199254740991e15", Some(9_007_199_254_740_991)),
+        ("1.23000e2", Some(123)),
+        ("12300e-2", Some(123)),
+        ("-0.000e99999999999999999999999999", Some(0)),
+        ("0e-99999999999999999999999999", Some(0)),
+        ("1.1", None),
+        ("9007199254740991.0000000001", None),
+        ("9007199254740992", None),
+        ("-9007199254740992", None),
+        ("1e100000", None),
+        ("1e999999999999999999999999", None),
+        ("1e-999999999999999999999999", None),
+        ("1e-100000", None),
+        ("null", None),
+        ("true", None),
+        (r#""1""#, None),
+    ] {
+        let input =
+            BindingRequest::from_json(&request(&format!(r#", "preference":{token}"#), "", ""));
+        match expected {
+            Some(expected) => assert_eq!(
+                input.unwrap().interface.binding("b").unwrap().preference(),
+                Some(expected)
+            ),
+            None => assert!(input.is_err(), "{token}"),
+        }
+    }
+}
+#[test]
+fn current_challenges_use_only_message_and_object_schema() {
+    let value = json(
+        r#"{"message":"Supply context","schema":{"oneOf":[{"title":"A","required":["a"]}],"x-opaque":{"x":1,"x":2}}}"#,
+    );
+    let challenge = ContextChallenge::try_from(value.clone()).unwrap();
+    let error = InvocationError::challenge(challenge);
+    assert_eq!(error.data().unwrap().text(), value.text());
+    assert_eq!(
+        error.context_required().unwrap().value().value().text(),
+        value.text()
+    );
+    for value in [
+        r#"{"message":"","schema":{}}"#,
+        r#"{"message":"x","schema":true}"#,
+        r#"{"message":"x","schema":{},"extra":null}"#,
+        r#"{"target":"old","alternatives":[{"requirements":[]}]}"#,
+    ] {
+        assert!(InvocationError::new("CONTEXT_REQUIRED", Some(json(value))).is_err());
+    }
+}
 #[test]
 fn portable_errors_preserve_unknown_codes_and_absent_null_exact_data() {
     for data in [
@@ -473,101 +210,56 @@ fn explicit_encoding_limits_bound_bytes_depth_and_nodes() {
         },
     ] {
         assert_eq!(
-            error.to_json_with_limits(limits).unwrap_err().code(),
-            "encoding-limit"
+            error.to_json_with_limits(limits).unwrap_err().kind(),
+            BoundaryFailureKind::EncodingLimit
         );
     }
     assert!(error.to_json_with_limits(JsonLimits::default()).is_ok());
 }
 
 #[test]
-fn diagnostics_and_debug_do_not_reveal_strings_values_or_field_names() {
+fn debug_redacts_current_carriers_and_fixed_admission_paths() {
     const SECRET: &str = "SENTINEL-CREDENTIAL-DO-NOT-LOG";
-    let source = Source {
-        kind: SECRET.into(),
-        description: Some(SECRET.into()),
-        content: Some(json(&format!(r#"{{"{SECRET}":"{SECRET}"}}"#))),
-        ..Source::default()
-    };
-    let mut binding = BindingValue {
-        operation: Some(SECRET.into()),
-        source: Some(SECRET.into()),
-        description: Some(SECRET.into()),
-        content: source.content.clone(),
-        ..BindingValue::default()
-    };
-    binding
-        .extensions
-        .insert(format!("x-{SECRET}"), JsonValue::string(SECRET).unwrap());
-    let context = json(&format!(r#"{{"{SECRET}":"{SECRET}"}}"#));
-    let request = BindingRequest {
-        source: &source,
-        binding: &binding,
-        context: Some(&context),
-    };
-    let challenge = ContextChallenge::new(json(&format!(r#"{{"target":"{SECRET}","alternatives":[{{"requirements":[{{"type":"{SECRET}","description":"{SECRET}"}}]}}]}}"#))).unwrap();
-    // codes are displayed; sensitive values belong in data, not the code.
-    let error = InvocationError::new("example.application", Some(context.clone())).unwrap();
-    let diagnostic = BindingValue::from_json(&context).unwrap_err();
-    let input = BindingInvocationInput {
-        source: source.clone(),
-        binding: binding.clone(),
-        context: Some(context.clone()),
-    };
+    let payload = request("", "", &format!(r#", "context":{{"{SECRET}":"{SECRET}"}}"#));
+    let mut input = BindingRequest::from_json(&payload).unwrap();
+    input.binding = SECRET.into();
+    let error = InvocationError::new(SECRET, Some(payload.clone())).unwrap();
+    let diagnostic = BindingRequest::from_json(&json(&format!(r#"{{"{SECRET}":0}}"#))).unwrap_err();
+    let challenge = ContextChallenge::try_from(json(&format!(
+        r#"{{"message":"{SECRET}","schema":{{"title":"{SECRET}"}}}}"#
+    )))
+    .unwrap();
     for text in [
-        format!("{binding:?}"),
-        format!("{request:?}"),
-        format!("{challenge:?}"),
+        format!("{input:?}"),
+        format!("{input:#?}"),
         format!("{error:?}"),
-        error.to_string(),
         format!("{diagnostic:?}"),
         diagnostic.to_string(),
-        format!("{input:?}"),
+        format!("{challenge:?}"),
     ] {
-        assert!(!text.contains(SECRET), "leaked {text}");
+        assert!(!text.contains(SECRET), "{text}");
         assert!(text.len() < 256);
     }
+    assert_eq!(error.code(), SECRET);
+    assert!(error.to_json().unwrap().text().contains(SECRET));
+    let document = Document::from_json(payload.get("interface").unwrap().to_owned());
+    assert!(document.validate().unwrap().conformant().is_some());
 }
 
-/// Supports one kind and lists it with a description.
-struct Listed;
-impl openbindings_invocation::binding::BindingInvoker for Listed {
-    type Invocation<'a> = std::future::Ready<Result<(), InvocationError>>;
-    fn supports_kind(&self, kind: &str) -> bool {
-        kind == "urn:example:listed"
-    }
-    fn supported_kinds(&self) -> Vec<openbindings_invocation::binding::SupportedKind> {
-        vec![
-            openbindings_invocation::binding::SupportedKind::new("urn:example:listed")
-                .with_description("listed for this job"),
-        ]
-    }
-    fn invoke<'a>(
-        &'a self,
-        _: BindingRequest<'a>,
-        _: openbindings_invocation::ProviderIo,
-        _: openbindings_invocation::CancellationToken,
-    ) -> Self::Invocation<'a> {
-        std::future::ready(Ok(()))
-    }
-}
 #[test]
-fn providers_list_kinds_with_their_constructor() {
-    let facade = openbindings_invocation::binding::Invoker::new(Listed);
-    let listed = facade.list_supported_kinds().unwrap();
-    assert_eq!(listed.len(), 1);
-    assert_eq!(
-        (listed[0].kind.as_str(), listed[0].description.as_deref()),
-        ("urn:example:listed", Some("listed for this job"))
-    );
-    let verdicts = facade
-        .check_kind_support(["urn:example:listed", "urn:example:other"])
-        .unwrap();
-    assert_eq!(
-        verdicts
-            .iter()
-            .map(|v| (v.kind.as_str(), v.supported))
-            .collect::<Vec<_>>(),
-        [("urn:example:listed", true), ("urn:example:other", false)]
-    );
+fn historical_opaque_document_payloads_do_not_bypass_current_obi01_admission() {
+    for data in [r#", "data":{"n":1,"n":2}"#, r#", "data":"\ud800""#] {
+        let value = request(data, "", "");
+        assert_eq!(
+            BindingRequest::from_json(&value).unwrap_err().kind(),
+            BoundaryFailureKind::InvalidDocument
+        );
+        let proof = Document::from_json(value.get("interface").unwrap().to_owned())
+            .validate()
+            .unwrap();
+        assert_eq!(
+            proof.report().evidence["OBI-01"],
+            openbindings::Evidence::Violated
+        );
+    }
 }

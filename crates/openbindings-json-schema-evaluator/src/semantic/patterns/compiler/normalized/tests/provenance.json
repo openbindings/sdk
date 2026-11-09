@@ -1,0 +1,13 @@
+{
+  "scope": "Private inactive normalized-grammar scanner controls; not a new ECMA or value-verdict oracle.",
+  "files": {
+    "reader-inputs.jsonl": {
+      "source": "receipts/2026-11-02-preparation/prepared-pattern-program-review/design/normalized-shape-inputs.jsonl",
+      "sha256": "a848ae698eea11d4e9e2e86abefe1f2014bd30c3ef55bb7d4fc958d8a50953d1"
+    },
+    "independent-controls.json": {
+      "source": "receipts/2026-11-02-preparation/prepared-pattern-program-review/design/normalized-grammar-independent-controls.json",
+      "sha256": "8234075b89f623ba1e80d2c491c5b6cdbbaec13a79876b670b9dd9780eefae00"
+    }
+  }
+}

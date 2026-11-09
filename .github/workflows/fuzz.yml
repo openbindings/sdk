@@ -1,0 +1,71 @@
+name: Fuzz
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 4 * * 1'
+  # A change to the targets runs them before review, not only on the weekly schedule.
+  pull_request:
+    paths:
+      - 'fuzz/**'
+      - '.github/workflows/fuzz.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fuzz-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CARGO_BUILD_JOBS: '4'
+      FUZZ_NIGHTLY: nightly-2026-11-01
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Read Rust toolchain
+        id: rust-version
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import os, tomllib
+          with open('rust-toolchain.toml', 'rb') as source:
+              version = tomllib.load(source)['toolchain']['channel']
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write('version=' + version + '\n')
+          PY
+      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # master
+        with:
+          toolchain: ${{ steps.rust-version.outputs.version }}
+      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # master
+        with:
+          toolchain: nightly-2026-11-01
+      # cargo-fuzz itself builds on the SDK's stable toolchain: its locked
+      # dependencies include a rustix that a current nightly refuses. Only the
+      # fuzz targets need nightly.
+      - name: Install pinned cargo-fuzz
+        run: cargo +"${{ steps.rust-version.outputs.version }}" install cargo-fuzz --version 0.13.2 --locked
+      - name: Build all fuzz targets
+        run: cargo +"$FUZZ_NIGHTLY" fuzz build
+      - name: Run every target for two minutes
+        shell: bash
+        run: |
+          status=0
+          for target in document json_value decimal pattern lanes; do
+            if ! cargo +"$FUZZ_NIGHTLY" fuzz run "$target" -- \
+              -max_total_time=120 -timeout=15 -rss_limit_mb=2048 -max_len=16384; then
+              status=1
+            fi
+          done
+          exit "$status"
+      - name: Preserve crashes and timeouts
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: fuzz-artifacts-${{ github.run_id }}
+          path: fuzz/artifacts/
+          if-no-files-found: ignore
+          retention-days: 30

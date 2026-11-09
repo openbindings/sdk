@@ -1,1 +1,4 @@
 msrv = "1.88"
+disallowed-types = [
+    { path = "std::collections::hash_map::RandomState", reason = "Input-chosen content must use ordered storage; worst-case work cannot depend on secret hash seeds." },
+]

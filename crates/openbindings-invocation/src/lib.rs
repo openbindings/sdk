@@ -1,43 +1,32 @@
-// A method that returns `Self` is a builder step; dropping its result loses the change.
+// A method that returns Self is a builder step; dropping it loses the change.
 #![warn(clippy::return_self_not_must_use)]
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 #![doc = include_str!("../README.md")]
 
 pub mod binding;
+mod boundary;
+mod channel;
 mod error;
-mod lifecycle;
 pub mod operation;
 mod value;
 
-pub use error::InvocationError;
-pub use lifecycle::{
-    Control, Input, Invocation, InvocationLimits, LimitError, Outputs, ProviderInput, ProviderIo,
-    ProviderOutput, WriteError,
+pub use binding::{BindingInvoker, BindingInvokerExt, InvocationSupport, PreflightOutcome};
+pub use boundary::{BoundaryFailure, BoundaryFailureKind};
+pub use channel::{
+    Invocation, InvocationControl, InvocationInput, InvocationLimits, InvocationOutput, LimitError,
+    OutputEvent, ProviderInput, ProviderIo, ProviderOutput, WriteError,
 };
-// One definition of the by-value binding source inspection also hands out.
-pub use openbindings_internal_interfaces::{BindingValue, BoundaryError};
-pub use value::{BindingInvocationInput, BindingRequest, ContextChallenge};
+pub use error::InvocationError;
+pub use openbindings_context::{Context, ContextChallenge};
+pub use operation::{
+    DefaultOperationInvoker, OperationAddress, OperationInvoker, OperationRequest,
+};
+pub use value::BindingRequest;
 
-/// Version of the published interface this crate implements, independent of the crate's own version.
+/// Version of the binding and operation invocation interfaces, separate from core.
 pub const INTERFACE_VERSION: &str = "0.1.0";
+/// Immutable current interfaces revision targeted by this implementation.
+pub const APPLIED_INTERFACE_REVISION: &str = "3e3dc453a93b611a8e9ea1813ec63a2216830f45";
 
-/// Revision of the interfaces repository applied by this crate.
-pub const APPLIED_INTERFACE_REVISION: &str = "f158f4f345301668ccb8fd555586b04ca823e732";
-
-// One token/future identity across all asynchronous companions.
 pub use openbindings_internal_cancellation::{Cancellation, CancellationToken};
-
-#[cfg(test)]
-mod interface_metadata_tests {
-    #[test]
-    fn published_interface_metadata_is_independent_of_the_crate_version() {
-        // The published interface version and applied revision are separate from
-        // the crate version, so a crate release cannot silently change them.
-        assert_eq!(super::INTERFACE_VERSION, "0.1.0");
-        assert_eq!(
-            super::APPLIED_INTERFACE_REVISION,
-            "f158f4f345301668ccb8fd555586b04ca823e732"
-        );
-    }
-}

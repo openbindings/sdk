@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   browserBootstrapSnippet,
+  discoverySnippet,
+  firstUseJavaScriptSnippet,
   firstUseSnippet,
 } from "../scripts/readme-snippet.mjs";
 
@@ -14,7 +16,11 @@ const source = firstUseSnippet(readme);
 test("README source is captured verbatim with LF or CRLF", () => {
   assert(original.includes(firstUseSnippet(original)));
   assert(source.startsWith("import { Document, type JsonInput }"));
-  assert(source.endsWith('console.log(checkInput("seven"));\n'));
+  assert(
+    source.endsWith(
+      'console.log(JSON.stringify(checkInput("seven"), null, 2));\n',
+    ),
+  );
   assert.equal(
     firstUseSnippet(readme.replaceAll("\n", "\r\n")),
     source.replaceAll("\n", "\r\n"),
@@ -33,11 +39,26 @@ test("README guard rejects missing, duplicate, and unclosed example fences", () 
       "```ts\nconst unclosed = true;\n\n## Browser resource management",
     ),
     readme.replace(
-      'console.log(checkInput("seven"));\n```',
-      'console.log(checkInput("seven"));',
+      'console.log(JSON.stringify(checkInput("seven"), null, 2));\n```',
+      'console.log(JSON.stringify(checkInput("seven"), null, 2));',
     ),
   ])
     assert.throws(() => firstUseSnippet(changed));
+});
+
+test("JavaScript and discovery examples remain verbatim executable README blocks", () => {
+  for (const extract of [firstUseJavaScriptSnippet, discoverySnippet]) {
+    const snippet = extract(original);
+    assert(original.includes(snippet));
+    assert(snippet.includes("await initialize();"));
+    assert.throws(() =>
+      extract(original.replace(snippet, snippet + "```\n```")),
+    );
+    assert.equal(
+      extract(readme.replaceAll("\n", "\r\n")),
+      extract(readme).replaceAll("\n", "\r\n"),
+    );
+  }
 });
 
 test("browser bootstrap remains a single verbatim executable README block", () => {

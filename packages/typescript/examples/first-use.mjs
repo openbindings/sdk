@@ -17,7 +17,7 @@ export const exampleDocument = `{
 }`;
 
 // Initialize in the host entry first. Every result is plain data; setup owners
-// close here. A service that validates repeatedly should retain its contract
+// close here. A service that validates repeatedly should retain its schema
 // instead, as shown in service.mjs and service-lifecycle.mjs.
 export function firstUse(
   input = { id: 7 },
@@ -26,23 +26,33 @@ export function firstUse(
 ) {
   const parsed = Document.parse(documentBytes);
   if (parsed.status !== "parsed") return parsed;
-  let proof, selected, contract, prepared;
+  let proof, selected, schema, prepared;
   try {
     const checked = parsed.value.validate();
     if (checked.status !== "conformant") return checked;
     proof = checked.document;
-    const operations = proof.operations;
+    const entries = proof.operations();
+    let operations;
+    try {
+      operations = entries.map((entry) => ({
+        key: entry.key,
+        aliases: entry.aliases,
+        description: entry.description,
+      }));
+    } finally {
+      for (const entry of entries) entry.dispose();
+    }
     selected = proof.resolveOperation(operation); // primary name or alias
     if (!selected) return { status: "operation-missing" };
-    contract = selected.input();
-    if (!contract) return { status: "no-value-contract" };
-    const setup = contract.prepare();
+    schema = selected.input();
+    if (!schema) return { status: "no-schema" };
+    const setup = schema.prepare();
     if (setup.status !== "ready") return setup;
-    prepared = setup.valueContract;
-    return { status: "checked", operations, result: prepared.validate(input) };
+    prepared = setup.schema;
+    return { status: "checked", operations, result: prepared.explain(input) };
   } finally {
     prepared?.dispose();
-    contract?.dispose();
+    schema?.dispose();
     selected?.dispose();
     proof?.dispose();
     parsed.value.dispose();

@@ -1,0 +1,797 @@
+{
+  "deep-relative-id/false": {
+    "complete": true,
+    "limitation": null,
+    "references": [
+      {
+        "keyword": "$ref",
+        "location": {
+          "pointer": "/schemas/entry/not/not/not/not/not/not/not/not/not/allOf/0/$ref",
+          "source_uri": null
+        },
+        "resolution": {
+          "dynamic_lookup": false,
+          "status": "located",
+          "target": {
+            "pointer": "/schemas/entry/not/not/not/not/not/not/not/not",
+            "source_uri": null
+          }
+        },
+        "resource_root": {
+          "pointer": "/schemas/entry/not/not/not/not/not/not/not/not",
+          "source_uri": null
+        },
+        "spelling": "#"
+      },
+      {
+        "keyword": "$ref",
+        "location": {
+          "pointer": "/schemas/entry/not/not/not/not/not/not/not/not/not/allOf/1/$ref",
+          "source_uri": null
+        },
+        "resolution": {
+          "detail": {
+            "code": "resource-unavailable",
+            "location": {
+              "pointer": "/schemas/entry/not/not/not/not/not/not/not/not/not/allOf/1",
+              "source_uri": null
+            },
+            "message": "resolution requires a resource that was not supplied",
+            "reason": "resource-unavailable",
+            "resource_uri": "https://e.test/a/a/a/a/a/a/a/a/s0"
+          },
+          "status": "unresolved"
+        },
+        "resource_root": {
+          "pointer": "/schemas/entry/not/not/not/not/not/not/not/not",
+          "source_uri": null
+        },
+        "spelling": "s0"
+      }
+    ]
+  },
+  "deep-relative-id/true": {
+    "complete": true,
+    "limitation": null,
+    "references": [
+      {
+        "keyword": "$ref",
+        "location": {
+          "pointer": "/schemas/entry/not/not/not/not/not/not/not/not/not/allOf/0/$ref",
+          "source_uri": null
+        },
+        "resolution": {
+          "dynamic_lookup": false,
+          "status": "located",
+          "target": {
+            "pointer": "/schemas/entry/not/not/not/not/not/not/not/not",
+            "source_uri": null
+          }
+        },
+        "resource_root": {
+          "pointer": "/schemas/entry/not/not/not/not/not/not/not/not",
+          "source_uri": null
+        },
+        "spelling": "#"
+      },
+      {
+        "keyword": "$ref",
+        "location": {
+          "pointer": "/schemas/entry/not/not/not/not/not/not/not/not/not/allOf/1/$ref",
+          "source_uri": null
+        },
+        "resolution": {
+          "dynamic_lookup": false,
+          "status": "located",
+          "target": {
+            "pointer": "",
+            "source_uri": "https://e.test/a/a/a/a/a/a/a/a/s0"
+          }
+        },
+        "resource_root": {
+          "pointer": "/schemas/entry/not/not/not/not/not/not/not/not",
+          "source_uri": null
+        },
+        "spelling": "s0"
+      },
+      {
+        "keyword": "$ref",
+        "location": {
+          "pointer": "/$ref",
+          "source_uri": "https://e.test/a/a/a/a/a/a/a/a/s0"
+        },
+        "resolution": {
+          "dynamic_lookup": false,
+          "status": "located",
+          "target": {
+            "pointer": "/$defs/target",
+            "source_uri": "https://e.test/a/a/a/a/a/a/a/a/s0"
+          }
+        },
+        "resource_root": {
+          "pointer": "",
+          "source_uri": "https://e.test/a/a/a/a/a/a/a/a/s0"
+        },
+        "spelling": "#/$defs/target"
+      }
+    ]
+  },
+  "fragment/false": {
+    "complete": true,
+    "limitation": null,
+    "references": [
+      {
+        "keyword": "$ref",
+        "location": {
+          "pointer": "/schemas/entry/allOf/0/$ref",
+          "source_uri": null
+        },
+        "resolution": {
+          "dynamic_lookup": false,
+          "status": "located",
+          "target": {
+            "pointer": "/schemas/entry/$defs/s0",
+            "source_uri": null
+          }
+        },
+        "resource_root": {
+          "pointer": "/schemas/entry",
+          "source_uri": null
+        },
+        "spelling": "#/$defs/s0"
+      },
+      {
+        "keyword": "$ref",
+        "location": {
+          "pointer": "/schemas/entry/allOf/1/$ref",
+          "source_uri": null
+        },
+        "resolution": {
+          "dynamic_lookup": false,
+          "status": "located",
+          "target": {
+            "pointer": "/schemas/entry/$defs/s1",
+            "source_uri": null
+          }
+        },
+        "resource_root": {
+          "pointer": "/schemas/entry",
+          "source_uri": null
+        },
+        "spelling": "#/$defs/s1"
+      },
+      {
+        "keyword": "$ref",
+        "location": {
+          "pointer": "/schemas/entry/allOf/2/$ref",
+          "source_uri": null
+        },
+        "resolution": {
+          "dynamic_lookup": false,
+          "status": "located",
+          "target": {
+            "pointer": "/schemas/entry/$defs/s2",
+            "source_uri": null
+          }
+        },
+        "resource_root": {
+          "pointer": "/schemas/entry",
+          "source_uri": null
+        },
+        "spelling": "#/$defs/s2"
+      }
+    ]
+  },
+  "fragment/true": {
+    "complete": true,
+    "limitation": null,
+    "references": [
+      {
+        "keyword": "$ref",
+        "location": {
+          "pointer": "/schemas/entry/allOf/0/$ref",
+          "source_uri": null
+        },
+        "resolution": {
+          "dynamic_lookup": false,
+          "status": "located",
+          "target": {
+            "pointer": "/schemas/entry/$defs/s0",
+            "source_uri": null
+          }
+        },
+        "resource_root": {
+          "pointer": "/schemas/entry",
+          "source_uri": null
+        },
+        "spelling": "#/$defs/s0"
+      },
+      {
+        "keyword": "$ref",
+        "location": {
+          "pointer": "/schemas/entry/allOf/1/$ref",
+          "source_uri": null
+        },
+        "resolution": {
+          "dynamic_lookup": false,
+          "status": "located",
+          "target": {
+            "pointer": "/schemas/entry/$defs/s1",
+            "source_uri": null
+          }
+        },
+        "resource_root": {
+          "pointer": "/schemas/entry",
+          "source_uri": null
+        },
+        "spelling": "#/$defs/s1"
+      },
+      {
+        "keyword": "$ref",
+        "location": {
+          "pointer": "/schemas/entry/allOf/2/$ref",
+          "source_uri": null
+        },
+        "resolution": {
+          "dynamic_lookup": false,
+          "status": "located",
+          "target": {
+            "pointer": "/schemas/entry/$defs/s2",
+            "source_uri": null
+          }
+        },
+        "resource_root": {
+          "pointer": "/schemas/entry",
+          "source_uri": null
+        },
+        "spelling": "#/$defs/s2"
+      }
+    ]
+  },
+  "identical/false": {
+    "complete": true,
+    "limitation": null,
+    "references": [
+      {
+        "keyword": "$ref",
+        "location": {
+          "pointer": "/schemas/entry/allOf/0/$ref",
+          "source_uri": null
+        },
+        "resolution": {
+          "dynamic_lookup": false,
+          "status": "located",
+          "target": {
+            "pointer": "/schemas/entry",
+            "source_uri": null
+          }
+        },
+        "resource_root": {
+          "pointer": "/schemas/entry",
+          "source_uri": null
+        },
+        "spelling": "#"
+      },
+      {
+        "keyword": "$ref",
+        "location": {
+          "pointer": "/schemas/entry/allOf/1/$ref",
+          "source_uri": null
+        },
+        "resolution": {
+          "dynamic_lookup": false,
+          "status": "located",
+          "target": {
+            "pointer": "/schemas/entry",
+            "source_uri": null
+          }
+        },
+        "resource_root": {
+          "pointer": "/schemas/entry",
+          "source_uri": null
+        },
+        "spelling": "#"
+      },
+      {
+        "keyword": "$ref",
+        "location": {
+          "pointer": "/schemas/entry/allOf/2/$ref",
+          "source_uri": null
+        },
+        "resolution": {
+          "dynamic_lookup": false,
+          "status": "located",
+          "target": {
+            "pointer": "/schemas/entry",
+            "source_uri": null
+          }
+        },
+        "resource_root": {
+          "pointer": "/schemas/entry",
+          "source_uri": null
+        },
+        "spelling": "#"
+      }
+    ]
+  },
+  "identical/true": {
+    "complete": true,
+    "limitation": null,
+    "references": [
+      {
+        "keyword": "$ref",
+        "location": {
+          "pointer": "/schemas/entry/allOf/0/$ref",
+          "source_uri": null
+        },
+        "resolution": {
+          "dynamic_lookup": false,
+          "status": "located",
+          "target": {
+            "pointer": "/schemas/entry",
+            "source_uri": null
+          }
+        },
+        "resource_root": {
+          "pointer": "/schemas/entry",
+          "source_uri": null
+        },
+        "spelling": "#"
+      },
+      {
+        "keyword": "$ref",
+        "location": {
+          "pointer": "/schemas/entry/allOf/1/$ref",
+          "source_uri": null
+        },
+        "resolution": {
+          "dynamic_lookup": false,
+          "status": "located",
+          "target": {
+            "pointer": "/schemas/entry",
+            "source_uri": null
+          }
+        },
+        "resource_root": {
+          "pointer": "/schemas/entry",
+          "source_uri": null
+        },
+        "spelling": "#"
+      },
+      {
+        "keyword": "$ref",
+        "location": {
+          "pointer": "/schemas/entry/allOf/2/$ref",
+          "source_uri": null
+        },
+        "resolution": {
+          "dynamic_lookup": false,
+          "status": "located",
+          "target": {
+            "pointer": "/schemas/entry",
+            "source_uri": null
+          }
+        },
+        "resource_root": {
+          "pointer": "/schemas/entry",
+          "source_uri": null
+        },
+        "spelling": "#"
+      }
+    ]
+  },
+  "long-directory/false": {
+    "complete": true,
+    "limitation": null,
+    "references": [
+      {
+        "keyword": "$ref",
+        "location": {
+          "pointer": "/schemas/entry/allOf/0/$ref",
+          "source_uri": null
+        },
+        "resolution": {
+          "detail": {
+            "code": "resource-unavailable",
+            "location": {
+              "pointer": "/schemas/entry/allOf/0",
+              "source_uri": null
+            },
+            "message": "resolution requires a resource that was not supplied",
+            "reason": "resource-unavailable",
+            "resource_uri": "https://e.test/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/s0"
+          },
+          "status": "unresolved"
+        },
+        "resource_root": {
+          "pointer": "/schemas/entry",
+          "source_uri": null
+        },
+        "spelling": "s0"
+      },
+      {
+        "keyword": "$ref",
+        "location": {
+          "pointer": "/schemas/entry/allOf/1/$ref",
+          "source_uri": null
+        },
+        "resolution": {
+          "detail": {
+            "code": "resource-unavailable",
+            "location": {
+              "pointer": "/schemas/entry/allOf/1",
+              "source_uri": null
+            },
+            "message": "resolution requires a resource that was not supplied",
+            "reason": "resource-unavailable",
+            "resource_uri": "https://e.test/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/s1"
+          },
+          "status": "unresolved"
+        },
+        "resource_root": {
+          "pointer": "/schemas/entry",
+          "source_uri": null
+        },
+        "spelling": "s1"
+      },
+      {
+        "keyword": "$ref",
+        "location": {
+          "pointer": "/schemas/entry/allOf/2/$ref",
+          "source_uri": null
+        },
+        "resolution": {
+          "detail": {
+            "code": "resource-unavailable",
+            "location": {
+              "pointer": "/schemas/entry/allOf/2",
+              "source_uri": null
+            },
+            "message": "resolution requires a resource that was not supplied",
+            "reason": "resource-unavailable",
+            "resource_uri": "https://e.test/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/s2"
+          },
+          "status": "unresolved"
+        },
+        "resource_root": {
+          "pointer": "/schemas/entry",
+          "source_uri": null
+        },
+        "spelling": "s2"
+      }
+    ]
+  },
+  "long-directory/true": {
+    "complete": true,
+    "limitation": null,
+    "references": [
+      {
+        "keyword": "$ref",
+        "location": {
+          "pointer": "/schemas/entry/allOf/0/$ref",
+          "source_uri": null
+        },
+        "resolution": {
+          "dynamic_lookup": false,
+          "status": "located",
+          "target": {
+            "pointer": "",
+            "source_uri": "https://e.test/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/s0"
+          }
+        },
+        "resource_root": {
+          "pointer": "/schemas/entry",
+          "source_uri": null
+        },
+        "spelling": "s0"
+      },
+      {
+        "keyword": "$ref",
+        "location": {
+          "pointer": "/schemas/entry/allOf/1/$ref",
+          "source_uri": null
+        },
+        "resolution": {
+          "dynamic_lookup": false,
+          "status": "located",
+          "target": {
+            "pointer": "",
+            "source_uri": "https://e.test/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/s1"
+          }
+        },
+        "resource_root": {
+          "pointer": "/schemas/entry",
+          "source_uri": null
+        },
+        "spelling": "s1"
+      },
+      {
+        "keyword": "$ref",
+        "location": {
+          "pointer": "/schemas/entry/allOf/2/$ref",
+          "source_uri": null
+        },
+        "resolution": {
+          "dynamic_lookup": false,
+          "status": "located",
+          "target": {
+            "pointer": "",
+            "source_uri": "https://e.test/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/s2"
+          }
+        },
+        "resource_root": {
+          "pointer": "/schemas/entry",
+          "source_uri": null
+        },
+        "spelling": "s2"
+      },
+      {
+        "keyword": "$ref",
+        "location": {
+          "pointer": "/$ref",
+          "source_uri": "https://e.test/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/s0"
+        },
+        "resolution": {
+          "dynamic_lookup": false,
+          "status": "located",
+          "target": {
+            "pointer": "/$defs/target",
+            "source_uri": "https://e.test/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/s0"
+          }
+        },
+        "resource_root": {
+          "pointer": "",
+          "source_uri": "https://e.test/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/s0"
+        },
+        "spelling": "#/$defs/target"
+      },
+      {
+        "keyword": "$ref",
+        "location": {
+          "pointer": "/$ref",
+          "source_uri": "https://e.test/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/s1"
+        },
+        "resolution": {
+          "dynamic_lookup": false,
+          "status": "located",
+          "target": {
+            "pointer": "/$defs/target",
+            "source_uri": "https://e.test/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/s1"
+          }
+        },
+        "resource_root": {
+          "pointer": "",
+          "source_uri": "https://e.test/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/s1"
+        },
+        "spelling": "#/$defs/target"
+      },
+      {
+        "keyword": "$ref",
+        "location": {
+          "pointer": "/$ref",
+          "source_uri": "https://e.test/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/s2"
+        },
+        "resolution": {
+          "dynamic_lookup": false,
+          "status": "located",
+          "target": {
+            "pointer": "/$defs/target",
+            "source_uri": "https://e.test/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/s2"
+          }
+        },
+        "resource_root": {
+          "pointer": "",
+          "source_uri": "https://e.test/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/s2"
+        },
+        "spelling": "#/$defs/target"
+      }
+    ]
+  },
+  "long-leaf/false": {
+    "complete": true,
+    "limitation": null,
+    "references": [
+      {
+        "keyword": "$ref",
+        "location": {
+          "pointer": "/schemas/entry/allOf/0/$ref",
+          "source_uri": null
+        },
+        "resolution": {
+          "detail": {
+            "code": "resource-unavailable",
+            "location": {
+              "pointer": "/schemas/entry/allOf/0",
+              "source_uri": null
+            },
+            "message": "resolution requires a resource that was not supplied",
+            "reason": "resource-unavailable",
+            "resource_uri": "https://e.test/s0"
+          },
+          "status": "unresolved"
+        },
+        "resource_root": {
+          "pointer": "/schemas/entry",
+          "source_uri": null
+        },
+        "spelling": "s0"
+      },
+      {
+        "keyword": "$ref",
+        "location": {
+          "pointer": "/schemas/entry/allOf/1/$ref",
+          "source_uri": null
+        },
+        "resolution": {
+          "detail": {
+            "code": "resource-unavailable",
+            "location": {
+              "pointer": "/schemas/entry/allOf/1",
+              "source_uri": null
+            },
+            "message": "resolution requires a resource that was not supplied",
+            "reason": "resource-unavailable",
+            "resource_uri": "https://e.test/s1"
+          },
+          "status": "unresolved"
+        },
+        "resource_root": {
+          "pointer": "/schemas/entry",
+          "source_uri": null
+        },
+        "spelling": "s1"
+      },
+      {
+        "keyword": "$ref",
+        "location": {
+          "pointer": "/schemas/entry/allOf/2/$ref",
+          "source_uri": null
+        },
+        "resolution": {
+          "detail": {
+            "code": "resource-unavailable",
+            "location": {
+              "pointer": "/schemas/entry/allOf/2",
+              "source_uri": null
+            },
+            "message": "resolution requires a resource that was not supplied",
+            "reason": "resource-unavailable",
+            "resource_uri": "https://e.test/s2"
+          },
+          "status": "unresolved"
+        },
+        "resource_root": {
+          "pointer": "/schemas/entry",
+          "source_uri": null
+        },
+        "spelling": "s2"
+      }
+    ]
+  },
+  "long-leaf/true": {
+    "complete": true,
+    "limitation": null,
+    "references": [
+      {
+        "keyword": "$ref",
+        "location": {
+          "pointer": "/schemas/entry/allOf/0/$ref",
+          "source_uri": null
+        },
+        "resolution": {
+          "dynamic_lookup": false,
+          "status": "located",
+          "target": {
+            "pointer": "",
+            "source_uri": "https://e.test/s0"
+          }
+        },
+        "resource_root": {
+          "pointer": "/schemas/entry",
+          "source_uri": null
+        },
+        "spelling": "s0"
+      },
+      {
+        "keyword": "$ref",
+        "location": {
+          "pointer": "/schemas/entry/allOf/1/$ref",
+          "source_uri": null
+        },
+        "resolution": {
+          "dynamic_lookup": false,
+          "status": "located",
+          "target": {
+            "pointer": "",
+            "source_uri": "https://e.test/s1"
+          }
+        },
+        "resource_root": {
+          "pointer": "/schemas/entry",
+          "source_uri": null
+        },
+        "spelling": "s1"
+      },
+      {
+        "keyword": "$ref",
+        "location": {
+          "pointer": "/schemas/entry/allOf/2/$ref",
+          "source_uri": null
+        },
+        "resolution": {
+          "dynamic_lookup": false,
+          "status": "located",
+          "target": {
+            "pointer": "",
+            "source_uri": "https://e.test/s2"
+          }
+        },
+        "resource_root": {
+          "pointer": "/schemas/entry",
+          "source_uri": null
+        },
+        "spelling": "s2"
+      },
+      {
+        "keyword": "$ref",
+        "location": {
+          "pointer": "/$ref",
+          "source_uri": "https://e.test/s0"
+        },
+        "resolution": {
+          "dynamic_lookup": false,
+          "status": "located",
+          "target": {
+            "pointer": "/$defs/target",
+            "source_uri": "https://e.test/s0"
+          }
+        },
+        "resource_root": {
+          "pointer": "",
+          "source_uri": "https://e.test/s0"
+        },
+        "spelling": "#/$defs/target"
+      },
+      {
+        "keyword": "$ref",
+        "location": {
+          "pointer": "/$ref",
+          "source_uri": "https://e.test/s1"
+        },
+        "resolution": {
+          "dynamic_lookup": false,
+          "status": "located",
+          "target": {
+            "pointer": "/$defs/target",
+            "source_uri": "https://e.test/s1"
+          }
+        },
+        "resource_root": {
+          "pointer": "",
+          "source_uri": "https://e.test/s1"
+        },
+        "spelling": "#/$defs/target"
+      },
+      {
+        "keyword": "$ref",
+        "location": {
+          "pointer": "/$ref",
+          "source_uri": "https://e.test/s2"
+        },
+        "resolution": {
+          "dynamic_lookup": false,
+          "status": "located",
+          "target": {
+            "pointer": "/$defs/target",
+            "source_uri": "https://e.test/s2"
+          }
+        },
+        "resource_root": {
+          "pointer": "",
+          "source_uri": "https://e.test/s2"
+        },
+        "spelling": "#/$defs/target"
+      }
+    ]
+  }
+}

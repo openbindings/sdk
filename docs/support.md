@@ -8,30 +8,16 @@ replacing an existing dependency.
 | Environment | Supported path and qualification |
 | --- | --- |
 | Rust | MSRV 1.88, edition 2024; independent native/Wasm MSRV CI. Development toolchain 1.99; Linux, macOS, and Windows native CI. Core has no mandatory async runtime. |
-| Node | ESM on Node 22.23.0 or later in the 22 line, 24.17.0 or later in the 24 line, or 26.2.0 or later (`engines`: `^22.23.0 || ^24.17.0 || >=26.2.0`), the first releases whose bundled undici rejects a chunked body cut short as its connection closes ([nodejs/undici#5273](https://github.com/nodejs/undici/pull/5273)) instead of handing `discover` the prefix as a complete body. CI pins 22.23.0 and runs the TypeScript tests at the 24 and 26 floors too. Read the exported Wasm asset and initialize explicitly. |
+| Node | ESM on Node 22.23.0 or later in the 22 line, 24.17.0 or later in the 24 line, or 26.2.0 or later (`engines`: `^22.23.0 || ^24.17.0 || >=26.2.0`), the first releases whose bundled undici rejects a chunked body cut short as its connection closes ([nodejs/undici#5273](https://github.com/nodejs/undici/pull/5273)) instead of handing `discover` the prefix as a complete body. CI pins 22.23.0 and runs the TypeScript tests at the 24 and 26 floors too. Await `initialize()`; Node loads the packaged asset automatically. |
 | Browser | Desktop Chromium and WebKit with explicit initialization; use a Worker for potentially expensive work. Firefox, mobile devices, and particular framework/bundler versions require their own qualification. |
 | Worker service | Local workerd with a compiled Wasm module and initialization in an allowed request context. This is not evidence of deployed Cloudflare latency, quotas, or service availability. |
 
-The 256 KiB small-stack document regression is qualified on the development
-toolchain. On the same stack, release builds on Linux, macOS and Windows prepare
-value contracts whose patterns nest to the default `pattern_depth` and check
-values against them. The evaluator sizes its evaluation depth, stack guard and
-unevaluated walk limit from `Limits::stack_bytes` (256 KiB by default), and
-release builds on the same hosts prepare, check and explain values as deep as
-it admits for the 39 recursive value contract shapes `evaluation_stack` covers,
-unevaluated keywords included, on threads of 192 KiB, 256 KiB and 1 MiB, and
-prepare the longest unevaluated annotation walk of each kind it admits with a
-fifth of a 192 KiB, 256 KiB or 512 KiB thread already in use (`walk_stack`);
-the derivations were measured from 128 KiB to 2 MiB. The static depth bound models
-the library's frames, and a value contract holding an unevaluated keyword is also
-guarded by measuring the stack its pass uses. Unoptimized code needs more:
-compiling 32 nested quantified groups takes up to about 1 MiB of stack in debug
-builds, and debug evaluation frames exceed 256 KiB at the default depth, so
-debug runs ignore both tests and `tools/verify.py` runs them in release builds.
-Older supported compilers may need larger stacks in debug builds. MSRV CI runs
-all workspace tests except the exact stack-margin tests selected by [this
-inventory](../tools/stack-margin-tests.json), with reasons and scope.
-Development-toolchain jobs retain the workspace stack tests.
+The current evaluator has Original and compiled execution paths. Non-default
+limits and all Explain calls use Original; eligible default Outcome checks may
+use the compiled backend. Their stack and cancellation policies differ. See the
+[execution policy](../crates/openbindings-json-schema-evaluator/README.md#execution-paths)
+and the dated [stack measurements](performance-boundaries.md#stack). No public
+stack-byte option or fixed host-stack guarantee is provided.
 
 The Rust and TypeScript APIs use the same engine and outcome meanings. They
 follow their languages' ownership conventions: Rust uses ordinary ownership and
@@ -47,34 +33,27 @@ own evaluator and qualify it with the evaluator test-support crate. TypeScript
 custom evaluator callbacks are not currently provided. The complete boundaries
 are in [CAPABILITIES.md](../CAPABILITIES.md).
 
-For untrusted request validation, use `validate`, the cheap check. `explain` is an
-explicit per-call choice for callers that accept library allocation; it allocates
-in proportion to inputs and explains only values within half the depth limit.
+For ordinary value validation, use `evaluate`, the outcome-only check. `explain`
+is an explicit per-call choice for diagnostic evidence. Diagnostics have their
+own bounds and may be incomplete even when the failure is established.
 An empty problem list never turns an established failure into success.
 See the [evaluator policy](../crates/openbindings-json-schema-evaluator/README.md).
 
-The default evaluator prepares a value contract with a stand-in for what it
-cannot evaluate: a missing resource, a schema that could apply again without
-consuming the instance, such as one whose `$ref` names itself
-(`in-place-cycle`), and a pattern invalid as an ECMA-262 11th edition (ES2020)
-regular expression with Unicode semantics, the dialect JSON Schema 2020-12
-cites (`schema-pattern-compilation`), or one its linear-time engine does not
-match. A value gives no verdict naming a stand-in only when its verdict depends
-on how the stand-in comes out; a value that satisfies one `anyOf` branch
-satisfies it whatever another branch holds. The evaluator refuses preparation
-for a value contract in which an `unevaluatedProperties` or
-`unevaluatedItems` keyword's annotation sources reach a stand-in for a missing
-resource, a cycle or `patternProperties` names, a reference to a fragment of a
-missing resource, or a static reference defect (an absent pointer target or
-anchor, or a malformed fragment). A preparation refusal withholds a verdict
-for every value. The default evaluator never produces Undefined. Missing
-resources, unsupported features and exhausted limits keep their distinct
-refusal reasons.
+The default evaluator uses bounded reasoning over original schema locations,
+exact values and evaluation annotations. It can
+establish `Undefined` when validity depends on a known undefined result under
+the specification. A missing resource, unsupported feature or exhausted allowance
+does not by itself establish undefinedness. Such cases remain `NoVerdict` unless
+the evaluator can establish a result independently of them. The
+[semantic dependence policy](../crates/openbindings-json-schema-evaluator/README.md#results-and-semantic-dependence)
+describes the supported recursive certificates and their limits. Preparation
+failure judges no value, and remains separate from these per-value outcomes.
 
 Preparing a schema from an untrusted party can take more memory than a host
 may want, as with any JSON Schema library: the evaluator bounds what the SDK
 itself reads and writes, not the library's compiled program (see the
-[evaluator limits](../crates/openbindings-json-schema-evaluator/README.md#limits)).
+[evaluator limits](../crates/openbindings-json-schema-evaluator/README.md#limits-and-cancellation)).
 Prepare such schemas in an isolated worker or process with an operating-system
-memory limit. Checking values against a trusted schema stays bounded by the
-evaluation depth limit and, when set, the work cap.
+memory limit. Value evaluation uses static compiled admission or Original heap frames and
+sampled stack checks. A caller-selected work cap selects Original. SDK limits
+are not a hard CPU deadline or a whole-process memory ceiling.

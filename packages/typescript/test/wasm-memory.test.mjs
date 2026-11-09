@@ -7,9 +7,10 @@ const MIB = 1024 * 1024;
 // Wasm linear memory only grows, so its size after a call is the call's
 // high-water mark, the module's copy of the input included. For one build it is
 // the same on every run, so each document's bound is what its validation adds
-// now, 223.75 and 227.75 MiB, rounded up to the next MiB: any growth fails.
+// now, 221.3125 and 227.75 MiB, rounded up to the next MiB: any growth fails.
 // Lower a bound when its figure falls; raise one only for a reason recorded
-// beside it. The diagnostic memory probe allows 300 MiB of native requested
+// beside it. Bounded copied-identifier blocks reduced the first bound from
+// 224 to 222 MiB; the query/fragment bound stays at 228 MiB. The diagnostic memory probe allows 300 MiB of native requested
 // memory for the same documents (tools/diagnostic-memory-probe/src/limits.rs).
 const run = promisify(execFile);
 
@@ -45,9 +46,9 @@ console.log(JSON.stringify({
 }));
 `;
 
-test("validating the probe's costliest documents adds no more module memory than it does now", async () => {
+test("validating the probe's costliest documents adds no more module memory than it does now", async (t) => {
   const shapes = [
-    ["copied identifier paths", "", "conformant", 224 * MIB],
+    ["copied identifier paths", "", "conformant", 222 * MIB],
     ["copied identifier paths with pieces", "?#f", "non-conformant", 228 * MIB],
   ];
   const results = await Promise.all(
@@ -59,6 +60,14 @@ test("validating the probe's costliest documents adds no more module memory than
       );
       return JSON.parse(stdout);
     }),
+  );
+  t.diagnostic(
+    JSON.stringify(
+      results.map((result, at) => ({
+        name: shapes[at][0],
+        ...result,
+      })),
+    ),
   );
   results.forEach((result, at) => {
     const [name, , conclusion, bound] = shapes[at];

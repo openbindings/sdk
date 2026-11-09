@@ -1,6 +1,8 @@
 //! The normative schema-position walk. Unknown keywords remain opaque.
+use crate::dialect::{Dialect, Profile};
 use crate::{JsonKind, JsonRef, JsonValue, identifiers::Identifiers};
 use openbindings_internal_json::backend::{node, ref_id};
+mod references;
 use std::sync::{
     Arc, OnceLock,
     atomic::{AtomicBool, Ordering},
@@ -38,6 +40,9 @@ pub struct SchemaIndex {
     /// The indexed value; every node is in its source.
     source: Option<JsonValue>,
     pub nodes: Vec<SchemaNode>,
+    /// External positions can inherit different interpretations. Contained OBI
+    /// positions all use the fixed profile, with no per-position storage cost.
+    profiles: Option<Vec<Option<Profile>>>,
     /// Each resource after the first and the resource enclosing it, by
     /// resource number.
     parent_resources: Vec<(u32, u32)>,
@@ -52,6 +57,8 @@ pub struct SchemaIndex {
     /// the identifier strings, one identifier's in walk order. A document's
     /// index only.
     identifiers: Vec<(u32, u32)>,
+    /// Original reference tokens that fail OBI-12's contained-resource clause.
+    missing_targets: Vec<u32>,
     /// Each `$id` declaration with a base and that base, in walk order. A
     /// supplied resource's index only.
     bases: Vec<(u32, Arc<str>)>,
@@ -137,27 +144,33 @@ pub fn each_schema_child<'a>(value: JsonRef<'a>, mut visit: impl FnMut(JsonRef<'
             else {
                 continue;
             };
-            let is_schema =
-                |v: &JsonRef<'_>| matches!(v.kind(), JsonKind::Object | JsonKind::Boolean);
-            match selector {
-                SchemaSelector::Map | SchemaSelector::MapOrStringArray => {
-                    if let Some(entries) = member.value.members() {
-                        entries
-                            .map(|m| m.value)
-                            .filter(is_schema)
-                            .for_each(&mut visit);
-                    }
-                }
-                SchemaSelector::Array => {
-                    if let Some(entries) = member.value.elements() {
-                        entries.filter(is_schema).for_each(&mut visit);
-                    }
-                }
-                SchemaSelector::Direct => {
-                    if is_schema(&member.value) {
-                        visit(member.value);
-                    }
-                }
+            selected_children(member.value, *selector, &mut visit);
+        }
+    }
+}
+pub(crate) fn selected_children<'a>(
+    value: JsonRef<'a>,
+    selector: SchemaSelector,
+    mut visit: impl FnMut(JsonRef<'a>),
+) {
+    let is_schema = |v: &JsonRef<'_>| matches!(v.kind(), JsonKind::Object | JsonKind::Boolean);
+    match selector {
+        SchemaSelector::Map | SchemaSelector::MapOrStringArray => {
+            if let Some(entries) = value.members() {
+                entries
+                    .map(|m| m.value)
+                    .filter(is_schema)
+                    .for_each(&mut visit);
+            }
+        }
+        SchemaSelector::Array => {
+            if let Some(entries) = value.elements() {
+                entries.filter(is_schema).for_each(&mut visit);
+            }
+        }
+        SchemaSelector::Direct => {
+            if is_schema(&value) {
+                visit(value);
             }
         }
     }
@@ -206,11 +219,61 @@ impl SchemaIndex {
     fn build_roots<'a>(
         source: &'a JsonValue,
         roots: impl IntoIterator<Item = JsonRef<'a>>,
-        mut bases: Bases<'a>,
+        bases: Bases<'a>,
     ) -> Self {
+        Self::build_roots_checked(source, roots, bases, &Profile::from_uri, &mut |_| Ok(()))
+            .expect("unbounded inventory")
+    }
+    pub(crate) fn supplied_nodes_bounded(
+        value: &JsonValue,
+        maximum: usize,
+        control: &dyn crate::Control,
+    ) -> Result<Self, crate::Failure> {
+        Self::supplied_profiled(value, None, maximum, control, &Profile::from_uri)
+    }
+    /// Interpret an already certified profile map. Expanded bases are requested
+    /// only after a nodes-only pass has established identity spelling bounds.
+    pub(crate) fn supplied_profiled(
+        value: &JsonValue,
+        retrieval: Option<&str>,
+        maximum: usize,
+        control: &dyn crate::Control,
+        resolve_profile: &dyn Fn(&str) -> Option<Profile>,
+    ) -> Result<Self, crate::Failure> {
+        let bases = retrieval.map_or(Bases::None, |uri| {
+            Bases::Ordinary(Vec::new(), Arc::from(uri))
+        });
+        Self::build_roots_checked(
+            value,
+            std::iter::once(value.view()),
+            bases,
+            resolve_profile,
+            &mut |count| {
+                control.check()?;
+                if count >= maximum {
+                    return Err(crate::Failure::new(
+                        crate::FailureReason::LimitExceeded,
+                        "schema-nodes",
+                        "schema inventory exceeds its configured node limit",
+                    ));
+                }
+                control.charge_allocation(512)?;
+                Ok(())
+            },
+        )
+    }
+    fn build_roots_checked<'a>(
+        source: &'a JsonValue,
+        roots: impl IntoIterator<Item = JsonRef<'a>>,
+        mut bases: Bases<'a>,
+        resolve_profile: &dyn Fn(&str) -> Option<Profile>,
+        check: &mut dyn FnMut(usize) -> Result<(), crate::Failure>,
+    ) -> Result<Self, crate::Failure> {
+        let external = !matches!(bases, Bases::Compared(_));
         let full = !matches!(bases, Bases::None);
         let mut out = Self {
             source: Some(source.clone()),
+            profiles: external.then(Vec::new),
             ..Self::default()
         };
         let mut compared = Vec::new();
@@ -218,6 +281,7 @@ impl SchemaIndex {
         for root in roots {
             stack.push((ref_id(root) as u32, u32::MAX));
             while let Some((id, parent)) = stack.pop() {
+                check(out.nodes.len())?;
                 let value = node(source, id as usize).expect("a node of the source");
                 let (depth, parent_resource) = match out.nodes.get(parent as usize) {
                     Some(parent) => (parent.depth + 1, parent.resource),
@@ -225,7 +289,66 @@ impl SchemaIndex {
                 };
                 let index =
                     u32::try_from(out.nodes.len()).expect("schemas are bounded by the node count");
-                let declared = value.get("$id");
+                let inherited = if parent == u32::MAX {
+                    Some(Profile::standard(Dialect::Draft202012))
+                } else {
+                    out.profile(parent as usize)
+                };
+                let candidate_id = value.get("$id");
+                let mut profile = if !external {
+                    Some(Profile::standard(Dialect::Draft202012))
+                } else if parent == u32::MAX
+                    || (candidate_id.is_some()
+                        && !inherited.is_some_and(|d| d.reference_object(value))
+                        && !(inherited == Some(Profile::standard(Dialect::Draft7))
+                            && candidate_id
+                                .and_then(|v| v.as_str())
+                                .is_some_and(|id| id.starts_with('#'))))
+                {
+                    value
+                        .get("$schema")
+                        .map_or(inherited, |v| v.as_str().and_then(resolve_profile))
+                } else {
+                    inherited
+                };
+                let reference_object = profile.is_some_and(|d| d.reference_object(value));
+                // A mixed-profile boundary is established by the enclosing
+                // profile. Its new root interpretation cannot erase that boundary.
+                let id_suppressed = if parent == u32::MAX {
+                    reference_object
+                } else {
+                    inherited.is_some_and(|d| d.reference_object(value))
+                };
+                let declaring_profile = if parent == u32::MAX {
+                    profile
+                } else {
+                    inherited
+                };
+                let fragment = if declaring_profile == Some(Profile::standard(Dialect::Draft7))
+                    && !id_suppressed
+                {
+                    candidate_id
+                        .and_then(|v| v.as_str())
+                        .and_then(|s| s.strip_prefix('#'))
+                } else {
+                    None
+                };
+                // Draft-07 only assigns a portable meaning to a fragment-only
+                // plain name. Other nonempty-fragment forms stay uninterpreted.
+                let unsupported_identifier = profile == Some(Profile::standard(Dialect::Draft7))
+                    && !id_suppressed
+                    && candidate_id.and_then(|v| v.as_str()).is_some_and(|id| {
+                        (id.contains('#') && !id.ends_with('#') && !id.starts_with('#'))
+                            || fragment.is_some_and(|name| !crate::dialect::draft7_name(name))
+                            || (declaring_profile != Some(Profile::standard(Dialect::Draft7))
+                                && id.starts_with('#')
+                                && id.len() > 1)
+                    });
+                if unsupported_identifier {
+                    profile = None;
+                }
+                let declared = candidate_id
+                    .filter(|_| !id_suppressed && fragment.is_none() && !unsupported_identifier);
                 let resource = if declared.is_some() {
                     out.parent_resources.push((index + 1, parent_resource));
                     index + 1
@@ -252,13 +375,13 @@ impl SchemaIndex {
                             of.push((resource, base));
                         }
                         Bases::Compared(ids) => {
-                            // Resource `r` begins at schema `r - 1`; the handles
-                            // of compared declarations follow the walk.
-                            let parent_base = match parent_resource {
-                                0 => None,
-                                r => compared.binary_search(&(r - 1)).ok().map(|h| h as u32),
-                            };
-                            // Each compared declaration's handle is the next.
+                            // Register declarations before reference queries. Their
+                            // handles are exactly their positions in this compact
+                            // list, including after an invalid enclosing identifier.
+                            let parent_base = parent_resource
+                                .checked_sub(1)
+                                .and_then(|index| compared.binary_search(&index).ok())
+                                .map(|h| h as u32);
                             if text.and_then(|s| ids.compared(parent_base, s)).is_some() {
                                 compared.push(index);
                             }
@@ -267,8 +390,12 @@ impl SchemaIndex {
                 }
                 for (keyword, dynamic) in [("$anchor", false), ("$dynamicAnchor", true)] {
                     if full
+                        && !reference_object
+                        && profile.is_some_and(|d| d.active(keyword))
                         && let Some(name) = value.get(keyword)
-                        && name.as_str().is_some_and(plain_name)
+                        && name
+                            .as_str()
+                            .is_some_and(|name| profile.is_some_and(|d| d.anchor_name(name)))
                     {
                         out.anchors.push(Anchor {
                             resource,
@@ -280,13 +407,39 @@ impl SchemaIndex {
                 }
                 // Push children in reverse so they are visited in document order.
                 let pending = stack.len();
-                each_schema_child(value, |child| stack.push((ref_id(child) as u32, index)));
+                let mut stopped = None;
+                let mut visit = |child: JsonRef<'_>| {
+                    if stopped.is_some() {
+                        return;
+                    }
+                    if let Err(error) = check(
+                        out.nodes
+                            .len()
+                            .saturating_add(stack.len())
+                            .saturating_add(1),
+                    ) {
+                        stopped = Some(error);
+                    } else {
+                        stack.push((ref_id(child) as u32, index));
+                    }
+                };
+                if !external {
+                    each_schema_child(value, &mut visit);
+                } else if let Some(profile) = profile {
+                    profile.each_child(value, &mut visit);
+                }
+                if let Some(error) = stopped {
+                    return Err(error);
+                }
                 stack[pending..].reverse();
                 out.nodes.push(SchemaNode {
                     id,
                     depth,
                     resource,
                 });
+                if let Some(profiles) = &mut out.profiles {
+                    profiles.push(profile);
+                }
             }
         }
         drop(stack);
@@ -298,14 +451,10 @@ impl SchemaIndex {
                 .then_with(|| out.anchor_name(a).cmp(out.anchor_name(b)))
         });
         out.anchors = anchors;
-        if let Bases::Compared(ids) = bases {
-            out.identifiers = ids
-                .duplicates()
-                .into_iter()
-                .map(|(rank, handle)| (rank, compared[handle as usize]))
-                .collect();
+        if let Bases::Compared(mut ids) = bases {
+            out.check_identified_references(source, &mut ids, &compared);
         }
-        out
+        Ok(out)
     }
     /// The value this index was built for.
     pub fn source(&self) -> Option<&JsonValue> {
@@ -324,6 +473,14 @@ impl SchemaIndex {
     /// satisfy the 2020-12 meta-schemas.
     pub fn schemas_checked(&self) -> bool {
         self.checked.load(Ordering::Acquire)
+    }
+    /// The interpretation of an indexed schema position.
+    pub fn profile(&self, position: usize) -> Option<Profile> {
+        self.nodes.get(position)?;
+        match &self.profiles {
+            Some(profiles) => profiles[position],
+            None => Some(Profile::standard(Dialect::Draft202012)),
+        }
     }
     /// A schema's value.
     pub fn value(&self, node: &SchemaNode) -> JsonRef<'_> {
@@ -413,7 +570,7 @@ impl SchemaIndex {
                 return SameDocument::Missing;
             };
             return match self.position(ref_id(value)) {
-                Some(index) if self.obi_position(index) => {
+                Some(index) if matches!(value.kind(), JsonKind::Object | JsonKind::Boolean) => {
                     SameDocument::Found(self.owned(&self.nodes[index]))
                 }
                 _ => SameDocument::Missing,
@@ -526,7 +683,6 @@ mod tests {
         )
         .unwrap();
         let resources = crate::space::embedded_resources()
-            .iter()
             .map(|r| (r.document.clone(), r.uri.clone()))
             .chain([(nested, "https://supplied.test/r".to_owned())]);
         for (value, uri) in resources {
@@ -578,6 +734,7 @@ mod tests {
             "#/schemas/a~1~0/allOf/0",
             "#%2Fschemas%2Fa~1~0%2FallOf%2F1%2Fproperties%2F~01",
             "#/schemas/resource",
+            "#/schemas/resource/properties/child",
             "#/schemas/space%20name",
         ] {
             assert!(
@@ -598,7 +755,6 @@ mod tests {
             "#/schemas/a~2",
             "#/schemas/missing",
             "#/schemas",
-            "#/schemas/resource/properties/child",
             "#/x-opaque/schema",
             "#%FF",
         ] {

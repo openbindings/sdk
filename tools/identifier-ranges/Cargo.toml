@@ -1,0 +1,11 @@
+[package]
+name = "sdk-identifier-ranges"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.88"
+publish = false
+
+[workspace]
+
+[dependencies]
+regex-syntax = "=0.8.11"

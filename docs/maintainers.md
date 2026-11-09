@@ -24,7 +24,11 @@ there. The package check installs a real archive and runs its README and package
 examples. `python3 tools/verify.py --browser` adds browser checks.
 
 `tools/verify-api-reference.py` checks Rust documentation and TypeScript reference
-contracts. `tools/verify-rust-snippets.py` executes prose examples.
+contracts. `tools/verify-rust-snippets.py` executes prose examples, including
+the external document-to-typed-result walkthrough.
+`tools/verify-kind-adapter.py` checks the adapter guide's verbatim Rust blocks
+against its external example, then tests and lints that example with its lockfile.
+Add `--wasm` to build its library for `wasm32-unknown-unknown`.
 `tools/verify-product-labels.py --self-test` checks product vocabulary boundaries.
 `tools/verify-doc-links.py` checks local Markdown targets and fragments without
 network access, including repository URLs that name this checkout. Remote URLs
@@ -48,7 +52,7 @@ Wasm qualification and the TypeScript tests on Node 22.23.0, and hands
 `packages/typescript/dist` to the `browser` and `node-floors` jobs. The
 `node-floors` job runs the TypeScript tests on that build at the other
 supported lines' floors, Node 24.17.0 and 26.2.0.
-That job runs the Chromium and WebKit replay and judges inside Microsoft's
+The `browser` job runs the Chromium and WebKit replay and judges inside Microsoft's
 Playwright image, which already contains the browsers and their system packages,
 so CI installs no browser dependencies. The image is pinned by its
 multi-architecture index digest at the `playwright-core` version in
@@ -58,6 +62,12 @@ from the lock. When the lock changes `playwright-core`, update the tag and diges
 together; `docker buildx imagetools inspect mcr.microsoft.com/playwright:v<version>-noble`
 prints the index digest.
 
+Hash tables must never use input-chosen content as keys, including content hashes
+and tuples containing text or bytes. Use ordered maps, ordered sets or sorted
+sequences so worst-case work needs no secret seed or host entropy; SDK-assigned
+positions and content-free identities may still use hash tables. Fingerprints
+may select sorted candidates only when exact comparisons are charged.
+
 ## Resolver implementation
 
 The bundled resolver and default evaluator give a unique contained declared ID
@@ -65,23 +75,28 @@ priority over supplied names; packaged standards are the final fallback. Supplie
 retrieval aliases and declared IDs compete equally when no contained ID owns the
 name. A reached carrier must itself own its canonical ID: aliases, pointers and
 direct applicators into a competing carrier conservatively refuse preparation.
-Unused conflicts do not poison other contracts, and an independently named nested
+Unused conflicts do not poison other schemas, and an independently named nested
 resource retains its original base and dialect. No schema-body comparison, alias
-transfer or missing-fragment fallback occurs. `SchemaRequest::supplied_resources()`
-retains the original catalog. `SchemaLocation.resource` records original retrieval
+transfer or missing-fragment fallback occurs. `EvaluationRequest::external_schemas`
+borrows the original catalog. `SchemaOrigin::source_uri` records original retrieval
 provenance, which need not be the winning lookup association for that URI. Replacing
-resources requires a new immutable set and preparation; retained contracts keep their inputs.
+resources requires a new immutable set and preparation; retained schemas keep their inputs.
 OBI-13 retains exact identifier comparison; ordinary JSON Schema resolution uses
-the library normalization policy.
+the original resource inventory and compact identifier comparisons.
 
 
-Ordinary resolution inside identified and supplied resources uses the dependency's
-documented API. Core retains OpenBindings embedding rules. See
-[architecture](architecture.md) for package boundaries and the
-[dependency maintenance contract](../DEPENDENCY-MAINTENANCE.md) for how the default
-evaluator bundles, specializes and transforms projected schemas before the library
-compiles them. Those are evaluator implementation details, not an application
-readiness API.
+Core retains OpenBindings embedding rules and original reference meaning. The
+compiled evaluator lowers established references into a private bundle; Original
+uses the retained schema environment directly. See
+[architecture](architecture.md) and the
+[dependency maintenance contract](../DEPENDENCY-MAINTENANCE.md) for ownership,
+projection and upgrade checks.
+
+The separate performance workflow enforces outcome and allocation checks;
+timing is advisory and it is not part of the required `ci` aggregate. Local
+workerd measurements likewise do not constitute a required hosted workerd job.
+Candidate performance and deployment qualification need recorded runs of their
+own; see [performance boundaries](performance-boundaries.md).
 
 ## Findings and allocation qualification
 
@@ -148,17 +163,38 @@ release checklist records those SDK-specific outcomes separately from source lan
 Maintained value and frame-shape tests cover the adopted interface; lifecycle
 and malformed-frame tests separately qualify this SDK's policy.
 The frame mapper is test-only and does not establish a new streaming fixture
-standard. The external Catalog consumer joins inspection, synthesis and explicit
-binding invocation against an independent execution oracle. The invoker-only
-consumer guards dependency isolation; the Node/Wasm probe qualifies a thin Rust
-bridge, not a released TypeScript API or browser deployment. Run
-`tools/verify-binding-invocation.py` for the maintained consumer qualification.
+standard. The external Catalog consumer explicitly pulls, adopts additions, then
+invokes a selected binding or operation from its conformant document. The
+invoker-only consumer guards dependency isolation; the Node/Wasm probe qualifies
+a thin Rust bridge, not a released TypeScript API or browser deployment. Run
+`tools/verify-invocation.py` for the maintained consumer qualification.
 
 Context provisioning and protocol transports remain application responsibilities.
 The SDK supplies no kind-specific instances. The separate
-[OpenAPI project](https://github.com/openbindings/openapi) implements the interfaces. Operation consumer and cancellation tests, the shared
-Catalog pipeline, and the expanded Node/Wasm probe qualify the operation layer.
+[OpenAPI project](https://github.com/openbindings/openapi) implements the interfaces.
+Current operation consumer checks cover aliases, selection, rejected values,
+context challenges and explicit retries without implicit effects.
 The resource probe records warmed binding-versus-operation overhead and owner
 release; it does not claim HTTP parity, browser memory bounds, or arbitrary schema
 throughput.
 
+## Generated lane comparisons and fuzzing
+
+Run the seeded default-limit differential with
+`cargo test -p openbindings-json-schema-evaluator --lib default_limit_lane_differential -- --nocapture`.
+It generates 1,008 schemas, probes their boundaries, and prints verdict and
+compiled-route counts. The test asserts a compiled comparison floor. For a larger
+reproducible run, prefix the command with `OB_DIFFERENTIAL_CASES=20000` and
+`OB_DIFFERENTIAL_SEEDS=2f6b95d1c0a47e33,1,deadbeef,9e3779b97f4a7c15`.
+A disagreement prints the seed, case, exact schema/value and both outcomes.
+The older work-capped reference-placement test remains separate.
+
+`tools/verify.py` also runs the [fuzz harness](../fuzz/README.md)'s committed seed
+corpus on stable: `cargo test --locked --manifest-path fuzz/seeds/Cargo.toml --test seed_corpus`.
+For coverage-guided runs, install `nightly-2026-11-01`, and `cargo-fuzz` 0.13.2 with the
+repository's stable toolchain (its locked dependencies do not build on that nightly), then
+run `cargo +nightly-2026-11-01 fuzz run lanes -- -max_total_time=120 -max_len=16384`
+from the repository root. Substitute `document`, `json_value`, `decimal` or
+`pattern` for the other targets. Crashes go to `fuzz/artifacts/<target>/`; the
+weekly/manual `Fuzz` workflow uploads them as `fuzz-artifacts-<run-id>`.
+See the harness guide for replay, minimization and campaign cost.

@@ -1,28 +1,29 @@
 //! A deliberately limited custom evaluator, independent of the default companion.
 use openbindings::*;
-use std::sync::Arc;
 struct BooleanEvaluator;
 // The schema's value and its original location, for explanations.
-struct BooleanContract(bool, SchemaLocation);
+struct BooleanContract(bool, SchemaOrigin);
 impl SchemaEvaluator for BooleanEvaluator {
+    type Validator = BooleanContract;
     fn prepare(
         &self,
-        request: &SchemaRequest,
+        request: EvaluationRequest<'_>,
+        _: &PreparationLimits,
         control: &dyn WorkControl,
-    ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
+    ) -> Result<Self::Validator, PreparationFailure> {
         control.check()?;
-        match request.entry().view().as_bool() {
-            Some(value) => Ok(Arc::new(BooleanContract(value, request.entry_location()))),
-            None => Err(NoVerdict::new(
-                NoVerdictReason::UnsupportedCapability,
-                "boolean-only",
-                "this example supports only boolean schemas",
+        match request.schema.json().view().as_bool() {
+            Some(value) => Ok(BooleanContract(value, request.schema.location())),
+            None => Err(PreparationFailure::new(
+                PreparationFailureKind::UnsupportedCapability {
+                    capability: "boolean-only".into(),
+                },
             )),
         }
     }
 }
-impl PreparedSchema for BooleanContract {
-    fn validate(&self, _: &JsonValue, detail: Detail, control: &dyn WorkControl) -> ValueOutcome {
+impl SchemaValidator for BooleanContract {
+    fn evaluate(&self, _: &JsonValue, detail: Detail, control: &dyn WorkControl) -> ValueOutcome {
         if let Err(detail) = control.check() {
             let detail = detail.into();
             return ValueOutcome::NoVerdict { detail };
@@ -33,7 +34,7 @@ impl PreparedSchema for BooleanContract {
         // A cheap check reports the verdict only; an explanation says why.
         let explain = detail == Detail::Explain;
         ValueOutcome::Fails {
-            message: "value does not satisfy the value contract".into(),
+            message: "value does not satisfy the schema".into(),
             problems: explain
                 .then(|| {
                     // The whole value fails: the instance's root.
@@ -64,15 +65,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let value = JsonValue::null();
     let input = operation
         .input()
-        .ok_or("operation has no input contract")?
-        .prepare(&BooleanEvaluator)?;
+        .ok_or("operation has no input schema")?
+        .prepare(
+            &BooleanEvaluator,
+            &openbindings::ExternalSchemas::default(),
+            &openbindings::PreparationLimits::default(),
+        )?;
     let output = operation
         .output()
-        .ok_or("operation has no output contract")?
-        .prepare(&BooleanEvaluator)?;
-    assert!(matches!(input.validate(&value), ValueOutcome::Satisfies));
+        .ok_or("operation has no output schema")?
+        .prepare(
+            &BooleanEvaluator,
+            &openbindings::ExternalSchemas::default(),
+            &openbindings::PreparationLimits::default(),
+        )?;
+    assert!(matches!(input.evaluate(&value), ValueOutcome::Satisfies));
     assert!(matches!(
-        output.validate(&value),
+        output.evaluate(&value),
         ValueOutcome::Fails { problems, .. } if problems.is_empty()
     ));
     let ValueOutcome::Fails {

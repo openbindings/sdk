@@ -1,48 +1,27 @@
-// Fixture construction through the public field and part setters.
+// Test fixture assembly uses exact JSON editing. Missing version/operations are
+// supplied explicitly here; the SDK never constructs missing namespace parents.
 export function constructDocument(sdk, fields) {
-  const document = sdk.Document.create();
+  let document = sdk.Document.create();
+  const replace = (next) => {
+    document.dispose();
+    document = next;
+  };
   try {
-    if (fields === null) document.setOperations(null);
-    for (const [key, value] of Object.entries(fields)) {
-      if (value === undefined) continue;
-      switch (key) {
-        case "openbindings":
-          document.setOpenbindings(value);
-          break;
-        case "name":
-          document.setName(value);
-          break;
-        case "version":
-          document.setVersion(value);
-          break;
-        case "description":
-          document.setDescription(value);
-          break;
-        case "operations":
-          document.setOperations(value);
-          break;
-        case "sources":
-          document.setSources(value);
-          break;
-        case "bindings":
-          document.setBindings(value);
-          break;
-        case "dependencies":
-          document.setDependencies(value);
-          break;
-        case "additionalFields":
-          for (const [name, exact] of Object.entries(value))
-            document.set(
-              "/" + name.replaceAll("~", "~0").replaceAll("/", "~1"),
-              exact,
-            );
-          break;
-        default:
-          document.set(
-            "/" + key.replaceAll("~", "~0").replaceAll("/", "~1"),
-            value,
-          );
-      }
+    replace(document.set("", fields));
+    const root = document.value();
+    let version, operations;
+    try {
+      version = root.get("openbindings");
+      operations = root.get("operations");
+    } finally {
+      root.dispose();
+    }
+    try {
+      if (!version) replace(document.set("/openbindings", "0.2.0"));
+      if (!operations) replace(document.set("/operations", {}));
+    } finally {
+      version?.dispose();
+      operations?.dispose();
     }
     return document;
   } catch (error) {

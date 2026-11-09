@@ -1,6 +1,6 @@
 //! Document edits preserve exact bytes and retained proof ownership.
 use openbindings::*;
-use std::{collections::BTreeMap, ops::Range, path::Path};
+use std::{ops::Range, path::Path};
 
 fn exact(text: &str) -> JsonValue {
     JsonValue::parse(text).unwrap()
@@ -14,43 +14,24 @@ fn atomic_failure_keeps_bytes_caches_views_and_proof() {
     let mut doc =
         Document::parse(" {\n\"openbindings\":\"0.2.0\",\"operations\":{\"go\":{}}} ").unwrap();
     let proof = doc.validate().unwrap().conformant().unwrap();
-    let view = doc.resolve_operation("go").unwrap();
+    let view = proof.resolve_operation("go").unwrap();
     let bytes = doc.as_bytes().to_vec();
     let value = exact("42");
     for edits in [
         vec![
-            Edit::Set {
-                pointer: "/name".into(),
-                value: &value,
-            },
-            Edit::Remove {
-                pointer: "/missing".into(),
-            },
+            Edit::set_at("/name", (value).clone()),
+            Edit::remove_at("/missing"),
         ],
         vec![
-            Edit::Set {
-                pointer: "/operations".into(),
-                value: &value,
-            },
-            Edit::Remove {
-                pointer: "/operations/go".into(),
-            },
+            Edit::set_at("/operations", (value).clone()),
+            Edit::remove_at("/operations/go"),
         ],
         vec![
-            Edit::Set {
-                pointer: "/new".into(),
-                value: &value,
-            },
-            Edit::Set {
-                pointer: "/new".into(),
-                value: &value,
-            },
+            Edit::set_at("/new", (value).clone()),
+            Edit::set_at("/new", (value).clone()),
         ],
-        vec![Edit::Set {
-            pointer: "/~2".into(),
-            value: &value,
-        }],
-        vec![Edit::Remove { pointer: "".into() }],
+        vec![Edit::set_at("/~2", (value).clone())],
+        vec![Edit::remove_at("")],
     ] {
         assert!(doc.edit(&edits).is_err());
         assert_eq!(doc.as_bytes(), bytes);
@@ -59,14 +40,29 @@ fn atomic_failure_keeps_bytes_caches_views_and_proof() {
             Conformance::Conformant
         );
     }
-    doc.set_operation_description("go", "new\nline").unwrap();
-    assert_eq!(proof.as_document().as_bytes(), bytes);
-    let OperationSelection::Found(view) = view else {
-        panic!()
-    };
-    assert!(view.description().unwrap().is_none());
+    doc = doc
+        .edit(&[Edit::set(
+            &["operations", "go", "description"],
+            JsonValue::string("new\nline").unwrap(),
+        )])
+        .unwrap();
+    assert_eq!(
+        doc.value()
+            .at("/operations/go/description")
+            .unwrap()
+            .as_str(),
+        Some("new\nline")
+    );
+    assert_eq!(proof.document().as_bytes(), bytes);
+    assert!(view.description().is_none());
     let mut doc = proof.into_inner();
-    doc.set_name("editable again").unwrap();
+    doc = doc
+        .set("/name", &JsonValue::string("editable again").unwrap())
+        .unwrap();
+    assert_eq!(
+        doc.value().get("name").unwrap().as_str(),
+        Some("editable again")
+    );
 }
 
 #[test]
@@ -79,62 +75,57 @@ fn sibling_insertions_coalesce_in_batch_order_and_escape_keys() {
         ),
     ] {
         let mut doc = Document::parse(input).unwrap();
-        doc.edit(&[
-            Edit::Set {
-                pointer: "/a~1b".into(),
-                value: &exact("1e+03"),
-            },
-            Edit::Set {
-                pointer: "/c~0d".into(),
-                value: &exact("-0"),
-            },
-        ])
-        .unwrap();
+        doc = doc
+            .edit(&[
+                Edit::set_at("/a~1b", (exact("1e+03")).clone()),
+                Edit::set_at("/c~0d", (exact("-0")).clone()),
+            ])
+            .unwrap();
         assert_eq!(doc.as_bytes(), expected.as_bytes());
     }
     let mut doc = Document::parse("[ ]").unwrap();
-    doc.edit(&[
-        Edit::Set {
-            pointer: "/-".into(),
-            value: &exact("1"),
-        },
-        Edit::Set {
-            pointer: "/-".into(),
-            value: &exact("2"),
-        },
-    ])
-    .unwrap();
+    doc = doc
+        .edit(&[
+            Edit::set_at("/-", (exact("1")).clone()),
+            Edit::set_at("/-", (exact("2")).clone()),
+        ])
+        .unwrap();
     assert_eq!(doc.as_bytes(), b"[ 1,2]");
     let mut doc = Document::new();
     let pointers: Vec<_> = (0..1000).map(|i| format!("/operations/op{i}")).collect();
     let value = exact("{}");
-    doc.edit(
-        &pointers
-            .iter()
-            .map(|pointer| Edit::Set {
-                pointer: pointer.into(),
-                value: &value,
-            })
-            .collect::<Vec<_>>(),
-    )
-    .unwrap();
-    assert_eq!(doc.operations().unwrap().len(), 1000);
+    doc = doc
+        .edit(
+            &pointers
+                .iter()
+                .map(|pointer| Edit::set_at(pointer, (value).clone()))
+                .collect::<Vec<_>>(),
+        )
+        .unwrap();
+    assert_eq!(
+        doc.validate()
+            .unwrap()
+            .conformant()
+            .unwrap()
+            .operations()
+            .len(),
+        1000
+    );
     assert!(doc.validate().unwrap().conformant().is_some());
 }
 
 #[test]
 fn duplicates_remain_inspectable_but_cannot_be_edited_or_proven() {
-    let mut doc =
+    let doc =
         Document::parse(r#"{"openbindings":"0.2.0","operations":{},"x":1,"\u0078":2}"#).unwrap();
     let before = doc.as_bytes().to_vec();
-    assert!(doc.operations().is_err());
     assert!(doc.validate().unwrap().conformant().is_none());
     assert_eq!(
         doc.set("/x", &exact("3")).unwrap_err().code(),
         "duplicate-members"
     );
     assert_eq!(doc.as_bytes(), before);
-    let mut doc = Document::new();
+    let doc = Document::new();
     assert_eq!(
         doc.set("/x", &exact(r#"{"a":1,"a":2}"#))
             .unwrap_err()
@@ -147,7 +138,12 @@ fn duplicates_remain_inspectable_but_cannot_be_edited_or_proven() {
 fn positions_follow_current_bytes_and_untouched_extensions_stay_exact() {
     let mut doc = Document::parse("{\n\"openbindings\":\"0.2.0\",\"description\":\"old\",\n\"operations\":{}, \"x\" : [ -0, 1e+002, 9007199254740993, \"\\ud800\" ]\n}").unwrap();
     let extension = doc.value().get("x").unwrap().text().to_owned();
-    doc.set_description("different length").unwrap();
+    doc = doc
+        .set(
+            "/description",
+            &JsonValue::string("different length").unwrap(),
+        )
+        .unwrap();
     assert_eq!(doc.value().get("x").unwrap().text(), extension);
     let operations = doc.value().get("operations").unwrap().location();
     assert_eq!(
@@ -155,9 +151,9 @@ fn positions_follow_current_bytes_and_untouched_extensions_stay_exact() {
         b"{}"
     );
     assert_eq!(operations.line, 3);
-    doc.set("/operations", &exact("null")).unwrap();
-    let error = doc.operations().unwrap_err();
-    let location = error.source_location().unwrap();
+    doc = doc.set("/operations", &exact("null")).unwrap();
+    let location = doc.value().get("operations").unwrap().location();
+    assert!(doc.validate().unwrap().conformant().is_none());
     assert_eq!(
         &doc.as_bytes()[location.byte_offset..location.byte_offset + 4],
         b"null"
@@ -170,58 +166,31 @@ fn positions_follow_current_bytes_and_untouched_extensions_stay_exact() {
 }
 
 #[test]
-fn whole_parts_preserve_absence_null_exact_values_and_collision_paths() {
-    let mut doc = Document::new();
-    doc.set_operation(
-        "go",
-        &Operation {
-            input: Some(exact("true")),
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    doc.set_example(
-        "go",
-        "one",
-        &Example {
-            input: Some(exact("null")),
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    doc.set_source(
-        "s",
-        &Source {
-            kind: "custom".into(),
-            content: Some(exact("null")),
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    doc.set_binding(
-        "b",
-        &Binding {
-            operation: "go".into(),
-            source: "s".into(),
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    doc.set_dependency(
-        "d",
-        &Dependency {
-            operation: "go".into(),
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    doc.set("/x-number", &exact("1e9999999999999999")).unwrap();
+fn exact_parts_preserve_absence_null_and_original_values() {
+    let doc = Document::new()
+        .edit(&[
+            Edit::set(
+                &["operations", "go"],
+                exact(r#"{"input":true,"examples":{"one":{"input":null}}}"#),
+            ),
+            Edit::set(
+                &["sources"],
+                exact(r#"{"s":{"kind":"custom","data":null}}"#),
+            ),
+            Edit::set(
+                &["bindings"],
+                exact(r#"{"b":{"operation":"go","source":"s"}}"#),
+            ),
+            Edit::set(&["dependencies"], exact(r#"{"d":{"operation":"go"}}"#)),
+            Edit::set(&["x-number"], exact("1e9999999999999999")),
+        ])
+        .unwrap();
     let proof = doc.validate().unwrap().conformant().unwrap();
     assert!(proof.name().is_none());
-    assert_eq!(proof.source("s").unwrap().content().unwrap().text(), "null");
+    assert_eq!(proof.source("s").unwrap().data().unwrap().text(), "null");
     assert_eq!(
         proof
-            .resolve_operation("go")
+            .operation("go")
             .unwrap()
             .example("one")
             .unwrap()
@@ -234,20 +203,8 @@ fn whole_parts_preserve_absence_null_exact_values_and_collision_paths() {
         doc.value().get("x-number").unwrap().text(),
         "1e9999999999999999"
     );
-    let before = doc.as_bytes().to_vec();
-    let bad = Source {
-        additional_fields: BTreeMap::from([("kind".into(), exact("null"))]),
-        ..Default::default()
-    };
-    let EditError::FieldCollision { part_pointer, .. } = doc.set_source("s~/", &bad).unwrap_err()
-    else {
-        panic!()
-    };
-    assert_eq!(
-        part_pointer.as_deref(),
-        Some("/sources/s~0~1/additional_fields/kind")
-    );
-    assert_eq!(doc.as_bytes(), before);
+    assert!(proof.binding("b").unwrap().data().is_none());
+    assert!(proof.dependency("d").unwrap().kinds().is_none());
 }
 
 // Independent text reference: parse the expected revision for every step, edit
@@ -371,7 +328,7 @@ fn generated_edit_sequences_over_every_corpus_document_match_reparsed_text() {
     let mut corpus = Vec::new();
     corpus_documents(&root.join("document"), &mut corpus);
     corpus_documents(&root.join("scenarios"), &mut corpus);
-    assert_eq!(corpus.len(), 440);
+    assert_eq!(corpus.len(), 505);
     let mut admitted = 0;
     let mut seed = 0x67cd_f829_302a_19e5u64;
     for bytes in corpus {
@@ -384,7 +341,7 @@ fn generated_edit_sequences_over_every_corpus_document_match_reparsed_text() {
         }
         admitted += 1;
         if doc.value().kind() != JsonKind::Object {
-            doc.set("", &exact("{}")).unwrap();
+            doc = doc.set("", &exact("{}")).unwrap();
         }
         let mut expected = String::from_utf8(doc.as_bytes().to_vec()).unwrap();
         for step in 0..24 {
@@ -401,35 +358,25 @@ fn generated_edit_sequences_over_every_corpus_document_match_reparsed_text() {
                 "{\"opaque\": [ true, 3.00 ]}",
                 "\"\\ud800\"",
             ][(seed as usize >> 8) % 6];
-            let (pointer, replacement, part) = if step % 5 == 0 {
-                let op = Operation {
-                    input: Some(exact(value)),
-                    ..Default::default()
-                };
-                let mut operations = BTreeMap::new();
-                operations.insert(format!("op{step}"), op);
+            let (pointer, replacement) = if step % 5 == 0 {
                 (
                     "/operations".to_owned(),
-                    Some(String::from_utf8(serde_json::to_vec(&operations).unwrap()).unwrap()),
-                    Some(operations),
+                    Some(format!(r#"{{"op{step}":{{"input":{value}}}}}"#)),
                 )
             } else if !choices.is_empty() && !seed.is_multiple_of(3) {
                 (
                     choices[seed as usize % choices.len()].clone(),
                     (seed & 4 != 0).then(|| value.to_owned()),
-                    None,
                 )
             } else {
-                (format!("/x~1{step}~0"), Some(value.to_owned()), None)
+                (format!("/x~1{step}~0"), Some(value.to_owned()))
             };
             let before = expected.clone();
             let (next, range, inserted) = reference(&expected, &pointer, replacement.as_deref());
-            if let Some(operations) = part {
-                doc.set_operations(&operations).unwrap();
-            } else if let Some(value) = replacement {
-                doc.set(&pointer, &exact(&value)).unwrap();
+            if let Some(value) = replacement {
+                doc = doc.set(&pointer, &exact(&value)).unwrap();
             } else {
-                doc.remove(&pointer).unwrap();
+                doc = doc.remove(&pointer).unwrap();
             }
             assert_eq!(
                 &doc.as_bytes()[..range.start],
@@ -455,15 +402,10 @@ fn removing_the_only_child_and_inserting_siblings_uses_one_separator_group() {
         ("[1 ]", "/0", "/-", "[ 2]"),
     ] {
         let mut document = Document::parse(source).unwrap();
-        document
+        document = document
             .edit(&[
-                Edit::Remove {
-                    pointer: removed.into(),
-                },
-                Edit::Set {
-                    pointer: inserted.into(),
-                    value: &exact("2"),
-                },
+                Edit::remove_at(removed),
+                Edit::set_at(inserted, (exact("2")).clone()),
             ])
             .unwrap();
         assert_eq!(document.as_bytes(), expected.as_bytes());
@@ -509,22 +451,17 @@ fn removing_any_set_of_siblings_in_one_batch_matches_removing_them_one_at_a_time
                 for reversed in [false, true] {
                     let mut edits: Vec<_> = removed
                         .iter()
-                        .map(|&i| Edit::Remove {
-                            pointer: children[i].into(),
-                        })
+                        .map(|&i| Edit::remove_at(children[i]))
                         .collect();
                     if reversed {
                         edits.reverse();
                     }
                     let five = exact("5");
                     if insert {
-                        edits.push(Edit::Set {
-                            pointer: append.into(),
-                            value: &five,
-                        });
+                        edits.push(Edit::set_at(append, (five).clone()));
                     }
                     let mut document = Document::parse(source).unwrap();
-                    document.edit(&edits).unwrap();
+                    document = document.edit(&edits).unwrap();
                     assert_eq!(
                         String::from_utf8_lossy(document.as_bytes()),
                         expected,
@@ -535,15 +472,8 @@ fn removing_any_set_of_siblings_in_one_batch_matches_removing_them_one_at_a_time
         }
     }
     let mut document = Document::parse(r#"{"a":1,"b":2,"c":3}"#).unwrap();
-    document
-        .edit(&[
-            Edit::Remove {
-                pointer: "/b".into(),
-            },
-            Edit::Remove {
-                pointer: "/c".into(),
-            },
-        ])
+    document = document
+        .edit(&[Edit::remove_at("/b"), Edit::remove_at("/c")])
         .unwrap();
     assert_eq!(document.as_bytes(), br#"{"a":1}"#);
 }
@@ -553,63 +483,21 @@ fn overlapping_edits_are_refused_without_changing_bytes() {
     let two = exact("2");
     let source = r#"{"a":{"b":1,"c":2},"d":3}"#;
     for edits in [
+        vec![Edit::remove_at("/d"), Edit::remove_at("/d")],
+        vec![Edit::remove_at("/a/b"), Edit::remove_at("/a")],
         vec![
-            Edit::Remove {
-                pointer: "/d".into(),
-            },
-            Edit::Remove {
-                pointer: "/d".into(),
-            },
+            Edit::remove_at("/a"),
+            Edit::remove_at("/a/b"),
+            Edit::remove_at("/a/c"),
         ],
+        vec![Edit::remove_at("/d"), Edit::set_at("/d", (two).clone())],
+        vec![Edit::remove_at("/a"), Edit::set_at("/a/b", (two).clone())],
         vec![
-            Edit::Remove {
-                pointer: "/a/b".into(),
-            },
-            Edit::Remove {
-                pointer: "/a".into(),
-            },
-        ],
-        vec![
-            Edit::Remove {
-                pointer: "/a".into(),
-            },
-            Edit::Remove {
-                pointer: "/a/b".into(),
-            },
-            Edit::Remove {
-                pointer: "/a/c".into(),
-            },
-        ],
-        vec![
-            Edit::Remove {
-                pointer: "/d".into(),
-            },
-            Edit::Set {
-                pointer: "/d".into(),
-                value: &two,
-            },
-        ],
-        vec![
-            Edit::Remove {
-                pointer: "/a".into(),
-            },
-            Edit::Set {
-                pointer: "/a/b".into(),
-                value: &two,
-            },
-        ],
-        vec![
-            Edit::Set {
-                pointer: "/z".into(),
-                value: &two,
-            },
-            Edit::Set {
-                pointer: "/z".into(),
-                value: &two,
-            },
+            Edit::set_at("/z", (two).clone()),
+            Edit::set_at("/z", (two).clone()),
         ],
     ] {
-        let mut document = Document::parse(source).unwrap();
+        let document = Document::parse(source).unwrap();
         let error = document.edit(&edits).unwrap_err();
         assert_eq!(error.code(), "overlapping-edits", "{edits:?}");
         assert_eq!(document.as_bytes(), source.as_bytes());
@@ -617,7 +505,7 @@ fn overlapping_edits_are_refused_without_changing_bytes() {
 }
 
 #[test]
-fn every_typed_part_setter_matches_an_exact_reference_sequence() {
+fn every_namespace_edit_matches_an_exact_reference_sequence() {
     // Exercise all construction namespaces with escaped keys.
     let mut seed = 0x9876_5432u64;
     let mut document = Document::new();
@@ -627,29 +515,18 @@ fn every_typed_part_setter_matches_an_exact_reference_sequence() {
         seed ^= seed >> 7;
         seed ^= seed << 17;
         let key = format!("item{}/~", seed % 7);
-        let operation = Operation {
-            description: Some(format!("step {step}")),
-            ..Default::default()
-        };
-        let source = Source {
-            kind: "custom".into(),
-            content: Some(exact("[-0,1e+3]")),
-            ..Default::default()
-        };
-        let binding = Binding {
-            operation: key.clone(),
-            source: key.clone(),
-            ..Default::default()
-        };
-        let dependency = Dependency {
-            operation: key.clone(),
-            ..Default::default()
-        };
+        let encoded_key = serde_json::to_string(&key).unwrap();
         let (namespace, part) = match seed % 4 {
-            0 => ("operations", serde_json::to_string(&operation).unwrap()),
-            1 => ("sources", serde_json::to_string(&source).unwrap()),
-            2 => ("bindings", serde_json::to_string(&binding).unwrap()),
-            _ => ("dependencies", serde_json::to_string(&dependency).unwrap()),
+            0 => ("operations", format!(r#"{{"description":"step {step}"}}"#)),
+            1 => (
+                "sources",
+                String::from(r#"{"kind":"custom","data":[-0,1e+3]}"#),
+            ),
+            2 => (
+                "bindings",
+                format!(r#"{{"operation":{encoded_key},"source":{encoded_key}}}"#),
+            ),
+            _ => ("dependencies", format!(r#"{{"operation":{encoded_key}}}"#)),
         };
         let (pointer, replacement) = if exact(&expected).get(namespace).is_some() {
             (format!("/{namespace}/{}", escape(&key)), part)
@@ -660,12 +537,9 @@ fn every_typed_part_setter_matches_an_exact_reference_sequence() {
             )
         };
         let (next, range, inserted) = reference(&expected, &pointer, Some(&replacement));
-        match seed % 4 {
-            0 => document.set_operation(&key, &operation).unwrap(),
-            1 => document.set_source(&key, &source).unwrap(),
-            2 => document.set_binding(&key, &binding).unwrap(),
-            _ => document.set_dependency(&key, &dependency).unwrap(),
-        }
+        document = document
+            .edit(&[Edit::set_at(&pointer, exact(&replacement))])
+            .unwrap();
         assert_eq!(document.as_bytes(), next.as_bytes());
         assert_eq!(
             &document.as_bytes()[..range.start],
@@ -677,94 +551,41 @@ fn every_typed_part_setter_matches_an_exact_reference_sequence() {
         );
         expected = next;
     }
-    let edit = Edit::Remove {
-        pointer: "/private-token".into(),
-    };
+    let edit = Edit::remove_at("/private-token");
     assert!(!format!("{edit:?}").contains("private-token"));
 }
 
 #[test]
-fn typed_namespace_batch_preserves_exact_bytes_and_is_atomic() {
-    // Typed maps and pointer edits share a single atomic revision.
+fn exact_namespace_batch_preserves_exact_bytes_and_is_atomic() {
+    // Complete maps and leaf edits share a single atomic revision.
     let mut document =
         Document::parse(" {\n\"openbindings\":\"0.2.0\",\"operations\":{},\"x-keep\": 1e+00 } ")
             .unwrap();
-    let operations = BTreeMap::from([(
-        "run".into(),
-        Operation {
-            input: Some(exact("true")),
-            additional_fields: BTreeMap::from([("x-number".into(), exact("1e+003"))]),
-            ..Default::default()
-        },
-    )]);
-    let sources = BTreeMap::from([(
-        "s".into(),
-        Source {
-            kind: "custom".into(),
-            content: Some(exact("9007199254740993")),
-            ..Default::default()
-        },
-    )]);
-    let bindings = BTreeMap::from([(
-        "b".into(),
-        Binding {
-            operation: "run".into(),
-            source: "s".into(),
-            ..Default::default()
-        },
-    )]);
-    let dependencies = BTreeMap::from([(
-        "d".into(),
-        Dependency {
-            operation: "run".into(),
-            ..Default::default()
-        },
-    )]);
+    let operations = exact(r#"{"run":{"input":true,"x-number":1e+003}}"#);
+    let sources = exact(r#"{"s":{"kind":"custom","data":9007199254740993}}"#);
+    let bindings = exact(r#"{"b":{"operation":"run","source":"s"}}"#);
+    let dependencies = exact(r#"{"d":{"operation":"run"}}"#);
     let name = exact("\"Batch\"");
-    document
+    document = document
         .edit(&[
-            Edit::SetOperations { value: &operations },
-            Edit::Set {
-                pointer: "/name".into(),
-                value: &name,
-            },
-            Edit::SetDependencies {
-                value: &dependencies,
-            },
-            Edit::SetSources { value: &sources },
-            Edit::SetBindings { value: &bindings },
+            Edit::set(&["operations"], operations),
+            Edit::set_at("/name", (name).clone()),
+            Edit::set(&["dependencies"], dependencies),
+            Edit::set(&["sources"], sources),
+            Edit::set(&["bindings"], bindings),
         ])
         .unwrap();
     assert!(document.validate().unwrap().conformant().is_some());
-    let expected = " {\n\"openbindings\":\"0.2.0\",\"operations\":{\"run\":{\"input\":true,\"x-number\":1e+003}},\"x-keep\": 1e+00 ,\"name\":\"Batch\",\"dependencies\":{\"d\":{\"operation\":\"run\"}},\"sources\":{\"s\":{\"kind\":\"custom\",\"content\":9007199254740993}},\"bindings\":{\"b\":{\"operation\":\"run\",\"source\":\"s\"}}} ";
+    let expected = " {\n\"openbindings\":\"0.2.0\",\"operations\":{\"run\":{\"input\":true,\"x-number\":1e+003}},\"x-keep\": 1e+00 ,\"name\":\"Batch\",\"dependencies\":{\"d\":{\"operation\":\"run\"}},\"sources\":{\"s\":{\"kind\":\"custom\",\"data\":9007199254740993}},\"bindings\":{\"b\":{\"operation\":\"run\",\"source\":\"s\"}}} ";
     assert_eq!(document.as_bytes(), expected.as_bytes());
     let before = document.as_bytes().to_vec();
     assert!(
         document
             .edit(&[
-                Edit::SetOperations {
-                    value: &BTreeMap::new()
-                },
-                Edit::Remove {
-                    pointer: "/missing".into()
-                }
+                Edit::set(&["operations"], exact("{}")),
+                Edit::remove_at("/missing")
             ])
             .is_err()
-    );
-    assert_eq!(document.as_bytes(), before);
-    let invalid = BTreeMap::from([(
-        "run".into(),
-        Operation {
-            additional_fields: BTreeMap::from([("input".into(), exact("true"))]),
-            ..Default::default()
-        },
-    )]);
-    assert_eq!(
-        document
-            .edit(&[Edit::SetOperations { value: &invalid }])
-            .unwrap_err()
-            .code(),
-        "field-collision"
     );
     assert_eq!(document.as_bytes(), before);
 }
@@ -786,7 +607,7 @@ fn a_finding_pointer_through_an_unpaired_name_edits_the_member_it_reports() {
     let conclusion = |doc: &Document| doc.validate().unwrap().report().conclusion;
 
     let mut removed = document.clone();
-    removed.remove(&pointer).unwrap();
+    removed = removed.remove(&pointer).unwrap();
     assert_eq!(
         removed.as_bytes(),
         br#"{"openbindings":"0.2.0","operations":{},"x-a":{"k":2}}"#
@@ -794,7 +615,7 @@ fn a_finding_pointer_through_an_unpaired_name_edits_the_member_it_reports() {
     assert_eq!(conclusion(&removed), Conformance::Conformant);
 
     let mut replaced = document.clone();
-    replaced.set(&pointer, &exact("[3]")).unwrap();
+    replaced = replaced.set(&pointer, &exact("[3]")).unwrap();
     assert_eq!(
         replaced.as_bytes(),
         br#"{"openbindings":"0.2.0","operations":{},"x-a":{"\ud800":[3],"k":2}}"#
@@ -806,20 +627,15 @@ fn a_finding_pointer_through_an_unpaired_name_edits_the_member_it_reports() {
             .collect::<Vec<_>>(),
     )
     .unwrap();
-    replaced.set(&inside, &exact("4")).unwrap();
+    replaced = replaced.set(&inside, &exact("4")).unwrap();
     assert_eq!(replaced.value().at_pointer(&inside).unwrap().text(), "4");
 
     let mut renamed = document.clone();
     let value = exact("1");
-    renamed
+    renamed = renamed
         .edit(&[
-            Edit::Remove {
-                pointer: (&pointer).into(),
-            },
-            Edit::Set {
-                pointer: "/x-a/fixed".into(),
-                value: &value,
-            },
+            Edit::remove_at(&pointer),
+            Edit::set_at("/x-a/fixed", (value).clone()),
         ])
         .unwrap();
     assert_eq!(
@@ -839,9 +655,9 @@ fn an_exact_pointer_inserts_and_appends_like_its_text() {
     // A missing name with an unpaired unit, decoded from its escapes, is
     // written as a JSON escape; its own pointer then finds it.
     let inserted = exact_pointer(&[&units("/x/"), &lone, &units("~0~1y")]);
-    doc.set(&inserted, &exact("true")).unwrap();
+    doc = doc.set(&inserted, &exact("true")).unwrap();
     let appended = exact_pointer(&[&units("/x/"), &lone, &units("/list/-")]);
-    doc.set(&appended, &exact("5")).unwrap();
+    doc = doc.set(&appended, &exact("5")).unwrap();
     assert_eq!(
         doc.as_bytes(),
         br#"{"x":{"\ud800":{"list":[5]},"\ud800~/y":true}}"#
@@ -849,25 +665,76 @@ fn an_exact_pointer_inserts_and_appends_like_its_text() {
     assert_eq!(doc.value().at_pointer(&inserted).unwrap().text(), "true");
     // An exact pointer whose units all pair is the same as its text.
     let paired: Pointer = "/x/plain".parse().unwrap();
-    doc.set(&paired, &exact("0")).unwrap();
+    doc = doc.set(&paired, &exact("0")).unwrap();
     assert_eq!(doc.value().at("/x/plain").unwrap().text(), "0");
     // Its refusals match the text form's.
     let missing = exact_pointer(&[&units("/none/"), &lone]);
     assert_eq!(
-        doc.set(&missing, &exact("0")),
-        Err(EditError::MissingParent)
+        doc.set(&missing, &exact("0")).unwrap_err(),
+        EditError::MissingParent
     );
-    assert_eq!(doc.remove(&missing), Err(EditError::MissingValue));
+    assert_eq!(doc.remove(&missing).unwrap_err(), EditError::MissingValue);
     let into_array = exact_pointer(&[&units("/x/"), &lone, &units("/list/"), &lone]);
     assert_eq!(
-        doc.set(&into_array, &exact("0")),
-        Err(EditError::InvalidPointer)
+        doc.set(&into_array, &exact("0")).unwrap_err(),
+        EditError::InvalidPointer
     );
     let duplicate = exact_pointer(&[&units("/x/"), &lone, &units("/n")]);
     let value = exact("1");
-    let twice = Edit::Set {
-        pointer: (&duplicate).into(),
-        value: &value,
+    let twice = Edit::set_at(&duplicate, (value).clone());
+    assert_eq!(
+        doc.edit(&[twice.clone(), twice]).unwrap_err(),
+        EditError::Overlap
+    );
+}
+
+#[test]
+fn successful_edits_preserve_original_snapshot_and_exact_owners() {
+    let source = " {\"openbindings\":\"0.2.0\",\"operations\":{},\"x-kept\":1e+003} ";
+    let original = Document::parse(source).unwrap();
+    let proof = original.validate().unwrap().conformant().unwrap();
+    let revision = original.set("/description", &JsonValue::null()).unwrap();
+    let empty = original.edit(&[]).unwrap();
+    assert_eq!(original.as_bytes(), source.as_bytes());
+    assert_eq!(proof.document().as_bytes(), source.as_bytes());
+    assert_eq!(empty.as_bytes(), source.as_bytes());
+    assert!(original.value().get("description").is_none());
+    assert_eq!(
+        revision.value().get("description").unwrap().kind(),
+        JsonKind::Null
+    );
+    let retained = revision.value().get("x-kept").unwrap().to_owned();
+    drop(original);
+    drop(revision);
+    assert_eq!(retained.text(), "1e+003");
+    assert_eq!(proof.document().as_bytes(), source.as_bytes());
+}
+
+#[test]
+fn owned_edits_retain_paths_and_exact_values_across_reuse() {
+    fn owned<T: Clone + Send + Sync + 'static>() {}
+    owned::<Edit>();
+    let edits = {
+        let key = String::from("look/up~");
+        let value = exact(r#"{ "input": false, "x-number": 1e+003 }"#);
+        vec![Edit::set(&["operations", &key], value)]
     };
-    assert_eq!(doc.edit(&[twice, twice]), Err(EditError::Overlap));
+    let original = Document::new();
+    let first = original.edit(&edits).unwrap();
+    let second = original.edit(&edits.clone()).unwrap();
+    assert_eq!(first.as_bytes(), second.as_bytes());
+    assert!(original.value().at("/operations/look~1up~0").is_none());
+    assert_eq!(
+        first
+            .value()
+            .at("/operations/look~1up~0/x-number")
+            .unwrap()
+            .text(),
+        "1e+003"
+    );
+    let removed = first
+        .edit(&[Edit::remove(&["operations", "look/up~"])])
+        .unwrap();
+    assert!(removed.value().at("/operations/look~1up~0").is_none());
+    assert!(first.value().at("/operations/look~1up~0").is_some());
 }

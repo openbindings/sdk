@@ -37,13 +37,32 @@ bounds for arbitrary documents or value explanations.
 The location walk keeps depth frames and one child candidate list, never a library
 error tree or a vector of all instance children. Its schema plan is fixed at
 compilation. Retained findings are capped at 4,096 and aggregate source pointers
-at 8 MiB. The 10 MiB allowance leaves 2 MiB for traversal/collection/name scratch
+at 8 MiB. The pinned 0.2 schema's largest OBI-02 keyword/schema/details tuple is
+199 serialized JSON bytes (198 in TypeScript), guarded by an exhaustive schema
+test without a runtime fact-size cap. Facts are included in the SDK measurement. The fixture-specific thresholds remain unchanged. The 10 MiB
+allowance leaves 2 MiB for traversal/collection/name scratch
 on this suite; the complete SDK allowance adds 2 MiB for native checks and reports.
 The separately capped validity baseline also detects increases in the fixed schemas' validity allocation cost.
 
 The verifier rejects diagnostic API calls in the two fixed-check modules. It also
 requires exact agreement between validity-only and fixed-check verdicts/refusals
 for every sample.
+
+## Reference report pointers
+
+The verifier also runs `tests/reference_report_bytes.rs`, a separate test binary
+whose global allocator refuses live allocations above 256 MiB. Its conformant
+long-key and shared-long-target documents contain 20,000 references. Both public
+inspection routes retain exactly eight entries totaling 8 MiB, then stop. Removing
+the report bound hits the allocator ceiling before the unbounded report can
+retain about 20 GiB. The binary also runs the existing reference-inspection
+fixtures unchanged and checks UTF-16 keyword suffixes and unresolved locations.
+
+Successful pointer measurement is linear in retained pointer content (at most
+8 MiB), plus the first omitted entry's paths and constant per-entry work. Traversal stops there, so no suffix of deep
+omitted references is repeatedly walked and no per-source size table is needed.
+The measure is relative to the source root and uses constant scratch space.
+Pointer construction retains its existing ancestor scratch and output cost.
 
 ## Near misses
 
@@ -177,3 +196,24 @@ assertions for each failing path alone, and restores the copy. It never mutates
 the production evaluator. Each path must fail the allocation assertion while
 retaining the expected public outcome. Fresh mutation receipts are generated under
 `target/diagnostics-review/value-mutations`.
+
+The `--semantic-only` lane exercises both the compiled-to-semantic path and direct
+semantic evaluation with 100 KB and 1 MB original keys and instance strings.
+The four oversized-origin runs keep a 64 KiB program allowance and must remain
+Undefined without inventing a truncated origin. The two pattern runs use 8 MiB
+and must satisfy; matching 64 KiB controls must report a resource limit before
+building the bounded matcher. All eight runs must add less than 128 KiB
+allocator-live peak bytes. Inputs and preparation
+precede each baseline. These checks catch temporary source-pointer and UTF-16
+copies; they do not claim a process RSS bound or include caller-owned input.
+
+The `--recursive-only` lane measures the recursive proof state for closed OR
+components of four and eight nodes and annotation producers with 32 or 512
+properties. Each case runs cold and warm against the same prepared owner at
+64 KiB and 8 MiB program allowances. The low allowance must refuse truthfully;
+the larger allowance must establish the adjudicated result, except that the
+512-property case also demonstrates the default proof-variable limit. A separate
+512-property control supplies a 4 MiB stack allowance and must satisfy. The SDK's
+default limits are unchanged. Every call must retain zero bytes after dropping its
+result and peak within twice its program allowance. These are regression bounds
+for the measured cases, not universal bounds or a matched performance comparison.

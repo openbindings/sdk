@@ -67,10 +67,11 @@ fn explain_checks_reported_count_and_original_problem_locations() {
         let output = run(
             json!({"mode":"explain", "schema":r#"{"type":"array","items":{"type":"integer"}}"#,
             "value":serde_json::to_string(&vec!["bad"; count]).unwrap(), "iterations":2,
-            "expected":{"status":"fails", "problem_count":1, "first_problem":{
-                "code":"type", "instance_pointer":"/0", "schema_location":{
+            "expected":{"status":"fails", "problem_count":count, "first_problem":{
+                "code":"type", "instance_pointer":"/0",
+                "details":{"expected":["integer"], "kind":"type"}, "schema_location":{
                     "pointer":"/items/type", "resource":"https://benchmark.invalid/root"},
-                "message":"expected JSON type: integer"}}}),
+                "message":"value fails this schema assertion"}}}),
         );
         assert!(
             output.status.success(),
@@ -90,6 +91,19 @@ fn incorrect_expected_outcomes_abort_instead_of_producing_timings() {
     assert!(!output.status.success());
     assert!(output.stdout.is_empty());
     assert!(String::from_utf8_lossy(&output.stderr).contains("unexpected status"));
+}
+#[test]
+fn refused_preparation_cannot_be_timed_as_a_ready_contract() {
+    for mode in ["compile", "context"] {
+        let output = run(json!({
+            "mode":mode, "schema":r#"{"pattern":"a"}"#, "value":"\"a\"",
+            "limits":{"total_pattern_memory":0}, "iterations":2,
+            "expected":{"status":"preparation-refused"}
+        }));
+        assert!(!output.status.success(), "{mode}");
+        assert!(output.stdout.is_empty(), "{mode}");
+        assert!(String::from_utf8_lossy(&output.stderr).contains("is_ready"));
+    }
 }
 #[test]
 fn each_mode_times_its_own_operation_and_counts_every_iteration() {
@@ -165,4 +179,37 @@ fn provenance_reports_the_embedded_source_digests() {
             "{key}: {digest}"
         );
     }
+}
+
+#[test]
+fn preparation_refusal_is_counted_without_an_instance_verdict() {
+    let output = run(json!({"schema":"true",
+    "value":"1", "iterations":2, "limits":{"schema_resources":0},
+    "expected":{"status":"preparation-refused", "failure":{
+        "kind":"limit", "details":{"resource":"schema-resource-limit"},
+        "origin":null
+    }}}));
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let observed: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(observed["outcomes"]["preparation-refused"], 2);
+    assert!(observed["outcomes"].get("no-verdict").is_none());
+}
+
+#[test]
+fn missing_local_target_is_a_value_outcome_not_preparation_refusal() {
+    let output = run(json!({"schema":r##"{"$ref":"#/$defs/absent"}"##,
+        "value":"1", "iterations":2,
+        "expected":{"status":"undefined", "code":"semantic-dependence"}}));
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let observed: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(observed["outcomes"]["undefined"], 2);
+    assert!(observed["outcomes"].get("preparation-refused").is_none());
 }

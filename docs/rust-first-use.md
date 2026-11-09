@@ -1,9 +1,25 @@
 # First useful result in Rust
 
 Validate an interface document's bytes, read an operation and prepare its input
-value contract. Select `openbindings` and `openbindings-json-schema-evaluator` from
-an exact checkout or local archives through [source replay](REPLAY.md). Packages
-are unpublished; Rust needs no runtime initialization.
+schema. Rust needs no runtime initialization. For a complete call, continue to
+[document to typed result](document-to-typed-result.md), which defines its own
+small adapter and handles invocation and output decoding.
+
+Packages are unpublished. In an application beside an exact SDK checkout named
+`sdk`, use these dependencies (adjust the paths for extracted crate archives):
+
+```toml
+[dependencies]
+openbindings = { path = "../sdk/crates/openbindings" }
+openbindings-json-schema-evaluator = { path = "../sdk/crates/openbindings-json-schema-evaluator" }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+```
+
+For packaged unpublished siblings, the archive provider must also supply local
+Cargo patches for the internal dependency closure; see the
+[candidate procedure](release-candidate.md). [Source replay](REPLAY.md) is for
+maintainers building and qualifying those artifacts.
 
 Run the packaged examples:
 
@@ -14,10 +30,11 @@ cargo run -p openbindings-json-schema-evaluator --example replacement
 
 The first example adds exact values and verdict handling. The replacement example
 keeps old work usable while a new document and resource set are installed.
-This caller diagnoses an unexpected document field, corrects it and prepares input:
+This caller diagnoses an unexpected document field, corrects it and prepares input.
+It uses `serde_json` to render structured finding facts:
 
 ```rust
-use openbindings::validate_document;
+use openbindings::{validate_document, ExternalSchemas, PreparationLimits};
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -29,6 +46,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("{}/{} ({:?}) at {:?}: {}",
             finding.rule, finding.code, finding.status,
             pointer.map(ToString::to_string), finding.message);
+        if let Some(keyword) = &finding.keyword {
+            println!("Schema fact: {}", serde_json::to_string(&(
+                keyword, &finding.schema, &finding.details))?);
+        }
     }
     if validation.report().findings_truncated {
         println!("More findings were omitted; rule evidence remains available.");
@@ -46,9 +67,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let operation = proof.resolve_operation("lookup").ok_or("operation is missing")?;
     let input = operation
         .input()
-        .ok_or("operation has no input contract")?
-        .prepare(&DefaultEvaluator::new())?;
-    println!("value outcome: {:?}", input.validate_json("7")?);
+        .ok_or("operation has no input schema")?
+        .prepare(&DefaultEvaluator::new(), &ExternalSchemas::default(), &PreparationLimits::default())
+        .map_err(|failure| failure.to_string())?;
+    println!("value outcome: {:?}", input.evaluate_json("7")?);
     // The cheap check says whether a value fails; explaining it says why.
     let seven = openbindings::JsonValue::parse(r#""seven""#)?;
     if let openbindings::ValueOutcome::Fails { problems, .. } = input.explain(&seven) {
@@ -69,80 +91,111 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 `validate_document` returns a document report or an unsupported-version refusal.
 It judges the bytes as they are: invalid UTF-8, a byte order mark or a JSON syntax
 error is an OBI-01 violation in the report, located like any other finding.
+Admission limits leave every rule inconclusive with `byte-limit`, `depth-limit` or
+`node-limit`, at the parser's byte offset and without a pointer. Messages describe
+the reached limit. To admit more, use `validate_document_with_limits` and raise
+`JsonLimits::max_bytes`, `max_depth` or `max_nodes`, respectively.
 A report can be conformant, non-conformant or undetermined. Only established
-conformance yields a `Conformant<Document>`. Its typed field reads are infallible;
-document editor reads remain fallible. `operations()` returns every operation as a
-`ConformantOperationView` in lexical key order: `key()` is its primary name and
-`aliases()` its declared aliases, or `None` when it declares none. Resolve primary
-names or aliases with `resolve_operation`. A conformant lookup returns an optional
-operation; a document lookup distinguishes found, missing and ambiguous.
+conformance yields a `ConformantDocument`. Its typed field reads are infallible;
+raw editor reads retain the exact draft. `operations()` returns canonical `Operation`
+owners in lexical key order. `key()` is the primary name and `aliases()` is optional.
+`operation(key)` selects only a primary key; `resolve_operation(name)` also accepts
+aliases. Both return `None` when absent. Binding/source/dependency relations retain
+the same conformant snapshot, and operation bindings are unranked.
 
-## Validate values
+## Evaluate values
 
-A conformant operation's `input()` and `output()` return its value contracts, or
-`None` when the operation declares none. `schema()` borrows the exact schema.
-`prepare(&DefaultEvaluator::new())` uses the default evaluator budgets and no
-supplied resources; reading a value contract prepares nothing. The SDK never acquires
-resources. Use `prepare_with(&evaluator, &resources)` for a shared or configured
-evaluator, custom budgets, supplied resources or a custom evaluator. The evaluator
-is borrowed for the call. Each check chooses its detail: `validate` is cheap and
-reports only whether a value fails; `explain` on the same value contract reports why.
+An operation's `input()` and `output()` return optional contextual `Schema` owners.
+Named schemas are available through `proof.schema(key)`. `Schema::json()` retains
+the exact declaration. Reading a schema performs no preparation or evaluation.
 
-Preparation returns `Result<PreparedValueContract, NoVerdict>`, so `?` propagates a
-refusal with its reason, code, message and location. A missing operation and an
-absent value contract are `None` before preparation. Only a `Conformant<Document>` hands
-out value contracts; a plain `Document` operation exposes the exact schema value.
-Document validation itself needs no caller-supplied evaluator. See
-[evaluator integration](schema-evaluators.md).
+Call `schema.prepare(&evaluator, &external_schemas, &preparation_limits)` to obtain
+`Result<PreparedSchema<E::Validator>, PreparationFailure>`. Resources are explicit
+and immutable; the SDK never fetches them. A preparation failure judges no value,
+and absence is a separate `None` before preparation. Core conformance requires no
+caller-supplied evaluator. See [evaluator integration](schema-evaluators.md).
 
-A prepared value contract's `validate_json(text_or_bytes)` admits exact JSON under the
-default limits: 32 MiB, 10,000 container levels and 1,000,000 nodes. `Err` means
-admission failed. `Ok` contains `Satisfies`, `Fails`, `Undefined` or `NoVerdict`.
-Duplicate members are preserved during admission and yield `NoVerdict` during
-validation. Number tokens retain their exact meaning.
+`evaluate_json(text_or_bytes)` admits exact JSON under default limits: 32 MiB,
+10,000 container levels and 1,000,000 nodes. Admission failure is `Err`; `Ok`
+contains `Satisfies`, `Fails`, `Undefined` or `NoVerdict`. Duplicate instance members
+are admitted exactly and yield `NoVerdict` during evaluation. Number tokens retain
+their exact meaning. `explain(&value)` requests diagnostics without changing the
+semantic result.
 
-Use `JsonValue::parse_with_limits` for custom admission limits and
-`PreparedValueContract::validate` for retained exact values without reparsing.
-Documents take the same `JsonLimits` through `validate_document_with_limits` and
-`Document::parse_with_limits`, and keep them for their edits. Use
-`JsonValue::from_serializable` for ordinary Rust data. The converter preserves
-integer digits but cannot recover a value already rounded by application code.
-It refuses exact wrappers; keep those on the parse/retain route.
+Use `JsonValue::parse_with_limits` and `prepared.evaluate(&value)` for custom
+admission limits or repeated checks. `JsonValue::from_serializable` checks Rust
+data, including nested `JsonValue` fields, but cannot recover precision already lost by application code. It preserves
+embedded number tokens and string units, and refuses duplicate object members.
 
-Preparation and validation refusals remain separate from an established failure.
-Retain and clone a prepared value contract to reuse compiled state. Every `prepare` call
-compiles independently. Prepared does not imply that every value is decidable.
+Use `JsonValue::semantic_eq(&other)` for value equality without floating-point
+conversion: `1e400` and `10e399` compare as `Some(true)` despite different tokens.
+The result is `Some(false)` for unequal values and `None` when either value
+contains duplicate object member names, so equality is ambiguous.
+
+Exact values can hold an unpaired UTF-16 surrogate or a number outside
+`serde_json::Value`'s range. Passing one to `serde_json::json!` can panic;
+conversion through a host value can also lose number precision. Compose values
+with `JsonValue::from_serializable` instead:
+
+```rust,edition2024
+use openbindings::JsonValue;
+use serde::Serialize;
+
+#[derive(Serialize)]
+struct Envelope { payload: JsonValue }
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let payload = JsonValue::parse(r#"[1e9999, "\ud800"]"#)?;
+    let value = JsonValue::from_serializable(&Envelope { payload })?;
+    assert_eq!(value.text(), r#"{"payload":[1e9999, "\ud800"]}"#);
+    // Serialize to JSON text when sending exact values over the wire.
+    let bytes = serde_json::to_vec(&value)?;
+    assert_eq!(JsonValue::parse(bytes)?.text(), value.text());
+    Ok(())
+}
+```
+
+Conversion keeps its 128-container ceiling and the selected byte/node limits,
+including inside exact fields. Parse or clone an already complete exact value
+when composition is unnecessary. Preparation errors have readable `Display`
+text; Rust's `Result`-returning `main` prints `Debug`, which deliberately hides
+these details. The first example converts the preparation failure to display
+text before returning it.
+
+Each preparation is independent. The default validator shares compiled state when
+cloned; custom validators choose their own ownership and thread-safety properties.
+Prepared does not mean every value is decidable. Handle all four results.
 
 ## Edit an opaque value
 
 Parse a `Document` to edit it. `Document::parse` admits exact JSON, keeps an
-invalid draft editable and refuses text that is not JSON as an `InputError`;
+invalid draft inspectable and refuses text that is not JSON as an `InputError`;
 `document.validate()` returns the same validation as `validate_document`. Edit
-the `Document` through a mutable borrow. Generic paths use RFC 6901:
+the `Document` through a shared borrow and retain the returned snapshot. Generic paths use RFC 6901:
 `~0` escapes a tilde and `~1` a slash. Parents must exist; `set` inserts missing
 object members and `/-` appends to arrays. Use exact JSON values to preserve
 number spellings and escaped UTF-16. A pointer is escaped text or an exact
 `Pointer`, so a finding's location addresses the member it reports, including a
 name holding an unpaired UTF-16 unit: `document.remove(&pointer)`, or
-`Edit::Remove { pointer: (&pointer).into() }` in a batch.
+`Edit::remove_at(&pointer)` in a batch.
 
 ```rust,edition2024
 use openbindings::{Document, Edit, JsonValue};
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut document = Document::parse(
+    let document = Document::parse(
         r#"{"openbindings":"0.2.0","operations":{},"x-editor":{"note":null,"id":9007199254740993}}"#,
     )?;
     let note = JsonValue::string("Reviewed")?;
     let description = JsonValue::string("Ready for review")?;
-    document.edit(&[
-        Edit::Set { pointer: "/x-editor/note".into(), value: &note },
-        Edit::Set { pointer: "/description".into(), value: &description },
+    let changed = document.edit(&[
+        Edit::set(&["x-editor", "note"], note),
+        Edit::set(&["description"], description),
     ])?;
     assert_eq!(document.value().at("/x-editor/id").unwrap().text(), "9007199254740993");
-    let proven = document.validate()?.conformant().ok_or("nonconformant")?;
+    let proven = changed.validate()?.conformant().ok_or("nonconformant")?;
     assert!(proven.operations().is_empty());
-    let mut document = proven.into_inner();
-    document.set_description("Editing again")?;
+    let document = proven.document().set("/description", &JsonValue::string("Editing again")?)?;
+    assert_eq!(document.value().get("description").unwrap().as_str(), Some("Editing again"));
     Ok(())
 }
 ```
@@ -152,17 +205,18 @@ batch changes nothing. Untouched extension members, number tokens, member order
 and whitespace remain exact; inserted members use compact punctuation. Sibling
 insertions at one boundary coalesce in request order. Adjacent removals, up to
 every member of a container, share their separators. Overlapping replacements
-and removals are refused. Default byte, node and depth limits apply to the result;
+and removals are refused. The document's retained byte, node and depth limits apply to the result;
 byte preflight happens before replacement allocation.
 
-Use typed parts for construction: `set_operation`, `set_binding`, `set_source`,
-`set_dependency` and `set_example`. `set_operations(&operations)` commits a complete
-operations map once for synthesis; the bindings, sources and dependencies maps
-have corresponding setters. These setters check typed collisions and admission,
-while `validate()` separately establishes document conformance.
+Construct operations, bindings, sources, dependencies and examples through exact
+JSON path edits. Set complete maps when namespaces are absent; edits do not create
+missing parents. Validate the resulting snapshot separately. Canonical domain
+entries come from that proof, not from detached authoring structures. Use
+`openbindings::is_valid_name(name)` to check a proposed entry key or alias before
+editing; validating the document still checks namespace collisions and relationships.
 
-`Conformant<Document>` has no setters or mutable borrow. `as_document()` borrows
-plain reads, and `into_inner()` consumes proof to return an editable owner.
+`ConformantDocument` has no setters or mutable borrow. `document()` borrows
+plain reads, and `into_inner()` consumes proof to return the immutable document snapshot.
 Retained views and proofs keep their earlier bytes. Findings and source positions
 always describe the revision being read. The packaged
 [exact-edit example](../crates/openbindings/examples/exact_edit.rs) includes
@@ -170,43 +224,54 @@ additional numeric and error cases.
 
 ## Resources, diagnostics and lifetime
 
-`prepare_with` borrows a `&dyn SchemaEvaluator` and a `ResourceSet`;
-the [replacement example](../crates/openbindings-json-schema-evaluator/examples/replacement.rs)
-shows supplied resources and retained work. Schema resources are explicit and immutable. The SDK never fetches missing
-references. Prepare again with a new set to change resources; prepared value contracts keep
-their original snapshots. An application can prepare a candidate before replacing
-its active value contract and keep serving old work if preparation fails.
+External schemas are explicit immutable inputs. Preparing against a replacement
+set produces independent work; existing prepared schemas keep their original
+meaning. A prepared schema owns whatever its validator needs and outlives the
+caller handles. Core imposes no universal retention or thread-safety strategy.
 
-A `ResourceSet` indexes its resource identities once when it is built, and clones
-share that index. Evaluators that request the core projection reuse one resolution
-space per live document revision and set, including when preparations alternate
-between sets. The space without supplied resources stays with the revision; a
-space with a set stays with that set and is released when the set or the revision
-is dropped. A prepared value contract retains at most its own document and resources,
-and only when its evaluator keeps them; the default evaluator's keeps neither.
+`prepare_with_control`, `evaluate_with_control` and `explain_with_control` accept
+`WorkControl`, including an `AtomicBool` or a companion's cancellation token.
+Cancellation is cooperative. A cancelled preparation returns no validator; an
+interrupted evaluation leaves an existing validator available for another call.
 
-`prepare_with_control`, `validate_with_control` and `explain_with_control` accept
-`WorkControl`, including
-an `AtomicBool` or a companion's `CancellationToken`. Cancellation is cooperative.
-Use a fresh flag or token for a retry. Cancelled preparation returns no prepared
-owner; cancelled validation leaves an existing owner usable.
+Document findings refer to the assessed revision using exact pointers, zero-based
+UTF-8 byte offsets and one-based lines and byte columns. Quote untrusted pointers
+for display. OBI-02 adds the failing `keyword`, a `schema` origin in the published
+fixed schema, and optional `ValueProblemDetails`: a missing required member,
+expected types or exact bounds. Disallowed members use the source pointer alone.
+Failed unions stay at `anyOf`/`oneOf` without speculative branch details.
+Facts never copy rejected document values. The pinned 0.2 schema's largest
+serialized `[keyword, schema, details]` tuple is 199 bytes, guarded by an exhaustive
+schema test with no runtime fact-size cap. Reports retain at most 4096 findings
+and 8 MiB of source pointers. Finding truncation leaves rule evidence intact. Use codes and evidence
+for program logic and messages for explanation. The API reference lists every
+[document finding code](api-reference.md#document-finding-codes) with its rule.
 
-Document findings describe the assessed revision with exact JSON Pointers, zero-based UTF-8 byte offsets and
-one-based lines and byte columns; `SourceLocation`'s `Display` writes them as
-`pointer (line L, column C, byte B)`. A pointer keeps a member name's unpaired
-UTF-16 unit (`Pointer::as_str` is then `None`) and is absent only for a syntax
-error, which precedes any value. Quote pointers when displaying them. Truncation
-leaves rule evidence intact. Use codes and evidence for logic; messages are
-advisory. `validate` reports value failures without problems. `explain` is an
-explicit per-call choice that allocates in proportion to the schema and value.
-The default evaluator explains only values within half the nesting
-`Limits::stack_bytes` admits and reports a deeper failure without its problem,
-so release builds explain on a thread with that much stack; debug builds need
-more (see [host support](support.md)). An explained problem names the failing
-node by its exact pointer from the value passed (`instance`) and the failing
-keyword by resource and exact pointer (`schema`). Line and column come from the
-text's holder when asked: `JsonValue::locate` for the value, `Conformant::locate`
-and `ResourceSet::locate` for the schema. A prepared value contract keeps a compact copy
-of the keywords it compiled for explanations, never its document or resources, and
-no positions. See the [evaluator guide](../crates/openbindings-json-schema-evaluator/README.md)
-and [host support](support.md).
+Value problems name the failing instance and original schema coordinate.
+`JsonValue::locate`, `ConformantDocument::locate` and `ExternalSchemas::locate` compute
+line and byte positions on demand. The default evaluator's `explain` reports
+established failing assertions at these locations, with at most 100 problems. `problems_complete` is true only when
+all reportable failures were collected; a limit, missing witness or interrupted
+diagnostic work leaves it false without changing the failure verdict. `allOf`
+collects failures from its failing branches. Failed `anyOf`, `oneOf` and `not`
+report the applicator itself, without treating their branch failures as independent
+problems. `details` includes missing required member names, expected types,
+exact numeric and size bounds, and complete enum choices from the original
+schema. Bounds and choices are original JSON token strings. Missing members
+with tied locations keep the schema's `required` array order. Keywords without
+a matching variant, such as `const`, `pattern`, `multipleOf` and
+`additionalProperties`, have no details; pattern text stays out. Facts that
+cannot fit the diagnostic allowance or be represented exactly are omitted and
+leave `problems_complete` false. Enum lists are never partial.
+
+Messages remain fixed SDK text, and `Debug` redacts schema facts. Rejected
+instance values are never copied into facts or messages. Serializing whole
+problems into a public response sends schema facts. An app with a private
+contract should forward only `instance` and `code`.
+
+Serialized problem and schema-origin pointers replace unpaired UTF-16 units with
+U+FFFD so they can be ordinary JSON strings. Keep the original `Pointer` for exact
+lookup or editing; the serialized spelling cannot identify such names exactly.
+See the [API reference](api-reference.md),
+[evaluator guide](../crates/openbindings-json-schema-evaluator/README.md) and
+[host support](support.md).

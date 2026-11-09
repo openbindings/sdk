@@ -1,0 +1,8 @@
+/target/
+/seeds/target/
+/artifacts/
+/coverage/
+# libFuzzer writes newly discovered inputs here. Named seeds remain committed.
+/corpus/*/*
+!/corpus/*/*.json
+!/corpus/*/*.bin

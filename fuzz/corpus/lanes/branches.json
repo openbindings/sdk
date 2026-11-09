@@ -1,0 +1,1 @@
+[{"oneOf":[{"type":"integer"},{"minimum":0}],"if":{"const":0},"then":false,"else":{"not":{"const":1}}},0]

@@ -2,9 +2,17 @@
 // A method that returns `Self` is a builder step; dropping its result loses the change.
 #![warn(clippy::return_self_not_must_use)]
 pub use openbindings_internal_json::{JsonKind, JsonRef, JsonValue};
+pub mod dialect;
 pub mod fixed_locations;
 pub mod fixed_schema;
+mod identifier_walk;
 mod identifiers;
+mod identity_budget;
+pub mod preparation;
+mod query_identifiers;
+mod query_storage;
+mod resolution_work;
+pub use identity_budget::DEFAULT_IDENTITY_BYTES;
 mod input_policy;
 pub mod schema_index;
 mod space;
@@ -88,12 +96,15 @@ pub enum FailureReason {
 #[derive(Clone, Serialize)]
 pub struct Failure {
     pub reason: FailureReason,
-    pub code: String,
-    pub message: String,
+    pub code: std::borrow::Cow<'static, str>,
+    pub message: std::borrow::Cow<'static, str>,
     pub location: Option<Location>,
     /// Established static-reference semantics, independent of evaluator ability.
     #[serde(skip)]
     pub reference_defect: Option<StaticReferenceDefect>,
+    /// Original-context resolution cause, retained without diagnostic parsing.
+    #[serde(skip)]
+    pub query_failure: Option<Box<QueryFailure>>,
 }
 impl std::fmt::Debug for Failure {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -112,13 +123,18 @@ pub enum StaticReferenceDefect {
     MalformedReference,
 }
 impl Failure {
-    pub fn new(reason: FailureReason, code: impl Into<String>, message: impl Into<String>) -> Self {
+    pub fn new(
+        reason: FailureReason,
+        code: impl Into<std::borrow::Cow<'static, str>>,
+        message: impl Into<std::borrow::Cow<'static, str>>,
+    ) -> Self {
         Self {
             reason,
             code: code.into(),
             message: message.into(),
             location: None,
             reference_defect: None,
+            query_failure: None,
         }
     }
     #[must_use]
@@ -146,6 +162,27 @@ pub trait Control: Send + Sync {
             Ok(())
         }
     }
+    /// Charge a cooperative SDK work site. Ordinary controls only observe
+    /// cancellation; a preparation attempt owns the shared SDK allowance.
+    /// Dependency and custom callback execution is not automatically counted.
+    fn charge_work(&self, _units: usize) -> Result<(), Failure> {
+        self.check()
+    }
+    /// Reserve a conservative estimate at an explicit SDK storage site before
+    /// allocating. This is not allocator-wide accounting. Footprint limits remain
+    /// separate; reservations are never refunds of retained data.
+    fn charge_allocation(&self, _bytes: usize) -> Result<(), Failure> {
+        self.check()
+    }
+    /// Keep an exhausted nested allocation allowance sticky in every enclosing
+    /// attempt. Ordinary cancellation controls have no allocation state.
+    fn allocation_limit_reached(&self) {}
+    /// Observe an enclosing exhausted allocation allowance without performing
+    /// another work charge. This prevents a child continuing after its parent
+    /// refused a reservation.
+    fn allocation_is_exhausted(&self) -> bool {
+        false
+    }
 }
 impl<F: Fn() -> bool + Send + Sync> Control for F {
     fn is_cancelled(&self) -> bool {
@@ -162,4 +199,12 @@ impl std::fmt::Debug for ProjectedResource {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ProjectedResource").finish_non_exhaustive()
     }
+}
+
+/// Private SDK bridge used by evaluator adapters to reuse an original inventory.
+/// This internal package is version-locked to the SDK, not an extension API.
+#[doc(hidden)]
+pub trait OriginalEnvironment {
+    fn space(&self) -> &SchemaSpace;
+    fn entry(&self) -> usize;
 }

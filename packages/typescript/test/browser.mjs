@@ -32,10 +32,9 @@ const requests = JSON.parse(
 const files = new Map();
 await usingExampleFiles(packageRoot, files);
 for (const name of [
-  "index.js",
-  "testing.js",
-  "internal.js",
-  "http-discovery.js",
+  ...(await fs.readdir(path.join(packageRoot, "dist")))
+    .filter((name) => name.endsWith(".js"))
+    .sort(),
   "wasm/openbindings_wasm.js",
   "wasm/openbindings_wasm_signature.js",
   "wasm/openbindings_wasm_bg.wasm",
@@ -76,6 +75,52 @@ files.set(
   "/observer.mjs",
   await fs.readFile(
     path.join(root, "tools/qualification/replay/sdk-observe.mjs"),
+  ),
+);
+files.set(
+  "/execution-frames.mjs",
+  await fs.readFile(path.join(packageRoot, "test/execution-frames.mjs")),
+);
+files.set(
+  "/compiled-depth.mjs",
+  await fs.readFile(path.join(packageRoot, "test/compiled-depth.mjs")),
+);
+files.set(
+  "/reference-preparation.mjs",
+  await fs.readFile(path.join(packageRoot, "test/reference-preparation.mjs")),
+);
+files.set(
+  "/syntax-facts.mjs",
+  await fs.readFile(path.join(packageRoot, "test/syntax-facts.mjs")),
+);
+files.set(
+  "/pattern-cache.mjs",
+  await fs.readFile(path.join(packageRoot, "test/pattern-cache.mjs")),
+);
+files.set(
+  "/exact-pointers.mjs",
+  await fs.readFile(path.join(packageRoot, "test/exact-pointers.mjs")),
+);
+files.set(
+  "/original-explain.mjs",
+  await fs.readFile(path.join(packageRoot, "test/original-explain.mjs")),
+);
+files.set(
+  "/original-explain-controls.json",
+  await fs.readFile(
+    path.join(
+      root,
+      "crates/openbindings-json-schema-evaluator/src/semantic/explain/controls.json",
+    ),
+  ),
+);
+files.set(
+  "/syntax-facts-input.json",
+  await fs.readFile(
+    path.join(
+      root,
+      "crates/openbindings-json-schema-evaluator/src/semantic/construction/shared-meta-input.json",
+    ),
   ),
 );
 files.set(
@@ -129,6 +174,15 @@ try {
         { diagnosticBudgetCases } = await import(
           "/diagnostic-budget-cases.mjs"
         );
+      const { executionFrameCases } = await import("/execution-frames.mjs");
+      const { compiledDepthCases } = await import("/compiled-depth.mjs");
+      const { referencePreparationCases } = await import(
+        "/reference-preparation.mjs"
+      );
+      const { syntaxFactCases } = await import("/syntax-facts.mjs");
+      const syntaxInput = await (
+        await fetch("/syntax-facts-input.json")
+      ).json();
       await sdk.initialize();
       const run = (list) =>
         list.map((request) => {
@@ -141,6 +195,23 @@ try {
       return {
         core: run(requests.core),
         suite: run(requests.suite),
+        executionFrames: executionFrameCases(sdk),
+        compiledDepth: compiledDepthCases(sdk),
+        referencePreparation: referencePreparationCases(sdk),
+        syntaxFacts: syntaxFactCases(sdk, syntaxInput),
+        originalExplain: (
+          await import("/original-explain.mjs")
+        ).originalExplainCases(
+          sdk,
+          await (await fetch("/original-explain-controls.json")).json(),
+          await import("/dist/testing.js"),
+        ),
+        exactPointers: (await import("/exact-pointers.mjs")).exactPointerCases(
+          sdk,
+        ),
+        patternCaches: (await import("/pattern-cache.mjs")).patternCacheCases(
+          sdk,
+        ),
         fixedDiagnostics: fixedDiagnosticCases(sdk),
         ...diagnosticBudgetCases(sdk),
       };
@@ -202,6 +273,34 @@ try {
   await fs.writeFile(
     path.join(output, "evaluator.json"),
     JSON.stringify(result.suite, null, 2),
+  );
+  await fs.writeFile(
+    path.join(output, "execution-frames.json"),
+    JSON.stringify(result.executionFrames, null, 2),
+  );
+  await fs.writeFile(
+    path.join(output, "compiled-depth.json"),
+    JSON.stringify(result.compiledDepth, null, 2),
+  );
+  await fs.writeFile(
+    path.join(output, "reference-preparation.json"),
+    JSON.stringify(result.referencePreparation, null, 2),
+  );
+  await fs.writeFile(
+    path.join(output, "syntax-facts.json"),
+    JSON.stringify(result.syntaxFacts, null, 2),
+  );
+  await fs.writeFile(
+    path.join(output, "pattern-cache.json"),
+    JSON.stringify(result.patternCaches, null, 2),
+  );
+  await fs.writeFile(
+    path.join(output, "exact-pointers.json"),
+    JSON.stringify(result.exactPointers, null, 2),
+  );
+  await fs.writeFile(
+    path.join(output, "original-explain.json"),
+    JSON.stringify(result.originalExplain, null, 2),
   );
   await fs.writeFile(
     path.join(output, "host.json"),

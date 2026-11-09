@@ -1,430 +1,331 @@
-// Cancellation and lifecycle regressions for the operation invoker.
-#[cfg(test)]
-mod tests {
-    use openbindings::{
-        Document, JsonValue, NoVerdict, PreparedSchema, ResourceSet, SchemaEvaluator,
-        SchemaRequest, ValueOutcome, ValueProblem,
-    };
-    use openbindings_invocation::CancellationToken;
-    use openbindings_invocation::{
-        BindingRequest, InvocationError, ProviderIo,
-        binding::BindingInvoker,
-        operation::{Invoker, Request},
-    };
-    use std::{
-        future::{Future, poll_fn},
-        pin::Pin,
-        sync::{
-            Arc, Barrier,
-            atomic::{AtomicBool, Ordering},
-        },
-        task::{Context, Poll, Waker},
-        time::{Duration, Instant},
-    };
-
-    fn doc() -> Document {
-        Document::parse(r#"{"openbindings":"0.2.0","operations":{"run":{"input":true}},"bindings":{"b":{"operation":"run","source":"s"}},"sources":{"s":{"kind":"test"}}}"#).unwrap()
+//! Cancellation reaches synchronous work and never changes an earlier terminal.
+use openbindings::{
+    ConformantDocument, Detail, Document, EvaluationRequest, ExternalSchemas, JsonValue,
+    PreparationFailure, PreparationLimits, SchemaEvaluator, SchemaValidator, ValueOutcome,
+    WorkControl,
+};
+use openbindings_invocation::{
+    BindingInvoker, BindingRequest, CancellationToken, DefaultOperationInvoker, InvocationError,
+    InvocationSupport, OperationRequest, OutputEvent, PreflightOutcome, ProviderIo,
+};
+use std::{
+    future::{Future, poll_fn},
+    pin::{Pin, pin},
+    sync::{
+        Arc, Barrier,
+        atomic::{AtomicBool, Ordering},
+    },
+    task::{Context, Poll, Waker},
+    time::{Duration, Instant},
+};
+fn doc() -> ConformantDocument {
+    Document::parse(r#"{"openbindings":"0.2.0","operations":{"run":{"input":true}},"bindings":{"b":{"operation":"run","source":"s"}},"sources":{"s":{"kind":"test"}}}"#).unwrap().validate().unwrap().conformant().unwrap()
+}
+fn poll<F: Future>(future: Pin<&mut F>) -> Poll<F::Output> {
+    future.poll(&mut Context::from_waker(Waker::noop()))
+}
+fn terminal(result: Poll<Option<OutputEvent>>) -> InvocationError {
+    match result {
+        Poll::Ready(Some(OutputEvent::Error(error))) => error,
+        other => panic!("terminal required: {other:?}"),
     }
-    struct Evaluator {
-        barrier: Option<Arc<Barrier>>,
-        saw_cancel: Arc<AtomicBool>,
+}
+#[derive(Clone, Copy)]
+enum Stage {
+    Preparation,
+    Evaluation,
+}
+struct Evaluator {
+    barrier: Option<Arc<Barrier>>,
+    saw_cancel: Arc<AtomicBool>,
+    stage: Stage,
+}
+struct Prepared {
+    barrier: Option<Arc<Barrier>>,
+    saw_cancel: Arc<AtomicBool>,
+}
+fn observe(barrier: &Barrier, control: &dyn WorkControl, saw: &AtomicBool) {
+    barrier.wait();
+    let until = Instant::now() + Duration::from_secs(3);
+    while Instant::now() < until && !control.is_cancelled() {
+        std::thread::yield_now();
     }
-    struct Prepared {
-        barrier: Option<Arc<Barrier>>,
-        saw_cancel: Arc<AtomicBool>,
-        schema: openbindings::SchemaLocation,
-    }
-    impl SchemaEvaluator for Evaluator {
-        fn prepare(
-            &self,
-            request: &SchemaRequest,
-            _: &dyn openbindings::WorkControl,
-        ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
-            Ok(Arc::new(Prepared {
-                barrier: self.barrier.clone(),
-                saw_cancel: self.saw_cancel.clone(),
-                schema: request.entry_location(),
-            }))
-        }
-    }
-    impl PreparedSchema for Prepared {
-        fn validate(
-            &self,
-            _: &JsonValue,
-            _: openbindings::Detail,
-            c: &dyn openbindings::WorkControl,
-        ) -> ValueOutcome {
-            if let Some(barrier) = &self.barrier {
-                barrier.wait();
-                let until = Instant::now() + Duration::from_secs(2);
-                while Instant::now() < until {
-                    if c.is_cancelled() {
-                        self.saw_cancel.store(true, Ordering::SeqCst);
-                        break;
-                    }
-                    std::thread::yield_now();
-                }
-            }
-            ValueOutcome::Fails {
-                message: "value does not satisfy the value contract".into(),
-                problems: vec![ValueProblem::new(
-                    "".parse().unwrap(),
-                    self.schema.clone(),
-                    "test.false",
-                    "reject",
-                )],
-                problems_complete: true,
-            }
-        }
-    }
-    struct Provider {
-        repeat_poll: bool,
-        eof: Arc<AtomicBool>,
-    }
-    impl BindingInvoker for Provider {
-        type Invocation<'a> =
-            Pin<Box<dyn Future<Output = Result<(), InvocationError>> + Send + 'a>>;
-        fn supports_kind(&self, k: &str) -> bool {
-            k == "test"
-        }
-        fn invoke<'a>(
-            &'a self,
-            _: BindingRequest<'a>,
-            mut io: ProviderIo,
-            _: CancellationToken,
-        ) -> Self::Invocation<'a> {
-            Box::pin(async move {
-                let value = if self.repeat_poll {
-                    let mut next = std::pin::pin!(io.next());
-                    poll_fn(|cx| match next.as_mut().poll(cx) {
-                        Poll::Ready(value) => Poll::Ready(value),
-                        Poll::Pending => next.as_mut().poll(cx),
-                    })
-                    .await
-                } else {
-                    io.next().await
-                };
-                if value.is_none() {
-                    self.eof.store(true, Ordering::SeqCst);
-                }
-                Ok(())
-            })
-        }
-    }
-    #[test]
-    fn external_cancel_reaches_cooperative_evaluator() {
-        let barrier = Arc::new(Barrier::new(2));
-        let saw_cancel = Arc::new(AtomicBool::new(false));
-        let invoker = Invoker::new(
-            doc().validate().unwrap().conformant().unwrap(),
-            Provider {
-                repeat_poll: false,
-                eof: Arc::default(),
-            },
-        )
-        .with_evaluator(
-            Arc::new(Evaluator {
-                barrier: Some(barrier.clone()),
-                saw_cancel: saw_cancel.clone(),
-            }),
-            ResourceSet::default(),
-        );
-        let control = CancellationToken::new();
-        let mut call = invoker.invoke_with_control(Request::binding("b"), &control);
-        assert!(
-            std::pin::pin!(call.write(JsonValue::null()))
-                .poll(&mut Context::from_waker(Waker::noop()))
-                .is_ready()
-        );
-        let cancelling = std::thread::spawn(move || {
-            barrier.wait();
-            control.cancel();
-        });
-        let result = std::pin::pin!(call.next()).poll(&mut Context::from_waker(Waker::noop()));
-        cancelling.join().unwrap();
-        let Poll::Ready(result) = result else {
-            panic!("terminal must be ready")
-        };
-        assert_eq!(result.unwrap().unwrap_err().code(), "ERR_CANCELLED");
-        assert!(
-            saw_cancel.load(Ordering::SeqCst),
-            "external cancellation should be observable by cooperative evaluator"
-        );
-        assert!(
-            call.validation_failure().is_none(),
-            "the losing evaluator failure must not attach evidence to cancellation"
-        );
-        assert!(call.control().validation_failure().is_none());
-    }
-    #[test]
-    fn rejected_input_cannot_turn_into_eof_on_second_poll() {
-        let eof = Arc::new(AtomicBool::new(false));
-        let invoker = Invoker::new(
-            doc().validate().unwrap().conformant().unwrap(),
-            Provider {
-                repeat_poll: true,
-                eof: eof.clone(),
-            },
-        )
-        .with_evaluator(
-            Arc::new(Evaluator {
-                barrier: None,
-                saw_cancel: Arc::default(),
-            }),
-            ResourceSet::default(),
-        );
-        let mut call = invoker.invoke(Request::binding("b"));
-        assert!(
-            std::pin::pin!(call.write(JsonValue::null()))
-                .poll(&mut Context::from_waker(Waker::noop()))
-                .is_ready()
-        );
-        let result = std::pin::pin!(call.next()).poll(&mut Context::from_waker(Waker::noop()));
-        let Poll::Ready(result) = result else {
-            panic!("terminal must be ready")
-        };
-        assert_eq!(
-            result.unwrap().unwrap_err().code(),
-            "ERR_OPERATION_VALIDATION_FAILED"
-        );
-        assert!(
-            !eof.load(Ordering::SeqCst),
-            "rejected input was observed by provider as clean EOF"
-        );
-    }
-    struct CancelThenComplete(CancellationToken);
-    impl BindingInvoker for CancelThenComplete {
-        type Invocation<'a> =
-            Pin<Box<dyn Future<Output = Result<(), InvocationError>> + Send + 'a>>;
-        fn supports_kind(&self, k: &str) -> bool {
-            k == "test"
-        }
-        fn invoke<'a>(
-            &'a self,
-            _: BindingRequest<'a>,
-            _: ProviderIo,
-            local: CancellationToken,
-        ) -> Self::Invocation<'a> {
-            Box::pin(async move {
-                self.0.cancel();
-                assert!(local.is_cancelled());
-                Ok(())
-            })
-        }
-        fn preflight<'a>(
-            &'a self,
-            _: BindingRequest<'a>,
-            local: CancellationToken,
-        ) -> Option<Self::Invocation<'a>> {
-            Some(Box::pin(async move {
-                self.0.cancel();
-                assert!(local.is_cancelled());
-                Ok(())
-            }))
-        }
-    }
-
-    #[test]
-    fn cancellation_during_poll_overrides_ready_provider_success() {
-        let external = CancellationToken::new();
-        let invoker = Invoker::new(
-            doc().validate().unwrap().conformant().unwrap(),
-            CancelThenComplete(external.clone()),
-        );
-        let mut call = invoker.invoke_with_control(Request::binding("b"), &external);
-        let result = std::pin::pin!(call.next()).poll(&mut Context::from_waker(Waker::noop()));
-        let Poll::Ready(result) = result else {
-            panic!("terminal must be ready")
-        };
-        assert_eq!(result.unwrap().unwrap_err().code(), "ERR_CANCELLED");
-        assert_eq!(call.outcome().unwrap().unwrap_err().code(), "ERR_CANCELLED");
-        assert!(call.validation_failure().is_none());
-        assert!(external.is_cancelled());
-    }
-
-    #[test]
-    fn cancellation_during_poll_overrides_ready_preflight_success() {
-        let external = CancellationToken::new();
-        let invoker = Invoker::new(
-            doc().validate().unwrap().conformant().unwrap(),
-            CancelThenComplete(external.clone()),
-        );
-        let result =
-            std::pin::pin!(invoker.preflight_with_control(Request::binding("b"), &external))
-                .poll(&mut Context::from_waker(Waker::noop()));
-        let Poll::Ready(result) = result else {
-            panic!("preflight must be ready")
-        };
-        assert_eq!(result.unwrap_err().code(), "ERR_CANCELLED");
-        assert!(external.is_cancelled());
-    }
-    struct RejectOutputThenCancel(CancellationToken);
-    impl BindingInvoker for RejectOutputThenCancel {
-        type Invocation<'a> =
-            Pin<Box<dyn Future<Output = Result<(), InvocationError>> + Send + 'a>>;
-        fn supports_kind(&self, k: &str) -> bool {
-            k == "test"
-        }
-        fn invoke<'a>(
-            &'a self,
-            _: BindingRequest<'a>,
-            mut io: ProviderIo,
-            _: CancellationToken,
-        ) -> Self::Invocation<'a> {
-            Box::pin(async move {
-                assert_eq!(
-                    io.emit(JsonValue::null()).await.unwrap_err().code(),
-                    "ERR_OPERATION_VALIDATION_FAILED"
-                );
-                self.0.cancel();
-                Ok(())
-            })
-        }
-    }
-    #[test]
-    fn already_settled_validation_keeps_its_evidence_when_external_cancel_follows() {
-        let external = CancellationToken::new();
-        let document=Document::parse(r#"{"openbindings":"0.2.0","operations":{"run":{"output":true}},"bindings":{"b":{"operation":"run","source":"s"}},"sources":{"s":{"kind":"test"}}}"#).unwrap();
-        let invoker = Invoker::new(
-            document.validate().unwrap().conformant().unwrap(),
-            RejectOutputThenCancel(external.clone()),
-        )
-        .with_evaluator(
-            Arc::new(Evaluator {
-                barrier: None,
-                saw_cancel: Arc::default(),
-            }),
-            ResourceSet::default(),
-        );
-        let mut call = invoker.invoke_with_control(Request::binding("b"), &external);
-        let result = std::pin::pin!(call.next()).poll(&mut Context::from_waker(Waker::noop()));
-        let Poll::Ready(result) = result else {
-            panic!("terminal must be ready")
-        };
-        assert_eq!(
-            result.unwrap().unwrap_err().code(),
-            "ERR_OPERATION_VALIDATION_FAILED"
-        );
-        assert!(external.is_cancelled());
-        let evidence = call.validation_failure().unwrap();
-        assert_eq!(
-            evidence.direction(),
-            openbindings_invocation::operation::Direction::Output
-        );
-        assert!(matches!(evidence.outcome(), ValueOutcome::Fails { .. }));
-        let control = call.control();
-        control.cancel();
-        assert_eq!(
-            control.outcome().unwrap().unwrap_err().code(),
-            "ERR_OPERATION_VALIDATION_FAILED"
-        );
-        assert!(Arc::ptr_eq(
-            &evidence,
-            &control.validation_failure().unwrap()
-        ));
-        assert!(matches!(
-            std::pin::pin!(call.next()).poll(&mut Context::from_waker(Waker::noop())),
-            Poll::Ready(None)
-        ));
-    }
-
-    struct Preparing(Arc<Barrier>);
-    impl SchemaEvaluator for Preparing {
-        fn prepare(
-            &self,
-            _: &SchemaRequest,
-            control: &dyn openbindings::WorkControl,
-        ) -> Result<Arc<dyn PreparedSchema>, NoVerdict> {
-            self.0.wait();
-            let until = Instant::now() + Duration::from_secs(5);
-            while !control.is_cancelled() && Instant::now() < until {
-                std::thread::yield_now();
-            }
-            assert!(
-                control.is_cancelled(),
-                "relay must reach synchronous preparation"
-            );
+    saw.store(control.is_cancelled(), Ordering::SeqCst);
+    assert!(
+        saw.load(Ordering::SeqCst),
+        "synchronous cooperative work must observe external cancellation"
+    );
+}
+impl SchemaEvaluator for Evaluator {
+    type Validator = Prepared;
+    fn prepare(
+        &self,
+        _: EvaluationRequest<'_>,
+        _: &PreparationLimits,
+        control: &dyn WorkControl,
+    ) -> Result<Self::Validator, PreparationFailure> {
+        if matches!(self.stage, Stage::Preparation)
+            && let Some(barrier) = &self.barrier
+        {
+            observe(barrier, control, &self.saw_cancel);
             control.check()?;
-            unreachable!()
+        }
+        Ok(Prepared {
+            barrier: self
+                .barrier
+                .clone()
+                .filter(|_| matches!(self.stage, Stage::Evaluation)),
+            saw_cancel: self.saw_cancel.clone(),
+        })
+    }
+}
+impl SchemaValidator for Prepared {
+    fn evaluate(&self, _: &JsonValue, _: Detail, control: &dyn WorkControl) -> ValueOutcome {
+        if let Some(barrier) = &self.barrier {
+            observe(barrier, control, &self.saw_cancel);
+        }
+        ValueOutcome::Fails {
+            message: "fixture mismatch".into(),
+            problems: vec![],
+            problems_complete: false,
         }
     }
-    #[test]
-    fn external_cancel_reaches_preparation_in_current_poll() {
-        let barrier = Arc::new(Barrier::new(2));
-        let invoker = Invoker::new(
-            doc().validate().unwrap().conformant().unwrap(),
-            Provider {
-                repeat_poll: false,
-                eof: Arc::default(),
-            },
+}
+struct Provider {
+    repeat_poll: bool,
+    eof: Arc<AtomicBool>,
+}
+impl InvocationSupport for Provider {
+    fn can_invoke(&self, _: &str) -> bool {
+        true
+    }
+}
+impl BindingInvoker for Provider {
+    type Invoke<'a> = Pin<Box<dyn Future<Output = Result<(), InvocationError>> + Send + 'a>>;
+    type Preflight<'a> = std::future::Ready<Result<PreflightOutcome, InvocationError>>;
+    fn handle_invoke<'a>(
+        &'a self,
+        _: BindingRequest,
+        mut io: ProviderIo,
+        _: CancellationToken,
+    ) -> Self::Invoke<'a> {
+        Box::pin(async move {
+            let value = if self.repeat_poll {
+                let mut read = pin!(io.next());
+                poll_fn(|cx| match read.as_mut().poll(cx) {
+                    Poll::Ready(value) => Poll::Ready(value),
+                    Poll::Pending => read.as_mut().poll(cx),
+                })
+                .await
+            } else {
+                io.next().await
+            };
+            if value.is_none() {
+                self.eof.store(true, Ordering::SeqCst);
+            }
+            Ok(())
+        })
+    }
+    fn handle_preflight<'a>(
+        &'a self,
+        _: BindingRequest,
+        _: CancellationToken,
+    ) -> Self::Preflight<'a> {
+        std::future::ready(Ok(PreflightOutcome::NoPrediction))
+    }
+}
+fn concurrent_cancel(stage: Stage) {
+    let barrier = Arc::new(Barrier::new(2));
+    let saw_cancel = Arc::new(AtomicBool::new(false));
+    let eof = Arc::new(AtomicBool::new(false));
+    let client = DefaultOperationInvoker::new(
+        Provider {
+            repeat_poll: false,
+            eof: eof.clone(),
+        },
+        Evaluator {
+            barrier: Some(barrier.clone()),
+            saw_cancel: saw_cancel.clone(),
+            stage,
+        },
+        ExternalSchemas::default(),
+    );
+    let external = CancellationToken::new();
+    let call = client
+        .invoke(OperationRequest::binding(doc(), "b"), external.clone())
+        .unwrap();
+    let control = call.control();
+    let (mut input, mut output) = call.split();
+    assert!(poll(pin!(input.send(JsonValue::null()))).is_ready());
+    let thread = std::thread::spawn(move || {
+        barrier.wait();
+        external.cancel();
+    });
+    let result = poll(pin!(output.next()));
+    thread.join().unwrap();
+    assert_eq!(terminal(result).code(), "ERR_CANCELLED");
+    assert!(saw_cancel.load(Ordering::SeqCst));
+    assert!(control.validation_failure().is_none());
+    assert!(!eof.load(Ordering::SeqCst));
+}
+#[test]
+fn external_cancel_reaches_cooperative_evaluator() {
+    concurrent_cancel(Stage::Evaluation);
+}
+#[test]
+fn external_cancel_reaches_preparation_in_current_poll() {
+    concurrent_cancel(Stage::Preparation);
+}
+#[test]
+fn rejected_input_cannot_turn_into_eof_on_second_poll() {
+    let eof = Arc::new(AtomicBool::new(false));
+    let client = DefaultOperationInvoker::new(
+        Provider {
+            repeat_poll: true,
+            eof: eof.clone(),
+        },
+        Evaluator {
+            barrier: None,
+            saw_cancel: Arc::default(),
+            stage: Stage::Evaluation,
+        },
+        ExternalSchemas::default(),
+    );
+    let (mut input, mut output) = client
+        .invoke(
+            OperationRequest::binding(doc(), "b"),
+            CancellationToken::new(),
         )
-        .with_evaluator(Arc::new(Preparing(barrier.clone())), ResourceSet::default());
-        let external = CancellationToken::new();
-        let mut call = invoker.invoke_with_control(Request::binding("b"), &external);
-        assert!(
-            std::pin::pin!(call.write(JsonValue::null()))
-                .poll(&mut Context::from_waker(Waker::noop()))
-                .is_ready()
-        );
-        let thread = std::thread::spawn(move || {
-            barrier.wait();
-            external.cancel();
-        });
-        let result = std::pin::pin!(call.next()).poll(&mut Context::from_waker(Waker::noop()));
-        thread.join().unwrap();
-        assert!(matches!(result, Poll::Ready(Some(Err(e))) if e.code() == "ERR_CANCELLED"));
-        assert!(call.validation_failure().is_none());
+        .unwrap()
+        .split();
+    assert!(poll(pin!(input.send(JsonValue::null()))).is_ready());
+    assert_eq!(
+        terminal(poll(pin!(output.next()))).code(),
+        "ERR_OPERATION_VALIDATION_FAILED"
+    );
+    assert!(!eof.load(Ordering::SeqCst));
+}
+struct CancelThenComplete {
+    external: CancellationToken,
+    synchronous: bool,
+}
+impl InvocationSupport for CancelThenComplete {
+    fn can_invoke(&self, _: &str) -> bool {
+        true
     }
-
-    struct CancelDuringStart(CancellationToken);
-    impl BindingInvoker for CancelDuringStart {
-        type Invocation<'a> = std::future::Ready<Result<(), InvocationError>>;
-        fn supports_kind(&self, _: &str) -> bool {
-            true
+}
+impl BindingInvoker for CancelThenComplete {
+    type Invoke<'a> = Pin<Box<dyn Future<Output = Result<(), InvocationError>> + Send + 'a>>;
+    type Preflight<'a> =
+        Pin<Box<dyn Future<Output = Result<PreflightOutcome, InvocationError>> + Send + 'a>>;
+    fn handle_invoke<'a>(
+        &'a self,
+        _: BindingRequest,
+        _: ProviderIo,
+        local: CancellationToken,
+    ) -> Self::Invoke<'a> {
+        if self.synchronous {
+            self.external.cancel();
+            assert!(local.is_cancelled());
         }
-        fn invoke<'a>(
-            &'a self,
-            _: BindingRequest<'a>,
-            _: ProviderIo,
-            local: CancellationToken,
-        ) -> Self::Invocation<'a> {
-            self.0.cancel();
-            assert!(local.is_cancelled(), "relay must be installed before start");
-            std::future::ready(Ok(()))
-        }
-        fn preflight<'a>(
-            &'a self,
-            _: BindingRequest<'a>,
-            local: CancellationToken,
-        ) -> Option<Self::Invocation<'a>> {
-            self.0.cancel();
-            assert!(
-                local.is_cancelled(),
-                "relay must be installed before preflight start"
-            );
-            Some(std::future::ready(Ok(())))
-        }
+        Box::pin(async move {
+            self.external.cancel();
+            assert!(local.is_cancelled());
+            Ok(())
+        })
     }
-    #[test]
-    fn synchronous_provider_and_preflight_start_observe_relay() {
-        let external = CancellationToken::new();
-        let invoker = Invoker::new(
-            doc().validate().unwrap().conformant().unwrap(),
-            CancelDuringStart(external.clone()),
-        );
-        let mut call = invoker.invoke_with_control(Request::binding("b"), &external);
-        assert!(
-            matches!(std::pin::pin!(call.next()).poll(&mut Context::from_waker(Waker::noop())),
-            Poll::Ready(Some(Err(e))) if e.code() == "ERR_CANCELLED")
-        );
-        let external = CancellationToken::new();
-        let invoker = Invoker::new(
-            doc().validate().unwrap().conformant().unwrap(),
-            CancelDuringStart(external.clone()),
-        );
-        assert!(
-            matches!(std::pin::pin!(invoker.preflight_with_control(Request::binding("b"), &external))
-            .poll(&mut Context::from_waker(Waker::noop())), Poll::Ready(Err(e)) if e.code() == "ERR_CANCELLED")
-        );
+    fn handle_preflight<'a>(
+        &'a self,
+        _: BindingRequest,
+        local: CancellationToken,
+    ) -> Self::Preflight<'a> {
+        if self.synchronous {
+            self.external.cancel();
+            assert!(local.is_cancelled());
+        }
+        Box::pin(async move {
+            self.external.cancel();
+            assert!(local.is_cancelled());
+            Ok(PreflightOutcome::NoPrediction)
+        })
     }
+}
+fn cancellation_overrides_success(synchronous: bool, preflight: bool) {
+    let external = CancellationToken::new();
+    let client = DefaultOperationInvoker::new(
+        CancelThenComplete {
+            external: external.clone(),
+            synchronous,
+        },
+        Evaluator {
+            barrier: None,
+            saw_cancel: Arc::default(),
+            stage: Stage::Evaluation,
+        },
+        ExternalSchemas::default(),
+    );
+    if preflight {
+        let future = client
+            .preflight(OperationRequest::binding(doc(), "b"), external.clone())
+            .unwrap();
+        assert!(
+            matches!(poll(pin!(future)),Poll::Ready(Err(error)) if error.code()=="ERR_CANCELLED")
+        );
+    } else {
+        let call = client
+            .invoke(OperationRequest::binding(doc(), "b"), external.clone())
+            .unwrap();
+        let control = call.control();
+        let (_, mut output) = call.split();
+        assert_eq!(terminal(poll(pin!(output.next()))).code(), "ERR_CANCELLED");
+        assert!(control.validation_failure().is_none());
+    }
+    assert!(external.is_cancelled());
+}
+#[test]
+fn cancellation_during_poll_overrides_ready_provider_success() {
+    cancellation_overrides_success(false, false);
+}
+#[test]
+fn cancellation_during_poll_overrides_ready_preflight_success() {
+    cancellation_overrides_success(false, true);
+}
+#[test]
+fn synchronous_provider_and_preflight_start_observe_relay() {
+    cancellation_overrides_success(true, false);
+    cancellation_overrides_success(true, true);
+}
+#[test]
+fn already_settled_validation_keeps_its_evidence_when_external_cancel_follows() {
+    let external = CancellationToken::new();
+    let client = DefaultOperationInvoker::new(
+        Provider {
+            repeat_poll: false,
+            eof: Arc::default(),
+        },
+        Evaluator {
+            barrier: None,
+            saw_cancel: Arc::default(),
+            stage: Stage::Evaluation,
+        },
+        ExternalSchemas::default(),
+    );
+    let call = client
+        .invoke(OperationRequest::binding(doc(), "b"), external.clone())
+        .unwrap();
+    let control = call.control();
+    let (mut input, mut output) = call.split();
+    assert!(poll(pin!(input.send(JsonValue::null()))).is_ready());
+    assert_eq!(
+        terminal(poll(pin!(output.next()))).code(),
+        "ERR_OPERATION_VALIDATION_FAILED"
+    );
+    let before = control.validation_failure().unwrap();
+    external.cancel();
+    control.cancel();
+    assert_eq!(
+        control.outcome().unwrap().unwrap_err().code(),
+        "ERR_OPERATION_VALIDATION_FAILED"
+    );
+    assert!(Arc::ptr_eq(&before, &control.validation_failure().unwrap()));
 }

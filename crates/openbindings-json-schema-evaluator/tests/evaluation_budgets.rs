@@ -1,10 +1,12 @@
-//! Evaluation work is uncapped unless the application sets a cap, which then
-//! applies to every pass whatever the value's size; exhausted depth is
-//! reported as such.
+//! Evaluation work has no default cap. A caller-selected cap covers every
+//! pass; storage admission and cooperative cancellation remain separate.
 use openbindings::*;
 use openbindings_json_schema_evaluator::{DefaultEvaluator, Limits};
 
-fn prepared(schema: &str, limits: Limits) -> PreparedValueContract {
+fn prepared(
+    schema: &str,
+    limits: Limits,
+) -> PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator> {
     let text = format!(r#"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{schema}}}}}}}"#);
     let proof = Document::parse(text)
         .unwrap()
@@ -16,7 +18,11 @@ fn prepared(schema: &str, limits: Limits) -> PreparedValueContract {
     operation
         .input()
         .unwrap()
-        .prepare(&DefaultEvaluator::with_limits(limits))
+        .prepare(
+            &DefaultEvaluator::with_limits(limits),
+            &openbindings::ExternalSchemas::default(),
+            &openbindings::PreparationLimits::default(),
+        )
         .unwrap()
 }
 fn code(outcome: &ValueOutcome) -> Option<&str> {
@@ -27,26 +33,54 @@ fn code(outcome: &ValueOutcome) -> Option<&str> {
 }
 
 const SCHEMA: &str = r#"{"type":"array","items":{"type":"integer","minimum":0}}"#;
-// Under a cap, two units per element: reading it and entering its schema.
+// Large values exercise traversal and primitive work under one allowance.
 const ITEMS: usize = 700_000;
 fn large() -> JsonValue {
     JsonValue::parse(format!("[{}0]", "1,".repeat(ITEMS - 1))).unwrap()
 }
-fn explicit(steps: usize) -> PreparedValueContract {
+fn explicit(steps: usize) -> PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator> {
     prepared(
         SCHEMA,
         Limits {
-            evaluation_steps: Some(steps),
+            evaluation_sdk_work_units: Some(steps),
             ..Limits::default()
         },
     )
 }
 
 #[test]
+fn repeated_root_proofs_fit_a_small_reservation_without_copying_empty_storage() {
+    let references = vec![r##"{"$ref":"#/$defs/leaf"}"##; 5000].join(",");
+    let schema = format!(
+        r#"{{"$id":"https://budget.example/root","$defs":{{"leaf":{{"type":"integer"}}}},"allOf":[{references}]}}"#
+    );
+    let contract = prepared(
+        &schema,
+        Limits {
+            evaluation_sdk_reservation_bytes: 64 * 1024,
+            ..Limits::default()
+        },
+    );
+    for (text, satisfies) in [("1", true), (r#""wrong""#, false)] {
+        let value = JsonValue::parse(text).unwrap();
+        for outcome in [contract.evaluate(&value), contract.explain(&value)] {
+            assert!(
+                matches!(
+                    outcome,
+                    ValueOutcome::Satisfies | ValueOutcome::Fails { .. }
+                ),
+                "{text}: {outcome:?}"
+            );
+            assert_eq!(matches!(outcome, ValueOutcome::Satisfies), satisfies);
+        }
+    }
+}
+
+#[test]
 fn uncapped_evaluation_decides_large_values() {
     let defaults = prepared(SCHEMA, Limits::default());
     assert!(matches!(
-        defaults.validate(&large()),
+        defaults.evaluate(&large()),
         ValueOutcome::Satisfies
     ));
     let failing = JsonValue::parse(format!("[{}-1]", "1,".repeat(ITEMS - 1))).unwrap();
@@ -68,18 +102,23 @@ fn explicit_caps_bracket_a_checks_work_and_the_default_sets_none() {
     let (cheaper, costlier) = (all_of(6), all_of(29));
     // The array and its elements: 4 x 65,536 nodes.
     let value = JsonValue::parse(format!("[{}0]", "1,".repeat(4 * 65_536 - 2))).unwrap();
-    let outcome = |schema: &str, limits| prepared(schema, limits).validate(&value);
+    let outcome = |schema: &str, limits| prepared(schema, limits).evaluate(&value);
     let capped = |steps| Limits {
-        evaluation_steps: Some(steps),
+        evaluation_sdk_work_units: Some(steps),
         ..Limits::default()
     };
-    // Bracket each check's need with explicit allowances.
+    // Original-engine work includes exact primitive and frame dispatch work.
+    // The values and expected semantics are unchanged; these generous caps
+    // bracket the current units (exact/one-below is covered separately).
     for (schema, enough, too_little) in [
-        (&cheaper, 8_000_000, 2_000_000),
-        (&costlier, 32_000_000, 8_000_000),
+        (&cheaper, 64_000_000, 2_000_000),
+        (&costlier, 256_000_000, 8_000_000),
     ] {
         let decided = outcome(schema, capped(enough));
-        assert!(matches!(decided, ValueOutcome::Satisfies));
+        assert!(
+            matches!(decided, ValueOutcome::Satisfies),
+            "{enough}: {decided:?}"
+        );
         let refused = outcome(schema, capped(too_little));
         assert_eq!(code(&refused), Some("evaluation-work-limit"));
     }
@@ -93,21 +132,70 @@ fn explicit_caps_bracket_a_checks_work_and_the_default_sets_none() {
 }
 
 #[test]
+fn evaluation_allowance_serialization_uses_only_current_names() {
+    use serde_json::json;
+    let defaults = serde_json::to_value(Limits::default()).unwrap();
+    assert_eq!(defaults["evaluation_sdk_work_units"], json!(null));
+    assert_eq!(
+        defaults["evaluation_sdk_reservation_bytes"],
+        json!(48 << 20)
+    );
+    assert!(defaults.get("evaluation_steps").is_none());
+    assert!(defaults.get("program_bytes").is_none());
+    for work in [json!(null), json!(0), json!(17)] {
+        for bytes in [0, 41] {
+            let supplied = json!({
+                "evaluation_sdk_work_units": work,
+                "evaluation_sdk_reservation_bytes": bytes,
+            });
+            let limits: Limits = serde_json::from_value(supplied.clone()).unwrap();
+            let encoded = serde_json::to_value(limits).unwrap();
+            for (key, value) in supplied.as_object().unwrap() {
+                assert_eq!(&encoded[key], value);
+            }
+        }
+    }
+    for retired in ["evaluation_steps", "program_bytes"] {
+        for value in [json!(null), json!(0), json!(17)] {
+            let mut keys = json!({});
+            keys[retired] = value;
+            assert!(serde_json::from_value::<Limits>(keys.clone()).is_err());
+            keys["evaluation_sdk_work_units"] = json!(null);
+            keys["evaluation_sdk_reservation_bytes"] = json!(0);
+            assert!(serde_json::from_value::<Limits>(keys).is_err());
+        }
+    }
+    for invalid in [json!(null), json!(-1), json!(1.5), json!("41")] {
+        assert!(
+            serde_json::from_value::<Limits>(json!({
+                "evaluation_sdk_reservation_bytes": invalid,
+            }))
+            .is_err()
+        );
+    }
+    #[cfg(target_pointer_width = "64")]
+    assert_eq!(
+        serde_json::from_value::<Limits>(json!({"evaluation_sdk_work_units": 4_294_967_296u64}))
+            .unwrap()
+            .evaluation_sdk_work_units,
+        Some(4_294_967_296)
+    );
+}
+
+#[test]
 fn an_evaluator_reports_the_budgets_it_was_given() {
     let limits = Limits {
-        evaluation_steps: Some(7),
-        stack_bytes: 11,
-        compile_json_depth: 17,
+        evaluation_sdk_work_units: Some(7),
         pattern_bytes: 19,
         pattern_depth: 23,
         total_pattern_bytes: 31,
         total_pattern_memory: 37,
-        program_bytes: 41,
+        evaluation_sdk_reservation_bytes: 41,
         schema_resources: Some(29),
     };
     let evaluator = DefaultEvaluator::with_limits(limits);
     let reported = evaluator.limits();
-    assert_eq!(reported.evaluation_steps, Some(7));
+    assert_eq!(reported.evaluation_sdk_work_units, Some(7));
     assert_eq!(reported.schema_resources, Some(29));
     assert_eq!(reported.total_pattern_bytes, 31);
     assert_eq!(reported.total_pattern_memory, 37);
@@ -119,19 +207,18 @@ fn an_evaluator_reports_the_budgets_it_was_given() {
         DefaultEvaluator::new().limits().total_pattern_memory,
         64 << 20
     );
-    assert_eq!(reported.program_bytes, 41);
-    assert_eq!(DefaultEvaluator::new().limits().stack_bytes, 256 << 10);
-    assert_eq!(DefaultEvaluator::new().limits().program_bytes, 48 << 20);
+    assert_eq!(reported.evaluation_sdk_reservation_bytes, 41);
     assert_eq!(
-        (
-            reported.stack_bytes,
-            reported.compile_json_depth,
-            reported.pattern_bytes,
-            reported.pattern_depth
-        ),
-        (11, 17, 19, 23)
+        DefaultEvaluator::new()
+            .limits()
+            .evaluation_sdk_reservation_bytes,
+        48 << 20
     );
-    assert_eq!(DefaultEvaluator::new().limits().evaluation_steps, None);
+    assert_eq!((reported.pattern_bytes, reported.pattern_depth), (19, 23));
+    assert_eq!(
+        DefaultEvaluator::new().limits().evaluation_sdk_work_units,
+        None
+    );
     assert_eq!(DefaultEvaluator::new().limits().schema_resources, None);
 }
 
@@ -140,61 +227,50 @@ fn an_explicit_work_allowance_caps_every_pass_whatever_the_value_size() {
     let large = large();
     for steps in [1_000_000, 1_000, 0] {
         assert_eq!(
-            code(&explicit(steps).validate(&large)),
+            code(&explicit(steps).evaluate(&large)),
             Some("evaluation-work-limit")
         );
     }
     assert!(matches!(
-        explicit(1_000).validate(&JsonValue::parse("[1,2]").unwrap()),
+        explicit(1_000).evaluate(&JsonValue::parse("[1,2]").unwrap()),
         ValueOutcome::Satisfies
     ));
     // A cap above what the value needs decides it.
     assert!(matches!(
-        explicit(10_000_000).validate(&large),
+        explicit(64_000_000).evaluate(&large),
         ValueOutcome::Satisfies
     ));
-    // An exhausted explanation pass keeps the failure the verdict pass
-    // established.
+    // Preserve the former1.5M-unit request: the current evaluator now exhausts
+    // it before completing this large verdict. Funded evaluation still fails.
     let failing = JsonValue::parse(format!("[{}-1]", "1,".repeat(ITEMS - 1))).unwrap();
-    let capped = explicit(1_500_000);
-    assert!(matches!(
-        capped.explain(&failing),
-        ValueOutcome::Fails { problems, .. } if problems.len() == 1
-    ));
-}
-
-#[test]
-fn deep_values_report_the_depth_limit() {
-    let schema = r##"{"$defs":{"node":{"anyOf":[{"type":"integer"},{"type":"array","items":{"$ref":"#/operations/op/input/$defs/node"}}]}},"$ref":"#/operations/op/input/$defs/node"}"##;
-    let deep = JsonValue::parse(format!("{}0{}", "[".repeat(300), "]".repeat(300))).unwrap();
-    let defaults = prepared(schema, Limits::default());
-    // Ample work, but each level nests several evaluations: 1,024 nested
-    // evaluations fit the default stack, so values up to 203 levels deep are
-    // evaluated, and the refusal says why and what to raise.
-    let refused = defaults.validate(&deep);
-    let ValueOutcome::NoVerdict { detail } = &refused else {
-        panic!("{refused:?}")
-    };
-    assert_eq!(detail.code, "evaluation-depth-limit");
     assert_eq!(
-        detail.message,
-        "this value nests more than 203 levels, the deepest this value contract evaluates within the \
-         1024 schema evaluations its 256 KiB stack_bytes holds at 256 bytes each; raise \
-         stack_bytes (stackBytes in TypeScript)"
+        code(&explicit(1_500_000).explain(&failing)),
+        Some("evaluation-work-limit")
     );
-    // The bound grows with the stack the host gives.
-    let deeper = prepared(
-        schema,
-        Limits {
-            stack_bytes: 1024 * 1024,
-            ..Limits::default()
-        },
+    assert!(
+        matches!(explicit(64_000_000).explain(&failing), ValueOutcome::Fails { problems, .. } if problems.len() == 1)
     );
-    assert!(matches!(deeper.validate(&deep), ValueOutcome::Satisfies));
 }
 
 #[test]
-fn a_contract_too_deep_for_the_stack_refuses_every_value() {
+fn deep_concrete_values_do_not_spend_symbolic_effects() {
+    let schema = r##"{"$defs":{"node":{"anyOf":[{"type":"integer"},{"type":"array","items":{"$ref":"#/operations/op/input/$defs/node"}}]}},"$ref":"#/operations/op/input/$defs/node"}"##;
+    let defaults = prepared(schema, Limits::default());
+    for (leaf, satisfies) in [("0", true), ("false", false)] {
+        let deep =
+            JsonValue::parse(format!("{}{leaf}{}", "[".repeat(300), "]".repeat(300))).unwrap();
+        for outcome in [defaults.evaluate(&deep), defaults.explain(&deep)] {
+            assert!(
+                matches!(outcome, ValueOutcome::Satisfies) && satisfies
+                    || matches!(outcome, ValueOutcome::Fails { .. }) && !satisfies,
+                "{outcome:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn long_alias_chains_do_not_inherit_the_retired_compiler_stack_bound() {
     // A chain of 300 references, each nesting one evaluation deeper, holds
     // more evaluations than a 64 KiB stack does before any value is read.
     let links: Vec<_> = (0..300)
@@ -209,26 +285,10 @@ fn a_contract_too_deep_for_the_stack_refuses_every_value() {
         r##"{{"$ref":"#/operations/op/input/$defs/d0","$defs":{{{},"d300":{{"type":"integer"}}}}}}"##,
         links.join(",")
     );
-    let small = prepared(
-        &schema,
-        Limits {
-            stack_bytes: 64 * 1024,
-            ..Limits::default()
-        },
-    );
-    let ValueOutcome::NoVerdict { detail } = small.validate(&JsonValue::parse("1").unwrap()) else {
-        panic!("a 64 KiB stack evaluates no value through 300 references")
-    };
-    assert_eq!(
-        detail.message,
-        "evaluating any value against this value contract could nest more than the 256 schema \
-         evaluations its 64 KiB stack_bytes holds at 256 bytes each; raise stack_bytes \
-         (stackBytes in TypeScript)"
-    );
-    // The default stack holds them.
+    // The same300-link input now evaluates through explicit original frames.
     let defaults = prepared(&schema, Limits::default());
     assert!(matches!(
-        defaults.validate(&JsonValue::parse("1").unwrap()),
+        defaults.evaluate(&JsonValue::parse("1").unwrap()),
         ValueOutcome::Satisfies
     ));
 }

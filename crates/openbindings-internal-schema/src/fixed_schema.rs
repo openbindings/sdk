@@ -10,6 +10,7 @@
 //! no budget of its own: the admission limits bound it. Its memory is the
 //! document's own arena plus a bounded matcher cache and the capped findings,
 //! and its stack depth follows the fixed schemas, not the instance.
+mod local;
 use crate::{JsonRef, JsonValue};
 use jsonschema::json::{JsonNumber, Node};
 use jsonschema::{Draft, Keyword, Retrieve, ValidationError, ValidationOptions, Validator};
@@ -47,6 +48,8 @@ pub struct Problems<'a> {
 pub struct Problem<'a> {
     pub at: JsonRef<'a>,
     pub message: Cow<'static, str>,
+    /// Index into the pinned location plan's immutable fact templates.
+    pub fact: Option<usize>,
 }
 impl std::fmt::Debug for Problem<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -63,6 +66,8 @@ const MAX_EXPANDED_POINTER_BYTES: usize = 8 * 1024 * 1024;
 type Compiled = Result<Validator<FlatJson>, String>;
 static DOCUMENT: OnceLock<Compiled> = OnceLock::new();
 static META: OnceLock<Compiled> = OnceLock::new();
+static DRAFT7: OnceLock<Compiled> = OnceLock::new();
+static DRAFT2019: OnceLock<Compiled> = OnceLock::new();
 
 /// An exact comparison of a number with a fixed schema's own operand. The fixed
 /// schemas assert only the four comparisons (a test checks every position), and
@@ -171,6 +176,11 @@ fn locations() -> &'static Result<super::fixed_locations::LocationMap, String> {
         OnceLock::new();
     LOCATIONS.get_or_init(compile_locations)
 }
+/// Fixed operands for preparing public fact fields once. A fact index is only
+/// offered after this same plan compiled successfully.
+pub fn fact_templates() -> &'static [(&'static str, String, Value)] {
+    locations().as_ref().map_or(&[], |map| map.facts())
+}
 /// One fixed validator's verdict on `at`, under the fixed-string presentation
 /// the caller has entered.
 pub(super) fn valid(validator: &Validator<FlatJson>, at: JsonRef<'_>) -> bool {
@@ -183,6 +193,137 @@ pub fn validity(value: &JsonValue, is_meta: bool) -> Result<bool, String> {
         .map_err(Clone::clone)?;
     Ok(backend::fixed_strings(|| valid(validator, value.view())))
 }
+fn localize_foreign(value: &mut Value) {
+    match value {
+        Value::Object(fields) => {
+            if fields.get("$schema").is_some_and(Value::is_string) {
+                fields.remove("$schema");
+            }
+            for reference in ["$ref", "$recursiveRef"] {
+                if fields.get(reference).and_then(Value::as_str) == Some("#") {
+                    fields.remove(reference);
+                    fields.insert("type".into(), serde_json::json!(["object", "boolean"]));
+                }
+            }
+            for (key, value) in fields {
+                if matches!(key.as_str(), "$id" | "$ref")
+                    && let Some(text) = value.as_str()
+                {
+                    *value = Value::String(
+                        text.replace(
+                            "http://json-schema.org/",
+                            "https://openbindings.invalid/foreign-meta/",
+                        )
+                        .replace(
+                            "https://json-schema.org/",
+                            "https://openbindings.invalid/foreign-meta/",
+                        ),
+                    );
+                } else {
+                    localize_foreign(value);
+                }
+            }
+        }
+        Value::Array(values) => values.iter_mut().for_each(localize_foreign),
+        _ => {}
+    }
+}
+
+fn foreign_meta_resources(files: &[&str]) -> Result<(Value, BTreeMap<String, Value>), String> {
+    let mut resources = BTreeMap::new();
+    let mut root = None;
+    for text in files {
+        let mut schema: Value = serde_json::from_str(text).map_err(|e| e.to_string())?;
+        localize_foreign(&mut schema);
+        if root.is_none() {
+            root = Some(schema.clone());
+        }
+        let id = schema["$id"]
+            .as_str()
+            .ok_or("foreign meta-schema identifier missing")?
+            .to_owned();
+        resources.insert(id, schema);
+    }
+    Ok((
+        root.ok_or("empty foreign meta-schema inventory")?,
+        resources,
+    ))
+}
+
+/// A single original foreign schema position, with recursive meta edges cut.
+/// Its schema children are checked at their own inventory positions.
+pub fn dialect_validity(
+    value: &JsonValue,
+    dialect: crate::dialect::Dialect,
+) -> Result<bool, String> {
+    use crate::dialect::Dialect;
+    if dialect.reference_object(value.view()) {
+        return Ok(value.get("$ref").is_some_and(|r| r.as_str().is_some()));
+    }
+    let (cell, files, draft) = match dialect {
+        Dialect::Draft202012 => return validity(value, true),
+        Dialect::Draft7 => (&DRAFT7, DRAFT7_FILES.as_slice(), Draft::Draft7),
+        Dialect::Draft201909 => (&DRAFT2019, DRAFT2019_FILES.as_slice(), Draft::Draft201909),
+    };
+    let compiled = cell
+        .get_or_init(|| {
+            let (root, resources) = foreign_meta_resources(files)?;
+            options(resources)
+                .with_draft(draft)
+                .build(&root)
+                .map_err(|e| e.to_string())
+        })
+        .as_ref()
+        .map_err(Clone::clone)?;
+    Ok(backend::fixed_strings(|| valid(compiled, value.view())))
+}
+
+/// Fixed syntax validators still parse exact original operands and may lazily
+/// initialize their fixed compiler. Reserve both costs before entering either
+/// operation; a warm immutable compiler does not repeat its startup charge.
+pub fn dialect_validity_bounded(
+    value: &JsonValue,
+    dialect: crate::dialect::Dialect,
+    control: &dyn crate::Control,
+) -> Result<bool, crate::Failure> {
+    use crate::dialect::Dialect;
+    control.check()?;
+    let (cold, allocation, work) = match dialect {
+        Dialect::Draft7 => (DRAFT7.get().is_none(), 1024 * 1024, 100_000),
+        Dialect::Draft201909 => (DRAFT2019.get().is_none(), 8 * 1024 * 1024, 1_000_000),
+        Dialect::Draft202012 => (META.get().is_none(), 16 * 1024 * 1024, 1_000_000),
+    };
+    if cold {
+        control.charge_allocation(allocation)?;
+        control.charge_work(work)?;
+    }
+    local::reserve(value.view(), dialect, control)?;
+    let result = dialect_validity(value, dialect);
+    control.check()?;
+    result.map_err(|_| {
+        crate::Failure::new(
+            crate::FailureReason::EvaluatorFailure,
+            "fixed-meta-schema-compilation",
+            "a fixed syntax validator could not be constructed",
+        )
+    })
+}
+
+pub(crate) const DRAFT7_FILES: [&str; 1] = [include_str!("../schemas/draft7.json")];
+// Supplemental external profile support. The pinned OBI dialect remains the
+// exact eight-file META_FILES inventory and keeps format annotation policy.
+pub(crate) const FORMAT_ASSERTION_FILES: [&str; 1] = [include_str!(
+    "../schemas/draft2020-12/meta/format-assertion.json"
+)];
+pub(crate) const DRAFT2019_FILES: [&str; 7] = [
+    include_str!("../schemas/draft2019-09/schema.json"),
+    include_str!("../schemas/draft2019-09/meta/core.json"),
+    include_str!("../schemas/draft2019-09/meta/applicator.json"),
+    include_str!("../schemas/draft2019-09/meta/validation.json"),
+    include_str!("../schemas/draft2019-09/meta/meta-data.json"),
+    include_str!("../schemas/draft2019-09/meta/format.json"),
+    include_str!("../schemas/draft2019-09/meta/content.json"),
+];
 fn document() -> &'static Compiled {
     DOCUMENT.get_or_init(|| {
         let schema: Value =
@@ -246,13 +387,15 @@ fn meta_resources() -> Result<BTreeMap<String, Value>, String> {
     }
     Ok(resources)
 }
+fn meta_root(resources: &BTreeMap<String, Value>) -> Result<&Value, String> {
+    resources
+        .get("https://openbindings.invalid/internal-meta/schema")
+        .ok_or_else(|| "embedded root meta-schema is missing".into())
+}
 fn meta() -> &'static Compiled {
     META.get_or_init(|| {
         let resources = meta_resources()?;
-        let root = resources
-            .get("https://openbindings.invalid/internal-meta/schema")
-            .ok_or("embedded root meta-schema is missing")?
-            .clone();
+        let root = meta_root(&resources)?.clone();
         compile(&root, resources)
     })
 }
@@ -383,13 +526,24 @@ impl<'a> ProblemCollector<'a> {
         expanded: bool,
         already_retained: &impl Fn(JsonRef<'a>, &str) -> bool,
     ) -> bool {
+        self.offer_fact(at, message, expanded, already_retained, None)
+    }
+    fn offer_fact(
+        &mut self,
+        at: JsonRef<'a>,
+        message: Cow<'static, str>,
+        expanded: bool,
+        already_retained: &impl Fn(JsonRef<'a>, &str) -> bool,
+        fact: Option<usize>,
+    ) -> bool {
         self.violated = true;
         let identity = occurrence(at);
-        if already_retained(at, &message)
+        if (fact.is_none() && already_retained(at, &message))
             || self.retained.get(&identity).is_some_and(|indices| {
-                indices
-                    .iter()
-                    .any(|&index| self.entries[index].message == message)
+                indices.iter().any(|&index| {
+                    let entry = &self.entries[index];
+                    entry.message == message && entry.fact == fact
+                })
             })
         {
             return true;
@@ -414,7 +568,7 @@ impl<'a> ProblemCollector<'a> {
             .entry(identity)
             .or_default()
             .push(self.entries.len());
-        self.entries.push(Problem { at, message });
+        self.entries.push(Problem { at, message, fact });
         true
     }
     fn finish(self) -> Problems<'a> {
@@ -464,9 +618,9 @@ pub fn check_with_retained<'a>(
         }
         if let Ok(map) = locations().as_ref() {
             let mut offered = false;
-            let limited = map.locate(value, |at| {
+            let limited = map.locate_fact_indices(value, |at, fact| {
                 offered = true;
-                collector.offer(at, GENERIC_MESSAGE.into(), true, &already_retained)
+                collector.offer_fact(at, GENERIC_MESSAGE.into(), true, &already_retained, fact)
                     && !collector.expansion_exhausted
             });
             collector.truncated |= limited;

@@ -14,6 +14,8 @@ for file in ["fixed_schema.rs", "fixed_locations.rs"]:
     source = (root / "crates/openbindings-internal-schema/src" / file).read_text(encoding='utf-8')
     for forbidden in [".validate(", ".iter_errors(", ".evaluate("]:
         assert forbidden not in source, (file, forbidden)
+# A removed report cap fails at the test allocator ceiling before exhausting RAM.
+subprocess.run(["cargo", "test", "--release", "--locked", "--manifest-path", str(root / "tools/diagnostic-memory-probe/Cargo.toml"), "--test", "reference_report_bytes"], cwd=root, env=env, check=True)
 subprocess.run([sys.executable, str(root / "tools/diagnostic-memory-probe/generate_inputs.py")], cwd=root, env=env, check=True)
 with (out / "memory.jsonl").open("w") as log:
     subprocess.run(["cargo", "run", "--release", "--locked", "--manifest-path", str(root / "tools/diagnostic-memory-probe/Cargo.toml"), "--", str(out / "fixtures/inputs.json")], cwd=root, env=env, stdout=log, check=True)

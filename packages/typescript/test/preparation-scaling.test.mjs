@@ -118,17 +118,10 @@ const preparation = (text, limits) => {
 const prepares = (text) => {
   const prepared = preparation(text);
   assert.equal(prepared.status, "ready");
-  prepared.valueContract.dispose();
-};
-const refuses = (text) => {
-  const prepared = preparation(text);
-  assert.equal(prepared.status, "no-verdict");
-  assert.equal(prepared.detail.reason, "limit-exceeded");
-  assert.equal(prepared.detail.code, "program-specialization-limit");
-  assert.equal(prepared.detail.location, null);
+  prepared.schema.dispose();
 };
 
-test("preparation compiles each schema once and bounds dynamic specialization through Wasm", () => {
+test("preparation keeps original schemas without projected dynamic copies through Wasm", () => {
   prepares(chain(5000, false));
   prepares(chain(100, true));
   // One resource, however many reference paths through resources reach a
@@ -139,53 +132,37 @@ test("preparation compiles each schema once and bounds dynamic specialization th
   prepares(requiredFan(1000, 20000, false));
   // Each path its own dynamic context: bounded.
   prepares(dynamicChoices(8));
-  refuses(dynamicChoices(17));
+  prepares(dynamicChoices(17));
 });
 
-test("the program and stack budgets scale what preparation and evaluation admit", () => {
+test("current evaluator policy rejects compiler knobs and keeps deep concrete values", () => {
   const limits = sdk.evaluatorLimits();
-  assert.equal(limits.programBytes, 50331648);
-  assert.equal(limits.stackBytes, 262144);
-  assert.equal("evaluationDepth" in limits, false);
-  assert.throws(
-    () => preparation(dynamicChoices(1), { evaluationDepth: 1024 }),
-    (e) => e.code === "invalid-evaluator-limits",
-  );
-  // 256 dynamic contexts reach the last of 8 levels, whose copies take about
-  // 6.8 MiB: a smaller budget refuses them and names itself.
-  const small = preparation(dynamicChoices(8), { programBytes: 4 << 20 });
-  assert.equal(small.status, "no-verdict");
-  assert.equal(small.detail.code, "program-specialization-limit");
-  assert.ok(
-    small.detail.message.endsWith(
-      "by more than its 4 MiB program_bytes; raise program_bytes (programBytes in TypeScript)",
-    ),
-    small.detail.message,
-  );
-  const enough = preparation(dynamicChoices(8), { programBytes: 8 << 20 });
-  assert.equal(enough.status, "ready");
-  enough.valueContract.dispose();
-  // A value nested deeper than the default stack admits is refused, and
-  // decided with a larger stack.
+  assert.equal(limits.evaluationSdkReservationBytes, 50331648);
+  for (const key of ["evaluationDepth", "stackBytes", "compileJsonDepth"]) {
+    assert.equal(key in limits, false);
+    assert.throws(
+      () => preparation(dynamicChoices(1), { [key]: 0 }),
+      (e) => e.code === "invalid-evaluator-limits",
+    );
+  }
+  for (const evaluationSdkReservationBytes of [4 << 20, 8 << 20]) {
+    const prepared = preparation(dynamicChoices(8), {
+      evaluationSdkReservationBytes,
+    });
+    assert.equal(prepared.status, "ready");
+    prepared.schema.dispose();
+  }
   const nested = document(
     {},
     { type: "array", items: { $ref: "#/operations/op/input" } },
   );
   const deep = sdk.parseJson("[".repeat(400) + "]".repeat(400)).value;
+  const prepared = preparation(nested);
   try {
-    const defaults = preparation(nested);
-    const refused = defaults.valueContract.validate(deep);
-    assert.equal(refused.status, "no-verdict");
-    assert.equal(refused.detail.code, "evaluation-depth-limit");
-    assert.equal(
-      refused.detail.message,
-      "this value nests more than 340 levels, the deepest this value contract evaluates within the 1024 schema evaluations its 256 KiB stack_bytes holds at 256 bytes each; raise stack_bytes (stackBytes in TypeScript)",
-    );
-    defaults.valueContract.dispose();
-    const larger = preparation(nested, { stackBytes: 512 * 1024 });
-    assert.equal(larger.valueContract.validate(deep).status, "satisfies");
-    larger.valueContract.dispose();
+    assert.equal(prepared.schema.evaluate(deep).status, "satisfies");
+    assert.equal(prepared.schema.explain(deep).status, "satisfies");
   } finally {
+    prepared.schema.dispose();
     deep.dispose();
   }
 });

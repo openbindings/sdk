@@ -18,14 +18,14 @@ fn default_diagnostics_omit_problems_with_long_source_locations() {
         .expect("declared operation");
     let fields: serde_json::Map<_, _> = (0..257).map(|i| (format!("f{i}"), json!(0))).collect();
     let input = JsonValue::parse(json!({&key:fields}).to_string()).unwrap();
-    let Ok(contract) = operation
-        .input()
-        .expect("declared input")
-        .prepare(&DefaultEvaluator::new())
-    else {
+    let Ok(contract) = operation.input().expect("declared input").prepare(
+        &DefaultEvaluator::new(),
+        &openbindings::ExternalSchemas::default(),
+        &openbindings::PreparationLimits::default(),
+    ) else {
         panic!("expected ready contract");
     };
-    let result = contract.validate(&input);
+    let result = contract.evaluate(&input);
     let ValueOutcome::Fails {
         problems,
         problems_complete,

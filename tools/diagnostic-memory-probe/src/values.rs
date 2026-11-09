@@ -8,7 +8,7 @@ pub fn run(only: Option<&str>) {
     // A failing branch over every element: the library builds an error for each.
     let types = json!({"anyOf":[{"type":"string"},{"items":{"type":"string"}}]});
     let capped = DefaultEvaluator::with_limits(Limits {
-        evaluation_steps: Some(1_000),
+        evaluation_sdk_work_units: Some(1_000),
         ..Limits::default()
     });
     let default = DefaultEvaluator::new();
@@ -36,17 +36,23 @@ pub fn run(only: Option<&str>) {
         let document = Document::parse(text).unwrap();
         let validation = document.validate().unwrap();
         let proof = validation.conformant().expect("conformant fixture");
-        let Some(contract) = proof
-            .resolve_operation("check")
-            .and_then(|operation| operation.input()?.prepare(evaluator).ok())
-        else {
+        let Some(contract) = proof.resolve_operation("check").and_then(|operation| {
+            operation
+                .input()?
+                .prepare(
+                    evaluator,
+                    &openbindings::ExternalSchemas::default(),
+                    &openbindings::PreparationLimits::default(),
+                )
+                .ok()
+        }) else {
             panic!("expected prepared {path} contract");
         };
         for count in [50_000, 1_000] {
             let text = format!("[{}0]", "0,".repeat(count - 1));
             let value = JsonValue::parse(&text).unwrap();
             for repetition in 0..3 {
-                let (outcome, bytes, nanos) = measured(|| contract.validate(&value));
+                let (outcome, bytes, nanos) = measured(|| contract.evaluate(&value));
                 match &outcome {
                     ValueOutcome::Fails {
                         problems,

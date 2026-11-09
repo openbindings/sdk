@@ -2,16 +2,17 @@
 //! The only unsafe code forwards allocator contracts unchanged to System.
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use openbindings::{Document, JsonValue, Source};
+use openbindings::{ConformantDocument, Document, ExternalSchemas, JsonValue};
 use openbindings_invocation::CancellationToken;
 use openbindings_invocation::{
-    BindingRequest, BindingValue, InvocationError, InvocationLimits, ProviderIo, WriteError,
-    binding::{BindingInvoker, Invoker},
+    BindingInvoker, BindingInvokerExt, BindingRequest, DefaultOperationInvoker, InvocationError,
+    InvocationLimits, InvocationSupport, OperationRequest, OutputEvent, PreflightOutcome,
+    ProviderIo, WriteError,
 };
 use serde::Serialize;
 use std::{
     alloc::{GlobalAlloc, Layout, System},
-    future::{Future, pending, poll_fn},
+    future::{Future, Ready, pending, poll_fn, ready},
     hint::black_box,
     pin::{Pin, pin},
     sync::{
@@ -218,24 +219,39 @@ impl Fixture {
     }
 }
 impl BindingInvoker for Fixture {
-    type Invocation<'a> = Pin<Box<dyn Future<Output = Result<(), InvocationError>> + 'a>>;
-    fn supports_kind(&self, kind: &str) -> bool {
-        kind == "resource.fixture"
-    }
-    fn invoke<'a>(
+    type Invoke<'a> = Pin<Box<dyn Future<Output = Result<(), InvocationError>> + 'a>>;
+    type Preflight<'a> = Ready<Result<PreflightOutcome, InvocationError>>;
+    fn handle_preflight<'a>(
         &'a self,
-        request: BindingRequest<'a>,
+        _: BindingRequest,
+        _: CancellationToken,
+    ) -> Self::Preflight<'a> {
+        ready(Ok(PreflightOutcome::NoPrediction))
+    }
+    fn handle_invoke<'a>(
+        &'a self,
+        request: BindingRequest,
         mut io: ProviderIo,
         _control: CancellationToken,
-    ) -> Self::Invocation<'a> {
+    ) -> Self::Invoke<'a> {
         Box::pin(async move {
             let _guard = self.activity.enter();
-            black_box(request.source.content.as_ref().unwrap().bytes().len());
+            black_box(
+                request
+                    .interface
+                    .binding(&request.binding)
+                    .unwrap()
+                    .source()
+                    .data()
+                    .unwrap()
+                    .bytes()
+                    .len(),
+            );
             match self.mode {
                 Mode::Empty => {}
                 Mode::Echo => {
                     while let Some(value) = io.next().await {
-                        io.emit(self.apply(value)).await?;
+                        io.send(self.apply(value)).await?;
                     }
                 }
                 Mode::Park => {
@@ -248,16 +264,70 @@ impl BindingInvoker for Fixture {
     }
 }
 
-fn zero(invoker: &Invoker<&Fixture>, request: BindingRequest<'_>) {
-    let mut call = invoker.invoke(request);
+impl InvocationSupport for Fixture {
+    fn can_invoke(&self, kind: &str) -> bool {
+        kind == "resource.fixture"
+    }
+}
+
+// A current DefaultOperationInvoker requires an explicit evaluator. Absent contracts
+// bypass it; the diagnostic lane deliberately asks an incapable evaluator.
+struct RefusingEvaluator;
+struct NeverPrepared;
+impl openbindings::SchemaEvaluator for RefusingEvaluator {
+    type Validator = NeverPrepared;
+    fn prepare(
+        &self,
+        _: openbindings::EvaluationRequest<'_>,
+        _: &openbindings::PreparationLimits,
+        _: &dyn openbindings::WorkControl,
+    ) -> Result<Self::Validator, openbindings::PreparationFailure> {
+        Err(openbindings::PreparationFailure::new(
+            openbindings::PreparationFailureKind::UnsupportedCapability {
+                capability: "measurement.fixture".into(),
+            },
+        ))
+    }
+}
+impl openbindings::SchemaValidator for NeverPrepared {
+    fn evaluate(
+        &self,
+        _: &JsonValue,
+        _: openbindings::Detail,
+        _: &dyn openbindings::WorkControl,
+    ) -> openbindings::ValueOutcome {
+        unreachable!("preparation always refuses")
+    }
+}
+
+fn document(data: &JsonValue) -> ConformantDocument {
+    Document::parse(format!(r#"{{"openbindings":"0.2.0","operations":{{"echo":{{"aliases":["say"]}}}},"bindings":{{"b":{{"operation":"echo","source":"s"}}}},"sources":{{"s":{{"kind":"resource.fixture","data":{}}}}}}}"#, data.text()))
+        .unwrap().validate().unwrap().conformant().unwrap()
+}
+
+fn zero(invoker: &Fixture, request: BindingRequest) {
+    let call = invoker.invoke(request, CancellationToken::new()).unwrap();
+    let (mut input, mut output) = call.split();
+    input.close();
     block_on(async {
-        assert!(call.next().await.is_none());
-        assert!(call.outcome().unwrap().is_ok());
+        let mut completed = false;
+        while let Some(event) = output.next().await {
+            match event {
+                OutputEvent::Complete => completed = true,
+                OutputEvent::InputClosed => {}
+                _ => panic!("unexpected zero-value event: {event:?}"),
+            }
+        }
+        assert!(completed);
     });
 }
 
-fn echo(invoker: &Invoker<&Fixture>, request: BindingRequest<'_>, value: &JsonValue, count: usize) {
-    echo_call(invoker.invoke(request), value, count);
+fn echo(invoker: &Fixture, request: BindingRequest, value: &JsonValue, count: usize) {
+    echo_call(
+        invoker.invoke(request, CancellationToken::new()).unwrap(),
+        value,
+        count,
+    );
 }
 fn echo_call<F: Future<Output = Result<(), InvocationError>>>(
     call: openbindings_invocation::Invocation<F>,
@@ -268,36 +338,58 @@ fn echo_call<F: Future<Output = Result<(), InvocationError>>>(
     block_on(join(
         async {
             for _ in 0..count {
-                input.write(value.clone()).await.unwrap();
+                input.send(value.clone()).await.unwrap();
             }
             input.close();
         },
         async {
             let mut received = 0;
-            while let Some(item) = outputs.next().await {
-                let output = item.unwrap();
-                assert_eq!(output.text(), value.text());
-                received += 1;
-                drop(black_box(output));
+            let mut completed = false;
+            while let Some(event) = outputs.next().await {
+                match event {
+                    OutputEvent::Output(output) => {
+                        assert_eq!(output.text(), value.text());
+                        received += 1;
+                        drop(black_box(output));
+                    }
+                    OutputEvent::Complete => completed = true,
+                    OutputEvent::InputClosed => {}
+                    _ => panic!("unexpected echo event: {event:?}"),
+                }
             }
             assert_eq!(received, count);
-            assert!(outputs.outcome().unwrap().is_ok());
+            assert!(completed);
         },
     ));
 }
 
-fn cancelled(invoker: &Invoker<&Fixture>, request: BindingRequest<'_>, value: &JsonValue) {
-    let (mut input, mut outputs) = invoker.invoke(request).split();
-    let control = outputs.control();
+fn cancel_call<F: Future<Output = Result<(), InvocationError>>>(
+    call: openbindings_invocation::Invocation<F>,
+    value: &JsonValue,
+) {
+    let control = call.control();
+    let (mut input, mut output) = call.split();
     block_on(async {
-        assert_eq!(input.write(value.clone()).await, Err(WriteError::Closed));
+        // Drive the provider until it explicitly declines input, then cancel
+        // its pending work. A queued send alone does not drive the provider.
+        assert!(matches!(
+            output.next().await,
+            Some(OutputEvent::InputClosed)
+        ));
+        assert_eq!(input.send(value.clone()).await, Err(WriteError::Closed));
         control.cancel();
-        assert_eq!(
-            outputs.next().await.unwrap().unwrap_err().code(),
-            "ERR_CANCELLED"
-        );
-        assert!(outputs.next().await.is_none());
+        let Some(OutputEvent::Error(error)) = output.next().await else {
+            panic!("missing cancellation")
+        };
+        assert_eq!(error.code(), "ERR_CANCELLED");
+        assert!(output.next().await.is_none());
     });
+}
+fn cancelled(invoker: &Fixture, request: BindingRequest, value: &JsonValue) {
+    cancel_call(
+        invoker.invoke(request, CancellationToken::new()).unwrap(),
+        value,
+    );
 }
 
 #[derive(Serialize)]
@@ -382,32 +474,22 @@ fn retention() -> Retention {
     let (completed_delta, cancelled_delta, live_guards) = {
         let parent = backing_value(1024 * 1024);
         let subtree = parent.get("selected").unwrap().to_owned();
-        let source = Source {
-            kind: "resource.fixture".into(),
-            content: Some(parent.clone()),
-            ..Source::default()
-        };
-        let binding = BindingValue::default();
-        let request = BindingRequest {
-            source: &source,
-            binding: &binding,
-            context: None,
-        };
+        let request = BindingRequest::new(document(&parent), "b");
         let complete = Fixture::new(Mode::Echo);
         let cancel = Fixture::new(Mode::Park);
-        let complete_invoker = Invoker::new(&complete);
-        let cancel_invoker = Invoker::new(&cancel);
+        let complete_invoker = &complete;
+        let cancel_invoker = &cancel;
         for _ in 0..128 {
-            echo(&complete_invoker, request, &subtree, 1);
-            cancelled(&cancel_invoker, request, &subtree);
+            echo(&complete_invoker, request.clone(), &subtree, 1);
+            cancelled(&cancel_invoker, request.clone(), &subtree);
         }
         let before_complete = Snapshot::now();
         for _ in 0..ITERATIONS {
-            echo(&complete_invoker, request, &subtree, 1);
+            echo(&complete_invoker, request.clone(), &subtree, 1);
         }
         let after_complete = Snapshot::now();
         for _ in 0..ITERATIONS {
-            cancelled(&cancel_invoker, request, &subtree);
+            cancelled(&cancel_invoker, request.clone(), &subtree);
         }
         let after_cancel = Snapshot::now();
         assert_eq!(
@@ -470,32 +552,27 @@ fn main() {
     let large = JsonValue::parse(format!("\"{}\"", "x".repeat(64 * 1024 - 2))).unwrap();
     assert_eq!(parent.bytes().len(), 1024 * 1024);
     assert_eq!(large.bytes().len(), 64 * 1024);
-    let source = Source {
-        kind: "resource.fixture".into(),
-        content: Some(parent.clone()),
-        ..Source::default()
-    };
-    let binding = BindingValue::default();
-    let request = BindingRequest {
-        source: &source,
-        binding: &binding,
-        context: None,
-    };
+    let proof = document(&parent);
+    let request = BindingRequest::new(proof.clone(), "b");
     let empty = Fixture::new(Mode::Empty);
     let fixture = Fixture::new(Mode::Echo);
     let parked = Fixture::new(Mode::Park);
-    let empty_invoker = Invoker::new(&empty);
-    let invoker = Invoker::new(&fixture);
-    let parked_invoker = Invoker::new(&parked);
+    let empty_invoker = &empty;
+    let invoker = &fixture;
+    let parked_invoker = &parked;
     let mut measurements = Vec::with_capacity(14);
     measurements.push(measure("direct_zero", iterations, 0, || {
         empty.direct(None, 0)
     }));
     measurements.push(measure("handle_creation_release", iterations, 0, || {
-        drop(black_box(invoker.invoke(request)))
+        drop(black_box(
+            invoker
+                .invoke(request.clone(), CancellationToken::new())
+                .unwrap(),
+        ))
     }));
     measurements.push(measure("checked_zero", iterations, 0, || {
-        zero(&empty_invoker, request)
+        zero(&empty_invoker, request.clone())
     }));
     for (name, value) in [
         ("1_byte", &small),
@@ -511,7 +588,7 @@ fn main() {
             fixture.direct(Some(value), 1)
         }));
         measurements.push(measure(checked_name, iterations, 1, || {
-            echo(&invoker, request, value, 1)
+            echo(&invoker, request.clone(), value, 1)
         }));
     }
     for (direct_name, checked_name, value) in [
@@ -522,123 +599,130 @@ fn main() {
             fixture.direct(Some(value), 64)
         }));
         measurements.push(measure(checked_name, 1_000, 64, || {
-            echo(&invoker, request, value, 64)
+            echo(&invoker, request.clone(), value, 64)
         }));
     }
     measurements.push(measure("checked_cancel_release", iterations, 0, || {
-        cancelled(&parked_invoker, request, &subtree)
+        cancelled(&parked_invoker, request.clone(), &subtree)
     }));
-    let document = Document::parse(format!(r#"{{"openbindings":"0.2.0","operations":{{"echo":{{"aliases":["say"]}}}},"bindings":{{"b":{{"operation":"echo","source":"s"}}}},"sources":{{"s":{{"kind":"resource.fixture","content":{}}}}}}}"#, parent.text())).unwrap();
-    let operation = openbindings_invocation::operation::Invoker::new(
-        document
-            .clone()
-            .validate()
-            .unwrap()
-            .conformant()
-            .expect("conformant invocation document"),
-        &fixture,
-    );
-    let operation_park = openbindings_invocation::operation::Invoker::new(
-        document
-            .validate()
-            .unwrap()
-            .conformant()
-            .expect("conformant invocation document"),
-        &parked,
-    );
-    use openbindings_invocation::operation::Request as OperationRequest;
-    // Construction retains the document and provider in place: no allocation.
-    let proof = document
-        .clone()
-        .validate()
-        .unwrap()
-        .conformant()
-        .expect("conformant invocation document");
+    let operation =
+        DefaultOperationInvoker::new(&fixture, RefusingEvaluator, ExternalSchemas::default());
+    let operation_park =
+        DefaultOperationInvoker::new(&parked, RefusingEvaluator, ExternalSchemas::default());
+    // Resource acquisition/creation is setup, as document construction is above.
+    // Measure retaining already supplied dependencies, not a resource-set factory.
+    let external = ExternalSchemas::default();
+    // Client construction only retains its explicit dependencies.
     measurements.push(measure(
         "operation_invoker_creation_release",
         iterations,
         0,
         || {
-            drop(black_box(openbindings_invocation::operation::Invoker::new(
-                proof.clone(),
+            drop(black_box(DefaultOperationInvoker::new(
                 &fixture,
+                RefusingEvaluator,
+                external.clone(),
             )))
         },
     ));
     measurements.push(measure("operation_unary_1_byte", iterations, 1, || {
         echo_call(
-            operation.invoke(OperationRequest::operation("say")),
+            operation
+                .invoke(
+                    OperationRequest::operation(proof.clone(), "say"),
+                    CancellationToken::new(),
+                )
+                .unwrap(),
             &small,
             1,
         )
     }));
     measurements.push(measure("operation_stream_1_byte", 1_000, 64, || {
         echo_call(
-            operation.invoke(OperationRequest::operation("say")),
+            operation
+                .invoke(
+                    OperationRequest::operation(proof.clone(), "say"),
+                    CancellationToken::new(),
+                )
+                .unwrap(),
             &small,
             64,
         )
     }));
     measurements.push(measure("operation_unary_subtree", iterations, 1, || {
         echo_call(
-            operation.invoke(OperationRequest::binding("b")),
+            operation
+                .invoke(
+                    OperationRequest::binding(proof.clone(), "b"),
+                    CancellationToken::new(),
+                )
+                .unwrap(),
             &subtree,
             1,
         )
     }));
     measurements.push(measure("operation_cancel_release", iterations, 0, || {
-        let mut call = operation_park.invoke(OperationRequest::operation("say"));
-        block_on(async {
-            assert_eq!(call.write(subtree.clone()).await, Err(WriteError::Closed));
-            call.control().cancel();
-            assert_eq!(
-                call.next().await.unwrap().unwrap_err().code(),
-                "ERR_CANCELLED"
-            );
-        });
+        cancel_call(
+            operation_park
+                .invoke(
+                    OperationRequest::operation(proof.clone(), "say"),
+                    CancellationToken::new(),
+                )
+                .unwrap(),
+            &subtree,
+        );
     }));
-    // The missing-evaluator case exercises diagnostic release, without making
-    // the invocation companion depend on a particular evaluator implementation.
-    let declared = Document::parse(r#"{"openbindings":"0.2.0","operations":{"echo":{"input":true}},"bindings":{"b":{"operation":"echo","source":"s"}},"sources":{"s":{"kind":"resource.fixture","content":null}}}"#).unwrap();
-    let unresolved = openbindings_invocation::operation::Invoker::new(
-        declared
-            .validate()
-            .unwrap()
-            .conformant()
-            .expect("conformant invocation document"),
-        &fixture,
-    );
+    // Explicit incapable evaluation exercises diagnostic ownership. The old
+    // implicit missing-evaluator API is not a compatibility target.
+    let declared = Document::parse(r#"{"openbindings":"0.2.0","operations":{"echo":{"input":true}},"bindings":{"b":{"operation":"echo","source":"s"}},"sources":{"s":{"kind":"resource.fixture","data":null}}}"#)
+        .unwrap().validate().unwrap().conformant().unwrap();
+    let unresolved =
+        DefaultOperationInvoker::new(&fixture, RefusingEvaluator, ExternalSchemas::default());
     measurements.push(measure(
         "operation_validation_failure_release",
         iterations,
         0,
         || {
-            let mut call = unresolved.invoke(OperationRequest::operation("echo"));
+            let call = unresolved
+                .invoke(
+                    OperationRequest::operation(declared.clone(), "echo"),
+                    CancellationToken::new(),
+                )
+                .unwrap();
+            let control = call.control();
+            let (mut input, mut output) = call.split();
             block_on(async {
-                call.write(small.clone()).await.unwrap();
-                assert_eq!(
-                    call.next().await.unwrap().unwrap_err().code(),
-                    "ERR_SCHEMA_UNRESOLVED"
-                );
-                assert!(call.validation_failure().is_some());
+                input.send(small.clone()).await.unwrap();
+                input.close();
+                let mut rejected = false;
+                while let Some(event) = output.next().await {
+                    match event {
+                        OutputEvent::Error(error) => {
+                            assert_eq!(error.code(), "ERR_SCHEMA_UNRESOLVED");
+                            rejected = true;
+                        }
+                        OutputEvent::InputClosed => {}
+                        _ => panic!("unexpected validation event: {event:?}"),
+                    }
+                }
+                assert!(rejected);
+                assert!(control.validation_failure().is_some());
             });
         },
     ));
-    // Warming bounds cache growth; dropping its last facade must release all
-    // carrier slots, document indexes and backing owners as well.
+    // Dropping requests and clients releases document proofs and backing owners.
     let owners_before = Snapshot::now();
     {
-        let document = Document::parse(r#"{"openbindings":"0.2.0","operations":{"echo":{}},"bindings":{"b":{"operation":"echo","source":"s"}},"sources":{"s":{"kind":"resource.fixture","content":null}}}"#).unwrap();
-        let invoker = openbindings_invocation::operation::Invoker::new(
-            document
-                .validate()
-                .unwrap()
-                .conformant()
-                .expect("conformant invocation document"),
-            &fixture,
-        );
+        let proof = document(&JsonValue::parse("null").unwrap());
+        let invoker =
+            DefaultOperationInvoker::new(&fixture, RefusingEvaluator, ExternalSchemas::default());
         echo_call(
-            invoker.invoke(OperationRequest::operation("echo")),
+            invoker
+                .invoke(
+                    OperationRequest::operation(proof, "echo"),
+                    CancellationToken::new(),
+                )
+                .unwrap(),
             &small,
             1,
         );
@@ -649,7 +733,7 @@ fn main() {
     let retention = retention();
     let defaults = InvocationLimits::default();
     let receipt = Receipt {
-        format: "openbindings-invocation-resource-probe-v1",
+        format: "openbindings-invocation-resource-probe-v2",
         scope: "single-thread synthetic public-API measurement, release build, no network or RSS claim",
         counting: "successful System allocation/reallocation calls; realloc counts full new reservation and frees old reservation; allocator atomics and fixture guard atomics are included in timings; setup/receipt encoding excluded",
         input_capacity: defaults.input_capacity,

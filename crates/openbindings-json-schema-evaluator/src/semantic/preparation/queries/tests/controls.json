@@ -1,0 +1,201 @@
+[
+  {
+    "id": "same-resource-two-occurrences-S",
+    "schema": "{\"$id\":\"https://review.invalid/root\",\"allOf\":[{\"$ref\":\"https://review.invalid/integer\"},{\"$ref\":\"https://review.invalid/integer\"}]}",
+    "value": "1",
+    "required": "S",
+    "resources": {
+      "https://review.invalid/integer": "{\"type\":\"integer\"}"
+    },
+    "external": false,
+    "reason": "The two original occurrences select the same supplied integer predicate."
+  },
+  {
+    "id": "same-resource-two-occurrences-F",
+    "schema": "{\"$id\":\"https://review.invalid/root\",\"allOf\":[{\"$ref\":\"https://review.invalid/integer\"},{\"$ref\":\"https://review.invalid/integer\"}]}",
+    "value": "\"x\"",
+    "required": "F",
+    "resources": {
+      "https://review.invalid/integer": "{\"type\":\"integer\"}"
+    },
+    "external": false,
+    "reason": "The two original occurrences select the same supplied integer predicate."
+  },
+  {
+    "id": "different-bases-ab",
+    "schema": "{\"allOf\":[{\"$ref\":\"https://review.invalid/a/root\"},{\"$ref\":\"https://review.invalid/b/root\"}]}",
+    "value": "1",
+    "required": "F",
+    "resources": {
+      "https://review.invalid/a/root": "{\"$id\":\"https://review.invalid/a/root\",\"$ref\":\"type\"}",
+      "https://review.invalid/b/root": "{\"$id\":\"https://review.invalid/b/root\",\"$ref\":\"type\"}",
+      "https://review.invalid/a/type": "{\"type\":\"integer\"}",
+      "https://review.invalid/b/type": "{\"type\":\"string\"}"
+    },
+    "external": false,
+    "reason": "Equal relative text resolves to different resources; integer and string intersection rejects 1."
+  },
+  {
+    "id": "different-bases-ba",
+    "schema": "{\"allOf\":[{\"$ref\":\"https://review.invalid/b/root\"},{\"$ref\":\"https://review.invalid/a/root\"}]}",
+    "value": "1",
+    "required": "F",
+    "resources": {
+      "https://review.invalid/a/root": "{\"$id\":\"https://review.invalid/a/root\",\"$ref\":\"type\"}",
+      "https://review.invalid/b/root": "{\"$id\":\"https://review.invalid/b/root\",\"$ref\":\"type\"}",
+      "https://review.invalid/a/type": "{\"type\":\"integer\"}",
+      "https://review.invalid/b/type": "{\"type\":\"string\"}"
+    },
+    "external": false,
+    "reason": "Equal relative text resolves to different resources; integer and string intersection rejects 1."
+  },
+  {
+    "id": "exact-contained-order-4",
+    "schema": "{\"$id\":\"https://review.invalid/root\",\"$defs\":{\"upper\":{\"$id\":\"https://Ex.invalid:443/a\",\"type\":\"string\"},\"lower\":{\"$id\":\"https://ex.invalid/a\",\"type\":\"integer\"}},\"allOf\":[{\"$ref\":\"https://Ex.invalid:443/a\"},{\"$ref\":\"https://ex.invalid/a\"}]}",
+    "value": "1",
+    "required": "F",
+    "resources": {},
+    "external": false,
+    "reason": "Pinned 7.2/7.4 retain distinct compared contained IDs; normalized cache keys would erase the distinction."
+  },
+  {
+    "id": "exact-contained-order-5",
+    "schema": "{\"$id\":\"https://review.invalid/root\",\"$defs\":{\"upper\":{\"$id\":\"https://Ex.invalid:443/a\",\"type\":\"string\"},\"lower\":{\"$id\":\"https://ex.invalid/a\",\"type\":\"integer\"}},\"allOf\":[{\"$ref\":\"https://ex.invalid/a\"},{\"$ref\":\"https://Ex.invalid:443/a\"}]}",
+    "value": "1",
+    "required": "F",
+    "resources": {},
+    "external": false,
+    "reason": "Pinned 7.2/7.4 retain distinct compared contained IDs; normalized cache keys would erase the distinction."
+  },
+  {
+    "id": "static-dynamic-$ref-$dynamicRef-x",
+    "schema": "{\"$id\":\"https://review.invalid/root\",\"$defs\":{\"choice\":{\"$dynamicAnchor\":\"x\",\"pattern\":\"^x$\"}},\"oneOf\":[{\"$ref\":\"https://review.invalid/default#x\"},{\"$dynamicRef\":\"https://review.invalid/default#x\"}]}",
+    "value": "\"x\"",
+    "required": "S",
+    "resources": {
+      "https://review.invalid/default": "{\"$id\":\"https://review.invalid/default\",\"$dynamicAnchor\":\"x\",\"pattern\":\"^y$\"}"
+    },
+    "external": false,
+    "reason": "Static target tests y; dynamic target in outer R tests x. Exactly one matches x/y, neither matches z."
+  },
+  {
+    "id": "static-dynamic-$ref-$dynamicRef-y",
+    "schema": "{\"$id\":\"https://review.invalid/root\",\"$defs\":{\"choice\":{\"$dynamicAnchor\":\"x\",\"pattern\":\"^x$\"}},\"oneOf\":[{\"$ref\":\"https://review.invalid/default#x\"},{\"$dynamicRef\":\"https://review.invalid/default#x\"}]}",
+    "value": "\"y\"",
+    "required": "S",
+    "resources": {
+      "https://review.invalid/default": "{\"$id\":\"https://review.invalid/default\",\"$dynamicAnchor\":\"x\",\"pattern\":\"^y$\"}"
+    },
+    "external": false,
+    "reason": "Static target tests y; dynamic target in outer R tests x. Exactly one matches x/y, neither matches z."
+  },
+  {
+    "id": "static-dynamic-$ref-$dynamicRef-z",
+    "schema": "{\"$id\":\"https://review.invalid/root\",\"$defs\":{\"choice\":{\"$dynamicAnchor\":\"x\",\"pattern\":\"^x$\"}},\"oneOf\":[{\"$ref\":\"https://review.invalid/default#x\"},{\"$dynamicRef\":\"https://review.invalid/default#x\"}]}",
+    "value": "\"z\"",
+    "required": "F",
+    "resources": {
+      "https://review.invalid/default": "{\"$id\":\"https://review.invalid/default\",\"$dynamicAnchor\":\"x\",\"pattern\":\"^y$\"}"
+    },
+    "external": false,
+    "reason": "Static target tests y; dynamic target in outer R tests x. Exactly one matches x/y, neither matches z."
+  },
+  {
+    "id": "static-dynamic-$dynamicRef-$ref-x",
+    "schema": "{\"$id\":\"https://review.invalid/root\",\"$defs\":{\"choice\":{\"$dynamicAnchor\":\"x\",\"pattern\":\"^x$\"}},\"oneOf\":[{\"$dynamicRef\":\"https://review.invalid/default#x\"},{\"$ref\":\"https://review.invalid/default#x\"}]}",
+    "value": "\"x\"",
+    "required": "S",
+    "resources": {
+      "https://review.invalid/default": "{\"$id\":\"https://review.invalid/default\",\"$dynamicAnchor\":\"x\",\"pattern\":\"^y$\"}"
+    },
+    "external": false,
+    "reason": "Static target tests y; dynamic target in outer R tests x. Exactly one matches x/y, neither matches z."
+  },
+  {
+    "id": "static-dynamic-$dynamicRef-$ref-y",
+    "schema": "{\"$id\":\"https://review.invalid/root\",\"$defs\":{\"choice\":{\"$dynamicAnchor\":\"x\",\"pattern\":\"^x$\"}},\"oneOf\":[{\"$dynamicRef\":\"https://review.invalid/default#x\"},{\"$ref\":\"https://review.invalid/default#x\"}]}",
+    "value": "\"y\"",
+    "required": "S",
+    "resources": {
+      "https://review.invalid/default": "{\"$id\":\"https://review.invalid/default\",\"$dynamicAnchor\":\"x\",\"pattern\":\"^y$\"}"
+    },
+    "external": false,
+    "reason": "Static target tests y; dynamic target in outer R tests x. Exactly one matches x/y, neither matches z."
+  },
+  {
+    "id": "static-dynamic-$dynamicRef-$ref-z",
+    "schema": "{\"$id\":\"https://review.invalid/root\",\"$defs\":{\"choice\":{\"$dynamicAnchor\":\"x\",\"pattern\":\"^x$\"}},\"oneOf\":[{\"$dynamicRef\":\"https://review.invalid/default#x\"},{\"$ref\":\"https://review.invalid/default#x\"}]}",
+    "value": "\"z\"",
+    "required": "F",
+    "resources": {
+      "https://review.invalid/default": "{\"$id\":\"https://review.invalid/default\",\"$dynamicAnchor\":\"x\",\"pattern\":\"^y$\"}"
+    },
+    "external": false,
+    "reason": "Static target tests y; dynamic target in outer R tests x. Exactly one matches x/y, neither matches z."
+  },
+  {
+    "id": "decisive-true",
+    "schema": "{\"anyOf\":[true,{\"$ref\":\"https://Missing.invalid:443/unavailable\"},{\"$ref\":\"https://Missing.invalid:443/unavailable\"}]}",
+    "value": "null",
+    "required": "S",
+    "resources": {},
+    "external": false,
+    "reason": "Missing external content remains inability; independently decisive branches retain their established answer."
+  },
+  {
+    "id": "decisive-false",
+    "schema": "{\"allOf\":[false,{\"$ref\":\"https://Missing.invalid:443/unavailable\"},{\"$ref\":\"https://Missing.invalid:443/unavailable\"}]}",
+    "value": "null",
+    "required": "F",
+    "resources": {},
+    "external": false,
+    "reason": "Missing external content remains inability; independently decisive branches retain their established answer."
+  },
+  {
+    "id": "missing-cause",
+    "schema": "{\"allOf\":[{\"$ref\":\"https://Missing.invalid:443/unavailable\"},{\"$ref\":\"https://Missing.invalid:443/unavailable\"}]}",
+    "value": "null",
+    "required": "N",
+    "resources": {},
+    "external": false,
+    "reason": "Missing external content remains inability; independently decisive branches retain their established answer."
+  },
+  {
+    "id": "same-original-malformed-effect",
+    "schema": "{\"$id\":\"https://review.invalid/root\",\"$defs\":{\"bad\":{\"$ref\":\"%\"}},\"oneOf\":[{\"$ref\":\"#/$defs/bad\"},{\"$ref\":\"#/$defs/bad\"}]}",
+    "value": "null",
+    "required": "F",
+    "resources": {},
+    "external": false,
+    "reason": "Both references reach the same original predicate on the same value/context; exactly one identical Boolean result cannot hold."
+  },
+  {
+    "id": "same-original-missing-effect",
+    "schema": "{\"$id\":\"https://review.invalid/root\",\"$defs\":{\"missing\":{\"$ref\":\"https://review.invalid/absent\"}},\"oneOf\":[{\"$ref\":\"#/$defs/missing\"},{\"$ref\":\"#/$defs/missing\"}]}",
+    "value": "null",
+    "required": "F",
+    "resources": {},
+    "external": false,
+    "reason": "The same external schema on the same value is coherent, independent of cache sharing."
+  },
+  {
+    "id": "malformed-local-reference",
+    "schema": "{\"$id\":\"https://review.invalid/root\",\"$ref\":\"%\"}",
+    "value": "null",
+    "required": "U",
+    "resources": {},
+    "external": false,
+    "reason": "Named-resource malformed reference is undefined under pinned 7.4 and directly determines validity."
+  },
+  {
+    "id": "json-escaped-spelling",
+    "schema": "{\"$id\":\"https://review.invalid/root\",\"allOf\":[{\"$ref\":\"https://review.invalid/integer\"},{\"$ref\":\"https:\\u002f\\u002freview.invalid/integer\"}]}",
+    "value": "1",
+    "required": "S",
+    "resources": {
+      "https://review.invalid/integer": "{\"type\":\"integer\"}"
+    },
+    "external": false,
+    "reason": "JSON decoding precedes URI interpretation; the borrowed key may share equal decoded strings."
+  }
+]

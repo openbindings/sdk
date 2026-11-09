@@ -32,9 +32,13 @@ fn internal_rows(context: &JsonValue) -> Vec<Row> {
         message: SECRET.into(),
         location: Some(location.clone()),
         reference_defect: Some(schema::StaticReferenceDefect::MalformedReference),
+        query_failure: Some(Box::new(schema::QueryFailure::ResourceUnavailable(
+            SECRET.into(),
+        ))),
     };
     let reference = schema::Reference {
         location: location.clone(),
+        resource_root: Some(location.clone()),
         keyword: SECRET.into(),
         spelling: Some(SECRET.into()),
         resolution: schema::ReferenceResolution::Unresolved {
@@ -44,6 +48,8 @@ fn internal_rows(context: &JsonValue) -> Vec<Row> {
     let problem = schema::fixed_schema::Problem {
         at: context.view(),
         message: SECRET.into(),
+        // Facts carry only a plan index; source operands are never copied here.
+        fact: Some(0),
     };
     vec![
         row("internal Location", &location),

@@ -17,7 +17,7 @@ function candidate(input) {
     }),
   );
   assert.equal(result.status, "ready");
-  return result.valueContract;
+  return result.schema;
 }
 test("service replacement retains in-flight work and handles partial contracts", async () => {
   const warm = candidate(true);
@@ -29,7 +29,7 @@ test("service replacement retains in-flight work and handles partial contracts",
   });
   let resume, pending;
   try {
-    assert.equal(partial.validate("preview").status, "satisfies");
+    assert.equal(partial.evaluate("preview").status, "satisfies");
     service.replace(partial.retain());
     assert.equal(service.check("preview").status, "satisfies");
     service.replace(candidate({ type: "integer" }));

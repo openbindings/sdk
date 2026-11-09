@@ -1,0 +1,2108 @@
+{
+  "note": "Independent full semantic requirements. All cases use the same original recursive annotation control with one changed known producer; no SDK output defines these oracles.",
+  "cases": [
+    {
+      "id": "coordinate-review/if-producer",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "A": {
+            "anyOf": [
+              true,
+              {
+                "allOf": [
+                  {
+                    "$ref": "#/schemas/A"
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "x": true
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "#/schemas/A",
+              "unevaluatedProperties": false
+            }
+          }
+        }
+      },
+      "value": {
+        "x": 1
+      },
+      "resources": [],
+      "required": "S"
+    },
+    {
+      "id": "coordinate-review/if-failed-no-annotation",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "A": {
+            "anyOf": [
+              true,
+              {
+                "allOf": [
+                  {
+                    "$ref": "#/schemas/A"
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "x": false
+                      }
+                    },
+                    "then": {},
+                    "else": {
+                      "properties": {
+                        "y": true
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "#/schemas/A",
+              "unevaluatedProperties": false
+            }
+          }
+        }
+      },
+      "value": {
+        "x": 1,
+        "y": 2
+      },
+      "resources": [],
+      "required": "F"
+    },
+    {
+      "id": "coordinate-review/then-producer",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "A": {
+            "anyOf": [
+              true,
+              {
+                "allOf": [
+                  {
+                    "$ref": "#/schemas/A"
+                  },
+                  {
+                    "if": true,
+                    "then": {
+                      "properties": {
+                        "x": true
+                      }
+                    },
+                    "else": false
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "#/schemas/A",
+              "unevaluatedProperties": false
+            }
+          }
+        }
+      },
+      "value": {
+        "x": 1
+      },
+      "resources": [],
+      "required": "S"
+    },
+    {
+      "id": "coordinate-review/else-producer",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "A": {
+            "anyOf": [
+              true,
+              {
+                "allOf": [
+                  {
+                    "$ref": "#/schemas/A"
+                  },
+                  {
+                    "if": false,
+                    "then": false,
+                    "else": {
+                      "properties": {
+                        "x": true
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "#/schemas/A",
+              "unevaluatedProperties": false
+            }
+          }
+        }
+      },
+      "value": {
+        "x": 1
+      },
+      "resources": [],
+      "required": "S"
+    },
+    {
+      "id": "coordinate-review/orphan-then-not-producer",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "A": {
+            "anyOf": [
+              true,
+              {
+                "allOf": [
+                  {
+                    "$ref": "#/schemas/A"
+                  },
+                  {
+                    "then": {
+                      "properties": {
+                        "x": true
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "#/schemas/A",
+              "unevaluatedProperties": false
+            }
+          }
+        }
+      },
+      "value": {
+        "x": 1
+      },
+      "resources": [],
+      "required": "F"
+    },
+    {
+      "id": "coordinate-review/dependent-active",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "A": {
+            "anyOf": [
+              true,
+              {
+                "allOf": [
+                  {
+                    "$ref": "#/schemas/A"
+                  },
+                  {
+                    "dependentSchemas": {
+                      "t": {
+                        "properties": {
+                          "x": true,
+                          "t": true
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "#/schemas/A",
+              "unevaluatedProperties": false
+            }
+          }
+        }
+      },
+      "value": {
+        "t": 0,
+        "x": 1
+      },
+      "resources": [],
+      "required": "S"
+    },
+    {
+      "id": "coordinate-review/dependent-inactive",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "A": {
+            "anyOf": [
+              true,
+              {
+                "allOf": [
+                  {
+                    "$ref": "#/schemas/A"
+                  },
+                  {
+                    "dependentSchemas": {
+                      "t": {
+                        "properties": {
+                          "x": true
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "#/schemas/A",
+              "unevaluatedProperties": false
+            }
+          }
+        }
+      },
+      "value": {
+        "x": 1
+      },
+      "resources": [],
+      "required": "F"
+    },
+    {
+      "id": "coordinate-review/oneOf-success",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "A": {
+            "anyOf": [
+              true,
+              {
+                "allOf": [
+                  {
+                    "$ref": "#/schemas/A"
+                  },
+                  {
+                    "oneOf": [
+                      false,
+                      {
+                        "properties": {
+                          "x": true
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "#/schemas/A",
+              "unevaluatedProperties": false
+            }
+          }
+        }
+      },
+      "value": {
+        "x": 1
+      },
+      "resources": [],
+      "required": "S"
+    },
+    {
+      "id": "coordinate-review/oneOf-failure",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "A": {
+            "anyOf": [
+              true,
+              {
+                "allOf": [
+                  {
+                    "$ref": "#/schemas/A"
+                  },
+                  {
+                    "oneOf": [
+                      {
+                        "properties": {
+                          "x": true
+                        }
+                      },
+                      {
+                        "properties": {
+                          "x": true
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "#/schemas/A",
+              "unevaluatedProperties": false
+            }
+          }
+        }
+      },
+      "value": {
+        "x": 1
+      },
+      "resources": [],
+      "required": "F"
+    },
+    {
+      "id": "coordinate-review/allOf-failure",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "A": {
+            "anyOf": [
+              true,
+              {
+                "allOf": [
+                  {
+                    "$ref": "#/schemas/A"
+                  },
+                  {
+                    "allOf": [
+                      {
+                        "properties": {
+                          "x": true
+                        }
+                      },
+                      false
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "#/schemas/A",
+              "unevaluatedProperties": false
+            }
+          }
+        }
+      },
+      "value": {
+        "x": 1
+      },
+      "resources": [],
+      "required": "F"
+    },
+    {
+      "id": "coordinate-review/not-discards",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "A": {
+            "anyOf": [
+              true,
+              {
+                "allOf": [
+                  {
+                    "$ref": "#/schemas/A"
+                  },
+                  {
+                    "not": {
+                      "properties": {
+                        "x": false
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "#/schemas/A",
+              "unevaluatedProperties": false
+            }
+          }
+        }
+      },
+      "value": {
+        "x": 1
+      },
+      "resources": [],
+      "required": "F"
+    },
+    {
+      "id": "coordinate-review/propertyNames-discards",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "A": {
+            "anyOf": [
+              true,
+              {
+                "allOf": [
+                  {
+                    "$ref": "#/schemas/A"
+                  },
+                  {
+                    "propertyNames": {
+                      "const": "x"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "#/schemas/A",
+              "unevaluatedProperties": false
+            }
+          }
+        }
+      },
+      "value": {
+        "x": 1
+      },
+      "resources": [],
+      "required": "F"
+    },
+    {
+      "id": "coordinate-review/child-properties-dont-leak",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "A": {
+            "anyOf": [
+              true,
+              {
+                "allOf": [
+                  {
+                    "$ref": "#/schemas/A"
+                  },
+                  {
+                    "properties": {
+                      "outer": {
+                        "properties": {
+                          "x": true
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "#/schemas/A",
+              "unevaluatedProperties": false
+            }
+          }
+        }
+      },
+      "value": {
+        "outer": {
+          "x": 1
+        },
+        "x": 2
+      },
+      "resources": [],
+      "required": "F"
+    },
+    {
+      "id": "coordinate-review/child-properties-parent-name",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "A": {
+            "anyOf": [
+              true,
+              {
+                "allOf": [
+                  {
+                    "$ref": "#/schemas/A"
+                  },
+                  {
+                    "properties": {
+                      "outer": {
+                        "properties": {
+                          "x": true
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "#/schemas/A",
+              "unevaluatedProperties": false
+            }
+          }
+        }
+      },
+      "value": {
+        "outer": {}
+      },
+      "resources": [],
+      "required": "S"
+    },
+    {
+      "id": "coordinate-review/default-not-producer",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "A": {
+            "anyOf": [
+              true,
+              {
+                "allOf": [
+                  {
+                    "$ref": "#/schemas/A"
+                  },
+                  {
+                    "default": {
+                      "properties": {
+                        "x": true
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "#/schemas/A",
+              "unevaluatedProperties": false
+            }
+          }
+        }
+      },
+      "value": {
+        "x": 1
+      },
+      "resources": [],
+      "required": "F"
+    },
+    {
+      "id": "coordinate-review/unknown-not-producer",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "A": {
+            "anyOf": [
+              true,
+              {
+                "allOf": [
+                  {
+                    "$ref": "#/schemas/A"
+                  },
+                  {
+                    "unknownKeyword": {
+                      "properties": {
+                        "x": true
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "#/schemas/A",
+              "unevaluatedProperties": false
+            }
+          }
+        }
+      },
+      "value": {
+        "x": 1
+      },
+      "resources": [],
+      "required": "F"
+    },
+    {
+      "id": "coordinate-review/additional-properties",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "A": {
+            "anyOf": [
+              true,
+              {
+                "allOf": [
+                  {
+                    "$ref": "#/schemas/A"
+                  },
+                  {
+                    "additionalProperties": true
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "#/schemas/A",
+              "unevaluatedProperties": false
+            }
+          }
+        }
+      },
+      "value": {
+        "x": 1
+      },
+      "resources": [],
+      "required": "S"
+    },
+    {
+      "id": "coordinate-review/pattern-properties",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "A": {
+            "anyOf": [
+              true,
+              {
+                "allOf": [
+                  {
+                    "$ref": "#/schemas/A"
+                  },
+                  {
+                    "patternProperties": {
+                      "^x$": true
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "#/schemas/A",
+              "unevaluatedProperties": false
+            }
+          }
+        }
+      },
+      "value": {
+        "x": 1
+      },
+      "resources": [],
+      "required": "S"
+    },
+    {
+      "id": "coordinate-review/pattern-does-not-produce-y",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "A": {
+            "anyOf": [
+              true,
+              {
+                "allOf": [
+                  {
+                    "$ref": "#/schemas/A"
+                  },
+                  {
+                    "patternProperties": {
+                      "^x$": true
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "#/schemas/A",
+              "unevaluatedProperties": false
+            }
+          }
+        }
+      },
+      "value": {
+        "x": 1,
+        "y": 1
+      },
+      "resources": [],
+      "required": "F"
+    },
+    {
+      "id": "coordinate-review/known-undefined-producer",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "A": {
+            "anyOf": [
+              true,
+              {
+                "allOf": [
+                  {
+                    "$ref": "#/schemas/A"
+                  },
+                  {
+                    "properties": {
+                      "x": {
+                        "pattern": "(?i)x"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "#/schemas/A",
+              "unevaluatedProperties": false
+            }
+          }
+        }
+      },
+      "value": {
+        "x": "y"
+      },
+      "resources": [],
+      "required": "U"
+    },
+    {
+      "id": "coordinate-review/same-value-shared-predicate",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "A": {
+            "anyOf": [
+              true,
+              {
+                "allOf": [
+                  {
+                    "$ref": "#/schemas/A"
+                  },
+                  {
+                    "properties": {
+                      "x": {
+                        "$ref": "#/schemas/P"
+                      },
+                      "y": {
+                        "$ref": "#/schemas/P"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "P": {
+            "pattern": "(?i)x"
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "#/schemas/A",
+              "unevaluatedProperties": false
+            }
+          }
+        }
+      },
+      "value": {
+        "x": "z",
+        "y": "z"
+      },
+      "resources": [],
+      "required": "U"
+    },
+    {
+      "id": "coordinate-review/prefix",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "A": {
+            "anyOf": [
+              true,
+              {
+                "allOf": [
+                  {
+                    "$ref": "#/schemas/A"
+                  },
+                  {
+                    "prefixItems": [
+                      true
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "#/schemas/A",
+              "unevaluatedItems": false
+            }
+          }
+        }
+      },
+      "value": [
+        1
+      ],
+      "resources": [],
+      "required": "S"
+    },
+    {
+      "id": "coordinate-review/prefix-extra",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "A": {
+            "anyOf": [
+              true,
+              {
+                "allOf": [
+                  {
+                    "$ref": "#/schemas/A"
+                  },
+                  {
+                    "prefixItems": [
+                      true
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "#/schemas/A",
+              "unevaluatedItems": false
+            }
+          }
+        }
+      },
+      "value": [
+        1,
+        2
+      ],
+      "resources": [],
+      "required": "F"
+    },
+    {
+      "id": "coordinate-review/items",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "A": {
+            "anyOf": [
+              true,
+              {
+                "allOf": [
+                  {
+                    "$ref": "#/schemas/A"
+                  },
+                  {
+                    "items": true
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "#/schemas/A",
+              "unevaluatedItems": false
+            }
+          }
+        }
+      },
+      "value": [
+        1,
+        2
+      ],
+      "resources": [],
+      "required": "S"
+    },
+    {
+      "id": "coordinate-review/contains-success",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "A": {
+            "anyOf": [
+              true,
+              {
+                "allOf": [
+                  {
+                    "$ref": "#/schemas/A"
+                  },
+                  {
+                    "contains": true
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "#/schemas/A",
+              "unevaluatedItems": false
+            }
+          }
+        }
+      },
+      "value": [
+        2
+      ],
+      "resources": [],
+      "required": "S"
+    },
+    {
+      "id": "coordinate-review/contains-zero",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "A": {
+            "anyOf": [
+              true,
+              {
+                "allOf": [
+                  {
+                    "$ref": "#/schemas/A"
+                  },
+                  {
+                    "contains": {
+                      "const": 1
+                    },
+                    "minContains": 0
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "#/schemas/A",
+              "unevaluatedItems": false
+            }
+          }
+        }
+      },
+      "value": [
+        2
+      ],
+      "resources": [],
+      "required": "F"
+    },
+    {
+      "id": "coordinate-review/child-items-dont-leak",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "A": {
+            "anyOf": [
+              true,
+              {
+                "allOf": [
+                  {
+                    "$ref": "#/schemas/A"
+                  },
+                  {
+                    "prefixItems": [
+                      {
+                        "items": true
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "#/schemas/A",
+              "unevaluatedItems": false
+            }
+          }
+        }
+      },
+      "value": [
+        [
+          1
+        ],
+        2
+      ],
+      "resources": [],
+      "required": "F"
+    },
+    {
+      "id": "coordinate-review/unknown-external-support",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "A": {
+            "anyOf": [
+              true,
+              {
+                "allOf": [
+                  {
+                    "$ref": "#/schemas/A"
+                  },
+                  {
+                    "$ref": "https://review.invalid/missing"
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "#/schemas/A",
+              "unevaluatedProperties": false
+            }
+          }
+        }
+      },
+      "value": {
+        "x": 1
+      },
+      "resources": [],
+      "required": "N:resource-unavailable"
+    },
+    {
+      "id": "coordinate-review/patternProperties-undefined-correlation",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "A": {
+            "anyOf": [
+              true,
+              {
+                "allOf": [
+                  {
+                    "$ref": "#/schemas/A"
+                  },
+                  {
+                    "patternProperties": {
+                      "(?i)x": true
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "#/schemas/A",
+              "unevaluatedProperties": false
+            }
+          }
+        }
+      },
+      "value": {
+        "x": 1
+      },
+      "resources": [],
+      "required": "U"
+    },
+    {
+      "id": "coordinate-review/lone-name",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {},
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "https://review.invalid/exact",
+              "unevaluatedProperties": false
+            }
+          }
+        }
+      },
+      "value": null,
+      "value_text": "{\"\\ud800\":1}",
+      "resources": [
+        {
+          "uri": "https://review.invalid/exact",
+          "schema_text": "{\"$id\":\"https://review.invalid/exact\",\"anyOf\":[true,{\"allOf\":[{\"$ref\":\"#\"},{\"properties\":{\"\\ud800\":true}}]}]}"
+        }
+      ],
+      "required": "S"
+    },
+    {
+      "id": "coordinate-review/distinct-replacement-name",
+      "document": {
+        "openbindings": "0.2.0",
+        "schemas": {},
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "https://review.invalid/exact",
+              "unevaluatedProperties": false
+            }
+          }
+        }
+      },
+      "value": null,
+      "value_text": "{\"\\ud800\":1,\"\\ufffd\":2}",
+      "resources": [
+        {
+          "uri": "https://review.invalid/exact",
+          "schema_text": "{\"$id\":\"https://review.invalid/exact\",\"anyOf\":[true,{\"allOf\":[{\"$ref\":\"#\"},{\"properties\":{\"\\ud800\":true}}]}]}"
+        }
+      ],
+      "required": "F"
+    },
+    {
+      "id": "exact-identifier/non-scalar-id",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "https://review.invalid/exact"
+            }
+          }
+        }
+      },
+      "value": 1,
+      "resources": [
+        {
+          "uri": "https://review.invalid/exact",
+          "schema_text": "{\"$id\":\"\\ud800\"}"
+        }
+      ],
+      "required": "S"
+    },
+    {
+      "id": "exact-identifier/non-scalar-id-and-type",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "https://review.invalid/exact"
+            }
+          }
+        }
+      },
+      "value": 1,
+      "resources": [
+        {
+          "uri": "https://review.invalid/exact",
+          "schema_text": "{\"$id\":\"\\ud800\",\"type\":\"integer\"}"
+        }
+      ],
+      "required": "S"
+    },
+    {
+      "id": "exact-identifier/non-scalar-id-failed-type",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "https://review.invalid/exact"
+            }
+          }
+        }
+      },
+      "value": "x",
+      "resources": [
+        {
+          "uri": "https://review.invalid/exact",
+          "schema_text": "{\"$id\":\"\\ud800\",\"type\":\"integer\"}"
+        }
+      ],
+      "required": "F"
+    },
+    {
+      "id": "exact-identifier/non-scalar-id-singleton",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "https://review.invalid/exact"
+            }
+          }
+        }
+      },
+      "value": 1,
+      "resources": [
+        {
+          "uri": "https://review.invalid/exact",
+          "schema_text": "{\"$id\":\"\\ud800\",\"allOf\":[true]}"
+        }
+      ],
+      "required": "S"
+    },
+    {
+      "id": "exact-identifier/non-scalar-id-reference",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "https://review.invalid/exact"
+            }
+          }
+        }
+      },
+      "value": 1,
+      "resources": [
+        {
+          "uri": "https://review.invalid/exact",
+          "schema_text": "{\"$id\":\"\\ud800\",\"$ref\":\"#/$defs/x\",\"$defs\":{\"x\":true}}"
+        }
+      ],
+      "required": "U"
+    },
+    {
+      "id": "exact-identifier/non-scalar-ref",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "https://review.invalid/exact"
+            }
+          }
+        }
+      },
+      "value": 1,
+      "resources": [
+        {
+          "uri": "https://review.invalid/exact",
+          "schema_text": "{\"$ref\":\"\\ud800\"}"
+        }
+      ],
+      "required": "U"
+    },
+    {
+      "id": "exact-identifier/non-scalar-ref-masked-true",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "https://review.invalid/exact"
+            }
+          }
+        }
+      },
+      "value": 1,
+      "resources": [
+        {
+          "uri": "https://review.invalid/exact",
+          "schema_text": "{\"anyOf\":[true,{\"$ref\":\"\\ud800\"}]}"
+        }
+      ],
+      "required": "S"
+    },
+    {
+      "id": "exact-identifier/non-scalar-ref-masked-false",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "https://review.invalid/exact"
+            }
+          }
+        }
+      },
+      "value": 1,
+      "resources": [
+        {
+          "uri": "https://review.invalid/exact",
+          "schema_text": "{\"allOf\":[false,{\"$ref\":\"\\ud800\"}]}"
+        }
+      ],
+      "required": "F"
+    },
+    {
+      "id": "exact-identifier/malformed-scalar-id",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "https://review.invalid/exact"
+            }
+          }
+        }
+      },
+      "value": 1,
+      "resources": [
+        {
+          "uri": "https://review.invalid/exact",
+          "schema_text": "{\"$id\":\"%\"}"
+        }
+      ],
+      "required": "S"
+    },
+    {
+      "id": "exact-identifier/malformed-scalar-id-and-type",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "https://review.invalid/exact"
+            }
+          }
+        }
+      },
+      "value": 1,
+      "resources": [
+        {
+          "uri": "https://review.invalid/exact",
+          "schema_text": "{\"$id\":\"%\",\"type\":\"integer\"}"
+        }
+      ],
+      "required": "S"
+    },
+    {
+      "id": "exact-identifier/malformed-scalar-id-failed-type",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "https://review.invalid/exact"
+            }
+          }
+        }
+      },
+      "value": "x",
+      "resources": [
+        {
+          "uri": "https://review.invalid/exact",
+          "schema_text": "{\"$id\":\"%\",\"type\":\"integer\"}"
+        }
+      ],
+      "required": "F"
+    },
+    {
+      "id": "exact-identifier/malformed-scalar-id-singleton",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "https://review.invalid/exact"
+            }
+          }
+        }
+      },
+      "value": 1,
+      "resources": [
+        {
+          "uri": "https://review.invalid/exact",
+          "schema_text": "{\"$id\":\"%\",\"allOf\":[true]}"
+        }
+      ],
+      "required": "S"
+    },
+    {
+      "id": "exact-identifier/malformed-scalar-id-reference",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "https://review.invalid/exact"
+            }
+          }
+        }
+      },
+      "value": 1,
+      "resources": [
+        {
+          "uri": "https://review.invalid/exact",
+          "schema_text": "{\"$id\":\"%\",\"$ref\":\"#/$defs/x\",\"$defs\":{\"x\":true}}"
+        }
+      ],
+      "required": "U"
+    },
+    {
+      "id": "exact-identifier/malformed-scalar-ref",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "https://review.invalid/exact"
+            }
+          }
+        }
+      },
+      "value": 1,
+      "resources": [
+        {
+          "uri": "https://review.invalid/exact",
+          "schema_text": "{\"$ref\":\"%\"}"
+        }
+      ],
+      "required": "U"
+    },
+    {
+      "id": "exact-identifier/malformed-scalar-ref-masked-true",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "https://review.invalid/exact"
+            }
+          }
+        }
+      },
+      "value": 1,
+      "resources": [
+        {
+          "uri": "https://review.invalid/exact",
+          "schema_text": "{\"anyOf\":[true,{\"$ref\":\"%\"}]}"
+        }
+      ],
+      "required": "S"
+    },
+    {
+      "id": "exact-identifier/malformed-scalar-ref-masked-false",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "https://review.invalid/exact"
+            }
+          }
+        }
+      },
+      "value": 1,
+      "resources": [
+        {
+          "uri": "https://review.invalid/exact",
+          "schema_text": "{\"allOf\":[false,{\"$ref\":\"%\"}]}"
+        }
+      ],
+      "required": "F"
+    },
+    {
+      "id": "fallback-review/malformed-surrogate-id",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "https://independent.test/schema"
+            }
+          }
+        }
+      },
+      "resources": [
+        {
+          "uri": "https://independent.test/schema",
+          "schema_text": "{\"$id\":\"\\ud800\"}"
+        }
+      ],
+      "value_text": "1",
+      "required": "S"
+    },
+    {
+      "id": "fallback-review/malformed-surrogate-id-true-sibling",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "https://independent.test/schema"
+            }
+          }
+        }
+      },
+      "resources": [
+        {
+          "uri": "https://independent.test/schema",
+          "schema_text": "{\"$id\":\"\\ud800\",\"type\":\"integer\"}"
+        }
+      ],
+      "value_text": "1",
+      "required": "S"
+    },
+    {
+      "id": "fallback-review/malformed-surrogate-id-false-sibling",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "https://independent.test/schema"
+            }
+          }
+        }
+      },
+      "resources": [
+        {
+          "uri": "https://independent.test/schema",
+          "schema_text": "{\"$id\":\"\\ud800\",\"type\":\"integer\"}"
+        }
+      ],
+      "value_text": "null",
+      "required": "F"
+    },
+    {
+      "id": "fallback-review/malformed-scalar-id-control",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "https://independent.test/schema"
+            }
+          }
+        }
+      },
+      "resources": [
+        {
+          "uri": "https://independent.test/schema",
+          "schema_text": "{\"$id\":\"%\"}"
+        }
+      ],
+      "value_text": "1",
+      "required": "S"
+    },
+    {
+      "id": "fallback-review/decisive-anyOf",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "https://independent.test/schema"
+            }
+          }
+        }
+      },
+      "resources": [
+        {
+          "uri": "https://independent.test/schema",
+          "schema_text": "{\"anyOf\":[true,{\"$id\":\"\\ud800\"}]}"
+        }
+      ],
+      "value_text": "1",
+      "required": "S"
+    },
+    {
+      "id": "fallback-review/unknown-literal-id-ignored",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "https://independent.test/schema"
+            }
+          }
+        }
+      },
+      "resources": [
+        {
+          "uri": "https://independent.test/schema",
+          "schema_text": "{\"\\ud800\":{\"$id\":\"\\ud800\"},\"type\":\"integer\"}"
+        }
+      ],
+      "value_text": "1",
+      "required": "S"
+    },
+    {
+      "id": "exact-identifier/non-scalar-relative-reference",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "https://review.invalid/exact"
+            }
+          }
+        }
+      },
+      "value": 1,
+      "resources": [
+        {
+          "uri": "https://review.invalid/exact",
+          "schema_text": "{\"$id\": \"\\ud800\", \"$ref\": \"target\"}"
+        }
+      ],
+      "required": "U"
+    },
+    {
+      "id": "exact-identifier/non-scalar-absolute-true",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "https://review.invalid/exact"
+            }
+          }
+        }
+      },
+      "value": 1,
+      "resources": [
+        {
+          "uri": "https://review.invalid/exact",
+          "schema_text": "{\"$id\": \"\\ud800\", \"$ref\": \"https://review.invalid/target\"}"
+        },
+        {
+          "uri": "https://review.invalid/target",
+          "schema": true
+        }
+      ],
+      "required": "S"
+    },
+    {
+      "id": "exact-identifier/non-scalar-absolute-false",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "https://review.invalid/exact"
+            }
+          }
+        }
+      },
+      "value": 1,
+      "resources": [
+        {
+          "uri": "https://review.invalid/exact",
+          "schema_text": "{\"$id\": \"\\ud800\", \"$ref\": \"https://review.invalid/target\"}"
+        },
+        {
+          "uri": "https://review.invalid/target",
+          "schema": false
+        }
+      ],
+      "required": "F"
+    },
+    {
+      "id": "exact-identifier/malformed-scalar-relative-reference",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "https://review.invalid/exact"
+            }
+          }
+        }
+      },
+      "value": 1,
+      "resources": [
+        {
+          "uri": "https://review.invalid/exact",
+          "schema_text": "{\"$id\": \"%\", \"$ref\": \"target\"}"
+        }
+      ],
+      "required": "U"
+    },
+    {
+      "id": "exact-identifier/malformed-scalar-absolute-true",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "https://review.invalid/exact"
+            }
+          }
+        }
+      },
+      "value": 1,
+      "resources": [
+        {
+          "uri": "https://review.invalid/exact",
+          "schema_text": "{\"$id\": \"%\", \"$ref\": \"https://review.invalid/target\"}"
+        },
+        {
+          "uri": "https://review.invalid/target",
+          "schema": true
+        }
+      ],
+      "required": "S"
+    },
+    {
+      "id": "exact-identifier/malformed-scalar-absolute-false",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "https://review.invalid/exact"
+            }
+          }
+        }
+      },
+      "value": 1,
+      "resources": [
+        {
+          "uri": "https://review.invalid/exact",
+          "schema_text": "{\"$id\": \"%\", \"$ref\": \"https://review.invalid/target\"}"
+        },
+        {
+          "uri": "https://review.invalid/target",
+          "schema": false
+        }
+      ],
+      "required": "F"
+    },
+    {
+      "id": "identifier-dependence/original-no-reference",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "https://independent.test/schema"
+            }
+          }
+        }
+      },
+      "resources": [
+        {
+          "uri": "https://independent.test/schema",
+          "schema_text": "{\"$id\":\"https://s9.example/root\",\"allOf\":[{\"$id\":\"http://[\"}]}"
+        }
+      ],
+      "value": null,
+      "required": "S"
+    },
+    {
+      "id": "identifier-dependence/scalar-forced-semantic",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "https://independent.test/schema"
+            }
+          }
+        }
+      },
+      "resources": [
+        {
+          "uri": "https://independent.test/schema",
+          "schema_text": "{\"$id\":\"%\",\"not\":{\"allOf\":[false,{\"$ref\":\"%\"}]}}"
+        }
+      ],
+      "value": 1,
+      "required": "S"
+    },
+    {
+      "id": "identifier-dependence/surrogate-forced-semantic",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "https://independent.test/schema"
+            }
+          }
+        }
+      },
+      "resources": [
+        {
+          "uri": "https://independent.test/schema",
+          "schema_text": "{\"$id\":\"\\ud800\",\"not\":{\"allOf\":[false,{\"$ref\":\"%\"}]}}"
+        }
+      ],
+      "value": 1,
+      "required": "S"
+    },
+    {
+      "id": "identifier-dependence/relative-reference",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "https://independent.test/schema"
+            }
+          }
+        }
+      },
+      "resources": [
+        {
+          "uri": "https://independent.test/schema",
+          "schema_text": "{\"$id\":\"%\",\"$ref\":\"target\"}"
+        }
+      ],
+      "value": 1,
+      "required": "U"
+    },
+    {
+      "id": "identifier-dependence/fragment-reference",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "https://independent.test/schema"
+            }
+          }
+        }
+      },
+      "resources": [
+        {
+          "uri": "https://independent.test/schema",
+          "schema_text": "{\"$id\":\"%\",\"$ref\":\"#/$defs/x\",\"$defs\":{\"x\":true}}"
+        }
+      ],
+      "value": 1,
+      "required": "U"
+    },
+    {
+      "id": "identifier-dependence/absolute-true",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "https://independent.test/schema"
+            }
+          }
+        }
+      },
+      "resources": [
+        {
+          "uri": "https://independent.test/schema",
+          "schema_text": "{\"$id\":\"%\",\"$ref\":\"https://independent.test/target\"}"
+        },
+        {
+          "uri": "https://independent.test/target",
+          "schema": true
+        }
+      ],
+      "value": 1,
+      "required": "S"
+    },
+    {
+      "id": "identifier-dependence/absolute-false",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "https://independent.test/schema"
+            }
+          }
+        }
+      },
+      "resources": [
+        {
+          "uri": "https://independent.test/schema",
+          "schema_text": "{\"$id\":\"%\",\"$ref\":\"https://independent.test/target\"}"
+        },
+        {
+          "uri": "https://independent.test/target",
+          "schema": false
+        }
+      ],
+      "value": 1,
+      "required": "F"
+    },
+    {
+      "id": "identifier-dependence/surrogate-absolute-true",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "https://independent.test/schema"
+            }
+          }
+        }
+      },
+      "resources": [
+        {
+          "uri": "https://independent.test/schema",
+          "schema_text": "{\"$id\":\"\\ud800\",\"$ref\":\"https://independent.test/target\"}"
+        },
+        {
+          "uri": "https://independent.test/target",
+          "schema": true
+        }
+      ],
+      "value": 1,
+      "required": "S"
+    },
+    {
+      "id": "identifier-dependence/surrogate-absolute-false",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "https://independent.test/schema"
+            }
+          }
+        }
+      },
+      "resources": [
+        {
+          "uri": "https://independent.test/schema",
+          "schema_text": "{\"$id\":\"\\ud800\",\"$ref\":\"https://independent.test/target\"}"
+        },
+        {
+          "uri": "https://independent.test/target",
+          "schema": false
+        }
+      ],
+      "value": 1,
+      "required": "F"
+    },
+    {
+      "id": "identifier-dependence/property-annotation",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "https://independent.test/schema"
+            }
+          }
+        }
+      },
+      "resources": [
+        {
+          "uri": "https://independent.test/schema",
+          "schema_text": "{\"properties\":{\"x\":{\"$id\":\"%\"}},\"unevaluatedProperties\":false}"
+        }
+      ],
+      "value": {
+        "x": 1
+      },
+      "required": "S"
+    },
+    {
+      "id": "identifier-dependence/not-identifier",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "https://independent.test/schema"
+            }
+          }
+        }
+      },
+      "resources": [
+        {
+          "uri": "https://independent.test/schema",
+          "schema_text": "{\"not\":{\"$id\":\"%\"}}"
+        }
+      ],
+      "value": 1,
+      "required": "F"
+    },
+    {
+      "id": "identifier-dependence/two-identifier-oneOf",
+      "document": {
+        "openbindings": "0.2.0",
+        "operations": {
+          "op": {
+            "input": {
+              "$ref": "https://independent.test/schema"
+            }
+          }
+        }
+      },
+      "resources": [
+        {
+          "uri": "https://independent.test/schema",
+          "schema_text": "{\"oneOf\":[{\"$id\":\"%\"},{\"$id\":\"http://[\"}]}"
+        }
+      ],
+      "value": 1,
+      "required": "F"
+    }
+  ]
+}

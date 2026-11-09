@@ -1,5 +1,5 @@
 use crate::*;
-use openbindings::{Conformant, Document, DocumentValidation, VersionRefusal};
+use openbindings::{ConformantDocument, DocumentValidation, VersionRefusal};
 use std::sync::Arc;
 
 /// Publication CORS policy. Exact origins must be canonical ASCII tuple origins.
@@ -95,12 +95,12 @@ impl Publication {
     /// # Errors
     /// Returns a configuration error for an invalid exact CORS origin.
     pub fn new(
-        document: &Conformant<Document>,
+        document: &ConformantDocument,
         options: PublicationOptions,
     ) -> Result<Self, ConfigurationError> {
         validate_allow_origin(&options.allow_origin)?;
         Ok(Self {
-            body: Arc::from(document.as_document().as_bytes()),
+            body: Arc::from(document.document().as_bytes()),
             allow_origin: options.allow_origin,
         })
     }

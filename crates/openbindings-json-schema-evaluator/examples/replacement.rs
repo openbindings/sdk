@@ -11,9 +11,9 @@ enum LoadFailure {
     Version(VersionRefusal),
     Conformance(ValidationReport),
     MissingOperation,
-    NoInputContract,
-    Preparation(NoVerdict),
-    MissingResources(NoVerdict),
+    NoInputSchema,
+    Preparation(PreparationFailure),
+    MissingResources(PreparationFailure),
     UnresolvedReferences(Box<ReferenceReport>),
 }
 impl fmt::Display for LoadFailure {
@@ -27,9 +27,9 @@ impl fmt::Display for LoadFailure {
                 report.conclusion, report.findings
             ),
             Self::MissingOperation => f.write_str("operation find is missing"),
-            Self::NoInputContract => f.write_str("operation find declares no input contract"),
-            Self::Preparation(detail) => write!(f, "input contract preparation: {detail:?}"),
-            Self::MissingResources(detail) => write!(f, "input contract resources: {detail:?}"),
+            Self::NoInputSchema => f.write_str("operation find declares no input schema"),
+            Self::Preparation(detail) => write!(f, "input schema preparation: {detail:?}"),
+            Self::MissingResources(detail) => write!(f, "input schema resources: {detail:?}"),
             Self::UnresolvedReferences(report) => {
                 write!(f, "unresolved reference inventory: {report:?}")
             }
@@ -38,8 +38,8 @@ impl fmt::Display for LoadFailure {
 }
 impl Error for LoadFailure {}
 
-fn resources(schema: &str) -> Result<ResourceSet, Box<dyn Error>> {
-    Ok(ResourceSet::new([SchemaResource {
+fn resources(schema: &str) -> Result<ExternalSchemas, Box<dyn Error>> {
+    Ok(ExternalSchemas::new([ExternalSchema {
         uri: "https://example.invalid/input".into(),
         document: JsonValue::parse(schema)?,
     }])?)
@@ -49,9 +49,9 @@ fn resources(schema: &str) -> Result<ResourceSet, Box<dyn Error>> {
 // Inspection is an application policy, not a proof that every value is decidable.
 fn candidate(
     text: &str,
-    resources: ResourceSet,
+    resources: ExternalSchemas,
     control: &dyn WorkControl,
-) -> Result<PreparedValueContract, LoadFailure> {
+) -> Result<PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator>, LoadFailure> {
     let document = Document::parse(text).map_err(LoadFailure::Parse)?;
     let validation = document.validate().map_err(LoadFailure::Version)?;
     let Some(proof) = validation.conformant() else {
@@ -66,26 +66,44 @@ fn candidate(
     {
         return Err(LoadFailure::UnresolvedReferences(Box::new(report)));
     }
-    // Retain the distinct missing-operation, no-contract and no-verdict states.
+    // Retain the distinct missing-operation, no-schema and no-verdict states.
     let operation = proof
         .resolve_operation("find")
         .ok_or(LoadFailure::MissingOperation)?;
-    let contract = operation.input().ok_or(LoadFailure::NoInputContract)?;
-    match contract.prepare_with_control(&DefaultEvaluator::new(), &resources, control) {
+    let contract = operation.input().ok_or(LoadFailure::NoInputSchema)?;
+    match contract.prepare_with_control(
+        &DefaultEvaluator::new(),
+        &resources,
+        &openbindings::PreparationLimits::default(),
+        control,
+    ) {
         // Document, resource and evaluator owners end; the returned owner remains usable.
         Ok(input) => Ok(input),
-        Err(detail) if detail.reason == NoVerdictReason::ResourceUnavailable => {
+        Err(detail)
+            if matches!(
+                detail.kind,
+                PreparationFailureKind::Resolution {
+                    cause: ResolutionFailureKind::ResourceUnavailable { .. }
+                }
+            ) =>
+        {
             Err(LoadFailure::MissingResources(detail))
         }
         Err(detail) => Err(LoadFailure::Preparation(detail)),
     }
 }
 
-fn satisfies(input: &PreparedValueContract, value: &JsonValue) {
-    assert!(matches!(input.validate(value), ValueOutcome::Satisfies));
+fn satisfies(
+    input: &PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator>,
+    value: &JsonValue,
+) {
+    assert!(matches!(input.evaluate(value), ValueOutcome::Satisfies));
 }
-fn mismatch(input: &PreparedValueContract, value: &JsonValue) {
-    assert!(matches!(input.validate(value), ValueOutcome::Fails { .. }));
+fn mismatch(
+    input: &PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator>,
+    value: &JsonValue,
+) {
+    assert!(matches!(input.evaluate(value), ValueOutcome::Fails { .. }));
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -107,7 +125,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         let retained = find
             .input()
             .expect("fixture declares an input")
-            .prepare_with(&evaluator, &resources)
+            .prepare(
+                &evaluator,
+                &resources,
+                &openbindings::PreparationLimits::default(),
+            )
             .expect("fixture must have a prepared input");
         let lookup = proof
             .resolve_operation("lookup")
@@ -116,7 +138,11 @@ fn main() -> Result<(), Box<dyn Error>> {
             lookup
                 .output()
                 .expect("fixture declares an output")
-                .prepare_with(&evaluator, &resources)
+                .prepare(
+                    &evaluator,
+                    &resources,
+                    &openbindings::PreparationLimits::default()
+                )
                 .is_ok()
         ); // each direction prepares independently
         // The prepared owner survives the document, resources and evaluator.
@@ -166,7 +192,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     old_job.join().expect("old preparation remains usable");
 
     let malformed = DOCUMENT.replace("[\"find\"]", "[false]");
-    match candidate(&malformed, ResourceSet::default(), &healthy) {
+    match candidate(&malformed, ExternalSchemas::default(), &healthy) {
         Err(LoadFailure::Conformance(report)) => {
             println!("replacement rejected: {:?}", report.findings)
         }
@@ -175,7 +201,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     satisfies(&active, &new_value); // failure never assigns to the active slot
     // Preparation can succeed with partial resources; this application checks
     // declared completeness before accepting the candidate, without a probe value.
-    match candidate(DOCUMENT, ResourceSet::default(), &healthy) {
+    match candidate(DOCUMENT, ExternalSchemas::default(), &healthy) {
         Err(LoadFailure::UnresolvedReferences(report)) => {
             assert!(report.references.iter().any(|r| matches!(
                 &r.resolution,
@@ -200,7 +226,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         other => panic!("expected cancelled loading: {other:?}"),
     }
     assert!(matches!(
-        active.validate_with_control(&new_value, &cancelled),
+        active.evaluate_with_control(&new_value, &cancelled),
         ValueOutcome::NoVerdict {
             detail: NoVerdict {
                 reason: NoVerdictReason::Cancelled,

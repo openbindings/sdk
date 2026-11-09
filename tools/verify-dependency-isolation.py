@@ -58,9 +58,12 @@ for name, manifest in manifests.items():
     enabled = isinstance(json_dependency, dict) and 'evaluator-work' in json_dependency.get('features', [])
     assert enabled == (name == 'openbindings-json-schema-evaluator'), name
     if 'jsonschema' in manifest.get('dependencies', {}):
-        assert manifest['dependencies']['jsonschema'] == {'workspace': True}, name
+        expected = {'workspace': True}
+        if name == 'openbindings-json-schema-evaluator':
+            expected['features'] = ['idna']
+        assert manifest['dependencies']['jsonschema'] == expected, name
 assert manifests['openbindings-internal-json']['features'] == {'evaluator-work': []}
-assert manifests['openbindings-json-schema-evaluator']['dependencies']['jsonschema'] == {'workspace': True}
+assert manifests['openbindings-json-schema-evaluator']['dependencies']['jsonschema'] == {'workspace': True, 'features': ['idna']}
 for name in ['openbindings-internal-schema', 'openbindings-internal-json']:
     for path in (root / 'crates' / name / 'src').rglob('*.rs'):
         for number, line in enumerate(path.read_text(encoding='utf-8').splitlines(), 1):
@@ -79,7 +82,7 @@ assert set(internal['dependencies']) == {'openbindings'}
 assert internal['dependencies']['openbindings'] == {
     'version': '=0.2.0-alpha.1', 'path': '../openbindings',
 }
-for interface in ['http-discovery', 'invocation', 'source-inspection', 'interface-synthesis']:
+for interface in ['http-discovery', 'invocation', 'kind-description', 'source-pull']:
     package = root / 'crates' / ('openbindings-' + interface)
     manifest = tomllib.loads((package / 'Cargo.toml').read_text(encoding='utf-8'))
     assert manifest['dependencies'][cancellation] == {
@@ -88,22 +91,32 @@ for interface in ['http-discovery', 'invocation', 'source-inspection', 'interfac
     assert 'pub use openbindings_internal_cancellation::{Cancellation, CancellationToken};' in (package / 'src/lib.rs').read_text(encoding='utf-8')
 print('Cancellation: one shared identity, std-only implementation above synchronous core.')
 
-# The records the interfaces define identically have one definition, outside
-# core, which the companions reexport instead of defining their own.
-interfaces = 'openbindings-internal-interfaces'
-assert interfaces not in core.get('dependencies', {})
-shared = {'SupportedKind', 'KindSupportVerdict', 'BindingValue', 'BoundaryError'}
-for interface in ['invocation', 'source-inspection', 'interface-synthesis']:
-    package = root / 'crates' / ('openbindings-' + interface)
-    manifest = tomllib.loads((package / 'Cargo.toml').read_text(encoding='utf-8'))
-    assert manifest['dependencies'][interfaces] == {
-        'version': '=0.2.0-alpha.1', 'path': '../' + interfaces,
-    }
-    source = ''.join(path.read_text(encoding='utf-8') for path in (package / 'src').rglob('*.rs'))
-    for name in shared:
-        assert not re.search(r'pub (struct|enum) ' + name + r'\b', source), (interface, name)
-    assert 'pub use openbindings_internal_interfaces::' in source, interface
-print('Interface records: kind support and the by-value binding have one definition, outside core.')
+# Retired interfaces have no compatibility layer in the current package graph.
+retired_packages = {'openbindings-' + name for name in
+                    ['source-inspection', 'interface-synthesis', 'internal-interfaces']}
+assert not retired_packages & {package['name'] for package in graph['packages']}
+invocation = manifests['openbindings-invocation']
+assert invocation['dependencies']['openbindings-context'] == {
+    'version': '=0.2.0-alpha.1', 'path': '../openbindings-context',
+}
+invocation_source = ''.join(path.read_text(encoding='utf-8') for path in
+                           (root / 'crates/openbindings-invocation/src').rglob('*.rs'))
+assert 'pub use openbindings_context::{Context, ContextChallenge};' in invocation_source
+for retired in ['BindingValue', 'BindingInvocationInput', 'BindingLifecycle']:
+    assert not re.search(r'pub (struct|enum|type) ' + retired + r'\b', invocation_source), retired
+comparison = manifests['openbindings-schema-comparison']['dependencies']
+assert set(comparison) == {'openbindings', 'openbindings-internal-json', 'openbindings-internal-schema'}
+for owner in ['openbindings', 'openbindings-invocation', 'openbindings-json-schema-evaluator']:
+    assert 'openbindings-schema-comparison' not in manifests[owner].get('dependencies', {})
+kind = manifests['openbindings-kind-description']['dependencies']
+assert set(kind) == {'openbindings', 'openbindings-context', cancellation}
+pull = manifests['openbindings-source-pull']['dependencies']
+assert set(pull) == {'openbindings', 'openbindings-context', 'openbindings-internal-json', cancellation}
+for owner in ['openbindings', 'openbindings-invocation', 'openbindings-json-schema-evaluator']:
+    assert 'openbindings-kind-description' not in manifests[owner].get('dependencies', {})
+    assert 'openbindings-source-pull' not in manifests[owner].get('dependencies', {})
+assert 'openbindings-context' not in core.get('dependencies', {})
+print('Interface roles: shared context, independent kind description, source pulling, comparison and invocation; no retired companions.')
 
 # Core's complete implementation closure holds no evaluator.
 graph = json.loads(subprocess.check_output(

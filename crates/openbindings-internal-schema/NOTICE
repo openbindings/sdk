@@ -1,7 +1,7 @@
 OpenBindings Rust SDK
-Applies OpenBindings draft revision 30416ef1ca626e58eb8c383a0c71422a68f9243f.
+Applies OpenBindings draft revision c1419c9fc3ae5a00c2b83da710c11bf67dab7934.
 Public package behavior is bounded by the declared core or companion scope.
-The bundled JSON Schema 2020-12 meta-schemas are the JSON Schema Specification
+The bundled JSON Schema draft-07, 2019-09 and 2020-12 meta-schemas are the JSON Schema Specification
 Authors' work under the BSD 3-Clause License or the Academic Free License 3.0;
 schemas/README.md records their provenance and schemas/ retains the license
 texts.

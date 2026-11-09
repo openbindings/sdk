@@ -1,0 +1,1676 @@
+[
+  {
+    "id": "cycle/deciding",
+    "family": "cycle",
+    "context": "deciding",
+    "schema": {
+      "$id": "https://s9.example/root",
+      "$anchor": "loop",
+      "$ref": "#loop"
+    },
+    "value": null,
+    "spec_expected": "U",
+    "resources": [],
+    "expected": {
+      "stage": "ready",
+      "detail": {
+        "code": "in-place-cycle",
+        "location": {
+          "pointer": "/operations/op/input",
+          "resource": null
+        },
+        "reason": "conservative-preparation"
+      },
+      "outcome": "N"
+    },
+    "required": "U"
+  },
+  {
+    "id": "pattern/deciding",
+    "family": "pattern",
+    "context": "deciding",
+    "schema": {
+      "$id": "https://s9.example/root",
+      "pattern": "\\a"
+    },
+    "value": "s",
+    "spec_expected": "U",
+    "resources": [],
+    "expected": {
+      "stage": "ready",
+      "detail": {
+        "code": "schema-pattern-compilation",
+        "location": {
+          "pointer": "/operations/op/input/pattern",
+          "resource": null
+        },
+        "reason": "conservative-preparation"
+      },
+      "outcome": "N"
+    },
+    "required": "U"
+  },
+  {
+    "id": "patternProperties/deciding",
+    "family": "patternProperties",
+    "context": "deciding",
+    "schema": {
+      "$id": "https://s9.example/root",
+      "patternProperties": {
+        "\\a": false
+      }
+    },
+    "value": {
+      "x": 1
+    },
+    "spec_expected": "U",
+    "resources": [],
+    "expected": {
+      "stage": "ready",
+      "detail": {
+        "code": "schema-pattern-compilation",
+        "location": {
+          "pointer": "/operations/op/input/patternProperties",
+          "resource": null
+        },
+        "reason": "conservative-preparation"
+      },
+      "outcome": "N"
+    },
+    "required": "U"
+  },
+  {
+    "id": "ref-malformed/any-true",
+    "family": "ref-malformed",
+    "context": "any-true",
+    "schema": {
+      "$id": "https://s9.example/root",
+      "anyOf": [
+        true,
+        {
+          "$ref": "http://["
+        }
+      ]
+    },
+    "value": null,
+    "spec_expected": "S",
+    "resources": [],
+    "expected": {
+      "detail": {
+        "code": "invalid-reference",
+        "location": {
+          "pointer": "/operations/op/input/anyOf/1",
+          "resource": null
+        },
+        "reason": "conservative-preparation"
+      },
+      "outcome": "N",
+      "stage": "preparation"
+    },
+    "required": "S"
+  },
+  {
+    "id": "ref-malformed/all-false",
+    "family": "ref-malformed",
+    "context": "all-false",
+    "schema": {
+      "$id": "https://s9.example/root",
+      "allOf": [
+        false,
+        {
+          "$ref": "http://["
+        }
+      ]
+    },
+    "value": null,
+    "spec_expected": "F",
+    "resources": [],
+    "expected": {
+      "detail": {
+        "code": "invalid-reference",
+        "location": {
+          "pointer": "/operations/op/input/allOf/1",
+          "resource": null
+        },
+        "reason": "conservative-preparation"
+      },
+      "outcome": "N",
+      "stage": "preparation"
+    },
+    "required": "F"
+  },
+  {
+    "id": "ref-malformed/unreached",
+    "family": "ref-malformed",
+    "context": "unreached",
+    "schema": {
+      "$id": "https://s9.example/root",
+      "properties": {
+        "x": {
+          "$ref": "http://["
+        }
+      }
+    },
+    "value": {},
+    "spec_expected": "S",
+    "resources": [],
+    "expected": {
+      "detail": {
+        "code": "invalid-reference",
+        "location": {
+          "pointer": "/operations/op/input/properties/x",
+          "resource": null
+        },
+        "reason": "conservative-preparation"
+      },
+      "outcome": "N",
+      "stage": "preparation"
+    },
+    "required": "S"
+  },
+  {
+    "id": "ref-malformed/deciding",
+    "family": "ref-malformed",
+    "context": "deciding",
+    "schema": {
+      "$id": "https://s9.example/root",
+      "$ref": "http://["
+    },
+    "value": null,
+    "spec_expected": "U",
+    "resources": [],
+    "expected": {
+      "detail": {
+        "code": "invalid-reference",
+        "location": {
+          "pointer": "/operations/op/input",
+          "resource": null
+        },
+        "reason": "conservative-preparation"
+      },
+      "outcome": "N",
+      "stage": "preparation"
+    },
+    "required": "U"
+  },
+  {
+    "id": "dynamicRef-malformed/any-true",
+    "family": "dynamicRef-malformed",
+    "context": "any-true",
+    "schema": {
+      "$id": "https://s9.example/root",
+      "anyOf": [
+        true,
+        {
+          "$dynamicRef": "http://["
+        }
+      ]
+    },
+    "value": null,
+    "spec_expected": "S",
+    "resources": [],
+    "expected": {
+      "stage": "preparation",
+      "detail": {
+        "code": "invalid-reference",
+        "location": {
+          "pointer": "/operations/op/input/anyOf/1",
+          "resource": null
+        },
+        "reason": "conservative-preparation"
+      },
+      "outcome": "N"
+    },
+    "required": "S"
+  },
+  {
+    "id": "dynamicRef-malformed/all-false",
+    "family": "dynamicRef-malformed",
+    "context": "all-false",
+    "schema": {
+      "$id": "https://s9.example/root",
+      "allOf": [
+        false,
+        {
+          "$dynamicRef": "http://["
+        }
+      ]
+    },
+    "value": null,
+    "spec_expected": "F",
+    "resources": [],
+    "expected": {
+      "stage": "preparation",
+      "detail": {
+        "code": "invalid-reference",
+        "location": {
+          "pointer": "/operations/op/input/allOf/1",
+          "resource": null
+        },
+        "reason": "conservative-preparation"
+      },
+      "outcome": "N"
+    },
+    "required": "F"
+  },
+  {
+    "id": "dynamicRef-malformed/unreached",
+    "family": "dynamicRef-malformed",
+    "context": "unreached",
+    "schema": {
+      "$id": "https://s9.example/root",
+      "properties": {
+        "x": {
+          "$dynamicRef": "http://["
+        }
+      }
+    },
+    "value": {},
+    "spec_expected": "S",
+    "resources": [],
+    "expected": {
+      "stage": "preparation",
+      "detail": {
+        "code": "invalid-reference",
+        "location": {
+          "pointer": "/operations/op/input/properties/x",
+          "resource": null
+        },
+        "reason": "conservative-preparation"
+      },
+      "outcome": "N"
+    },
+    "required": "S"
+  },
+  {
+    "id": "dynamicRef-malformed/deciding",
+    "family": "dynamicRef-malformed",
+    "context": "deciding",
+    "schema": {
+      "$id": "https://s9.example/root",
+      "$dynamicRef": "http://["
+    },
+    "value": null,
+    "spec_expected": "U",
+    "resources": [],
+    "expected": {
+      "stage": "preparation",
+      "detail": {
+        "code": "invalid-reference",
+        "location": {
+          "pointer": "/operations/op/input",
+          "resource": null
+        },
+        "reason": "conservative-preparation"
+      },
+      "outcome": "N"
+    },
+    "required": "U"
+  },
+  {
+    "id": "id-malformed/any-true",
+    "family": "id-malformed",
+    "context": "any-true",
+    "schema": {
+      "$id": "https://s9.example/root",
+      "anyOf": [
+        true,
+        {
+          "$id": "http://[",
+          "$ref": "target"
+        }
+      ]
+    },
+    "value": null,
+    "spec_expected": "S",
+    "resources": [
+      {
+        "uri": "https://s9.example/a/target",
+        "schema": true
+      },
+      {
+        "uri": "https://s9.example/b/target",
+        "schema": false
+      }
+    ],
+    "expected": {
+      "stage": "preparation",
+      "detail": {
+        "code": "invalid-reference",
+        "location": {
+          "pointer": "/operations/op/input/anyOf/1",
+          "resource": null
+        },
+        "reason": "conservative-preparation"
+      },
+      "outcome": "N"
+    },
+    "required": "S"
+  },
+  {
+    "id": "id-malformed/all-false",
+    "family": "id-malformed",
+    "context": "all-false",
+    "schema": {
+      "$id": "https://s9.example/root",
+      "allOf": [
+        false,
+        {
+          "$id": "http://[",
+          "$ref": "target"
+        }
+      ]
+    },
+    "value": null,
+    "spec_expected": "F",
+    "resources": [
+      {
+        "uri": "https://s9.example/a/target",
+        "schema": true
+      },
+      {
+        "uri": "https://s9.example/b/target",
+        "schema": false
+      }
+    ],
+    "expected": {
+      "stage": "preparation",
+      "detail": {
+        "code": "invalid-reference",
+        "location": {
+          "pointer": "/operations/op/input/allOf/1",
+          "resource": null
+        },
+        "reason": "conservative-preparation"
+      },
+      "outcome": "N"
+    },
+    "required": "F"
+  },
+  {
+    "id": "id-malformed/unreached",
+    "family": "id-malformed",
+    "context": "unreached",
+    "schema": {
+      "$id": "https://s9.example/root",
+      "properties": {
+        "x": {
+          "$id": "http://[",
+          "$ref": "target"
+        }
+      }
+    },
+    "value": {},
+    "spec_expected": "S",
+    "resources": [
+      {
+        "uri": "https://s9.example/a/target",
+        "schema": true
+      },
+      {
+        "uri": "https://s9.example/b/target",
+        "schema": false
+      }
+    ],
+    "expected": {
+      "stage": "preparation",
+      "detail": {
+        "code": "invalid-reference",
+        "location": {
+          "pointer": "/operations/op/input/properties/x",
+          "resource": null
+        },
+        "reason": "conservative-preparation"
+      },
+      "outcome": "N"
+    },
+    "required": "S"
+  },
+  {
+    "id": "id-malformed/deciding",
+    "family": "id-malformed",
+    "context": "deciding",
+    "schema": {
+      "$id": "https://s9.example/root",
+      "allOf": [
+        {
+          "$id": "http://[",
+          "$ref": "target"
+        }
+      ]
+    },
+    "value": null,
+    "spec_expected": "U",
+    "resources": [
+      {
+        "uri": "https://s9.example/a/target",
+        "schema": true
+      },
+      {
+        "uri": "https://s9.example/b/target",
+        "schema": false
+      }
+    ],
+    "expected": {
+      "stage": "preparation",
+      "detail": {
+        "code": "invalid-reference",
+        "location": {
+          "pointer": "/operations/op/input/allOf/0",
+          "resource": null
+        },
+        "reason": "conservative-preparation"
+      },
+      "outcome": "N"
+    },
+    "required": "U"
+  },
+  {
+    "id": "cycle/dynamic",
+    "family": "control",
+    "context": "control",
+    "schema": {
+      "$id": "https://s9.example/root",
+      "$dynamicAnchor": "loop",
+      "$dynamicRef": "#loop"
+    },
+    "value": null,
+    "spec_expected": "U",
+    "expected": {
+      "stage": "ready",
+      "detail": {
+        "code": "in-place-cycle",
+        "location": {
+          "pointer": "/operations/op/input",
+          "resource": null
+        },
+        "reason": "conservative-preparation"
+      },
+      "outcome": "N"
+    },
+    "required": "U"
+  },
+  {
+    "id": "cycle/document-resource",
+    "family": "control",
+    "context": "control",
+    "schema": {
+      "$ref": "#/schemas/A"
+    },
+    "value": null,
+    "spec_expected": "U",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "#/schemas/A"
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$ref": "#/schemas/A"
+        }
+      }
+    },
+    "expected": {
+      "stage": "ready",
+      "detail": {
+        "code": "in-place-cycle",
+        "location": {
+          "pointer": "/schemas/A",
+          "resource": null
+        },
+        "reason": "conservative-preparation"
+      },
+      "outcome": "N"
+    },
+    "required": "U"
+  },
+  {
+    "id": "patternProperties/selection-sensitive",
+    "family": "control",
+    "context": "control",
+    "schema": {
+      "patternProperties": {
+        "\\a": true
+      },
+      "additionalProperties": false
+    },
+    "value": {
+      "x": 1
+    },
+    "spec_expected": "U",
+    "expected": {
+      "stage": "ready",
+      "detail": {
+        "code": "schema-pattern-compilation",
+        "location": {
+          "pointer": "/operations/op/input/patternProperties",
+          "resource": null
+        },
+        "reason": "conservative-preparation"
+      },
+      "outcome": "N"
+    },
+    "required": "U"
+  },
+  {
+    "id": "external-nonschema/any-true",
+    "family": "external-nonschema",
+    "context": "any-true",
+    "schema": {
+      "anyOf": [
+        true,
+        {
+          "$ref": "https://s9.example/openapi#/components/schemas/Task"
+        }
+      ]
+    },
+    "value": null,
+    "spec_expected": "S",
+    "resources": [
+      {
+        "uri": "https://s9.example/openapi",
+        "schema": {
+          "openapi": "3.1.0",
+          "components": {
+            "schemas": {
+              "Task": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    ],
+    "expected": {
+      "detail": {
+        "code": "non-schema-target",
+        "location": {
+          "pointer": "/operations/op/input/anyOf/1",
+          "resource": null
+        },
+        "reason": "conservative-preparation"
+      },
+      "outcome": "N",
+      "stage": "preparation"
+    },
+    "required": "S"
+  },
+  {
+    "id": "external-nonschema/all-false",
+    "family": "external-nonschema",
+    "context": "all-false",
+    "schema": {
+      "allOf": [
+        false,
+        {
+          "$ref": "https://s9.example/openapi#/components/schemas/Task"
+        }
+      ]
+    },
+    "value": null,
+    "spec_expected": "F",
+    "resources": [
+      {
+        "uri": "https://s9.example/openapi",
+        "schema": {
+          "openapi": "3.1.0",
+          "components": {
+            "schemas": {
+              "Task": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    ],
+    "expected": {
+      "detail": {
+        "code": "non-schema-target",
+        "location": {
+          "pointer": "/operations/op/input/allOf/1",
+          "resource": null
+        },
+        "reason": "conservative-preparation"
+      },
+      "outcome": "N",
+      "stage": "preparation"
+    },
+    "required": "F"
+  },
+  {
+    "id": "external-nonschema/unreached",
+    "family": "external-nonschema",
+    "context": "unreached",
+    "schema": {
+      "properties": {
+        "x": {
+          "$ref": "https://s9.example/openapi#/components/schemas/Task"
+        }
+      }
+    },
+    "value": {},
+    "spec_expected": "S",
+    "resources": [
+      {
+        "uri": "https://s9.example/openapi",
+        "schema": {
+          "openapi": "3.1.0",
+          "components": {
+            "schemas": {
+              "Task": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    ],
+    "expected": {
+      "detail": {
+        "code": "non-schema-target",
+        "location": {
+          "pointer": "/operations/op/input/properties/x",
+          "resource": null
+        },
+        "reason": "conservative-preparation"
+      },
+      "outcome": "N",
+      "stage": "preparation"
+    },
+    "required": "S"
+  },
+  {
+    "id": "external-nonschema/deciding",
+    "family": "external-nonschema",
+    "context": "deciding",
+    "schema": {
+      "$ref": "https://s9.example/openapi#/components/schemas/Task"
+    },
+    "value": null,
+    "spec_expected": "U",
+    "resources": [
+      {
+        "uri": "https://s9.example/openapi",
+        "schema": {
+          "openapi": "3.1.0",
+          "components": {
+            "schemas": {
+              "Task": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    ],
+    "expected": {
+      "detail": {
+        "code": "non-schema-target",
+        "location": {
+          "pointer": "/operations/op/input",
+          "resource": null
+        },
+        "reason": "conservative-preparation"
+      },
+      "outcome": "N",
+      "stage": "preparation"
+    },
+    "required": "U"
+  },
+  {
+    "id": "planner/unevaluated",
+    "family": "planner",
+    "context": "unevaluated",
+    "schema": {
+      "anyOf": [
+        true,
+        {
+          "$ref": "https://s9.example/missing"
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "value": {},
+    "spec_expected": "S",
+    "expected": {
+      "stage": "preparation",
+      "outcome": "N",
+      "detail": {
+        "code": "resource-unavailable",
+        "location": {
+          "pointer": "",
+          "resource": "https://s9.example/missing"
+        },
+        "reason": "resource-unavailable"
+      }
+    },
+    "required": "S"
+  },
+  {
+    "id": "planner/oneOf-correlated",
+    "family": "planner",
+    "context": "oneOf-correlated",
+    "schema": {
+      "oneOf": [
+        {
+          "$ref": "https://s9.example/missing"
+        },
+        {
+          "$ref": "https://s9.example/missing"
+        }
+      ]
+    },
+    "value": null,
+    "spec_expected": "F",
+    "expected": {
+      "stage": "ready",
+      "outcome": "N",
+      "detail": {
+        "code": "resource-unavailable",
+        "location": {
+          "pointer": "",
+          "resource": "https://s9.example/missing"
+        },
+        "reason": "resource-unavailable"
+      }
+    },
+    "required": "F"
+  },
+  {
+    "id": "mixture/anyOf/False",
+    "family": "mixture",
+    "context": "completion",
+    "schema": {
+      "anyOf": [
+        {
+          "pattern": "\\a"
+        },
+        {
+          "$ref": "https://s9.example/missing"
+        }
+      ]
+    },
+    "value": "s",
+    "spec_expected": "U",
+    "resources": [
+      {
+        "uri": "https://s9.example/missing",
+        "schema": false
+      }
+    ],
+    "expected": {
+      "stage": "ready",
+      "detail": {
+        "code": "schema-pattern-compilation",
+        "location": {
+          "pointer": "/operations/op/input/anyOf/0/pattern",
+          "resource": null
+        },
+        "reason": "conservative-preparation"
+      },
+      "outcome": "N"
+    },
+    "required": "U"
+  },
+  {
+    "id": "mixture/allOf/True",
+    "family": "mixture",
+    "context": "completion",
+    "schema": {
+      "allOf": [
+        {
+          "pattern": "\\a"
+        },
+        {
+          "$ref": "https://s9.example/missing"
+        }
+      ]
+    },
+    "value": "s",
+    "spec_expected": "U",
+    "resources": [
+      {
+        "uri": "https://s9.example/missing",
+        "schema": true
+      }
+    ],
+    "expected": {
+      "stage": "ready",
+      "detail": {
+        "code": "schema-pattern-compilation",
+        "location": {
+          "pointer": "/operations/op/input/allOf/0/pattern",
+          "resource": null
+        },
+        "reason": "conservative-preparation"
+      },
+      "outcome": "N"
+    },
+    "required": "U"
+  },
+  {
+    "id": "mixture/always-undefined",
+    "family": "mixture",
+    "context": "control",
+    "schema": {
+      "allOf": [
+        {
+          "pattern": "\\a"
+        },
+        {
+          "anyOf": [
+            true,
+            {
+              "$ref": "https://s9.example/missing"
+            }
+          ]
+        }
+      ]
+    },
+    "value": "s",
+    "spec_expected": "U",
+    "expected": {
+      "stage": "ready",
+      "detail": {
+        "code": "schema-pattern-compilation",
+        "location": {
+          "pointer": "/operations/op/input/allOf/0/pattern",
+          "resource": null
+        },
+        "reason": "conservative-preparation"
+      },
+      "outcome": "N"
+    },
+    "required": "U"
+  },
+  {
+    "id": "differential/7/0/partial",
+    "family": "differential",
+    "context": "partial",
+    "schema": {
+      "oneOf": [
+        {
+          "$ref": "https://s9.example/diff/0"
+        },
+        {
+          "$ref": "https://s9.example/diff/0"
+        }
+      ]
+    },
+    "value": null,
+    "spec_expected": null,
+    "group": "differential/7/0",
+    "expected": {
+      "stage": "ready",
+      "outcome": "N",
+      "detail": {
+        "code": "resource-unavailable",
+        "location": {
+          "pointer": "",
+          "resource": "https://s9.example/diff/0"
+        },
+        "reason": "resource-unavailable"
+      }
+    },
+    "required": "F"
+  },
+  {
+    "id": "differential/7/1/partial",
+    "family": "differential",
+    "context": "partial",
+    "schema": {
+      "oneOf": [
+        {
+          "$ref": "https://s9.example/diff/0"
+        },
+        {
+          "$ref": "https://s9.example/diff/0"
+        }
+      ]
+    },
+    "value": "s",
+    "spec_expected": null,
+    "group": "differential/7/1",
+    "expected": {
+      "stage": "ready",
+      "outcome": "N",
+      "detail": {
+        "code": "resource-unavailable",
+        "location": {
+          "pointer": "",
+          "resource": "https://s9.example/diff/0"
+        },
+        "reason": "resource-unavailable"
+      }
+    },
+    "required": "F"
+  },
+  {
+    "id": "differential/7/2/partial",
+    "family": "differential",
+    "context": "partial",
+    "schema": {
+      "oneOf": [
+        {
+          "$ref": "https://s9.example/diff/0"
+        },
+        {
+          "$ref": "https://s9.example/diff/0"
+        }
+      ]
+    },
+    "value": {
+      "x": "s",
+      "y": 1
+    },
+    "spec_expected": null,
+    "group": "differential/7/2",
+    "expected": {
+      "stage": "ready",
+      "outcome": "N",
+      "detail": {
+        "code": "resource-unavailable",
+        "location": {
+          "pointer": "",
+          "resource": "https://s9.example/diff/0"
+        },
+        "reason": "resource-unavailable"
+      }
+    },
+    "required": "F"
+  },
+  {
+    "id": "differential/7/3/partial",
+    "family": "differential",
+    "context": "partial",
+    "schema": {
+      "oneOf": [
+        {
+          "$ref": "https://s9.example/diff/0"
+        },
+        {
+          "$ref": "https://s9.example/diff/0"
+        }
+      ]
+    },
+    "value": [
+      "s",
+      {}
+    ],
+    "spec_expected": null,
+    "group": "differential/7/3",
+    "expected": {
+      "stage": "ready",
+      "outcome": "N",
+      "detail": {
+        "code": "resource-unavailable",
+        "location": {
+          "pointer": "",
+          "resource": "https://s9.example/diff/0"
+        },
+        "reason": "resource-unavailable"
+      }
+    },
+    "required": "F"
+  },
+  {
+    "id": "order/ref-malformed/any-true/0",
+    "family": "ref-malformed",
+    "context": "any-true",
+    "schema": {
+      "$id": "https://s9.example/root",
+      "anyOf": [
+        true,
+        {
+          "$ref": "http://["
+        }
+      ]
+    },
+    "value": null,
+    "spec_expected": "S",
+    "resources": [],
+    "expected": {
+      "detail": {
+        "code": "invalid-reference",
+        "location": {
+          "pointer": "/operations/op/input/anyOf/1",
+          "resource": null
+        },
+        "reason": "conservative-preparation"
+      },
+      "outcome": "N",
+      "stage": "preparation"
+    },
+    "required": "S"
+  },
+  {
+    "id": "order/ref-malformed/any-true/1",
+    "family": "ref-malformed",
+    "context": "any-true",
+    "schema": {
+      "$id": "https://s9.example/root",
+      "anyOf": [
+        {
+          "$ref": "http://["
+        },
+        true
+      ]
+    },
+    "value": null,
+    "spec_expected": "S",
+    "resources": [],
+    "expected": {
+      "detail": {
+        "code": "invalid-reference",
+        "location": {
+          "pointer": "/operations/op/input/anyOf/0",
+          "resource": null
+        },
+        "reason": "conservative-preparation"
+      },
+      "outcome": "N",
+      "stage": "preparation"
+    },
+    "required": "S"
+  },
+  {
+    "id": "order/ref-malformed/all-false/0",
+    "family": "ref-malformed",
+    "context": "all-false",
+    "schema": {
+      "$id": "https://s9.example/root",
+      "allOf": [
+        false,
+        {
+          "$ref": "http://["
+        }
+      ]
+    },
+    "value": null,
+    "spec_expected": "F",
+    "resources": [],
+    "expected": {
+      "detail": {
+        "code": "invalid-reference",
+        "location": {
+          "pointer": "/operations/op/input/allOf/1",
+          "resource": null
+        },
+        "reason": "conservative-preparation"
+      },
+      "outcome": "N",
+      "stage": "preparation"
+    },
+    "required": "F"
+  },
+  {
+    "id": "order/ref-malformed/all-false/1",
+    "family": "ref-malformed",
+    "context": "all-false",
+    "schema": {
+      "$id": "https://s9.example/root",
+      "allOf": [
+        {
+          "$ref": "http://["
+        },
+        false
+      ]
+    },
+    "value": null,
+    "spec_expected": "F",
+    "resources": [],
+    "expected": {
+      "detail": {
+        "code": "invalid-reference",
+        "location": {
+          "pointer": "/operations/op/input/allOf/0",
+          "resource": null
+        },
+        "reason": "conservative-preparation"
+      },
+      "outcome": "N",
+      "stage": "preparation"
+    },
+    "required": "F"
+  },
+  {
+    "id": "order/ref-malformed/unreached/0",
+    "family": "ref-malformed",
+    "context": "unreached",
+    "schema": {
+      "$id": "https://s9.example/root",
+      "properties": {
+        "x": {
+          "$ref": "http://["
+        }
+      }
+    },
+    "value": {},
+    "spec_expected": "S",
+    "resources": [],
+    "expected": {
+      "detail": {
+        "code": "invalid-reference",
+        "location": {
+          "pointer": "/operations/op/input/properties/x",
+          "resource": null
+        },
+        "reason": "conservative-preparation"
+      },
+      "outcome": "N",
+      "stage": "preparation"
+    },
+    "required": "S"
+  },
+  {
+    "id": "order/ref-malformed/unreached/1",
+    "family": "ref-malformed",
+    "context": "unreached",
+    "schema": {
+      "$id": "https://s9.example/root",
+      "properties": {
+        "x": {
+          "$ref": "http://["
+        }
+      }
+    },
+    "value": {},
+    "spec_expected": "S",
+    "resources": [],
+    "expected": {
+      "detail": {
+        "code": "invalid-reference",
+        "location": {
+          "pointer": "/operations/op/input/properties/x",
+          "resource": null
+        },
+        "reason": "conservative-preparation"
+      },
+      "outcome": "N",
+      "stage": "preparation"
+    },
+    "required": "S"
+  },
+  {
+    "id": "order/ref-malformed/deciding/0",
+    "family": "ref-malformed",
+    "context": "deciding",
+    "schema": {
+      "$id": "https://s9.example/root",
+      "$ref": "http://["
+    },
+    "value": null,
+    "spec_expected": "U",
+    "resources": [],
+    "expected": {
+      "detail": {
+        "code": "invalid-reference",
+        "location": {
+          "pointer": "/operations/op/input",
+          "resource": null
+        },
+        "reason": "conservative-preparation"
+      },
+      "outcome": "N",
+      "stage": "preparation"
+    },
+    "required": "U"
+  },
+  {
+    "id": "order/ref-malformed/deciding/1",
+    "family": "ref-malformed",
+    "context": "deciding",
+    "schema": {
+      "$id": "https://s9.example/root",
+      "$ref": "http://["
+    },
+    "value": null,
+    "spec_expected": "U",
+    "resources": [],
+    "expected": {
+      "detail": {
+        "code": "invalid-reference",
+        "location": {
+          "pointer": "/operations/op/input",
+          "resource": null
+        },
+        "reason": "conservative-preparation"
+      },
+      "outcome": "N",
+      "stage": "preparation"
+    },
+    "required": "U"
+  },
+  {
+    "id": "order/external-nonschema/any-true/0",
+    "family": "external-nonschema",
+    "context": "any-true",
+    "schema": {
+      "anyOf": [
+        true,
+        {
+          "$ref": "https://s9.example/openapi#/components/schemas/Task"
+        }
+      ]
+    },
+    "value": null,
+    "spec_expected": "S",
+    "resources": [
+      {
+        "uri": "https://s9.example/openapi",
+        "schema": {
+          "openapi": "3.1.0",
+          "components": {
+            "schemas": {
+              "Task": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    ],
+    "expected": {
+      "detail": {
+        "code": "non-schema-target",
+        "location": {
+          "pointer": "/operations/op/input/anyOf/1",
+          "resource": null
+        },
+        "reason": "conservative-preparation"
+      },
+      "outcome": "N",
+      "stage": "preparation"
+    },
+    "required": "S"
+  },
+  {
+    "id": "order/external-nonschema/any-true/1",
+    "family": "external-nonschema",
+    "context": "any-true",
+    "schema": {
+      "anyOf": [
+        {
+          "$ref": "https://s9.example/openapi#/components/schemas/Task"
+        },
+        true
+      ]
+    },
+    "value": null,
+    "spec_expected": "S",
+    "resources": [
+      {
+        "uri": "https://s9.example/openapi",
+        "schema": {
+          "openapi": "3.1.0",
+          "components": {
+            "schemas": {
+              "Task": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    ],
+    "expected": {
+      "detail": {
+        "code": "non-schema-target",
+        "location": {
+          "pointer": "/operations/op/input/anyOf/0",
+          "resource": null
+        },
+        "reason": "conservative-preparation"
+      },
+      "outcome": "N",
+      "stage": "preparation"
+    },
+    "required": "S"
+  },
+  {
+    "id": "order/external-nonschema/all-false/0",
+    "family": "external-nonschema",
+    "context": "all-false",
+    "schema": {
+      "allOf": [
+        false,
+        {
+          "$ref": "https://s9.example/openapi#/components/schemas/Task"
+        }
+      ]
+    },
+    "value": null,
+    "spec_expected": "F",
+    "resources": [
+      {
+        "uri": "https://s9.example/openapi",
+        "schema": {
+          "openapi": "3.1.0",
+          "components": {
+            "schemas": {
+              "Task": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    ],
+    "expected": {
+      "detail": {
+        "code": "non-schema-target",
+        "location": {
+          "pointer": "/operations/op/input/allOf/1",
+          "resource": null
+        },
+        "reason": "conservative-preparation"
+      },
+      "outcome": "N",
+      "stage": "preparation"
+    },
+    "required": "F"
+  },
+  {
+    "id": "order/external-nonschema/all-false/1",
+    "family": "external-nonschema",
+    "context": "all-false",
+    "schema": {
+      "allOf": [
+        {
+          "$ref": "https://s9.example/openapi#/components/schemas/Task"
+        },
+        false
+      ]
+    },
+    "value": null,
+    "spec_expected": "F",
+    "resources": [
+      {
+        "uri": "https://s9.example/openapi",
+        "schema": {
+          "openapi": "3.1.0",
+          "components": {
+            "schemas": {
+              "Task": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    ],
+    "expected": {
+      "detail": {
+        "code": "non-schema-target",
+        "location": {
+          "pointer": "/operations/op/input/allOf/0",
+          "resource": null
+        },
+        "reason": "conservative-preparation"
+      },
+      "outcome": "N",
+      "stage": "preparation"
+    },
+    "required": "F"
+  },
+  {
+    "id": "order/external-nonschema/unreached/0",
+    "family": "external-nonschema",
+    "context": "unreached",
+    "schema": {
+      "properties": {
+        "x": {
+          "$ref": "https://s9.example/openapi#/components/schemas/Task"
+        }
+      }
+    },
+    "value": {},
+    "spec_expected": "S",
+    "resources": [
+      {
+        "uri": "https://s9.example/openapi",
+        "schema": {
+          "openapi": "3.1.0",
+          "components": {
+            "schemas": {
+              "Task": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    ],
+    "expected": {
+      "detail": {
+        "code": "non-schema-target",
+        "location": {
+          "pointer": "/operations/op/input/properties/x",
+          "resource": null
+        },
+        "reason": "conservative-preparation"
+      },
+      "outcome": "N",
+      "stage": "preparation"
+    },
+    "required": "S"
+  },
+  {
+    "id": "order/external-nonschema/unreached/1",
+    "family": "external-nonschema",
+    "context": "unreached",
+    "schema": {
+      "properties": {
+        "x": {
+          "$ref": "https://s9.example/openapi#/components/schemas/Task"
+        }
+      }
+    },
+    "value": {},
+    "spec_expected": "S",
+    "resources": [
+      {
+        "uri": "https://s9.example/openapi",
+        "schema": {
+          "openapi": "3.1.0",
+          "components": {
+            "schemas": {
+              "Task": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    ],
+    "expected": {
+      "detail": {
+        "code": "non-schema-target",
+        "location": {
+          "pointer": "/operations/op/input/properties/x",
+          "resource": null
+        },
+        "reason": "conservative-preparation"
+      },
+      "outcome": "N",
+      "stage": "preparation"
+    },
+    "required": "S"
+  },
+  {
+    "id": "order/external-nonschema/deciding/0",
+    "family": "external-nonschema",
+    "context": "deciding",
+    "schema": {
+      "$ref": "https://s9.example/openapi#/components/schemas/Task"
+    },
+    "value": null,
+    "spec_expected": "U",
+    "resources": [
+      {
+        "uri": "https://s9.example/openapi",
+        "schema": {
+          "openapi": "3.1.0",
+          "components": {
+            "schemas": {
+              "Task": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    ],
+    "expected": {
+      "detail": {
+        "code": "non-schema-target",
+        "location": {
+          "pointer": "/operations/op/input",
+          "resource": null
+        },
+        "reason": "conservative-preparation"
+      },
+      "outcome": "N",
+      "stage": "preparation"
+    },
+    "required": "U"
+  },
+  {
+    "id": "order/external-nonschema/deciding/1",
+    "family": "external-nonschema",
+    "context": "deciding",
+    "schema": {
+      "$ref": "https://s9.example/openapi#/components/schemas/Task"
+    },
+    "value": null,
+    "spec_expected": "U",
+    "resources": [
+      {
+        "uri": "https://s9.example/openapi",
+        "schema": {
+          "openapi": "3.1.0",
+          "components": {
+            "schemas": {
+              "Task": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    ],
+    "expected": {
+      "detail": {
+        "code": "non-schema-target",
+        "location": {
+          "pointer": "/operations/op/input",
+          "resource": null
+        },
+        "reason": "conservative-preparation"
+      },
+      "outcome": "N",
+      "stage": "preparation"
+    },
+    "required": "U"
+  },
+  {
+    "id": "migrated/corpus/VALUES-57",
+    "family": "migration",
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "$ref": "https://e.com/t"
+          }
+        }
+      },
+      "schemas": {
+        "T": {
+          "$id": "https://e.com/t",
+          "$ref": "#/$defs/a b",
+          "$defs": {
+            "a b": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "value": "x",
+    "expected": {
+      "detail": {
+        "code": "invalid-reference",
+        "location": {
+          "pointer": "/schemas/T",
+          "resource": null
+        },
+        "reason": "conservative-preparation"
+      },
+      "outcome": "N",
+      "stage": "preparation"
+    },
+    "required": "U"
+  },
+  {
+    "id": "influence/idless-malformed-reference",
+    "family": "influence",
+    "schema": {
+      "anyOf": [
+        true,
+        {
+          "$ref": "https://controls.test/supplied"
+        }
+      ]
+    },
+    "resources": [
+      {
+        "uri": "https://controls.test/supplied",
+        "schema": {
+          "$ref": "%"
+        }
+      }
+    ],
+    "value": 1,
+    "expected": {
+      "stage": "preparation",
+      "outcome": "N",
+      "detail": {
+        "reason": "conservative-preparation"
+      }
+    },
+    "required": "S"
+  },
+  {
+    "id": "influence/malformed-reference-and-id",
+    "family": "influence",
+    "schema": {
+      "$id": "https://controls.test/root",
+      "$defs": {
+        "bad": {
+          "$id": "%"
+        }
+      },
+      "anyOf": [
+        true,
+        {
+          "$ref": "%"
+        }
+      ]
+    },
+    "value": 1,
+    "expected": {
+      "stage": "preparation",
+      "outcome": "N",
+      "detail": {
+        "reason": "conservative-preparation"
+      }
+    },
+    "required": "S"
+  }
+]

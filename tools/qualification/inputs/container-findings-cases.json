@@ -5,6 +5,13 @@
     "obi02_pointers": [
       "/name",
       ""
+    ],
+    "obi02_keywords": [
+      "type",
+      "required"
+    ],
+    "required": [
+      "operations"
     ]
   },
   {
@@ -13,6 +20,13 @@
     "obi02_pointers": [
       "/sources/s/description",
       "/sources/s"
+    ],
+    "obi02_keywords": [
+      "type",
+      "required"
+    ],
+    "required": [
+      "kind"
     ]
   },
   {
@@ -20,7 +34,17 @@
     "document": "{\"openbindings\":\"0.2.0\",\"operations\":{},\"bindings\":{\"b\":{\"description\":42}}}",
     "obi02_pointers": [
       "/bindings/b/description",
+      "/bindings/b",
       "/bindings/b"
+    ],
+    "obi02_keywords": [
+      "type",
+      "required",
+      "required"
+    ],
+    "required": [
+      "operation",
+      "source"
     ]
   },
   {
@@ -30,6 +54,12 @@
       "/operations/op/aliases/0",
       "/operations/op/aliases/1",
       "/operations/op/aliases"
-    ]
+    ],
+    "obi02_keywords": [
+      "type",
+      "type",
+      "uniqueItems"
+    ],
+    "required": []
   }
 ]

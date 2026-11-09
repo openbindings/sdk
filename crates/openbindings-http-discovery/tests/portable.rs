@@ -298,12 +298,7 @@ async fn complete_bad_body_and_version_priority_survive_with_metadata() {
         panic!("expected found")
     };
     assert_eq!(
-        document
-            .as_document()
-            .validate()
-            .unwrap()
-            .report()
-            .conclusion,
+        document.document().validate().unwrap().report().conclusion,
         Conformance::Conformant
     );
     let (r, _) = get(
@@ -376,7 +371,7 @@ async fn a_raised_body_limit_validates_bodies_past_the_default_byte_limit() {
         panic!("expected a conformant document, got {:?}", r.outcome)
     };
     assert_eq!(
-        document.as_document().limits(),
+        document.document().limits(),
         openbindings::JsonLimits {
             max_bytes: default.max_bytes + 1,
             max_depth: usize::MAX,
@@ -392,15 +387,15 @@ async fn a_raised_body_limit_validates_bodies_past_the_default_byte_limit() {
         panic!("expected a conformant document, got {:?}", r.outcome)
     };
     assert_eq!(
-        document.as_document().limits(),
+        document.document().limits(),
         openbindings::JsonLimits {
             max_depth: usize::MAX,
             ..default
         }
     );
     // Only the bytes follow the bound: a body past the default nodes is
-    // undetermined, and its findings name validating the retained body with
-    // larger limits, which admits it.
+    // undetermined with node-limit findings at the parser offset. Validating
+    // the retained body with larger limits admits it.
     let nodes = format!(
         r#"{{"openbindings":"0.2.0","operations":{{}},"x-a":[{}0]}}"#,
         "0,".repeat(default.max_nodes)
@@ -409,11 +404,11 @@ async fn a_raised_body_limit_validates_bodies_past_the_default_byte_limit() {
     let DiscoveryOutcome::Undetermined { validation } = r.outcome else {
         panic!("expected an undetermined body, got {:?}", r.outcome)
     };
+    let parser = openbindings::JsonValue::parse(&nodes).unwrap_err();
     assert!(validation.report().findings.iter().all(|f| {
-        f.message.ends_with(
-            "; validate it with validate_document_with_limits and a larger JsonLimits::max_nodes \
-         (validateDocument with a larger limits.maxNodes in TypeScript)",
-        )
+        f.code == "node-limit"
+            && f.location.as_ref().unwrap().byte_offset == parser.byte_offset()
+            && f.message == "the document exceeds the admission limit of 1000000 JSON nodes"
     }));
     let body = r.body.expect("the body is retained");
     let raised = openbindings::validate_document_with_limits(
@@ -624,7 +619,7 @@ fn publication_refuses_every_unestablished_conformance_state() {
     let report = validation.report();
     assert_eq!(report.conclusion, Conformance::Undetermined);
     assert!(!report.findings.is_empty());
-    assert!(report.findings.iter().all(|f| f.code == "input-limit"));
+    assert!(report.findings.iter().all(|f| f.code == "node-limit"));
     // Publication applies the core document boundary, including opaque content.
     let error = Publication::from_bytes(
         br#"{"openbindings":"0.2.0","operations":{},"x-value":"\ud800"}"#,
@@ -903,7 +898,19 @@ async fn portable_redirects_obey_statuses_relative_location_limit_and_total_time
                 }
             }
         ));
-        assert_eq!(calls.get(), 1, "downgrade was dispatched");
+        assert_eq!(calls.get(), 1, "refused hop was dispatched");
+        let metadata = r.metadata.as_ref().unwrap();
+        assert_eq!(
+            metadata.requested_url,
+            "https://example.test/.well-known/openbindings"
+        );
+        assert_eq!(
+            metadata.final_url.as_deref(),
+            Some(metadata.requested_url.as_str())
+        );
+        assert_eq!(metadata.status, 302);
+        assert_eq!(metadata.header("location"), Some(location.as_bytes()));
+        assert!(r.body.is_none());
     }
     for slow in [false, true] {
         let clock = Clock::default();
@@ -1229,4 +1236,169 @@ fn transports_report_failures_with_the_request_error_constructor() {
     assert_eq!(error.kind, ErrorKind::RedirectPolicy);
     assert_eq!(error.message, "hop refused");
     assert_eq!(error.to_string(), "hop refused");
+}
+
+#[test]
+fn plain_http_option_changes_only_scheme_admission() {
+    assert!(!ClientOptions::default().allow_http);
+    let options = ClientOptions {
+        allow_http: true,
+        ..Default::default()
+    };
+    for origin in [
+        "http://localhost",
+        "http://example.test",
+        "http://192.0.2.1",
+        "http://[2001:db8::1]",
+    ] {
+        assert_eq!(endpoint(origin).unwrap_err().code, "origin-policy");
+        assert_eq!(
+            options.endpoint(origin).unwrap(),
+            format!("{origin}{WELL_KNOWN_PATH}")
+        );
+    }
+    for origin in [
+        "ftp://example.test",
+        "file://example.test",
+        "http://user:secret@example.test",
+        "http://@example.test",
+        "http://example.test/document.json",
+        "http://example.test?",
+        "http://example.test#",
+        "http://example.test\\next",
+        "http://bücher.example",
+        "http://example.test:",
+        "http://exa mple.test",
+    ] {
+        assert_eq!(
+            options.endpoint(origin).unwrap_err(),
+            endpoint(origin).unwrap_err(),
+            "{origin}"
+        );
+    }
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn portable_plain_http_policy_is_checked_before_dispatch() {
+    for allow_http in [false, true] {
+        let options = ClientOptions {
+            allow_http,
+            ..Default::default()
+        };
+        let mut calls = 0;
+        let origin = discover(
+            "http://localhost",
+            &options,
+            &CancellationToken::new(),
+            &Clock::default(),
+            |request| {
+                calls += 1;
+                let mut r = response(200, DOCUMENT, Rc::default());
+                r.final_url = Some(request.url);
+                std::future::ready(Ok(r))
+            },
+        )
+        .await;
+        if allow_http {
+            assert!(matches!(
+                origin.unwrap().outcome,
+                DiscoveryOutcome::Found { .. }
+            ));
+            assert_eq!(calls, 1);
+        } else {
+            let error = origin.unwrap_err();
+            assert_eq!(error.code, "origin-policy");
+            assert_eq!(
+                error.message,
+                "client policy refused a plain-http discovery URL"
+            );
+            assert_eq!(calls, 0);
+        }
+        for (origin, target, admitted) in [
+            ("http://127.0.0.1", "http://localhost/done", allow_http),
+            ("https://example.test", "http://localhost/done", false),
+            ("https://example.test", "http://127.0.0.1/done", false),
+            ("http://127.0.0.1", "ftp://example.test/done", false),
+            (
+                "http://127.0.0.1",
+                "http://user:secret@localhost/done",
+                false,
+            ),
+        ] {
+            let mut calls = 0;
+            let result = discover(
+                origin,
+                &options,
+                &CancellationToken::new(),
+                &Clock::default(),
+                |request| {
+                    calls += 1;
+                    let mut r =
+                        response(if calls == 1 { 302 } else { 200 }, DOCUMENT, Rc::default());
+                    r.final_url = Some(request.url);
+                    if calls == 1 {
+                        r.headers.push(Header::new("location", target));
+                    }
+                    std::future::ready(Ok(r))
+                },
+            )
+            .await
+            .unwrap();
+            if admitted {
+                assert!(matches!(result.outcome, DiscoveryOutcome::Found { .. }));
+                assert_eq!(calls, 2);
+                assert_eq!(result.metadata.unwrap().final_url.as_deref(), Some(target));
+            } else {
+                assert!(matches!(
+                    result.outcome,
+                    DiscoveryOutcome::TransportError {
+                        error: RequestError {
+                            kind: ErrorKind::RedirectPolicy,
+                            ..
+                        }
+                    }
+                ));
+                assert_eq!(calls, 1);
+                assert_eq!(result.metadata.as_ref().unwrap().status, 302);
+                assert_eq!(
+                    result.metadata.as_ref().unwrap().header("location"),
+                    Some(target.as_bytes())
+                );
+                assert!(result.body.is_none());
+            }
+        }
+    }
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn portable_plain_http_opt_in_keeps_redirect_cap() {
+    let mut calls = 0;
+    let result = discover(
+        "http://localhost",
+        &ClientOptions {
+            allow_http: true,
+            ..Default::default()
+        },
+        &CancellationToken::new(),
+        &Clock::default(),
+        |request| {
+            calls += 1;
+            let mut r = response(302, DOCUMENT, Rc::default());
+            r.final_url = Some(request.url);
+            r.headers.push(Header::new("location", "/loop"));
+            std::future::ready(Ok(r))
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(calls, MAX_REDIRECTS + 1);
+    assert!(matches!(
+        result.outcome,
+        DiscoveryOutcome::TransportError {
+            error: RequestError {
+                kind: ErrorKind::RedirectPolicy,
+                ..
+            }
+        }
+    ));
 }

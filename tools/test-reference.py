@@ -15,6 +15,34 @@ def load(name):
 
 
 class ReferenceLinks(unittest.TestCase):
+    def test_readme_source_links_use_the_exact_candidate_without_hiding_bad_links(self):
+        reference = load('build-reference')
+        with tempfile.TemporaryDirectory() as directory:
+            reference.ROOT = root = Path(directory)
+            source = root / 'docs/schema-evaluators.md'
+            source.parent.mkdir()
+            source.write_text('# Evaluators\n')
+            output = root / 'bundle'
+            page = output / 'rust/openbindings_json_schema_evaluator/index.html'
+            page.parent.mkdir(parents=True)
+            raw = '<a href="../../docs/schema-evaluators.md">guide</a>'
+            page.write_text(raw * 2)
+            commit = 'a' * 40
+            resolutions = reference.resolve_source_links(output, commit)
+            self.assertEqual(len(resolutions), 1)
+            self.assertEqual(resolutions[0]['count'], 2)
+            self.assertEqual(resolutions[0]['to'],
+                             f'https://github.com/openbindings/sdk/blob/{commit}/docs/schema-evaluators.md')
+            reference.verify_local_links(output)
+            page.write_text(page.read_text() + '<a href="unknown.md">unknown</a>')
+            reference.resolve_source_links(output, commit)
+            with self.assertRaisesRegex(SystemExit, 'missing local target unknown.md'):
+                reference.verify_local_links(output)
+            page.write_text(raw)
+            source.unlink()
+            with self.assertRaisesRegex(SystemExit, 'Missing reference source'):
+                reference.resolve_source_links(output, commit)
+
     def test_rustdoc_local_targets_fragments_and_fences(self):
         links = load('verify-doc-links')
         with tempfile.TemporaryDirectory() as directory:

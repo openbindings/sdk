@@ -1,6 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  cp,
+  mkdtemp,
+  readFile,
+  readdir,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -9,6 +16,27 @@ import ts from "typescript";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const checker = path.join(root, "scripts/check-api-reference.mjs");
+async function findDeclaration(directory, owner) {
+  const matches = [];
+  for (const entry of await readdir(directory)) {
+    if (!entry.endsWith(".d.ts")) continue;
+    const filename = path.join(directory, entry);
+    const source = await readFile(filename, "utf8");
+    const ast = ts.createSourceFile(
+      filename,
+      source,
+      ts.ScriptTarget.Latest,
+      true,
+    );
+    const declaration = ast.statements.find(
+      (node) => node.name?.text === owner,
+    );
+    if (declaration) matches.push({ filename, source, declaration });
+  }
+  assert.equal(matches.length, 1, `expected one declaration for ${owner}`);
+  return matches[0];
+}
+
 // Mutate only temporary emitted declarations. Verify definitions, nested fields
 // and inherited contracts are all protected by the actual exported-graph gate.
 for (const [owner, member, expected, insertion] of [
@@ -31,17 +59,9 @@ for (const [owner, member, expected, insertion] of [
       await cp(path.join(root, "dist"), path.join(temporary, "dist"), {
         recursive: true,
       });
-      const filename = path.join(temporary, "dist/internal.d.ts");
-      let source = await readFile(filename, "utf8");
-      const ast = ts.createSourceFile(
-        filename,
-        source,
-        ts.ScriptTarget.Latest,
-        true,
-      );
-      const declaration = ast.statements.find(
-        (node) => node.name?.text === owner,
-      );
+      const found = await findDeclaration(path.join(temporary, "dist"), owner);
+      const { filename, declaration } = found;
+      let { source } = found;
       if (insertion) {
         const end = declaration.end - 1;
         assert.equal(source[end], "}");
@@ -84,7 +104,7 @@ test("reference check rejects declarations that import the generated Wasm bindin
     await cp(path.join(root, "dist"), path.join(temporary, "dist"), {
       recursive: true,
     });
-    const filename = path.join(temporary, "dist/internal.d.ts");
+    const filename = path.join(temporary, "dist/index.d.ts");
     const source = await readFile(filename, "utf8");
     assert.doesNotMatch(source, /\.\/wasm\//);
     await writeFile(

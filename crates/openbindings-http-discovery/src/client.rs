@@ -1,7 +1,7 @@
 use crate::CancellationToken;
 use crate::*;
 use openbindings::{
-    Conformance, Conformant, Document, DocumentValidation, JsonLimits, VersionRefusal,
+    Conformance, ConformantDocument, DocumentValidation, JsonLimits, VersionRefusal,
     validate_document_with_limits,
 };
 use serde::Serialize;
@@ -172,6 +172,14 @@ pub trait DiscoveryTimer {
 /// Discovery configuration. By default the decoded body is bounded at 1 MiB,
 /// which protects the process, and an attempt has no deadline.
 pub struct ClientOptions {
+    /// Admit plain HTTP origins and HTTP-to-HTTP redirects beyond literal
+    /// loopback. Defaults to `false`, which permits HTTP only for normalized
+    /// IPv4 127/8 and IPv6 ::1, not names such as localhost.
+    /// Plain HTTP exposes requests, credentials and documents to network
+    /// observation and modification. HTTPS-to-HTTP redirects are always refused;
+    /// all other admission and credential rules still apply. A transport may
+    /// impose stricter restrictions, including browser mixed-content blocking.
+    pub allow_http: bool,
     /// Positive bound on decoded bytes, with room for one over-limit sentinel.
     /// A body within it is validated under admission limits that admit its
     /// bytes: this bound when it exceeds [`JsonLimits::default`]'s byte limit,
@@ -191,6 +199,7 @@ pub struct ClientOptions {
 impl Default for ClientOptions {
     fn default() -> Self {
         Self {
+            allow_http: false,
             max_document_bytes: DEFAULT_MAX_DOCUMENT_BYTES,
             timeout: None,
         }
@@ -202,6 +211,8 @@ impl Default for ClientOptions {
 /// enforce application DNS/peer/proxy restrictions at connection time, deliver
 /// decoded bytes (or a typed decode refusal), and cancel/release work on drop.
 /// The SDK follows at most ten admitted DISC-C-02 redirects. It stores no cache.
+/// [`ClientOptions::allow_http`] admits plain HTTP beyond literal loopback;
+/// HTTPS-to-HTTP hops are always refused before calling the transport.
 /// A Location that is not an RFC 3986 URI-reference, such as one containing a
 /// space or a backslash, is a redirect-policy failure; native discovery, which
 /// keeps reqwest's redirect execution, recovers it instead.
@@ -232,6 +243,18 @@ where
 }
 
 impl ClientOptions {
+    /// Construct the normalized discovery URL using this client's HTTP policy.
+    /// Only [`Self::allow_http`] affects URL admission; this performs no I/O.
+    /// Unlike [`crate::endpoint`], this can admit named plain-HTTP origins.
+    ///
+    /// # Errors
+    /// Returns `invalid-origin` for malformed origins, credentials, resource
+    /// paths, query or fragment, or `origin-policy` for a refused scheme or
+    /// plain-HTTP origin. See [`crate::endpoint`] for the origin grammar.
+    pub fn endpoint(&self, origin: &str) -> Result<String, ConfigurationError> {
+        endpoint_with_policy(origin, self.allow_http)
+    }
+
     /// Resolve the positive decoded-byte limit with room for one over-limit sentinel.
     ///
     /// # Errors
@@ -275,7 +298,7 @@ impl ClientOptions {
     {
         let limit = self.byte_limit()?;
         let duration = self.attempt_timeout()?;
-        let requested_url = endpoint(origin)?;
+        let requested_url = self.endpoint(origin)?;
         let deadline = duration
             .map(|duration| {
                 timer.now().checked_add(duration).ok_or(ConfigurationError {
@@ -339,7 +362,8 @@ impl ClientOptions {
             if let Some(final_url) = &metadata.final_url {
                 let observed = url::Url::parse(final_url);
                 let admitted = observed.as_ref().ok().is_some_and(|url| {
-                    admit_redirect(&current, url).is_ok() && (!individual_hops || url == &current)
+                    admit_redirect(&current, url, self.allow_http).is_ok()
+                        && (!individual_hops || url == &current)
                 });
                 if !admitted {
                     result.outcome = policy_failure(
@@ -354,14 +378,14 @@ impl ClientOptions {
                 metadata.final_url = Some(current.as_str().into());
             }
             let metadata = &*metadata;
-            // F2: a host-following transport must not return a redirect with Location.
-            // tower-http can do this for malformed Location without consulting reqwest's policy.
+            // A stopped native policy preserves the refused response here.
+            // A delegated host or malformed Location can also leave a visible
+            // redirect unfollowed. All retain metadata and refuse the hop.
             if !individual_hops
                 && matches!(response.status, 301 | 302 | 303 | 307 | 308)
                 && metadata.header("location").is_some()
             {
-                result.outcome =
-                    policy_failure("host did not follow the observed redirect Location");
+                result.outcome = policy_failure("redirect destination or redirect limit refused");
                 return Ok(result);
             }
             if individual_hops
@@ -377,7 +401,8 @@ impl ClientOptions {
                     .and_then(|location| current.join(location).ok());
                 let next = match next {
                     Some(mut next)
-                        if admit_redirect(&current, &next).is_ok() && followed < MAX_REDIRECTS =>
+                        if admit_redirect(&current, &next, self.allow_http).is_ok()
+                            && followed < MAX_REDIRECTS =>
                     {
                         next.set_fragment(None);
                         next
@@ -575,7 +600,7 @@ pub enum DiscoveryOutcome {
     /// A complete bounded 200 body established normative document conformance.
     Found {
         #[doc = "Retained immutable proof for the exact acquired body."]
-        document: Conformant<Document>,
+        document: ConformantDocument,
     },
     /// A complete 200 body established at least one normative violation, including invalid JSON.
     NonConformant {

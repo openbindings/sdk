@@ -1,20 +1,22 @@
-//! Preparation bundles the schemas a contract reaches into one resource, so the
-//! library compiles each once, whatever reference paths through resources reach
-//! it. A dynamic reference is resolved before compilation: the schemas it can
-//! reach are specialized once per dynamic context, and a contract whose
-//! specialized copies and contexts would grow its program by more than
-//! `Limits::program_bytes` refuses.
+//! Original-schema preparation retains one graph and resolves dynamic scope at
+//! evaluation time. These preserved workloads test reuse and actual work/storage
+//! limits without assuming projected copies or compiler-derived stack depths.
 use openbindings::*;
 use openbindings_json_schema_evaluator::{DefaultEvaluator, Limits};
 
-fn prepare_with(text: &str, resources: &ResourceSet) -> Result<PreparedValueContract, NoVerdict> {
+fn prepare_with(
+    text: &str,
+    resources: &ExternalSchemas,
+) -> Result<PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator>, PreparationFailure>
+{
     prepare_within(text, resources, Limits::default())
 }
 fn prepare_within(
     text: &str,
-    resources: &ResourceSet,
+    resources: &ExternalSchemas,
     limits: Limits,
-) -> Result<PreparedValueContract, NoVerdict> {
+) -> Result<PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator>, PreparationFailure>
+{
     let proof = Document::parse(text)
         .unwrap()
         .validate()
@@ -26,10 +28,17 @@ fn prepare_within(
         .expect("declared operation")
         .input()
         .expect("declared input")
-        .prepare_with(&DefaultEvaluator::with_limits(limits), resources)
+        .prepare(
+            &DefaultEvaluator::with_limits(limits),
+            resources,
+            &openbindings::PreparationLimits::default(),
+        )
 }
-fn prepare(text: &str) -> Result<PreparedValueContract, NoVerdict> {
-    prepare_with(text, &ResourceSet::default())
+fn prepare(
+    text: &str,
+) -> Result<PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator>, PreparationFailure>
+{
+    prepare_with(text, &ExternalSchemas::default())
 }
 fn document(schemas: &[String], input: &str) -> String {
     format!(
@@ -37,8 +46,8 @@ fn document(schemas: &[String], input: &str) -> String {
         schemas.join(",")
     )
 }
-fn resources(entries: Vec<(String, String)>) -> ResourceSet {
-    ResourceSet::new(entries.into_iter().map(|(uri, text)| SchemaResource {
+fn resources(entries: Vec<(String, String)>) -> ExternalSchemas {
+    ExternalSchemas::new(entries.into_iter().map(|(uri, text)| ExternalSchema {
         uri,
         document: JsonValue::parse(text).unwrap(),
     }))
@@ -184,23 +193,26 @@ fn model_value(layers: usize, wrong: bool) -> JsonValue {
     }
     JsonValue::parse(value).unwrap()
 }
-fn decides(contract: &PreparedValueContract) {
+fn decides(contract: &PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator>) {
     assert!(matches!(
-        contract.validate(&JsonValue::parse("7").unwrap()),
+        contract.evaluate(&JsonValue::parse("7").unwrap()),
         ValueOutcome::Satisfies
     ));
     assert!(matches!(
-        contract.validate(&JsonValue::parse("\"7\"").unwrap()),
+        contract.evaluate(&JsonValue::parse("\"7\"").unwrap()),
         ValueOutcome::Fails { .. }
     ));
 }
-fn decides_model(contract: &PreparedValueContract, layers: usize) {
+fn decides_model(
+    contract: &PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator>,
+    layers: usize,
+) {
     assert!(matches!(
-        contract.validate(&model_value(layers, false)),
+        contract.evaluate(&model_value(layers, false)),
         ValueOutcome::Satisfies
     ));
     assert!(matches!(
-        contract.validate(&model_value(layers, true)),
+        contract.evaluate(&model_value(layers, true)),
         ValueOutcome::Fails { .. }
     ));
 }
@@ -221,55 +233,84 @@ fn reference_chains_prepare_and_release_on_a_small_stack() {
 }
 
 #[test]
-fn chains_the_default_stack_holds_decide() {
-    decides(&prepare(&chain(500)).unwrap());
-    decides(&prepare(&chain(1_000)).unwrap());
+fn concrete_alias_chains_decide_without_compiler_stack_bounds() {
+    for links in [500, 1_000, 1_500] {
+        decides(&prepare(&chain(links)).unwrap());
+    }
     decides(&prepare(&resource_chain(100)).unwrap());
-    // Longer chains still prepare, though evaluation cannot follow them within
-    // the default stack: each link nests one evaluation deeper.
-    let contract = prepare(&chain(1_500)).unwrap();
-    let ValueOutcome::NoVerdict { detail } = contract.validate(&JsonValue::parse("7").unwrap())
-    else {
-        panic!("evaluation follows no 1,500-link chain under default limits")
+}
+
+fn expects_limit(outcome: ValueOutcome, code: &str) {
+    let ValueOutcome::NoVerdict { detail } = outcome else {
+        panic!("expected {code}, got {outcome:?}")
     };
-    assert_eq!(detail.code, "evaluation-depth-limit");
+    assert_eq!(detail.reason, NoVerdictReason::LimitExceeded);
+    assert_eq!(detail.code, code);
 }
 
 #[test]
-fn resource_diamonds_compile_each_level_once() {
-    // Compiled once per path through resources, 24 levels would compile the
-    // last one 2^24 times.
-    decides(&prepare(&diamonds(4)).unwrap());
-    decides(&prepare(&diamonds(12)).unwrap());
-    // Evaluation still follows every path; an application that caps its work
-    // gets no verdict instead.
-    let capped = DefaultEvaluator::with_limits(Limits {
-        evaluation_steps: Some(1_000_000),
-        ..Limits::default()
-    });
+fn resource_diamonds_reuse_completed_applications() {
+    for levels in [4, 12] {
+        decides(&prepare(&diamonds(levels)).unwrap());
+    }
     let text = diamonds(24);
-    let proof = Document::parse(&text)
-        .unwrap()
-        .validate()
-        .unwrap()
-        .conformant()
-        .unwrap();
-    let contract = proof
-        .resolve_operation("op")
-        .unwrap()
-        .input()
-        .unwrap()
-        .prepare(&capped)
-        .unwrap();
-    let ValueOutcome::NoVerdict { detail } = contract.validate(&JsonValue::parse("7").unwrap())
-    else {
-        panic!("evaluation follows no 2^24 paths within the cap")
-    };
-    assert_eq!(detail.code, "evaluation-work-limit");
+    // The old compiler followed 2^24 paths. The original plan reuses completed
+    // applications and now decides this unchanged workload under the old cap.
+    decides(
+        &prepare_within(
+            &text,
+            &ExternalSchemas::default(),
+            Limits {
+                evaluation_sdk_work_units: Some(1_000_000),
+                ..Limits::default()
+            },
+        )
+        .unwrap(),
+    );
+    let capped = prepare_within(
+        &text,
+        &ExternalSchemas::default(),
+        Limits {
+            evaluation_sdk_work_units: Some(0),
+            ..Limits::default()
+        },
+    )
+    .unwrap();
+    expects_limit(capped.evaluate_json("7").unwrap(), "evaluation-work-limit");
 }
 
 #[test]
-fn layered_models_across_resources_compile_each_schema_once() {
+fn default_resource_diamonds_at_hostile_depths_finish_without_a_work_cap() {
+    let (send, receive) = std::sync::mpsc::channel();
+    let worker = std::thread::spawn(move || {
+        for levels in [40, 64] {
+            for (leaf, yes, no) in [
+                (r#""type":"object""#, "{}", "1"),
+                (r#""type":"integer","minimum":0"#, "1", "-1"),
+                (r#""enum":["a","b"]"#, "\"a\"", "\"c\""),
+            ] {
+                let contract = prepare(&diamonds_ending(levels, leaf)).unwrap();
+                assert!(matches!(
+                    contract.evaluate_json(yes).unwrap(),
+                    ValueOutcome::Satisfies
+                ));
+                assert!(matches!(
+                    contract.evaluate_json(no).unwrap(),
+                    ValueOutcome::Fails { .. }
+                ));
+            }
+        }
+        send.send(()).unwrap();
+    });
+    // A missing admission guard must fail, never join an exponential pass.
+    receive
+        .recv_timeout(std::time::Duration::from_secs(20))
+        .expect("default-limits resource diamonds exceeded 20 seconds");
+    worker.join().unwrap();
+}
+
+#[test]
+fn layered_models_reuse_original_schemas_across_resources() {
     // Supplied as separate resources, or as `$id` resources in the document,
     // a layered model reaches its deepest schemas along hundreds of paths.
     let (layers, fan_out, width) = (7, 3, 6);
@@ -317,7 +358,7 @@ fn dynamic_anchors_resolve_per_scope() {
         (r#"{"s":[1]}"#, false),
         (r#"{"any":[{}],"s":[],"i":[]}"#, true),
     ] {
-        let outcome = contract.validate(&JsonValue::parse(value).unwrap());
+        let outcome = contract.evaluate(&JsonValue::parse(value).unwrap());
         if satisfies {
             assert!(matches!(outcome, ValueOutcome::Satisfies), "{value}");
         } else {
@@ -370,86 +411,107 @@ fn dynamic_choices(levels: usize) -> String {
     document(&schemas, r##"{"$ref":"#/schemas/l0"}"##)
 }
 #[test]
-fn dynamic_specialization_is_bounded() {
+fn dynamic_scope_is_prepared_once_and_runtime_work_remains_bounded() {
     decides(&prepare(&dynamic_choices(8)).unwrap());
-    let refused = prepare(&dynamic_choices(17)).unwrap_err();
-    assert_eq!(refused.reason, NoVerdictReason::LimitExceeded);
-    assert_eq!(refused.code, "program-specialization-limit");
-    assert!(refused.location.is_none());
-}
-
-#[test]
-fn the_program_budget_scales_dynamic_specialization() {
-    let within = |levels: usize, program_bytes: usize| {
-        prepare_within(
-            &dynamic_choices(levels),
-            &ResourceSet::default(),
-            Limits {
-                program_bytes,
-                ..Limits::default()
-            },
-        )
-    };
-    // 256 dynamic contexts reach the last level of 8, whose copies take about
-    // 6.8 MiB: a smaller budget refuses them, and says what to raise.
-    let refused = within(8, 4 << 20).unwrap_err();
-    assert_eq!(refused.reason, NoVerdictReason::LimitExceeded);
-    assert_eq!(refused.code, "program-specialization-limit");
-    assert!(
-        refused.message.ends_with(
-            "by more than its 4 MiB program_bytes; raise program_bytes (programBytes in TypeScript)"
-        ),
-        "{}",
-        refused.message
-    );
-    decides(&within(8, 8 << 20).unwrap());
-    // Twice the contexts need about twice the budget.
-    assert_eq!(
-        within(9, 8 << 20).unwrap_err().code,
-        "program-specialization-limit"
-    );
-    decides(&within(9, 16 << 20).unwrap());
-    // No budget refuses a contract that specializes nothing.
-    let unspecialized = prepare_within(
-        &chain(3),
-        &ResourceSet::default(),
+    let text = dynamic_choices(17);
+    assert!(prepare(&text).is_ok());
+    // Scope choices no longer make exponentially many projected definitions.
+    // The value call still honors its own work cap before exploring them all.
+    let capped = prepare_within(
+        &text,
+        &ExternalSchemas::default(),
         Limits {
-            program_bytes: 0,
-            ..Limits::default()
-        },
-    );
-    decides(&unspecialized.unwrap());
-}
-
-#[test]
-fn a_specialization_refusal_states_its_arithmetic() {
-    let refused = prepare_within(
-        &dynamic_choices(8),
-        &ResourceSet::default(),
-        Limits {
-            program_bytes: 4 << 20,
+            evaluation_sdk_work_units: Some(1_000_000),
             ..Limits::default()
         },
     )
-    .unwrap_err();
-    assert_eq!(
-        refused.message,
-        "this value contract's dynamic references specialize 3352 schemas, taking 4 MiB, and 304 \
-         dynamic contexts holding 1740 entries, taking 32 KiB, before preparation stops: \
-         together they pass its projected schemas' 76 KiB by more than its 4 MiB program_bytes; \
-         raise program_bytes (programBytes in TypeScript)"
-    );
+    .unwrap();
+    for value in ["7", "\"7\""] {
+        expects_limit(
+            capped.evaluate_json(value).unwrap(),
+            "evaluation-work-limit",
+        );
+    }
 }
 
 #[test]
-fn long_required_lists_compile_once_per_specialization() {
+fn former_specialization_budgets_fund_the_actual_dynamic_proof() {
+    for (levels, evaluation_sdk_reservation_bytes) in
+        [(8, 4 << 20), (8, 8 << 20), (9, 8 << 20), (9, 16 << 20)]
+    {
+        decides(
+            &prepare_within(
+                &dynamic_choices(levels),
+                &ExternalSchemas::default(),
+                Limits {
+                    evaluation_sdk_reservation_bytes,
+                    ..Limits::default()
+                },
+            )
+            .unwrap(),
+        );
+    }
+    // Even a plan with no dynamic scope needs storage for its value call.
+    let contract = prepare_within(
+        &chain(3),
+        &ExternalSchemas::default(),
+        Limits {
+            evaluation_sdk_reservation_bytes: 0,
+            ..Limits::default()
+        },
+    )
+    .unwrap();
+    expects_limit(
+        contract.evaluate_json("7").unwrap(),
+        "semantic-analysis-memory-limit",
+    );
+    decides(&prepare(&chain(3)).unwrap());
+}
+
+#[test]
+fn the_program_storage_boundary_names_the_actual_proof_budget() {
+    let text = dynamic_choices(3);
+    let within = |evaluation_sdk_reservation_bytes| {
+        prepare_within(
+            &text,
+            &ExternalSchemas::default(),
+            Limits {
+                evaluation_sdk_reservation_bytes,
+                ..Limits::default()
+            },
+        )
+        .unwrap()
+        .evaluate_json("7")
+        .unwrap()
+    };
+    let mut low = 0;
+    let mut high = Limits::default().evaluation_sdk_reservation_bytes;
+    assert!(matches!(within(high), ValueOutcome::Satisfies));
+    while low < high {
+        let middle = low + (high - low) / 2;
+        match within(middle) {
+            ValueOutcome::Satisfies => high = middle,
+            outcome => {
+                expects_limit(outcome, "semantic-analysis-memory-limit");
+                low = middle + 1;
+            }
+        }
+    }
+    assert!(low > 0);
+    assert!(matches!(within(low), ValueOutcome::Satisfies));
+    expects_limit(within(low - 1), "semantic-analysis-memory-limit");
+    decides(&prepare(&text).unwrap());
+}
+
+#[test]
+fn long_required_lists_are_shared_across_resource_paths() {
     // A shared resource requiring 20,000 names, reached through 1,000
     // resources, compiles once: with no dynamic anchor, and with one that
     // every path resolves alike.
     for dynamic in [false, true] {
         let contract = prepare(&required_fan(1_000, 20_000, dynamic)).unwrap();
         assert!(matches!(
-            contract.validate(&JsonValue::parse(r#"{"p0":{}}"#).unwrap()),
+            contract.evaluate(&JsonValue::parse(r#"{"p0":{}}"#).unwrap()),
             ValueOutcome::Fails { .. }
         ));
     }
@@ -476,7 +538,7 @@ struct GeneratedResource {
 fn generated_cases() -> Vec<GeneratedCase> {
     serde_json::from_str(include_str!("fixtures/preparation-generated-walks.json")).unwrap()
 }
-fn generated_resources(case: &GeneratedCase) -> ResourceSet {
+fn generated_resources(case: &GeneratedCase) -> ExternalSchemas {
     resources(
         case.resources
             .iter()
@@ -486,14 +548,14 @@ fn generated_resources(case: &GeneratedCase) -> ResourceSet {
 }
 
 #[test]
-fn generated_walks_across_resources_compile_once() {
+fn generated_annotation_walks_preserve_original_results() {
     for case in generated_cases() {
         let contract = prepare_with(case.document.get(), &generated_resources(&case))
             .unwrap_or_else(|detail| panic!("{}: {detail:?}", case.id));
         for (value, expected) in case.values.iter().zip(&case.expected) {
             let value = JsonValue::parse(value.get()).unwrap();
             let label = format!("{} {}", case.id, value.text());
-            for outcome in [contract.validate(&value), contract.explain(&value)] {
+            for outcome in [contract.evaluate(&value), contract.explain(&value)] {
                 let verdict = match outcome {
                     ValueOutcome::Satisfies => "S",
                     ValueOutcome::Fails { .. } => "F",
@@ -506,7 +568,7 @@ fn generated_walks_across_resources_compile_once() {
 }
 
 #[test]
-fn generated_walks_reaching_a_dynamic_anchor_compile_once_too() {
+fn generated_annotation_walks_with_dynamic_meta_anchors_preserve_results() {
     // A property holding a 2020-12 schema reaches the meta-schema's dynamic
     // anchor; the walks still prepare and decide as before.
     for case in generated_cases() {
@@ -520,7 +582,7 @@ fn generated_walks_reaching_a_dynamic_anchor_compile_once_too() {
             .unwrap_or_else(|detail| panic!("{}: {detail:?}", case.id));
         for (value, expected) in case.values.iter().zip(&case.expected) {
             let value = JsonValue::parse(value.get()).unwrap();
-            let verdict = match contract.validate(&value) {
+            let verdict = match contract.evaluate(&value) {
                 ValueOutcome::Satisfies => "S",
                 ValueOutcome::Fails { .. } => "F",
                 _ => "neither",
@@ -530,8 +592,12 @@ fn generated_walks_reaching_a_dynamic_anchor_compile_once_too() {
     }
 }
 
-// Prepare the input contract of a document admitted under `limits`.
-fn prepare_admitted(text: &str, limits: JsonLimits) -> Result<PreparedValueContract, NoVerdict> {
+// Prepare the input schema of a document admitted under `limits`.
+fn prepare_admitted(
+    text: &str,
+    limits: JsonLimits,
+) -> Result<PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator>, PreparationFailure>
+{
     validate_document_with_limits(text, limits)
         .unwrap()
         .conformant()
@@ -540,11 +606,15 @@ fn prepare_admitted(text: &str, limits: JsonLimits) -> Result<PreparedValueContr
         .expect("declared operation")
         .input()
         .expect("declared input")
-        .prepare(&DefaultEvaluator::new())
+        .prepare(
+            &DefaultEvaluator::new(),
+            &openbindings::ExternalSchemas::default(),
+            &openbindings::PreparationLimits::default(),
+        )
 }
 
 #[test]
-fn a_projection_keeps_its_own_bounds_whatever_the_document_was_admitted_under() {
+fn admitted_large_documents_and_resources_keep_required_capabilities() {
     // Each empty `allOf` member projects to a reference and a definition, so
     // the projection is many times the document; admitting the document at its
     // own size or node count does not bound it.
@@ -581,14 +651,14 @@ fn a_projection_keeps_its_own_bounds_whatever_the_document_was_admitted_under() 
     }
     // Supplied resources together past the document's byte limit prepare.
     let pad = "a".repeat(17 << 20);
-    let resource = |uri: &str, body: &str| SchemaResource {
+    let resource = |uri: &str, body: &str| ExternalSchema {
         uri: uri.into(),
         document: JsonValue::parse(format!(
             r#"{{"$schema":"https://json-schema.org/draft/2020-12/schema",{body},"x-pad":"{pad}"}}"#
         ))
         .unwrap(),
     };
-    let supplied = ResourceSet::new([
+    let supplied = ExternalSchemas::new([
         resource(
             "https://e.test/a",
             r#""allOf":[{"$ref":"https://e.test/b"}]"#,
@@ -599,7 +669,7 @@ fn a_projection_keeps_its_own_bounds_whatever_the_document_was_admitted_under() 
     let small = document(&[], r#"{"$ref":"https://e.test/a"}"#);
     let contract = prepare_with(&small, &supplied).unwrap();
     assert!(matches!(
-        contract.validate_json(r#""x""#).unwrap(),
+        contract.evaluate_json(r#""x""#).unwrap(),
         ValueOutcome::Satisfies
     ));
     // A document admitted past the default byte limit prepares a contract whose
@@ -613,7 +683,7 @@ fn a_projection_keeps_its_own_bounds_whatever_the_document_was_admitted_under() 
     };
     let contract = prepare_admitted(&large, raised).unwrap();
     let value = JsonValue::parse_with_limits(&literal, raised).unwrap();
-    assert!(matches!(contract.validate(&value), ValueOutcome::Satisfies));
+    assert!(matches!(contract.evaluate(&value), ValueOutcome::Satisfies));
 }
 
 // Preparation refuses a reached schema nested more than 256 schemas below the
@@ -631,55 +701,54 @@ fn a_schema_nested_more_than_256_levels_deep_refuses_whatever_the_limits() {
         })
     }
     let raised = Limits {
-        stack_bytes: 16 << 20,
-        compile_json_depth: 100_000,
+        evaluation_sdk_reservation_bytes: 256 << 20,
         ..Limits::default()
     };
-    let refused = |result: Result<PreparedValueContract, NoVerdict>| {
+    let refused = |result: Result<
+        PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator>,
+        PreparationFailure,
+    >| {
         let detail = result.expect_err("refused");
         assert_eq!(
-            (detail.reason, detail.code.as_str()),
-            (NoVerdictReason::LimitExceeded, "schema-depth-limit")
+            detail.kind,
+            PreparationFailureKind::Limit {
+                resource: "schema-depth-limit".into()
+            }
         );
     };
     for schema in [not, properties] {
         let deepest = prepare(&document(&[], &schema(256))).unwrap();
         assert!(matches!(
-            deepest.validate_json("{}").unwrap(),
+            deepest.evaluate_json("{}").unwrap(),
             ValueOutcome::Satisfies | ValueOutcome::Fails { .. }
         ));
         for limits in [Limits::default(), raised.clone()] {
             refused(prepare_within(
                 &document(&[], &schema(257)),
-                &ResourceSet::default(),
+                &ExternalSchemas::default(),
                 limits,
             ));
         }
     }
-    // Reference inspection skips the references nested past the same depth:
-    // a reference 256 schemas below the input is reported, one 257 below is not.
+    // Inspection has its own inventory and representation allowances. Both
+    // references remain visible across preparation's independent depth bound.
     let inspect = |levels: usize| {
         let inner = (0..levels).fold(
             r#"{"$ref":"https://depth.test/inner"}"#.to_owned(),
             |inner, _| format!(r#"{{"not":{inner}}}"#),
         );
         let input = format!(r#"{{"$ref":"https://depth.test/r","allOf":[{inner}]}}"#);
-        Document::parse(document(&[], &input))
-            .unwrap()
-            .references()
-            .unwrap()
+        Document::parse(document(&[], &input)).unwrap().references()
     };
-    let report = inspect(255);
-    assert!(report.complete && report.limitation.is_none());
-    assert_eq!(report.references.len(), 2);
-    let report = inspect(256);
-    assert!(!report.complete);
-    let limitation = report.limitation.expect("a limitation");
-    assert_eq!(
-        (limitation.reason, limitation.code.as_str()),
-        (ReferenceRefusalReason::LimitExceeded, "schema-depth")
-    );
-    assert_eq!(report.references.len(), 1);
+    for levels in [255, 256] {
+        let report = inspect(levels);
+        assert!(report.complete && report.limitation.is_none());
+        assert_eq!(report.references.len(), 2);
+        assert_eq!(
+            report.references[1].spelling.as_deref(),
+            Some("https://depth.test/inner")
+        );
+    }
     // A supplied resource counts from its own root.
     let input = document(&[], r#"{"$ref":"https://depth.test/r"}"#);
     let supplied = |levels| resources(vec![("https://depth.test/r".into(), not(levels))]);

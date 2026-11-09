@@ -1,7 +1,7 @@
 # Capabilities and limits
 
 Use this SDK to read, validate, author and inspect OpenBindings interface
-documents, and to validate caller-facing values against their value contracts.
+documents, and to evaluate caller-facing values against their input/output schemas.
 Start with a working example in the [Rust guide](docs/rust-first-use.md) or
 [TypeScript guide](packages/typescript/README.md).
 
@@ -9,18 +9,18 @@ Start with a working example in the [Rust guide](docs/rust-first-use.md) or
 
 Core checks OpenBindings 0.2 document rules and reports met, violated or
 inconclusive evidence where applicable. A parsed document keeps its exact bytes
-and can be edited in place; validation that establishes every rule yields a
+and supports immutable edits that return a new revision; validation that establishes every rule yields a
 conformant document. Unsupported specification versions
 are refused separately. A document's conformance does not establish its author
 claims about examples, bindings, availability or dependencies.
 
 Exact JSON retains numeric tokens, escaped UTF-16, duplicate-member evidence,
-unknown fields and original source locations. Typed authoring preserves opaque
-values while re-encoding typed fields. Checked conversion of ordinary application
+unknown fields and original source locations. Batched edits target exact JSON
+Pointers and preserve untouched bytes and opaque values. Checked conversion of ordinary application
 data refuses unsupported or inexact representations. Conversion cannot restore
 precision already lost by the application. Document conformance rejects an escaped
 unpaired surrogate in any member name or string value as OBI-01, including opaque
-content and embedded schemas. OBI-02 through OBI-13 then do not apply. Escaped
+content and embedded schemas. OBI-02 through OBI-14 then do not apply. Escaped
 surrogate pairs and noncharacters remain permitted. Draft inspection, caller
 values and supplied schema resources still retain unpaired UTF-16 units exactly,
 and so do the JSON Pointers that locate their nodes.
@@ -31,193 +31,88 @@ admission limits are a setting at `validate_document_with_limits`,
 `Document::parse_with_limits` and `JsonValue::parse_with_limits` (`JsonLimits`),
 and at TypeScript's `validateDocument`, `Document.parse` and `parseJson`
 (`limits`). `Document::new`, `Document::from_json`, `JsonValue::parse`,
-`JsonValue::string`, `Publication::from_bytes` and `validate_json` use the
+`JsonValue::string` and `PreparedSchema::evaluate_json` use the
 defaults, as do TypeScript's `Document.create()`, `ExactJson.from`,
-`validateJson` and a prepared value contract's `validate` and `explain` of an ordinary
-value.
+`evaluateJson` and a prepared schema's `evaluate` and `explain` of an ordinary
+value. `Publication::from_bytes` uses whole-document validation admission,
+including no nesting cap.
 A document keeps the limits it was admitted under, and its edits apply them to
 the edited document. Discovery raises only the byte limit, to its configured
 body bound; a body past the default nodes comes back undetermined and is admitted
-by validating it again with `validate_document_with_limits`. Value-contract
-preparation keeps fixed bounds of its own, which no setting raises. Every
-admission and edit limit refusal names how to admit more, including the route
-for calls that take no limits.
-Ordinary Rust Serde conversion has a 128-container ceiling. Document reports retain at
-most 4,096 findings and 8 MiB of pointers. Truncation leaves rule evidence
-intact. Document validation's memory grows linearly with the document: its copy
-of the text, the decoded text of its escaped strings, its tree, and validation
-state per schema position, `$id` declaration and retained finding. Compared
-identifiers share runs of the `$id` texts, so a long or deeply nested `$id`
-costs memory and time linear in the document. At the default limits the
-diagnostic memory probe validates 34 documents, most filling the byte or node
-limit, with structures that grow these terms, and fails if one allocates more
-than 300 MiB beyond the caller's input, counting every reallocation as holding
-its old and new blocks at once. The largest, a third of a million escaped
-`$id`s, each with its own authority, a query, a fragment and a dot segment that
-makes its path a copy, allocates 256.0 MiB, against 364.9 MiB at the former
-64 MiB default. A caller that hands over its buffer, through
-`validate_document_owned`, `Document::parse_owned`, their `_with_limits` forms
-or `JsonValue::parse_owned_with_limits`, gives the document or value that
-buffer as its text, saving the copy: the same document then allocates
-224.3 MiB beyond the buffer. The TypeScript package always hands over the
-module's copy of its input. See
-[performance and allocation boundaries](docs/performance-boundaries.md).
-OBI-02's whole-document check and each embedded schema's OBI-10 meta-schema
-check run on the unmodified jsonschema 0.58.6 library with its default pattern
-engine. Every fixed pattern is regular, so that engine matches it on a finite
-automaton in time linear in the string, with the results of ECMAScript's `u`-mode
-RegExp. The derived schema has no recursive reference and the meta-schema check
-cuts its recursive edges, so every document the admission limits admit, default
-or caller-selected, gets OBI-02 and OBI-10 verdicts, with work linear in those
-limits and no work budget of the checks' own. A SemVer near miss, the costliest
-input per byte, took about 0.35 seconds at the default 32 MiB limit, 0.6 seconds
-at 60 MB and 0.7 seconds at 64 MiB in a release build on an Apple M1 Max; peak
-memory was the input text and the stored document, and the checks' own memory
-does not grow with the string. The admission byte limit is how a caller bounds that time:
-`validate_document_with_limits` with a smaller `max_bytes` admits less. A
-meta-schema check reads its schema's own members and only the type of each
-subschema, so a node is read by at most two checks and their work together stays
-linear in those limits. A failing schema's members are read once more to locate
-OBI-10 findings at the keywords whose values fail.
+by validating it again with `validate_document_with_limits`. Schema preparation
+has separate footprint, cooperative SDK work and explicit SDK storage reservation
+bounds through `PreparationLimits` (`max_sdk_work_units`,
+`max_sdk_reservation_bytes`). These are not allocator-wide or CPU accounting for
+dependencies and custom callbacks. Dependency construction needs separate
+structural admission and measured resource qualification,
+plus the selected evaluator's capability and execution limits. Parser-limit
+findings use `byte-limit`, `depth-limit` or `node-limit` and describe the limit
+without API advice. The [Rust guide](docs/rust-first-use.md) explains how to
+choose admission limits. Ordinary Rust Serde conversion has a 128-container
+ceiling. Document reports retain at most 4,096 findings and 8 MiB of pointers;
+truncation leaves rule evidence intact. OBI-02 findings include fixed-schema
+keyword, origin and optional facts, as documented in the
+[API reference](docs/api-reference.md#document-finding-codes).
 
-## Value validation
+Reference inspection works on drafts, including missing or malformed version
+declarations, under 0.2's rules and throughout the admitted depth. Unsupported
+versions and duplicate names produce incomplete reports. `resource_root` names
+the site's resource origin, absent exactly for the document resource. An 8 MiB
+retained-text allowance can stop inspection with `reference-report-bytes`.
+See [reference inspection](docs/api-reference.md#schemas-and-value-results) for
+completion, resources and accounting details.
 
-Document validation needs no caller-supplied evaluator. Operation values require
-an explicit Rust `SchemaEvaluator`; the TypeScript facade supplies the bundled
-evaluator. Only a conformant operation hands out its input and output value
-contracts, and preparing one borrows the evaluator and any supplied resources. Core alone makes no satisfies/fails decision, even for a boolean
-schema. The [evaluator guide](docs/schema-evaluators.md) explains integration.
+## Schema evaluation
 
-The optional default evaluator supports JSON Schema 2020-12 with exact decimal
-comparison and explicit immutable resources, composed over the unmodified
-jsonschema 0.58.6 library. It performs no reference acquisition. `format`
-remains an annotation. Patterns are read in the dialect JSON Schema 2020-12
-cites, ECMA-262 11th edition (ES2020) section 21.2.1 with Unicode semantics, the
-word boundary `\b` included, and translated for a linear-time engine; a
-differential against V8 checks the translation through both pattern keywords.
-Syntax later editions added, such as ES2025's modifiers `(?i:a)` and duplicate
-named groups, is invalid in that edition and refused.
-One that needs a backtracking engine (lookaround or backreferences), applies
-a Unicode property escape or holds the non-word boundary `\B` produces
-no-verdict, as do other unsupported capabilities. A `$dynamicRef` resolves through the dynamic scope
-of the path that reaches it, also through `$ref` cycles.
+Core exposes an original, proof-owned `Schema` and a generic `SchemaEvaluator`
+seam. Preparation borrows the schema, explicit immutable external resources,
+limits and caller control. `PreparedSchema<E::Validator>` owns the resulting
+validator. The seam requires neither `Send` nor `Sync` and performs no resource
+acquisition. Core alone supplies no value verdict, even for a Boolean schema.
+See the [evaluator integration guide](docs/schema-evaluators.md).
 
-The evaluator bounds what the SDK itself reads, writes and recurses through; it
-does not estimate the JSON Schema library's compiled memory. On by default:
-core's document admission limits, its 100,000 schema positions per value contract
-and its fixed depth of 256 nested schemas below a schema position or supplied
-resource root (`schema-depth-limit`);
-the projected JSON nesting compiled (`compile_json_depth`, 512,
-`compileJsonDepth` in TypeScript);
-the stack the host gives (`stack_bytes`, 256 KiB, `stackBytes` in TypeScript),
-from which the evaluator sizes evaluation depth (256 bytes for each nested
-schema evaluation, 1,024 at the default), bounded from the value contract before a
-value is evaluated, the stack a pass of a value contract holding
-`unevaluatedProperties` or `unevaluatedItems` may use as it evaluates (half,
-128 KiB at the default: a bound on the stack's bytes, so the depth it admits
-varies with the build and the host) and the unevaluated walk limit below, so release
-builds on Linux, macOS and Windows prepare, check and explain the 39 recursive
-shapes the stack test covers on threads of 192 KiB, 256 KiB and 1 MiB with the
-evaluator sized for each; each pattern's bytes, form and nesting (1 MiB,
-32 groups) and the forms kept for all of a value contract's patterns together (4 MiB,
-`totalPatternBytes` in TypeScript); the memory of all of a value contract's
-patterns together (`total_pattern_memory`, 64 MiB, `totalPatternMemory` in
-TypeScript, `pattern-total-memory-limit`, with a message that states the
-arithmetic): the SDK's run matchers, which match anchored sequences of
-single-character runs without an automaton and hold a few bytes for each step
-and each range of members past ASCII and a byte for each byte of literal text,
-and the regex crate's memory
-for the compiled patterns, spent through the crate's lazy-DFA cache setting, a
-quarter of it in equal parts, and its compiled-size setting, within which each
-pattern first compiles in 48 KiB beside the run matchers while those that need
-more share the rest, so small patterns beside a large one change its outcome
-only through what they hold: `^.{1,10000}$` compiles beside up to 743 small
-patterns and four such counted repetitions of about 13 MiB compile together,
-while 40 refuse in about 0.2 s; the
-memory dynamic specialization adds to a value contract's program, estimated for the
-SDK's own copies and dynamic contexts (`program_bytes`, 48 MiB, `programBytes`
-in TypeScript, `program-specialization-limit`); and an unevaluated keyword's
-annotation walk, which the library compiles by recursion, weighed by the kind
-of each reference against what `stack_bytes` admits with a fifth of it left to
-the caller (`unevaluated-walk-limit`: at the default 26 `$ref`s, 8 levels of
-`allOf` inheritance, 7 through `then` or `dependentSchemas`). Each of these
-refusals states its arithmetic and names the setting to raise. Off unless an
-application sets them: an evaluation work cap (`evaluation_steps`), which bounds
-only time and without which time can grow exponentially with some schemas (its
-marker before every reference nests one more schema evaluation for each
-reference a value's evaluation follows, so within the same `stack_bytes` a
-recursive value contract decides fewer levels, at worst about half as many:
-203 instead of 340 for an array nested through one subschema reference per
-level), and a
-cap on the schema resources one value contract may reach (`schema_resources`,
-`schemaResources` in TypeScript). That cap refuses a value contract after core projects
-it and before the evaluator copies its resources and the library compiles them,
-so it bounds the time and memory of that compilation: an 8 MB document whose input
-reaches a chain of 99,990 `$id` resources prepared in 8.1 s at a 725 MB peak
-without it, and refused in 1.1 s at a 499 MB peak with it set to 1,000. Within
-these bounds, preparing a schema can still take more memory than a host may
-want, since the library's compiled program grows with what it compiles: 1,000
-holders of `unevaluatedProperties` that each inherit 4,000 properties peak at
-400 MB. A host preparing schemas from untrusted parties should do so in an
-isolated worker or process with an operating-system memory limit. Values
-checked against trusted schemas stay bounded by `stack_bytes` and, when set,
-`evaluation_steps`. A prepared value contract can remain undecidable for a
-particular value.
+The optional [default evaluator](crates/openbindings-json-schema-evaluator/README.md)
+retains an Original semantic plan and, for an admitted subset at default limits,
+a compiled jsonschema validator. Outcome checks may use the compiled lane;
+Explain always uses Original. Any non-default evaluator or preparation limit
+selects Original. The [execution policy](crates/openbindings-json-schema-evaluator/README.md#execution-paths)
+explains value selection, cancellation and storage accounting.
 
-Two further cases give no verdict whatever `Limits` sets. Exact `multipleOf`
-divides within a fixed arithmetic bound: when the value or the divisor has more
-than 4,096 significant digits, or an exponent beyond ±20,000 once the trailing
-zeros of its digits are counted in it, a division the answer needs gives no
-verdict (`numeric-arithmetic-limit`); other numeric keywords compare exactly at
-any size. Caller values keep unpaired UTF-16 units: keywords that compare values
-exactly, such as `const`, `enum`, `required` and `uniqueItems`, decide them,
-while a keyword that reads a string or member name as Unicode text, such as
-`minLength`, `maxLength`, `pattern`, `properties`, `patternProperties` or
-`propertyNames`, gives no verdict (`lone-surrogate-instance`) when it reaches
-one.
+Results are `Satisfies`, `Fails`, `Undefined` and `NoVerdict`. Undefined requires
+semantic dependence on a known undefined result. Missing content, unsupported
+features, exhausted limits and cancellation alone do not establish it. Original
+reasoning tracks validity and evaluated properties/items; unresolved recursive
+components can remain conservative. Finite passing tests do not establish
+unrestricted recursive completeness.
 
-A value contract prepares with a stand-in for what the evaluator cannot evaluate:
-a resource that was not supplied, a schema that could apply again without
-consuming the instance (an in-place cycle, such as one whose `$ref` names
-itself), and a pattern, in `pattern` or as a `patternProperties` name, that is
-invalid as an ECMA-262 11th edition (ES2020) regular expression with Unicode
-semantics, the dialect JSON Schema 2020-12 cites, or that its linear-time
-engine does not match. A value whose verdict depends on how a stand-in comes
-out gives no verdict naming it (`resource-unavailable`, `in-place-cycle`,
-`schema-pattern-compilation`, `pattern-backtracking`,
-`unicode-property-matching` or `pattern-non-word-boundary`); every other value
-keeps the verdict that holds however each stand-in comes out, independently at
-each place evaluation reaches it, whatever order the keywords are in. A pass
-that reaches a stand-in is decided by a second program the value contract
-compiles for its stand-ins, which bounds its validity from below and above.
-Preparation refuses a value contract in which an `unevaluatedProperties` or
-`unevaluatedItems` keyword's annotation sources reach a stand-in for a missing
-resource, a cycle or `patternProperties` names, since the library reads those
-sources rather than evaluating them, and a reference to a fragment of a
-missing resource or one that identifies no schema. An established undefined
-result has its own `Undefined` outcome, separate from no-verdict, which a
-custom evaluator may return; the default evaluator never does.
-Unsupported capabilities and exhausted limits produce no-verdict. Handle
-no-verdict in both preparation and validation.
+The evaluator preserves exact numeric comparisons and ECMA-262 11th-edition
+Unicode-pattern semantics within its supported subset. Optional format assertion
+is disabled. Standard draft-07, 2019-09 and 2020-12 external resources and supported
+custom vocabularies retain their own dialect interpretation. Preparation failure
+is separate from a per-value result; replacing external resources requires new
+preparation. Prepared owners retain the original schema environment.
 
-Retain prepared value contracts for repeated validation. Paired macOS arm64 release
-measurements reduced 20,000-integer evaluation from 5.61 ms to 0.39 ms and the
-original twenty-pair SDK/jsonschema-rs time ratio from 12.50× to 4.84×. Sharing one
-target carrier across 100 referring resources measured 8.01 ms before and 7.74 ms
-after for public preparation. The case with 5,000 long references uses 50.38 MiB peak
-requested heap versus 55.01 MiB before. Exact fallbacks and limits remain in
-force; these are measured examples, not latency guarantees. See
-[methodology and heap tradeoffs](docs/performance-boundaries.md).
+Explicit limits cover SDK work and reservations, not all dependency allocations,
+CPU time or process RSS. Explanations have bounded original-location evidence;
+missing detail does not weaken an established failure. See the evaluator guide
+for the supported profiles and individual limits. Historical measurements and
+qualification scopes are recorded in [performance boundaries](docs/performance-boundaries.md).
 
-Each value check chooses its detail. `validate` reports a failure without
-problems; `explain` reports the library's first error, an explicit choice that
-allocates in proportion to input and is made only for values within half the
-nesting `stack_bytes` admits. The explained problem names the failing node by exact pointer from
-the value and the failing keyword by resource and exact pointer; the value,
-document or resource set finds line and column on demand. A prepared value contract
-keeps only the original locations of the schemas it compiled for explanations,
-never their text, its document, supplied resources or any position. Diagnostic
-completeness is separate from the established value outcome.
+## Schema comparison
+
+The optional [comparison companion](crates/openbindings-schema-comparison/README.md)
+implements normalized identity from `OB-2020-12` profile 0.1. It preserves optional
+slots, exact numbers/strings, opaque keyword values and union multiplicity. Explicit
+caller roots, bases and resource records govern references; it performs no fetching
+and does not reuse core `$id` interpretation or value evaluation. Its Equal answer
+is profile identity, not general schema equivalence or a verified reuse claim.
+
+The comparison fixture harness covers 27 ordinary and 10 exact identity groups. The 88 directional
+groups remain outside this API's scope. Missing/cyclic references, repeated-first-enum intersection ambiguity, resource exhaustion
+and cancellation are failures with no identity verdict. Defaults are 20 million
+work units, 64 MiB cumulative allocation reservations and depth 128; the depth
+ceiling cannot be raised. Plain-name anchors and nested resource bases are supported.
+Comparison remains independent of core conformance.
 
 ## Discovery and kind implementations
 
@@ -227,12 +122,31 @@ authentication, additional network policy and credentialed CORS. Browser Fetch
 limits what redirect and network facts the SDK can observe. See
 [HTTP policy](docs/http-discovery.md).
 
-Source inspection, interface synthesis and invocation are optional Rust
-companions. They define provider traits and checked callers. Kind implementations
-supply source interpretation, binding behavior and acquisition policy in separate
-projects. Applications choose providers; kinds remain exact opaque strings in core.
-No fixed registry or universal kind-support claim follows from installing the SDK.
-TypeScript does not expose inspection, synthesis or invocation APIs.
+Invocation and [kind description/source checking](crates/openbindings-kind-description/README.md)
+are optional Rust companions. They define provider traits and checked callers.
+Kind descriptions retain per-operation support claims and disclose check execution;
+source checks require an explicit call and never acquire context or retry by
+themselves. Exact carriers retain allowed output members, numbers, strings and
+absent-versus-null data. Neither a description nor a checked source proves document
+conformance, availability or permission to execute. Default carrier handoff bounds
+are 32 MiB per request/response and 100,000 listed kinds; they do not bound work
+inside a provider. Native provider failures remain distinct from kind rejections.
+
+Kind implementations supply source interpretation, binding behavior and acquisition
+policy in separate projects. Applications choose providers; kinds remain exact
+opaque strings in core. No fixed registry or universal kind-support claim follows
+from installing the SDK. TypeScript does not expose interface APIs.
+
+[Source pulling](crates/openbindings-source-pull/README.md) provides exact carriers,
+original-document requests, borrowed providers and checked lazy callers. The SDK
+checks mechanically knowable report relationships and core conformance of a
+prospective all-additions snapshot. It does not establish kind-owned fidelity,
+offered-schema identity or opaque dependency closure, and it never applies
+proposals. Default handoffs are 32 MiB; relationship indexing has separate entry,
+work and allocation bounds. These do not cover provider work or core prospective
+rebuild/validation internals, which retain core limits. Cancellation is checked
+around those synchronous core calls. These checks do not qualify an application
+or adapter for deployment.
 
 ## Runtime qualifications
 

@@ -19,7 +19,7 @@ def canonical(value):
         return [canonical(item) for item in value]
     if isinstance(value, dict):
         names = {'byteOffset': 'byte_offset', 'byteColumn': 'byte_column',
-                 'problemsComplete': 'problems_complete'}
+                 'problemsComplete': 'problems_complete', 'sourceUri': 'source_uri'}
         # The TS observer also records setup tags. Both observers' outcome/refusal
         # and independent corpus judgments remain required. Finding truncation is
         # independently covered by the shared native/Node/package/browser cases.

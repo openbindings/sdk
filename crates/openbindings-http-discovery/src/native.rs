@@ -27,7 +27,8 @@ impl std::fmt::Debug for Client {
 
 impl Client {
     /// Build the application builder after installing the SDK redirect policy last.
-    /// HTTP is allowed only for literal loopback; every HTTPS-to-HTTP hop is
+    /// HTTP is allowed only for literal loopback unless [`ClientOptions::allow_http`]
+    /// is set; every HTTPS-to-HTTP hop is
     /// refused before dispatch, and at most ten redirects are followed. A foreign-origin
     /// hop followed by a same-origin hop is refused to prevent upstream header replay.
     ///
@@ -53,21 +54,22 @@ impl Client {
     ) -> Result<Self, ConfigurationError> {
         validate_options(options)?;
         let http = builder
-            .redirect(reqwest::redirect::Policy::custom(|attempt| {
+            .redirect(reqwest::redirect::Policy::custom(move |attempt| {
+                // Keep a refused hop's response so discovery can retain its
+                // status and Location before reporting the policy failure.
                 if attempt.previous().len() > MAX_REDIRECTS {
-                    return attempt.error("discovery redirect limit exceeded");
+                    return attempt.stop();
                 }
                 if let Some(previous) = attempt.previous().last()
-                    && let Err(message) = admit_redirect(previous, attempt.url())
+                    && admit_redirect(previous, attempt.url(), options.allow_http).is_err()
                 {
-                    return attempt.error(message);
+                    return attempt.stop();
                 }
                 if let (Some(first), Some(previous)) =
                     (attempt.previous().first(), attempt.previous().last())
                     && credential_replay_hop(first, previous, attempt.url())
                 {
-                    return attempt
-                        .error("redirect would replay original credentials to a foreign origin");
+                    return attempt.stop();
                 }
                 attempt.follow()
             }))
@@ -79,7 +81,9 @@ impl Client {
         Ok(Self { http, options })
     }
     /// Retain an already-built client through explicit policy delegation.
-    /// The application MUST enforce the same per-hop admission and ten-redirect
+    /// The application MUST enforce the same per-hop admission for the selected
+    /// [`ClientOptions::allow_http`] policy, including refusing every HTTPS-to-HTTP
+    /// hop, and the ten-redirect
     /// limit before dispatch. Applications needing a foreign-origin hop followed by
     /// a same-origin hop must own credential policy to prevent original-header replay
     /// by tower-http 0.6.11 / reqwest 0.13.5. A final URL cannot prove hop safety.

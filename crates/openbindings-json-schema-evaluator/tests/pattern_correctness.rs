@@ -2,7 +2,19 @@ use openbindings::*;
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 use serde_json::{Value, json};
 
-fn prepare(schema: Value, resources: ResourceSet) -> Result<PreparedValueContract, NoVerdict> {
+fn prepare(
+    schema: Value,
+    resources: ExternalSchemas,
+) -> Result<PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator>, PreparationFailure>
+{
+    prepare_with_limits(schema, resources, &PreparationLimits::default())
+}
+fn prepare_with_limits(
+    schema: Value,
+    resources: ExternalSchemas,
+    limits: &PreparationLimits,
+) -> Result<PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator>, PreparationFailure>
+{
     let document = Document::parse(
         json!({"openbindings":"0.2.0","operations":{"op":{"input":schema}}}).to_string(),
     )
@@ -16,7 +28,7 @@ fn prepare(schema: Value, resources: ResourceSet) -> Result<PreparedValueContrac
         .expect("declared operation")
         .input()
         .expect("declared input")
-        .prepare_with(&DefaultEvaluator::new(), &resources)
+        .prepare(&DefaultEvaluator::new(), &resources, limits)
 }
 
 // Patterns with lone surrogate escapes, matched as Node's `RegExp` with the `u`
@@ -41,12 +53,12 @@ fn node_surrogate_differential_for_both_pattern_keywords() {
                 json!({*input:null}),
             ),
         ] {
-            let contract = match prepare(schema, ResourceSet::default()) {
+            let contract = match prepare(schema, ExternalSchemas::default()) {
                 Ok(contract) => contract,
                 Err(detail) => panic!("{id}/{keyword}: {detail:?}"),
             };
             let value = JsonValue::parse(value.to_string()).unwrap();
-            match contract.validate(&value) {
+            match contract.evaluate(&value) {
                 ValueOutcome::Satisfies => assert_eq!(*expected, "true", "{id}/{keyword}"),
                 ValueOutcome::Fails { .. } => assert_eq!(*expected, "false", "{id}/{keyword}"),
                 ValueOutcome::NoVerdict { detail } if backtracking => {
@@ -79,7 +91,7 @@ fn invalid_patterns_locate_authored_keywords_in_document_and_supplied_resources(
             let (entry, resources, resource, prefix) = if supplied {
                 (
                     json!({"$ref":URI}),
-                    ResourceSet::new([SchemaResource {
+                    ExternalSchemas::new([ExternalSchema {
                         uri: URI.into(),
                         document: JsonValue::parse(schema.to_string()).unwrap(),
                     }])
@@ -88,27 +100,27 @@ fn invalid_patterns_locate_authored_keywords_in_document_and_supplied_resources(
                     "",
                 )
             } else {
-                (schema, ResourceSet::default(), None, "/operations/op/input")
+                (
+                    schema,
+                    ExternalSchemas::default(),
+                    None,
+                    "/operations/op/input",
+                )
             };
             let contract = prepare(entry, resources).unwrap_or_else(|d| panic!("{d:?}"));
             let value = JsonValue::parse(json!({ "a/b~c": reaching }).to_string()).unwrap();
-            let ValueOutcome::NoVerdict { detail } = contract.validate(&value) else {
+            let ValueOutcome::Undefined { detail } = contract.evaluate(&value) else {
                 panic!("{keyword}/{supplied}")
             };
-            assert_eq!(detail.reason, NoVerdictReason::ConservativePreparation);
-            assert_eq!(detail.code, "schema-pattern-compilation");
+            assert_eq!(detail.code, "semantic-dependence");
             assert_eq!(
                 detail.location,
-                Some(SchemaLocation::new(
+                Some(SchemaOrigin::new(
                     resource,
                     format!("{prefix}/properties/a~1b~0c/{keyword}")
                         .parse()
                         .unwrap(),
                 ))
-            );
-            assert_eq!(
-                detail.message,
-                format!("the schema {keyword} regular expression could not be compiled")
             );
             assert!(!detail.message.contains("SECRET"));
         }
@@ -147,7 +159,8 @@ fn ecma_rows() -> Vec<EcmaRow> {
         .collect()
 }
 // Whether a pattern holds a construct the evaluator does not match:
-// lookaround, a backreference, a property escape or a non-word boundary.
+// lookaround, a backreference, a property absent from the pinned tables or a
+// non-word boundary. Some of these patterns have a supported linear form.
 fn may_be_unmatched(pattern: &str) -> bool {
     ["(?=", "(?!", "(?<=", "(?<!", "\\k", "\\p", "\\P", "\\B"]
         .iter()
@@ -167,13 +180,27 @@ fn member(index: usize) -> String {
     format!("p{index}")
 }
 // Prepare one contract holding each row's schema under its member.
-fn combined(rows: &[(usize, &EcmaRow)], schema: impl Fn(&str) -> Value) -> PreparedValueContract {
+fn combined(
+    rows: &[(usize, &EcmaRow)],
+    schema: impl Fn(&str) -> Value,
+) -> PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator> {
     let properties: serde_json::Map<String, Value> = rows
         .iter()
         .map(|(index, row)| (member(*index), schema(&row.pattern)))
         .collect();
-    prepare(json!({ "properties": properties }), ResourceSet::default())
-        .unwrap_or_else(|detail| panic!("{detail:?}"))
+    // This batches the entire independently generated matching corpus into one
+    // document for test speed. Its cumulative Unicode translation work exceeds
+    // an ordinary request's default allowance; keep a finite explicit budget.
+    prepare_with_limits(
+        json!({ "properties": properties }),
+        ExternalSchemas::default(),
+        &PreparationLimits {
+            max_sdk_work_units: 256 * 1024 * 1024,
+            max_sdk_reservation_bytes: 1024 * 1024 * 1024,
+            ..PreparationLimits::default()
+        },
+    )
+    .unwrap_or_else(|detail| panic!("{:?}", detail.kind))
 }
 
 // Generated patterns, matched as V8's `RegExp` with the `u` flag matches them,
@@ -181,7 +208,7 @@ fn combined(rows: &[(usize, &EcmaRow)], schema: impl Fn(&str) -> Value) -> Prepa
 // keyword reads as evaluated. The evaluator reads ECMA-262 11th edition, so a
 // pattern V8 accepts may be read as invalid only for a property escape whose
 // name or value that edition lacks; it declines to match only the constructs
-// that need a backtracking engine, property escapes and `\B`, and a string
+// that need a backtracking engine, missing property tables and `\B`, and a string
 // whose verdict depends on an invalid pattern gives no verdict.
 #[test]
 fn generated_patterns_match_as_ecmascript_does_through_both_keywords() {
@@ -200,17 +227,13 @@ fn generated_patterns_match_as_ecmascript_does_through_both_keywords() {
                 json!({"x": 0}),
             ),
         ] {
-            let contract = prepare(schema, ResourceSet::default())
+            let contract = prepare(schema, ExternalSchemas::default())
                 .unwrap_or_else(|detail| panic!("{:?}: {detail:?}", row.pattern));
             let value = JsonValue::parse(value.to_string()).unwrap();
-            let ValueOutcome::NoVerdict { detail } = contract.validate(&value) else {
+            let ValueOutcome::Undefined { detail } = contract.evaluate(&value) else {
                 panic!("V8 refuses {:?}", row.pattern)
             };
-            assert_eq!(
-                detail.code, "schema-pattern-compilation",
-                "{:?}",
-                row.pattern
-            );
+            assert_eq!(detail.code, "semantic-dependence", "{:?}", row.pattern);
             *counts.entry("invalid stands in").or_default() += 1;
         }
     }
@@ -234,11 +257,11 @@ fn generated_patterns_match_as_ecmascript_does_through_both_keywords() {
     for &(index, row) in &valid {
         for (at, string) in row.strings.iter().enumerate() {
             let value = JsonValue::parse(json!({ member(index): string }).to_string()).unwrap();
-            match contract.validate(&value) {
+            match contract.evaluate(&value) {
                 ValueOutcome::Satisfies if expected(row, at) => {}
                 ValueOutcome::Fails { .. } if !expected(row, at) => {}
                 ValueOutcome::NoVerdict { detail }
-                    if UNMATCHED.contains(&detail.code.as_str())
+                    if UNMATCHED.contains(&detail.code.as_ref())
                         && may_be_unmatched(&row.pattern) =>
                 {
                     *counts.entry("pattern unmatched").or_default() += 1;
@@ -271,14 +294,14 @@ fn generated_patterns_match_as_ecmascript_does_through_both_keywords() {
     for (_, row) in alone {
         let contract = prepare(
             json!({"patternProperties": {row.pattern.as_str(): false}}),
-            ResourceSet::default(),
+            ExternalSchemas::default(),
         )
         .unwrap_or_else(|detail| panic!("{:?}: {detail:?}", row.pattern));
         let mut unmatched = 0;
         for (at, string) in row.strings.iter().enumerate() {
             let value = JsonValue::parse(json!({ string: 0 }).to_string()).unwrap();
-            match contract.validate(&value) {
-                ValueOutcome::NoVerdict { detail } if UNMATCHED.contains(&detail.code.as_str()) => {
+            match contract.evaluate(&value) {
+                ValueOutcome::NoVerdict { detail } if UNMATCHED.contains(&detail.code.as_ref()) => {
                     unmatched += 1;
                 }
                 outcome => {
@@ -296,6 +319,24 @@ fn generated_patterns_match_as_ecmascript_does_through_both_keywords() {
         );
         if unmatched > 0 {
             *counts.entry("patternProperties unmatched").or_default() += 1;
+        } else {
+            let marked = prepare(
+                json!({"patternProperties": {row.pattern.as_str(): true}, "unevaluatedProperties": false}),
+                ExternalSchemas::default(),
+            ).unwrap();
+            for (at, string) in row.strings.iter().enumerate() {
+                let value = JsonValue::parse(json!({ string: 0 }).to_string()).unwrap();
+                let outcome = marked.evaluate(&value);
+                assert!(matches!(
+                    outcome,
+                    ValueOutcome::Satisfies | ValueOutcome::Fails { .. }
+                ));
+                assert_eq!(
+                    matches!(outcome, ValueOutcome::Satisfies),
+                    expected(row, at)
+                );
+                *counts.entry("unevaluated marking agrees").or_default() += 1;
+            }
         }
     }
     let contract = combined(&together, |p| json!({"patternProperties": {p: false}}));
@@ -303,7 +344,7 @@ fn generated_patterns_match_as_ecmascript_does_through_both_keywords() {
         for (at, string) in row.strings.iter().enumerate() {
             let value =
                 JsonValue::parse(json!({ member(index): { string: 0 } }).to_string()).unwrap();
-            let fails = matches!(contract.validate(&value), ValueOutcome::Fails { .. });
+            let fails = matches!(contract.evaluate(&value), ValueOutcome::Fails { .. });
             assert_eq!(fails, expected(row, at), "{:?} on {string:?}", row.pattern);
             *counts.entry("patternProperties agrees").or_default() += 1;
         }
@@ -318,7 +359,7 @@ fn generated_patterns_match_as_ecmascript_does_through_both_keywords() {
         for (at, string) in row.strings.iter().enumerate() {
             let value =
                 JsonValue::parse(json!({ member(index): { string: 0 } }).to_string()).unwrap();
-            let satisfies = matches!(contract.validate(&value), ValueOutcome::Satisfies);
+            let satisfies = matches!(contract.evaluate(&value), ValueOutcome::Satisfies);
             assert_eq!(
                 satisfies,
                 expected(row, at),
@@ -329,7 +370,7 @@ fn generated_patterns_match_as_ecmascript_does_through_both_keywords() {
         }
     }
     // 1,247 generated patterns with eight strings each: 305 V8 refuses,
-    // through both keywords; 135 hold constructs the evaluator does not match.
+    // through both keywords; 88 hold constructs the evaluator does not match.
     // Then 130 fixed patterns with sets that meet across the surrogate gap,
     // with 13 strings each, and 128 with word-boundary assertions, with 15
     // strings each; the 64 holding `\B` are not matched.
@@ -337,11 +378,11 @@ fn generated_patterns_match_as_ecmascript_does_through_both_keywords() {
         counts,
         [
             ("invalid stands in", 610),
-            ("pattern agrees", 9_106),
-            ("pattern unmatched", 2_040),
-            ("patternProperties agrees", 9_106),
-            ("patternProperties unmatched", 199),
-            ("unevaluated marking agrees", 9_106),
+            ("pattern agrees", 9_482),
+            ("pattern unmatched", 1_664),
+            ("patternProperties agrees", 9_482),
+            ("patternProperties unmatched", 152),
+            ("unevaluated marking agrees", 9_482),
         ]
         .into()
     );
@@ -361,35 +402,38 @@ fn a_non_word_boundary_is_not_matched_and_a_word_boundary_is() {
         ("\\W|\\B", "a😀a"),
         ("\\B", "abc"),
     ] {
-        let contract = prepare(json!({"pattern": pattern}), ResourceSet::default()).unwrap();
+        let contract = prepare(json!({"pattern": pattern}), ExternalSchemas::default()).unwrap();
         let text = value;
         let value = JsonValue::parse(json!(text).to_string()).unwrap();
-        let ValueOutcome::NoVerdict { detail } = contract.validate(&value) else {
+        let ValueOutcome::NoVerdict { detail } = contract.evaluate(&value) else {
             panic!("{pattern}")
         };
         assert_eq!(detail.code, "pattern-non-word-boundary", "{pattern}");
         assert_eq!(detail.reason, NoVerdictReason::UnsupportedCapability);
         let contract = prepare(
             json!({"patternProperties": {pattern: {"type": "integer"}}}),
-            ResourceSet::default(),
+            ExternalSchemas::default(),
         )
         .unwrap();
         let object = JsonValue::parse(json!({ text: "s" }).to_string()).unwrap();
-        let ValueOutcome::NoVerdict { detail } = contract.validate(&object) else {
+        let ValueOutcome::NoVerdict { detail } = contract.evaluate(&object) else {
             panic!("{pattern}")
         };
         assert_eq!(detail.code, "pattern-non-word-boundary", "{pattern}");
         assert!(matches!(
-            contract.validate(&JsonValue::parse(json!({ text: 1 }).to_string()).unwrap()),
+            contract.evaluate(&JsonValue::parse(json!({ text: 1 }).to_string()).unwrap()),
             ValueOutcome::Satisfies
         ));
-        let Err(detail) = prepare(
+        let contract = prepare(
             json!({"patternProperties": {pattern: true}, "unevaluatedProperties": false}),
-            ResourceSet::default(),
-        ) else {
-            panic!("{pattern}")
+            ExternalSchemas::default(),
+        )
+        .unwrap();
+        let ValueOutcome::NoVerdict { detail } = contract.evaluate(&object) else {
+            panic!("{pattern}");
         };
-        assert_eq!(detail.code, "pattern-non-word-boundary", "{pattern}");
+        assert_eq!(detail.reason, NoVerdictReason::UnsupportedCapability);
+        assert_eq!(detail.code, "pattern-non-word-boundary");
     }
     for (pattern, value, satisfies) in [
         ("^a\\b", "a", true),
@@ -401,8 +445,8 @@ fn a_non_word_boundary_is_not_matched_and_a_word_boundary_is() {
         ("é\\b", "éé", false),
         ("a\\b", "a😀", true),
     ] {
-        let contract = prepare(json!({"pattern": pattern}), ResourceSet::default()).unwrap();
-        let outcome = contract.validate(&JsonValue::parse(json!(value).to_string()).unwrap());
+        let contract = prepare(json!({"pattern": pattern}), ExternalSchemas::default()).unwrap();
+        let outcome = contract.evaluate(&JsonValue::parse(json!(value).to_string()).unwrap());
         assert_eq!(
             matches!(outcome, ValueOutcome::Satisfies),
             satisfies,
@@ -416,25 +460,87 @@ fn a_non_word_boundary_is_not_matched_and_a_word_boundary_is() {
 #[test]
 fn unmatched_patterns_keep_their_own_reasons() {
     let wide = "\\S".repeat(6000);
-    for (first, second) in [("\\p{L}", wide.as_str()), (wide.as_str(), "\\p{L}")] {
+    for (first, second) in [("(?!a)", wide.as_str()), (wide.as_str(), "(?!a)")] {
         let contract = prepare(
             json!({"properties": {"a": {"pattern": first}, "b": {"pattern": second}, "c": {"pattern": "\\Bx"}}}),
-            ResourceSet::default(),
+            ExternalSchemas::default(),
         )
         .unwrap();
         for (member, pattern) in [("a", first), ("b", second), ("c", "\\Bx")] {
             let value = JsonValue::parse(json!({ member: "x" }).to_string()).unwrap();
-            let ValueOutcome::NoVerdict { detail } = contract.validate(&value) else {
+            let ValueOutcome::NoVerdict { detail } = contract.evaluate(&value) else {
                 panic!("{member}")
             };
-            let expected = if pattern.starts_with("\\p") {
-                "unicode-property-matching"
+            let expected = if pattern.starts_with("(?") {
+                "pattern-backtracking"
             } else if pattern.starts_with("\\B") {
                 "pattern-non-word-boundary"
             } else {
                 "pattern-size-limit"
             };
             assert_eq!(detail.code, expected, "{member}");
+        }
+    }
+}
+
+// Independently generated JS-u observations, with edition11 invalid-name
+// controls kept separate from current Node's wider accepted property table.
+#[test]
+fn independently_reviewed_property_and_assertion_capabilities() {
+    let fixture: Value =
+        serde_json::from_str(include_str!("fixtures/pattern-capabilities.json")).unwrap();
+    for row in fixture["rows"].as_array().unwrap() {
+        let pattern = row["pattern"].as_str().unwrap();
+        let capability = row["expected_capability"].as_str().unwrap();
+        for schema in [
+            json!({"pattern":pattern}),
+            json!({"patternProperties":{pattern:true},"unevaluatedProperties":false}),
+        ] {
+            let is_name = schema.get("patternProperties").is_some();
+            // Unsupported patterns cannot supply the evaluated-name annotation.
+            if is_name && capability != "linear" {
+                continue;
+            }
+            let prepared = prepare(schema, ExternalSchemas::default()).unwrap();
+            for (at, string) in fixture["strings"].as_array().unwrap().iter().enumerate() {
+                let value = if is_name {
+                    json!({string.as_str().unwrap():null})
+                } else {
+                    string.clone()
+                };
+                let outcome = prepared.evaluate(&JsonValue::parse(value.to_string()).unwrap());
+                match capability {
+                    "linear" => {
+                        let expected =
+                            row["semantic_matches"].as_str().unwrap().as_bytes()[at] == b'1';
+                        assert!(
+                            matches!(
+                                outcome,
+                                ValueOutcome::Satisfies | ValueOutcome::Fails { .. }
+                            ),
+                            "{}: {outcome:?}",
+                            row["id"]
+                        );
+                        assert_eq!(
+                            matches!(outcome, ValueOutcome::Satisfies),
+                            expected,
+                            "{} at {at}",
+                            row["id"]
+                        );
+                    }
+                    "invalid" => assert!(
+                        matches!(outcome, ValueOutcome::Undefined { .. }),
+                        "{}: {outcome:?}",
+                        row["id"]
+                    ),
+                    "unsupported" => assert!(
+                        matches!(outcome, ValueOutcome::NoVerdict { ref detail } if detail.reason == NoVerdictReason::UnsupportedCapability),
+                        "{}: {outcome:?}",
+                        row["id"]
+                    ),
+                    _ => panic!("unknown fixture capability"),
+                }
+            }
         }
     }
 }

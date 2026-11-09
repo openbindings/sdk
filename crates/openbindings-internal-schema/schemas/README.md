@@ -27,7 +27,7 @@ package carries it as `licenses/JSON-SCHEMA-SPEC-LICENSE`).
 These files were originally copied from the distribution carried by
 `github.com/santhosh-tekuri/jsonschema/v6` v6.0.3. The acquisition history is
 retained here with `LICENSE-jsonschema-go`. Core embeds the meta-schemas in a
-value contract's bundle when a schema references one the document and its
+value schema's bundle when a schema references one the document and its
 resources do not declare.
 
 | Bundled file | Published URL |
@@ -69,3 +69,27 @@ one byte of the derived schema or any meta-schema fails with a diagnostic
 naming the file, that embedding a schema outside the pin or leaving a pinned
 file unembedded fails, and that omitting a digest fails. CI runs this harness
 with the pinned specification checkout.
+
+## External draft-07 and 2019-09 resources
+
+These additional dialects interpret supplied external resources; they do not
+change OBI-10's fixed 2020-12 authority. Their exact official maintenance bytes
+are pinned in `EXTERNAL-DIGESTS.json`, with immutable acquisition URLs and commits
+in `EXTERNAL-SOURCES.json`. Draft-07 uses json-schema-spec commit
+`20a3fee852db88519dcb3bb329b7a872ebad8953`; 2019-09 uses
+`c8eb3d320f60eca7cfb18da25337a426ceb40eaa`. The same JSON Schema specification
+license applies. `tools/verify-spec.mjs --self-test` checks both inventories.
+
+The historical publication tags contain earlier versions: 2019-09's original
+identifier pattern and unevaluated-properties shape differ from the corrected
+maintenance schemas, and the later vocabulary meta-schemas omit their own
+`$vocabulary`. The SDK uses the above exact official maintenance artifacts for
+external dialects. Dependency-bundled copies are not authoritative; in particular,
+the dependency's draft-07 copy relaxes the official enum-array restrictions.
+Qualification receipts retain the comparisons. OBI's separately pinned 2020-12
+meta-schemas remain byte-for-byte unchanged.
+
+The local fixed checker cuts only recursive meta-schema edges into an
+object/boolean check, then checks reached original schema positions separately.
+The published schemas stored here are unmodified. Original-resource queries see
+the published bytes, never the private checker localization.

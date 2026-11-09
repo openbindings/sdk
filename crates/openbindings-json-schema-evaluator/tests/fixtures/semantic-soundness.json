@@ -1,0 +1,676 @@
+[
+  {
+    "id": "malformed-id-cannot-annotate",
+    "schema": {
+      "$id": "https://e.test/root",
+      "allOf": [
+        {
+          "$id": "%"
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "value": {
+      "x": 1
+    },
+    "required": "F",
+    "resources": []
+  },
+  {
+    "id": "malformed-id-cannot-annotate-items",
+    "schema": {
+      "$id": "https://e.test/root",
+      "allOf": [
+        {
+          "$id": "%"
+        }
+      ],
+      "unevaluatedItems": false
+    },
+    "value": [
+      1
+    ],
+    "required": "F",
+    "resources": []
+  },
+  {
+    "id": "same-pattern-irrelevant-scope",
+    "schema": {},
+    "value": "s",
+    "required": "F",
+    "resources": [],
+    "document": {
+      "openbindings": "0.2.0",
+      "operations": {
+        "op": {
+          "input": {
+            "oneOf": [
+              {
+                "$ref": "https://e.test/a"
+              },
+              {
+                "$ref": "https://e.test/b"
+              }
+            ]
+          }
+        }
+      },
+      "schemas": {
+        "A": {
+          "$id": "https://e.test/a",
+          "$dynamicAnchor": "irrelevant",
+          "$ref": "https://e.test/p"
+        },
+        "B": {
+          "$id": "https://e.test/b",
+          "$dynamicAnchor": "irrelevant",
+          "$ref": "https://e.test/p"
+        },
+        "Pattern": {
+          "$id": "https://e.test/p",
+          "pattern": "\\a"
+        }
+      }
+    }
+  },
+  {
+    "id": "malformed-id-cannot-annotate-forced-fallback",
+    "schema": {
+      "$id": "https://e.test/root",
+      "allOf": [
+        {
+          "$id": "%"
+        }
+      ],
+      "unevaluatedProperties": false,
+      "not": {
+        "allOf": [
+          false,
+          {
+            "$ref": "%"
+          }
+        ]
+      }
+    },
+    "value": {
+      "x": 1
+    },
+    "required": "F",
+    "resources": []
+  },
+  {
+    "id": "malformed-id-cannot-annotate-items-forced-fallback",
+    "schema": {
+      "$id": "https://e.test/root",
+      "allOf": [
+        {
+          "$id": "%"
+        }
+      ],
+      "unevaluatedItems": false,
+      "not": {
+        "allOf": [
+          false,
+          {
+            "$ref": "%"
+          }
+        ]
+      }
+    },
+    "value": [
+      1
+    ],
+    "required": "F",
+    "resources": []
+  },
+  {
+    "id": "alias-cycle-order-ab",
+    "document": {
+      "openbindings": "0.2.0",
+      "schemas": {
+        "A": {
+          "$id": "https://e.test/a",
+          "not": {
+            "$ref": "https://e.test/b"
+          }
+        },
+        "B": {
+          "$id": "https://e.test/b",
+          "$ref": "https://e.test/a"
+        }
+      },
+      "operations": {
+        "op": {
+          "input": {
+            "oneOf": [
+              {
+                "$ref": "https://e.test/a"
+              },
+              {
+                "$ref": "https://e.test/b"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "value": null,
+    "resources": [],
+    "required": "F"
+  },
+  {
+    "id": "alias-cycle-order-ba",
+    "document": {
+      "openbindings": "0.2.0",
+      "schemas": {
+        "A": {
+          "$id": "https://e.test/a",
+          "not": {
+            "$ref": "https://e.test/b"
+          }
+        },
+        "B": {
+          "$id": "https://e.test/b",
+          "$ref": "https://e.test/a"
+        }
+      },
+      "operations": {
+        "op": {
+          "input": {
+            "oneOf": [
+              {
+                "$ref": "https://e.test/b"
+              },
+              {
+                "$ref": "https://e.test/a"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "value": null,
+    "resources": [],
+    "required": "F"
+  },
+  {
+    "id": "malformed-ref-cannot-annotate-unevaluatedProperties",
+    "schema": {
+      "$id": "https://e.test/r",
+      "$ref": "%",
+      "unevaluatedProperties": false
+    },
+    "value": {
+      "x": 1
+    },
+    "required": "F",
+    "resources": []
+  },
+  {
+    "id": "malformed-ref-cannot-annotate-unevaluatedItems",
+    "schema": {
+      "$id": "https://e.test/r",
+      "$ref": "%",
+      "unevaluatedItems": false
+    },
+    "value": [
+      1
+    ],
+    "required": "F",
+    "resources": []
+  },
+  {
+    "id": "external-correlated-unavailable",
+    "schema": {
+      "$defs": {
+        "u": {
+          "$id": "https://known.test/u",
+          "pattern": "\\a"
+        }
+      },
+      "oneOf": [
+        {
+          "$ref": "https://known.test/u"
+        },
+        {
+          "$ref": "https://missing.test/"
+        }
+      ]
+    },
+    "value": "x",
+    "resources": [],
+    "required": "external"
+  },
+  {
+    "id": "external-correlated-false",
+    "schema": {
+      "$defs": {
+        "u": {
+          "$id": "https://known.test/u",
+          "pattern": "\\a"
+        }
+      },
+      "oneOf": [
+        {
+          "$ref": "https://known.test/u"
+        },
+        {
+          "$ref": "https://missing.test/"
+        }
+      ]
+    },
+    "value": "x",
+    "resources": [
+      {
+        "uri": "https://missing.test/",
+        "schema": false
+      }
+    ],
+    "required": "U"
+  },
+  {
+    "id": "external-correlated-true",
+    "schema": {
+      "$defs": {
+        "u": {
+          "$id": "https://known.test/u",
+          "pattern": "\\a"
+        }
+      },
+      "oneOf": [
+        {
+          "$ref": "https://known.test/u"
+        },
+        {
+          "$ref": "https://missing.test/"
+        }
+      ]
+    },
+    "value": "x",
+    "resources": [
+      {
+        "uri": "https://missing.test/",
+        "schema": true
+      }
+    ],
+    "required": "U"
+  },
+  {
+    "id": "external-correlated-ref-known",
+    "schema": {
+      "$defs": {
+        "u": {
+          "$id": "https://known.test/u",
+          "pattern": "\\a"
+        }
+      },
+      "oneOf": [
+        {
+          "$ref": "https://known.test/u"
+        },
+        {
+          "$ref": "https://missing.test/"
+        }
+      ]
+    },
+    "value": "x",
+    "resources": [
+      {
+        "uri": "https://missing.test/",
+        "schema": {
+          "$ref": "https://known.test/u"
+        }
+      }
+    ],
+    "required": "F"
+  },
+  {
+    "id": "external-correlated-not-known",
+    "schema": {
+      "$defs": {
+        "u": {
+          "$id": "https://known.test/u",
+          "pattern": "\\a"
+        }
+      },
+      "oneOf": [
+        {
+          "$ref": "https://known.test/u"
+        },
+        {
+          "$ref": "https://missing.test/"
+        }
+      ]
+    },
+    "value": "x",
+    "resources": [
+      {
+        "uri": "https://missing.test/",
+        "schema": {
+          "not": {
+            "$ref": "https://known.test/u"
+          }
+        }
+      }
+    ],
+    "required": "S"
+  },
+  {
+    "id": "equal-values-malformed-ref-1",
+    "schema": {
+      "properties": {
+        "a": {
+          "$ref": "https://undef.test/"
+        },
+        "b": {
+          "not": {
+            "$ref": "https://undef.test/"
+          }
+        }
+      }
+    },
+    "value": {
+      "a": 1,
+      "b": 1
+    },
+    "resources": [
+      {
+        "uri": "https://undef.test/",
+        "schema": {
+          "$id": "https://undef.test/",
+          "$ref": "%"
+        }
+      }
+    ],
+    "required": "F"
+  },
+  {
+    "id": "equal-values-malformed-ref-x",
+    "schema": {
+      "properties": {
+        "a": {
+          "$ref": "https://undef.test/"
+        },
+        "b": {
+          "not": {
+            "$ref": "https://undef.test/"
+          }
+        }
+      }
+    },
+    "value": {
+      "a": "x",
+      "b": "x"
+    },
+    "resources": [
+      {
+        "uri": "https://undef.test/",
+        "schema": {
+          "$id": "https://undef.test/",
+          "$ref": "%"
+        }
+      }
+    ],
+    "required": "F"
+  },
+  {
+    "id": "structural-coherence/zero",
+    "schema": {
+      "properties": {
+        "a": {
+          "$ref": "https://undef.test/"
+        },
+        "b": {
+          "not": {
+            "$ref": "https://undef.test/"
+          }
+        }
+      }
+    },
+    "valueText": "{\"a\":0,\"b\":-0.0}",
+    "required": "F",
+    "resources": [
+      {
+        "uri": "https://undef.test/",
+        "schema": {
+          "$id": "https://undef.test/",
+          "$ref": "%"
+        }
+      }
+    ]
+  },
+  {
+    "id": "structural-coherence/decimal",
+    "schema": {
+      "properties": {
+        "a": {
+          "$ref": "https://undef.test/"
+        },
+        "b": {
+          "not": {
+            "$ref": "https://undef.test/"
+          }
+        }
+      }
+    },
+    "valueText": "{\"a\":1,\"b\":1.00e0}",
+    "required": "F",
+    "resources": [
+      {
+        "uri": "https://undef.test/",
+        "schema": {
+          "$id": "https://undef.test/",
+          "$ref": "%"
+        }
+      }
+    ]
+  },
+  {
+    "id": "structural-coherence/big-decimal",
+    "schema": {
+      "properties": {
+        "a": {
+          "$ref": "https://undef.test/"
+        },
+        "b": {
+          "not": {
+            "$ref": "https://undef.test/"
+          }
+        }
+      }
+    },
+    "valueText": "{\"a\":9007199254740993,\"b\":90071992547409930e-1}",
+    "required": "F",
+    "resources": [
+      {
+        "uri": "https://undef.test/",
+        "schema": {
+          "$id": "https://undef.test/",
+          "$ref": "%"
+        }
+      }
+    ]
+  },
+  {
+    "id": "structural-coherence/distinct-big",
+    "schema": {
+      "properties": {
+        "a": {
+          "$ref": "https://undef.test/"
+        },
+        "b": {
+          "not": {
+            "$ref": "https://undef.test/"
+          }
+        }
+      }
+    },
+    "valueText": "{\"a\":9007199254740992,\"b\":9007199254740993}",
+    "required": "U",
+    "resources": [
+      {
+        "uri": "https://undef.test/",
+        "schema": {
+          "$id": "https://undef.test/",
+          "$ref": "%"
+        }
+      }
+    ]
+  },
+  {
+    "id": "structural-coherence/huge-exponent",
+    "schema": {
+      "properties": {
+        "a": {
+          "$ref": "https://undef.test/"
+        },
+        "b": {
+          "not": {
+            "$ref": "https://undef.test/"
+          }
+        }
+      }
+    },
+    "valueText": "{\"a\":1e1000000000000000000000,\"b\":10e999999999999999999999}",
+    "required": "F",
+    "resources": [
+      {
+        "uri": "https://undef.test/",
+        "schema": {
+          "$id": "https://undef.test/",
+          "$ref": "%"
+        }
+      }
+    ]
+  },
+  {
+    "id": "structural-coherence/objects",
+    "schema": {
+      "properties": {
+        "a": {
+          "$ref": "https://undef.test/"
+        },
+        "b": {
+          "not": {
+            "$ref": "https://undef.test/"
+          }
+        }
+      }
+    },
+    "valueText": "{\"a\":{\"x\":1,\"y\":[true,null]},\"b\":{\"y\":[true,null],\"x\":1.0}}",
+    "required": "F",
+    "resources": [
+      {
+        "uri": "https://undef.test/",
+        "schema": {
+          "$id": "https://undef.test/",
+          "$ref": "%"
+        }
+      }
+    ]
+  },
+  {
+    "id": "structural-coherence/escaped",
+    "schema": {
+      "properties": {
+        "a": {
+          "$ref": "https://undef.test/"
+        },
+        "b": {
+          "not": {
+            "$ref": "https://undef.test/"
+          }
+        }
+      }
+    },
+    "valueText": "{\"a\":\"x\",\"b\":\"\\u0078\"}",
+    "required": "F",
+    "resources": [
+      {
+        "uri": "https://undef.test/",
+        "schema": {
+          "$id": "https://undef.test/",
+          "$ref": "%"
+        }
+      }
+    ]
+  },
+  {
+    "id": "structural-coherence/unpaired",
+    "schema": {
+      "properties": {
+        "a": {
+          "$ref": "https://undef.test/"
+        },
+        "b": {
+          "not": {
+            "$ref": "https://undef.test/"
+          }
+        }
+      }
+    },
+    "valueText": "{\"a\":\"\\ud800\",\"b\":\"\\ud800\"}",
+    "required": "F",
+    "resources": [
+      {
+        "uri": "https://undef.test/",
+        "schema": {
+          "$id": "https://undef.test/",
+          "$ref": "%"
+        }
+      }
+    ]
+  },
+  {
+    "id": "structural-coherence/arrays",
+    "schema": {
+      "properties": {
+        "a": {
+          "$ref": "https://undef.test/"
+        },
+        "b": {
+          "not": {
+            "$ref": "https://undef.test/"
+          }
+        }
+      }
+    },
+    "valueText": "{\"a\":[1,2],\"b\":[1.0,2.00]}",
+    "required": "F",
+    "resources": [
+      {
+        "uri": "https://undef.test/",
+        "schema": {
+          "$id": "https://undef.test/",
+          "$ref": "%"
+        }
+      }
+    ]
+  },
+  {
+    "id": "structural-coherence/array-order",
+    "schema": {
+      "properties": {
+        "a": {
+          "$ref": "https://undef.test/"
+        },
+        "b": {
+          "not": {
+            "$ref": "https://undef.test/"
+          }
+        }
+      }
+    },
+    "valueText": "{\"a\":[1,2],\"b\":[2,1]}",
+    "required": "U",
+    "resources": [
+      {
+        "uri": "https://undef.test/",
+        "schema": {
+          "$id": "https://undef.test/",
+          "$ref": "%"
+        }
+      }
+    ]
+  }
+]

@@ -1,0 +1,1 @@
+[{"$defs":{"n":{"type":"number"},"a":{"$ref":"#/$defs/n"}},"allOf":[{"$ref":"#/$defs/a"},{"$ref":"#/$defs/n"}]},-0.0]

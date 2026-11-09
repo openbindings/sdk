@@ -1,0 +1,242 @@
+[
+  {
+    "id": "suite/draft2020-12/optional/refOfUnknownKeyword.json#0/0 reference of a root arbitrary keyword /match",
+    "group": "suite/draft2020-12/optional/refOfUnknownKeyword.json#0 reference of a root arbitrary keyword ",
+    "documentJson": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"$id\":\"https://suite.openbindings.invalid/schema.json\",\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"properties\":{\"bar\":{\"$ref\":\"#/unknown-keyword\"}},\"unknown-keyword\":{\"type\":\"integer\"}}}}}",
+    "valid": false,
+    "violates": [
+      "OBI-12"
+    ],
+    "original_value": "{\"bar\": 3}",
+    "original_value_expectation": "no-verdict",
+    "reason": "Current document admission precedes value preparation. Preserve the exact original document and case identity as a negative admission witness."
+  },
+  {
+    "id": "suite/draft2020-12/optional/refOfUnknownKeyword.json#0/1 reference of a root arbitrary keyword /mismatch",
+    "group": "suite/draft2020-12/optional/refOfUnknownKeyword.json#0 reference of a root arbitrary keyword ",
+    "documentJson": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"$id\":\"https://suite.openbindings.invalid/schema.json\",\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"properties\":{\"bar\":{\"$ref\":\"#/unknown-keyword\"}},\"unknown-keyword\":{\"type\":\"integer\"}}}}}",
+    "valid": false,
+    "violates": [
+      "OBI-12"
+    ],
+    "original_value": "{\"bar\": true}",
+    "original_value_expectation": "no-verdict",
+    "reason": "Current document admission precedes value preparation. Preserve the exact original document and case identity as a negative admission witness."
+  },
+  {
+    "id": "suite/draft2020-12/optional/refOfUnknownKeyword.json#1/0 reference of a root arbitrary keyword with encoded ref/match",
+    "group": "suite/draft2020-12/optional/refOfUnknownKeyword.json#1 reference of a root arbitrary keyword with encoded ref",
+    "documentJson": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"$id\":\"https://suite.openbindings.invalid/schema.json\",\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"properties\":{\"bar\":{\"$ref\":\"#/unknown~1keyword\"}},\"unknown/keyword\":{\"type\":\"integer\"}}}}}",
+    "valid": false,
+    "violates": [
+      "OBI-12"
+    ],
+    "original_value": "{\"bar\": 3}",
+    "original_value_expectation": "no-verdict",
+    "reason": "Current document admission precedes value preparation. Preserve the exact original document and case identity as a negative admission witness."
+  },
+  {
+    "id": "suite/draft2020-12/optional/refOfUnknownKeyword.json#1/1 reference of a root arbitrary keyword with encoded ref/mismatch",
+    "group": "suite/draft2020-12/optional/refOfUnknownKeyword.json#1 reference of a root arbitrary keyword with encoded ref",
+    "documentJson": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"$id\":\"https://suite.openbindings.invalid/schema.json\",\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"properties\":{\"bar\":{\"$ref\":\"#/unknown~1keyword\"}},\"unknown/keyword\":{\"type\":\"integer\"}}}}}",
+    "valid": false,
+    "violates": [
+      "OBI-12"
+    ],
+    "original_value": "{\"bar\": true}",
+    "original_value_expectation": "no-verdict",
+    "reason": "Current document admission precedes value preparation. Preserve the exact original document and case identity as a negative admission witness."
+  },
+  {
+    "id": "suite/draft2020-12/optional/refOfUnknownKeyword.json#2/0 reference of an arbitrary keyword of a sub-schema/match",
+    "group": "suite/draft2020-12/optional/refOfUnknownKeyword.json#2 reference of an arbitrary keyword of a sub-schema",
+    "documentJson": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"$id\":\"https://suite.openbindings.invalid/schema.json\",\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"properties\":{\"foo\":{\"unknown-keyword\":{\"type\":\"integer\"}},\"bar\":{\"$ref\":\"#/properties/foo/unknown-keyword\"}}}}}}",
+    "valid": false,
+    "violates": [
+      "OBI-12"
+    ],
+    "original_value": "{\"bar\": 3}",
+    "original_value_expectation": "no-verdict",
+    "reason": "Current document admission precedes value preparation. Preserve the exact original document and case identity as a negative admission witness."
+  },
+  {
+    "id": "suite/draft2020-12/optional/refOfUnknownKeyword.json#2/1 reference of an arbitrary keyword of a sub-schema/mismatch",
+    "group": "suite/draft2020-12/optional/refOfUnknownKeyword.json#2 reference of an arbitrary keyword of a sub-schema",
+    "documentJson": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"$id\":\"https://suite.openbindings.invalid/schema.json\",\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"properties\":{\"foo\":{\"unknown-keyword\":{\"type\":\"integer\"}},\"bar\":{\"$ref\":\"#/properties/foo/unknown-keyword\"}}}}}}",
+    "valid": false,
+    "violates": [
+      "OBI-12"
+    ],
+    "original_value": "{\"bar\": true}",
+    "original_value_expectation": "no-verdict",
+    "reason": "Current document admission precedes value preparation. Preserve the exact original document and case identity as a negative admission witness."
+  },
+  {
+    "id": "suite/draft2020-12/optional/refOfUnknownKeyword.json#3/0 reference internals of known non-applicator/match",
+    "group": "suite/draft2020-12/optional/refOfUnknownKeyword.json#3 reference internals of known non-applicator",
+    "documentJson": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"$id\":\"https://suite.openbindings.invalid/schema.json\",\"$ref\":\"#/examples/0\",\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"examples\":[{\"type\":\"string\"}]}}}}",
+    "valid": false,
+    "violates": [
+      "OBI-12"
+    ],
+    "original_value": "\"a string\"",
+    "original_value_expectation": "no-verdict",
+    "reason": "Current document admission precedes value preparation. Preserve the exact original document and case identity as a negative admission witness."
+  },
+  {
+    "id": "suite/draft2020-12/optional/refOfUnknownKeyword.json#3/1 reference internals of known non-applicator/mismatch",
+    "group": "suite/draft2020-12/optional/refOfUnknownKeyword.json#3 reference internals of known non-applicator",
+    "documentJson": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"$id\":\"https://suite.openbindings.invalid/schema.json\",\"$ref\":\"#/examples/0\",\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"examples\":[{\"type\":\"string\"}]}}}}",
+    "valid": false,
+    "violates": [
+      "OBI-12"
+    ],
+    "original_value": "42",
+    "original_value_expectation": "no-verdict",
+    "reason": "Current document admission precedes value preparation. Preserve the exact original document and case identity as a negative admission witness."
+  },
+  {
+    "id": "suite/draft2020-12/optional/refOfUnknownKeyword.json#4/0 reference of an arbitrary keyword of a sub-schema with encoded ref/match",
+    "group": "suite/draft2020-12/optional/refOfUnknownKeyword.json#4 reference of an arbitrary keyword of a sub-schema with encoded ref",
+    "documentJson": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"$id\":\"https://suite.openbindings.invalid/schema.json\",\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"properties\":{\"foo\":{\"unknown/keyword\":{\"type\":\"integer\"}},\"bar\":{\"$ref\":\"#/properties/foo/unknown~1keyword\"}}}}}}",
+    "valid": false,
+    "violates": [
+      "OBI-12"
+    ],
+    "original_value": "{\"bar\": 3}",
+    "original_value_expectation": "no-verdict",
+    "reason": "Current document admission precedes value preparation. Preserve the exact original document and case identity as a negative admission witness."
+  },
+  {
+    "id": "suite/draft2020-12/optional/refOfUnknownKeyword.json#4/1 reference of an arbitrary keyword of a sub-schema with encoded ref/mismatch",
+    "group": "suite/draft2020-12/optional/refOfUnknownKeyword.json#4 reference of an arbitrary keyword of a sub-schema with encoded ref",
+    "documentJson": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"$id\":\"https://suite.openbindings.invalid/schema.json\",\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"properties\":{\"foo\":{\"unknown/keyword\":{\"type\":\"integer\"}},\"bar\":{\"$ref\":\"#/properties/foo/unknown~1keyword\"}}}}}}",
+    "valid": false,
+    "violates": [
+      "OBI-12"
+    ],
+    "original_value": "{\"bar\": true}",
+    "original_value_expectation": "no-verdict",
+    "reason": "Current document admission precedes value preparation. Preserve the exact original document and case identity as a negative admission witness."
+  },
+  {
+    "id": "adversarial/scope-wrappers/0",
+    "group": "adversarial/scope-wrappers",
+    "documentJson": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"$ref\":\"#/schemas/StrictTree\"}}},\"schemas\":{\"StrictTree\":{\"$dynamicAnchor\":\"node\",\"$ref\":\"https://ex.invalid/tree\",\"unevaluatedProperties\":false}}}",
+    "valid": false,
+    "violates": [
+      "OBI-14"
+    ],
+    "original_value": "{\"kids\":[{\"kids\":[]}]}",
+    "original_value_expectation": "satisfies",
+    "reason": "Current document admission precedes value preparation. Preserve the exact original document and case identity as a negative admission witness."
+  },
+  {
+    "id": "adversarial/scope-wrappers/1",
+    "group": "adversarial/scope-wrappers",
+    "documentJson": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"$ref\":\"#/schemas/StrictTree\"}}},\"schemas\":{\"StrictTree\":{\"$dynamicAnchor\":\"node\",\"$ref\":\"https://ex.invalid/tree\",\"unevaluatedProperties\":false}}}",
+    "valid": false,
+    "violates": [
+      "OBI-14"
+    ],
+    "original_value": "{\"kids\":[{\"x\":1}]}",
+    "original_value_expectation": "mismatch",
+    "reason": "Current document admission precedes value preparation. Preserve the exact original document and case identity as a negative admission witness."
+  },
+  {
+    "id": "adversarial/scope-wrappers/2",
+    "group": "adversarial/scope-wrappers",
+    "documentJson": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"$ref\":\"#/schemas/StrictTree\"}}},\"schemas\":{\"StrictTree\":{\"$dynamicAnchor\":\"node\",\"$ref\":\"https://ex.invalid/tree\",\"unevaluatedProperties\":false}}}",
+    "valid": false,
+    "violates": [
+      "OBI-14"
+    ],
+    "original_value": "{\"x\":1}",
+    "original_value_expectation": "mismatch",
+    "reason": "Current document admission precedes value preparation. Preserve the exact original document and case identity as a negative admission witness."
+  },
+  {
+    "id": "adversarial/scope-wrappers-meta/0",
+    "group": "adversarial/scope-wrappers-meta",
+    "documentJson": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"$ref\":\"https://json-schema.org/draft/2020-12/schema\"}}},\"schemas\":{\"A\":{\"$dynamicAnchor\":\"meta\"}}}",
+    "valid": false,
+    "violates": [
+      "OBI-14"
+    ],
+    "original_value": "{\"properties\":{\"p\":{\"minLength\":-1}}}",
+    "original_value_expectation": "satisfies",
+    "reason": "Current document admission precedes value preparation. Preserve the exact original document and case identity as a negative admission witness."
+  },
+  {
+    "id": "adversarial/scope-wrappers-meta/1",
+    "group": "adversarial/scope-wrappers-meta",
+    "documentJson": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"$ref\":\"https://json-schema.org/draft/2020-12/schema\"}}},\"schemas\":{\"A\":{\"$dynamicAnchor\":\"meta\"}}}",
+    "valid": false,
+    "violates": [
+      "OBI-14"
+    ],
+    "original_value": "{\"minLength\":-1}",
+    "original_value_expectation": "mismatch",
+    "reason": "Current document admission precedes value preparation. Preserve the exact original document and case identity as a negative admission witness."
+  },
+  {
+    "id": "adversarial/scope-wrappers-none-under-id/0",
+    "group": "adversarial/scope-wrappers-none-under-id",
+    "documentJson": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"$id\":\"https://ex.invalid/e\",\"$ref\":\"https://json-schema.org/draft/2020-12/schema\"}}},\"schemas\":{\"A\":{\"$dynamicAnchor\":\"meta\"}}}",
+    "valid": false,
+    "violates": [
+      "OBI-14"
+    ],
+    "original_value": "{\"properties\":{\"p\":{\"minLength\":-1}}}",
+    "original_value_expectation": "mismatch",
+    "reason": "Current document admission precedes value preparation. Preserve the exact original document and case identity as a negative admission witness."
+  },
+  {
+    "id": "adversarial/unrelated-dynamic-anchor/0",
+    "group": "adversarial/unrelated-dynamic-anchor",
+    "documentJson": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"type\":\"string\"}}},\"schemas\":{\"Unused\":{\"$dynamicAnchor\":\"n\",\"pattern\":\"a{\"}}}",
+    "valid": false,
+    "violates": [
+      "OBI-14"
+    ],
+    "original_value": "\"s\"",
+    "original_value_expectation": "satisfies",
+    "reason": "Current document admission precedes value preparation. Preserve the exact original document and case identity as a negative admission witness."
+  },
+  {
+    "id": "adversarial/unrelated-dynamic-anchor/1",
+    "group": "adversarial/unrelated-dynamic-anchor",
+    "documentJson": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"type\":\"string\"}}},\"schemas\":{\"Unused\":{\"$dynamicAnchor\":\"n\",\"pattern\":\"a{\"}}}",
+    "valid": false,
+    "violates": [
+      "OBI-14"
+    ],
+    "original_value": "1",
+    "original_value_expectation": "mismatch",
+    "reason": "Current document admission precedes value preparation. Preserve the exact original document and case identity as a negative admission witness."
+  },
+  {
+    "id": "adversarial/unreached-uncopied-targets/0",
+    "group": "adversarial/unreached-uncopied-targets",
+    "documentJson": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"type\":\"string\",\"$defs\":{\n\t\t\"id\":{\"$ref\":\"https://ex.invalid/other\"},\"resource\":{\"$ref\":\"https://ex.invalid/supplied\"},\n\t\t\"enum\":{\"$ref\":\"#/operations/op/input/$defs/values/enum\"},\"const\":{\"$ref\":\"#/operations/op/input/$defs/values/const\"},\n\t\t\"definitions\":{\"$ref\":\"#/operations/op/input/$defs/legacy/definitions\"},\n\t\t\"values\":{\"enum\":[1],\"const\":{\"a\":1}},\"legacy\":{\"definitions\":{\"x\":{}}}}}}},\"schemas\":{\"Other\":{\"$id\":\"https://ex.invalid/other\",\"type\":\"null\"}}}",
+    "valid": false,
+    "violates": [
+      "OBI-12"
+    ],
+    "original_value": "\"s\"",
+    "original_value_expectation": "satisfies",
+    "reason": "Current document admission precedes value preparation. Preserve the exact original document and case identity as a negative admission witness."
+  },
+  {
+    "id": "adversarial/unreached-uncopied-targets/1",
+    "group": "adversarial/unreached-uncopied-targets",
+    "documentJson": "{\"openbindings\":\"0.2.0\",\"operations\":{\"op\":{\"input\":{\"type\":\"string\",\"$defs\":{\n\t\t\"id\":{\"$ref\":\"https://ex.invalid/other\"},\"resource\":{\"$ref\":\"https://ex.invalid/supplied\"},\n\t\t\"enum\":{\"$ref\":\"#/operations/op/input/$defs/values/enum\"},\"const\":{\"$ref\":\"#/operations/op/input/$defs/values/const\"},\n\t\t\"definitions\":{\"$ref\":\"#/operations/op/input/$defs/legacy/definitions\"},\n\t\t\"values\":{\"enum\":[1],\"const\":{\"a\":1}},\"legacy\":{\"definitions\":{\"x\":{}}}}}}},\"schemas\":{\"Other\":{\"$id\":\"https://ex.invalid/other\",\"type\":\"null\"}}}",
+    "valid": false,
+    "violates": [
+      "OBI-12"
+    ],
+    "original_value": "1",
+    "original_value_expectation": "mismatch",
+    "reason": "Current document admission precedes value preparation. Preserve the exact original document and case identity as a negative admission witness."
+  }
+]

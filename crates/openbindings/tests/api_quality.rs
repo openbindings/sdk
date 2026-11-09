@@ -1,4 +1,27 @@
 use openbindings::*;
+
+#[test]
+fn inability_text_borrows_literals_and_moves_owned_strings() {
+    use std::borrow::Cow;
+    let fixed = NoVerdict::new(NoVerdictReason::LimitExceeded, "budget", "limit reached");
+    assert!(matches!(fixed.code, Cow::Borrowed("budget")));
+    assert!(matches!(fixed.message, Cow::Borrowed("limit reached")));
+    let cloned = fixed.clone();
+    assert!(matches!(cloned.code, Cow::Borrowed("budget")));
+    assert!(matches!(cloned.message, Cow::Borrowed("limit reached")));
+    let code = String::from("custom-code");
+    let message = String::from("owned Unicode: é\n");
+    let (code_pointer, message_pointer) = (code.as_ptr(), message.as_ptr());
+    let owned = NoVerdict::new(NoVerdictReason::EvaluatorFailure, code, message);
+    assert!(matches!(owned.code, Cow::Owned(_)));
+    assert!(matches!(owned.message, Cow::Owned(_)));
+    assert_eq!(owned.code.as_ptr(), code_pointer);
+    assert_eq!(owned.message.as_ptr(), message_pointer);
+    let serialized = serde_json::to_value(&owned).unwrap();
+    assert_eq!(serialized["code"], "custom-code");
+    assert_eq!(serialized["message"], "owned Unicode: é\n");
+    assert!(!format!("{owned:?}").contains("custom-code"));
+}
 use serde::{Serialize, Serializer, ser::SerializeMap};
 use std::{collections::BTreeMap, sync::Arc};
 fn parsed(operations: &str) -> Document {
@@ -8,157 +31,49 @@ fn parsed(operations: &str) -> Document {
     .unwrap()
 }
 #[test]
-fn typed_inspection_checks_the_namespace_and_retains_unrelated_metadata() {
-    let doc = parsed(
+fn malformed_operation_fields_and_alias_collisions_never_acquire_proof() {
+    for operations in [
         r#"{"z":{"description":"last","aliases":["go"],"input":false,"output":null},"a":{}}"#,
-    );
-    let keys = doc
-        .operations()
-        .unwrap()
-        .iter()
-        .map(|v| v.key().to_owned())
-        .collect::<Vec<_>>();
-    assert_eq!(keys, ["a", "z"]);
-    let OperationSelection::Found(op) = doc.resolve_operation("go").unwrap() else {
-        panic!()
-    };
-    drop(doc);
-    assert_eq!(op.key(), "z");
-    assert_eq!(
-        op.description()
-            .unwrap()
-            .map(|s| s.as_str().expect("scalar fixture")),
-        Some("last")
-    );
-    assert_eq!(op.aliases().unwrap().unwrap().collect::<Vec<_>>(), ["go"]);
-    assert_eq!(op.input().unwrap().as_bool(), Some(false));
-    assert_eq!(op.output().unwrap().kind(), JsonKind::Null);
-    assert_eq!(
-        op.input()
-            .unwrap()
-            .location()
-            .pointer
-            .as_ref()
-            .and_then(openbindings::Pointer::as_str),
-        Some("/operations/z/input")
-    );
-    let held = op.input().unwrap().to_owned();
-    drop(op);
-    assert_eq!(held.text(), "false");
-    let unrelated = parsed(r#"{"good":{"description":12},"bad":{}}"#);
-    let OperationSelection::Found(good) = unrelated.resolve_operation("good").unwrap() else {
-        panic!()
-    };
-    assert_eq!(
-        good.description()
-            .unwrap_err()
-            .source_location()
-            .unwrap()
-            .pointer
-            .as_ref()
-            .and_then(openbindings::Pointer::as_str),
-        Some("/operations/good/description")
-    );
-    assert!(unrelated.operations().is_ok());
-    let malformed = parsed(r#"{"good":{"description":12},"bad":false}"#);
-    for name in ["good", "bad", "absent"] {
-        assert_eq!(
-            malformed.resolve_operation(name).unwrap_err().code(),
-            "invalid-operation-object"
-        );
-    }
-    assert!(matches!(
-        unrelated.resolve_operation("absent").unwrap(),
-        OperationSelection::Missing
-    ));
-    for operations in ["null", "[]", "false"] {
-        assert!(parsed(operations).operations().is_err());
-    }
-    assert!(
-        Document::parse(r#"{"openbindings":"0.2.0"}"#)
-            .unwrap()
-            .resolve_operation("x")
-            .is_err()
-    );
-}
-#[test]
-fn namespace_counts_occurrences_and_refuses_malformed_aliases_everywhere() {
-    for (ops, name, expected) in [
-        (r#"{"a":{"aliases":["x","x"]}}"#, "x", vec!["a"]),
-        (r#"{"a":{"aliases":["a"]}}"#, "a", vec!["a"]),
-        (
-            r#"{"z":{"aliases":["x"]},"a":{"aliases":["x"]}}"#,
-            "x",
-            vec!["a", "z"],
-        ),
+        r#"{"good":{"description":12},"bad":{}}"#,
+        r#"{"good":{"description":12},"bad":false}"#,
+        r#"{"a":{"aliases":["x","x"]}}"#,
+        r#"{"a":{"aliases":["a"]}}"#,
+        r#"{"z":{"aliases":["x"]},"a":{"aliases":["x"]}}"#,
+        "null",
+        "[]",
+        "false",
     ] {
-        let OperationSelection::Ambiguous { candidates } =
-            parsed(ops).resolve_operation(name).unwrap()
-        else {
-            panic!()
-        };
-        assert_eq!(candidates, expected);
+        let doc = parsed(operations);
+        assert_eq!(doc.value().get("operations").unwrap().text(), operations);
+        assert!(doc.validate().unwrap().conformant().is_none());
     }
     for aliases in ["null", "false", r#"["valid",2]"#] {
         let doc = parsed(&format!(r#"{{"good":{{}},"bad":{{"aliases":{aliases}}}}}"#));
-        assert!(doc.resolve_operation("good").is_err());
-        assert!(doc.operations().is_err());
+        assert!(doc.validate().unwrap().conformant().is_none());
     }
-}
-#[test]
-fn authoring_collision_has_native_draft_path_and_source_is_separate() {
-    let mut b = Document::new();
-    let mut op = Operation::default();
-    let mut ex = Example::default();
-    ex.additional_fields
-        .insert("input".into(), JsonValue::null());
-    op.examples = Some(BTreeMap::from([("a~/b".into(), ex)]));
-    let error = b.set_operation("x~/y", &op).unwrap_err();
-    assert_eq!(error.code(), "field-collision");
-    let EditError::FieldCollision { part_pointer, .. } = error else {
-        panic!()
-    };
+    for source in [
+        r#"{"openbindings":"0.2.0"}"#,
+        r#"{"openbindings":"0.2.0","operations":{"x":{"aliases":false}}}"#,
+    ] {
+        assert!(
+            Document::parse(source)
+                .unwrap()
+                .validate()
+                .unwrap()
+                .conformant()
+                .is_none()
+        );
+    }
+    let doc = Document::new().set("/unknown", &JsonValue::null()).unwrap();
     assert_eq!(
-        part_pointer.as_deref(),
-        Some("/operations/x~0~1y/examples/a~0~1b/additional_fields/input")
-    );
-    let wrong =
-        JsonValue::parse(r#"{"openbindings":"0.2.0","operations":{"x":{"aliases":false}}}"#)
-            .unwrap();
-    let e = Document::from_json(wrong).operations().unwrap_err();
-    assert_eq!(e.code(), "invalid-operation-aliases");
-    assert_eq!(
-        e.source_location()
-            .unwrap()
-            .pointer
-            .as_ref()
-            .and_then(openbindings::Pointer::as_str),
-        Some("/operations/x/aliases")
-    );
-    let mut b = Document::new();
-    b.set("/unknown", &JsonValue::null()).unwrap();
-    assert_eq!(
-        b.clone().validate().unwrap().report().conclusion,
+        doc.validate().unwrap().report().conclusion,
         Conformance::NonConformant
     );
-    let op = Operation {
-        additional_fields: BTreeMap::from([("input".into(), JsonValue::null())]),
-        ..Default::default()
-    };
-    let mut b = Document::new();
-    // A pointer whose escaped spelling would exceed 4,096 bytes is omitted.
-    let EditError::FieldCollision { part_pointer, .. } =
-        b.set_operation(&"x".repeat(5000), &op).unwrap_err()
-    else {
-        panic!()
-    };
-    assert!(part_pointer.is_none());
 }
 #[test]
 fn errors_are_owned_send_sync_without_bounds_on_serialized_values() {
     fn bound<T: std::error::Error + Send + Sync + 'static>() {}
     bound::<EditError>();
-    bound::<InterpretationError>();
     bound::<ValueConversionError>();
     let local = std::rc::Rc::new(std::cell::Cell::new(7));
     struct Local<'a>(&'a std::cell::Cell<i32>);
@@ -210,12 +125,12 @@ fn serde_profile_preserves_numbers_enums_unicode_and_refuses_loss() {
     assert_eq!(e.kind(), ValueConversionErrorKind::NonStringKey);
     let exact = JsonValue::parse("1e999999999999999999999999").unwrap();
     assert_eq!(
-        JsonValue::from_serializable(&exact).unwrap_err().kind(),
-        ValueConversionErrorKind::UnsupportedRepresentation
+        JsonValue::from_serializable(&exact).unwrap().text(),
+        exact.text()
     );
     assert_eq!(exact.text(), "1e999999999999999999999999");
     let mut draft = Document::new();
-    draft.set("/x-number", &exact).unwrap();
+    draft = draft.set("/x-number", &exact).unwrap();
     assert_eq!(draft.value().get("x-number").unwrap().text(), exact.text());
 }
 #[test]
@@ -564,10 +479,7 @@ fn serde_json_numbers_preserve_tokens_and_protocol_cannot_inject_json() {
     .unwrap_err();
     assert_eq!(e.kind(), ValueConversionErrorKind::Limit);
     let raw: Box<serde_json::value::RawValue> = serde_json::from_str("7").unwrap();
-    assert_eq!(
-        JsonValue::from_serializable(&raw).unwrap_err().kind(),
-        ValueConversionErrorKind::UnsupportedRepresentation
-    );
+    assert_eq!(JsonValue::from_serializable(&raw).unwrap().text(), "7");
 }
 
 #[test]
@@ -684,19 +596,32 @@ fn static_struct_fields_keep_duplicate_and_fused_admission_checks() {
     assert_eq!(calls.get(), 0);
 }
 #[test]
-fn prepared_value_contracts_are_owned_and_value_contract_reads_stay_two_words() {
-    // A prepared value contract outlives its document, resources and evaluator, across threads.
+fn contextual_schemas_and_prepared_validators_own_their_inputs() {
     fn owned<T: Clone + Send + Sync + 'static>() {}
-    owned::<PreparedValueContract>();
-    fn borrowed<T: Copy + Send + Sync>() {}
-    borrowed::<ValueContract<'static>>();
-    // Asking whether an operation declares a contract costs what reading its exact
-    // schema did: both answers are two machine words.
+    #[derive(Clone)]
+    struct Validator;
+    impl SchemaValidator for Validator {
+        fn evaluate(&self, _: &JsonValue, _: Detail, _: &dyn WorkControl) -> ValueOutcome {
+            ValueOutcome::Satisfies
+        }
+    }
+    owned::<PreparedSchema<Validator>>();
+    owned::<Schema>();
+    let schema = {
+        let document =
+            Document::parse(r#"{"openbindings":"0.2.0","operations":{"read":{"input":false}}}"#)
+                .unwrap();
+        let proof = document.validate().unwrap().conformant().unwrap();
+        proof.resolve_operation("read").unwrap().input().unwrap()
+    };
+    assert_eq!(schema.json().text(), "false");
     assert_eq!(
-        std::mem::size_of::<Option<ValueContract<'static>>>(),
-        std::mem::size_of::<Option<JsonRef<'static>>>()
+        schema.location().pointer.as_str(),
+        Some("/operations/read/input")
     );
+    assert!(schema.document().resolve_operation("read").is_some());
 }
+
 #[test]
 fn version_refusals_are_built_only_for_unsupported_declarations() {
     // A tool checking a declaration before any document exists refuses with the
@@ -716,7 +641,7 @@ fn version_refusals_are_built_only_for_unsupported_declarations() {
 }
 #[test]
 fn evaluator_records_build_with_constructors_and_optional_fields() {
-    let location = SchemaLocation::new(
+    let location = SchemaOrigin::new(
         Some("https://example.invalid/s".into()),
         "/type".parse().unwrap(),
     );
@@ -730,8 +655,8 @@ fn evaluator_records_build_with_constructors_and_optional_fields() {
     assert_eq!(
         (
             refusal.reason,
-            refusal.code.as_str(),
-            refusal.message.as_str()
+            refusal.code.as_ref(),
+            refusal.message.as_ref()
         ),
         (
             NoVerdictReason::LimitExceeded,
@@ -752,7 +677,7 @@ fn evaluator_records_build_with_constructors_and_optional_fields() {
     });
     assert_eq!(
         serde_json::to_string(&problem).unwrap(),
-        r#"{"instance":"/0","schema":{"resource":"https://example.invalid/s","pointer":"/type"},"code":"type","message":"wrong type","details":{"kind":"type","expected":["integer"]}}"#
+        r#"{"instance":"/0","schema":{"source_uri":"https://example.invalid/s","pointer":"/type"},"code":"type","message":"wrong type","details":{"kind":"type","expected":["integer"]}}"#
     );
 }
 #[test]
@@ -767,13 +692,10 @@ fn outcome_and_report_records_compare_by_value() {
     let mut other = report.clone();
     other.findings[0].message.push('.');
     assert_ne!(report, other);
-    let references = Document::parse(text).unwrap().references().unwrap();
+    let references = Document::parse(text).unwrap().references();
     eq(&references);
-    assert_eq!(
-        references,
-        Document::parse(text).unwrap().references().unwrap()
-    );
-    let location = SchemaLocation::new(None, "/operations/op/input".parse().unwrap());
+    assert_eq!(references, Document::parse(text).unwrap().references());
+    let location = SchemaOrigin::new(None, "/operations/op/input".parse().unwrap());
     let refusal = NoVerdict::new(NoVerdictReason::LimitExceeded, "budget", "limit")
         .with_location(location.clone());
     let undefined = UndefinedResult::new("static-reference-defect", "undefined");
@@ -803,8 +725,159 @@ fn outcome_and_report_records_compare_by_value() {
         assert_eq!(left, &left.clone());
     }
     let mut changed = refusal.clone();
-    changed.code.push('!');
+    changed.code.to_mut().push('!');
     assert_ne!(refusal, changed);
     assert_eq!(problem, problem.clone());
     assert_eq!(undefined, undefined.clone());
+}
+
+#[test]
+fn nested_exact_values_preserve_tokens_units_and_conversion_limits() {
+    #[derive(Serialize)]
+    struct Envelope {
+        payload: JsonValue,
+        tail: bool,
+    }
+    let text =
+        r#"{ "\ud800": [123456789012345678901234567890, 1e999999999999999999, -0.00, "\udfff"] }"#;
+    let envelope = Envelope {
+        payload: JsonValue::parse(text).unwrap(),
+        tail: true,
+    };
+    let value = JsonValue::from_serializable(&envelope).unwrap();
+    assert_eq!(value.get("payload").unwrap().text(), text);
+    assert_eq!(value.text(), format!(r#"{{"payload":{text},"tail":true}}"#));
+    assert_eq!(
+        value
+            .get("payload")
+            .unwrap()
+            .to_owned()
+            .semantic_eq(&envelope.payload),
+        Some(true)
+    );
+    // Root + two names + tail + the complete embedded subtree.
+    let nodes = 4 + openbindings_internal_json::backend::node_count(envelope.payload.view());
+    let limits = JsonLimits {
+        max_bytes: value.text().len(),
+        max_nodes: nodes,
+        max_depth: 3,
+    };
+    assert_eq!(
+        JsonValue::from_serializable_with_limits(&envelope, limits)
+            .unwrap()
+            .text(),
+        value.text()
+    );
+    for limits in [
+        JsonLimits {
+            max_bytes: limits.max_bytes - 1,
+            ..limits
+        },
+        JsonLimits {
+            max_nodes: nodes - 1,
+            ..limits
+        },
+        JsonLimits {
+            max_depth: 2,
+            ..limits
+        },
+    ] {
+        assert_eq!(
+            JsonValue::from_serializable_with_limits(&envelope, limits)
+                .unwrap_err()
+                .kind(),
+            ValueConversionErrorKind::Limit
+        );
+    }
+    let duplicate = Envelope {
+        payload: JsonValue::parse(r#"{"a":1,"\u0061":2}"#).unwrap(),
+        tail: false,
+    };
+    let error = JsonValue::from_serializable(&duplicate).unwrap_err();
+    assert_eq!(error.kind(), ValueConversionErrorKind::DuplicateKey);
+    assert_eq!(error.pointer(), Some("/payload"));
+    let deep = JsonValue::parse(format!("{}0{}", "[".repeat(129), "]".repeat(129))).unwrap();
+    assert_eq!(
+        JsonValue::from_serializable(&deep).unwrap_err().kind(),
+        ValueConversionErrorKind::Limit
+    );
+}
+
+#[test]
+fn raw_json_protocol_is_checked_and_cannot_hide_a_refusal() {
+    struct Raw<'a> {
+        field: &'static str,
+        text: &'a str,
+        count: usize,
+        swallow: bool,
+    }
+    impl Serialize for Raw<'_> {
+        fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+            use serde::ser::SerializeStruct;
+            let mut raw = s.serialize_struct("$serde_json::private::RawValue", self.count)?;
+            for _ in 0..self.count {
+                let result = raw.serialize_field(self.field, self.text);
+                if !self.swallow {
+                    result?;
+                }
+            }
+            raw.end()
+        }
+    }
+    let token = "$serde_json::private::RawValue";
+    for (field, text, count) in [
+        (token, "1,2", 1),
+        ("wrong", "1", 1),
+        (token, "1", 0),
+        (token, "1", 2),
+    ] {
+        for swallow in [false, true] {
+            let error = JsonValue::from_serializable(&Raw {
+                field,
+                text,
+                count,
+                swallow,
+            })
+            .unwrap_err();
+            assert_eq!(
+                error.kind(),
+                ValueConversionErrorKind::UnsupportedRepresentation
+            );
+        }
+    }
+}
+
+#[test]
+fn preparation_display_names_causes_without_changing_debug_redaction() {
+    let invalid = PreparationFailure::new(PreparationFailureKind::InvalidExternalSchema)
+        .with_origin(SchemaOrigin::new(
+            Some("https://example.test/schema".into()),
+            "/$defs/bad".parse().unwrap(),
+        ));
+    assert_eq!(
+        invalid.to_string(),
+        "schema preparation failed: invalid external schema in resource \"https://example.test/schema\" at pointer \"/$defs/bad\""
+    );
+    assert_eq!(format!("{invalid:?}"), "PreparationFailure { .. }");
+    let limit = PreparationFailure::new(PreparationFailureKind::Limit {
+        resource: "schema-nodes".into(),
+    });
+    assert!(limit.to_string().contains("limit reached \"schema-nodes\""));
+    let missing = PreparationFailure::new(PreparationFailureKind::Resolution {
+        cause: ResolutionFailureKind::ResourceUnavailable {
+            uri: "https://example.test/missing".into(),
+        },
+    });
+    assert!(
+        missing
+            .to_string()
+            .contains("resource unavailable \"https://example.test/missing\"")
+    );
+    let private = PreparationFailure::new(PreparationFailureKind::Implementation {
+        message: "PRIVATE SCHEMA".into(),
+    });
+    assert_eq!(
+        private.to_string(),
+        "schema preparation failed: implementation failure"
+    );
 }

@@ -25,7 +25,7 @@ export async function apiQualityCases(sdk, http) {
   const ready = (proof, name, options) => {
     const r = prepareInput(proof, name, options);
     check(r.status === "ready", "ready " + name);
-    return own(r.valueContract);
+    return own(r.schema);
   };
   const throws = (fn, predicate, label) => {
     let error;
@@ -44,8 +44,8 @@ export async function apiQualityCases(sdk, http) {
   const warmPrepared = prepareInput(warm.value, "run");
   if (warmPrepared.status !== "ready")
     throw new Error("Warmup did not prepare.");
-  warmPrepared.valueContract.validate(1);
-  warmPrepared.valueContract.dispose();
+  warmPrepared.schema.evaluate(1);
+  warmPrepared.schema.dispose();
   warm.value.dispose();
   const baseline = testing.liveStorageOwners();
   try {
@@ -130,38 +130,34 @@ export async function apiQualityCases(sdk, http) {
     const document = parsed(
       '{"openbindings":"0.2.0","operations":{"run":{"aliases":["execute"],"input":{"type":"integer"}},"empty":{},"never":{"input":false},"object":{"input":{"const":{"n":9007199254740993}}},"remote":{"input":{"$ref":"https://schema.test/id"}}}}',
     );
-    check(document.operations === document.operations, "metadata cache");
+    const inspected = own(document.validate().document);
+    const operation = own(inspected.resolveOperation("execute"));
+    check(operation instanceof sdk.Operation, "canonical selected operation");
+    check(operation.aliases === operation.aliases, "frozen scalar list cache");
     throws(
       () => {
-        document.operations[0].key = "edit";
+        operation.key = "edit";
       },
       (e) => e instanceof TypeError,
       "runtime readonly",
     );
-    const selected = document.resolveOperation("execute");
-    check(selected.status === "found", "found selection");
-    const operation = own(selected.operation);
     check(
-      document.resolveOperation("missing").status === "missing",
+      inspected.resolveOperation("missing") === undefined,
       "missing selection",
     );
     const ambiguous = parsed(
       '{"openbindings":"0.2.0","operations":{"z":{"aliases":["x"]},"a":{"aliases":["x"]}}}',
     );
-    const ambiguity = ambiguous.resolveOperation("x");
     check(
-      ambiguity.status === "ambiguous" &&
-        ambiguity.candidates.join(",") === "a,z",
-      "lexical ambiguous keys",
+      ambiguous.validate().report.evidence["OBI-05"] === "violated",
+      "alias collision excludes proof",
     );
-    check(Object.isFrozen(ambiguity.candidates), "immutable candidates");
     const duplicate = parsed(
       '{"openbindings":"0.2.0","operations":{"a":{"aliases":["x","x"]}}}',
     );
-    const repeated = duplicate.resolveOperation("x");
     check(
-      repeated.status === "ambiguous" && repeated.candidates.join(",") === "a",
-      "same operation repetition unresolved",
+      duplicate.validate().report.evidence["OBI-05"] === "violated",
+      "same operation repetition excludes proof",
     );
     for (const text of [
       '{"openbindings":"0.2.0"}',
@@ -169,14 +165,17 @@ export async function apiQualityCases(sdk, http) {
       '{"openbindings":"0.2.0","operations":{"run":7}}',
     ]) {
       const invalid = parsed(text);
-      throws(
-        () => invalid.operations,
-        (e) =>
-          e instanceof sdk.SdkError &&
-          e.code === "interpretation" &&
-          e.location &&
-          Number.isInteger(e.location.byteOffset),
-        "located structure refusal",
+      const validation = invalid.validate();
+      check(
+        validation.status === "report" &&
+          validation.report.conclusion === "non-conformant",
+        "invalid structure excludes proof",
+      );
+      check(
+        validation.report.findings.some((finding) =>
+          Number.isInteger(finding.location?.byteOffset),
+        ),
+        "located conformance evidence",
       );
       const raw = own(invalid.value());
       check(raw.text === text, "raw invalid evidence preserved");
@@ -184,12 +183,13 @@ export async function apiQualityCases(sdk, http) {
     const aliases = parsed(
       '{"openbindings":"0.2.0","operations":{"run":{"aliases":7}}}',
     );
-    throws(
-      () => aliases.resolveOperation("run"),
-      (e) =>
-        e.code === "interpretation" &&
-        e.location?.pointer === "/operations/run/aliases",
-      "malformed alias primary lookup",
+    check(
+      aliases
+        .validate()
+        .report.findings.some(
+          (finding) => finding.location?.pointer === "/operations/run/aliases",
+        ),
+      "malformed alias original location",
     );
     const validated = document.validate();
     check(validated.status === "conformant", "document proof");
@@ -211,8 +211,8 @@ export async function apiQualityCases(sdk, http) {
       remote.status === "ready",
       "qualified missing-resource contract prepares ready",
     );
-    own(remote.valueContract);
-    const remoteResult = remote.valueContract.validate(null);
+    own(remote.schema);
+    const remoteResult = remote.schema.evaluate(null);
     check(
       remoteResult.status === "no-verdict" &&
         remoteResult.detail.reason === "resource-unavailable",
@@ -224,8 +224,8 @@ export async function apiQualityCases(sdk, http) {
     const beforeCancel = testing.liveStorageOwners();
     const cancelledSetup = runContract.prepare({ signal: cancelled.signal });
     check(
-      cancelledSetup.status === "no-verdict" &&
-        cancelledSetup.detail.reason === "cancelled",
+      cancelledSetup.status === "refused" &&
+        cancelledSetup.failure.kind === "cancelled",
       "setup cancellation",
     );
     check(
@@ -234,7 +234,7 @@ export async function apiQualityCases(sdk, http) {
     );
     const input = ready(conformant, "run");
     const never = ready(conformant, "never");
-    check(never.validate(null).status === "fails", "false is present contract");
+    check(never.evaluate(null).status === "fails", "false is present contract");
     const nullDoc = parsed(
       '{"openbindings":"0.2.0","operations":{"run":{"input":null}}}',
     );
@@ -242,17 +242,17 @@ export async function apiQualityCases(sdk, http) {
       nullDoc.validate().status === "report",
       "null schema rejects the document; it is not absence",
     );
-    check(input.validate(7).status === "satisfies", "ordinary validation");
+    check(input.evaluate(7).status === "satisfies", "ordinary validation");
     check(
-      input.validate("7").status === "fails",
+      input.evaluate("7").status === "fails",
       "ordinary string not JSON text",
     );
     check(
-      input.validate(NaN).error.code === "non-finite-number",
+      input.evaluate(NaN).error.code === "non-finite-number",
       "ordinary admission distinct",
     );
     check(
-      input.validate({ "a/~": undefined }).error.instancePointer === "/a~1~0",
+      input.evaluate({ "a/~": undefined }).error.instancePointer === "/a~1~0",
       "ordinary escaped pointer",
     );
     const getter = {
@@ -261,19 +261,19 @@ export async function apiQualityCases(sdk, http) {
       },
     };
     check(
-      input.validate(getter).error.code === "accessor-property",
+      input.evaluate(getter).error.code === "accessor-property",
       "getter not invoked",
     );
     const cycle = {};
     cycle.loop = cycle;
     check(
-      input.validate(cycle).error.instancePointer === "/loop",
+      input.evaluate(cycle).error.instancePointer === "/loop",
       "cycle edge pointer",
     );
-    check(input.validate([,]).error.code === "sparse-array", "sparse refusal");
+    check(input.evaluate([,]).error.code === "sparse-array", "sparse refusal");
     for (const value of ["\ud800", { v: "\ud800" }, { "\ud800": 1 }])
       check(
-        input.validate(value).status !== "input-error",
+        input.evaluate(value).status !== "input-error",
         "escaped surrogate admission preserved",
       );
     const trap = new Error("caller trap");
@@ -286,22 +286,22 @@ export async function apiQualityCases(sdk, http) {
       },
     );
     check(
-      input.validate(proxy, { signal: cancelled.signal }).detail.reason ===
+      input.evaluate(proxy, { signal: cancelled.signal }).detail.reason ===
         "cancelled",
       "cancel before ordinary traversal",
     );
     throws(
-      () => input.validate(proxy),
+      () => input.evaluate(proxy),
       (e) => e === trap,
       "caller exception retained",
     );
     check(
-      input.validate(NaN, { signal: cancelled.signal }).detail.reason ===
+      input.evaluate(NaN, { signal: cancelled.signal }).detail.reason ===
         "cancelled",
       "cancellation precedes admission",
     );
     throws(
-      () => input.validate(7, { signal: { aborted: true } }),
+      () => input.evaluate(7, { signal: { aborted: true } }),
       (e) => e.code === "invalid-work-options",
       "options validated",
     );
@@ -309,16 +309,16 @@ export async function apiQualityCases(sdk, http) {
     const object = ready(conformant, "object");
     const beforeValue = testing.liveStorageOwners();
     check(
-      object.validate({ n: large }).status === "satisfies",
+      object.evaluate({ n: large }).status === "satisfies",
       "nested exact token",
     );
     check(large.text === "9007199254740993", "nested owner remains");
     check(
-      object.validate({ n: 9007199254740992 }).status === "fails",
+      object.evaluate({ n: 9007199254740992 }).status === "fails",
       "rounded ordinary differs",
     );
     check(
-      object.validate({ n: large, bad: undefined }).status === "input-error",
+      object.evaluate({ n: large, bad: undefined }).status === "input-error",
       "partial ordinary refusal",
     );
     check(
@@ -328,12 +328,12 @@ export async function apiQualityCases(sdk, http) {
     const dead = exact("7");
     dead.dispose();
     throws(
-      () => input.validate(dead, { signal: cancelled.signal }),
+      () => input.evaluate(dead, { signal: cancelled.signal }),
       (e) => e.code === "disposed-handle",
       "root misuse before cancellation",
     );
     throws(
-      () => object.validate({ n: dead }),
+      () => object.evaluate({ n: dead }),
       (e) => e.code === "disposed-handle",
       "nested misuse",
     );
@@ -352,7 +352,7 @@ export async function apiQualityCases(sdk, http) {
       },
     );
     check(
-      object.validate(duringProxy, { signal: during.signal }).detail.reason ===
+      object.evaluate(duringProxy, { signal: during.signal }).detail.reason ===
         "cancelled",
       "post admission control check",
     );
@@ -365,7 +365,7 @@ export async function apiQualityCases(sdk, http) {
     // aggregate parse limit even though the ordinary encoder borrows its tokens.
     const deep = exact("[".repeat(10000) + "0" + "]".repeat(10000));
     const beforeDepthRefusal = testing.liveStorageOwners();
-    const depthRefusal = input.validate({ nested: deep });
+    const depthRefusal = input.evaluate({ nested: deep });
     check(
       depthRefusal.status === "input-error",
       "real aggregate admission limit",
@@ -375,10 +375,10 @@ export async function apiQualityCases(sdk, http) {
         depthRefusal.error.instancePointer === null,
       "aggregate limit truthful unknown pointer",
     );
-    const editing = sdk.Document.create();
+    let editing = sdk.Document.create();
     let editFailure;
     try {
-      editing.set("/x-deep", deep);
+      editing = replaceDocument(editing, editing.set("/x-deep", deep));
     } catch (error) {
       editFailure = error;
     } finally {
@@ -387,7 +387,7 @@ export async function apiQualityCases(sdk, http) {
     check(
       editFailure instanceof sdk.EditError &&
         editFailure.code === "depth-limit" &&
-        editFailure.partPointer === null,
+        editFailure.inputPointer === null,
       "real encoded edit limit",
     );
     check(
@@ -398,19 +398,19 @@ export async function apiQualityCases(sdk, http) {
       testing.liveStorageOwners() === beforeDepthRefusal,
       "aggregate limit cleanup",
     );
-    check(input.validate(8).status === "satisfies", "healthy reuse");
+    check(input.evaluate(8).status === "satisfies", "healthy reuse");
     const intSchema = exact('{"type":"integer"}');
     const stringSchema = exact('{"type":"string"}');
     const resources = own(
-      new sdk.SchemaResources([["https://schema.test/id", intSchema]]),
+      new sdk.ExternalSchemas([["https://schema.test/id", intSchema]]),
     );
     const others = own(
-      new sdk.SchemaResources([["https://schema.test/id", stringSchema]]),
+      new sdk.ExternalSchemas([["https://schema.test/id", stringSchema]]),
     );
     const a = ready(conformant, "remote", { resources }),
       b = ready(conformant, "remote", { resources: others });
     check(
-      a.validate(7).status === "satisfies" && b.validate(7).status === "fails",
+      a.evaluate(7).status === "satisfies" && b.evaluate(7).status === "fails",
       "same URI isolation",
     );
     const beforeBatch = testing.liveStorageOwners();
@@ -429,7 +429,7 @@ export async function apiQualityCases(sdk, http) {
       ],
     ]) {
       throws(
-        () => new sdk.SchemaResources(entries),
+        () => new sdk.ExternalSchemas(entries),
         () => true,
         "batch refusal",
       );
@@ -444,12 +444,12 @@ export async function apiQualityCases(sdk, http) {
       throw trap;
     }
     throws(
-      () => new sdk.SchemaResources(throwing()),
+      () => new sdk.ExternalSchemas(throwing()),
       (e) => e === trap,
       "iterator exception preserved",
     );
     check(testing.liveStorageOwners() === beforeBatch, "iterator cleanup");
-    own(new sdk.SchemaResources([["https://schema.test/healthy", intSchema]]));
+    own(new sdk.ExternalSchemas([["https://schema.test/healthy", intSchema]]));
     const checked = document.validate();
     check(checked.status === "conformant", "proof");
     const proof = own(checked.document);
@@ -463,13 +463,13 @@ export async function apiQualityCases(sdk, http) {
     const child = own(operation.value());
     operation.dispose();
     check(child.text.includes("execute"), "retained exact child");
-    check(a.validate(7).status === "satisfies", "retained ready resource");
+    check(a.evaluate(7).status === "satisfies", "retained ready resource");
     const held = own(input.retain());
     input.dispose();
     await Promise.resolve();
-    check(held.validate(9).status === "satisfies", "retain across await");
+    check(held.evaluate(9).status === "satisfies", "retain across await");
     throws(
-      () => input.validate(7, { signal: cancelled.signal }),
+      () => input.evaluate(7, { signal: cancelled.signal }),
       (e) => e.code === "disposed-handle",
       "disposed prepared before cancellation",
     );
@@ -497,4 +497,10 @@ export async function apiQualityCases(sdk, http) {
       `complete owner cleanup: ${testing.liveStorageOwners()} vs ${baseline}`,
     );
   }
+}
+
+// Test fixture cursor: keep the new immutable snapshot and release its predecessor.
+function replaceDocument(previous, next) {
+  previous.dispose();
+  return next;
 }

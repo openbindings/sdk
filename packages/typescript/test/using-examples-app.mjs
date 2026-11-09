@@ -25,9 +25,9 @@ try {
   const setup = prepareInput(warm.value, "run");
   check(setup.status === "ready", "warm contract");
   try {
-    setup.valueContract.validate(1);
+    setup.schema.evaluate(1);
   } finally {
-    setup.valueContract.dispose();
+    setup.schema.dispose();
   }
 } finally {
   warm.value.dispose();
@@ -36,7 +36,7 @@ const baseline = testing.liveStorageOwners();
 const results = [];
 const log = console.log;
 try {
-  console.log = (value) => results.push(value);
+  console.log = (value) => results.push(JSON.parse(value));
   await import("./first-use.js");
 } finally {
   console.log = log;
@@ -44,6 +44,10 @@ try {
 check(results.length === 2, "README must produce both results");
 check(results[0].result.status === "satisfies", "README passing value");
 check(results[1].result.status === "fails", "README failing value");
+check(
+  results[1].result.problems[0]?.code === "type",
+  "README failure must explain its problem",
+);
 check(testing.liveStorageOwners() === baseline, "README owners not released");
 
 const example = await import("./inspect-edit.js");

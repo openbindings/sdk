@@ -1,0 +1,52 @@
+[package]
+name = "openbindings-fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[workspace]
+
+[dependencies]
+libfuzzer-sys = "=0.4.10"
+openbindings = { path = "../crates/openbindings" }
+openbindings-internal-json = { path = "../crates/openbindings-internal-json" }
+openbindings-json-schema-evaluator = { path = "../crates/openbindings-json-schema-evaluator" }
+serde_json = "1.0.151"
+
+[[bin]]
+name = "document"
+path = "fuzz_targets/document.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "json_value"
+path = "fuzz_targets/json_value.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "decimal"
+path = "fuzz_targets/decimal.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "pattern"
+path = "fuzz_targets/pattern.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "lanes"
+path = "fuzz_targets/lanes.rs"
+test = false
+doc = false
+bench = false

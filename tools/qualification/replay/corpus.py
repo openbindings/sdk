@@ -6,11 +6,12 @@ import json
 
 OUT = Path(__file__).resolve().parent.parent
 CORPUS = OUT / 'inputs/spec/conformance'
+# Required alignment scope, not a claim that the current evaluator implements it.
 PROFILE = {
     'recursive-references': True, 'document-resource-dynamic-scope': True,
     'supplied-resources': True, 'repeated-member-detection': True,
-    'exact-numbers': True, 'ecma262-unicode-property-escapes': False,
-    'draft-07-dialect': False,
+    'exact-numbers': True, 'ecma262-unicode-property-escapes': True,
+    'draft-07-dialect': True,
 }
 
 class Number(str):
@@ -48,7 +49,7 @@ def load():
             cases.append({'id':f"{file['path']}#/tests/{index}",'file':file['path'],'action':'validate-document','given':test,'expected':expected})
     for file in manifest['scenarioFiles']:
         data=read(CORPUS/file['path']); counted[file['path']]=len(data['scenarios'])
-        if data['format']!='openbindings.core-scenarios@3' or len(data['scenarios'])!=int(file['scenarios']): raise ValueError('Scenario format/count mismatch')
+        if data['format']!='openbindings.core-scenarios@4' or len(data['scenarios'])!=int(file['scenarios']): raise ValueError('Scenario format/count mismatch')
         for case in data['scenarios']: cases.append(dict(case,file=file['path']))
     actual=sorted(c['id'] for c in cases); expected=read(OUT/'inputs/blueprint/case-inventory.json')['ids']
     if actual!=expected or len(set(actual))!=len(actual): raise ValueError('Frozen case inventory mismatch')
@@ -71,13 +72,21 @@ def lacking(features,profile):
 
 def judge_value(expected,actual,features,profile):
     form={'result':expected} if isinstance(expected,str) else expected
-    dependent=form.get('dependsOn',features); unsupported=lacking(dependent,profile)
+    lacking(form.get('dependsOn',features),profile)  # reject unknown capability names
     want=form['result']; result=actual['status']
-    if result=='no-contract': return want=='no-contract'
+    if result=='no-schema': return want=='no-schema'
     if result=='undefined': return want=='undefined'
     if result=='no-verdict':
         reason=actual.get('detail',{}).get('reason')
-        return reason in ('conservative-preparation','resource-unavailable','unsupported-capability') and (want in ('undefined','external') or form.get('orNoVerdict',False) or unsupported)
+        # Completion requires the required instance verdict, even where the
+        # publication permits an implementation to decline evaluation.
+        return want=='external' and reason=='resource-unavailable'
+    if result=='preparation-refused':
+        failure=actual.get('failure',{})
+        cause=failure.get('details',{}).get('cause',{})
+        # The corpus's external category explicitly lacks required content;
+        # this does not turn a preparation failure into an instance verdict.
+        return want=='external' and failure.get('kind')=='resolution' and cause.get('kind')=='resource-unavailable' and bool(cause.get('details',{}).get('uri'))
     if result=='fails' and not actual.get('problems') and actual.get('problems_complete',actual.get('problemsComplete')) is True:return False
     return result=={'satisfies':'satisfies','fails':'fails'}.get(want)
 
@@ -95,7 +104,7 @@ def judge(case,actual,profile=PROFILE):
     if action=='validate-operation-values':
         return len(actual['values'])==len(want['results']) and all(judge_value(e,a,want.get('dependsOn',[]),profile) for e,a in zip(want['results'],actual['values']))
     if action=='check-examples':
-        claims={'true':'satisfies','false':'fails','no-claim':'no-contract','external':'external','undefined':'undefined'}
+        claims={'true':'satisfies','false':'fails','no-claim':'no-schema','external':'external','undefined':'undefined'}
         expected={(k,s):v for k,example in want['examples'].items() for s,v in example.items()}
         observed={(a['example'],a['side']):a for a in actual['examples']}
         return len(observed)==len(actual['examples']) and expected.keys()==observed.keys() and all(judge_value(claims[e],observed[k],[],profile) for k,e in expected.items())
@@ -118,14 +127,22 @@ def controls():
             'reject_unexecuted':bool(reconcile(cases,[dict(r,executed=False) if i==0 else r for i,r in enumerate(valid)])),
             'exact_integer':exact_text(read_text('{"n":9007199254740993}'))=='{"n":9007199254740993}',
             'reject_wrong_verdict':not judge_value('satisfies',{'status':'fails'},[],PROFILE),
-            'reject_no_contract_for_undefined':not judge_value('undefined',{'status':'no-contract'},[],PROFILE),
-            'reject_no_verdict_for_absence':not judge_value('no-contract',{'status':'no-verdict','detail':{'reason':'resource-unavailable'}},[],PROFILE),
+            'reject_no_schema_for_undefined':not judge_value('undefined',{'status':'no-schema'},[],PROFILE),
+            'reject_no_verdict_for_absence':not judge_value('no-schema',{'status':'no-verdict','detail':{'reason':'resource-unavailable'}},[],PROFILE),
             'reject_undefined_for_external':not judge_value('external',{'status':'undefined','detail':{'code':'static-reference-defect','message':'established undefined result','location':None}},[],PROFILE),
             'reject_undefined_for_valid':not judge_value('satisfies',{'status':'undefined','detail':{'code':'static-reference-defect','message':'established undefined result','location':None}},[],PROFILE),
             'reject_obsolete_undefined_reason':not judge_value('undefined',{'status':'no-verdict','detail':{'reason':'undefined'}},[],PROFILE),
             'accept_proven_undefined':judge_value('undefined',{'status':'undefined','detail':{'code':'static-reference-defect','message':'established undefined result','location':None}},[],PROFILE),
             'reject_unsupported_misuse':not judge_value('satisfies',{'status':'no-verdict'},['exact-numbers'],PROFILE)}
-    for n in range(1,14):
+    checks.update({
+        'reject_refusal_for_required_undefined':not judge_value('undefined',{'status':'no-verdict','detail':{'reason':'conservative-preparation'}},[],PROFILE),
+        'reject_refusal_for_unsupported_required_dialect':not judge_value('satisfies',{'status':'no-verdict','detail':{'reason':'unsupported-capability'}},['draft-07-dialect'],{**PROFILE,'draft-07-dialect':False}),
+        'reject_optional_decline_for_alignment_completion':not judge_value({'result':'satisfies','orNoVerdict':True},{'status':'no-verdict','detail':{'reason':'unsupported-capability'}},[],PROFILE),
+        'reject_unavailable_for_required_failure':not judge_value('fails',{'status':'preparation-refused','failure':{'kind':'resolution','details':{'cause':{'kind':'resource-unavailable','details':{'uri':'https://missing.test/'}}}}},[],PROFILE),
+        'accept_unavailable_for_external_requirement':judge_value('external',{'status':'preparation-refused','failure':{'kind':'resolution','details':{'cause':{'kind':'resource-unavailable','details':{'uri':'https://missing.test/'}}}}},[],PROFILE),
+        'reject_preparation_defect_as_value_undefined':not judge_value('undefined',{'status':'preparation-refused','failure':{'kind':'resolution','details':{'cause':{'kind':'undefined','details':'missing-anchor'}}}},[],PROFILE),
+    })
+    for n in range(1,15):
         rule=f'OBI-{n:02}'; case=next(c for c in cases if rule in c['expected'].get('violates',[]))
         result={'id':case['id'],'executed':True,'outcome':'non-conformant','rules':{r:'violated' for r in case['expected']['violates']}}
         checks[rule+'_positive_control']=judge(case,result)

@@ -1,0 +1,47 @@
+{
+  "draft2019-09/meta/applicator.json": {
+    "revision": "c8eb3d320f60eca7cfb18da25337a426ceb40eaa",
+    "sha256": "6b5f4e2fbc326d63cef6f6a3fa53bbfd3da39323116bc2eee866d716afc0e52c",
+    "url": "https://raw.githubusercontent.com/json-schema-org/json-schema-spec/c8eb3d320f60eca7cfb18da25337a426ceb40eaa/meta/applicator.json"
+  },
+  "draft2019-09/meta/content.json": {
+    "revision": "c8eb3d320f60eca7cfb18da25337a426ceb40eaa",
+    "sha256": "9054737ada8e2ffbd9c9487ea406a86af8b57dcfd269543f04aba782936e3385",
+    "url": "https://raw.githubusercontent.com/json-schema-org/json-schema-spec/c8eb3d320f60eca7cfb18da25337a426ceb40eaa/meta/content.json"
+  },
+  "draft2019-09/meta/core.json": {
+    "revision": "c8eb3d320f60eca7cfb18da25337a426ceb40eaa",
+    "sha256": "a6751523406d9ca767032ae97eb1c00c2de6d3cac9fc7d619babb460131cc1cb",
+    "url": "https://raw.githubusercontent.com/json-schema-org/json-schema-spec/c8eb3d320f60eca7cfb18da25337a426ceb40eaa/meta/core.json"
+  },
+  "draft2019-09/meta/format.json": {
+    "revision": "c8eb3d320f60eca7cfb18da25337a426ceb40eaa",
+    "sha256": "a53cf235aab26c7639e70e94656136b20bcc364379c6a129cc06377982f91e96",
+    "url": "https://raw.githubusercontent.com/json-schema-org/json-schema-spec/c8eb3d320f60eca7cfb18da25337a426ceb40eaa/meta/format.json"
+  },
+  "draft2019-09/meta/meta-data.json": {
+    "revision": "c8eb3d320f60eca7cfb18da25337a426ceb40eaa",
+    "sha256": "ebcce1cded976590c75b4e5ee18ac471ffd8d21575a41d3ba05f59946fcbb5ce",
+    "url": "https://raw.githubusercontent.com/json-schema-org/json-schema-spec/c8eb3d320f60eca7cfb18da25337a426ceb40eaa/meta/meta-data.json"
+  },
+  "draft2019-09/meta/validation.json": {
+    "revision": "c8eb3d320f60eca7cfb18da25337a426ceb40eaa",
+    "sha256": "c83c5121d0afd313846002429cd16b08ab77be022f423c70f0cfb64adc1069b7",
+    "url": "https://raw.githubusercontent.com/json-schema-org/json-schema-spec/c8eb3d320f60eca7cfb18da25337a426ceb40eaa/meta/validation.json"
+  },
+  "draft2019-09/schema.json": {
+    "revision": "c8eb3d320f60eca7cfb18da25337a426ceb40eaa",
+    "sha256": "7b761b3e121f0a0ca1ea2a0b8e2cc856bcf801604b8268d71bacaa202bc0c13b",
+    "url": "https://raw.githubusercontent.com/json-schema-org/json-schema-spec/c8eb3d320f60eca7cfb18da25337a426ceb40eaa/schema.json"
+  },
+  "draft2020-12/meta/format-assertion.json": {
+    "revision": "add836e705c9a07434c467b6b90946ba45258a73",
+    "sha256": "c52242b9a1bb786b26c3e82c7add428c31f9c96e575dce99e56ea5feaa6da20c",
+    "url": "https://raw.githubusercontent.com/json-schema-org/json-schema-spec/add836e705c9a07434c467b6b90946ba45258a73/meta/format-assertion.json"
+  },
+  "draft7.json": {
+    "revision": "20a3fee852db88519dcb3bb329b7a872ebad8953",
+    "sha256": "692e1d165e47afcb5f11b2ce1c639635ffa834035d6ecb6bcf3087481dae8404",
+    "url": "https://raw.githubusercontent.com/json-schema-org/json-schema-spec/20a3fee852db88519dcb3bb329b7a872ebad8953/schema.json"
+  }
+}

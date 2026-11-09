@@ -4,11 +4,12 @@ use serde::{
     Serialize, Serializer,
     ser::{self, SerializeMap, SerializeSeq},
 };
-use std::{borrow::Cow, collections::HashSet, fmt};
+use std::{borrow::Cow, collections::BTreeSet, fmt};
 const DIAGNOSTIC_LIMIT: usize = 4096;
 const SERDE_MAX_DEPTH: usize = 128;
 // Qualified against the pinned serde_json arbitrary_precision Number protocol.
 const NUMBER_TOKEN: &str = "$serde_json::private::Number";
+const RAW_TOKEN: &str = "$serde_json::private::RawValue";
 
 /// Stable reasons why a Serde value could not enter the JSON value model.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -334,8 +335,9 @@ impl JsonValue {
     /// Checked Serde profile: finite numbers (including exact i128/u128), string
     /// map keys, unique members, standard containers/enums, and bytes as arrays.
     /// Pinned `serde_json::Number` tokens preserve their exact spelling.
-    /// Exact `JsonValue`/Serde RawValue wrappers are refused; retain or parse exact
-    /// values directly. Limits bound emitted storage, not user serializer work.
+    /// Nested `JsonValue` and Serde `RawValue` wrappers retain every number token
+    /// and string unit. They obey the same limits and unique-member rule.
+    /// Limits bound emitted storage, not user serializer work.
     /// This recursive Serde profile has a ceiling of 128 containers, independent
     /// of the larger iterative exact-parser depth limit.
     ///
@@ -384,9 +386,10 @@ struct Compound<'a> {
     state: &'a mut State,
     object: bool,
     number_token: bool,
+    raw_token: bool,
     index: usize,
     key: Option<Cow<'static, str>>,
-    seen: HashSet<Cow<'static, str>>,
+    seen: BTreeSet<Cow<'static, str>>,
     variant_parent: Option<(usize, bool)>,
 }
 impl Compound<'_> {
@@ -533,15 +536,72 @@ impl Compound<'_> {
         self.index = 1;
         Ok(())
     }
+    fn raw<T: Serialize + ?Sized>(
+        &mut self,
+        key: &str,
+        value: &T,
+    ) -> Result<(), ValueConversionError> {
+        self.state.guard()?;
+        if key != RAW_TOKEN || self.index != 0 {
+            return Err(self.state.fail(
+                ValueConversionErrorKind::UnsupportedRepresentation,
+                "invalid RawValue serialization protocol",
+            ));
+        }
+        let limits = JsonLimits {
+            max_bytes: self
+                .state
+                .limits
+                .max_bytes
+                .saturating_sub(self.state.bytes.len()),
+            max_nodes: self.state.limits.max_nodes.saturating_sub(self.state.nodes),
+            max_depth: self.state.limits.max_depth.saturating_sub(self.state.depth),
+        };
+        let text = value
+            .serialize(KeySerializer {
+                limit: limits.max_bytes,
+                string_only: true,
+            })
+            .map_err(|e| match e.kind() {
+                ValueConversionErrorKind::NonStringKey => self.state.fail(
+                    ValueConversionErrorKind::UnsupportedRepresentation,
+                    "RawValue protocol requires a string token",
+                ),
+                ValueConversionErrorKind::Limit => self.state.byte_limit(),
+                _ => self.state.latch(e),
+            })?;
+        // Treat the private Serde protocol as untrusted: parse one complete value
+        // under the remaining allowance before copying its original token text.
+        let parsed = JsonValue::parse_with_limits(&text, limits).map_err(|e| {
+            self.state.fail(
+                if e.kind() == crate::InputErrorKind::Limit {
+                    ValueConversionErrorKind::Limit
+                } else {
+                    ValueConversionErrorKind::UnsupportedRepresentation
+                },
+                crate::json::input_error_description(e.code()).unwrap_or(e.code()),
+            )
+        })?;
+        if parsed.has_duplicate_names() {
+            return Err(self.state.fail(
+                ValueConversionErrorKind::DuplicateKey,
+                "exact JSON contains duplicate members",
+            ));
+        }
+        self.state.nodes += crate::backend::node_count(parsed.view());
+        self.state.write(text.as_bytes())?;
+        self.index = 1;
+        Ok(())
+    }
     fn finish(self) -> Result<(), ValueConversionError> {
         self.state.guard()?;
-        if self.number_token {
+        if self.number_token || self.raw_token {
             return if self.index == 1 {
                 Ok(())
             } else {
                 Err(self.state.fail(
                     ValueConversionErrorKind::UnsupportedRepresentation,
-                    "Number protocol token missing",
+                    "JSON token protocol value missing",
                 ))
             };
         }
@@ -566,9 +626,10 @@ fn compound(state: &mut State, object: bool) -> Result<Compound<'_>, ValueConver
         state,
         object,
         number_token: false,
+        raw_token: false,
         index: 0,
         key: None,
-        seen: HashSet::new(),
+        seen: BTreeSet::new(),
         variant_parent: None,
     })
 }
@@ -648,15 +709,9 @@ impl<'a> Serializer for &'a mut State {
     }
     fn serialize_newtype_struct<T: Serialize + ?Sized>(
         self,
-        name: &'static str,
+        _: &'static str,
         v: &T,
     ) -> Result<(), Self::Error> {
-        if name == "$openbindings::exact" {
-            return Err(self.fail(
-                ValueConversionErrorKind::UnsupportedRepresentation,
-                "exact values use the exact JSON lane",
-            ));
-        }
         self.guard()?;
         v.serialize(self)
     }
@@ -693,22 +748,26 @@ impl<'a> Serializer for &'a mut State {
         name: &'static str,
         _: usize,
     ) -> Result<Self::SerializeStruct, Self::Error> {
-        if name == NUMBER_TOKEN {
-            self.node()?;
+        if name == NUMBER_TOKEN || name == RAW_TOKEN {
+            // Number is a single node; RawValue accounts for its parsed subtree.
+            if name == NUMBER_TOKEN {
+                self.node()?;
+            }
             return Ok(Compound {
                 state: self,
                 object: false,
-                number_token: true,
+                number_token: name == NUMBER_TOKEN,
+                raw_token: name == RAW_TOKEN,
                 index: 0,
                 key: None,
-                seen: HashSet::new(),
+                seen: BTreeSet::new(),
                 variant_parent: None,
             });
         }
         if name.starts_with("$serde_json::private::") {
             return Err(self.fail(
                 ValueConversionErrorKind::UnsupportedRepresentation,
-                "raw-token serialization requires the exact JSON lane",
+                "unsupported private serde_json serialization protocol",
             ));
         }
         self.serialize_map(None)
@@ -791,7 +850,9 @@ impl ser::SerializeStruct for Compound<'_> {
         k: &'static str,
         v: &T,
     ) -> Result<(), Self::Error> {
-        if self.number_token {
+        if self.raw_token {
+            self.raw(k, v)
+        } else if self.number_token {
             self.number(k, v)
         } else {
             self.admit_key(Cow::Borrowed(k))?;

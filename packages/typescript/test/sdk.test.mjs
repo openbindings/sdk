@@ -14,7 +14,7 @@ await sdk.initialize(
 );
 const ready = (preparation) => {
   assert.equal(preparation.status, "ready");
-  return preparation.valueContract;
+  return preparation.schema;
 };
 const text =
   ' {"openbindings":"0.2.0","operations":{"run":{"input":{"type":"integer"},"aliases":["execute"]}}} ';
@@ -32,7 +32,6 @@ test("author every normative object; absence/null and exact opaque values surviv
   const large = exact("9007199254740993");
   const document = constructDocument(sdk, {
     name: "example",
-    description: undefined,
     operations: {
       run: {
         aliases: ["execute"],
@@ -41,12 +40,12 @@ test("author every normative object; absence/null and exact opaque values surviv
         examples: { demo: { input: large, output: null } },
       },
     },
-    sources: { local: { kind: "https://kind.example/raw", content: null } },
+    sources: { local: { kind: "https://kind.example/raw", data: null } },
     bindings: {
       default: {
         operation: "run",
         source: "local",
-        content: { large },
+        data: { large },
         preference: 1,
         idempotent: true,
       },
@@ -55,7 +54,7 @@ test("author every normative object; absence/null and exact opaque values surviv
       dep: { operation: "run", kinds: ["https://kind.example/raw"] },
     },
     schemas: { extra: true },
-    additionalFields: { "x-extra": { large } },
+    "x-extra": { large },
   });
   large.dispose();
   const validation = document.validate();
@@ -63,14 +62,14 @@ test("author every normative object; absence/null and exact opaque values surviv
   const value = document.value();
   assert.equal(value.get("description"), undefined);
   for (const path of [
-    "/sources/local/content",
+    "/sources/local/data",
     "/operations/run/examples/demo/output",
   ]) {
     const child = value.at(path);
     assert.equal(child.text, "null");
     child.dispose();
   }
-  const preserved = value.at("/bindings/default/content/large");
+  const preserved = value.at("/bindings/default/data/large");
   assert.equal(preserved.text, "9007199254740993");
   assert.equal(preserved.toValue().status, "inexact");
   preserved.dispose();
@@ -79,24 +78,13 @@ test("author every normative object; absence/null and exact opaque values surviv
   document.dispose();
   const edited = sdk.Document.create();
   assert.throws(
-    () => edited.setOperation("run", { additionalFields: { input: {} } }),
+    () => edited.set("/operations/run", { "x-missing": undefined }),
     (e) =>
-      e.code === "field-collision" &&
-      e.partPointer === "/operations/run/additionalFields/input",
+      e.code === "unsupported-value" && e.inputPointer === "/0/value/x-missing",
   );
-  assert.throws(
-    () =>
-      edited.setOperation("run", {
-        additionalFields: { "x-missing": undefined },
-      }),
-    (e) =>
-      e.code === "unsupported-value" &&
-      e.partPointer === "/operations/run/additionalFields/x-missing",
-  );
-  assert.throws(
-    () => edited.setOperation("run", { description: null }),
-    sdk.EditError,
-  );
+  const malformed = edited.set("/operations/run", { description: null });
+  assert.equal(malformed.validate().status, "report");
+  malformed.dispose();
   edited.dispose();
 });
 test("ordinary conversion rejects lossy/side-effecting values and exact handles retain ownership", () => {
@@ -138,6 +126,43 @@ test("ordinary conversion rejects lossy/side-effecting values and exact handles 
   });
   ordinary.dispose();
 });
+test("ordinary number serialization stays distinct from exact JSON conversion", () => {
+  for (const [text, status] of [
+    ["9007199254740993", "inexact"],
+    ["9007199254740992", "converted"],
+    ["1000000000000000128", "inexact"],
+  ]) {
+    const value = exact(text);
+    try {
+      const result = value.toValue();
+      assert.equal(result.status, status, text);
+      if (result.status === "converted")
+        assert.equal(result.value, 9007199254740992);
+      assert.equal(value.text, text);
+    } finally {
+      value.dispose();
+    }
+  }
+  const ordinary = sdk.ExactJson.from(1000000000000000128);
+  try {
+    assert.equal(ordinary.text, "1000000000000000100");
+  } finally {
+    ordinary.dispose();
+  }
+  const document = parsed(
+    '{"openbindings":"0.2.0","operations":{"run":{"input":{"const":9007199254740993}}}}',
+  );
+  const schema = ready(prepareInput(document, "run"));
+  const exactInput = exact("9007199254740993");
+  try {
+    assert.equal(schema.evaluate(9007199254740992).status, "fails");
+    assert.equal(schema.evaluate(exactInput).status, "satisfies");
+  } finally {
+    exactInput.dispose();
+    schema.dispose();
+    document.dispose();
+  }
+});
 test("retained contracts and metadata support repeated native-feeling caller use", () => {
   const warmDocument = parsed(text);
   ready(prepareInput(warmDocument, "run")).dispose();
@@ -145,16 +170,15 @@ test("retained contracts and metadata support repeated native-feeling caller use
   const before = testing.liveStorageOwners();
   for (let i = 0; i < 1000; i++) {
     const document = parsed(text);
-    assert.equal(document.operations, document.operations);
-    assert.ok(Object.isFrozen(document.operations));
-    const selection = document.resolveOperation("execute");
-    assert.equal(selection.status, "found");
-    const op = selection.operation;
-    assert.equal(op.key, "run");
-    assert.deepEqual(op.bindings, []);
-    op.dispose();
     const checked = document.validate();
     assert.equal(checked.status, "conformant");
+    const entries = checked.document.operations();
+    assert.ok(Object.isFrozen(entries));
+    for (const entry of entries) entry.dispose();
+    const op = checked.document.resolveOperation("execute");
+    assert.equal(op.key, "run");
+    assert.deepEqual(op.bindings(), []);
+    op.dispose();
     const run = checked.document.resolveOperation("run");
     const contract = run.input();
     const input = ready(contract.prepare());
@@ -165,8 +189,8 @@ test("retained contracts and metadata support repeated native-feeling caller use
     document.dispose();
     const good = sdk.ExactJson.from(7),
       bad = sdk.ExactJson.from("private-value");
-    assert.equal(input.validate(good).status, "satisfies");
-    const mismatch = input.validate(bad);
+    assert.equal(input.evaluate(good).status, "satisfies");
+    const mismatch = input.evaluate(bad);
     assert.equal(mismatch.status, "fails");
     assert.ok(!JSON.stringify(mismatch).includes("private-value"));
     assert.equal(output, undefined);
@@ -360,7 +384,7 @@ test("explicit resources, evaluator limits and pre-cancellation keep their disti
     '{"openbindings":"0.2.0","operations":{"run":{"input":{"$ref":"https://example.test/schema"}}}}',
   );
   const schema = exact('{"type":"integer"}'),
-    empty = new sdk.SchemaResources(),
+    empty = new sdk.ExternalSchemas(),
     resources = empty.with("https://example.test/schema", schema);
   empty.dispose();
   schema.dispose();
@@ -377,30 +401,30 @@ test("explicit resources, evaluator limits and pre-cancellation keep their disti
   operation.dispose();
   const cancelled = contract.prepare({ resources, signal: control.signal });
   const value = sdk.ExactJson.from(7);
-  assert.equal(cancelled.status, "no-verdict");
-  assert.equal(cancelled.detail.reason, "cancelled");
+  assert.equal(cancelled.status, "refused");
+  assert.equal(cancelled.failure.kind, "cancelled");
   const healthy = ready(contract.prepare({ resources }));
-  assert.equal(healthy.validate(value).status, "satisfies");
+  assert.equal(healthy.evaluate(value).status, "satisfies");
   assert.equal(
-    healthy.validate(value, { signal: control.signal }).detail.reason,
+    healthy.evaluate(value, { signal: control.signal }).detail.reason,
     "cancelled",
   );
-  assert.equal(healthy.validate(value).status, "satisfies");
+  assert.equal(healthy.evaluate(value).status, "satisfies");
   const input = ready(
-    contract.prepare({ resources, limits: { evaluationSteps: 0 } }),
+    contract.prepare({ resources, limits: { evaluationSdkWorkUnits: 0 } }),
   );
-  assert.equal(input.validate(value).status, "no-verdict");
-  assert.equal(input.validate(value).detail.reason, "limit-exceeded");
+  assert.equal(input.evaluate(value).status, "no-verdict");
+  assert.equal(input.evaluate(value).detail.reason, "limit-exceeded");
   input.dispose();
   // By default no work cap applies; null selects that, and a number caps
   // every pass.
-  assert.equal(sdk.evaluatorLimits().evaluationSteps, null);
+  assert.equal(sdk.evaluatorLimits().evaluationSdkWorkUnits, null);
   const grown = ready(
-    contract.prepare({ resources, limits: { evaluationSteps: null } }),
+    contract.prepare({ resources, limits: { evaluationSdkWorkUnits: null } }),
   );
-  assert.equal(grown.validate(value).status, "satisfies");
+  assert.equal(grown.evaluate(value).status, "satisfies");
   grown.dispose();
-  // Only evaluationSteps and schemaResources have null defaults, and the
+  // Only evaluationSdkWorkUnits and schemaResources have null defaults, and the
   // refusal says so.
   assert.throws(
     () => contract.prepare({ limits: { patternDepth: null } }),
@@ -408,14 +432,14 @@ test("explicit resources, evaluator limits and pre-cancellation keep their disti
       e.code === "invalid-evaluator-limits" &&
       e.message.includes("4294967295") &&
       e.message.includes(
-        "evaluationSteps and schemaResources may also be null",
+        "evaluationSdkWorkUnits and schemaResources may also be null",
       ),
   );
   const partial = document.references({ resources, signal: control.signal });
   assert.equal(partial.complete, false);
   assert.equal(partial.limitation.reason, "cancelled");
   assert.throws(
-    () => contract.prepare({ limits: { evaluationSteps: -1 } }),
+    () => contract.prepare({ limits: { evaluationSdkWorkUnits: -1 } }),
     (e) => e.code === "invalid-evaluator-limits",
   );
   assert.throws(
@@ -465,21 +489,21 @@ test("schema resources admit every entry in one pass", () => {
   };
   try {
     const uri = (i) => `https://example.test/s${i}`;
-    const set = new sdk.SchemaResources(documents.map((d, i) => [uri(i), d]));
+    const set = new sdk.ExternalSchemas(documents.map((d, i) => [uri(i), d]));
     assert.deepEqual(calls, { add: 0, build: 1 });
     for (const i of [0, 31, 63])
       assert.equal(
-        set.locate({ resource: uri(i), pointer: "/title" }).pointer,
+        set.locate({ sourceUri: uri(i), pointer: "/title" }).pointer,
         "/title",
       );
     set.dispose();
-    new sdk.SchemaResources([]).dispose();
-    new sdk.SchemaResources().dispose();
+    new sdk.ExternalSchemas([]).dispose();
+    new sdk.ExternalSchemas().dispose();
     assert.deepEqual(calls, { add: 0, build: 1 });
     // Refusals release collected entries and leave supplied owners usable.
     assert.throws(
       () =>
-        new sdk.SchemaResources([
+        new sdk.ExternalSchemas([
           [uri(0), documents[0]],
           [uri(0), documents[1]],
         ]),
@@ -487,7 +511,7 @@ test("schema resources admit every entry in one pass", () => {
     );
     assert.throws(
       () =>
-        new sdk.SchemaResources([
+        new sdk.ExternalSchemas([
           [uri(0), documents[0]],
           ["https://example.test/\ud800", documents[1]],
         ]),
@@ -497,7 +521,7 @@ test("schema resources admit every entry in one pass", () => {
       yield [uri(0), documents[0]];
       throw new Error("caller iterable failed");
     }
-    assert.throws(() => new sdk.SchemaResources(failing()), /caller iterable/);
+    assert.throws(() => new sdk.ExternalSchemas(failing()), /caller iterable/);
     assert.equal(documents[0].text, '{"type":"integer","title":"s0"}');
     assert.equal(testing.liveStorageOwners(), before);
   } finally {
@@ -507,59 +531,52 @@ test("schema resources admit every entry in one pass", () => {
   }
 });
 
-// a view outlives its original owner, and a conformant one keeps its contracts.
-test("operation views retain independent owners", () => {
-  const before = testing.liveStorageOwners();
-  const document = parsed(text);
-  const selection = document.resolveOperation("execute");
-  assert.equal(selection.status, "found");
-  const plain = selection.operation.retain();
-  assert.ok(plain instanceof sdk.OperationView);
-  assert.notEqual(plain, selection.operation);
-  selection.operation.dispose();
-  assert.equal(plain.key, "run");
-  const schema = plain.input();
-  assert.equal(schema.text, '{"type":"integer"}');
-  schema.dispose();
+test("canonical operations retain their proof and contracts independently", () => {
+  const before = testing.liveStorageOwners(),
+    document = parsed(text);
   const checked = document.validate();
   assert.equal(checked.status, "conformant");
-  const original = checked.document.resolveOperation("execute");
-  const retained = original.retain();
-  assert.ok(retained instanceof sdk.ConformantOperationView);
-  // A plain view's handle cannot be retained as a conformant one.
+  const original = checked.document.resolveOperation("execute"),
+    retained = original.retain();
+  assert.ok(retained instanceof sdk.Operation);
+  assert.notEqual(retained, original);
+  const raw = document.value();
   assert.throws(
-    () => sdk.ConformantOperationView.prototype.retain.call(plain),
-    (e) => e instanceof sdk.SdkError && e.code === "document-conformance",
+    () => sdk.Operation.prototype.retain.call(raw),
+    (e) => e.code === "invalid-domain-owner",
   );
+  raw.dispose();
   original.dispose();
-  plain.dispose();
   checked.document.dispose();
   document.dispose();
   assert.equal(retained.key, "run");
   const contract = retained.input();
   retained.dispose();
+  const json = contract.json();
+  assert.equal(json.text, '{"type":"integer"}');
+  json.dispose();
   const prepared = ready(contract.prepare());
   contract.dispose();
-  assert.equal(prepared.validate(7).status, "satisfies");
+  assert.equal(prepared.evaluate(7).status, "satisfies");
   prepared.dispose();
   assert.equal(testing.liveStorageOwners(), before);
 });
 
 // a string is JSON text here, admitted exactly as parseJson admits it.
-test("validateJson admits JSON text as parseJson does, then validates", () => {
+test("evaluateJson admits JSON text as parseJson does, then validates", () => {
   const document = parsed(text);
   const contract = ready(prepareInput(document, "run"));
   document.dispose();
   const before = testing.liveStorageOwners();
   const utf8 = (value) => new TextEncoder().encode(value);
-  assert.equal(contract.validate("7").status, "fails");
-  assert.equal(contract.validateJson("7").status, "satisfies");
-  assert.equal(contract.validateJson(utf8(" 7 ")).status, "satisfies");
-  assert.equal(contract.validateJson("9007199254740993").status, "satisfies");
-  assert.equal(contract.validateJson("1.5").status, "fails");
-  const failed = contract.validateJson('"7"');
-  assert.deepEqual(failed, contract.validate("7"));
-  const duplicate = contract.validateJson('{"a":1,"a":2}');
+  assert.equal(contract.evaluate("7").status, "fails");
+  assert.equal(contract.evaluateJson("7").status, "satisfies");
+  assert.equal(contract.evaluateJson(utf8(" 7 ")).status, "satisfies");
+  assert.equal(contract.evaluateJson("9007199254740993").status, "satisfies");
+  assert.equal(contract.evaluateJson("1.5").status, "fails");
+  const failed = contract.evaluateJson('"7"');
+  assert.deepEqual(failed, contract.evaluate("7"));
+  const duplicate = contract.evaluateJson('{"a":1,"a":2}');
   assert.equal(duplicate.status, "no-verdict");
   assert.equal(duplicate.detail.code, "duplicate-instance-members");
   // A refusal's message says what was expected and where; code and offset
@@ -584,33 +601,33 @@ test("validateJson admits JSON text as parseJson does, then validates", () => {
   ]) {
     const admitted = sdk.parseJson(input);
     assert.equal(admitted.status, "input-error");
-    // A limit names parseJson with limits, which validateJson does not take;
+    // A limit names parseJson with limits, which evaluateJson does not take;
     // every other refusal is parseJson's.
     const message =
       input === deep
         ? "the input nests deeper than the admitted depth limit at byte 10000; parse the value with JsonValue::parse_with_limits and a larger JsonLimits::max_depth, then validate it (parseJson with a larger limits.maxDepth in TypeScript)"
         : admitted.error.message;
-    assert.deepEqual(contract.validateJson(input), {
+    assert.deepEqual(contract.evaluateJson(input), {
       status: "input-error",
       error: { ...admitted.error, message },
     });
   }
-  assert.throws(() => contract.validateJson("\ud800"), TypeError);
-  assert.throws(() => contract.validateJson(7), TypeError);
+  assert.throws(() => contract.evaluateJson("\ud800"), TypeError);
+  assert.throws(() => contract.evaluateJson(7), TypeError);
   const control = new AbortController();
   control.abort();
   assert.equal(
-    contract.validateJson("7", { signal: control.signal }).detail.reason,
+    contract.evaluateJson("7", { signal: control.signal }).detail.reason,
     "cancelled",
   );
   assert.throws(
-    () => contract.validateJson("7", { unknown: true }),
+    () => contract.evaluateJson("7", { unknown: true }),
     (e) => e.code === "invalid-work-options",
   );
   assert.equal(testing.liveStorageOwners(), before);
   contract.dispose();
   assert.throws(
-    () => contract.validateJson("7"),
+    () => contract.evaluateJson("7"),
     (e) => e.code === "disposed-handle",
   );
 });

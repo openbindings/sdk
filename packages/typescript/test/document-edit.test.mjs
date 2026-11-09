@@ -19,7 +19,7 @@ const text =
   ' {\n"openbindings":"0.2.0", "operations":{"run":{"input":true}},\n "x-number":1e+003, "x-object": { "untouched" : -0 }\n} ';
 
 test("proof constructors and plain-object forgeries cannot grant authority", () => {
-  const document = open(text);
+  let document = open(text);
   assert.throws(() => new sdk.ConformantDocument(), TypeError);
   assert.throws(
     () =>
@@ -50,32 +50,33 @@ test("proof constructors and plain-object forgeries cannot grant authority", () 
     "setDescription",
   ])
     assert.equal(proof[method], undefined);
-  // A plain document's operation hands out exact values, never value contracts.
-  const plain = document.resolveOperation("run");
-  assert.equal(plain.status, "found");
-  assert.equal(plain.operation instanceof sdk.ConformantOperationView, false);
-  const exactInput = plain.operation.input();
+  assert.equal(typeof document.resolveOperation, "undefined");
+  const root = document.value(),
+    exactInput = root.at("/operations/run/input");
   assert.ok(exactInput instanceof sdk.ExactJson);
   assert.equal(exactInput.prepare, undefined);
   exactInput.dispose();
-  plain.operation.dispose();
+  root.dispose();
   document.dispose();
   proof.dispose();
 });
 
 test("consuming proof revokes all aliases while retained proofs and editable copies survive", () => {
-  const document = open(text),
+  let document = open(text),
     proof = document.validate().document,
     alias = proof,
     retained = proof.retain(),
     independent = proof.asDocument();
   const initial = proof.toBytes();
-  independent.setDescription("different revision");
+  independent = replaceDocument(
+    independent,
+    independent.set("/description", "different revision"),
+  );
   assert.deepEqual(proof.toBytes(), initial);
-  const editable = proof.intoDocument();
+  let editable = proof.intoDocument();
   assert.equal(alias.disposed, true);
   for (const read of [
-    () => alias.operations,
+    () => alias.operations(),
     () => alias.toBytes(),
     () => alias.value(),
     () => alias.resolveOperation("run"),
@@ -83,15 +84,20 @@ test("consuming proof revokes all aliases while retained proofs and editable cop
     () => alias.intoDocument(),
   ])
     assert.throws(read, (e) => e.code === "disposed-handle");
-  editable.setOperationDescription("run", "editing again");
+  editable = replaceDocument(
+    editable,
+    editable.set("/operations/" + "run" + "/description", "editing again"),
+  );
   assert.deepEqual(retained.toBytes(), initial);
-  assert.equal(retained.operations[0].key, "run");
+  const retainedOperation = retained.operation("run");
+  assert.equal(retainedOperation.key, "run");
+  retainedOperation.dispose();
   for (const owner of [document, proof, retained, independent, editable])
     owner.dispose();
 });
 
 test("one batch commits once and preserves decimal spelling and every untouched byte", () => {
-  const document = open(text),
+  let document = open(text),
     decimal = exact("0.29000000000000001");
   const original = bridge.WasmDocument.prototype.editEncoded;
   let calls = 0;
@@ -104,14 +110,17 @@ test("one batch commits once and preserves decimal spelling and every untouched 
     return original.apply(this, args);
   };
   try {
-    document.edit([
-      {
-        op: "set",
-        pointer: "/operations/run/input",
-        value: { const: decimal },
-      },
-      { op: "set", pointer: "/description", value: "edited" },
-    ]);
+    document = replaceDocument(
+      document,
+      document.edit([
+        {
+          op: "set",
+          pointer: "/operations/run/input",
+          value: { const: decimal },
+        },
+        { op: "set", pointer: "/description", value: "edited" },
+      ]),
+    );
     assert.equal(calls, 1);
     assert.equal(
       new TextDecoder().decode(document.toBytes()),
@@ -129,11 +138,12 @@ test("one batch commits once and preserves decimal spelling and every untouched 
   }
 });
 
-test("failed batches preserve bytes, metadata caches and retained evidence", () => {
-  const document = open(text),
-    operations = document.operations,
-    proof = document.validate().document,
+test("failed batches preserve bytes and retained canonical entries", () => {
+  let document = open(text);
+  const proof = document.validate().document,
+    operation = proof.operation("run"),
     before = document.toBytes();
+  const oldDescription = operation.description;
   assert.throws(
     () =>
       document.edit([
@@ -143,88 +153,140 @@ test("failed batches preserve bytes, metadata caches and retained evidence", () 
     (e) => e instanceof sdk.EditError && e.code === "missing-value",
   );
   assert.deepEqual(document.toBytes(), before);
-  assert.equal(document.operations, operations);
-  document.edit([
-    { op: "set", pointer: "/operations/run/description", value: "changed" },
-  ]);
-  assert.notEqual(document.operations, operations);
+  assert.equal(operation.description, oldDescription);
+  document = replaceDocument(
+    document,
+    document.set("/operations/run/description", "changed"),
+  );
+  const current = document.validate().document,
+    changed = current.operation("run");
+  assert.equal(changed.description, "changed");
+  assert.equal(operation.description, oldDescription);
   assert.deepEqual(proof.toBytes(), before);
-  assert.equal(document.operations[0].description, "changed");
-  proof.dispose();
-  document.dispose();
+  for (const owner of [changed, current, operation, proof, document])
+    owner.dispose();
 });
 
-test("coalesced insertions, escaped keys and all typed part setters construct one document", () => {
-  const document = sdk.Document.create();
-  document.edit(
-    Array.from({ length: 1000 }, (_, i) => ({
-      op: "set",
-      pointer: `/operations/op${i}`,
-      value: {},
-    })),
+test("coalesced insertions, escaped keys and explicit namespace edits construct one document", () => {
+  let document = sdk.Document.create();
+  document = replaceDocument(
+    document,
+    document.edit(
+      Array.from({ length: 1000 }, (_, i) => ({
+        op: "set",
+        pointer: `/operations/op${i}`,
+        value: {},
+      })),
+    ),
   );
-  assert.equal(document.operations.length, 1000);
-  document.setOperation("run/~", { input: true });
-  document.setSource("s/~", { kind: "custom", content: null });
-  document.setBinding("b/~", {
-    operation: "run/~",
-    source: "s/~",
-    preference: 0,
-  });
-  document.setDependency("d/~", { operation: "run/~" });
-  document.setExample("run/~", "e/~", { input: null });
-  document.setOperations({ run: { input: true } });
-  document.setSources({ s: { kind: "custom", content: null } });
-  document.setBindings({ b: { operation: "run", source: "s" } });
-  document.setDependencies({ d: { operation: "run" } });
-  document.setExample("run", "e", { input: null });
+  const populated = document.validate().document,
+    entries = populated.operations();
+  assert.equal(entries.length, 1000);
+  for (const entry of entries) entry.dispose();
+  populated.dispose();
+  document = replaceDocument(
+    document,
+    document.edit(
+      ["sources", "bindings", "dependencies"].map((name) => ({
+        op: "set",
+        pointer: "/" + name,
+        value: {},
+      })),
+    ),
+  );
+  document = replaceDocument(
+    document,
+    document.set("/operations/" + "run~1~0", { input: true, examples: {} }),
+  );
+  document = replaceDocument(
+    document,
+    document.set("/sources/" + "s~1~0", { kind: "custom", data: null }),
+  );
+  document = replaceDocument(
+    document,
+    document.set("/bindings/" + "b~1~0", {
+      operation: "run/~",
+      source: "s/~",
+      preference: 0,
+    }),
+  );
+  document = replaceDocument(
+    document,
+    document.set("/dependencies/" + "d~1~0", { operation: "run/~" }),
+  );
+  document = replaceDocument(
+    document,
+    document.set("/operations/" + "run~1~0" + "/examples/" + "e~1~0", {
+      input: null,
+    }),
+  );
+  document = replaceDocument(
+    document,
+    document.set("/operations", { run: { input: true } }),
+  );
+  document = replaceDocument(
+    document,
+    document.set("/sources", { s: { kind: "custom", data: null } }),
+  );
+  document = replaceDocument(
+    document,
+    document.set("/bindings", { b: { operation: "run", source: "s" } }),
+  );
+  document = replaceDocument(
+    document,
+    document.set("/dependencies", { d: { operation: "run" } }),
+  );
+  document = replaceDocument(
+    document,
+    document.set("/operations/run/examples", { e: { input: null } }),
+  );
   const checked = document.validate();
   assert.equal(checked.status, "conformant");
   checked.document.dispose();
-  const before = document.toBytes();
-  assert.throws(
-    () => document.setOperation("bad/~", { additionalFields: { input: true } }),
-    (e) =>
-      e.code === "field-collision" &&
-      e.partPointer === "/operations/bad~1~0/additionalFields/input" &&
-      !Object.hasOwn(e, "draftPointer"),
-  );
-  assert.deepEqual(document.toBytes(), before);
   document.dispose();
 });
 
 test("duplicate documents remain inspectable and immutable until replaced by a distinct document", () => {
-  const text = '{"openbindings":"0.2.0","operations":{},"x":1,"x":2}',
+  let text = '{"openbindings":"0.2.0","operations":{},"x":1,"x":2}',
     document = open(text);
   assert.equal(document.validate().status, "report");
+  assert.equal(document.references().limitation.code, "duplicate-members");
   assert.throws(
-    () => document.operations,
-    (e) => e.interpretationCode === "duplicate-members",
-  );
-  assert.throws(
-    () => document.setName("refused"),
+    () => document.set("/name", "refused"),
     (e) => e.code === "duplicate-members",
   );
   assert.equal(new TextDecoder().decode(document.toBytes()), text);
   document.dispose();
 });
 
-test("typed text setters preserve lone UTF-16 and source positions follow the current revision", () => {
-  const document = open(text);
-  document.setName("\ud800");
-  document.setDescription("\udc00");
-  document.setOperationDescription("run", "\ud800");
-  assert.equal(document.name, "\ud800");
-  assert.equal(document.description, "\udc00");
-  document.set("/operations", null);
-  const bytes = document.toBytes();
-  assert.throws(
-    () => document.operations,
-    (e) =>
-      new TextDecoder().decode(
-        bytes.subarray(e.location.byteOffset, e.location.byteOffset + 4),
-      ) === "null",
+test("exact text edits preserve lone UTF-16 and source positions follow the current revision", () => {
+  let document = open(text);
+  document = replaceDocument(document, document.set("/name", "\ud800"));
+  document = replaceDocument(document, document.set("/description", "\udc00"));
+  document = replaceDocument(
+    document,
+    document.set("/operations/" + "run" + "/description", "\ud800"),
   );
+  const root = document.value(),
+    name = root.get("name"),
+    description = root.get("description");
+  assert.equal(JSON.parse(name.text), "\ud800");
+  assert.equal(JSON.parse(description.text), "\udc00");
+  name.dispose();
+  description.dispose();
+  root.dispose();
+  document = replaceDocument(document, document.set("/operations", null));
+  const bytes = document.toBytes();
+  const value = document.value(),
+    operations = value.get("operations");
+  const offset = operations.metadata.location.byteOffset;
+  assert.equal(
+    new TextDecoder().decode(bytes.subarray(offset, offset + 4)),
+    "null",
+  );
+  assert.equal(document.validate().status, "report");
+  operations.dispose();
+  value.dispose();
   document.dispose();
 });
 
@@ -233,19 +295,22 @@ test("released edited owners and consumed proofs release their arenas", () => {
   warm.validate().document.dispose();
   warm.dispose();
   const baseline = liveStorageOwners();
-  const document = open(text),
+  let document = open(text),
     value = exact("1e+003");
-  document.set("/x-number", value);
+  document = replaceDocument(document, document.set("/x-number", value));
   const proof = document.validate().document;
-  const editable = proof.intoDocument();
-  editable.setDescription("after proof");
+  let editable = proof.intoDocument();
+  editable = replaceDocument(
+    editable,
+    editable.set("/description", "after proof"),
+  );
   for (const owner of [document, value, proof, editable]) owner.dispose();
   assert.equal(liveStorageOwners(), baseline);
 });
 
 // Exact owner transfer is invisible on native batch refusal and aliases.
-test("exact owners survive failed batches, repeated references and whole-part setters", () => {
-  const baseline = liveStorageOwners(),
+test("exact owners survive failed batches, repeated references and whole-entry edits", () => {
+  let baseline = liveStorageOwners(),
     document = sdk.Document.create(),
     value = exact("9007199254740993"),
     alias = value;
@@ -266,15 +331,27 @@ test("exact owners survive failed batches, repeated references and whole-part se
     throw new Error("unexpected exact-value read across the bridge");
   };
   try {
-    document.edit([
-      { op: "set", pointer: "/x-exact", value: { a: value, b: alias } },
-    ]);
-    document.setOperation("run", {
-      input: { const: value },
-      output: { const: alias },
-    });
-    document.setOperations({ run: { input: { const: value } } });
-    document.setExample("run", "sample", { input: value });
+    document = replaceDocument(
+      document,
+      document.edit([
+        { op: "set", pointer: "/x-exact", value: { a: value, b: alias } },
+      ]),
+    );
+    document = replaceDocument(
+      document,
+      document.set("/operations/" + "run", {
+        input: { const: value },
+        output: { const: alias },
+      }),
+    );
+    document = replaceDocument(
+      document,
+      document.set("/operations", { run: { input: { const: value } } }),
+    );
+    document = replaceDocument(
+      document,
+      document.set("/operations/run/examples", { sample: { input: value } }),
+    );
   } finally {
     bridge.WasmJson.prototype.text = read;
   }
@@ -289,7 +366,7 @@ test("exact owners survive failed batches, repeated references and whole-part se
 
 // Exact input byte preflight includes repeated occurrences before joining.
 test("an oversized exact batch returns borrowed owners without changing bytes", () => {
-  const baseline = liveStorageOwners(),
+  let baseline = liveStorageOwners(),
     document = sdk.Document.create();
   const value = exact('"' + "x".repeat(17 * 1024 * 1024) + '"');
   const before = document.toBytes();
@@ -307,9 +384,9 @@ test("an oversized exact batch returns borrowed owners without changing bytes", 
   assert.equal(liveStorageOwners(), baseline);
 });
 
-test("typed namespace construction and exact pointer edits share one atomic bridge call", () => {
-  // Every prepared namespace commits once; failed typed input is atomic.
-  const document = sdk.Document.create();
+test("exact namespace construction and exact pointer edits share one atomic bridge call", () => {
+  // Every namespace commits once; failed ordinary JSON admission is atomic.
+  let document = sdk.Document.create();
   const number = exact("1e+003");
   const rawEdit = bridge.WasmDocument.prototype.editEncoded;
   let calls = 0;
@@ -318,18 +395,34 @@ test("typed namespace construction and exact pointer edits share one atomic brid
     return rawEdit.apply(this, args);
   };
   try {
-    document.edit([
-      {
-        op: "set-operations",
-        value: {
-          run: { input: true, additionalFields: { "x-number": number } },
+    document = replaceDocument(
+      document,
+      document.edit([
+        {
+          op: "set",
+          pointer: "/operations",
+          value: {
+            run: { input: true, "x-number": number },
+          },
         },
-      },
-      { op: "set", pointer: "/name", value: "Batch" },
-      { op: "set-dependencies", value: { d: { operation: "run" } } },
-      { op: "set-sources", value: { s: { kind: "custom", content: number } } },
-      { op: "set-bindings", value: { b: { operation: "run", source: "s" } } },
-    ]);
+        { op: "set", pointer: "/name", value: "Batch" },
+        {
+          op: "set",
+          pointer: "/dependencies",
+          value: { d: { operation: "run" } },
+        },
+        {
+          op: "set",
+          pointer: "/sources",
+          value: { s: { kind: "custom", data: number } },
+        },
+        {
+          op: "set",
+          pointer: "/bindings",
+          value: { b: { operation: "run", source: "s" } },
+        },
+      ]),
+    );
     assert.equal(calls, 1);
     assert.match(
       new TextDecoder().decode(document.toBytes()),
@@ -342,21 +435,21 @@ test("typed namespace construction and exact pointer edits share one atomic brid
         document.edit([
           { op: "set", pointer: "/name", value: "changed" },
           {
-            op: "set-sources",
+            op: "set",
+            pointer: "/sources",
             value: {
-              s: { kind: "custom", additionalFields: { kind: "shadow" } },
+              s: { kind: NaN },
             },
           },
         ]),
       (e) =>
-        e.code === "field-collision" &&
-        e.partPointer === "/sources/s/additionalFields/kind",
+        e.code === "non-finite-number" && e.inputPointer === "/1/value/s/kind",
     );
     assert.deepEqual(document.toBytes(), before);
     assert.equal(calls, 1);
     assert.throws(() =>
       document.edit([
-        { op: "set-operations", value: {} },
+        { op: "set", pointer: "/operations", value: {} },
         { op: "remove", pointer: "/missing" },
       ]),
     );
@@ -401,8 +494,8 @@ test("a finding pointer through an unpaired name edits the member it reports", (
       String.raw`{"openbindings":"0.2.0","operations":{},"x-a":{"k":2,"fixed":1}}`,
     ],
   ]) {
-    const document = open(source);
-    edit(document);
+    let document = open(source);
+    document = replaceDocument(document, edit(document));
     assert.equal(new TextDecoder().decode(document.toBytes()), expected);
     const checked = document.validate();
     if (expected === kept) {
@@ -413,7 +506,7 @@ test("a finding pointer through an unpaired name edits the member it reports", (
   }
   assert.equal(value.text, "[3]");
   value.dispose();
-  const document = open(source);
+  let document = open(source);
   assert.throws(
     () => document.remove("\ud800"),
     (e) => e instanceof sdk.EditError && e.code === "invalid-pointer",
@@ -424,4 +517,54 @@ test("a finding pointer through an unpaired name edits the member it reports", (
   );
   assert.equal(new TextDecoder().decode(document.toBytes()), source);
   document.dispose();
+});
+
+// Test fixture cursor: keep the new immutable snapshot and release its predecessor.
+function replaceDocument(previous, next) {
+  previous.dispose();
+  return next;
+}
+
+test("edits return distinct owners while the original snapshot and proof remain usable", () => {
+  const baseline = liveStorageOwners();
+  const original = open(text);
+  const proof = original.validate().document;
+  const operation = proof.operation("run");
+  const originalDescription = operation.description;
+  const value = exact("null");
+  const revised = original.set("/description", value);
+  const removed = revised.remove("/description");
+  const empty = original.edit([]);
+  try {
+    assert.notEqual(revised, original);
+    assert.notEqual(empty, original);
+    assert.equal(new TextDecoder().decode(original.toBytes()), text);
+    assert.deepEqual(proof.toBytes(), original.toBytes());
+    assert.equal(operation.description, originalDescription);
+    // Release exact reads separately; they do not consume either document.
+    const root = revised.value();
+    const description = root.get("description");
+    assert.equal(description.text, "null");
+    description.dispose();
+    root.dispose();
+    original.dispose();
+    assert.equal(revised.disposed, false);
+    assert.equal(empty.disposed, false);
+    assert.deepEqual(proof.toBytes(), empty.toBytes());
+    const removedRoot = removed.value();
+    assert.equal(removedRoot.get("description"), undefined);
+    removedRoot.dispose();
+  } finally {
+    for (const owner of [
+      original,
+      proof,
+      operation,
+      revised,
+      removed,
+      empty,
+      value,
+    ])
+      owner.dispose();
+  }
+  assert.equal(liveStorageOwners(), baseline);
 });

@@ -46,7 +46,8 @@ build outputs.
 
 The independent Python judge decodes the pinned specification fixtures and rejects
 missing/duplicate/unexpected/wrong results; the Rust/JS observers only exercise
-public APIs. Both browsers run 440 core cases and 1,564 evaluator cases. The two migrated OBI-12 cases run as Rust core rejection regressions. The reusable
+public APIs. Both browsers use the current core inventory and evaluator suite,
+including the retained document-admission regressions. The reusable
 Rust evaluator kit additionally supplies its own exact-case refusal declarations
 and source-location checks. A test filter or ignored TLS test is not a full pass.
 

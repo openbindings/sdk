@@ -7,6 +7,7 @@ reimplemented: the oracle only evaluates complete Boolean/type/applicator cases.
 import argparse
 import copy
 import json
+import hashlib
 from collections import defaultdict
 from pathlib import Path
 
@@ -15,21 +16,90 @@ INPUTS = ROOT / "crates/openbindings-json-schema-evaluator/tests/fixtures"
 CASES = sum((json.loads((INPUTS / name).read_text()) for name in
              ["reference-matrix.json", "reference-completions.json"]), [])
 
-# Translate the historical representation without changing the frozen controls.
+ADJUDICATION = json.loads((INPUTS / "reference-adjudication.json").read_text())
+assert ADJUDICATION["spec_revision"] == "c1419c9fc3ae5a00c2b83da710c11bf67dab7934"
+assert len({c["id"] for c in CASES}) == len(CASES) == ADJUDICATION["total_cases"] == 2348
+for source in ADJUDICATION["sources"]:
+    assert hashlib.sha256((INPUTS / source["file"]).read_bytes()).hexdigest() == source["sha256"]
+ADMISSION = json.loads((INPUTS / "reference-admission.json").read_text())
+NEGATIVES = {c["id"]: c for c in ADMISSION["cases"]}
+assert len(NEGATIVES) == len(ADMISSION["cases"]) == 194
+assert set(NEGATIVES) <= {c["id"] for c in CASES}
+CAPABILITIES = {c["id"]: c for c in json.loads((INPUTS / "reference-capabilities.json").read_text())["cases"]}
+assert len(CAPABILITIES) == 1
+assert not set(CAPABILITIES) & set(NEGATIVES)
 for case in CASES:
-    expected = case["expected"]
-    if expected["outcome"] == "N" and expected.get("detail", {}).get("reason") == "undefined":
-        expected["outcome"] = "undefined"
-        del expected["detail"]["reason"]
+    if case["id"] in CAPABILITIES:
+        capability = CAPABILITIES[case["id"]]
+        assert case == capability["historical_case"]
+
+# Original inputs remain exact; current obligations are selected below.
+for case in CASES:
+    if case["id"] in NEGATIVES:
+        negative = NEGATIVES[case["id"]]
+        assert case == negative["historical_case"]
+
+# The native and facade adapters already use this independently adjudicated
+# current ledger. Historical inability codes above are retained as provenance,
+# not as the semantics required of the current implementation.
+CURRENT = json.loads((INPUTS / "reference-current-oracle.json").read_text())
+assert CURRENT["specification"] == ADJUDICATION["spec_revision"]
+CURRENT = {case["id"]: case for case in CURRENT["cases"]}
+assert len(CURRENT) == len(CASES) and set(CURRENT) == {case["id"] for case in CASES}
 
 
-def subset(expected, actual):
-    if isinstance(expected, dict):
-        assert isinstance(actual, dict)
-        for key, value in expected.items():
-            subset(value, actual.get(key))
+def pointer_exists(value, pointer):
+    if pointer == "":
+        return True
+    if not isinstance(pointer, str) or not pointer.startswith("/"):
+        return False
+    for part in pointer[1:].split("/"):
+        at = 0
+        while at < len(part):
+            if part[at] == '~':
+                if at + 1 == len(part) or part[at + 1] not in '01':
+                    return False
+                at += 2
+            else:
+                at += 1
+        part = part.replace("~1", "/").replace("~0", "~")
+        if isinstance(value, dict) and part in value:
+            value = value[part]
+        elif isinstance(value, list) and part.isascii() and part.isdecimal() and (part == "0" or not part.startswith("0")) and int(part) < len(value):
+            value = value[int(part)]
+        else:
+            return False
+    return True
+
+
+def current_expectation(case, actual):
+    expected = CURRENT[case["id"]]
+    required = expected["required"]
+    detail = actual.get("detail", {})
+    if required in ("S", "F", "U"):
+        assert actual["stage"] == "ready"
+        assert actual["outcome"] == ("undefined" if required == "U" else required)
+        if required == "U":
+            assert detail.get("code") and detail.get("location")
+            assert "reason" not in detail
+    elif required == "external":
+        assert actual["outcome"] == "N" and detail["reason"] == "resource-unavailable"
+        assert detail.get("code")
+    elif required == "limit":
+        assert (actual["outcome"] == "N" and detail.get("reason") == "limit-exceeded") or (
+            actual["stage"] == "preparation" and actual["outcome"] == "refused" and actual["failure"]["kind"] == "limit")
+    elif required == "admission":
+        assert actual["stage"] == "admission" and actual["outcome"] == "non-conformant"
+        assert all(actual["evidence"][rule] == "violated" for rule in expected["rules"])
     else:
-        assert expected == actual, (expected, actual)
+        raise AssertionError("unrecognized current obligation: " + required)
+    sources = {None: case.get("document", {"openbindings": "0.2.0", "operations": {"op": {"input": case.get("schema")}}})}
+    sources.update({resource["uri"]: resource["schema"] for resource in case.get("resources", [])})
+    for location, coordinate in [(detail.get("location"), "resource"), (actual.get("failure", {}).get("origin"), "source_uri")]:
+        if location is not None:
+            assert coordinate in location
+            assert location[coordinate] in sources
+            assert pointer_exists(sources[location[coordinate]], location.get("pointer"))
 
 
 def oracle(schema, value, supplied):
@@ -63,10 +133,11 @@ def check(rows):
     assert len(actual) == len(rows) == len(CASES)
     groups, completions = defaultdict(list), defaultdict(list)
     checked = 0
+    admission_boundaries = 0
     for c in CASES:
         result = actual[c["id"]]
         try:
-            subset(c["expected"], result)
+            current_expectation(c, result)
         except AssertionError as error:
             raise AssertionError(c["id"]) from error
         if c["family"] in ["differential", "semantic-differential", "completion"]:
@@ -84,15 +155,23 @@ def check(rows):
         completions[partial["id"]] = [actual[c["id"]]["outcome"] for c in group if c["context"] == "complete"]
     for key, outcomes in completions.items():
         partial = actual[key]
+        if partial["stage"] == "admission":
+            assert key in NEGATIVES
+            admission_boundaries += 1
+            continue
         if partial["outcome"] in ["S", "F"]:
             assert all(v == partial["outcome"] for v in outcomes), key
         elif partial["outcome"] == "undefined":
             assert set(outcomes) == {"S", "F"}, key
     return {"cases": len(rows), "independent_complete_checks": checked,
-            "completion_groups": len(completions)}
+            "completion_groups": len(completions), "admission_boundaries": admission_boundaries}
 
 
 def main():
+    assert not pointer_exists({'a~2': 1}, '/a~2')
+    assert pointer_exists({'a~2': 1}, '/a~02')
+    assert not pointer_exists([1], '/٠')
+    assert pointer_exists({'٠': 1}, '/٠')
     parser = argparse.ArgumentParser()
     parser.add_argument("receipts", nargs="+", type=Path)
     args = parser.parse_args()
@@ -108,6 +187,7 @@ def main():
     mutations = [
         ("pointer-missing/any-true", {"stage": "ready", "outcome": "F"}),
         ("pointer-scalar/deciding", {"stage": "ready", "outcome": "S"}),
+        ("pointer-missing/deciding", {"stage": "admission", "outcome": "non-conformant", "evidence": {"OBI-12":"met"}}),
         ("influence/budget", {"stage": "ready", "outcome": "undefined", "detail": {}}),
         ("influence/oneof/correlated", {"stage": "ready", "outcome": "undefined", "detail": {}}),
         ("influence/mixture/anyOfFalseFalse", {"stage": "ready", "outcome": "undefined", "detail": {}}),
@@ -122,14 +202,14 @@ def main():
         else:
             raise AssertionError(f"false verdict/classification accepted: {key}")
     rows = copy.deepcopy(reference)
-    next(r for r in rows if r["id"] == "pointer-missing/deciding")["actual"]["detail"]["location"]["pointer"] = "/$defs/n0"
+    next(r for r in rows if r["id"] == "cycle/deciding")["actual"]["detail"]["location"]["pointer"] = "/$defs/n0"
     try:
         check(rows)
     except AssertionError:
         pass
     else:
         raise AssertionError("invented generated location accepted")
-    print("6 injected false verdict/classification/location controls rejected")
+    print("7 injected false verdict/classification/admission/location controls rejected")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,229 @@
+[
+  {
+    "name": "trial scope distinction",
+    "conformant": false,
+    "document": {
+      "operations": {},
+      "schemas": {
+        "Task": true,
+        "document": {
+          "$ref": "#/schemas/Task"
+        },
+        "named": {
+          "$id": "https://id.test/root",
+          "$ref": "#/schemas/Task"
+        }
+      }
+    },
+    "resources": [],
+    "expected": [
+      {
+        "location": {
+          "source_uri": null,
+          "pointer": "/schemas/document/$ref"
+        },
+        "resource_root": null,
+        "status": "located"
+      },
+      {
+        "location": {
+          "source_uri": null,
+          "pointer": "/schemas/named/$ref"
+        },
+        "resource_root": {
+          "source_uri": null,
+          "pointer": "/schemas/named"
+        },
+        "status": "unresolved"
+      }
+    ]
+  },
+  {
+    "name": "document nested and supplied resources",
+    "conformant": true,
+    "document": {
+      "operations": {},
+      "schemas": {
+        "Task": true,
+        "document": {
+          "$ref": "#/schemas/Task"
+        },
+        "named": {
+          "$id": "https://id.test/root/",
+          "$ref": "#",
+          "$defs": {
+            "nested": {
+              "$id": "child/",
+              "$dynamicAnchor": "node",
+              "$dynamicRef": "#node",
+              "not": {
+                "$ref": "#"
+              }
+            }
+          }
+        },
+        "supplied": {
+          "$ref": "https://fetch.test/bundle"
+        }
+      }
+    },
+    "resources": [
+      {
+        "uri": "https://fetch.test/bundle",
+        "document": {
+          "$ref": "#",
+          "$defs": {
+            "nested": {
+              "$id": "https://id.test/external/",
+              "$ref": "#",
+              "not": {
+                "$ref": "#"
+              }
+            }
+          }
+        }
+      }
+    ],
+    "expected": [
+      {
+        "location": {
+          "source_uri": null,
+          "pointer": "/schemas/document/$ref"
+        },
+        "resource_root": null,
+        "status": "located"
+      },
+      {
+        "location": {
+          "source_uri": null,
+          "pointer": "/schemas/named/$ref"
+        },
+        "resource_root": {
+          "source_uri": null,
+          "pointer": "/schemas/named"
+        },
+        "status": "located"
+      },
+      {
+        "location": {
+          "source_uri": null,
+          "pointer": "/schemas/named/$defs/nested/$dynamicRef"
+        },
+        "resource_root": {
+          "source_uri": null,
+          "pointer": "/schemas/named/$defs/nested"
+        },
+        "status": "located"
+      },
+      {
+        "location": {
+          "source_uri": null,
+          "pointer": "/schemas/named/$defs/nested/not/$ref"
+        },
+        "resource_root": {
+          "source_uri": null,
+          "pointer": "/schemas/named/$defs/nested"
+        },
+        "status": "located"
+      },
+      {
+        "location": {
+          "source_uri": null,
+          "pointer": "/schemas/supplied/$ref"
+        },
+        "resource_root": null,
+        "status": "located"
+      },
+      {
+        "location": {
+          "source_uri": "https://fetch.test/bundle",
+          "pointer": "/$ref"
+        },
+        "resource_root": {
+          "source_uri": "https://fetch.test/bundle",
+          "pointer": ""
+        },
+        "status": "located"
+      },
+      {
+        "location": {
+          "source_uri": "https://fetch.test/bundle",
+          "pointer": "/$defs/nested/$ref"
+        },
+        "resource_root": {
+          "source_uri": "https://fetch.test/bundle",
+          "pointer": "/$defs/nested"
+        },
+        "status": "located"
+      },
+      {
+        "location": {
+          "source_uri": "https://fetch.test/bundle",
+          "pointer": "/$defs/nested/not/$ref"
+        },
+        "resource_root": {
+          "source_uri": "https://fetch.test/bundle",
+          "pointer": "/$defs/nested"
+        },
+        "status": "located"
+      }
+    ]
+  },
+  {
+    "name": "invalid and duplicate draft identities stay distinct",
+    "conformant": false,
+    "document": {
+      "operations": {},
+      "schemas": {
+        "a": {
+          "$id": 5,
+          "$ref": "#"
+        },
+        "b": {
+          "$id": "https://id.test/duplicate",
+          "$ref": "#"
+        },
+        "c": {
+          "$id": "https://id.test/duplicate",
+          "$ref": "#"
+        }
+      }
+    },
+    "resources": [],
+    "expected": [
+      {
+        "location": {
+          "source_uri": null,
+          "pointer": "/schemas/a/$ref"
+        },
+        "resource_root": {
+          "source_uri": null,
+          "pointer": "/schemas/a"
+        },
+        "status": "unresolved"
+      },
+      {
+        "location": {
+          "source_uri": null,
+          "pointer": "/schemas/b/$ref"
+        },
+        "resource_root": {
+          "source_uri": null,
+          "pointer": "/schemas/b"
+        },
+        "status": "unresolved"
+      },
+      {
+        "location": {
+          "source_uri": null,
+          "pointer": "/schemas/c/$ref"
+        },
+        "resource_root": {
+          "source_uri": null,
+          "pointer": "/schemas/c"
+        },
+        "status": "unresolved"
+      }
+    ]
+  }
+]

@@ -706,6 +706,7 @@ dependencies = [
  "fancy-regex",
  "fraction",
  "getrandom 0.3.4",
+ "idna",
  "itoa",
  "jsonschema-regex",
  "jsonschema-value",
@@ -907,6 +908,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "openbindings-context"
+version = "0.2.0-alpha.1"
+dependencies = [
+ "openbindings",
+ "serde_json",
+]
+
+[[package]]
 name = "openbindings-http-discovery"
 version = "0.2.0-alpha.1"
 dependencies = [
@@ -914,10 +923,10 @@ dependencies = [
  "flate2",
  "fluent-uri",
  "openbindings",
- "openbindings-interface-synthesis",
  "openbindings-internal-cancellation",
  "openbindings-invocation",
- "openbindings-source-inspection",
+ "openbindings-kind-description",
+ "openbindings-source-pull",
  "reqwest",
  "serde",
  "tokio",
@@ -925,32 +934,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "openbindings-interface-synthesis"
-version = "0.2.0-alpha.1"
-dependencies = [
- "openbindings",
- "openbindings-internal-cancellation",
- "openbindings-internal-interfaces",
- "openbindings-json-schema-evaluator",
- "serde",
- "serde_json",
- "tokio",
-]
-
-[[package]]
 name = "openbindings-internal-cancellation"
 version = "0.2.0-alpha.1"
 dependencies = [
  "openbindings",
-]
-
-[[package]]
-name = "openbindings-internal-interfaces"
-version = "0.2.0-alpha.1"
-dependencies = [
- "openbindings",
- "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -983,8 +970,8 @@ version = "0.2.0-alpha.1"
 dependencies = [
  "futures-core",
  "openbindings",
+ "openbindings-context",
  "openbindings-internal-cancellation",
- "openbindings-internal-interfaces",
  "openbindings-json-schema-evaluator",
  "serde",
  "serde_json",
@@ -999,9 +986,31 @@ dependencies = [
  "openbindings",
  "openbindings-internal-json",
  "openbindings-internal-schema",
- "openbindings-json-schema-evaluator",
+ "openbindings-schema-evaluator-test-support",
  "regex",
+ "regex-automata",
+ "regex-syntax",
  "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "openbindings-kind-description"
+version = "0.2.0-alpha.1"
+dependencies = [
+ "openbindings",
+ "openbindings-context",
+ "openbindings-internal-cancellation",
+ "serde_json",
+]
+
+[[package]]
+name = "openbindings-schema-comparison"
+version = "0.2.0-alpha.1"
+dependencies = [
+ "openbindings",
+ "openbindings-internal-json",
+ "openbindings-internal-schema",
  "serde_json",
 ]
 
@@ -1010,22 +1019,20 @@ name = "openbindings-schema-evaluator-test-support"
 version = "0.2.0-alpha.1"
 dependencies = [
  "openbindings",
- "openbindings-json-schema-evaluator",
  "serde",
  "serde_json",
 ]
 
 [[package]]
-name = "openbindings-source-inspection"
+name = "openbindings-source-pull"
 version = "0.2.0-alpha.1"
 dependencies = [
  "openbindings",
+ "openbindings-context",
  "openbindings-internal-cancellation",
- "openbindings-internal-interfaces",
- "openbindings-json-schema-evaluator",
- "serde",
+ "openbindings-internal-json",
+ "openbindings-schema-comparison",
  "serde_json",
- "tokio",
 ]
 
 [[package]]

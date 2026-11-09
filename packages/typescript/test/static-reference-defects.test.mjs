@@ -19,12 +19,17 @@ const cases = (
     ),
   )
 ).flat();
-function subset(expected, actual, id) {
-  if (expected && typeof expected === "object") {
-    for (const [key, value] of Object.entries(expected))
-      subset(value, actual?.[key], id);
-  } else assert.deepEqual(actual, expected, id);
-}
+const admission = JSON.parse(
+  await readFile(new URL("reference-admission.json", input), "utf8"),
+);
+const oracle = new Map(
+  JSON.parse(
+    await readFile(new URL("reference-current-oracle.json", input), "utf8"),
+  ).cases.map((c) => [c.id, c]),
+);
+assert.equal(oracle.size, 2348);
+const negatives = new Map(admission.cases.map((c) => [c.id, c]));
+assert.equal(negatives.size, 194);
 test("static reference matrix and concrete completions through Wasm", async () => {
   const receipt = [];
   for (const c of cases) {
@@ -37,11 +42,40 @@ test("static reference matrix and concrete completions through Wasm", async () =
       ),
     );
     assert.equal(parsed.status, "parsed", c.id);
+    const assessed = parsed.value.validate();
+    if (assessed.status !== "conformant") {
+      try {
+        const negative = negatives.get(c.id);
+        assert.ok(negative, "Unexpected admission refusal: " + c.id);
+        assert.deepEqual(c, negative.historical_case, c.id);
+        assert.equal(assessed.status, "report", c.id);
+        assert.equal(assessed.report.conclusion, "non-conformant", c.id);
+        for (const rule of negative.required_violated_rules)
+          assert.equal(assessed.report.evidence[rule], "violated", c.id);
+        receipt.push({
+          id: c.id,
+          actual: {
+            stage: "admission",
+            outcome: "non-conformant",
+            evidence: assessed.report.evidence,
+          },
+        });
+      } finally {
+        parsed.value.dispose();
+      }
+      continue;
+    }
+    assessed.document.dispose();
+    assert.equal(
+      negatives.has(c.id),
+      false,
+      "Expected admission refusal: " + c.id,
+    );
     const values = (c.resources ?? []).map((r) => [
       r.uri,
       sdk.parseJson(JSON.stringify(r.schema)).value,
     ]);
-    const resources = new sdk.SchemaResources(values);
+    const resources = new sdk.ExternalSchemas(values);
     let contract;
     try {
       const limits = Object.fromEntries(
@@ -51,11 +85,11 @@ test("static reference matrix and concrete completions through Wasm", async () =
         ]),
       );
       const setup = prepareInput(parsed.value, "op", { resources, limits });
-      contract = setup.valueContract;
+      contract = setup.schema;
       const result =
         setup.status === "ready"
-          ? contract.validate(c.value)
-          : { status: "no-verdict", detail: setup.detail };
+          ? contract.evaluate(c.value)
+          : { status: "refused", failure: setup.failure };
       const actual = {
         stage: setup.status === "ready" ? "ready" : "preparation",
         outcome: {
@@ -63,29 +97,54 @@ test("static reference matrix and concrete completions through Wasm", async () =
           fails: "F",
           undefined: "undefined",
           "no-verdict": "N",
+          refused: "refused",
         }[result.status],
       };
+      if (result.failure) {
+        actual.failure = {
+          ...result.failure,
+          origin: result.failure.origin
+            ? {
+                source_uri: result.failure.origin.sourceUri,
+                pointer: result.failure.origin.pointer,
+              }
+            : null,
+        };
+      }
       if (result.detail)
         actual.detail = {
           reason: result.detail.reason,
           code: result.detail.code,
           location: result.detail.location
             ? {
-                resource: result.detail.location.resource ?? null,
+                resource: result.detail.location.sourceUri ?? null,
                 pointer: result.detail.location.pointer,
               }
             : null,
         };
-      const expected = structuredClone(c.expected);
-      if (expected.outcome === "N" && expected.detail?.reason === "undefined") {
-        expected.outcome = "undefined";
-        delete expected.detail.reason;
-      }
+      const required = oracle.get(c.id).required;
       if (result.status === "undefined") {
         assert.equal("reason" in result.detail, false, c.id);
         assert.equal(typeof result.detail.message, "string", c.id);
       }
-      subset(expected, actual, c.id);
+      const matched =
+        required === "S" || required === "F"
+          ? actual.stage === "ready" && actual.outcome === required
+          : required === "U"
+            ? actual.stage === "ready" && actual.outcome === "undefined"
+            : required === "external"
+              ? actual.outcome === "N" &&
+                actual.detail.reason === "resource-unavailable"
+              : required === "limit"
+                ? (actual.outcome === "N" &&
+                    actual.detail.reason === "limit-exceeded") ||
+                  (actual.outcome === "refused" &&
+                    actual.failure.kind === "limit")
+                : false;
+      assert.ok(
+        matched,
+        `${c.id}: required ${required}, observed ${JSON.stringify(actual)}`,
+      );
       receipt.push({ id: c.id, actual });
     } finally {
       contract?.dispose();

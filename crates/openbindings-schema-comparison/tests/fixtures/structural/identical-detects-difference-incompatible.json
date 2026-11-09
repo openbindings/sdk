@@ -1,0 +1,33 @@
+{
+  "version": "1.0",
+  "description": "Identical mode reports schemas whose canonical forms differ.",
+  "mode": "identical",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "differentTypes": {
+        "input": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "differentTypes": {
+        "input": {
+          "type": "integer"
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "incompatible"
+    }
+  }
+}

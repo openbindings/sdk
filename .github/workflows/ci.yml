@@ -19,7 +19,9 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    # Fresh macOS and Windows builds reached release-test linking at the former
+    # 30-minute cap. Preserve the complete verifier and its runtime limits.
+    timeout-minutes: ${{ matrix.os == 'ubuntu-latest' && 30 || 45 }}
     env:
       CARGO_TARGET_DIR: ${{ github.workspace }}/target
     steps:
@@ -42,7 +44,15 @@ jobs:
         with:
           toolchain: ${{ steps.rust-version.outputs.version }}
           components: rustfmt, clippy
-      - run: python tools/verify.py
+      - name: Verify workspace and external Rust guide walkthrough
+        run: python tools/verify.py
+      - name: Preserve evaluator replay receipt
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: evaluator-replay-${{ matrix.os }}
+          path: target/qualification/evaluator-replay.json
+          if-no-files-found: warn
       - name: Verify discovery downstream features and decoded bodies
         if: matrix.os == 'ubuntu-latest'
         run: |
@@ -54,6 +64,13 @@ jobs:
         run: |
           cargo build --locked --manifest-path tools/no-io/Cargo.toml
           python tools/verify-no-io.py --binary target/debug/sdk-no-io --output target/no-io-receipt
+      - name: Preserve core acquisition boundary receipt
+        if: always() && matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: no-io-receipt-${{ matrix.os }}
+          path: target/no-io-receipt
+          if-no-files-found: warn
   package:
     env:
       CARGO_TARGET_DIR: ${{ github.workspace }}/target
@@ -87,13 +104,14 @@ jobs:
         run: |
           cargo test --locked -p openbindings --test document_stack
           cargo test --locked --release -p openbindings-json-schema-evaluator --test pattern_stack --test evaluation_stack --test walk_stack
+          cargo test --locked --release -p openbindings-json-schema-evaluator --lib -- --exact compiled_qualification::recursive_compiled_boundary_runs_on_qualified_native_threads compiled_qualification::ordinary_recursive_boundaries_run_on_qualified_native_threads compiled_qualification::productive_scalar_recursive_boundaries_fit_qualified_threads compiled_qualification::wasm_depth_walk_bounds_match_native_selection compiled_qualification::expansion::product_default_large_diamonds_finish_without_backend_entry
       - name: Check out the SDK's declared specification
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: openbindings/spec
-          ref: 30416ef1ca626e58eb8c383a0c71422a68f9243f
+          ref: c1419c9fc3ae5a00c2b83da710c11bf67dab7934
           path: .ci-spec
-      - run: node tools/verify-spec.mjs . .ci-spec 30416ef1ca626e58eb8c383a0c71422a68f9243f --self-test
+      - run: node tools/verify-spec.mjs . .ci-spec c1419c9fc3ae5a00c2b83da710c11bf67dab7934 --self-test
       - name: Remove temporary specification checkout before clean-candidate checks
         run: python -c "import shutil; shutil.rmtree('.ci-spec')"
       - run: cargo install wasm-bindgen-cli --version 0.2.129 --locked
@@ -110,9 +128,8 @@ jobs:
         run: |
           cargo build --locked --manifest-path tools/conformance-observer/Cargo.toml
           python tools/qualification/replay/check-container-findings.py --binary target/debug/sdk-production-observer
-      - run: python tools/verify-source-inspection.py --archives --wasm
-      - run: python tools/verify-interface-synthesis.py --archives --wasm
-      - run: python tools/verify-binding-invocation.py --archives --wasm
+      - run: python tools/verify-source-pull.py --archives --wasm
+      - run: python tools/verify-invocation.py --archives --wasm
       - name: Hand the built package to the browser job
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

@@ -1,0 +1,12 @@
+[package]
+name = "invoker-only-consumer"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.88"
+publish = false
+
+[workspace]
+
+[dependencies]
+openbindings = "=0.2.0-alpha.1"
+openbindings-invocation = "=0.2.0-alpha.1"

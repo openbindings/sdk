@@ -25,7 +25,7 @@ def fixtures():
     add('decimal-array', '{"type":"array","items":{"multipleOf":0.1,"minimum":0}}', '['+','.join(f'{i//10}.{i%10}' for i in range(5000))+']')
     add('wide-integers', '{"type":"array","items":{"minimum":9007199254740993}}', '[9007199254740993,9223372036854775807,9223372036854775808]')
     add('wide-adjacent', '{"minimum":9007199254740993}', '9007199254740992', 'fails')
-    add('arithmetic-stop', '{"multipleOf":3}', '1e'+'9'*5000, 'no-verdict')['expected']['code'] = 'numeric-arithmetic-limit'
+    add('arithmetic-stop', '{"multipleOf":3}', '1e'+'9'*5000, 'no-verdict')['expected']['code'] = 'multiple-of-arithmetic-limit'
     add('huge-exponent', '{"minimum":1e400}', '10e399')
     add('mixed-equality', '{"const":[-0,9223372036854775807,1e400]}', '[0.0,9223372036854775807.0,10e399]')
     add('unique-array', dict(uniqueItems=True), array)
@@ -60,13 +60,14 @@ def fixtures():
         modes=('compile', 'context', 'eval', 'full'))
     # A value that reaches an unsupplied resource gives no verdict naming it;
     # a reference that identifies no schema refuses preparation, and a refused
-    # preparation gives no verdict for any value.
+    # preparation is observed separately from every value outcome.
+    # The required per-value Undefined case remains in the semantic gate.
     add('missing-resource', {'$ref': 'https://benchmark.invalid/missing'}, '1', 'no-verdict', modes=('cold', 'compile', 'context', 'eval', 'full'))
     add('missing-independent', {'anyOf': [True, {'$ref': 'https://benchmark.invalid/missing'}]}, '1')
-    add('undefined-pointer', {'$ref': '#/$defs/absent'}, '1', 'no-verdict')
+    add('undefined-pointer', {'$ref': '#/$defs/absent'}, '1', 'undefined')
     recursive = {'$defs': {'node': {'anyOf': [{'type': 'integer'}, {'type': 'array', 'items': {'$ref': '#/$defs/node'}}]}}, '$ref': '#/$defs/node'}
     add('deep', recursive, '['*32+'0'+']'*32)
-    add('depth-stop', recursive, '['*32+'0'+']'*32, 'no-verdict', limits=dict(evaluation_depth=8))
+    add('depth-stop', recursive, '['*32+'0'+']'*32, 'satisfies', limits=dict(evaluation_depth=8))
     add('work-stop', {'type': 'array', 'items': {'type': 'integer'}}, array, 'no-verdict', limits=dict(evaluation_steps=16))
     # Patterns match in time linear in the string, so a megabyte string is decided.
     add('regex-failure', dict(pattern='[A-Z]+[0-9]+'), compact('a'*65536), 'fails')
@@ -74,22 +75,24 @@ def fixtures():
     add('cancelled', True, '1', 'no-verdict', cancelled=True)
     add('source-diagnostics', '{"maximum":9223372036854775807}', '9223372036854775808', 'fails', upstream=True)
     for name, code in [('missing-resource', 'resource-unavailable'),
-                       ('undefined-pointer', 'non-schema-target'), ('depth-stop', 'evaluation-depth-limit'),
                        ('work-stop', 'evaluation-work-limit'), ('cancelled', 'caller-cancelled')]:
         rows[name]['expected']['code'] = code
+    rows['undefined-pointer']['expected'].update(code='semantic-dependence', detail=dict(
+        code='semantic-dependence',
+        location=dict(pointer='/$ref', resource='https://benchmark.invalid/root'),
+        message="the value's validity depends on a known undefined schema result"))
     rows['missing-resource']['expected']['detail'] = dict(code='resource-unavailable',
-        location=dict(pointer='', resource='https://benchmark.invalid/missing'),
-        message='evaluation reached a resource that was not supplied', reason='resource-unavailable')
+        location=dict(pointer='/$ref', resource='https://benchmark.invalid/root'),
+        message='the value is not settled without external schema content', reason='resource-unavailable')
     rows['work-stop']['expected']['detail'] = dict(code='evaluation-work-limit', location=None,
-        message='evaluation work limit reached', reason='limit-exceeded')
-    # The refusal states its arithmetic and the setting to raise.
-    rows['depth-stop']['expected']['detail'] = dict(code='evaluation-depth-limit', location=None,
-        message='this value nests more than 0 levels, the deepest this value contract evaluates within the '
-                '8 schema evaluations its 2 KiB stack_bytes holds at 256 bytes each; raise stack_bytes '
-                '(stackBytes in TypeScript)', reason='limit-exceeded')
-    rows['source-diagnostics']['expected'].update(problems_complete=False, problems=[dict(
+        message='semantic analysis exceeded its configured resource allowance', reason='limit-exceeded')
+    # The frozen evaluation_depth request has no current SDK counterpart. The
+    # finite value now satisfies; the matched comparison excludes this changed
+    # policy outcome from equivalent-work timing and memory decisions.
+    rows['source-diagnostics']['expected'].update(problems_complete=True, problems=[dict(
         code='maximum', instance_pointer='',
-        message='number exceeds the inclusive upper bound; inspect maximum at the schema location',
+        details=dict(bound='9223372036854775807', kind='numeric-bound'),
+        message='value fails this schema assertion',
         schema_location=dict(pointer='/maximum', resource='https://benchmark.invalid/root'))])
     # Fixed text includes escaped Unicode so conformant text access does work.
     for count in [1, 50, 1000]:
@@ -115,24 +118,30 @@ def fixtures():
             expected=dict(status='conformant', finding_count=0), modes=['document'])
         rows[f'read-{count}'] = dict(document=compact(document),
             expected=dict(status='conformant', finding_count=0, reads=reads), modes=['read'])
+    for name, row in rows.items():
+        if name.startswith(('document-', 'read-')):
+            row['expected']['report'] = dict(
+                release='0.2.0', revision='c1419c9fc3ae5a00c2b83da710c11bf67dab7934',
+                conclusion='conformant', evidence={f'OBI-{n:02d}': 'met' for n in range(1, 15)},
+                findings=[], findings_truncated=False)
     rows['document-invalid'] = dict(document=compact(dict(openbindings='0.2.0', operations={
         'bad name': {'input': None, 'tags': 42},
         'other': {'aliases': ['same']}, 'third': {'aliases': ['same']}})),
         expected=dict(status='non-conformant', finding_count=6), modes=['document'])
     # The complete report: each finding's rule, code, original location and
     # message, so a changed message or location is a declared outcome change.
-    def finding(rule, code, pointer, offset, message):
-        return dict(rule=rule, status='violated', code=code, message=message,
+    def finding(rule, code, pointer, offset, message, **facts):
+        return dict(**facts,rule=rule, status='violated', code=code, message=message,
                     location=dict(pointer=pointer, byte_offset=offset, line=1, byte_column=offset + 1))
     fixed = 'value violates the fixed normative schema'
     rows['document-invalid']['expected']['report'] = dict(
-        release='0.2.0', revision='30416ef1ca626e58eb8c383a0c71422a68f9243f',
+        release='0.2.0', revision='c1419c9fc3ae5a00c2b83da710c11bf67dab7934',
         conclusion='non-conformant',
-        evidence={f'OBI-{rule:02d}': 'violated' if rule in (2, 4, 5, 10) else 'met' for rule in range(1, 14)},
+        evidence={f'OBI-{rule:02d}': 'violated' if rule in (2, 4, 5, 10) else 'met' for rule in range(1, 15)},
         findings=[
-            finding('OBI-02', 'schema-mismatch', '/operations/bad name', 38, fixed),
-            finding('OBI-02', 'schema-mismatch', '/operations/bad name/input', 58, fixed),
-            finding('OBI-02', 'schema-mismatch', '/operations/bad name/tags', 70, fixed),
+            finding('OBI-02', 'schema-mismatch', '/operations/bad name', 38, fixed, keyword='pattern', schema=dict(source_uri='https://openbindings.com/schema/openbindings-0.2.0.json', pointer='/properties/operations/propertyNames/pattern')),
+            finding('OBI-02', 'schema-mismatch', '/operations/bad name/input', 58, fixed, keyword='anyOf', schema=dict(source_uri='https://openbindings.com/schema/openbindings-0.2.0.json', pointer='/$defs/JSONSchema/anyOf')),
+            finding('OBI-02', 'schema-mismatch', '/operations/bad name/tags', 70, fixed, keyword='type', schema=dict(source_uri='https://openbindings.com/schema/openbindings-0.2.0.json', pointer='/$defs/Operation/properties/tags/type'), details=dict(kind='type', expected=['array'])),
             finding('OBI-04', 'name-grammar', '/operations/bad name', 38,
                     'a name must be a nonempty ASCII string: start with a letter, digit or underscore; '
                     'then use letters, digits, underscores, dots or hyphens'),
@@ -143,13 +152,14 @@ def fixtures():
         ],
         findings_truncated=False)
     add('explain-one', {'type': 'array', 'items': {'type': 'integer'}}, '["bad"]',
-        'fails', modes=('explain',))['expected'].update(problem_count=1, problems_complete=False,
+        'fails', modes=('explain',))['expected'].update(problem_count=1, problems_complete=True,
         first_problem=dict(code='type', instance_pointer='/0',
+            details=dict(expected=['integer'], kind='type'),
             schema_location=dict(pointer='/items/type', resource='https://benchmark.invalid/root'),
-            message='expected JSON type: integer'))
-    # Sixty-four independent violations exercise a broad failing value. The
-    # current evaluator reports its first problem only, never a fabricated list.
+            message='value fails this schema assertion'))
+    # Sixty-four independent violations exercise a broad failing value; explain
+    # reports every one of them, up to its limit of 100 problems.
     add('explain-many', {'type': 'array', 'items': {'type': 'integer'}},
         compact(['bad'] * 64), 'fails', modes=('explain',))['expected'].update(
-            rows['explain-one']['expected'])
+            rows['explain-one']['expected'], problem_count=64)
     return rows

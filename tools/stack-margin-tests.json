@@ -15,7 +15,7 @@
       "names": [
         "patterns_at_the_default_depth_prepare_and_check_on_a_small_stack"
       ],
-      "reason": "Prepares value contracts whose patterns nest to the default pattern_depth, and checks values against them, on a 256 KiB thread stack. Release builds need at most 96 KiB; unoptimized pattern compilation needs up to 1 MiB, so debug runs ignore it on every host and tools/verify.py runs it in release builds."
+      "reason": "Prepares value schemas whose patterns nest to the default pattern_depth, and checks values against them, on a 256 KiB thread stack. Release builds need at most 96 KiB; unoptimized pattern compilation needs up to 1 MiB, so debug runs ignore it on every host and tools/verify.py runs it in release builds."
     },
     {
       "source": "crates/openbindings-json-schema-evaluator/tests/evaluation_stack.rs",
@@ -23,7 +23,7 @@
       "names": [
         "each_stack_admits_only_values_it_evaluates"
       ],
-      "reason": "Prepares recursive contracts through every applicator family, unevaluated keywords included, and checks and explains values as deep as the evaluator admits on thread stacks of 192 KiB, 256 KiB and 1 MiB, with stack_bytes set to each. Unoptimized evaluation frames exceed this margin, so debug runs ignore it on every host and tools/verify.py runs it in release builds."
+      "reason": "Checks the preserved 39 recursive shape workloads at the former depth boundary and one level beyond it on actual 192 KiB, 256 KiB and 1 MiB threads. The original evaluator uses heap frames and no public stack-size option. Debug runs ignore this build-specific qualification; tools/verify.py runs it in release builds."
     },
     {
       "source": "crates/openbindings-json-schema-evaluator/tests/walk_stack.rs",
@@ -31,7 +31,7 @@
       "names": [
         "the_longest_admitted_walks_prepare_on_a_stack_of_the_size_given"
       ],
-      "reason": "Prepares the longest unevaluated annotation walk of each kind the walk limit admits, below enclosing schemas, on thread stacks of 192 KiB, 256 KiB and 512 KiB with stack_bytes set to each and a fifth of each already in use. Release builds still prepare each at 256 KiB with up to 57 KiB already in use on Windows, 91.5 KiB on Linux and 107.5 KiB on macOS; unoptimized compilation frames exceed this margin, so debug runs ignore it on every host and tools/verify.py runs it in release builds."
+      "reason": "Prepares the preserved annotation-walk workloads at the former boundary and one level beyond it on actual 192 KiB, 256 KiB and 512 KiB threads, with one fifth already used by the caller. No public stack-size option or projected-walk limit remains. Debug runs ignore this build-specific qualification; tools/verify.py runs it in release builds."
     }
   ]
 }

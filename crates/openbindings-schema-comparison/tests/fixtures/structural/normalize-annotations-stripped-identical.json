@@ -1,0 +1,74 @@
+{
+  "version": "1.0",
+  "description": "Annotation keywords and x- extensions are stripped during normalization: schemas differing only in them are identical.",
+  "mode": "identical",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "titleStripped": {
+        "input": {
+          "type": "string",
+          "title": "Name",
+          "description": "User name"
+        }
+      },
+      "defaultsStripped": {
+        "input": {
+          "type": "integer",
+          "default": 0,
+          "deprecated": true,
+          "examples": [
+            1,
+            2
+          ]
+        }
+      },
+      "readWriteStripped": {
+        "input": {
+          "type": "string",
+          "readOnly": true,
+          "writeOnly": false
+        }
+      },
+      "extensionsStripped": {
+        "input": {
+          "type": "string",
+          "x-go-name": "Foo"
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "titleStripped": {
+        "input": {
+          "type": "string"
+        }
+      },
+      "defaultsStripped": {
+        "input": {
+          "type": "integer"
+        }
+      },
+      "readWriteStripped": {
+        "input": {
+          "type": "string"
+        }
+      },
+      "extensionsStripped": {
+        "input": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "compatible"
+    }
+  }
+}

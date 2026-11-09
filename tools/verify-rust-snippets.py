@@ -1,4 +1,4 @@
-"""Test repository prose with rustdoc and run the two standalone first-use fences."""
+"""Test repository prose, run standalone fences and verify the external walkthrough."""
 from pathlib import Path
 import json
 import os
@@ -10,13 +10,14 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[1]
 SNIPPETS = [
     (ROOT / 'docs/rust-first-use.md', 'rust_first_use'),
+    (ROOT / 'docs/document-to-typed-result.md', 'document_call'),
     (ROOT / 'crates/openbindings-json-schema-evaluator/README.md', 'evaluator_readme'),
 ]
-CRATES = ['openbindings', 'openbindings_json_schema_evaluator', 'openbindings_invocation', 'serde_json', 'tokio']
+CRATES = ['openbindings', 'openbindings_json_schema_evaluator', 'openbindings_invocation', 'serde', 'serde_json', 'tokio']
 
 
 def read_snippet(path):
-    # These two documents use top-level fences. Track every language's fence so
+    # These documents use top-level fences. Track every language's fence so
     # a Rust-looking line inside another block cannot become an executable example.
     snippets = []
     fence = None
@@ -47,17 +48,35 @@ def read_snippet(path):
     return snippets[0]
 
 
+def same_walkthrough(main_rs, fence):
+    # A Windows checkout may give either file CRLF line endings. The walkthrough
+    # must be the same program as the example crate, whatever its line endings.
+    def lf(text):
+        return text.replace(b'\r\n', b'\n')
+    return lf(main_rs) == lf(fence) + b'\n#[cfg(test)]\nmod tests;\n'
+
+
 def run(args, **kwargs):
     print('+ ' + ' '.join(map(str, args)), flush=True)
     return subprocess.run(list(map(str, args)), cwd=ROOT, check=True, **kwargs)
 
 
 def main():
-    # Require both documented examples before building; a deleted fence is a failure.
+    # Require every documented example before building; a deleted fence is a failure.
     sources = [(path, name, read_snippet(path)) for path, name in SNIPPETS]
-    # Reuse the locked Cargo graph rather than resolve a separate consumer manifest.
+    walkthrough = ROOT / 'examples/document-call'
+    source = next(source for _, name, source in sources if name == 'document_call')
+    if not same_walkthrough((walkthrough / 'src/main.rs').read_bytes(), source):
+        raise ValueError('Walkthrough fence differs from examples/document-call/src/main.rs')
+    env = {**os.environ, 'CARGO_TARGET_DIR': str(Path(os.environ.get('CARGO_TARGET_DIR', ROOT / 'target')).resolve())}
+    manifest = walkthrough / 'Cargo.toml'
+    run(['cargo', 'fmt', '--manifest-path', manifest, '--all', '--check'])
+    run(['cargo', 'test', '--offline', '--locked', '--manifest-path', manifest], env=env)
+    run(['cargo', 'clippy', '--offline', '--locked', '--manifest-path', manifest,
+         '--all-targets', '--', '-D', 'warnings'], env=env)
+    # Reuse the workspace's locked Cargo graph for standalone prose compilation.
     build = run([
-        'cargo', 'build', '--locked', '--tests', '-p', 'openbindings-invocation',
+        'cargo', 'build', '--offline', '--locked', '--tests', '-p', 'openbindings-invocation',
         '-p', 'openbindings-json-schema-evaluator',
         '--message-format=json-render-diagnostics',
     ], stdout=subprocess.PIPE, text=True)
@@ -74,7 +93,9 @@ def main():
         raise RuntimeError(f'Cargo did not report snippet dependencies: {libraries}')
     # Repository prose is not included from outside an archived crate. Test it
     # here with the same locked dependencies, including every Rust fence.
-    for document in ['README.md', 'docs/rust-first-use.md', 'docs/invocation.md']:
+    # The discovery README is that crate's docs, so its client example runs as a
+    # Cargo doctest with the native feature, linked the way Cargo links it.
+    for document in ['README.md', 'docs/rust-first-use.md', 'docs/document-to-typed-result.md', 'docs/invocation.md', 'docs/schema-evaluators.md']:
         args = [os.environ.get('RUSTDOC', 'rustdoc'), '--test', '--edition=2024', ROOT / document]
         for crate, library in libraries.items():
             args += ['--extern', f'{crate}={library}', '-L', f'dependency={library.parent}']
@@ -91,8 +112,13 @@ def main():
             run(args)
             result = run([executable], stdout=subprocess.PIPE, text=True)
             print(result.stdout, end='')
-            if name == 'evaluator_readme' and result.stdout != 'input satisfies the input contract\n':
-                raise AssertionError('Evaluator README example must demonstrate a satisfied input')
+            if name == 'document_call' and result.stdout != 'count: 7\n':
+                raise AssertionError('Walkthrough must return the typed reply after completion')
+            if name == 'evaluator_readme' and result.stdout != (
+                'fails; diagnostics complete: true\n'
+                'instance="" code=type details={"kind":"type","expected":["string"]}\n'
+            ):
+                raise AssertionError('Evaluator README must show a failure pointer, code and details')
 
 
 if __name__ == '__main__':

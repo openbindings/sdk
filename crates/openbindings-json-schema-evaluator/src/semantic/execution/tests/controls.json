@@ -1,0 +1,392 @@
+{
+  "scope": "Independent initial-frame control set; current refusals on required deep cases remain failures to restore, not adopted expectations. Eager-limit rows explicitly characterize the first mechanical scope.",
+  "rows": [
+    {
+      "id": "mixed-1-S",
+      "schema": "{\"$defs\":{\"node\":{\"anyOf\":[{\"type\":\"integer\"},{\"type\":\"array\",\"items\":{\"$ref\":\"#/$defs/node\"}},{\"type\":\"object\",\"additionalProperties\":{\"$ref\":\"#/$defs/node\"}}]}},\"$ref\":\"#/$defs/node\"}",
+      "value": "[1]",
+      "external": true,
+      "required": "S",
+      "gate": "restore explicit-frame depth"
+    },
+    {
+      "id": "mixed-1-F",
+      "schema": "{\"$defs\":{\"node\":{\"anyOf\":[{\"type\":\"integer\"},{\"type\":\"array\",\"items\":{\"$ref\":\"#/$defs/node\"}},{\"type\":\"object\",\"additionalProperties\":{\"$ref\":\"#/$defs/node\"}}]}},\"$ref\":\"#/$defs/node\"}",
+      "value": "[false]",
+      "external": true,
+      "required": "F",
+      "gate": "restore explicit-frame depth"
+    },
+    {
+      "id": "mixed-8-S",
+      "schema": "{\"$defs\":{\"node\":{\"anyOf\":[{\"type\":\"integer\"},{\"type\":\"array\",\"items\":{\"$ref\":\"#/$defs/node\"}},{\"type\":\"object\",\"additionalProperties\":{\"$ref\":\"#/$defs/node\"}}]}},\"$ref\":\"#/$defs/node\"}",
+      "value": "{\"x\":[{\"x\":[{\"x\":[{\"x\":[1]}]}]}]}",
+      "external": true,
+      "required": "S",
+      "gate": "restore explicit-frame depth"
+    },
+    {
+      "id": "mixed-8-F",
+      "schema": "{\"$defs\":{\"node\":{\"anyOf\":[{\"type\":\"integer\"},{\"type\":\"array\",\"items\":{\"$ref\":\"#/$defs/node\"}},{\"type\":\"object\",\"additionalProperties\":{\"$ref\":\"#/$defs/node\"}}]}},\"$ref\":\"#/$defs/node\"}",
+      "value": "{\"x\":[{\"x\":[{\"x\":[{\"x\":[false]}]}]}]}",
+      "external": true,
+      "required": "F",
+      "gate": "restore explicit-frame depth"
+    },
+    {
+      "id": "mixed-32-S",
+      "schema": "{\"$defs\":{\"node\":{\"anyOf\":[{\"type\":\"integer\"},{\"type\":\"array\",\"items\":{\"$ref\":\"#/$defs/node\"}},{\"type\":\"object\",\"additionalProperties\":{\"$ref\":\"#/$defs/node\"}}]}},\"$ref\":\"#/$defs/node\"}",
+      "value": "{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[1]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}",
+      "external": true,
+      "required": "S",
+      "gate": "restore explicit-frame depth"
+    },
+    {
+      "id": "mixed-32-F",
+      "schema": "{\"$defs\":{\"node\":{\"anyOf\":[{\"type\":\"integer\"},{\"type\":\"array\",\"items\":{\"$ref\":\"#/$defs/node\"}},{\"type\":\"object\",\"additionalProperties\":{\"$ref\":\"#/$defs/node\"}}]}},\"$ref\":\"#/$defs/node\"}",
+      "value": "{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[false]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}",
+      "external": true,
+      "required": "F",
+      "gate": "restore explicit-frame depth"
+    },
+    {
+      "id": "mixed-64-S",
+      "schema": "{\"$defs\":{\"node\":{\"anyOf\":[{\"type\":\"integer\"},{\"type\":\"array\",\"items\":{\"$ref\":\"#/$defs/node\"}},{\"type\":\"object\",\"additionalProperties\":{\"$ref\":\"#/$defs/node\"}}]}},\"$ref\":\"#/$defs/node\"}",
+      "value": "{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[1]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}",
+      "external": true,
+      "required": "S",
+      "gate": "restore explicit-frame depth"
+    },
+    {
+      "id": "mixed-64-F",
+      "schema": "{\"$defs\":{\"node\":{\"anyOf\":[{\"type\":\"integer\"},{\"type\":\"array\",\"items\":{\"$ref\":\"#/$defs/node\"}},{\"type\":\"object\",\"additionalProperties\":{\"$ref\":\"#/$defs/node\"}}]}},\"$ref\":\"#/$defs/node\"}",
+      "value": "{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[{\"x\":[false]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}",
+      "external": true,
+      "required": "F",
+      "gate": "restore explicit-frame depth"
+    },
+    {
+      "id": "one-of-exactly-one",
+      "schema": "{\"oneOf\":[{\"type\":\"integer\"},{\"minimum\":0}]}",
+      "value": "-1",
+      "external": true,
+      "required": "S"
+    },
+    {
+      "id": "one-of-two",
+      "schema": "{\"oneOf\":[{\"type\":\"integer\"},{\"minimum\":0}]}",
+      "value": "1",
+      "external": true,
+      "required": "F"
+    },
+    {
+      "id": "property-name-not-value",
+      "schema": "{\"propertyNames\":{\"const\":\"x\"}}",
+      "value": "{\"x\":42}",
+      "external": true,
+      "required": "S"
+    },
+    {
+      "id": "property-value-not-name",
+      "schema": "{\"propertyNames\":{\"const\":\"x\"}}",
+      "value": "{\"y\":\"x\"}",
+      "external": true,
+      "required": "F"
+    },
+    {
+      "id": "exact-name-unpaired",
+      "schema": "{\"propertyNames\":{\"const\":\"\\ud800\"}}",
+      "value": "{\"\\ud800\":42}",
+      "external": true,
+      "required": "S"
+    },
+    {
+      "id": "duplicate-input-members",
+      "schema": "true",
+      "value": "{\"x\":1,\"x\":2}",
+      "external": true,
+      "required": "N:UnsupportedCapability"
+    },
+    {
+      "id": "failed-branch-annotation",
+      "schema": "{\"anyOf\":[true,{\"allOf\":[{\"properties\":{\"x\":true}},false]}],\"unevaluatedProperties\":false}",
+      "value": "{\"x\":1}",
+      "external": true,
+      "required": "F"
+    },
+    {
+      "id": "valid-branch-annotation",
+      "schema": "{\"anyOf\":[true,{\"properties\":{\"x\":true}}],\"unevaluatedProperties\":false}",
+      "value": "{\"x\":1}",
+      "external": true,
+      "required": "S"
+    },
+    {
+      "id": "not-discards-annotations",
+      "schema": "{\"anyOf\":[true,{\"not\":{\"properties\":{\"x\":true}}}],\"unevaluatedProperties\":false}",
+      "value": "{\"x\":1}",
+      "external": true,
+      "required": "F"
+    },
+    {
+      "id": "contains-zero-maximum",
+      "schema": "{\"contains\":{\"type\":\"integer\"},\"minContains\":0,\"maxContains\":0}",
+      "value": "[\"x\"]",
+      "external": true,
+      "required": "S"
+    },
+    {
+      "id": "contains-maximum-violation",
+      "schema": "{\"contains\":{\"type\":\"integer\"},\"minContains\":0,\"maxContains\":0}",
+      "value": "[1]",
+      "external": true,
+      "required": "F"
+    },
+    {
+      "id": "prefix-rest-annotation",
+      "schema": "{\"prefixItems\":[{\"type\":\"integer\"}],\"items\":{\"type\":\"string\"},\"unevaluatedItems\":false}",
+      "value": "[1,\"x\"]",
+      "external": true,
+      "required": "S"
+    },
+    {
+      "id": "prefix-rest-invalid",
+      "schema": "{\"prefixItems\":[{\"type\":\"integer\"}],\"items\":{\"type\":\"string\"},\"unevaluatedItems\":false}",
+      "value": "[1,2]",
+      "external": true,
+      "required": "F"
+    },
+    {
+      "id": "same-node-distinct-scope-False",
+      "schema": "{\"allOf\":[{\"$ref\":\"https://scope.test/a\"},{\"$ref\":\"https://scope.test/b\"}]}",
+      "value": "1",
+      "external": true,
+      "required": "F",
+      "resources": {
+        "https://scope.test/default": "{\"$id\":\"https://scope.test/default\",\"$defs\":{\"fallback\":{\"$dynamicAnchor\":\"x\",\"type\":\"null\"}}}",
+        "https://scope.test/target": "{\"$id\":\"https://scope.test/target\",\"$dynamicRef\":\"https://scope.test/default#x\"}",
+        "https://scope.test/a": "{\"$id\":\"https://scope.test/a\",\"$defs\":{\"choice\":{\"$dynamicAnchor\":\"x\",\"type\":\"integer\"}},\"$ref\":\"https://scope.test/target\"}",
+        "https://scope.test/b": "{\"$id\":\"https://scope.test/b\",\"$defs\":{\"choice\":{\"$dynamicAnchor\":\"x\",\"type\":\"string\"}},\"$ref\":\"https://scope.test/target\"}"
+      }
+    },
+    {
+      "id": "same-node-distinct-scope-any-False",
+      "schema": "{\"anyOf\":[{\"$ref\":\"https://scope.test/a\"},{\"$ref\":\"https://scope.test/b\"}]}",
+      "value": "1",
+      "external": true,
+      "required": "S",
+      "resources": {
+        "https://scope.test/default": "{\"$id\":\"https://scope.test/default\",\"$defs\":{\"fallback\":{\"$dynamicAnchor\":\"x\",\"type\":\"null\"}}}",
+        "https://scope.test/target": "{\"$id\":\"https://scope.test/target\",\"$dynamicRef\":\"https://scope.test/default#x\"}",
+        "https://scope.test/a": "{\"$id\":\"https://scope.test/a\",\"$defs\":{\"choice\":{\"$dynamicAnchor\":\"x\",\"type\":\"integer\"}},\"$ref\":\"https://scope.test/target\"}",
+        "https://scope.test/b": "{\"$id\":\"https://scope.test/b\",\"$defs\":{\"choice\":{\"$dynamicAnchor\":\"x\",\"type\":\"string\"}},\"$ref\":\"https://scope.test/target\"}"
+      }
+    },
+    {
+      "id": "outermost-binding-False",
+      "schema": "{\"$ref\":\"https://scope.test/a\"}",
+      "value": "1",
+      "external": true,
+      "required": "S",
+      "resources": {
+        "https://scope.test/default": "{\"$id\":\"https://scope.test/default\",\"$defs\":{\"fallback\":{\"$dynamicAnchor\":\"x\",\"type\":\"null\"}}}",
+        "https://scope.test/target": "{\"$id\":\"https://scope.test/target\",\"$dynamicRef\":\"https://scope.test/default#x\"}",
+        "https://scope.test/a": "{\"$id\":\"https://scope.test/a\",\"$defs\":{\"choice\":{\"$dynamicAnchor\":\"x\",\"type\":\"integer\"}},\"$ref\":\"https://scope.test/b\"}",
+        "https://scope.test/b": "{\"$id\":\"https://scope.test/b\",\"$defs\":{\"choice\":{\"$dynamicAnchor\":\"x\",\"type\":\"string\"}},\"$ref\":\"https://scope.test/target\"}"
+      }
+    },
+    {
+      "id": "same-node-distinct-scope-True",
+      "schema": "{\"allOf\":[{\"$ref\":\"https://scope.test/b\"},{\"$ref\":\"https://scope.test/a\"}]}",
+      "value": "1",
+      "external": true,
+      "required": "F",
+      "resources": {
+        "https://scope.test/default": "{\"$id\":\"https://scope.test/default\",\"$defs\":{\"fallback\":{\"$dynamicAnchor\":\"x\",\"type\":\"null\"}}}",
+        "https://scope.test/target": "{\"$id\":\"https://scope.test/target\",\"$dynamicRef\":\"https://scope.test/default#x\"}",
+        "https://scope.test/a": "{\"$id\":\"https://scope.test/a\",\"$defs\":{\"choice\":{\"$dynamicAnchor\":\"x\",\"type\":\"integer\"}},\"$ref\":\"https://scope.test/target\"}",
+        "https://scope.test/b": "{\"$id\":\"https://scope.test/b\",\"$defs\":{\"choice\":{\"$dynamicAnchor\":\"x\",\"type\":\"string\"}},\"$ref\":\"https://scope.test/target\"}"
+      }
+    },
+    {
+      "id": "same-node-distinct-scope-any-True",
+      "schema": "{\"anyOf\":[{\"$ref\":\"https://scope.test/b\"},{\"$ref\":\"https://scope.test/a\"}]}",
+      "value": "1",
+      "external": true,
+      "required": "S",
+      "resources": {
+        "https://scope.test/default": "{\"$id\":\"https://scope.test/default\",\"$defs\":{\"fallback\":{\"$dynamicAnchor\":\"x\",\"type\":\"null\"}}}",
+        "https://scope.test/target": "{\"$id\":\"https://scope.test/target\",\"$dynamicRef\":\"https://scope.test/default#x\"}",
+        "https://scope.test/a": "{\"$id\":\"https://scope.test/a\",\"$defs\":{\"choice\":{\"$dynamicAnchor\":\"x\",\"type\":\"integer\"}},\"$ref\":\"https://scope.test/target\"}",
+        "https://scope.test/b": "{\"$id\":\"https://scope.test/b\",\"$defs\":{\"choice\":{\"$dynamicAnchor\":\"x\",\"type\":\"string\"}},\"$ref\":\"https://scope.test/target\"}"
+      }
+    },
+    {
+      "id": "outermost-binding-True",
+      "schema": "{\"$ref\":\"https://scope.test/a\"}",
+      "value": "1",
+      "external": true,
+      "required": "S",
+      "resources": {
+        "https://scope.test/default": "{\"$id\":\"https://scope.test/default\",\"$defs\":{\"fallback\":{\"$dynamicAnchor\":\"x\",\"type\":\"null\"}}}",
+        "https://scope.test/target": "{\"$id\":\"https://scope.test/target\",\"$dynamicRef\":\"https://scope.test/default#x\"}",
+        "https://scope.test/a": "{\"$id\":\"https://scope.test/a\",\"$defs\":{\"choice\":{\"$dynamicAnchor\":\"x\",\"type\":\"integer\"}},\"$ref\":\"https://scope.test/b\"}",
+        "https://scope.test/b": "{\"$id\":\"https://scope.test/b\",\"$defs\":{\"choice\":{\"$dynamicAnchor\":\"x\",\"type\":\"string\"}},\"$ref\":\"https://scope.test/target\"}"
+      }
+    },
+    {
+      "id": "alias-cycle",
+      "schema": "{\"$defs\":{\"a\":{\"$ref\":\"#/$defs/b\"},\"b\":{\"allOf\":[{\"$ref\":\"#/$defs/a\"}]}},\"$ref\":\"#/$defs/a\"}",
+      "value": "null",
+      "external": true,
+      "required": "U"
+    },
+    {
+      "id": "negating-cycle",
+      "schema": "{\"not\":{\"$ref\":\"#\"}}",
+      "value": "null",
+      "external": true,
+      "required": "U"
+    },
+    {
+      "id": "same-instance-diamond",
+      "schema": "{\"$defs\":{\"body\":{\"allOf\":[{\"minimum\":0},{\"maximum\":10}]}},\"allOf\":[{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"},{\"$ref\":\"#/$defs/body\"}]}",
+      "value": "5",
+      "external": true,
+      "required": "S",
+      "instrumentation": "non-leaf body completes once per exact Visit, regardless of referring branch order"
+    },
+    {
+      "id": "preserve-eager/if-unchosen-arm",
+      "schema": "{\"if\":true,\"then\":true,\"else\":{\"pattern\":\"[A-Z]+[0-9]+\"}}",
+      "value": "\"x\"",
+      "external": true,
+      "required": "S",
+      "evaluation_sdk_reservation_bytes": 131072,
+      "semantic_required": "S",
+      "gate": "Reviewed once-prepared program disposition: same schema meaning; obsolete per-value compiler charge removed. Prior observation retained.",
+      "historical_per_value_compiler_required": "N:LimitExceeded"
+    },
+    {
+      "id": "preserve-eager/pattern-nonmatch-child",
+      "schema": "{\"patternProperties\":{\"^never$\":{\"pattern\":\"[A-Z]+[0-9]+\"}}}",
+      "value": "{\"x\":\"abc\"}",
+      "external": true,
+      "required": "S",
+      "evaluation_sdk_reservation_bytes": 131072,
+      "semantic_required": "S",
+      "gate": "Reviewed once-prepared program disposition: same schema meaning; obsolete per-value compiler charge removed. Prior observation retained.",
+      "historical_per_value_compiler_required": "N:LimitExceeded"
+    },
+    {
+      "id": "preserve-eager/additional-selected-child",
+      "schema": "{\"properties\":{\"x\":true},\"additionalProperties\":{\"pattern\":\"[A-Z]+[0-9]+\"}}",
+      "value": "{\"x\":\"abc\"}",
+      "external": true,
+      "required": "S",
+      "evaluation_sdk_reservation_bytes": 131072,
+      "semantic_required": "S",
+      "gate": "Reviewed once-prepared program disposition: same schema meaning; obsolete per-value compiler charge removed. Prior observation retained.",
+      "historical_per_value_compiler_required": "N:LimitExceeded"
+    },
+    {
+      "id": "preserve-eager/unevaluated-already-evaluated",
+      "schema": "{\"properties\":{\"x\":true},\"unevaluatedProperties\":{\"pattern\":\"[A-Z]+[0-9]+\"}}",
+      "value": "{\"x\":\"abc\"}",
+      "external": true,
+      "required": "S",
+      "evaluation_sdk_reservation_bytes": 131072,
+      "semantic_required": "S",
+      "gate": "Reviewed once-prepared program disposition: same schema meaning; obsolete per-value compiler charge removed. Prior observation retained.",
+      "historical_per_value_compiler_required": "N:LimitExceeded"
+    },
+    {
+      "id": "preserve-eager/allof-false-then-cost",
+      "schema": "{\"allOf\":[false,{\"pattern\":\"[A-Z]+[0-9]+\"}]}",
+      "value": "\"x\"",
+      "external": true,
+      "required": "F",
+      "evaluation_sdk_reservation_bytes": 131072,
+      "semantic_required": "F",
+      "gate": "Reviewed once-prepared program disposition: same schema meaning; obsolete per-value compiler charge removed. Prior observation retained.",
+      "historical_per_value_compiler_required": "N:LimitExceeded"
+    },
+    {
+      "id": "preserve-eager/anyof-true-then-cost",
+      "schema": "{\"anyOf\":[true,{\"pattern\":\"[A-Z]+[0-9]+\"}]}",
+      "value": "\"x\"",
+      "external": true,
+      "required": "S",
+      "evaluation_sdk_reservation_bytes": 131072,
+      "semantic_required": "S",
+      "gate": "Reviewed once-prepared program disposition: same schema meaning; obsolete per-value compiler charge removed. Prior observation retained.",
+      "historical_per_value_compiler_required": "N:LimitExceeded"
+    },
+    {
+      "id": "eager-local-limit/if-unchosen-arm",
+      "schema": "{\"if\":true,\"then\":true,\"else\":{\"pattern\":\"a{65535}\"}}",
+      "value": "\"x\"",
+      "external": true,
+      "required": "N:LimitExceeded",
+      "evaluation_sdk_reservation_bytes": 131072,
+      "semantic_required": "S",
+      "gate": "Same actual eager reach with a confirmed prepared local Limited operand; terminal inability must remain observable.",
+      "required_pattern_state": "limited"
+    },
+    {
+      "id": "eager-local-limit/pattern-nonmatch-child",
+      "schema": "{\"patternProperties\":{\"^never$\":{\"pattern\":\"a{65535}\"}}}",
+      "value": "{\"x\":\"abc\"}",
+      "external": true,
+      "required": "N:LimitExceeded",
+      "evaluation_sdk_reservation_bytes": 131072,
+      "semantic_required": "S",
+      "gate": "Same actual eager reach with a confirmed prepared local Limited operand; terminal inability must remain observable.",
+      "required_pattern_state": "limited"
+    },
+    {
+      "id": "eager-local-limit/additional-selected-child",
+      "schema": "{\"properties\":{\"x\":true},\"additionalProperties\":{\"pattern\":\"a{65535}\"}}",
+      "value": "{\"x\":\"abc\"}",
+      "external": true,
+      "required": "N:LimitExceeded",
+      "evaluation_sdk_reservation_bytes": 131072,
+      "semantic_required": "S",
+      "gate": "Same actual eager reach with a confirmed prepared local Limited operand; terminal inability must remain observable.",
+      "required_pattern_state": "limited"
+    },
+    {
+      "id": "eager-local-limit/unevaluated-already-evaluated",
+      "schema": "{\"properties\":{\"x\":true},\"unevaluatedProperties\":{\"pattern\":\"a{65535}\"}}",
+      "value": "{\"x\":\"abc\"}",
+      "external": true,
+      "required": "N:LimitExceeded",
+      "evaluation_sdk_reservation_bytes": 131072,
+      "semantic_required": "S",
+      "gate": "Same actual eager reach with a confirmed prepared local Limited operand; terminal inability must remain observable.",
+      "required_pattern_state": "limited"
+    },
+    {
+      "id": "eager-local-limit/allof-false-then-cost",
+      "schema": "{\"allOf\":[false,{\"pattern\":\"a{65535}\"}]}",
+      "value": "\"x\"",
+      "external": true,
+      "required": "N:LimitExceeded",
+      "evaluation_sdk_reservation_bytes": 131072,
+      "semantic_required": "F",
+      "gate": "Same actual eager reach with a confirmed prepared local Limited operand; terminal inability must remain observable.",
+      "required_pattern_state": "limited"
+    },
+    {
+      "id": "eager-local-limit/anyof-true-then-cost",
+      "schema": "{\"anyOf\":[true,{\"pattern\":\"a{65535}\"}]}",
+      "value": "\"x\"",
+      "external": true,
+      "required": "N:LimitExceeded",
+      "evaluation_sdk_reservation_bytes": 131072,
+      "semantic_required": "S",
+      "gate": "Same actual eager reach with a confirmed prepared local Limited operand; terminal inability must remain observable.",
+      "required_pattern_state": "limited"
+    }
+  ]
+}

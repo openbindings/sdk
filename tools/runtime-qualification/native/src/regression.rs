@@ -1,11 +1,9 @@
-use openbindings::{
-    Conformance, Document, Evidence, JsonValue, PreparedValueContract, ValueOutcome,
-};
+use openbindings::{Conformance, Document, Evidence, JsonValue, PreparedSchema, ValueOutcome};
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 use serde_json::json;
 use std::{hint::black_box, time::Instant};
 
-fn prepare(source: &str) -> PreparedValueContract {
+fn prepare(source: &str) -> PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator> {
     let document = Document::parse(source).unwrap();
     let proof = document
         .validate()
@@ -15,7 +13,11 @@ fn prepare(source: &str) -> PreparedValueContract {
     let operation = proof.resolve_operation("run").expect("declared operation");
     let input = operation.input().expect("declared input");
     input
-        .prepare(&DefaultEvaluator::new())
+        .prepare(
+            &DefaultEvaluator::new(),
+            &openbindings::ExternalSchemas::default(),
+            &openbindings::PreparationLimits::default(),
+        )
         .expect("contract must prepare")
 }
 
@@ -34,7 +36,7 @@ fn main() {
     let value = JsonValue::parse(r#"{"n":1e1000}"#).unwrap();
     let retained = contract_job.then(|| prepare(&source));
     let observation = if contract_job {
-        let outcome = retained.as_ref().unwrap().validate(&value);
+        let outcome = retained.as_ref().unwrap().evaluate(&value);
         assert!(matches!(outcome, ValueOutcome::Satisfies));
         json!({"outcome":"satisfies"})
     } else {
@@ -102,7 +104,7 @@ fn main() {
     let once = || {
         if lane == "retained" {
             let start = Instant::now();
-            let outcome = black_box(retained.as_ref().unwrap().validate(black_box(&value)));
+            let outcome = black_box(retained.as_ref().unwrap().evaluate(black_box(&value)));
             let elapsed = start.elapsed().as_nanos();
             drop(outcome);
             elapsed
@@ -110,7 +112,7 @@ fn main() {
             let start = Instant::now();
             let contract = prepare(black_box(&source));
             let value = JsonValue::parse(r#"{"n":1e1000}"#).unwrap();
-            let outcome = black_box(contract.validate(&value));
+            let outcome = black_box(contract.evaluate(&value));
             let elapsed = start.elapsed().as_nanos();
             drop((outcome, value, contract));
             elapsed

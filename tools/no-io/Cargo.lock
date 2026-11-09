@@ -635,6 +635,7 @@ dependencies = [
  "fancy-regex",
  "fraction",
  "getrandom 0.3.4",
+ "idna",
  "itoa",
  "jsonschema-regex",
  "jsonschema-value",
@@ -853,6 +854,8 @@ dependencies = [
  "openbindings-internal-json",
  "openbindings-internal-schema",
  "regex",
+ "regex-automata",
+ "regex-syntax",
  "serde",
  "serde_json",
 ]

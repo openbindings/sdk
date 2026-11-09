@@ -53,6 +53,23 @@ class RustFenceTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     self.read(markdown)
 
+    def test_walkthrough_ignores_checkout_line_endings(self):
+        same = HELPER['same_walkthrough']
+        crate = SOURCE + b'\n#[cfg(test)]\nmod tests;\n'
+
+        def crlf(text):
+            return text.replace(b'\n', b'\r\n')
+
+        for name, (main_rs, fence) in {
+            'lf': (crate, SOURCE),
+            'crlf': (crlf(crate), crlf(SOURCE)),
+            'mixed': (crlf(crate), SOURCE),
+        }.items():
+            with self.subTest(name=name):
+                self.assertTrue(same(main_rs, fence))
+        self.assertFalse(same(crate, b'fn main() { }\n'))
+        self.assertFalse(same(SOURCE, SOURCE))
+
     def test_guide_rejects_deleted_shell_close(self):
         guide = (HELPER['ROOT'] / 'docs/rust-first-use.md').read_bytes()
         lines = guide.splitlines(keepends=True)

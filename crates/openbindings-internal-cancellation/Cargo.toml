@@ -1,6 +1,6 @@
 [package]
 name = "openbindings-internal-cancellation"
-description = "Internal executor-independent cancellation for OpenBindings async companions"
+description = "Internal async-runtime-independent cancellation for OpenBindings async companions"
 readme = "README.md"
 version.workspace = true
 edition.workspace = true

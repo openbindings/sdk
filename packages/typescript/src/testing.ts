@@ -1,5 +1,5 @@
 /** Optional testing entry for ownership assertions after SDK initialization. */
-import { requireReady } from "./internal.js";
+import { requireReady } from "./runtime.js";
 import { liveStorageOwners as liveOwners } from "./wasm/openbindings_wasm.js";
 
 /**

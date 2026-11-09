@@ -1,0 +1,147 @@
+{
+  "version": "1.0",
+  "description": "Sibling keywords beside allOf form one additional branch, merged first: the carrying schema's own type, required, properties, bounds, and enum participate in the merge, and enum intersection preserves the sibling branch's value order.",
+  "mode": "identical",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "siblingKeywords": {
+        "input": {
+          "type": "object",
+          "required": [
+            "id"
+          ],
+          "allOf": [
+            {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name"
+              ]
+            },
+            {
+              "properties": {
+                "name": {
+                  "type": "string"
+                }
+              }
+            }
+          ]
+        }
+      },
+      "siblingEnumOrder": {
+        "input": {
+          "type": "string",
+          "enum": [
+            "a",
+            "b",
+            "c"
+          ],
+          "allOf": [
+            {
+              "enum": [
+                "c",
+                "b",
+                "d"
+              ]
+            }
+          ]
+        }
+      },
+      "siblingBounds": {
+        "input": {
+          "minLength": 3,
+          "allOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 10
+            }
+          ]
+        }
+      },
+      "siblingProperties": {
+        "input": {
+          "properties": {
+            "p": {
+              "type": "string",
+              "maxLength": 5
+            }
+          },
+          "allOf": [
+            {
+              "type": "object",
+              "properties": {
+                "p": {
+                  "minLength": 2
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "siblingKeywords": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "name"
+          ]
+        }
+      },
+      "siblingEnumOrder": {
+        "input": {
+          "type": "string",
+          "enum": [
+            "b",
+            "c"
+          ]
+        }
+      },
+      "siblingBounds": {
+        "input": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 10
+        }
+      },
+      "siblingProperties": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "p": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 5
+            }
+          }
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "compatible"
+    }
+  }
+}

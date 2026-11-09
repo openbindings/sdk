@@ -14,6 +14,7 @@ export function fixedDiagnosticCases(sdk) {
       pointer: "/operations/x/inputs~1~0\n",
       token: '"inputs/',
       unexpected: true,
+      schemaPointer: "/$defs/Operation/additionalProperties",
     },
     {
       name: "description type and original UTF-8 coordinates",
@@ -21,6 +22,7 @@ export function fixedDiagnosticCases(sdk) {
       pointer: "/operations/x/description",
       token: '{"s":',
       expectedType: "string",
+      schemaPointer: "/$defs/Operation/properties/description/type",
     },
     {
       name: "aliases array type",
@@ -28,6 +30,7 @@ export function fixedDiagnosticCases(sdk) {
       pointer: "/operations/x/aliases",
       token: '"REJECTED_SENTINEL"',
       expectedType: "array",
+      schemaPointer: "/$defs/Operation/properties/aliases/type",
     },
     {
       name: "operations object type",
@@ -35,6 +38,7 @@ export function fixedDiagnosticCases(sdk) {
       pointer: "/operations",
       token: '["REJECTED',
       expectedType: "object",
+      schemaPointer: "/properties/operations/type",
     },
     {
       name: "required root member uses containing object",
@@ -42,13 +46,15 @@ export function fixedDiagnosticCases(sdk) {
       pointer: "",
       token: "{",
       required: "operations",
+      schemaPointer: "/required",
     },
     {
       name: "required source member uses containing object",
-      text: '{"openbindings":"0.2.0","operations":{},"sources":{"s":{"content":"REJECTED_SENTINEL"}}}',
+      text: '{"openbindings":"0.2.0","operations":{},"sources":{"s":{"data":"REJECTED_SENTINEL"}}}',
       pointer: "/sources/s",
-      token: '{"content":',
+      token: '{"data":',
       required: "kind",
+      schemaPointer: "/$defs/SourceEntry/required",
     },
     {
       // A union failure keeps the checked position and fixed message.
@@ -57,6 +63,24 @@ export function fixedDiagnosticCases(sdk) {
       pointer: "/operations/x/input",
       token: "null",
       keyword: "anyOf",
+      schemaPointer: "/$defs/JSONSchema/anyOf",
+    },
+    {
+      name: "binding missing source",
+      text: '{"openbindings":"0.2.0","operations":{"op":{}},"bindings":{"b":{"operation":"op"}}}',
+      pointer: "/bindings/b",
+      token: '{"operation":',
+      required: "source",
+      schemaPointer: "/$defs/BindingEntry/required",
+    },
+    {
+      name: "largest pinned schema fact",
+      text: '{"openbindings":"0.2.0","operations":{"op":{}},"sources":{"s":{"kind":"x"}},"bindings":{"b":{"operation":"op","source":"s","preference":-9007199254740992}}}',
+      pointer: "/bindings/b/preference",
+      token: "-9007199254740992",
+      keyword: "minimum",
+      bound: "-9007199254740991",
+      schemaPointer: "/$defs/BindingEntry/properties/preference/minimum",
     },
     {
       name: "corrected healthy document",
@@ -141,6 +165,52 @@ export function fixedDiagnosticCases(sdk) {
           finding.message === unexpectedMessage,
           `${fixture.name}: fixed message`,
         );
+        const keyword =
+          fixture.keyword ??
+          (fixture.required
+            ? "required"
+            : fixture.expectedType
+              ? "type"
+              : "additionalProperties");
+        check(finding.keyword === keyword, `${fixture.name}: keyword`);
+        check(
+          finding.schema.sourceUri ===
+            "https://openbindings.com/schema/openbindings-0.2.0.json" &&
+            finding.schema.pointer === fixture.schemaPointer,
+          `${fixture.name}: published keyword location`,
+        );
+        const expected = fixture.required
+          ? { kind: "required", member: fixture.required }
+          : fixture.expectedType
+            ? { kind: "type", expected: [fixture.expectedType] }
+            : fixture.bound
+              ? { kind: "numeric-bound", bound: fixture.bound }
+              : undefined;
+        check(
+          JSON.stringify(finding.details) === JSON.stringify(expected),
+          `${fixture.name}: exact detail`,
+        );
+        if (fixture.bound) {
+          check(
+            byteLength(
+              JSON.stringify([
+                finding.keyword,
+                finding.schema,
+                finding.details,
+              ]),
+            ) === 198,
+            "largest pinned schema fact uses the TypeScript sourceUri spelling",
+          );
+        }
+        const facts = JSON.stringify([
+          finding.keyword,
+          finding.schema,
+          finding.details,
+        ]);
+        check(
+          !facts.includes("REJECTED_SENTINEL") && byteLength(facts) <= 198,
+          `${fixture.name}: bounded schema-only facts`,
+        );
       }
       results.push({ name: fixture.name, conclusion: report.conclusion });
     } finally {
@@ -219,6 +289,36 @@ export function fixedDiagnosticCases(sdk) {
       conclusion: report.conclusion,
     });
   }
+  for (const count of [2048, 2049]) {
+    const bindings = Object.fromEntries(
+      Array.from({ length: count }, (_, i) => [`b${i}`, {}]),
+    );
+    const report = sdk.validateDocument(
+      JSON.stringify({ openbindings: "0.2.0", operations: {}, bindings }),
+    ).report;
+    check(
+      report.findings.length === 4096 &&
+        report.findingsTruncated === count > 2048,
+      "fixed fact count allowance",
+    );
+    let bytes = 0;
+    report.findings.forEach((finding, i) => {
+      check(
+        finding.details.kind === "required" &&
+          finding.details.member === (i % 2 ? "source" : "operation"),
+        "distinct required facts in published order",
+      );
+      const size = byteLength(
+        JSON.stringify([finding.keyword, finding.schema, finding.details]),
+      );
+      check(size <= 198, "pinned schema fact size");
+      bytes += size;
+    });
+    check(
+      bytes <= 4096 * 198 && report.evidence["OBI-02"] === "violated",
+      "aggregate facts and independent evidence",
+    );
+  }
   for (const count of [4096, 4097]) {
     const schemas = Object.fromEntries(
       Array.from({ length: count }, (_, i) => [`s${i}`, { minLength: -1 }]),
@@ -236,7 +336,7 @@ export function fixedDiagnosticCases(sdk) {
         "independent evidence",
       );
       check(
-        Object.keys(report.evidence).length === 13,
+        Object.keys(report.evidence).length === 14,
         "all rule evidence retained",
       );
     } finally {

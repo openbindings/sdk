@@ -12,9 +12,9 @@ export function observe(sdk, request) {
   // Normalize the staged public API to the corpus observation vocabulary, while
   // recording the setup state separately. Non-ready setup never validates values.
   const preparationOutcome = (result) =>
-    result.status === "no-verdict"
-      ? { status: "no-verdict", detail: result.detail }
-      : { status: result.status };
+    result.status === "refused"
+      ? { status: "preparation-refused", failure: result.failure }
+      : { status: result.status === "no-contract" ? "no-schema" : result.status };
   const output = { id: request.id, executed: true };
   const given = request.given;
   const bytes = Uint8Array.from(atob(given.documentBase64), (c) =>
@@ -37,47 +37,32 @@ export function observe(sdk, request) {
       };
     }
     const doc = parsed(sdk.Document.parse(bytes));
+    const validation = doc.validate();
+    if (validation.status !== "conformant") throw new Error("Fixture document lacks conformance proof");
+    const conformant = own(validation.document);
     if (request.action === "resolve-operation") {
-      const selection = doc.resolveOperation(given.name);
-      if (selection.status !== "found")
-        return { ...output, outcome: "not-found", selection };
-      const op = own(selection.operation);
+      const op = own(conformant.resolveOperation(given.name));
+      if (!op) return { ...output, outcome: "not-found" };
       return {
         ...output,
         outcome: "resolved",
         operationKey: op.key,
-        bindingKeys: op.bindings,
+        bindingKeys: op.bindings().map(binding => own(binding).key),
       };
     }
     if (request.action === "check-dependency-kind") {
-      const root = own(doc.value());
-      const bindings = own(root.get("bindings"));
-      const binding = own(bindings.get(given.binding));
-      const source = own(binding.get("source"));
-      const sourceName = JSON.parse(source.text);
-      const sources = own(root.get("sources"));
-      const sourceEntry = own(sources.get(sourceName));
-      const kind = own(sourceEntry.get("kind"));
-      return {
-        ...output,
-        outcome: doc.dependencyAcceptsKind(
-          given.dependency,
-          JSON.parse(kind.text),
-        )
-          ? "meets"
-          : "does-not-meet",
-      };
+      const binding = own(conformant.binding(given.binding));
+      const source = own(binding.source());
+      const dependency = own(conformant.dependency(given.dependency));
+      return { ...output, outcome: dependency.acceptsKind(source.kind) ? "meets" : "does-not-meet" };
     }
-    let resources = own(new sdk.SchemaResources());
+    let resources = own(new sdk.ExternalSchemas());
     for (const r of given.resources ?? []) {
       const value = parsed(sdk.parseJson(r.documentJson));
       const next = own(resources.with(r.uri, value));
       resources.dispose();
       resources = next;
     }
-    const validation = doc.validate();
-    if (validation.status !== "conformant") throw new Error("Fixture document lacks conformance proof");
-    const conformant = own(validation.document);
     // A missing operation and an absent contract are setup states found before
     // preparation; conformance excludes ambiguous selection.
     const prepare = (name, side) => {
@@ -97,14 +82,14 @@ export function observe(sdk, request) {
           preparation,
           values: given.valuesJson.map(() => preparationOutcome(preparation)),
         };
-      const prepared = own(preparation.valueContract);
+      const prepared = own(preparation.schema);
       return {
         ...output,
         preparation: { status: "ready" },
         values: given.valuesJson.map((text) => {
           const v = parsed(sdk.parseJson(text));
           try {
-            return prepared.validate(v);
+            return prepared.evaluate(v);
           } finally {
             v.dispose();
           }
@@ -112,25 +97,21 @@ export function observe(sdk, request) {
       };
     }
     if (request.action === "check-examples") {
-      const selection = doc.resolveOperation(given.operation);
-      if (selection.status !== "found")
-        throw new Error("Example operation selection: " + selection.status);
-      const op = own(selection.operation);
-      const opValue = own(op.value());
-      const examples = own(opValue.get("examples"));
+      const op = own(conformant.resolveOperation(given.operation));
+      if (!op) throw new Error("Example operation missing");
+      const examples = op.examples()?.map(own);
       const results = [];
       if (examples) {
-        for (const name of Object.keys(JSON.parse(examples.text))) {
-          const example = own(examples.get(name));
+        for (const example of examples) {
           for (const direction of ["input", "output"]) {
-            const value = own(example.get(direction));
+            const value = own(direction === "input" ? example.input() : example.output());
             if (value) {
               const preparation = prepare(given.operation, direction);
               const outcome =
                 preparation.status === "ready"
-                  ? own(preparation.valueContract).validate(value)
+                  ? own(preparation.schema).evaluate(value)
                   : preparationOutcome(preparation);
-              results.push({ ...outcome, example: name, side: direction });
+              results.push({ ...outcome, example: example.key, side: direction });
             }
           }
         }

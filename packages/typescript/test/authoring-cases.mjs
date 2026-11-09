@@ -9,7 +9,7 @@ export async function runCases(sdk, ids, http) {
       if (JSON.stringify(actual) !== JSON.stringify(expected))
         throw Error(label);
     };
-    const bad = (label, input, code, partPointer) => {
+    const bad = (label, input, code, inputPointer) => {
       let failure;
       try {
         constructDocument(sdk, input).dispose();
@@ -22,7 +22,11 @@ export async function runCases(sdk, ids, http) {
         true,
       );
       equal(label + ": code", failure.code, code);
-      equal(label + ": input pointer", failure.partPointer, partPointer);
+      equal(
+        label + ": input pointer",
+        failure.inputPointer,
+        "/0/value" + inputPointer,
+      );
       equal(label + ": no byte location", "byteOffset" in failure, false);
       equal(label + ": explained", failure.message.length > 0, true);
       return failure;
@@ -31,7 +35,7 @@ export async function runCases(sdk, ids, http) {
       constructDocument(sdk, fields);
     const content = (value) => ({
       operations: { run: {} },
-      sources: { s: { kind: "test", content: value } },
+      sources: { s: { kind: "test", data: value } },
     });
     const field = (document, pointer, text) => {
       const root = document.value();
@@ -45,49 +49,6 @@ export async function runCases(sdk, ids, http) {
     };
     try {
       switch (id) {
-        case "A01":
-          bad(
-            "root collision",
-            { operations: { run: { additionalFields: { input: {} } } } },
-            "field-collision",
-            "/operations/run/additionalFields/input",
-          );
-          break;
-        case "A02": {
-          for (const [map, object, collision] of [
-            ["operations", {}, "input"],
-            ["sources", { kind: "test" }, "kind"],
-            ["bindings", { operation: "run", source: "s" }, "source"],
-            ["dependencies", { operation: "run" }, "operation"],
-          ])
-            bad(
-              map,
-              {
-                operations: { run: {} },
-                [map]: {
-                  "a/~b": {
-                    ...object,
-                    additionalFields: { [collision]: null },
-                  },
-                },
-              },
-              "field-collision",
-              `/${map}/a~1~0b/additionalFields/${collision}`,
-            );
-          bad(
-            "example",
-            {
-              operations: {
-                "a/~b": {
-                  examples: { "e/~f": { additionalFields: { input: null } } },
-                },
-              },
-            },
-            "field-collision",
-            "/operations/a~1~0b/examples/e~1~0f/additionalFields/input",
-          );
-          break;
-        }
         case "A03":
           for (const [name, value] of [
             ["nan", NaN],
@@ -98,7 +59,7 @@ export async function runCases(sdk, ids, http) {
               name,
               content({ [name]: value }),
               "non-finite-number",
-              `/sources/s/content/${name}`,
+              `/sources/s/data/${name}`,
             );
           break;
         case "A04": {
@@ -112,11 +73,10 @@ export async function runCases(sdk, ids, http) {
               name,
               content({ [name]: value }),
               "unsupported-value",
-              `/sources/s/content/${name}`,
+              `/sources/s/data/${name}`,
             );
           const d = good({
-            operations: { run: { description: undefined, aliases: undefined } },
-            description: undefined,
+            operations: { run: {} },
           });
           field(d, "/description", undefined);
           field(d, "/operations/run/aliases", undefined);
@@ -124,22 +84,12 @@ export async function runCases(sdk, ids, http) {
           break;
         }
         case "A05":
-          bad(
-            "hole",
-            content([7, , 9]),
-            "sparse-array",
-            "/sources/s/content/1",
-          );
+          bad("hole", content([7, , 9]), "sparse-array", "/sources/s/data/1");
           break;
         case "A06": {
           const value = {};
           value.loop = value;
-          bad(
-            "cycle",
-            content(value),
-            "cyclic-value",
-            "/sources/s/content/loop",
-          );
+          bad("cycle", content(value), "cyclic-value", "/sources/s/data/loop");
           const d = good();
           const v = d.validate();
           equal("healthy after cycle", v.status, "conformant");
@@ -159,13 +109,13 @@ export async function runCases(sdk, ids, http) {
             "date",
             content(new Date(0)),
             "non-plain-object",
-            "/sources/s/content",
+            "/sources/s/data",
           );
           bad(
             "instance",
             content(new Opaque()),
             "non-plain-object",
-            "/sources/s/content",
+            "/sources/s/data",
           );
           equal("implicit conversions", calls, 0);
           break;
@@ -173,7 +123,7 @@ export async function runCases(sdk, ids, http) {
         case "A08": {
           let calls = 0;
           bad(
-            "typed map getter",
+            "map getter",
             {
               operations: {
                 get run() {
@@ -186,7 +136,7 @@ export async function runCases(sdk, ids, http) {
             "/operations/run",
           );
           bad(
-            "typed child getter",
+            "nested getter",
             {
               operations: {
                 "a/~b": {
@@ -200,7 +150,7 @@ export async function runCases(sdk, ids, http) {
             "accessor-property",
             "/operations/a~1~0b/description",
           );
-          equal("typed getter calls", calls, 0);
+          equal("getter calls", calls, 0);
           break;
         }
         case "A09": {
@@ -214,26 +164,24 @@ export async function runCases(sdk, ids, http) {
               },
             }),
             "accessor-property",
-            "/sources/s/content/hidden",
+            "/sources/s/data/hidden",
           );
           bad(
             "additional getter",
             {
               operations: {
                 run: {
-                  additionalFields: {
-                    "x/~a": {
-                      get hidden() {
-                        calls++;
-                        return "secret";
-                      },
+                  "x/~a": {
+                    get hidden() {
+                      calls++;
+                      return "secret";
                     },
                   },
                 },
               },
             },
             "accessor-property",
-            "/operations/run/additionalFields/x~1~0a/hidden",
+            "/operations/run/x~1~0a/hidden",
           );
           equal("opaque getter calls", calls, 0);
           break;
@@ -249,7 +197,7 @@ export async function runCases(sdk, ids, http) {
               },
             }),
             "unsupported-value",
-            "/sources/s/content/toJSON",
+            "/sources/s/data/toJSON",
           );
           equal("toJSON calls", calls, 0);
           break;
@@ -260,27 +208,24 @@ export async function runCases(sdk, ids, http) {
           const d = good({
             operations: {
               run: {
-                description: undefined,
                 input: { type: "integer" },
                 output: false,
                 aliases: [],
                 examples: { e: { input: exact.value, output: null } },
               },
             },
-            sources: { s: { kind: "test", content: null } },
-            bindings: { b: { operation: "run", source: "s", content: {} } },
+            sources: { s: { kind: "test", data: null } },
+            bindings: { b: { operation: "run", source: "s", data: {} } },
             dependencies: { d: { operation: "run", kinds: [] } },
             schemas: {},
-            additionalFields: {
-              "x-extra": { large: exact.value, empty: [], text: "" },
-              future: { n: 7 },
-            },
+            "x-extra": { large: exact.value, empty: [], text: "" },
+            future: { n: 7 },
           });
           exact.value.dispose();
           field(d, "/operations/run/description", undefined);
           field(d, "/operations/run/aliases", "[]");
-          field(d, "/sources/s/content", "null");
-          field(d, "/bindings/b/content", "{}");
+          field(d, "/sources/s/data", "null");
+          field(d, "/bindings/b/data", "{}");
           field(d, "/schemas", "{}");
           field(d, "/operations/run/output", "false");
           field(d, "/x-extra/large", "9007199254740993");
@@ -300,34 +245,22 @@ export async function runCases(sdk, ids, http) {
           const secret = "opaque-secret-never-in-diagnostic";
           const input = {
             operations: { run: {} },
-            sources: {
-              s: {
-                kind: "test",
-                content: { secret },
-                additionalFields: { kind: secret },
-              },
-            },
+            sources: { s: { kind: "test", data: { secret, invalid: NaN } } },
           };
           const diagnostic = bad(
             "editor",
             input,
-            "field-collision",
-            "/sources/s/additionalFields/kind",
+            "non-finite-number",
+            "/sources/s/data/invalid",
           );
           equal(
             "secret omitted",
             JSON.stringify(diagnostic).includes(secret),
             false,
           );
-          const segments = diagnostic.partPointer
-            .slice(1)
-            .split("/")
-            .map((x) => x.replace(/~1/g, "/").replace(/~0/g, "~"));
-          let parent = input;
-          for (const key of segments.slice(0, -1)) parent = parent[key];
-          delete parent[segments.at(-1)];
-          const d = good(input);
-          const v = d.validate();
+          delete input.sources.s.data.invalid;
+          const d = good(input),
+            v = d.validate();
           equal("editor retry", v.status, "conformant");
           v.document.dispose();
           d.dispose();
@@ -379,18 +312,16 @@ export async function runCases(sdk, ids, http) {
           break;
         }
         case "X01": {
-          bad(
-            "invalid part map",
-            null,
-            "invalid-authoring-object",
-            "/operations",
+          // Exact editing admits representable but nonconformant domain fields.
+          const malformed = good({
+            operations: { run: { description: null } },
+          });
+          equal(
+            "malformed domain stays unproved",
+            malformed.validate().status,
+            "report",
           );
-          bad(
-            "typed Rust refusal",
-            { operations: { run: { description: null } } },
-            "invalid-authoring-object",
-            "/operations/run/description",
-          );
+          malformed.dispose();
           const exact = sdk.ExactJson.from(7);
           exact.dispose();
           let code;
@@ -428,29 +359,19 @@ export async function runCases(sdk, ids, http) {
             "non enumerable",
             content(obj),
             "non-enumerable-property",
-            "/sources/s/content/hidden",
+            "/sources/s/data/hidden",
           );
           bad(
             "symbol key",
             content({ [Symbol("x")]: 7 }),
             "symbol-key",
-            "/sources/s/content",
+            "/sources/s/data",
           );
           bad(
             "extra array property",
             content(Object.assign([1], { extra: 2 })),
             "array-property",
-            "/sources/s/content",
-          );
-          bad(
-            "duplicate field",
-            {
-              operations: {
-                run: { additionalFields: { "x-extra": 1 }, "x-extra": 2 },
-              },
-            },
-            "duplicate-field",
-            "/operations/run/x-extra",
+            "/sources/s/data",
           );
           let deep = 0;
           for (let i = 0; i < 10002; i++) deep = [deep];
@@ -463,7 +384,7 @@ export async function runCases(sdk, ids, http) {
           // A document's edit refuses as Rust's edit would: the limit is the
           // edited document's, with no part pointer.
           equal("depth limit code", limited.code, "depth-limit");
-          equal("depth limit input path", limited.partPointer, null);
+          equal("depth limit input path", limited.inputPointer, null);
           break;
         }
       }

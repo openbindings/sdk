@@ -28,7 +28,15 @@ test("first-use caller keeps setup refusals separate and releases its owners", (
     firstUse({ id: 7 }, exampleDocument, "lookup").result.status,
     "satisfies",
   );
-  assert.equal(firstUse({ id: 0 }).result.status, "fails");
+  const failure = firstUse({ id: 0 }).result;
+  assert.equal(failure.status, "fails");
+  assert.equal(failure.problemsComplete, true);
+  assert.equal(failure.problems[0].instance, "/id");
+  assert.equal(failure.problems[0].code, "minimum");
+  assert.deepEqual(failure.problems[0].details, {
+    kind: "numeric-bound",
+    bound: "1",
+  });
   const admission = firstUse({ id: NaN }).result;
   assert.equal(admission.status, "input-error");
   assert.equal(admission.error.instancePointer, "/id");
@@ -64,6 +72,12 @@ test("source editor requires conformance and retains prepared partial snapshots"
     assert.equal(finding.code, "schema-mismatch");
     assert.equal(finding.message, "value violates the fixed normative schema");
     assert.match(formatEditorResult(rejected), /UTF-8 byte column/);
+    assert.match(formatEditorResult(rejected), /additionalProperties/);
+    assert.equal(
+      finding.schema.pointer,
+      "/$defs/Operation/additionalProperties",
+    );
+    assert.equal(finding.details, undefined);
     assert.equal(editor.snapshot(), undefined);
 
     const accepted = editor.update(corrected);
@@ -76,7 +90,7 @@ test("source editor requires conformance and retains prepared partial snapshots"
       editor.update(
         '{"openbindings":"0.2.0","operations":{"lookup":{"aliases":["find"]}}}',
       ).status,
-      "no-value-contract",
+      "no-schema",
     );
     const partialText =
       '{"openbindings":"0.2.0","operations":{"lookup":{"aliases":["find"],"input":{"$ref":"https://schema.example/missing"}}}}';
@@ -90,30 +104,31 @@ test("source editor requires conformance and retains prepared partial snapshots"
     const negated = editor.update(negatedText);
     assert.equal(negated.status, "updated");
     assert.equal(negated.result.status, "no-verdict");
-    assert.equal(
-      negated.result.detail.location.resource,
-      "https://schema.example/missing",
-    );
-    const declined = editor.update(
-      '{"openbindings":"0.2.0","operations":{"lookup":{"aliases":["find"],"input":{"$ref":"https://schema.example/missing#/$defs/name"}}}}',
-    );
-    assert.equal(declined.status, "resources-missing");
-    assert.equal(
-      declined.evidence.message,
-      "static preparation requires a resource that was not supplied",
-    );
-    assert.match(
-      formatEditorResult(declined),
-      /Previous prepared snapshot kept/,
-    );
+    assert.deepEqual(negated.result.detail.location, {
+      sourceUri: null,
+      pointer: "/operations/lookup/input/not/$ref",
+    });
+    const fragmentText =
+      '{"openbindings":"0.2.0","operations":{"lookup":{"aliases":["find"],"input":{"$ref":"https://schema.example/missing#/$defs/name"}}}}';
+    const fragment = editor.update(fragmentText);
+    assert.equal(fragment.status, "updated");
+    assert.equal(fragment.result.status, "no-verdict");
+    assert.equal(fragment.result.detail.reason, "resource-unavailable");
+    assert.deepEqual(fragment.result.detail.location, {
+      sourceUri: null,
+      pointer: "/operations/lookup/input/$ref",
+    });
+    assert.match(formatEditorResult(fragment), /resource-unavailable/);
     const current = editor.snapshot();
     try {
-      assert.equal(new TextDecoder().decode(current.toBytes()), negatedText);
+      assert.equal(new TextDecoder().decode(current.toBytes()), fragmentText);
     } finally {
       current.dispose();
     }
     editor.dispose();
-    assert.equal(retained.operations[0].key, "lookup");
+    const operation = retained.operation("lookup");
+    assert.equal(operation.key, "lookup");
+    operation.dispose();
   } finally {
     retained?.dispose();
     editor.dispose();
@@ -156,7 +171,7 @@ test("editor presentation quotes original pointers and reports diagnostic trunca
           {
             instance: "/id",
             schema: {
-              resource: null,
+              sourceUri: null,
               pointer: "/operations/lookup/input",
             },
             message:
