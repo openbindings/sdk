@@ -61,7 +61,7 @@ fn error(code: &str, message: impl ToString) -> JsValue {
 }
 fn input_error(e: InputError) -> JsValue {
     JsValue::from_str(&encoded(
-        json!({"code":e.code(),"kind":format!("{:?}",e.kind()),"byte_offset":e.byte_offset(),"message":e.to_string()}),
+        json!({"code":e.code(),"kind":format!("{:?}",e.kind()),"byte_offset":e.byte_offset(),"line":e.line(),"byte_column":e.byte_column(),"message":e.to_string()}),
     ))
 }
 // Admission limits as the facade passes them: bytes, nodes and nesting, each a
@@ -375,6 +375,11 @@ impl WasmDocument {
     /// The admission limits this revision keeps: bytes, nodes and nesting.
     pub fn limits(&self) -> Vec<u32> {
         limit_values(self.handle.document().limits())
+    }
+    /// Estimated heap bytes retained by this document snapshot's shared storage.
+    #[wasm_bindgen(js_name=retainedBytes)]
+    pub fn retained_bytes(&self) -> usize {
+        self.handle.document().retained_bytes()
     }
     /// Create an editable empty OBI.
     pub fn create() -> WasmDocument {

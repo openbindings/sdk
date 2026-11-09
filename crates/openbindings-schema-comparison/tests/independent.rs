@@ -39,8 +39,8 @@ fn independently_authored_design_controls_keep_their_expected_classifications() 
         let right = input(&case["right"]);
         let actual = identical(left.as_ref(), right.as_ref(), &ComparisonLimits::default());
         let category = match actual {
-            Ok(Identity::Equal) => "Equal",
-            Ok(Identity::Different) => "Different",
+            Ok(true) => "Equal",
+            Ok(false) => "Different",
             Err(ComparisonFailure::InvalidSchema) => "Failure(InputShape)",
             Err(
                 ComparisonFailure::InvalidReference
@@ -71,12 +71,16 @@ impl openbindings::WorkControl for CancelAfter {
 }
 #[test]
 fn every_observed_public_checkpoint_cancels_and_a_fresh_attempt_is_unchanged() {
-    let left = SchemaInput::standalone(json(
-        r##"{"allOf":[{"properties":{"p":{"$ref":"#/$defs/P"}}},{"properties":{"p":{"minLength":2}}}],"$defs":{"P":{"type":"string"}}}"##,
-    ));
-    let right = SchemaInput::standalone(json(
-        r#"{"properties":{"p":{"type":"string","minLength":2}}}"#,
-    ));
+    let left = {
+        let schema = json(
+            r##"{"allOf":[{"properties":{"p":{"$ref":"#/$defs/P"}}},{"properties":{"p":{"minLength":2}}}],"$defs":{"P":{"type":"string"}}}"##,
+        );
+        SchemaInput::new(schema.clone(), schema)
+    };
+    let right = {
+        let schema = json(r#"{"properties":{"p":{"type":"string","minLength":2}}}"#);
+        SchemaInput::new(schema.clone(), schema)
+    };
     let baseline = CancelAfter {
         checks: AtomicUsize::new(0),
         limit: usize::MAX,
@@ -88,7 +92,7 @@ fn every_observed_public_checkpoint_cancels_and_a_fresh_attempt_is_unchanged() {
             &ComparisonLimits::default(),
             &baseline
         ),
-        Ok(Identity::Equal)
+        Ok(true)
     );
     let checkpoints = baseline.checks.load(Ordering::Relaxed);
     for limit in 0..checkpoints {
@@ -109,7 +113,7 @@ fn every_observed_public_checkpoint_cancels_and_a_fresh_attempt_is_unchanged() {
     }
     assert_eq!(
         identical(Some(&left), Some(&right), &ComparisonLimits::default()),
-        Ok(Identity::Equal)
+        Ok(true)
     );
 }
 #[test]
@@ -133,7 +137,7 @@ fn source_projection_and_owned_core_schema_consumers_keep_their_own_roots() {
             Some(&existing),
             &ComparisonLimits::default()
         ),
-        Ok(Identity::Equal)
+        Ok(true)
     );
     assert!(
         offered.document().get("openbindings").is_none(),
@@ -157,32 +161,46 @@ fn merge_uses_the_published_keyword_table_without_an_invented_satisfiability_sol
             r#"{"minimum":2,"maximum":1}"#,
         ),
     ] {
-        let left = SchemaInput::standalone(json(merged));
-        let right = SchemaInput::standalone(json(explicit));
+        let left = {
+            let schema = json(merged);
+            SchemaInput::new(schema.clone(), schema)
+        };
+        let right = {
+            let schema = json(explicit);
+            SchemaInput::new(schema.clone(), schema)
+        };
         assert_eq!(
             identical(Some(&left), Some(&right), &ComparisonLimits::default()),
-            Ok(Identity::Equal)
+            Ok(true)
         );
     }
 }
 #[test]
 fn unresolved_enum_intersection_multiplicity_is_a_failure_while_standalone_values_stay_ordered() {
-    let repeated = SchemaInput::standalone(json(r#"{"enum":[1,1.0]}"#));
-    let single = SchemaInput::standalone(json(r#"{"enum":[1]}"#));
+    let repeated = {
+        let schema = json(r#"{"enum":[1,1.0]}"#);
+        SchemaInput::new(schema.clone(), schema)
+    };
+    let single = {
+        let schema = json(r#"{"enum":[1]}"#);
+        SchemaInput::new(schema.clone(), schema)
+    };
     assert_eq!(
         identical(
             Some(&repeated),
             Some(&repeated),
             &ComparisonLimits::default()
         ),
-        Ok(Identity::Equal)
+        Ok(true)
     );
     assert_eq!(
         identical(Some(&repeated), Some(&single), &ComparisonLimits::default()),
-        Ok(Identity::Different)
+        Ok(false)
     );
-    let intersection =
-        SchemaInput::standalone(json(r#"{"allOf":[{"enum":[1,1.0]},{"enum":[1]}]}"#));
+    let intersection = {
+        let schema = json(r#"{"allOf":[{"enum":[1,1.0]},{"enum":[1]}]}"#);
+        SchemaInput::new(schema.clone(), schema)
+    };
     assert_eq!(
         identical(
             Some(&intersection),
@@ -196,34 +214,36 @@ fn unresolved_enum_intersection_multiplicity_is_a_failure_while_standalone_value
 #[test]
 fn resources_keep_reference_scope_and_outside_dependencies_without_reading_instance_data() {
     for (left, right, expected) in [
-        (
-            r##"{"$defs":{"P":true},"x-\ud800":true}"##,
-            r##"{}"##,
-            Identity::Equal,
-        ),
+        (r##"{"$defs":{"P":true},"x-\ud800":true}"##, r##"{}"##, true),
         (
             r##"{"$id":"https://example.test/S","$defs":{"P":{"type":"string"}},"properties":{"p":{"$ref":"#/$defs/P"}}}"##,
             r##"{"$id":"https://example.test/S","$defs":{"P":{"type":"string"}},"properties":{"p":{"type":"string"}}}"##,
-            Identity::Equal,
+            true,
         ),
         (
             r##"{"$defs":{"P":{"type":"string"}},"properties":{"p":{"$dynamicRef":"#/$defs/P"}}}"##,
             r##"{"$defs":{"P":{"type":"number"}},"properties":{"p":{"$dynamicRef":"#/$defs/P"}}}"##,
-            Identity::Different,
+            false,
         ),
         (
             r##"{"$defs":{"P":true},"const":{"$id":"relative","$ref":"%"}}"##,
             r##"{"const":{"$id":"relative","$ref":"%"}}"##,
-            Identity::Equal,
+            true,
         ),
         (
             r##"{"$defs":{"P":{"$anchor":"named","type":"string"}},"properties":{"p":{"$ref":"#named"}}}"##,
             r##"{"$defs":{"P":{"$anchor":"named","type":"string"}},"properties":{"p":{"$ref":"#named"}}}"##,
-            Identity::Equal,
+            true,
         ),
     ] {
-        let left = SchemaInput::standalone(json(left));
-        let right = SchemaInput::standalone(json(right));
+        let left = {
+            let schema = json(left);
+            SchemaInput::new(schema.clone(), schema)
+        };
+        let right = {
+            let schema = json(right);
+            SchemaInput::new(schema.clone(), schema)
+        };
         assert_eq!(
             identical(Some(&left), Some(&right), &ComparisonLimits::default()),
             Ok(expected)
@@ -233,10 +253,13 @@ fn resources_keep_reference_scope_and_outside_dependencies_without_reading_insta
     let schema = json(
         r##"{"$id":"https://example.test/outer","$defs":{"P":false,"Inner":{"$id":"inner","$defs":{"P":true},"$ref":"#/$defs/P"}},"$ref":"inner"}"##,
     );
-    let same = SchemaInput::standalone(schema);
+    let same = {
+        let schema = schema;
+        SchemaInput::new(schema.clone(), schema)
+    };
     assert_eq!(
         identical(Some(&same), Some(&same), &ComparisonLimits::default()),
-        Ok(Identity::Equal)
+        Ok(true)
     );
 }
 
@@ -244,14 +267,20 @@ fn resources_keep_reference_scope_and_outside_dependencies_without_reading_insta
 fn nested_retained_conjunctions_keep_authored_order() {
     let first = r#"{"allOf":[{"properties":{"a":true},"additionalProperties":false},{"properties":{"b":true}}]}"#;
     let second = r#"{"allOf":[{"oneOf":[true,false]},{"type":"string"}]}"#;
-    let left = SchemaInput::standalone(json(&format!(r#"{{"allOf":[{first},{second}]}}"#)));
-    let right = SchemaInput::standalone(json(&format!(r#"{{"allOf":[{second},{first}]}}"#)));
+    let left = {
+        let schema = json(&format!(r#"{{"allOf":[{first},{second}]}}"#));
+        SchemaInput::new(schema.clone(), schema)
+    };
+    let right = {
+        let schema = json(&format!(r#"{{"allOf":[{second},{first}]}}"#));
+        SchemaInput::new(schema.clone(), schema)
+    };
     assert_eq!(
         identical(Some(&left), Some(&left), &ComparisonLimits::default()),
-        Ok(Identity::Equal)
+        Ok(true)
     );
     assert_eq!(
         identical(Some(&left), Some(&right), &ComparisonLimits::default()),
-        Ok(Identity::Different)
+        Ok(false)
     );
 }

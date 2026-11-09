@@ -50,16 +50,23 @@ fn local_nonclone_validator_owns_only_what_it_retains() {
         let evaluator = LocalEvaluator(calls.clone());
         let schema = selected();
         let external = ExternalSchemas::default();
-        schema
-            .prepare(&evaluator, &external, &PreparationLimits::default())
+        evaluator
+            .prepare(
+                EvaluationRequest {
+                    schema: &schema,
+                    external_schemas: &external,
+                },
+                &PreparationLimits::default(),
+                &AtomicBool::new(false),
+            )
             .unwrap()
     };
     assert!(matches!(
-        prepared.evaluate_json(b"null").unwrap(),
+        prepared.evaluate(&JsonValue::null(), Detail::Outcome, &AtomicBool::new(false)),
         ValueOutcome::Satisfies
     ));
     assert_eq!(calls.get(), 1);
-    let validator: LocalValidator = prepared.into_validator();
+    let validator: LocalValidator = prepared;
     assert_eq!(
         validator.root.pointer().as_str(),
         Some("/operations/run/input")
@@ -190,12 +197,11 @@ impl SchemaEvaluator for ResolveOnly {
 }
 #[test]
 fn local_reference_defect_is_a_preparation_cause_not_an_instance_verdict() {
-    let external = ExternalSchemas::default()
-        .with(
-            "https://example.test/external",
-            JsonValue::parse("{}").unwrap(),
-        )
-        .unwrap();
+    let external = ExternalSchemas::new([openbindings::ExternalSchema {
+        uri: ("https://example.test/external").into(),
+        document: JsonValue::parse("{}").unwrap(),
+    }])
+    .unwrap();
     let error = selected()
         .prepare(&ResolveOnly, &external, &PreparationLimits::default())
         .unwrap_err();

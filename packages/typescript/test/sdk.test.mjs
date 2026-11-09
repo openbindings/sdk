@@ -568,6 +568,8 @@ test("evaluateJson admits JSON text as parseJson does, then validates", () => {
   // stay the machine-readable fields.
   assert.deepEqual(sdk.parseJson('{"a" ').error, {
     byteOffset: 5,
+    line: 1,
+    byteColumn: 6,
     code: "colon",
     kind: "Syntax",
     message: "expected a colon after the member name at byte 5",

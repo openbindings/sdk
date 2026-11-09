@@ -3,7 +3,7 @@ use openbindings::{ConformantDocument, Document, ExternalSchemas, JsonValue};
 use openbindings_invocation::{
     BindingInvoker, BindingInvokerExt, BindingRequest, CancellationToken, ContextChallenge,
     DefaultOperationInvoker, InvocationError, InvocationSupport, OperationRequest, OutputEvent,
-    PreflightOutcome, ProviderIo, ProviderOutput,
+    ProviderIo, ProviderOutput,
 };
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 use std::{
@@ -50,7 +50,7 @@ impl BindingInvoker for Provider<'_> {
     where
         Self: 'a;
     type Preflight<'a>
-        = Ready<Result<PreflightOutcome, InvocationError>>
+        = Ready<Result<Option<ContextChallenge>, InvocationError>>
     where
         Self: 'a;
     fn handle_invoke<'a>(
@@ -74,7 +74,7 @@ impl BindingInvoker for Provider<'_> {
         self.hooks.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         ready(
             self.code.map_or(
-                Ok(PreflightOutcome::Challenge(
+                Ok(Some(
                     ContextChallenge::try_from(json(r#"{"message":"Context needed","schema":{}}"#))
                         .unwrap(),
                 )),
@@ -91,7 +91,7 @@ impl InvocationSupport for Provider<'_> {
 fn send_preflight<'a, P: BindingInvoker + Sync>(
     client: &'a P,
     request: BindingRequest,
-) -> impl Future<Output = Result<PreflightOutcome, InvocationError>> + Send + 'a
+) -> impl Future<Output = Result<Option<ContextChallenge>, InvocationError>> + Send + 'a
 where
     P::Preflight<'a>: Send,
 {
@@ -125,7 +125,7 @@ async fn check_forwarding<P: BindingInvoker + InvocationSupport>(
 ) {
     let expected = r#"{"message":"Context needed","schema":{}}"#;
     let binding = &provider;
-    let PreflightOutcome::Challenge(challenge) = binding
+    let Some(challenge) = binding
         .preflight(request(), cancel())
         .unwrap()
         .await
@@ -142,7 +142,7 @@ async fn check_forwarding<P: BindingInvoker + InvocationSupport>(
         DefaultEvaluator::default(),
         ExternalSchemas::default(),
     );
-    let PreflightOutcome::Challenge(challenge) = operation
+    let Some(challenge) = operation
         .preflight(OperationRequest::binding(doc("{}"), "b"), cancel())
         .unwrap()
         .await
@@ -336,7 +336,7 @@ async fn explain_detail_covers_both_directions_and_names_value_members() {
     }
     impl BindingInvoker for EmitMember {
         type Invoke<'a> = std::pin::Pin<Box<dyn Future<Output = Result<(), InvocationError>> + 'a>>;
-        type Preflight<'a> = Ready<Result<PreflightOutcome, InvocationError>>;
+        type Preflight<'a> = Ready<Result<Option<ContextChallenge>, InvocationError>>;
         fn handle_invoke<'a>(
             &'a self,
             _: BindingRequest,
@@ -353,7 +353,7 @@ async fn explain_detail_covers_both_directions_and_names_value_members() {
             _: BindingRequest,
             _: CancellationToken,
         ) -> Self::Preflight<'a> {
-            ready(Ok(PreflightOutcome::NoPrediction))
+            ready(Ok(None))
         }
     }
     let strings = r#"{"type":"object","additionalProperties":{"type":"string"}}"#;
@@ -415,7 +415,7 @@ impl InvocationSupport for HoldOutput {
 }
 impl BindingInvoker for HoldOutput {
     type Invoke<'a> = std::pin::Pin<Box<dyn Future<Output = Result<(), InvocationError>> + 'a>>;
-    type Preflight<'a> = Ready<Result<PreflightOutcome, InvocationError>>;
+    type Preflight<'a> = Ready<Result<Option<ContextChallenge>, InvocationError>>;
     fn handle_invoke<'a>(
         &'a self,
         _: BindingRequest,
@@ -434,7 +434,7 @@ impl BindingInvoker for HoldOutput {
         _: BindingRequest,
         _: CancellationToken,
     ) -> Self::Preflight<'a> {
-        ready(Ok(PreflightOutcome::NoPrediction))
+        ready(Ok(None))
     }
 }
 fn post_terminal_precedence<F: Future<Output = Result<(), InvocationError>>>(

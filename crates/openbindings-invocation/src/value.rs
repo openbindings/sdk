@@ -41,6 +41,9 @@ impl BindingRequest {
     /// A well-shaped missing binding key remains an invocation terminal, not an
     /// admission failure. The context object remains exact and opaque.
     ///
+    /// For a borrowed frame, pass `&frame.to_owned()`; this retains its shared
+    /// exact storage with a reference-count clone.
+    ///
     /// # Errors
     /// Rejects malformed fields, ambiguous outer names, or a document for which
     /// the core cannot establish conformance. It does not acquire external data.
@@ -51,7 +54,7 @@ impl BindingRequest {
     ///
     /// # Errors
     /// Returns the same local admission failures as [`Self::from_json`].
-    pub fn from_json_ref(value: JsonRef<'_>) -> Result<Self, BoundaryFailure> {
+    fn from_json_ref(value: JsonRef<'_>) -> Result<Self, BoundaryFailure> {
         object(value, &["interface", "binding", "context"], "")?;
         let interface = interface(value)?;
         let binding = string(required(value, "binding", "/binding")?, "/binding")?.to_owned();

@@ -858,7 +858,10 @@ fn preparation_display_names_causes_without_changing_debug_redaction() {
         invalid.to_string(),
         "schema preparation failed: invalid external schema in resource \"https://example.test/schema\" at pointer \"/$defs/bad\""
     );
-    assert_eq!(format!("{invalid:?}"), "PreparationFailure { .. }");
+    assert_eq!(
+        format!("{invalid:?}"),
+        r#"PreparationFailure { kind: "InvalidExternalSchema", has_origin: true, .. }"#
+    );
     let limit = PreparationFailure::new(PreparationFailureKind::Limit {
         resource: "schema-nodes".into(),
     });

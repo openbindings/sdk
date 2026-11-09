@@ -95,8 +95,8 @@ error type instead of panicking.
 ```rust
 use openbindings::JsonValue;
 use openbindings_invocation::{
-    BindingInvoker, BindingRequest, CancellationToken, InvocationError, InvocationSupport,
-    PreflightOutcome, ProviderIo,
+    BindingInvoker, BindingRequest, CancellationToken, ContextChallenge, InvocationError,
+    InvocationSupport, ProviderIo,
 };
 use std::{
     collections::BTreeMap,
@@ -150,7 +150,7 @@ fn admit(request: &BindingRequest) -> Result<(), InvocationError> {
     let binding = request
         .interface
         .binding(&request.binding)
-        .ok_or_else(|| InvocationError::new("ERR_BINDING_NOT_FOUND", None).unwrap())?;
+        .ok_or_else(InvocationError::binding_not_found)?;
     if !source_ok(&binding.source()) || !matches(binding.data(), r#"{"mode":"echo"}"#) {
         // This kind defines a fixed code and never copies rejected data into errors.
         return Err(InvocationError::new("example.memory.invalid-data", None).unwrap());
@@ -159,7 +159,7 @@ fn admit(request: &BindingRequest) -> Result<(), InvocationError> {
 }
 impl BindingInvoker for Memory {
     type Invoke<'a> = Pin<Box<dyn Future<Output = Result<(), InvocationError>> + Send + 'a>>;
-    type Preflight<'a> = Ready<Result<PreflightOutcome, InvocationError>>;
+    type Preflight<'a> = Ready<Result<Option<ContextChallenge>, InvocationError>>;
 
     fn handle_invoke<'a>(
         &'a self,
@@ -180,7 +180,7 @@ impl BindingInvoker for Memory {
         request: BindingRequest,
         _: CancellationToken,
     ) -> Self::Preflight<'a> {
-        ready(admit(&request).map(|()| PreflightOutcome::NoPrediction))
+        ready(admit(&request).map(|()| None))
     }
 }
 impl InvocationSupport for Memory {
@@ -518,7 +518,13 @@ object-form schema for the next attempt's context; mark secret properties
 The application acquires values, decides whether to disclose them and starts a
 new attempt. The SDK never acquires context or retries for you.
 
-Preflight returns `Ok(PreflightOutcome::Challenge(challenge))` when it predicts
+A provider that makes no prediction can use the one-line body
+`ready(Ok(None))` with `Ready<Result<Option<ContextChallenge>, InvocationError>>`.
+The [binding-invoker interface](https://github.com/openbindings/interfaces/blob/3e3dc453a93b611a8e9ea1813ec63a2216830f45/binding-invoker/README.md)
+states that `null` is always conformant, even when invocation will need context.
+`None` means no prediction; it does not promise that invocation will proceed.
+
+Preflight returns `Ok(Some(challenge))` when it predicts
 context requirements. Returning a `CONTEXT_REQUIRED` error there is invalid and
 becomes `ERR_EXECUTION_FAILED`. Checked invocation similarly rejects a challenge
 after output. The adapter must enforce the before-effects guarantee itself.
@@ -753,10 +759,7 @@ pub fn keep_part(
         }
         // An added binding needs its added operation and what its `uses` names.
         if let Some(key) = root.strip_prefix("/bindings/")
-            && let Some(added) = result
-                .report()
-                .added()
-                .find(|added| added.binding() == key)
+            && let Some(added) = result.report().added().find(|added| added.binding() == key)
         {
             if !added.reused() {
                 wanted.push(format!(

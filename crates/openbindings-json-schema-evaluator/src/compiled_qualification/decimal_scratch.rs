@@ -11,12 +11,11 @@ fn prepared(schema: &str) -> (DefaultValidator, DefaultValidator) {
 }
 
 fn diagnostic(schema: &str) -> DefaultValidator {
-    let resources = ExternalSchemas::default()
-        .with(
-            "https://qualification.invalid/root",
-            JsonValue::parse(schema).unwrap(),
-        )
-        .unwrap();
+    let resources = ExternalSchemas::new([openbindings::ExternalSchema {
+        uri: ("https://qualification.invalid/root").into(),
+        document: JsonValue::parse(schema).unwrap(),
+    }])
+    .unwrap();
     prepare_document(
         &document(r#"{"$ref":"https://qualification.invalid/root"}"#),
         &resources,

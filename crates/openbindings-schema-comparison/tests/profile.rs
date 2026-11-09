@@ -5,7 +5,7 @@ use std::{collections::BTreeSet, path::PathBuf};
 fn json(text: &str) -> JsonValue {
     JsonValue::parse(text).unwrap()
 }
-fn document_identity(left: &JsonValue, right: &JsonValue) -> Result<Identity, ComparisonFailure> {
+fn document_identity(left: &JsonValue, right: &JsonValue) -> Result<bool, ComparisonFailure> {
     let left_operations = left.get("operations").unwrap();
     let right_operations = right.get("operations").unwrap();
     let left_keys: BTreeSet<_> = left_operations
@@ -19,9 +19,9 @@ fn document_identity(left: &JsonValue, right: &JsonValue) -> Result<Identity, Co
         .map(|m| m.name.as_str().unwrap())
         .collect();
     if left_keys != right_keys {
-        return Ok(Identity::Different);
+        return Ok(false);
     }
-    let mut answer = Identity::Equal;
+    let mut answer = true;
     for key in left_keys {
         for slot in ["input", "output"] {
             let a = left_operations
@@ -34,10 +34,8 @@ fn document_identity(left: &JsonValue, right: &JsonValue) -> Result<Identity, Co
                 .unwrap()
                 .get(slot)
                 .map(|schema| SchemaInput::new(schema.to_owned(), right.clone()));
-            if identical(a.as_ref(), b.as_ref(), &ComparisonLimits::default())?
-                == Identity::Different
-            {
-                answer = Identity::Different;
+            if !identical(a.as_ref(), b.as_ref(), &ComparisonLimits::default())? {
+                answer = false;
             }
         }
     }
@@ -63,11 +61,7 @@ fn all_27_pinned_identity_groups_preserve_the_published_verdicts() {
             &fixture.get("left").unwrap().to_owned(),
             &fixture.get("right").unwrap().to_owned(),
         );
-        let expected = if record["verdict"] == "compatible" {
-            Identity::Equal
-        } else {
-            Identity::Different
-        };
+        let expected = record["verdict"] == "compatible";
         if result != Ok(expected) {
             mismatches.push(format!(
                 "{}: {result:?}, expected {expected:?}",
@@ -98,11 +92,7 @@ fn all_10_exact_value_identity_groups_preserve_the_published_verdicts() {
             &json(case["leftJSON"].as_str().unwrap()),
             &json(case["rightJSON"].as_str().unwrap()),
         );
-        let expected = if case["expected"]["verdict"] == "compatible" {
-            Identity::Equal
-        } else {
-            Identity::Different
-        };
+        let expected = case["expected"]["verdict"] == "compatible";
         assert_eq!(result, Ok(expected), "{}", case["id"]);
     }
     assert_eq!(

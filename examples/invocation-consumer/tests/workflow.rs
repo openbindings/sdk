@@ -147,7 +147,7 @@ async fn preflight_and_context_require_a_separate_explicit_attempt() {
         .unwrap()
         .await
         .unwrap();
-    assert!(matches!(prediction, PreflightOutcome::Challenge(_)));
+    assert!((prediction).is_some());
     assert_eq!(provider.predictions(), 1);
     assert_eq!(provider.values(), 0);
     let call = client

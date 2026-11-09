@@ -27,10 +27,6 @@ impl SchemaInput {
             resources: Vec::new(),
         }
     }
-    /// Treat this exact schema as its own fragment-reference document root.
-    pub fn standalone(schema: JsonValue) -> Self {
-        Self::new(schema.clone(), schema)
-    }
     /// Set the absolute starting base for this profile input. A schema resource's
     /// `$id` establishes its own base. This is not an OBI acquisition-base declaration.
     #[must_use]

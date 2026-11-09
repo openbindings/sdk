@@ -21,7 +21,7 @@ fn direct_default_validator_refuses_ambiguous_instances() {
     let external = ExternalSchemas::default();
     let limits = PreparationLimits::default();
     let control = AtomicBool::new(false);
-    let direct: DefaultValidator = DefaultEvaluator::new()
+    let validator: DefaultValidator = DefaultEvaluator::new()
         .prepare(
             EvaluationRequest {
                 schema: &selected,
@@ -31,17 +31,11 @@ fn direct_default_validator_refuses_ambiguous_instances() {
             &control,
         )
         .unwrap();
-    let extracted = selected
-        .prepare(&DefaultEvaluator::new(), &external, &limits)
-        .unwrap()
-        .into_validator();
     let duplicate = JsonValue::parse(r#"{"x":1,"x":2}"#).unwrap();
-    for validator in [direct, extracted] {
-        for detail in [Detail::Outcome, Detail::Explain] {
-            assert!(
-                matches!(validator.evaluate(&duplicate, detail, &control), ValueOutcome::NoVerdict { detail } if detail.code == "duplicate-instance-members")
-            );
-        }
+    for detail in [Detail::Outcome, Detail::Explain] {
+        assert!(
+            matches!(validator.evaluate(&duplicate, detail, &control), ValueOutcome::NoVerdict { detail } if detail.code == "duplicate-instance-members")
+        );
     }
 }
 #[test]

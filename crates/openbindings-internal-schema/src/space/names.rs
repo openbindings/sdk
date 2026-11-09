@@ -7,6 +7,12 @@ pub(super) struct Inventory {
     names: Vec<(u32, NameSelection)>,
 }
 impl Inventory {
+    pub(super) fn retained_bytes(&self) -> usize {
+        size_of::<Self>()
+            + self.ids.retained_bytes()
+            + openbindings_internal_json::backend::vec_bytes(&self.names)
+    }
+
     pub(super) fn new(space: &SchemaSpace) -> Self {
         let mut ids = Identifiers::new(usize::MAX);
         let mut names = Vec::new();

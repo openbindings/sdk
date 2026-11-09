@@ -1,10 +1,11 @@
 //! Operation addressing, caller-owned selection, and typed value validation.
+use crate::ContextChallenge;
 mod prepared;
 mod request;
 use crate::{
     BindingRequest, BoundaryFailure, CancellationToken, Invocation, InvocationError,
     InvocationLimits, LimitError, ProviderIo,
-    binding::{self, BindingInvoker, InvocationSupport, PreflightOutcome, error},
+    binding::{self, BindingInvoker, InvocationSupport, error},
     channel::{self, Shared},
 };
 use openbindings::{
@@ -93,7 +94,7 @@ impl<P, E> fmt::Debug for DefaultOperationInvoker<P, E> {
             .finish_non_exhaustive()
     }
 }
-impl<P: BindingInvoker + InvocationSupport, E: SchemaEvaluator> DefaultOperationInvoker<P, E> {
+impl<P: BindingInvoker, E: SchemaEvaluator> DefaultOperationInvoker<P, E> {
     /// Retain explicit dependencies. This does not prepare or judge any schema.
     pub fn new(provider: P, evaluator: E, external: ExternalSchemas) -> Self {
         Self {
@@ -124,6 +125,8 @@ impl<P: BindingInvoker + InvocationSupport, E: SchemaEvaluator> DefaultOperation
         self.detail = detail;
         self
     }
+}
+impl<P: BindingInvoker + InvocationSupport, E: SchemaEvaluator> DefaultOperationInvoker<P, E> {
     /// Resolve and select, then return a lazy output-driven attempt. Schemas are
     /// prepared only as values reach their direction; absent schemas bypass gating.
     /// # Errors
@@ -185,7 +188,7 @@ impl<P: BindingInvoker + InvocationSupport, E: SchemaEvaluator> DefaultOperation
         request: OperationRequest,
         control: CancellationToken,
     ) -> Result<
-        impl Future<Output = Result<PreflightOutcome, InvocationError>> + 'a + use<'a, P, E>,
+        impl Future<Output = Result<Option<ContextChallenge>, InvocationError>> + 'a + use<'a, P, E>,
         BoundaryFailure,
     > {
         request.admit()?;
@@ -213,7 +216,7 @@ fn resolve<P: InvocationSupport>(
         OperationAddress::Binding(key) => {
             let binding = interface
                 .binding(&key)
-                .ok_or_else(|| error("ERR_BINDING_NOT_FOUND"))?;
+                .ok_or_else(InvocationError::binding_not_found)?;
             let operation = binding.operation();
             (operation, key)
         }
@@ -229,7 +232,7 @@ fn resolve<P: InvocationSupport>(
                             .binding(key)
                             .is_some_and(|binding| binding.operation_key() == operation.key())
                         {
-                            return Err(error("ERR_BINDING_NOT_FOUND"));
+                            return Err(InvocationError::binding_not_found());
                         }
                     }
                     let selected = keys
@@ -252,7 +255,7 @@ fn resolve<P: InvocationSupport>(
             }
             (
                 operation,
-                keys.0.ok_or_else(|| error("ERR_BINDING_NOT_FOUND"))?,
+                keys.0.ok_or_else(InvocationError::binding_not_found)?,
             )
         }
     };
@@ -424,7 +427,10 @@ pub trait OperationInvoker {
         &self,
         request: OperationRequest,
         control: CancellationToken,
-    ) -> Result<impl Future<Output = Result<PreflightOutcome, InvocationError>>, BoundaryFailure>;
+    ) -> Result<
+        impl Future<Output = Result<Option<ContextChallenge>, InvocationError>>,
+        BoundaryFailure,
+    >;
 }
 impl<P: BindingInvoker + InvocationSupport, E: SchemaEvaluator> OperationInvoker
     for DefaultOperationInvoker<P, E>
@@ -441,8 +447,10 @@ impl<P: BindingInvoker + InvocationSupport, E: SchemaEvaluator> OperationInvoker
         &self,
         request: OperationRequest,
         control: CancellationToken,
-    ) -> Result<impl Future<Output = Result<PreflightOutcome, InvocationError>>, BoundaryFailure>
-    {
+    ) -> Result<
+        impl Future<Output = Result<Option<ContextChallenge>, InvocationError>>,
+        BoundaryFailure,
+    > {
         DefaultOperationInvoker::preflight(self, request, control)
     }
 }
@@ -453,7 +461,7 @@ macro_rules! forward_operation { ($($wrapper:ty),+) => { $(
             (**self).invoke(request,control)
         }
         fn preflight(&self, request: OperationRequest, control: CancellationToken)
-            -> Result<impl Future<Output=Result<PreflightOutcome,InvocationError>>, BoundaryFailure> {
+            -> Result<impl Future<Output=Result<Option<ContextChallenge>, InvocationError>>, BoundaryFailure> {
             (**self).preflight(request,control)
         }
     }

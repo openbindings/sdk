@@ -288,6 +288,10 @@ const documentToken = Symbol("document owner");
 
 /** One exact, immutable OBI snapshot. Edits return a new snapshot; owners, views and proofs keep their original revision. */
 export class Document extends DocumentSnapshot {
+  /** Estimate heap bytes held by this snapshot's shared storage now: source text, parsed nodes and buffers, and built indexes, conformance reports and schema-resolution caches. Clones and proofs share storage, so charge a snapshot once; a proof reaches it through asDocument(). Reads existing capacities without parsing, validating or building caches. Later namespace lookups can add entries and aliases, schema queries can add their inventory and identities, and location lookups can add two machine words per 4096 source bytes with geometrically reserved capacity capped at floor(sourceBytes / 4096) checkpoints (8 bytes each on Wasm). Call again to include growth. Tree/hash storage is estimated. Excludes separately owned external resources, validators, process-wide packaged schemas, allocator overhead and Wasm memory growth. */
+  retainedBytes(): number {
+    return handle<wasm.WasmDocument>(this).retainedBytes();
+  }
   private constructor(raw: wasm.WasmDocument, token: symbol) {
     if (token !== documentToken)
       throw new TypeError("Use Document.parse() or Document.create().");

@@ -43,6 +43,10 @@ value evaluator.
 
 ## Default evaluation implementation
 
+The default evaluator is built on the SDK's internal crates as shared
+implementation. Third-party evaluators use the public `SchemaEvaluator` contract;
+`openbindings-schema-evaluator-test-support` qualifies that public contract.
+
 The optional `openbindings-json-schema-evaluator` retains an Original semantic
 plan over original locations and may additionally compile a projected subset
 through unmodified jsonschema. Outcome checks use compiled evaluation when both

@@ -128,9 +128,6 @@ fn preparation_detail(detail: NoVerdict) -> PreparationFailure {
         NoVerdictReason::LimitExceeded => PreparationFailureKind::Limit {
             resource: detail.code.into_owned(),
         },
-        NoVerdictReason::ConservativePreparation if detail.code == "invalid-schema" => {
-            PreparationFailureKind::InvalidExternalSchema
-        }
         NoVerdictReason::UnsupportedCapability | NoVerdictReason::ConservativePreparation => {
             PreparationFailureKind::UnsupportedCapability {
                 capability: detail.code.into_owned(),

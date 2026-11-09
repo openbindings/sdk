@@ -571,11 +571,53 @@ fn debug_and_display_write_their_structure() {
     // Debug is structural, not empty: it names the type, the variant and the
     // fixed fields it may show. Display writes the disclosed text.
     let refusal = VersionRefusal::new("0.3.0").unwrap();
-    assert_eq!(format!("{refusal:?}"), "VersionRefusal { .. }");
+    assert_eq!(
+        format!("{refusal:?}"),
+        r#"VersionRefusal { supported: "0.2.x", .. }"#
+    );
     assert_eq!(
         refusal.to_string(),
         "declared version 0.3.0 is outside 0.2.x"
     );
+    for (kind, name) in [
+        (
+            PreparationFailureKind::Resolution {
+                cause: ResolutionFailureKind::ResourceUnavailable { uri: SECRET.into() },
+            },
+            "Resolution",
+        ),
+        (
+            PreparationFailureKind::UnsupportedCapability {
+                capability: SECRET.into(),
+            },
+            "UnsupportedCapability",
+        ),
+        (
+            PreparationFailureKind::Limit {
+                resource: SECRET.into(),
+            },
+            "Limit",
+        ),
+        (PreparationFailureKind::Cancelled, "Cancelled"),
+        (
+            PreparationFailureKind::InvalidExternalSchema,
+            "InvalidExternalSchema",
+        ),
+        (
+            PreparationFailureKind::Implementation {
+                message: SECRET.into(),
+            },
+            "Implementation",
+        ),
+    ] {
+        for origin in [None, Some(location())] {
+            let mut failure = PreparationFailure::new(kind.clone());
+            failure.origin = origin;
+            let item = row_with_fields("PreparationFailure", &failure, &[("kind", name)]);
+            assert!(item.text.iter().all(|text| text.contains(&format!("has_origin: {}", failure.origin.is_some()))));
+            check_rows(vec![item], 1);
+        }
+    }
     let text = r#"{"openbindings":"0.2.0","operations":{}}"#;
     let document = Document::parse(text).unwrap();
     assert_eq!(

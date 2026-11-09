@@ -107,7 +107,18 @@ impl From<ResolutionFailure> for PreparationFailure {
 }
 impl fmt::Debug for PreparationFailure {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("PreparationFailure").finish_non_exhaustive()
+        let kind = match self.kind {
+            PreparationFailureKind::Resolution { .. } => "Resolution",
+            PreparationFailureKind::UnsupportedCapability { .. } => "UnsupportedCapability",
+            PreparationFailureKind::Limit { .. } => "Limit",
+            PreparationFailureKind::Cancelled => "Cancelled",
+            PreparationFailureKind::InvalidExternalSchema => "InvalidExternalSchema",
+            PreparationFailureKind::Implementation { .. } => "Implementation",
+        };
+        f.debug_struct("PreparationFailure")
+            .field("kind", &kind)
+            .field("has_origin", &self.origin.is_some())
+            .finish_non_exhaustive()
     }
 }
 impl fmt::Display for PreparationFailure {
@@ -695,10 +706,6 @@ impl<V: SchemaValidator> fmt::Debug for PreparedSchema<V> {
     }
 }
 impl<V: SchemaValidator> PreparedSchema<V> {
-    /// Recover the concrete validator without changing its ownership model.
-    pub fn into_validator(self) -> V {
-        self.validator
-    }
     /// Admit exact JSON text or bytes under [`JsonLimits::default`], then validate.
     /// Every [`ValueOutcome`] is returned as `Ok`, including undefined and
     /// no-verdict. Duplicate members are retained by admission and yield
@@ -855,6 +862,7 @@ forward_validator!(Arc);
 forward_validator!(Rc);
 forward_validator!(Box);
 
+#[doc(hidden)]
 impl From<openbindings_internal_schema::Failure> for PreparationFailure {
     fn from(failure: openbindings_internal_schema::Failure) -> Self {
         use openbindings_internal_schema::FailureReason as F;
@@ -873,9 +881,6 @@ impl From<openbindings_internal_schema::Failure> for PreparationFailure {
                     origin,
                 }
                 .into();
-            }
-            F::ConservativePreparation if failure.code == "invalid-schema" => {
-                PreparationFailureKind::InvalidExternalSchema
             }
             F::UnsupportedCapability | F::ConservativePreparation => {
                 PreparationFailureKind::UnsupportedCapability {

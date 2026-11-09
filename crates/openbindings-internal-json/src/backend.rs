@@ -1115,6 +1115,16 @@ pub fn input_location(input: &[u8], byte_offset: usize) -> crate::SourceLocation
     }
 }
 
+/// Reuse the coordinates computed at admission, without rescanning source.
+pub fn input_error_location(error: &crate::InputError) -> crate::SourceLocation {
+    crate::SourceLocation {
+        pointer: None,
+        byte_offset: error.byte_offset(),
+        line: error.line(),
+        byte_column: error.byte_column(),
+    }
+}
+
 /// An admission refusal decided before any byte is parsed, such as an edit
 /// batch that already exceeds a limit.
 pub fn input_error(
@@ -1125,6 +1135,8 @@ pub fn input_error(
     crate::InputError {
         kind,
         byte_offset,
+        line: 1,
+        byte_column: 1,
         code,
         route: crate::json::Route::Admission,
     }
@@ -1545,6 +1557,34 @@ pub fn live_arenas() -> usize {
 /// Borrow a token's byte range without constructing its pointer or line coordinates.
 pub fn byte_range(value: crate::JsonRef<'_>) -> std::ops::Range<usize> {
     value.owner.nodes[value.id].span.clone()
+}
+
+// On-demand storage estimates for shared SDK implementation, never parse work.
+pub fn vec_bytes<T>(values: &Vec<T>) -> usize {
+    values.capacity() * size_of::<T>()
+}
+pub fn btree_bytes<K, V>(values: &std::collections::BTreeMap<K, V>) -> usize {
+    // Rust exposes length, not B-tree capacity. Estimate 8 of 11 occupied slots
+    // per node after the first, including an allowance for internal edges.
+    let nodes = if values.is_empty() {
+        0
+    } else {
+        1 + values.len().saturating_sub(11).div_ceil(8)
+    };
+    nodes * (16 + 11 * (size_of::<K>() + size_of::<V>()) + 2 * size_of::<usize>())
+}
+pub fn hash_bytes<K, V>(values: &std::collections::HashMap<K, V>) -> usize {
+    if values.capacity() == 0 {
+        return 0;
+    }
+    let buckets = (values.capacity() * 8 / 7).next_power_of_two();
+    buckets * (size_of::<(K, V)>() + 1) + 16
+}
+pub fn retained_bytes(value: &crate::JsonValue) -> usize {
+    value.owner.retained_bytes()
+}
+pub fn pointer_retained_bytes(pointer: &crate::Pointer) -> usize {
+    pointer.retained_bytes()
 }
 
 #[cfg(test)]

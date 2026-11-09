@@ -1,0 +1,235 @@
+{
+  "openbindings": "0.2.0",
+  "name": "Acme Refunds",
+  "version": "2026-10-01",
+  "description": "Refunds for Acme orders. createRefund runs a graph that checks the refund limit and then creates the refund in Stripe; checkLimit and stripeCreateRefund are its steps.",
+  "schemas": {
+    "Money": {
+      "type": "object",
+      "properties": {
+        "amount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Amount in the currency's minor unit, such as cents."
+        },
+        "currency": {
+          "type": "string",
+          "pattern": "^[a-z]{3}$",
+          "description": "ISO 4217 currency code, in lowercase."
+        }
+      },
+      "required": ["amount", "currency"],
+      "additionalProperties": false
+    },
+    "RefundReason": {
+      "type": "string",
+      "enum": ["duplicate", "fraudulent", "requested_by_customer"]
+    },
+    "Refund": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "orderId": { "type": "string" },
+        "amount": { "$ref": "#/schemas/Money" },
+        "reason": { "$ref": "#/schemas/RefundReason" },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "succeeded", "failed", "canceled"]
+        },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "orderId", "amount", "status", "createdAt"],
+      "additionalProperties": false
+    }
+  },
+  "operations": {
+    "createRefund": {
+      "description": "Refund all or part of an order's payment.",
+      "tags": ["refunds"],
+      "input": {
+        "type": "object",
+        "properties": {
+          "orderId": { "type": "string" },
+          "amount": { "$ref": "#/schemas/Money" },
+          "reason": { "$ref": "#/schemas/RefundReason" }
+        },
+        "required": ["orderId", "amount"],
+        "additionalProperties": false,
+        "examples": [
+          {
+            "orderId": "ord_8VZ2Q4",
+            "amount": { "amount": 2500, "currency": "usd" },
+            "reason": "requested_by_customer"
+          }
+        ]
+      },
+      "output": {
+        "$ref": "#/schemas/Refund",
+        "examples": [
+          {
+            "id": "re_3Q9XK2",
+            "orderId": "ord_8VZ2Q4",
+            "amount": { "amount": 2500, "currency": "usd" },
+            "reason": "requested_by_customer",
+            "status": "pending",
+            "createdAt": "2026-10-17T14:03:12Z"
+          }
+        ]
+      }
+    },
+    "getRefund": {
+      "description": "Look up one refund.",
+      "tags": ["refunds"],
+      "aliases": ["retrieveRefund"],
+      "input": {
+        "type": "object",
+        "properties": {
+          "refundId": { "type": "string" }
+        },
+        "required": ["refundId"],
+        "additionalProperties": false,
+        "examples": [{ "refundId": "re_3Q9XK2" }]
+      },
+      "output": {
+        "$ref": "#/schemas/Refund",
+        "examples": [
+          {
+            "id": "re_3Q9XK2",
+            "orderId": "ord_8VZ2Q4",
+            "amount": { "amount": 2500, "currency": "usd" },
+            "reason": "requested_by_customer",
+            "status": "succeeded",
+            "createdAt": "2026-10-17T14:03:12Z"
+          }
+        ]
+      }
+    },
+    "listAllRefunds": {
+      "description": "List every refund on the account, newest first. Meant for the finance team.",
+      "tags": ["refunds"],
+      "aliases": ["listRefunds"],
+      "input": {
+        "type": "object",
+        "properties": {
+          "limit": { "type": "integer", "minimum": 1, "maximum": 100 },
+          "startingAfter": { "type": "string" }
+        },
+        "additionalProperties": false,
+        "examples": [{ "limit": 2 }]
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "refunds": {
+            "type": "array",
+            "items": { "$ref": "#/schemas/Refund" }
+          },
+          "hasMore": { "type": "boolean" }
+        },
+        "required": ["refunds", "hasMore"],
+        "additionalProperties": false,
+        "examples": [
+          {
+            "refunds": [
+              {
+                "id": "re_3Q9XK2",
+                "orderId": "ord_8VZ2Q4",
+                "amount": { "amount": 2500, "currency": "usd" },
+                "reason": "requested_by_customer",
+                "status": "succeeded",
+                "createdAt": "2026-10-17T14:03:12Z"
+              },
+              {
+                "id": "re_3Q8WJ7",
+                "orderId": "ord_7TY1P9",
+                "amount": { "amount": 12999, "currency": "usd" },
+                "reason": "duplicate",
+                "status": "succeeded",
+                "createdAt": "2026-10-16T09:41:55Z"
+              }
+            ],
+            "hasMore": true
+          }
+        ]
+      }
+    },
+    "checkLimit": {
+      "description": "Check a proposed refund against the account's daily refund limit. A step of createRefund's graph.",
+      "input": {
+        "type": "object",
+        "properties": {
+          "orderId": { "type": "string" },
+          "amount": { "$ref": "#/schemas/Money" }
+        },
+        "required": ["orderId", "amount"],
+        "additionalProperties": false,
+        "examples": [
+          {
+            "orderId": "ord_8VZ2Q4",
+            "amount": { "amount": 2500, "currency": "usd" }
+          }
+        ]
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "allowed": { "type": "boolean" },
+          "remaining": { "$ref": "#/schemas/Money" }
+        },
+        "required": ["allowed", "remaining"],
+        "additionalProperties": false,
+        "examples": [
+          {
+            "allowed": true,
+            "remaining": { "amount": 47500, "currency": "usd" }
+          }
+        ]
+      }
+    },
+    "stripeCreateRefund": {
+      "description": "Create a refund for a payment in Stripe. A step of createRefund's graph.",
+      "aliases": ["stripe.refunds.create"],
+      "input": {
+        "type": "object",
+        "properties": {
+          "payment_intent": { "type": "string" },
+          "amount": { "type": "integer", "minimum": 1 },
+          "reason": { "$ref": "#/schemas/RefundReason" }
+        },
+        "required": ["payment_intent"],
+        "examples": [
+          {
+            "payment_intent": "pi_3Q9XK2LkdIwHu7ix0Z8A",
+            "amount": 2500,
+            "reason": "requested_by_customer"
+          }
+        ]
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "object": { "const": "refund" },
+          "amount": { "type": "integer" },
+          "currency": { "type": "string" },
+          "payment_intent": { "type": "string" },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "requires_action", "succeeded", "failed", "canceled"]
+          }
+        },
+        "required": ["id", "object", "amount", "currency", "status"],
+        "examples": [
+          {
+            "id": "re_3Q9XK2LkdIwHu7ix1Bq5",
+            "object": "refund",
+            "amount": 2500,
+            "currency": "usd",
+            "payment_intent": "pi_3Q9XK2LkdIwHu7ix0Z8A",
+            "status": "succeeded"
+          }
+        ]
+      }
+    }
+  }
+}

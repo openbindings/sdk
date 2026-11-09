@@ -237,6 +237,55 @@ struct Layer {
     sources: Vec<Source>,
     names: BTreeMap<String, NameSelection>,
 }
+impl SchemaSpace {
+    // Excludes shared source arenas and the process-wide packaged catalog.
+    pub fn retained_bytes(&self) -> usize {
+        use openbindings_internal_json::backend::{btree_bytes, hash_bytes, vec_bytes};
+        let layer = &self.local;
+        size_of::<Self>()
+            + 2 * size_of::<usize>()
+            + vec_bytes(&layer.nodes)
+            + vec_bytes(&layer.resources)
+            + vec_bytes(&layer.sources)
+            + btree_bytes(&layer.names)
+            + layer.names.keys().map(String::capacity).sum::<usize>()
+            + layer
+                .resources
+                .iter()
+                .map(|r| {
+                    r.base.as_ref().map_or(0, String::capacity)
+                        + r.dialect.as_ref().map_or(0, String::capacity)
+                        + btree_bytes(&r.anchors)
+                        + r.anchors
+                            .iter()
+                            .map(|(k, v)| k.capacity() + vec_bytes(v))
+                            .sum::<usize>()
+                })
+                .sum::<usize>()
+            + layer
+                .sources
+                .iter()
+                .map(|s| s.uri.as_ref().map_or(0, String::capacity) + hash_bytes(&s.positions))
+                .sum::<usize>()
+            + self.names.get().map_or(0, |n| n.retained_bytes())
+            + btree_bytes(&self.custom.metas)
+            + self
+                .custom
+                .metas
+                .iter()
+                .map(|(k, v)| {
+                    k.capacity()
+                        + match v {
+                            Err(
+                                QueryFailure::ResourceUnavailable(s)
+                                | QueryFailure::UnsupportedDialect(Some(s)),
+                            ) => s.capacity(),
+                            _ => 0,
+                        }
+                })
+                .sum::<usize>()
+    }
+}
 impl std::fmt::Debug for SchemaSpace {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("SchemaSpace").finish_non_exhaustive()

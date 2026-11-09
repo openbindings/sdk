@@ -46,6 +46,7 @@ object member names. Token spelling is preserved independently of value equality
 | --- | --- |
 | Rust `Document::parse`, TypeScript `Document.parse` | Admit exact JSON and retain an immutable snapshot, including nonconformant drafts. Syntax, encoding and admission failures are separate from document findings. |
 | Rust `Document::new`, TypeScript `Document.create` | Create a draft declaring the supported specification version and an empty operations map. |
+| `Document::retained_bytes` / `Document.retainedBytes()` | Estimate current shared snapshot heap storage, including source, nodes and built caches. Charge clones and proofs once; excludes allocator overhead and Wasm memory growth. Later lookups can grow the estimate; see definition-level docs for cache growth. |
 | `Document::value` / `Document.value()` | Inspect original JSON, including extension members, original number tokens and duplicate occurrences. TypeScript acquires a disposable owner. |
 | `set`, `remove`, `edit` | Return a new immutable snapshot. An atomic batch addresses the original revision and preserves untouched bytes. Failure leaves all earlier owners unchanged. |
 | `Document::validate` / `Document.validate()` | Assess all applicable OBI rules. Only established conformance creates a `ConformantDocument`. Unsupported declared versions have a separate refusal. |
@@ -294,3 +295,14 @@ redirect and deadline policy; see [HTTP discovery](../crates/openbindings-http-d
 Source/kind data and binding selection remain outside core document interpretation.
 
 See [maintainer verification](maintainers.md) for the complete gate sequence.
+
+Parse failures expose `InputError::line()` and `byte_column()` in Rust and
+`InputFailure.error.line` and `byteColumn` in TypeScript. Lines and UTF-8 byte
+columns are one-based. They are computed once on failure; nothing changes on success.
+
+Invocation preflight returns `Option<ContextChallenge>`: `None` means no prediction,
+not guaranteed success. `InvocationError::binding_not_found()` constructs the
+binding interface's missing-binding error. Invocation carriers decode through
+`from_json(&JsonValue)`; retain a borrowed frame with `to_owned()` first, a
+reference-count clone. Schema comparison's `identical` returns `Result<bool,
+ComparisonFailure>`; a failure is separate from a negative comparison.

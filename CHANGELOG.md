@@ -1,5 +1,35 @@
 # Changelog
 
+## 2026-11-09 public API consensus batch (unreleased)
+
+### Changed
+
+- Lift `InvocationSupport` from `DefaultOperationInvoker` construction,
+  configuration and schema preparation; keep it on invocation and preflight.
+- Add `InvocationError::binding_not_found()` and use it in adapters and guides.
+- Replace `PreflightOutcome` with `Option<ContextChallenge>`; `None` means no
+  prediction. Keep required `handle_preflight` and document its one-line body.
+- Show fixed supported versions and preparation-failure variant names/origin
+  presence in `Debug`, while keeping document and caller payloads hidden.
+- Add Rust parse-error `line()`/`byte_column()` and TypeScript `line`/`byteColumn`,
+  computed only on failure.
+- Hide core's internal schema-failure conversion and remove unreachable
+  `invalid-schema` classification arms. Document the default evaluator's shared
+  internal implementation and third-party public evaluator contract.
+- Return `Result<bool, ComparisonFailure>` from schema identity comparison.
+- Add `Document::retained_bytes()` and TypeScript `Document.retainedBytes()` to
+  estimate current shared snapshot storage, including built caches, on demand.
+  Exclude allocator overhead and Wasm memory growth; document later cache growth.
+
+### Removed
+
+- Remove `PreflightOutcome` and schema comparison's `Identity` enum.
+- Remove `PreparedSchema::into_validator`, `SchemaInput::standalone` and
+  `ExternalSchemas::with`; use the evaluator contract and explicit input/resource constructors.
+- Remove public invocation-carrier `from_json_ref` decoders; use `from_json(&JsonValue)`
+  and retain a borrowed frame with `to_owned()` when needed.
+
+
 ## 2026-11-08 newcomer docs and omitted-entry accessors (unreleased)
 
 - Fix failure diagnostics, Node worker and disposal examples, and discovery client setup in the newcomer docs.

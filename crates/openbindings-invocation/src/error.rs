@@ -48,6 +48,9 @@ impl InvocationError {
 
     /// Read a closed portable error object without collapsing duplicate fields.
     ///
+    /// For a borrowed frame, pass `&frame.to_owned()`; this retains its shared
+    /// exact storage with a reference-count clone.
+    ///
     /// # Errors
     /// Returns a boundary error for a malformed carrier: invalid field types, missing required fields, duplicate members, or unsupported fields. Opaque payloads are preserved.
     pub fn from_json(value: &JsonValue) -> Result<Self, BoundaryFailure> {
@@ -58,7 +61,7 @@ impl InvocationError {
     ///
     /// # Errors
     /// Returns a boundary error for a malformed carrier: invalid field types, missing required fields, duplicate members, or unsupported fields. Opaque payloads are preserved.
-    pub fn from_json_ref(value: JsonRef<'_>) -> Result<Self, BoundaryFailure> {
+    fn from_json_ref(value: JsonRef<'_>) -> Result<Self, BoundaryFailure> {
         object(value, &["code", "data"], "")?;
         let code = value
             .get("code")
@@ -111,6 +114,11 @@ impl InvocationError {
     /// The provider may use this only when it can uphold that guarantee.
     pub fn refused() -> Self {
         Self::without_data("ERR_REFUSED")
+    }
+
+    /// Report that the addressed binding is absent.
+    pub fn binding_not_found() -> Self {
+        Self::without_data("ERR_BINDING_NOT_FOUND")
     }
 
     /// Record caller cancellation without claiming remote rollback or no effects.

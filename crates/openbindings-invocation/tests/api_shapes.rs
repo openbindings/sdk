@@ -4,11 +4,12 @@ use openbindings::{
     PreparationFailure, PreparationLimits, SchemaEvaluator, SchemaValidator, ValueOutcome,
     WorkControl,
 };
+use openbindings_invocation::ContextChallenge;
 use openbindings_invocation::{
     BindingInvoker, BindingInvokerExt, BindingRequest, BoundaryFailure, BoundaryFailureKind,
     CancellationToken, DefaultOperationInvoker, Invocation, InvocationError, InvocationLimits,
     InvocationSupport, OperationAddress, OperationInvoker, OperationRequest, OutputEvent,
-    PreflightOutcome, ProviderIo,
+    ProviderIo,
 };
 use std::{
     cell::Cell,
@@ -30,7 +31,7 @@ impl BindingInvoker for Echo<'_> {
     where
         Self: 'a;
     type Preflight<'a>
-        = Ready<Result<PreflightOutcome, InvocationError>>
+        = Ready<Result<Option<ContextChallenge>, InvocationError>>
     where
         Self: 'a;
     fn handle_invoke<'a>(
@@ -53,7 +54,7 @@ impl BindingInvoker for Echo<'_> {
         _: CancellationToken,
     ) -> Self::Preflight<'a> {
         self.0.fetch_add(1, Ordering::Relaxed);
-        ready(Ok(PreflightOutcome::NoPrediction))
+        ready(Ok(None))
     }
 }
 struct Router<'a> {
@@ -81,7 +82,7 @@ impl BindingInvoker for Router<'_> {
     where
         Self: 'a;
     type Preflight<'a>
-        = Ready<Result<PreflightOutcome, InvocationError>>
+        = Ready<Result<Option<ContextChallenge>, InvocationError>>
     where
         Self: 'a;
     fn handle_invoke<'a>(
@@ -137,7 +138,7 @@ where
 fn generic_preflight_send<'a, P: BindingInvoker + Sync>(
     p: &'a P,
     request: BindingRequest,
-) -> impl Future<Output = Result<PreflightOutcome, InvocationError>> + Send + 'a
+) -> impl Future<Output = Result<Option<ContextChallenge>, InvocationError>> + Send + 'a
 where
     P::Preflight<'a>: Send,
 {
@@ -165,10 +166,7 @@ async fn aggregate_routes_both_interfaces_and_checks_each_value_once() {
     for key in ["a", "b"] {
         let request = BindingRequest::new(document(), key);
         echo(generic_send(&router, request.clone())).await;
-        assert!(matches!(
-            generic_preflight_send(&router, request).await.unwrap(),
-            PreflightOutcome::NoPrediction
-        ));
+        assert!((generic_preflight_send(&router, request).await.unwrap()).is_none());
     }
     assert_eq!(
         (a.load(Ordering::Relaxed), b.load(Ordering::Relaxed)),
@@ -184,13 +182,13 @@ async fn aggregate_routes_both_interfaces_and_checks_each_value_once() {
     for key in ["a", "b"] {
         let request = OperationRequest::operation(document(), key);
         echo(OperationInvoker::invoke(&invoker, request.clone(), cancel()).unwrap()).await;
-        assert!(matches!(
+        assert!(
             OperationInvoker::preflight(&invoker, request, cancel())
                 .unwrap()
                 .await
-                .unwrap(),
-            PreflightOutcome::NoPrediction
-        ));
+                .unwrap()
+                .is_none()
+        );
     }
     assert_eq!(
         (a.load(Ordering::Relaxed), b.load(Ordering::Relaxed)),
@@ -231,8 +229,10 @@ impl OperationInvoker for EmptyInvoker {
         &self,
         request: OperationRequest,
         _: CancellationToken,
-    ) -> Result<impl Future<Output = Result<PreflightOutcome, InvocationError>>, BoundaryFailure>
-    {
+    ) -> Result<
+        impl Future<Output = Result<Option<ContextChallenge>, InvocationError>>,
+        BoundaryFailure,
+    > {
         request.admit()?;
         Ok(ready(Err(InvocationError::new(
             "ERR_OPERATION_NOT_FOUND",
@@ -341,4 +341,22 @@ async fn public_constructor_cancels_before_dropping_started_work() {
     drop(output);
     assert!(dropped.get());
     assert!(!parent.is_cancelled());
+}
+
+#[test]
+fn preparing_operation_schemas_needs_no_routing_support() {
+    let calls = AtomicUsize::new(0);
+    let preparations = Rc::new(Cell::new(0));
+    let invoker = DefaultOperationInvoker::new(
+        Echo(&calls),
+        CountingEvaluator(preparations.clone(), Rc::new(Cell::new(0))),
+        ExternalSchemas::default(),
+    )
+    .with_limits(InvocationLimits::default())
+    .unwrap()
+    .with_preparation_limits(PreparationLimits::default())
+    .with_validation_detail(Detail::Explain);
+    invoker.prepare(document(), "a", &cancel()).unwrap();
+    assert_eq!(preparations.get(), 2);
+    assert_eq!(calls.load(Ordering::Relaxed), 0);
 }

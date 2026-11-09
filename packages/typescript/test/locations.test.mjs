@@ -237,3 +237,34 @@ test("at selects the node locate reports, including through unpaired names", () 
     assert.equal(value.at("/a~2"), undefined);
     assert.equal(value.at("no-slash\ud800"), undefined);
   }));
+
+test("parse failures forward UTF-8 line and byte column", () => {
+  const result = sdk.Document.parse('{\n "é" 0}');
+  assert.equal(result.status, "input-error");
+  assert.equal(result.error.byteOffset, 8);
+  assert.equal(result.error.line, 2);
+  assert.equal(result.error.byteColumn, 7);
+  // A byte-limit refusal is located at the limit, counted over the admitted prefix.
+  const limited = sdk.Document.parse("[\n0]", { limits: { maxBytes: 3 } });
+  assert.equal(limited.status, "input-error");
+  assert.equal(limited.error.byteOffset, 3);
+  assert.equal(limited.error.line, 2);
+  assert.equal(limited.error.byteColumn, 2);
+});
+
+test("document retained bytes include caches shared with a proof", () =>
+  owning((own) => {
+    const parsed = sdk.Document.parse(
+      '{"openbindings":"0.2.0","operations":{"op":{}}}',
+    );
+    assert.equal(parsed.status, "parsed");
+    const document = own(parsed.value);
+    const before = document.retainedBytes();
+    assert.ok(before > document.toBytes().length);
+    const result = document.validate();
+    assert.equal(result.status, "conformant");
+    const proof = own(result.document);
+    const snapshot = own(proof.asDocument());
+    assert.ok(document.retainedBytes() > before);
+    assert.equal(document.retainedBytes(), snapshot.retainedBytes());
+  }));

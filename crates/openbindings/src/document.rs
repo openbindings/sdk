@@ -4,6 +4,7 @@ use openbindings_internal_json::backend;
 mod edit;
 mod index;
 mod model;
+mod retained;
 use crate::{schema::references::SchemaSpace, schema::resources::ExternalSchemasInner};
 pub use edit::{Edit, EditError, PointerRef};
 use index::NamespaceCache;

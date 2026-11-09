@@ -242,6 +242,28 @@ pub struct Arena {
     pub unpaired: Vec<u32>,
 }
 impl Arena {
+    pub fn retained_bytes(&self) -> usize {
+        use crate::backend::vec_bytes;
+        // Arc header, arena allocation, and all separately allocated buffers.
+        2 * size_of::<usize>()
+            + size_of::<Self>()
+            + self.source.len()
+            + vec_bytes(&self.nodes)
+            + vec_bytes(&self.items)
+            + self.decoded.capacity()
+            + vec_bytes(&self.decoded_ends)
+            + vec_bytes(&self.duplicates)
+            + vec_bytes(&self.unpaired)
+            + vec_bytes(&self.member_indexes)
+            + vec_bytes(&self.member_slots)
+            + size_of_val(
+                self.positions
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .checkpoints
+                    .as_ref(),
+            )
+    }
     /// Parse into a shared owner, written where it will stay.
     pub fn parse(bytes: &[u8], limits: Limits) -> Result<Arc<Self>, Problem> {
         if bytes.starts_with(&[0xef, 0xbb, 0xbf]) {

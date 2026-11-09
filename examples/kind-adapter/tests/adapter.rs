@@ -1,8 +1,8 @@
 use kind_adapter::{KIND, Memory};
 use openbindings::{ConformantDocument, Document, Edit, JsonValue};
+use openbindings_invocation::ContextChallenge;
 use openbindings_invocation::{
     BindingInvokerExt, BindingRequest, CancellationToken, InvocationLimits, OutputEvent,
-    PreflightOutcome,
 };
 use openbindings_kind_description::{DescribeKindRequest, KindDescriptorExt};
 use openbindings_source_pull::{
@@ -132,7 +132,7 @@ async fn describe_and_preflight_agree_with_implemented_facets() {
             )
             .unwrap()
             .await,
-        Ok(PreflightOutcome::NoPrediction)
+        Ok(None)
     ));
 }
 
@@ -348,7 +348,7 @@ async fn streams_past_queue_capacity_in_order() {
 
 #[test]
 fn local_future_is_dropped_without_async_cleanup_and_send_composition_remains_available() {
-    use openbindings_invocation::{BindingInvoker, InvocationError, PreflightOutcome, ProviderIo};
+    use openbindings_invocation::{BindingInvoker, InvocationError, ProviderIo};
     use std::{
         cell::Cell,
         future::{Future, Ready, ready},
@@ -370,7 +370,7 @@ fn local_future_is_dropped_without_async_cleanup_and_send_composition_remains_av
     }
     impl BindingInvoker for Local {
         type Invoke<'a> = Pin<Box<dyn Future<Output = Result<(), InvocationError>> + 'a>>;
-        type Preflight<'a> = Ready<Result<PreflightOutcome, InvocationError>>;
+        type Preflight<'a> = Ready<Result<Option<ContextChallenge>, InvocationError>>;
         fn handle_invoke<'a>(
             &'a self,
             _: BindingRequest,
@@ -390,7 +390,7 @@ fn local_future_is_dropped_without_async_cleanup_and_send_composition_remains_av
             _: BindingRequest,
             _: CancellationToken,
         ) -> Self::Preflight<'a> {
-            ready(Ok(PreflightOutcome::NoPrediction))
+            ready(Ok(None))
         }
     }
     let interface = document(

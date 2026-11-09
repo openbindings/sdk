@@ -44,10 +44,11 @@ checking that **every** key belongs to the operation. Repeated keys are permitte
 `binding(interface, key)` derives the operation and bypasses support selection.
 No preference, deprecation flag, key order or registration order silently breaks
 ambiguity. The optional native `InvocationSupport` facet supplies routing knowledge;
-it is not a portable kind-description query. `BindingInvokerExt` needs no facet, but the current
-`DefaultOperationInvoker` constructor, invocation, preflight and preparation
-methods require `P: BindingInvoker + InvocationSupport`, even for explicit
-bindings. `PreparedOperation::invoke` has the same bound.
+it is not a portable kind-description query. `BindingInvokerExt` needs no facet.
+`DefaultOperationInvoker` construction, configuration and `prepare` need only
+`BindingInvoker`; `invoke`, `preflight`, `PreparedOperation::invoke` and the
+`OperationInvoker` implementation require `BindingInvoker + InvocationSupport`,
+even for an explicit binding.
 
 ## Driving, closure and cancellation
 
@@ -190,8 +191,8 @@ kind-specific interpretation and the no-output/no-operation-effect guarantee of
 Acquisition, approval, credential storage and retry policy belong to the host.
 
 `BindingInvoker` declares separate `Invoke` and `Preflight` future types. A provider
-with no prediction returns `Ok(PreflightOutcome::NoPrediction)`; a known requirement
-returns `Ok(PreflightOutcome::Challenge(challenge))`. An error carries no prediction.
+with no prediction returns `Ok(None)`; a known requirement
+returns `Ok(Some(challenge))`. An error carries no prediction.
 Both checked invocation entry points synchronously admit preflight requests, then return the advisory
 future. Operation preflight selects exactly as invocation does, but never prepares
 schemas, consumes values, dispatches the operation or reserves a later choice.

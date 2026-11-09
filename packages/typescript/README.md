@@ -455,3 +455,14 @@ See [HTTP policy](https://github.com/openbindings/sdk/blob/main/docs/http-discov
 [capabilities](https://github.com/openbindings/sdk/blob/main/CAPABILITIES.md),
 [migration](https://github.com/openbindings/sdk/blob/main/docs/migration.md) and
 [the API reference](https://github.com/openbindings/sdk/blob/main/docs/api-reference.md).
+
+`Document.retainedBytes()` estimates the current shared snapshot heap bytes for
+source, parsed nodes and built indexes/caches. Charge clones and proofs once;
+`proof.asDocument()` acquires the shared snapshot. Later lookups can grow caches,
+so call again afterwards. The estimate excludes allocator overhead, separately
+owned resources and validators, process-wide packaged schemas, and Wasm memory
+growth. It reads existing sizes without adding parse or validation work.
+
+Parse failures carry `error.line` and `error.byteColumn`, one-based coordinates
+in original UTF-8 bytes. A byte column is not a JavaScript UTF-16 column. Refusals
+before parsing report 1:1 without scanning unread bytes, even with a later refusal offset.

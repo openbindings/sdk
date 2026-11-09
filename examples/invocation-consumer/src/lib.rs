@@ -2,7 +2,7 @@
 use openbindings::{JsonValue, Source};
 use openbindings_invocation::{
     BindingInvoker, BindingRequest, CancellationToken, ContextChallenge, InvocationError,
-    InvocationSupport, PreflightOutcome, ProviderIo,
+    InvocationSupport, ProviderIo,
 };
 use std::{
     future::{Future, Ready, ready},
@@ -86,7 +86,7 @@ impl InvocationSupport for Catalog {
 }
 impl BindingInvoker for Catalog {
     type Invoke<'a> = Pin<Box<dyn Future<Output = Result<(), InvocationError>> + Send + 'a>>;
-    type Preflight<'a> = Ready<Result<PreflightOutcome, InvocationError>>;
+    type Preflight<'a> = Ready<Result<Option<ContextChallenge>, InvocationError>>;
     fn handle_invoke<'a>(
         &'a self,
         request: BindingRequest,
@@ -114,11 +114,7 @@ impl BindingInvoker for Catalog {
         _: CancellationToken,
     ) -> Self::Preflight<'a> {
         self.predictions.fetch_add(1, Ordering::Relaxed);
-        ready(selected(&request).map(|_| {
-            self.challenge(&request)
-                .map(PreflightOutcome::Challenge)
-                .unwrap_or(PreflightOutcome::NoPrediction)
-        }))
+        ready(selected(&request).map(|_| self.challenge(&request)))
     }
 }
 

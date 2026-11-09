@@ -1,9 +1,7 @@
 //! External consumers and two illustrative kind implementations for current source pulling.
 //! Kind definitions are local to this fixture, not OpenBindings standards.
 use openbindings::{JsonRef, JsonValue};
-use openbindings_schema_comparison::{
-    ComparisonFailure, ComparisonLimits, Identity, SchemaInput, identical,
-};
+use openbindings_schema_comparison::{ComparisonFailure, ComparisonLimits, SchemaInput, identical};
 use openbindings_source_pull::*;
 use std::{collections::BTreeMap, future::Future, pin::Pin};
 
@@ -128,8 +126,8 @@ fn slots(
     observed: &Observation,
     existing: JsonRef<'_>,
     original: JsonRef<'_>,
-) -> Result<[Identity; 2], CatalogError> {
-    let mut answers = [Identity::Equal; 2];
+) -> Result<[bool; 2], CatalogError> {
+    let mut answers = [true; 2];
     for (index, name) in ["input", "output"].into_iter().enumerate() {
         let left = offer
             .operation
@@ -184,7 +182,7 @@ fn reconcile(request: &PullRequest, observed: Observation) -> Result<PullResult,
                 }
                 Err(error) => return Err(error),
             };
-            if compared != [Identity::Equal; 2] {
+            if compared != [true; 2] {
                 omitted.push(json(&format!(r#"{{"status":"conflict","reasonCode":"offered-schema-differs","message":"The offered input or output differs from the existing operation.","item":{},"existing":{},"offered":{}}}"#, quote(&format!("operations/{}", offer.key)), quote(&format!("operations/{}", offer.key)), offer.operation.text())));
                 continue;
             }
@@ -263,7 +261,7 @@ fn reconcile(request: &PullRequest, observed: Observation) -> Result<PullResult,
         };
         let mut remove = Vec::new();
         for (name, comparison) in ["input", "output"].into_iter().zip(comparisons) {
-            if comparison == Identity::Different {
+            if !comparison {
                 if let Some(value) = offer.operation.get(name) {
                     proposal.insert(name.into(), value.to_owned());
                 } else {

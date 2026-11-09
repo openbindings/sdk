@@ -157,3 +157,14 @@ refusals, not finding codes.
 | `duplicate-anchor` | OBI-13 | A plain anchor name is declared repeatedly in the document resource. |
 | `duplicate-schema-id` | OBI-13 | Contained schemas declare the same compared identifier. |
 | `document-dynamic-anchor` | OBI-14 | A dynamic anchor appears outside an identified schema resource. |
+
+`Document::retained_bytes()` estimates the heap storage of a snapshot at the time
+of the call, including original source, parsed nodes and built indexes/caches.
+Clones and proofs share it: charge a snapshot once, reaching it through a proof's
+`document()`. It reads existing capacities on demand, adds no parse/validate work,
+and excludes allocator overhead, separately owned external resources and validators,
+process-wide packaged schemas, and Wasm memory growth. Namespace/schema lookups
+and location requests can grow caches; see its rustdoc for growth bounds.
+
+`InputError::line()` and `byte_column()` report one-based lines and UTF-8 byte
+columns, computed once on failure; nothing changes on success.

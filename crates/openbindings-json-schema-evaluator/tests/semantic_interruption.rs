@@ -54,14 +54,17 @@ fn interruption_does_not_poison_a_prepared_predicate() {
 }
 #[test]
 fn direct_validator_checks_cancellation_before_inspecting_duplicates() {
-    let validator = schema()
+    let selected = schema();
+    let validator = DefaultEvaluator::new()
         .prepare(
-            &DefaultEvaluator::new(),
-            &ExternalSchemas::default(),
+            EvaluationRequest {
+                schema: &selected,
+                external_schemas: &ExternalSchemas::default(),
+            },
             &PreparationLimits::default(),
+            &AtomicBool::new(false),
         )
-        .unwrap()
-        .into_validator();
+        .unwrap();
     let duplicate = JsonValue::parse(r#"{"x":1,"x":2}"#).unwrap();
     for detail in [Detail::Outcome, Detail::Explain] {
         assert!(

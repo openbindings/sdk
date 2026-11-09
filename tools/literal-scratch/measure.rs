@@ -58,28 +58,15 @@ static ALLOCATOR: Counter = Counter;
 static HEALTHY: AtomicBool = AtomicBool::new(false);
 
 fn prepare(schema: &str) -> DefaultValidator {
-    let resources = ExternalSchemas::default()
-        .with(
-            "https://allocation.invalid/root",
-            JsonValue::parse(schema).unwrap(),
-        )
+    let resources = ExternalSchemas::new([openbindings::ExternalSchema { uri: ("https://allocation.invalid/root").into(), document: JsonValue::parse(schema).unwrap() }])
         .unwrap();
     let document = Document::parse(r#"{"openbindings":"0.2.0","operations":{"op":{"input":{"$ref":"https://allocation.invalid/root"}}}}"#)
         .unwrap().validate().unwrap();
-    document
-        .conformant()
-        .unwrap()
-        .resolve_operation("op")
-        .unwrap()
-        .input()
-        .unwrap()
-        .prepare(
-            &DefaultEvaluator::new(),
-            &resources,
-            &PreparationLimits::default(),
-        )
-        .unwrap()
-        .into_validator()
+    let selected = document.conformant().unwrap().resolve_operation("op").unwrap().input().unwrap();
+    DefaultEvaluator::new().prepare(
+        EvaluationRequest { schema: &selected, external_schemas: &resources },
+        &PreparationLimits::default(), &AtomicBool::new(false),
+    ).unwrap()
 }
 
 fn sample(lane: &compiled::Lane, value: &JsonValue) -> Counts {

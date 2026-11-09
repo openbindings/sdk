@@ -120,10 +120,7 @@ pub fn keep_part(
         }
         // An added binding needs its added operation and what its `uses` names.
         if let Some(key) = root.strip_prefix("/bindings/")
-            && let Some(added) = result
-                .report()
-                .added()
-                .find(|added| added.binding() == key)
+            && let Some(added) = result.report().added().find(|added| added.binding() == key)
         {
             if !added.reused() {
                 wanted.push(format!(

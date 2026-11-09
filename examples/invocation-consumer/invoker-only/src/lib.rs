@@ -8,7 +8,7 @@ use std::{
 pub struct Echo;
 impl BindingInvoker for Echo {
     type Invoke<'a> = Pin<Box<dyn Future<Output = Result<(), InvocationError>> + 'a>>;
-    type Preflight<'a> = Ready<Result<PreflightOutcome, InvocationError>>;
+    type Preflight<'a> = Ready<Result<Option<ContextChallenge>, InvocationError>>;
     fn handle_invoke<'a>(
         &'a self,
         _: BindingRequest,
@@ -22,8 +22,12 @@ impl BindingInvoker for Echo {
             Ok(())
         })
     }
-    fn handle_preflight<'a>(&'a self, _: BindingRequest, _: CancellationToken) -> Self::Preflight<'a> {
-        ready(Ok(PreflightOutcome::NoPrediction))
+    fn handle_preflight<'a>(
+        &'a self,
+        _: BindingRequest,
+        _: CancellationToken,
+    ) -> Self::Preflight<'a> {
+        ready(Ok(None))
     }
 }
 

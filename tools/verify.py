@@ -29,6 +29,8 @@ run(['cargo', 'run', '--locked', '--manifest-path', 'tools/identifier-ranges/Car
 run(['cargo', 'clippy', '--locked', '--workspace', '--all-targets', '--features', 'openbindings-http-discovery/native', '--', '-D', 'warnings'])
 run(['cargo', 'test', '--locked', '--workspace', '--no-fail-fast', '--features', 'openbindings-http-discovery/native'])
 run(['cargo', 'test', '--locked', '--manifest-path', 'fuzz/seeds/Cargo.toml', '--test', 'seed_corpus'])
+# Document::retained_bytes() stays within its stated tolerance of measured heap bytes.
+run(['cargo', 'test', '--locked', '--manifest-path', 'tools/retained-size-qualification/Cargo.toml'])
 run([sys.executable, 'tools/verify-api-reference.py', '--rust-only'])
 # Offline checks below read every platform's dependencies; fetch them all first.
 run(['cargo', 'fetch', '--locked'])

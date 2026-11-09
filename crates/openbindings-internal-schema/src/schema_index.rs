@@ -66,6 +66,27 @@ pub struct SchemaIndex {
     /// meta-schemas and found none failing.
     checked: AtomicBool,
 }
+impl SchemaIndex {
+    // Excludes the source arena, which the document already charges.
+    pub fn retained_bytes(&self) -> usize {
+        use openbindings_internal_json::backend::vec_bytes;
+        size_of::<Self>()
+            + 2 * size_of::<usize>()
+            + vec_bytes(&self.nodes)
+            + self.profiles.as_ref().map_or(0, vec_bytes)
+            + vec_bytes(&self.parent_resources)
+            + self.positions.get().map_or(0, vec_bytes)
+            + vec_bytes(&self.anchors)
+            + vec_bytes(&self.identifiers)
+            + vec_bytes(&self.missing_targets)
+            + vec_bytes(&self.bases)
+            + self
+                .bases
+                .iter()
+                .map(|(_, base)| base.len() + 2 * size_of::<usize>())
+                .sum::<usize>()
+    }
+}
 impl std::fmt::Debug for SchemaIndex {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("SchemaIndex").finish_non_exhaustive()

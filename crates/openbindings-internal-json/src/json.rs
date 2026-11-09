@@ -49,6 +49,8 @@ pub enum InputErrorKind {
 pub struct InputError {
     pub(crate) kind: InputErrorKind,
     pub(crate) byte_offset: usize,
+    pub(crate) line: usize,
+    pub(crate) byte_column: usize,
     pub(crate) code: &'static str,
     pub(crate) route: Route,
 }
@@ -60,6 +62,16 @@ impl InputError {
     /// Zero-based original-input byte offset; an end-of-input failure may equal the input length.
     pub fn byte_offset(&self) -> usize {
         self.byte_offset
+    }
+    /// One-based original source line, counted once on failure. A refusal of a
+    /// value that has no source text reports 1.
+    pub fn line(&self) -> usize {
+        self.line
+    }
+    /// One-based UTF-8 byte column, not a character or UTF-16 column. A refusal
+    /// of a value that has no source text reports 1.
+    pub fn byte_column(&self) -> usize {
+        self.byte_column
     }
     /// Stable detailed parse/admission code, suitable for branching.
     pub fn code(&self) -> &'static str {
@@ -224,7 +236,7 @@ pub enum JsonKind {
 pub struct SourceLocation {
     /// Exact RFC 6901 pointer: from the value, document or resource the location was asked of (`locate`), or from the source's root (findings, [`JsonRef::location`]); an empty pointer means that root. `None` only when the location precedes any value, as a syntax error does. Duplicate member occurrences can share a pointer, so use byte coordinates to distinguish them.
     pub pointer: Option<Pointer>,
-    /// Zero-based token-start offset into original UTF-8 bytes.
+    /// Zero-based token-start or refusal offset into original UTF-8 bytes.
     pub byte_offset: usize,
     /// One-based line number in original source, counting newline bytes.
     pub line: usize,
@@ -334,9 +346,10 @@ impl JsonValue {
     ) -> Result<Self, InputError> {
         let bytes = input.as_ref();
         if bytes.len() > limits.max_bytes {
-            return Err(byte_limit(limits));
+            return Err(byte_limit(bytes, limits));
         }
-        let owner = Arena::parse(bytes, arena_limits(limits)).map_err(admission)?;
+        let owner = Arena::parse(bytes, arena_limits(limits))
+            .map_err(|problem| admission(problem, bytes))?;
         Ok(Self { owner, id: 0 })
     }
     /// Parse as [`Self::parse_with_limits`] does, taking the bytes: the value
@@ -442,6 +455,8 @@ impl JsonValue {
         serde_json::to_writer(&mut size, value).map_err(|_| InputError {
             kind: InputErrorKind::Limit,
             byte_offset: limits.max_bytes,
+            line: 1,
+            byte_column: 1,
             code: "byte-limit",
             route: Route::String,
         })?;
@@ -778,11 +793,15 @@ impl std::fmt::Debug for SourceLocation {
     }
 }
 // The refusal for a document longer than the admitted bytes, made before
-// anything is parsed.
-fn byte_limit(limits: JsonLimits) -> InputError {
+// anything is parsed. Its coordinates are counted over the admitted prefix only,
+// on this failure path, so they agree with the offset.
+fn byte_limit(bytes: &[u8], limits: JsonLimits) -> InputError {
+    let location = crate::backend::input_location(bytes, limits.max_bytes);
     InputError {
         kind: InputErrorKind::Limit,
         byte_offset: limits.max_bytes,
+        line: location.line,
+        byte_column: location.byte_column,
         code: "byte-limit",
         route: Route::Admission,
     }
@@ -793,8 +812,11 @@ fn arena_limits(limits: JsonLimits) -> Limits {
         max_nodes: limits.max_nodes.min(u32::MAX as usize),
     }
 }
-fn admission(p: Problem) -> InputError {
+fn admission(p: Problem, bytes: &[u8]) -> InputError {
+    let location = crate::backend::input_location(bytes, p.offset);
     InputError {
+        line: location.line,
+        byte_column: location.byte_column,
         kind: match p.code {
             "utf8" => InputErrorKind::InvalidUtf8,
             "bom" => InputErrorKind::ByteOrderMark,
@@ -815,11 +837,12 @@ fn admission(p: Problem) -> InputError {
 #[doc(hidden)]
 pub fn parse_owned(input: Vec<u8>, limits: JsonLimits) -> Result<JsonValue, (InputError, Vec<u8>)> {
     if input.len() > limits.max_bytes {
-        return Err((byte_limit(limits), input));
+        let error = byte_limit(&input, limits);
+        return Err((error, input));
     }
     Arena::parse_owned(input, arena_limits(limits))
         .map(|owner| JsonValue { owner, id: 0 })
-        .map_err(|(problem, bytes)| (admission(problem), bytes))
+        .map_err(|(problem, bytes)| (admission(problem, &bytes), bytes))
 }
 
 #[cfg(test)]

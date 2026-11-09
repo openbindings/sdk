@@ -235,8 +235,7 @@ Cancellation is cooperative. A cancelled preparation returns no validator; an
 interrupted evaluation leaves an existing validator available for another call.
 
 Document findings refer to the assessed revision using exact pointers, zero-based
-UTF-8 byte offsets and one-based lines and byte columns. Quote untrusted pointers
-for display. OBI-02 adds the failing `keyword`, a `schema` origin in the published
+UTF-8 byte offsets and one-based lines and byte columns. Quote untrusted pointers for display. OBI-02 adds the failing `keyword`, a `schema` origin in the published
 fixed schema, and optional `ValueProblemDetails`: a missing required member,
 expected types or exact bounds. Disallowed members use the source pointer alone.
 Failed unions stay at `anyOf`/`oneOf` without speculative branch details.
