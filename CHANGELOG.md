@@ -9,9 +9,10 @@
   source and external example crate through the Rust snippet verifier and CI.
 - Correct evaluator routing, limits, discovery and package documentation; remove
   duplicated migration status and capability detail.
-- Move the historical alignment checkpoint (924 files of review and qualification
-  evidence) out of `docs/` to the project's records, so `docs/` holds only
-  material for people using or maintaining the SDK.
+- Remove the historical alignment checkpoint (924 files of review and
+  qualification evidence) from `docs/`, so `docs/` holds only material for
+  people using or maintaining the SDK. It remains in Git history at commit
+  `d29864e`.
 - Correct the documented `InvocationSupport` requirement. Its bound is unchanged:
   runtime operation/binding address variants share one entry point, so a pure
   conditional relaxation needs a separately designed public API.
@@ -185,9 +186,8 @@
 ## 0.2.0-alpha.1 (working draft)
 
 This first release remains unpublished. The SDK and specification versions are
-independent. This entry describes the current feature-branch implementation;
-[the alignment checkpoint records](https://github.com/openbindings/project/tree/main/records/history/sdk-alignment-checkpoint-2026-11-08), kept in the
-project's records, hold its validation history. Earlier development APIs have no compatibility guarantee.
+independent. This entry describes the current feature-branch implementation.
+Earlier development APIs have no compatibility guarantee.
 
 ### Security
 

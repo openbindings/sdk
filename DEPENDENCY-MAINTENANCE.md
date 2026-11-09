@@ -136,8 +136,9 @@ Both paths use SDK-owned original resource identity, dialect and reference facts
 - `semantic/patterns/compiler` admits finite structural AST/HIR/NFA bounds before
   one forward capture-free NFA build. There is no geometric compilation retry.
   Local supported-profile failures become retained limitations; aggregate quota
-  exhaustion aborts preparation. The review that set this contract,
-  `compiler-resource-policy.md`, is in the [alignment checkpoint records](https://github.com/openbindings/project/tree/main/records/history/sdk-alignment-checkpoint-2026-11-08).
+  exhaustion aborts preparation. The review that set this contract is
+  [`compiler-resource-policy.md`](https://github.com/openbindings/sdk/blob/d29864eeaff2a7e8d7f0b07fc1097493811b612c/docs/alignment-checkpoint/compiler-resource-policy.md)
+  in Git history.
 - `semantic/patterns/cache.rs` owns per-call search caches. Work reservations include
   outgoing transitions and epsilon breadth. Immutable programs contain no mutable
   search state. Reader, structural, NFA, cache and original-effect controls must be
