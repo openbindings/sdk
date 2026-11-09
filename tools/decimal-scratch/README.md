@@ -4,7 +4,7 @@ The runner copies the evaluator crate into `target/decimal-scratch-snapshot`,
 adds a private test binary with a counting global allocator, and uses the
 workspace's other crates unchanged. Unsafe allocator forwarding is confined to
 that copy. The SDK's unsafe-code lint, public API and dependencies are unchanged.
-Keep `CARGO_BUILD_JOBS=4` and run commands serially with the requested toolchain.
+Keep `CARGO_BUILD_JOBS=2` and run commands serially with the requested toolchain.
 
 ```sh
 python3 tools/decimal-scratch/run.py --release
@@ -21,9 +21,9 @@ outstanding bytes in `Lane::outcome`. For a realloc it conservatively counts
 both old and replacement buffers at the transition. It counts deallocation and
 asserts no measured allocation remains live when the outcome is dropped. Parsing,
 preparation, printing and assertions are outside the counting window. Every
-sample asserts one compiled entry and a successful verdict. Both cold and warm
-breadth samples run at exactly 1 KiB, 1 MiB and 16 MiB; increasing array breadth
-must not change peak live bytes.
+sample asserts a successful verdict and released scratch. Cold and warm
+breadth samples run at 1 KiB, 1 MiB and 16 MiB; each peak must fit the documented
+operand-length bound. Allocation counts remain measurements.
 
 Length measurements include long significant fractions, mostly zero fractions,
 and huge positive and negative exponent spellings. Small cases also use an

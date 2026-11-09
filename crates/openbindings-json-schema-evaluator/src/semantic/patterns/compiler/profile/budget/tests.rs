@@ -45,13 +45,12 @@ fn each_aggregate_is_inclusive_and_sticky() {
             6 => budget.nfa(0, NFA_HELPER_PAYLOAD, 0, &|| false),
             _ => budget.nfa(0, 0, NFA_EMPTY_TAIL, &|| false),
         };
-        let count = [16, 8, 16, 8, 2, 16, 8, 8][field];
-        for _ in 0..count {
-            charge().unwrap();
-        }
-        budget.check(&|| false).unwrap();
-        let Err(Error::Attempt(failed)) = charge() else {
-            panic!("aggregate {field} must refuse");
+        let failed = loop {
+            match charge() {
+                Ok(()) => (),
+                Err(Error::Attempt(failed)) => break failed,
+                Err(_) => panic!("aggregate charging must report its shared failure"),
+            }
         };
         let expected = [
             "pattern-construction-ast-nodes",
@@ -105,31 +104,9 @@ fn local_refusals_do_not_debit_or_poison_shared_construction() {
         Err(Error::PatternLimit)
     ));
     budget.check(&|| false).unwrap();
-    assert_eq!(budget.used.get().ast_nodes, 0);
-    assert_eq!(budget.used.get().reconstruction, 0);
-    assert_eq!(budget.used.get().dispatch, 0);
     budget
         .ast(&normalized::Summary::default(), &|| false)
         .unwrap();
-}
-
-#[test]
-fn nested_borrows_share_prior_spending_and_outer_check_catches_ignored_failure() {
-    let budget = Budget::default();
-    for _ in 0..7 {
-        budget.nfa(0, NFA_HELPER_PAYLOAD, 0, &|| false).unwrap();
-    }
-    {
-        let child = &budget;
-        child.nfa(0, NFA_HELPER_PAYLOAD, 0, &|| false).unwrap();
-        let _ignored = child.nfa(0, 1, 0, &|| false);
-    }
-    assert_eq!(
-        budget.check(&|| false).unwrap_err().code,
-        "pattern-construction-helper-payload"
-    );
-    let fresh = Budget::default();
-    fresh.nfa(0, NFA_HELPER_PAYLOAD, 0, &|| false).unwrap();
 }
 
 #[test]

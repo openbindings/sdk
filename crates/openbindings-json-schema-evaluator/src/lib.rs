@@ -230,6 +230,3 @@ fn unsupported_pattern(unsupported: pattern::Unsupported, _keyword: &str) -> NoV
 #[cfg(test)]
 #[path = "../tests/private/resource_identity.rs"]
 mod resource_identity;
-#[cfg(test)]
-#[path = "../tests/private/supplied_reuse.rs"]
-mod supplied_reuse;

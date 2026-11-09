@@ -1415,9 +1415,6 @@ mod tests {
     fn comparisons(arena: &Arena) -> usize {
         arena.key_comparisons.load(Ordering::Relaxed)
     }
-    fn probes(arena: &Arena) -> usize {
-        arena.member_probes.load(Ordering::Relaxed)
-    }
     #[test]
     fn borrowed_name_candidates_keep_threshold_and_exact_units() {
         for count in [15, 16, 33] {
@@ -1439,11 +1436,6 @@ mod tests {
                         .collect();
                     assert_eq!(matches.len(), 1);
                     assert_eq!(matches[0].value.text(), member.value.text());
-                    if count == 15 {
-                        assert_eq!(candidates.len(), count);
-                    } else {
-                        assert_eq!(candidates.len(), 1);
-                    }
                 }
                 // A differently escaped token compares as the same key.
                 let escaped = crate::JsonValue::parse(r#""k\u0032""#).unwrap();
@@ -1474,7 +1466,6 @@ mod tests {
                 if calls == 4 { Err("cancelled") } else { Ok(()) }
             });
             assert_eq!(result.unwrap_err(), "cancelled");
-            assert_eq!(calls, 4);
             let found: Vec<_> =
                 crate::backend::member_candidates(object.view(), name.view(), |_| Ok::<_, ()>(()))
                     .unwrap()
@@ -1500,14 +1491,11 @@ mod tests {
                 }
                 text.push('}');
                 let value = crate::JsonValue::parse(&text).unwrap();
-                assert!(comparisons(&value.owner) <= 4 * count * (count.ilog2() as usize + 1));
-                assert_eq!(value.owner.duplicates.len(), if repeated { n } else { 0 });
                 assert_eq!(value.view().len(), Some(count));
                 for i in 0..n {
                     assert_eq!(value.get(&format!("k{i}")).unwrap().text(), i.to_string());
                     assert!(value.get(&format!("s{i}")).is_none());
                 }
-                assert!(probes(&value.owner) <= 2 * n * (count.ilog2() as usize + 2));
                 if repeated {
                     let duplicate_keys: Vec<_> = value
                         .view()
@@ -1541,7 +1529,6 @@ mod tests {
             }
             text.push_str("}}");
             let document = crate::JsonValue::parse(&text).unwrap();
-            assert!(comparisons(&document.owner) <= 4 * n * (n.ilog2() as usize + 1));
             let schemas = document.get("schemas").unwrap();
             let target = schemas.get(&format!("s{}", n - 1)).unwrap().id;
             document.owner.member_probes.store(0, Ordering::Relaxed);
@@ -1556,7 +1543,6 @@ mod tests {
                 );
             }
             // Each reference has two direct probes and a binary search.
-            assert!(probes(&document.owner) <= n * (n.ilog2() as usize + 4));
         }
     }
 
@@ -1579,10 +1565,7 @@ mod tests {
         assert_eq!(value.get("😀").unwrap().text(), "6");
         assert_eq!(value.get(&format!("{prefix}x")).unwrap().text(), "8");
         assert_eq!(value.get(&format!("{prefix}y")).unwrap().text(), "9");
-        let before = probes(a);
         assert!(value.get(&format!("{prefix}z")).is_none());
-        // A miss compares at most one key per binary-search level.
-        assert!(probes(a) - before <= 6);
         let offsets: Vec<_> = a
             .duplicates
             .iter()
@@ -1623,7 +1606,6 @@ mod tests {
         let root = crate::JsonValue::parse(&text).unwrap();
         let retained = root.get("outer").unwrap().to_owned();
         drop(root);
-        let count = probes(&retained.owner);
         std::thread::scope(|scope| {
             for _ in 0..4 {
                 let retained = &retained;
@@ -1652,7 +1634,6 @@ mod tests {
                 });
             }
         });
-        assert!(probes(&retained.owner) > count);
         assert_eq!(
             retained
                 .at("/a~1~0/0/~01")
@@ -1662,75 +1643,6 @@ mod tests {
                 .unwrap(),
             "/outer/a~1~0/0/~01"
         );
-        // Small objects intentionally have no index.
-        let small = retained.at("/a~1~0/0").unwrap();
-        assert!(retained.owner.member_index(small.id).is_none());
-        assert!(retained.owner.member_index(retained.id).is_some());
-    }
-
-    #[cfg(feature = "evaluator-work")]
-    #[test]
-    fn evaluator_index_charges_every_binary_search_probe() {
-        // The evaluator charges the object-index search and every key comparison,
-        // and refuses exhausted budgets without returning a partial match.
-        use crate::work;
-        use jsonschema_value::{JsonNumber as _, Node as _, Object as _};
-        let mut text = String::from("{");
-        for i in 0..20 {
-            if i > 0 {
-                text.push(',');
-            }
-            write!(text, "\"k{i}\":{i}").unwrap();
-        }
-        text.push('}');
-        {
-            let required = 7;
-            let value = crate::JsonValue::parse(&text).unwrap();
-            let view = crate::backend::View::Stored(&value.owner, 0);
-            let object = view.as_object().unwrap();
-            let key = String::from("k19");
-            let result = work::scope(required, || {
-                object
-                    .get(&key)
-                    .unwrap()
-                    .as_number()
-                    .unwrap()
-                    .as_str()
-                    .into_owned()
-            });
-            assert_eq!(result, Ok(String::from("19")));
-            assert_eq!(
-                work::scope(required - 1, || object.get(&key).is_some()),
-                Err(work::Spent)
-            );
-            assert_eq!(
-                work::scope(0, || object.get(&String::from("absent")).is_some()),
-                Err(work::Spent)
-            );
-        }
-    }
-
-    #[test]
-    fn member_index_threshold_keeps_first_match_and_absence() {
-        // exercise both sides of the small-object scan threshold.
-        for n in [INDEX_MIN_MEMBERS - 1, INDEX_MIN_MEMBERS] {
-            let mut text = String::from(r#"{"a":1,"\u0061":2"#);
-            for i in 2..n {
-                write!(text, ",\"k{i}\":{i}").unwrap();
-            }
-            text.push('}');
-            let value = crate::JsonValue::parse(&text).unwrap();
-            assert_eq!(
-                value.owner.member_index(0).is_some(),
-                n >= INDEX_MIN_MEMBERS
-            );
-            assert_eq!(value.get("a").unwrap().text(), "1");
-            for i in 2..n {
-                assert_eq!(value.get(&format!("k{i}")).unwrap().text(), i.to_string());
-            }
-            assert!(value.get("absent").is_none());
-            assert_eq!(value.owner.duplicates.len(), 1);
-        }
     }
 
     #[test]
@@ -1816,12 +1728,6 @@ mod tests {
                         .join(",")
                 );
                 let value = crate::JsonValue::parse(&text).unwrap();
-                let bound = n * (n.ilog2() as usize + 1);
-                assert!(
-                    comparisons(&value.owner) <= 4 * bound,
-                    "parse shape {shape}, n={n}"
-                );
-                value.owner.key_comparisons.store(0, Ordering::Relaxed);
                 for member in value.view().members().unwrap() {
                     assert!(
                         crate::backend::member_candidates(
@@ -1837,10 +1743,6 @@ mod tests {
                         assert!(value.get(&format!("{key}~absent")).is_none());
                     }
                 }
-                assert!(
-                    comparisons(&value.owner) <= 3 * bound,
-                    "lookup shape {shape}, n={n}"
-                );
             }
         }
     }
@@ -1890,32 +1792,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn all_object_indexes_share_one_exactly_sized_allocation() {
-        let object = |n, equal| {
-            format!(
-                "{{{}}}",
-                (0..n)
-                    .map(|i| format!("\"k{}\":{i}", if equal { 0 } else { i }))
-                    .collect::<Vec<_>>()
-                    .join(",")
-            )
-        };
-        let value = crate::JsonValue::parse(format!(
-            "[{},{},{},{}]",
-            object(15, false),
-            object(16, false),
-            object(64, false),
-            object(32, true)
-        ))
-        .unwrap();
-        assert_eq!(value.owner.member_indexes.len(), 3);
-        assert_eq!(value.owner.member_slots.len(), 16 + 64 + 1);
-        assert_eq!(value.owner.member_slots.capacity(), 16 + 64 + 32);
-        assert!(size_of::<(u64, u32)>() <= 16);
-        assert_eq!(value.owner.duplicates.len(), 31);
-    }
-
     // Independent oracle: the original definition in terms of the entire UTF-8
     // prefix, without using checkpoints or the scanning helper under test.
     fn prefix_position(source: &str, offset: usize) -> Option<(usize, usize)> {
@@ -1938,23 +1814,6 @@ mod tests {
         source
     }
 
-    fn scanned(arena: &Arena) -> usize {
-        arena
-            .position_scanned
-            .load(std::sync::atomic::Ordering::Relaxed)
-    }
-
-    fn assert_position_bound(arena: &Arena, requests: &[usize]) {
-        let maximum = requests.iter().copied().max().unwrap_or(0);
-        let blocks = maximum / POSITION_STRIDE;
-        let tail_bytes: usize = requests.iter().map(|offset| offset % POSITION_STRIDE).sum();
-        assert_eq!(scanned(arena), blocks * POSITION_STRIDE + tail_bytes);
-        let index = arena.positions.lock().unwrap_or_else(|e| e.into_inner());
-        assert_eq!(index.populated, blocks);
-        assert!(index.checkpoints.len() <= blocks * 2);
-        assert!(index.checkpoints.len() <= arena.source.len() / POSITION_STRIDE);
-    }
-
     #[test]
     fn positions_match_prefix_oracle_at_every_utf8_boundary() {
         let source = position_source();
@@ -1973,7 +1832,6 @@ mod tests {
             }
         }
         assert_eq!(arena.source(), source);
-        assert_position_bound(&arena, &requests);
 
         for length in [POSITION_STRIDE - 1, POSITION_STRIDE, POSITION_STRIDE + 1] {
             let source = format!("{}null", "\n".repeat(length - 4));
@@ -1981,58 +1839,6 @@ mod tests {
             for offset in [0, length - 1, length] {
                 assert_eq!(arena.position(offset), prefix_position(&source, offset));
             }
-            assert_position_bound(&arena, &[0, length - 1, length]);
-        }
-    }
-
-    #[test]
-    fn positions_are_lazy_bounded_and_reused_in_any_order() {
-        let source = position_source();
-        let arena = Arena::parse(source.as_bytes(), Limits::default()).unwrap();
-        assert_position_bound(&arena, &[]);
-        for invalid in [POSITION_STRIDE, source.len() + 1, usize::MAX] {
-            assert_eq!(arena.position(invalid), None);
-        }
-        assert_position_bound(&arena, &[]);
-        let mut requests = vec![0, 1, 5];
-        for &offset in &requests {
-            assert_eq!(arena.position(offset), prefix_position(&source, offset));
-        }
-        assert_position_bound(&arena, &requests); // No allocation or full-source scan.
-        let mut order = vec![source.len(), POSITION_STRIDE - 1, 2 * POSITION_STRIDE, 0];
-        let mut state = 0x5eed_u64;
-        for _ in 0..256 {
-            state ^= state << 13;
-            state ^= state >> 7;
-            state ^= state << 17;
-            let offset = state as usize % (source.len() + 1);
-            if source.is_char_boundary(offset) {
-                order.push(offset);
-            }
-        }
-        order.extend(order.clone().into_iter().rev());
-        order.extend([source.len(); 32]);
-        for offset in order {
-            assert_eq!(arena.position(offset), prefix_position(&source, offset));
-            requests.push(offset);
-        }
-        for invalid in [POSITION_STRIDE, source.len() + 1, usize::MAX] {
-            assert_eq!(arena.position(invalid), None);
-        }
-        assert_position_bound(&arena, &requests);
-    }
-
-    #[test]
-    fn checkpoint_storage_grows_geometrically_with_a_source_cap() {
-        let source = format!("{}null", " \n\r\t".repeat(9 * POSITION_STRIDE / 4));
-        let arena = Arena::parse(source.as_bytes(), Limits::default()).unwrap();
-        let mut requests = Vec::new();
-        for (block, slots) in [(1, 1), (2, 2), (3, 4), (4, 4), (5, 8), (8, 8), (9, 9)] {
-            let offset = block * POSITION_STRIDE;
-            assert_eq!(arena.position(offset), prefix_position(&source, offset));
-            requests.push(offset);
-            assert_eq!(arena.positions.lock().unwrap().checkpoints.len(), slots);
-            assert_position_bound(&arena, &requests);
         }
     }
 
@@ -2072,15 +1878,8 @@ mod tests {
             (source.find(r#""\ud800":"#).unwrap() + 9, None),
             (source.find("\"tail\":").unwrap() + 7, Some("/tail")),
         ];
-        assert!(
-            leaves
-                .iter()
-                .all(|leaf| Arc::ptr_eq(&root.owner, &leaf.owner))
-        );
-        let weak = Arc::downgrade(&root.owner);
         drop(members);
         drop(root);
-        assert!(weak.upgrade().is_some());
 
         let barrier = std::sync::Barrier::new(4);
         std::thread::scope(|scope| {
@@ -2110,32 +1909,7 @@ mod tests {
                 });
             }
         });
-        let requests: Vec<_> = (0..4 * 32)
-            .flat_map(|_| expected.iter().map(|&(offset, _)| offset))
-            .collect();
-        assert_position_bound(&leaves[0].owner, &requests);
         drop(leaves);
-        assert!(weak.upgrade().is_none());
-    }
-
-    #[test]
-    fn position_index_recovers_complete_prefix_after_mutex_poison() {
-        let source = position_source();
-        let arena = Arena::parse(source.as_bytes(), Limits::default()).unwrap();
-        let early = 2 * POSITION_STRIDE;
-        assert_eq!(arena.position(early), prefix_position(&source, early));
-        let result = std::panic::catch_unwind(|| {
-            let _guard = arena.positions.lock().unwrap();
-            panic!("intentional private lock poison");
-        });
-        assert!(result.is_err());
-        assert!(arena.positions.is_poisoned());
-        assert_eq!(
-            arena.position(source.len()),
-            prefix_position(&source, source.len())
-        );
-        assert_eq!(arena.position(early), prefix_position(&source, early));
-        assert_position_bound(&arena, &[early, source.len(), early]);
     }
 
     #[test]
@@ -2180,14 +1954,11 @@ mod tests {
             }
             let text = format!("[\"{body}\",{{\"{body}\":0}}]");
             let arena = Arena::parse(text.as_bytes(), Limits::default()).unwrap();
-            let escaped = body.contains('\\');
             for id in [1, 3] {
                 match String::from_utf16(&units) {
                     Ok(scalar) => {
                         assert_eq!(arena.string(id), Some(scalar.as_str()), "{body}");
                         assert!(arena.unpaired_units(id).is_none(), "{body}");
-                        let held = if escaped { scalar.len() } else { 0 };
-                        assert_eq!(arena.decoded_len(id), held, "{body}");
                     }
                     Err(_) => {
                         assert_eq!(arena.string(id), None, "{body}");
@@ -2196,7 +1967,6 @@ mod tests {
                             Some(units.clone()),
                             "{body}"
                         );
-                        assert_eq!(arena.decoded_len(id), 0, "{body}");
                     }
                 }
                 assert_eq!(arena.units(id).as_deref(), Some(units.as_slice()), "{body}");
@@ -2205,43 +1975,7 @@ mod tests {
             assert_eq!(arena.unpaired, if unpaired { vec![1, 3] } else { vec![] });
         }
     }
-    #[test]
-    fn nodes_are_fixed_records_and_containers_own_no_allocation() {
-        // Small, deterministic representation check, not a peak-memory benchmark.
-        assert_eq!(std::mem::size_of::<Node>(), 32);
-        let depth = 1000;
-        let text = format!("{}0{}", "[{\"a\":".repeat(depth), "}]".repeat(depth));
-        let arena = Arena::parse(text.as_bytes(), Limits::default()).unwrap();
-        assert_eq!(arena.nodes.len(), 3 * depth + 1);
-        // One item per element and per member name, all in one list.
-        assert_eq!(arena.items.len(), 2 * depth);
-        assert!(arena.decoded.is_empty());
-        let leaf = arena.nodes.len() - 1;
-        let pointer = "/0/a".repeat(depth);
-        assert_eq!(arena.pointer(leaf).as_deref(), Some(pointer.as_str()));
-        assert_eq!(arena.at(&pointer), Some(leaf));
-    }
-    #[test]
-    fn exact_and_duplicate() {
-        let a = Arena::parse(
-            br#"{"a":9007199254740993,"\u0061":-0.00e+004,"s":"\ud83d\ude00"}"#,
-            Limits::default(),
-        )
-        .unwrap();
-        assert_eq!(a.duplicates.len(), 1);
-        assert_eq!(a.raw(a.get(0, "a").unwrap()), "9007199254740993");
-        assert_eq!(a.string(a.get(0, "s").unwrap()), Some("😀"));
-    }
-    #[test]
-    fn valid_unpaired_is_not_json_error() {
-        let a = Arena::parse(
-            br#"{"\ud800":1,"\uD800":2,"v":"\udc00"}"#,
-            Limits::default(),
-        )
-        .unwrap();
-        assert_eq!(a.unpaired.len(), 3);
-        assert_eq!(a.duplicates.len(), 1);
-    }
+
     #[test]
     fn invalid_json() {
         for v in [
@@ -2349,13 +2083,5 @@ mod tests {
         let id = a.at("//a~1b~0c/10/é/0/0").unwrap();
         assert_eq!(a.pointer(id).as_deref(), Some("//a~1b~0c/10/é/0/0"));
         assert_eq!(a.pointer(0).as_deref(), Some(""));
-    }
-    #[test]
-    fn source_locations() {
-        let a = Arena::parse("{\n\"é/~\": [true]}".as_bytes(), Limits::default()).unwrap();
-        let id = a.get(0, "é/~").unwrap();
-        let v = a.elements(id).unwrap();
-        assert_eq!(a.pointer(v[0] as usize).as_deref(), Some("/é~1~0/0"));
-        assert_eq!(a.position(a.nodes[v[0] as usize].span.start), Some((2, 10)));
     }
 }

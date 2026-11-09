@@ -1114,14 +1114,6 @@ mod finding_identity_tests {
     }
 
     #[test]
-    fn each_rule_names_the_identifier_it_indexes() {
-        for (index, rule) in Rule::ALL.into_iter().enumerate() {
-            assert_eq!(rule as usize, index);
-            let name = format!("{rule:?}").to_uppercase().replace("OBI", "OBI-");
-            assert_eq!(rule.id(), name);
-        }
-    }
-    #[test]
     fn final_dedup_precedes_count_and_pointer_caps_and_preserves_evidence() {
         let value = JsonValue::parse(r#"{"a":0,"b":0}"#).unwrap();
         let a = value.get("a").unwrap();

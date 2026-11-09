@@ -277,3 +277,79 @@ fn reached_supplied_sources_include_nested_identifier_scopes() {
         Some("https://nested.test/base/missing")
     );
 }
+
+#[test]
+fn reference_refusals_preserve_the_public_cause_and_safe_message() {
+    for (schemas, reason) in [
+        (
+            r#"{"entry":{"$ref":42}}"#,
+            ReferenceRefusalReason::InvalidReference,
+        ),
+        (
+            r##"{"entry":{"$ref":"#%FF"}}"##,
+            ReferenceRefusalReason::InvalidReference,
+        ),
+        (
+            r##"{"entry":{"$ref":"#missing"}}"##,
+            ReferenceRefusalReason::MissingTarget,
+        ),
+        (
+            r##"{"entry":{"$ref":"#/schemas"}}"##,
+            ReferenceRefusalReason::MissingTarget,
+        ),
+        (
+            r##"{"entry":{"$ref":"#same"},"a":{"$anchor":"same"},"b":{"$anchor":"same"}}"##,
+            ReferenceRefusalReason::AmbiguousTarget,
+        ),
+        (
+            r#"{"entry":{"$ref":"https://private.test/same"},"a":{"$id":"https://private.test/same"},"b":{"$id":"https://private.test/same"}}"#,
+            ReferenceRefusalReason::IdentityConflict,
+        ),
+        (
+            r#"{"entry":{"$ref":"https://private.test/missing"}}"#,
+            ReferenceRefusalReason::ResourceUnavailable,
+        ),
+    ] {
+        let document = Document::parse(format!(
+            r#"{{"openbindings":"0.2.0","operations":{{}},"schemas":{schemas}}}"#
+        ))
+        .unwrap();
+        let report = document.references();
+        assert!(report.complete);
+        let ReferenceResolution::Unresolved { detail } = &report.references[0].resolution else {
+            panic!("expected reference refusal")
+        };
+        assert_eq!(detail.reason, reason);
+        assert_eq!(report.references[0].location.pointer, "/schemas/entry/$ref");
+        assert!(!detail.to_string().is_empty());
+        assert_eq!(detail.to_string(), detail.message);
+        assert!(!detail.message.contains("private"));
+    }
+    let document = Document::parse(r#"{"openbindings":"0.2.0","operations":{},"schemas":{"entry":{"$ref":"https://example.test/external"}}}"#).unwrap();
+    let external = ExternalSchemas::default()
+        .with(
+            "https://example.test/external",
+            JsonValue::parse(r#"{"$schema":"https://example.test/unknown"}"#).unwrap(),
+        )
+        .unwrap();
+    let report = document.references_with_resources(external, &AtomicBool::new(false));
+    let ReferenceResolution::Unresolved { detail } = &report.references[0].resolution else {
+        panic!("expected reference refusal")
+    };
+    assert_eq!(detail.reason, ReferenceRefusalReason::UnsupportedCapability);
+    // A cancellation after admission must retain the same public cancellation cause.
+    struct StopAfter(std::sync::atomic::AtomicUsize);
+    impl WorkControl for StopAfter {
+        fn is_cancelled(&self) -> bool {
+            self.0.fetch_add(1, std::sync::atomic::Ordering::Relaxed) > 3
+        }
+    }
+    let report = document.references_with_resources(
+        ExternalSchemas::default(),
+        &StopAfter(std::sync::atomic::AtomicUsize::new(0)),
+    );
+    assert_eq!(
+        report.limitation.unwrap().reason,
+        ReferenceRefusalReason::Cancelled
+    );
+}

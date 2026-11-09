@@ -486,7 +486,7 @@ fn unmatched_patterns_keep_their_own_reasons() {
 // Independently generated JS-u observations, with edition11 invalid-name
 // controls kept separate from current Node's wider accepted property table.
 #[test]
-fn independently_reviewed_property_and_assertion_capabilities() {
+fn property_escapes_and_assertions_match_ecmascript_or_refuse_explicitly() {
     let fixture: Value =
         serde_json::from_str(include_str!("fixtures/pattern-capabilities.json")).unwrap();
     for row in fixture["rows"].as_array().unwrap() {

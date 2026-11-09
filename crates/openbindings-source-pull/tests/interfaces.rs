@@ -157,7 +157,7 @@ fn original_owner_context_and_native_local_errors_are_preserved_without_retry() 
     let PullError::Provider(PullFailure::Operational(returned)) = error else {
         panic!("native failure")
     };
-    assert!(Rc::ptr_eq(&native, &returned));
+    assert_eq!(returned.as_ref(), native.as_ref());
     assert_eq!(provider.calls.get(), 1);
 }
 

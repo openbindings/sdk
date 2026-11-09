@@ -10,8 +10,6 @@ macro_rules! keywords {
                 _ => None,
             }
         }
-        #[cfg(test)]
-        const KEYWORDS: &[(&str, u64)] = &[$(($keyword, $name)),+];
     };
 }
 keywords! {
@@ -119,59 +117,5 @@ impl Fields {
     }
     pub(super) fn array(self) -> bool {
         self.0 & (ORIGINAL | ARRAY) != 0
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn closed_inventory_has_independent_bits_and_explicit_fallback() {
-        let mut seen = ORIGINAL | LEAF | REFERENCED_TARGET | SHARED_TARGET;
-        for &(keyword, bit) in KEYWORDS {
-            assert_eq!(seen & bit, 0, "overlapping {keyword}");
-            seen |= bit;
-            assert!(Fields::ORIGINAL.may_read(keyword));
-            assert!(!Fields::EMPTY.may_read(keyword));
-            let mut fields = Fields::EMPTY;
-            fields.include(keyword);
-            for &(other, _) in KEYWORDS {
-                assert_eq!(fields.may_read(other), keyword == other);
-            }
-        }
-        for keyword in [
-            "$recursiveAnchor",
-            "$defs",
-            "definitions",
-            "contentSchema",
-            "future",
-        ] {
-            assert!(Fields::EMPTY.may_read(keyword));
-        }
-        assert!(!Fields::ORIGINAL.is_leaf());
-        assert!(!Fields::EMPTY.is_leaf());
-    }
-
-    #[test]
-    fn reference_multiplicity_does_not_create_leaf_or_keyword_facts() {
-        for mut fields in [Fields::ORIGINAL, Fields::EMPTY] {
-            fields.note_reference_target();
-            fields.note_reference_target();
-            assert!(!fields.is_shared_leaf());
-            assert!(!fields.is_leaf());
-        }
-        let mut fields = Fields::EMPTY;
-        fields.include("type");
-        fields.certify_leaf();
-        fields.note_reference_target();
-        assert!(!fields.is_shared_leaf());
-        fields.note_reference_target();
-        fields.note_reference_target();
-        assert!(fields.is_shared_leaf());
-        for &(keyword, _) in KEYWORDS {
-            assert_eq!(fields.may_read(keyword), keyword == "type");
-        }
-        assert!(!fields.logical() && !fields.object() && !fields.array());
     }
 }

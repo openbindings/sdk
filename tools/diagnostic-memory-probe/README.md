@@ -189,13 +189,11 @@ expected no-verdict. Each call must use
 at most **65,536 bytes** of incremental live allocation. This is a focused
 regression threshold for prepared type decisions, not a universal value bound.
 
-Run `python3 tools/diagnostic-memory-probe/check_value_mutations.py` to test the
-allocation controls. It copies sources under `target/diagnostics-review`, replaces
-the cheap check's `is_valid` call with `validate(...).is_ok()`, runs the same
-assertions for each failing path alone, and restores the copy. It never mutates
-the production evaluator. Each path must fail the allocation assertion while
-retaining the expected public outcome. Fresh mutation receipts are generated under
-`target/diagnostics-review/value-mutations`.
+The mutation experiment archived in the 2026-11-09 test-reduction receipt
+checked the allocation controls by replacing a former evaluator validity call
+with eager error construction in an isolated source copy. Its historical source
+needle no longer names the current evaluator. The maintained allocation controls
+remain in `src/values.rs` and run with this probe.
 
 The `--semantic-only` lane exercises both the compiled-to-semantic path and direct
 semantic evaluation with 100 KB and 1 MB original keys and instance strings.

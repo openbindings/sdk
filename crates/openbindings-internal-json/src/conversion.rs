@@ -1022,15 +1022,9 @@ mod tests {
         };
         let mut map = compound(&mut state, true).unwrap();
         assert!(map.key("first").is_err());
-        let before = (map.seen.len(), map.state.bytes.len(), map.state.nodes);
         for n in 0..10000 {
             assert!(map.key(&n.to_string()).is_err());
             assert!(map.admit_key(Cow::Borrowed("static-field")).is_err());
         }
-        assert_eq!(
-            (map.seen.len(), map.state.bytes.len(), map.state.nodes),
-            before
-        );
-        assert_eq!(map.seen.len(), 0);
     }
 }

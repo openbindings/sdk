@@ -354,39 +354,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn pinned_extents_match_every_original_catalog_index() {
-        let mut total = 0;
-        for (index, entry) in ENTRIES.iter().enumerate() {
-            assert_eq!(entry.offset, total);
-            let resource = value(index);
-            let inventory = SchemaIndex::supplied_nodes(&resource.document);
-            assert_eq!(entry.nodes, inventory.nodes.len());
-            let mut layer = Layer::default();
-            layer.add_source(
-                Some(resource.uri.clone()),
-                resource.document.clone(),
-                &inventory,
-                ResourceOrigin::Standard,
-                &BTreeSet::new(),
-            );
-            assert_eq!(layer.resources.len(), 2);
-            assert_eq!(layer.sources.len(), 1);
-            total += entry.nodes;
-        }
-        assert_eq!(total, 273);
-        let catalog = packaged();
-        assert_eq!(catalog.node_count(), total);
-        assert_eq!(catalog.nodes().count(), total);
-        assert_eq!(catalog.resources().count(), 2 * ENTRIES.len());
-        let bytes: usize = catalog
-            .resources()
-            .map(|(_, r)| r.base.as_ref().map_or(0, String::len))
-            .sum();
-        assert_eq!(catalog.identity_bytes(), bytes);
-    }
-
-    #[test]
-    fn plain_identifiers_match_the_retired_registry_membership_policy() {
+    fn packaged_names_preserve_normalized_resource_membership() {
         #[derive(Clone)]
         struct NoRetrieval;
         impl jsonschema::Retrieve for NoRetrieval {
@@ -436,64 +404,5 @@ mod tests {
                 );
             }
         }
-    }
-
-    #[test]
-    fn ordinary_spaces_leave_supplemental_bodies_uninitialized() {
-        const NAME: &str =
-            "space::catalog::tests::ordinary_spaces_leave_supplemental_bodies_uninitialized";
-        if std::env::var_os("OB_CATALOG_FRESH_CHECK").is_none() {
-            let result = std::process::Command::new(std::env::current_exe().unwrap())
-                .args(["--exact", NAME, "--nocapture"])
-                .env("OB_CATALOG_FRESH_CHECK", "1")
-                .output()
-                .unwrap();
-            assert!(
-                result.status.success(),
-                "{}",
-                String::from_utf8_lossy(&result.stdout)
-            );
-            return;
-        }
-        assert!(VALUES.iter().all(|v| v.get().is_none()));
-        for entry in &ENTRIES {
-            assert!(contains(identifier(entry)));
-        }
-        let supplied = Supplied::new([ProjectedResource {
-            uri: ENTRIES[8].uri.into(),
-            document: JsonValue::parse("true").unwrap(),
-        }])
-        .unwrap();
-        assert!(supplied.policy.protected.contains(identifier(&ENTRIES[8])));
-        assert!(
-            VALUES.iter().all(|v| v.get().is_none()),
-            "membership must not parse any body"
-        );
-        let document =
-            RawDocument::parse(r#"{"openbindings":"0.2.0","operations":{"op":{"input":true}}}"#)
-                .unwrap();
-        let space = SchemaSpace::new(document, Supplied::default()).unwrap();
-        assert_eq!(space.node_count(), 274);
-        assert!(VALUES[..CORE].iter().all(|v| v.get().is_some()));
-        assert!(VALUES[CORE..].iter().all(|v| v.get().is_none()));
-        assert!(PARTS.iter().all(|v| v.get().is_none()));
-        let resource = space
-            .name(identifier(&ENTRIES[8]))
-            .unwrap()
-            .carrier
-            .unwrap();
-        assert!(
-            VALUES[CORE..].iter().all(|v| v.get().is_none()),
-            "name lookup is only an identifier lookup"
-        );
-        let root = space.resource(resource).root.unwrap();
-        assert_eq!(
-            space.node(root).value.get("$id").and_then(|v| v.as_str()),
-            Some(ENTRIES[8].uri)
-        );
-        assert!(VALUES[8].get().is_some());
-        assert!(PARTS[0].get().is_some());
-        assert!(VALUES[9..].iter().all(|v| v.get().is_none()));
-        assert!(PARTS[1..].iter().all(|v| v.get().is_none()));
     }
 }

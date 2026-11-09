@@ -576,3 +576,24 @@ fn missing_members_remain_distinct_and_many_fixed_facts_stay_bounded() {
         assert!(pointer_bytes <= 8 * 1024 * 1024);
     }
 }
+
+#[test]
+fn node_limit_diagnostics_name_the_exhausted_allowance() {
+    let validation = validate_document_with_limits(
+        r#"{"openbindings":"0.2.0","operations":{}}"#,
+        JsonLimits {
+            max_nodes: 4,
+            ..JsonLimits::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(validation.report().conclusion, Conformance::Undetermined);
+    assert!(!validation.report().findings.is_empty());
+    for finding in &validation.report().findings {
+        assert_eq!(finding.code, "node-limit");
+        assert_eq!(
+            finding.message,
+            "the document exceeds the admission limit of 4 JSON nodes"
+        );
+    }
+}

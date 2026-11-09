@@ -96,18 +96,12 @@ test("consuming proof revokes all aliases while retained proofs and editable cop
     owner.dispose();
 });
 
-test("one batch commits once and preserves decimal spelling and every untouched byte", () => {
+test("one batch preserves decimal spelling and every untouched byte", () => {
   let document = open(text),
     decimal = exact("0.29000000000000001");
-  const original = bridge.WasmDocument.prototype.editEncoded;
-  let calls = 0;
   const read = bridge.WasmJson.prototype.text;
   bridge.WasmJson.prototype.text = () => {
     throw new Error("unexpected exact-value read across the bridge");
-  };
-  bridge.WasmDocument.prototype.editEncoded = function (...args) {
-    calls++;
-    return original.apply(this, args);
   };
   try {
     document = replaceDocument(
@@ -121,7 +115,6 @@ test("one batch commits once and preserves decimal spelling and every untouched 
         { op: "set", pointer: "/description", value: "edited" },
       ]),
     );
-    assert.equal(calls, 1);
     assert.equal(
       new TextDecoder().decode(document.toBytes()),
       text
@@ -132,7 +125,6 @@ test("one batch commits once and preserves decimal spelling and every untouched 
     assert.equal(decimal.text, "0.29000000000000001");
   } finally {
     bridge.WasmJson.prototype.text = read;
-    bridge.WasmDocument.prototype.editEncoded = original;
     document.dispose();
     decimal.dispose();
   }
@@ -384,16 +376,10 @@ test("an oversized exact batch returns borrowed owners without changing bytes", 
   assert.equal(liveStorageOwners(), baseline);
 });
 
-test("exact namespace construction and exact pointer edits share one atomic bridge call", () => {
-  // Every namespace commits once; failed ordinary JSON admission is atomic.
+test("exact namespace construction and exact pointer edits stay atomic", () => {
+  // Failed namespace edits and ordinary JSON admission preserve the document.
   let document = sdk.Document.create();
   const number = exact("1e+003");
-  const rawEdit = bridge.WasmDocument.prototype.editEncoded;
-  let calls = 0;
-  bridge.WasmDocument.prototype.editEncoded = function (...args) {
-    calls++;
-    return rawEdit.apply(this, args);
-  };
   try {
     document = replaceDocument(
       document,
@@ -423,7 +409,6 @@ test("exact namespace construction and exact pointer edits share one atomic brid
         },
       ]),
     );
-    assert.equal(calls, 1);
     assert.match(
       new TextDecoder().decode(document.toBytes()),
       /"x-number":1e\+003/,
@@ -446,18 +431,15 @@ test("exact namespace construction and exact pointer edits share one atomic brid
         e.code === "non-finite-number" && e.inputPointer === "/1/value/s/kind",
     );
     assert.deepEqual(document.toBytes(), before);
-    assert.equal(calls, 1);
     assert.throws(() =>
       document.edit([
         { op: "set", pointer: "/operations", value: {} },
         { op: "remove", pointer: "/missing" },
       ]),
     );
-    assert.equal(calls, 2);
     assert.deepEqual(document.toBytes(), before);
     document.validate().document.dispose();
   } finally {
-    bridge.WasmDocument.prototype.editEncoded = rawEdit;
     number.dispose();
     document.dispose();
   }

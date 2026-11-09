@@ -14,7 +14,7 @@ These byte-exact sources target interfaces revision
 | `conformance/selection/override-selection.json` | `12d6e91b627e238516a57b52ec5b59e543babd9b250feb1e6ade23a76e8ad2e0` |
 
 The twenty published selection cases run through plain invocation, prepared
-invocation, and preflight. The frame-correspondence suite consumes the current
+invocation, and preflight. The archived frame-correspondence experiment consumed the current
 interface snapshots; its adapter and native lifecycle policies are SDK choices.
 The previous kind-support query is absent from the current invocation contract.
 Kind description is a separate companion obligation, not a passing invocation

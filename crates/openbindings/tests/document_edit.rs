@@ -738,3 +738,151 @@ fn owned_edits_retain_paths_and_exact_values_across_reuse() {
     assert!(removed.value().at("/operations/look~1up~0").is_none());
     assert!(first.value().at("/operations/look~1up~0").is_some());
 }
+
+#[test]
+fn edit_batches_accept_the_node_limit_and_refuse_larger_requests() {
+    let document = Document::parse_with_limits(
+        "[0,0,0,0]",
+        JsonLimits {
+            max_nodes: 5,
+            ..JsonLimits::default()
+        },
+    )
+    .unwrap();
+    let mut edits: Vec<_> = (0..4)
+        .map(|i| Edit::remove_at(format!("/{i}").as_str()))
+        .collect();
+    edits.push(Edit::set_at("/-", exact("1")));
+    assert_eq!(document.edit(&edits).unwrap().as_bytes(), b"[1]");
+    for _ in 0..2 {
+        edits.push(Edit::set_at("/-", exact("1")));
+        assert_eq!(document.edit(&edits).unwrap_err().code(), "node-limit");
+    }
+    assert_eq!(document.as_bytes(), b"[0,0,0,0]");
+}
+
+#[test]
+fn edit_pointer_byte_and_utf16_limits_are_inclusive() {
+    let document = Document::parse_with_limits(
+        "{}",
+        JsonLimits {
+            max_bytes: 8,
+            ..JsonLimits::default()
+        },
+    )
+    .unwrap();
+    for length in [8, 9, 10] {
+        let text = format!("/{}", "a".repeat(length - 1));
+        let expected = if length == 8 {
+            "missing-value"
+        } else {
+            "byte-limit"
+        };
+        assert_eq!(document.remove(text.as_str()).unwrap_err().code(), expected);
+        let source = exact(&format!(r#"{{"{}\ud800":0}}"#, "a".repeat(length - 2)));
+        let pointer = source
+            .view()
+            .members()
+            .unwrap()
+            .next()
+            .unwrap()
+            .value
+            .location()
+            .pointer
+            .unwrap();
+        assert_eq!(pointer.utf16_units().count(), length);
+        assert_eq!(document.remove(&pointer).unwrap_err().code(), expected);
+    }
+}
+
+#[test]
+fn inserted_names_and_replacements_obey_the_final_byte_limit() {
+    for name in [
+        "plain",
+        "quote\"slash\\line\nreturn\rtab\t\u{8}\u{c}",
+        "control\u{1}",
+        "é😀",
+    ] {
+        let expected = format!("{{{}:1e+03}}", serde_json::to_string(name).unwrap());
+        for maximum in [expected.len(), expected.len() - 1] {
+            let document = Document::parse_with_limits(
+                "{}",
+                JsonLimits {
+                    max_bytes: maximum,
+                    ..JsonLimits::default()
+                },
+            )
+            .unwrap();
+            let result = document.edit(&[Edit::set(&[name], exact("1e+03"))]);
+            if maximum == expected.len() {
+                assert_eq!(result.unwrap().as_bytes(), expected.as_bytes());
+            } else {
+                assert_eq!(result.unwrap_err().code(), "byte-limit");
+            }
+            assert_eq!(document.as_bytes(), b"{}");
+        }
+    }
+    let document = Document::parse_with_limits(
+        r#"{"a":0}"#,
+        JsonLimits {
+            max_bytes: 14,
+            ..JsonLimits::default()
+        },
+    )
+    .unwrap();
+    let edits = [Edit::remove_at("/a"), Edit::set_at("/long", exact("1e+03"))];
+    assert_eq!(
+        document.edit(&edits).unwrap().as_bytes(),
+        br#"{"long":1e+03}"#
+    );
+    let oversized = [
+        Edit::remove_at("/a"),
+        Edit::set_at("/long", exact("1e+003")),
+    ];
+    assert_eq!(document.edit(&oversized).unwrap_err().code(), "byte-limit");
+}
+
+#[test]
+fn edit_input_errors_expose_the_underlying_error_as_their_source() {
+    use std::error::Error;
+    let document = Document::parse_with_limits(
+        "{}",
+        JsonLimits {
+            max_bytes: 2,
+            ..JsonLimits::default()
+        },
+    )
+    .unwrap();
+    let error = document.set("/x", &exact("0")).unwrap_err();
+    let EditError::Input(input) = &error else {
+        panic!("expected input refusal")
+    };
+    let source = error
+        .source()
+        .unwrap()
+        .downcast_ref::<InputError>()
+        .unwrap();
+    assert_eq!(source, input);
+    assert_eq!(source.code(), "byte-limit");
+    assert!(EditError::InvalidPointer.source().is_none());
+}
+
+#[test]
+fn duplicate_replacements_keep_their_refusal_under_tight_byte_limits() {
+    let replacement = exact(r#"{"a":0,"a":1}"#);
+    for maximum in [2, 128] {
+        let document = Document::parse_with_limits(
+            "{}",
+            JsonLimits {
+                max_bytes: maximum,
+                ..JsonLimits::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            document.set("/x", &replacement).unwrap_err().code(),
+            "duplicate-members"
+        );
+        assert_eq!(document.as_bytes(), b"{}");
+    }
+}

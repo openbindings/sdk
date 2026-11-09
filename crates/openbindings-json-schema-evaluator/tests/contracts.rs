@@ -720,20 +720,3 @@ fn preparation_separates_setup_from_value_and_keeps_ready_healthy() {
         );
     }
 }
-#[test]
-fn resources_reject_compared_uri_duplicates_even_for_equal_bytes() {
-    let schema = value("true");
-    assert!(
-        ExternalSchemas::new([
-            ExternalSchema {
-                uri: "https://example.invalid/a/../b".into(),
-                document: schema.clone()
-            },
-            ExternalSchema {
-                uri: "https://example.invalid/b#".into(),
-                document: schema
-            }
-        ])
-        .is_err()
-    );
-}

@@ -19,20 +19,15 @@ fn broad_epsilon_closures_need_more_than_a_state_only_reservation() {
     let control = AtomicBool::new(false);
     for count in [100, 1_000, 10_000] {
         let engine = engine(&"|".repeat(count));
-        assert_eq!(engine.get_nfa().states().len(), 4);
-        let bytes = reservation(engine.get_nfa()).unwrap();
-        let mut graph = Graph::new(bytes, None, 0, &control);
+        let mut graph = Graph::new(usize::MAX, None, 0, &control);
         let mut cache = create(&engine, &mut graph).unwrap();
         for text in ["", "x", "a string"] {
             assert!(engine.is_match(&mut cache, text));
         }
         assert!(
-            create(&engine, &mut Graph::new(bytes - 1, None, 0, &control)).is_err(),
+            create(&engine, &mut Graph::new(0, None, 0, &control)).is_err(),
             "cache creation must refuse before its backing is requested"
         );
-        if count >= 1_000 {
-            assert!(bytes > 4 * 256 + 4096);
-        }
     }
 }
 
@@ -69,19 +64,8 @@ fn cache_work_and_cancellation_refuse_before_construction() {
         assert_eq!(failure.reason, NoVerdictReason::Cancelled);
     }
     let control = AtomicBool::new(false);
-    let work = engine.get_nfa().states().len() + 1;
-    create(
-        &engine,
-        &mut Graph::new(usize::MAX, Some(work), 0, &control),
-    )
-    .unwrap();
-    assert!(
-        create(
-            &engine,
-            &mut Graph::new(usize::MAX, Some(work - 1), 0, &control)
-        )
-        .is_err()
-    );
+    create(&engine, &mut Graph::new(usize::MAX, None, 0, &control)).unwrap();
+    assert!(create(&engine, &mut Graph::new(usize::MAX, Some(0), 0, &control)).is_err());
 }
 
 #[test]

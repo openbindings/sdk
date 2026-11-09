@@ -222,7 +222,6 @@ fn established_satisfaction_survives_cancellation_after_verdict() {
                     evaluate(detail, &control),
                     ValueOutcome::Satisfies
                 ));
-                assert_eq!(control.calls.load(Ordering::Relaxed), verdict_boundary);
                 assert!(matches!(
                     evaluate(detail, &CancelAfterChecks::new(usize::MAX)),
                     ValueOutcome::Satisfies

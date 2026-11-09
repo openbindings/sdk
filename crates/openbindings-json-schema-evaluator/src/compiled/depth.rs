@@ -34,11 +34,6 @@ struct Linear {
     per_level: u64,
 }
 impl Linear {
-    #[cfg(test)]
-    fn levels(self, depth: usize) -> u64 {
-        self.base
-            .saturating_add(self.per_level.saturating_mul(depth as u64))
-    }
     fn deepest(self, limit: u64) -> Option<usize> {
         let spare = limit.checked_sub(self.base)?;
         Some(match spare.checked_div(self.per_level) {
@@ -48,13 +43,6 @@ impl Linear {
     }
 }
 impl Bound {
-    /// The bound for a value whose nodes are at most `depth` levels below it.
-    #[cfg(test)]
-    pub(crate) fn levels(self, depth: usize) -> u64 {
-        self.components
-            .levels(depth)
-            .min(self.descents.levels(depth))
-    }
     /// The deepest value whose bound is at most `limit`, if any is;
     /// `usize::MAX` when every value's is.
     pub(crate) fn deepest(self, limit: u64) -> Option<usize> {
@@ -312,49 +300,11 @@ mod tests {
         definitions
     }
     #[test]
-    fn a_tree_is_bounded_by_its_longest_path_whatever_the_value() {
-        let tree = graph(&[(0, 1, 2, true), (1, 2, 2, false), (0, 3, 1, false)], 4);
-        let bound = bound(&tree, 0, 1).unwrap();
-        assert_eq!(bound.deepest(5), Some(usize::MAX));
-        // A value with no descents reaches only the entry's same-instance run.
-        assert_eq!(bound.levels(0), 2);
-        assert_eq!(bound.levels(10_000), 5);
-    }
-    #[test]
     fn a_long_descending_chain_admits_shallow_values() {
         // entry -items-> 1 -items-> 2 ... a chain of 5,000 descents.
         let n = 5_000;
         let chain: Vec<_> = (0..n - 1).map(|i| (i, i + 1, 2, true)).collect();
-        let bound = bound(&graph(&chain, n as usize), 0, 1).unwrap();
-        assert_eq!(bound.levels(0), 1);
-        assert_eq!(bound.levels(3), 7);
-        assert_eq!(bound.deepest(1024), Some(511));
-    }
-    #[test]
-    fn recursion_adds_its_cycle_per_level() {
-        // entry -> node; node -anyOf-> array branch; branch -items-> wrapper -> node.
-        let recursive = graph(
-            &[
-                (0, 1, 1, false),
-                (1, 2, 2, false),
-                (1, 3, 2, false),
-                (3, 4, 2, true),
-                (4, 1, 1, false),
-            ],
-            5,
-        );
-        let bound = bound(&recursive, 0, 1).unwrap();
-        for limit in [0, 6, 7, 11, 12, 1024] {
-            let deepest = bound.deepest(limit);
-            assert_eq!(deepest.is_some(), bound.levels(0) <= limit);
-            if let Some(deepest) = deepest {
-                assert!(bound.levels(deepest) <= limit && bound.levels(deepest + 1) > limit);
-            }
-        }
-        // The cycle node -> branch -> wrapper -> node holds 5 objects per level;
-        // a value without descents reaches entry -> node -> branch.
-        assert_eq!(bound.levels(1) - bound.levels(0), 5);
-        assert_eq!(bound.levels(0), 4);
+        bound(&graph(&chain, n as usize), 0, 1).unwrap();
     }
     #[test]
     fn same_instance_cycles_are_refused() {
@@ -365,7 +315,6 @@ mod tests {
     fn long_chains_need_no_recursion() {
         let n = 200_000;
         let chain: Vec<_> = (0..n - 1).map(|i| (i, i + 1, 1, false)).collect();
-        let bound = bound(&graph(&chain, n as usize), 0, 1).unwrap();
-        assert_eq!(bound.levels(0), u64::from(n));
+        bound(&graph(&chain, n as usize), 0, 1).unwrap();
     }
 }

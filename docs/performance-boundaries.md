@@ -812,11 +812,8 @@ and in 0.35 s below, where the bounds program does not fit.
 
 ## Document validation
 
-Run from the repository root with no concurrent compilation:
-
-```sh
-cargo test --release --locked -p openbindings --test indexed_lookup_measurement -- --ignored --nocapture
-```
+The measurement source and generated inputs are archived in the 2026-11-09
+test-reduction receipt under `moved/crates/openbindings/tests/`.
 
 Each fixture has two warmups and five samples; the table reports the median.
 Parsing and full document validation are timed. Fixture generation, result

@@ -148,8 +148,8 @@ export const compiledDepthShapes = [
   },
 ];
 
-// Each shape's compiledDepth is the native qualified_depth(), pinned by
-// compiled_qualification::wasm_depth_walk_bounds_match_native_selection.
+// Each shape walks the compiled boundary and the original-engine fallback.
+// Native recursive-boundary tests separately exercise their host stack limits.
 // A linear chain's evaluation path at one depth is a prefix of the next, so
 // stack use grows with depth and the deepest compiled value is the one that
 // can overflow. Every chain depth within `below` of the compiled boundary and

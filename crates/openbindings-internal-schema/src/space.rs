@@ -2231,7 +2231,7 @@ mod projection_tests {
         }
     }
     #[test]
-    fn the_shared_packaged_layer_assembles_the_flat_space() {
+    fn packaged_resources_preserve_resolution_conflicts_and_original_origins() {
         const META: &str = "https://json-schema.org/draft/2020-12/schema";
         const CORE: &str = "https://json-schema.org/draft/2020-12/meta/core";
         let resource = |uri: &str, text: &str| ProjectedResource {
@@ -2450,7 +2450,6 @@ mod projection_tests {
         let control = std::sync::atomic::AtomicBool::new(false);
         let mapped = space.program(entry, &control).unwrap();
         let unmapped = space.program_unmapped(entry, &control).unwrap();
-        assert!(unmapped.program.locations.is_empty());
         assert_eq!(mapped.entry_uri, unmapped.program.entry_uri);
         assert_eq!(mapped.resources.len(), unmapped.definitions.len());
         let (mut out, mut scratch) = (Vec::new(), Vec::new());

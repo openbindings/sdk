@@ -435,7 +435,7 @@ fn dynamic_scope_is_prepared_once_and_runtime_work_remains_bounded() {
 }
 
 #[test]
-fn former_specialization_budgets_fund_the_actual_dynamic_proof() {
+fn dynamic_choice_proofs_respect_evaluation_reservations_and_allow_healthy_retries() {
     for (levels, evaluation_sdk_reservation_bytes) in
         [(8, 4 << 20), (8, 8 << 20), (9, 8 << 20), (9, 16 << 20)]
     {

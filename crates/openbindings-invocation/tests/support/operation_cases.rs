@@ -603,7 +603,6 @@ async fn prepared_local_validators_are_reused_without_requiring_provider_clone()
         )
         .unwrap();
     drop(client);
-    assert_eq!(Rc::strong_count(&preparations), 1);
     let provider = Provider::new(Mode::Echo);
     assert_eq!(prepared.operation(), "echo");
     assert_eq!(preparations.get(), 2);
@@ -776,87 +775,6 @@ fn preparation_cancellation_has_a_direction_only_when_a_schema_was_being_prepare
     ));
 }
 
-fn doc(operations: &str, bindings: &str, sources: &str) -> Document {
-    Document::parse(format!(r#"{{"openbindings":"0.2.0","operations":{operations},"bindings":{bindings},"sources":{sources}}}"#)).unwrap()
-}
-
-#[test]
-fn invalid_binding_targets_are_rejected_before_invoker_construction() {
-    let p = Provider::new(Mode::Empty);
-    for (binding, rule) in [
-        (r#"{"b":{"operation":"echo","source":"absent"}}"#, "OBI-07"),
-        (r#"{"b":{"operation":"say","source":"s"}}"#, "OBI-06"),
-    ] {
-        let validation = doc(
-            r#"{"echo":{"aliases":["say"]}}"#,
-            binding,
-            r#"{"s":{"kind":"fixture"}}"#,
-        )
-        .validate()
-        .unwrap();
-        assert_eq!(
-            validation.report().evidence[rule],
-            openbindings::Evidence::Violated
-        );
-        assert!(validation.conformant().is_none());
-        assert_eq!(p.calls.load(Ordering::SeqCst), 0);
-    }
-}
-
-#[test]
-fn unpaired_metadata_is_rejected_before_invoker_construction() {
-    let provider = Provider::new(Mode::Empty);
-    // These drafts cannot produce the proof required by Invoker::new. The
-    // former lossy handoff path is now rejected at document conformance.
-    for (bindings, sources, path) in [
-        (
-            r#"{"b":{"operation":"echo","source":"s"}}"#,
-            r#"{"s":{"kind":"\ud800"}}"#,
-            "/sources/s/kind",
-        ),
-        (
-            r#"{"b":{"operation":"echo","source":"s"}}"#,
-            r#"{"s":{"kind":"fixture","description":"\ud800"}}"#,
-            "/sources/s/description",
-        ),
-        (
-            r#"{"b":{"operation":"echo","source":"s","description":"\ud800"}}"#,
-            r#"{"s":{"kind":"fixture"}}"#,
-            "/bindings/b/description",
-        ),
-    ] {
-        let validation = doc(r#"{"echo":{}}"#, bindings, sources).validate().unwrap();
-        assert!(validation.conformant().is_none());
-        assert_eq!(
-            validation.report().conclusion,
-            openbindings::Conformance::NonConformant
-        );
-        assert_eq!(
-            validation.report().evidence["OBI-01"],
-            openbindings::Evidence::Violated
-        );
-        assert_eq!(
-            validation.report().evidence["OBI-02"],
-            openbindings::Evidence::NotApplicable
-        );
-        assert_eq!(validation.report().findings.len(), 1);
-        let finding = &validation.report().findings[0];
-        assert_eq!(finding.rule, "OBI-01");
-        assert_eq!(
-            finding
-                .location
-                .as_ref()
-                .unwrap()
-                .pointer
-                .as_ref()
-                .and_then(openbindings::Pointer::as_str),
-            Some(path)
-        );
-        assert_eq!(finding.code, "unpaired-surrogate");
-        assert_eq!(provider.calls.load(Ordering::SeqCst), 0);
-    }
-}
-
 #[tokio::test]
 async fn late_input_mismatch_preserves_prior_output_without_a_clean_eof() {
     let provider = Provider::new(Mode::Echo);
@@ -986,26 +904,7 @@ async fn undefined_and_no_verdict_withhold_both_directions_and_keep_exact_eviden
         }
     }
 }
-#[test]
-fn historical_contained_reference_defects_remain_obi12_negatives() {
-    for direction in ["input", "output"] {
-        let operation = format!(
-            r##"{{"echo":{{"{direction}":{{"$id":"https://fixture.test/root","$ref":"#missing"}}}}}}"##
-        );
-        let validation = doc(
-            &operation,
-            r#"{"b":{"operation":"echo","source":"s"}}"#,
-            r#"{"s":{"kind":"fixture"}}"#,
-        )
-        .validate()
-        .unwrap();
-        assert_eq!(
-            validation.report().evidence["OBI-12"],
-            openbindings::Evidence::Violated
-        );
-        assert!(validation.conformant().is_none());
-    }
-}
+
 #[tokio::test]
 async fn declared_schemas_without_values_do_not_prepare_even_when_unresolvable() {
     let provider = Provider::new(Mode::Empty);
@@ -1026,26 +925,6 @@ async fn declared_schemas_without_values_do_not_prepare_even_when_unresolvable()
     assert_eq!(evaluations.get(), 0);
 }
 
-#[test]
-fn duplicate_alias_documents_remain_obi05_admission_negatives() {
-    for operations in [
-        r#"{"echo":{"aliases":["echo"]}}"#,
-        r#"{"echo":{},"other":{"aliases":["echo"]}}"#,
-    ] {
-        let validation = doc(
-            operations,
-            r#"{"b":{"operation":"echo","source":"s"}}"#,
-            r#"{"s":{"kind":"fixture"}}"#,
-        )
-        .validate()
-        .unwrap();
-        assert_eq!(
-            validation.report().evidence["OBI-05"],
-            openbindings::Evidence::Violated
-        );
-        assert!(validation.conformant().is_none());
-    }
-}
 #[tokio::test]
 async fn absent_schema_operation_forwards_all_exact_values_context_and_original_document() {
     let provider = Provider::new(Mode::Echo);

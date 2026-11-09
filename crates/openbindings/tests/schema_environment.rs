@@ -630,3 +630,168 @@ fn registration_stops_consuming_inputs_at_the_first_budget_overrun() {
     ));
     assert_eq!(consumed.get(), 2);
 }
+
+#[test]
+fn document_and_external_schema_locations_use_the_original_source_coordinates() {
+    let text = "{\n\"openbindings\":\"0.2.0\",\n\"operations\":{},\n\"schemas\":{\"entry\":{\"type\":\"integer\"}}\n}";
+    let selected = schema(text);
+    let origin = selected.location();
+    let expected = value(text).at("/schemas/entry").unwrap().location();
+    assert_eq!(selected.document().locate(&origin), Some(expected));
+    let carrier = value("{\n\"outside\":0,\n\"schema\":{\n \"properties\":{\"field\":false}\n}}");
+    let subtree = carrier.at("/schema").unwrap().to_owned();
+    let external = ExternalSchemas::default()
+        .with("https://example.test/schema", subtree.clone())
+        .unwrap();
+    let env = environment(&selected, &external);
+    let node = env
+        .resolve(&env.root(), "https://example.test/schema#/properties/field")
+        .unwrap()
+        .schema;
+    let expected = value(subtree.text())
+        .at("/properties/field")
+        .unwrap()
+        .location();
+    assert_eq!(external.locate(node.origin()), Some(expected));
+    assert!(external.locate(&origin).is_none());
+    assert!(selected.document().locate(node.origin()).is_none());
+}
+
+#[test]
+fn cached_schema_inventory_limits_accept_the_boundary_and_refuse_one_less() {
+    let text = r#"{"openbindings":"0.2.0","operations":{},"schemas":{"entry":{"$id":"https://example.test/root","$defs":{"child":true}}}}"#;
+    for supplied in [false, true] {
+        let external = if supplied {
+            ExternalSchemas::default()
+                .with("https://example.test/external", value("true"))
+                .unwrap()
+        } else {
+            ExternalSchemas::default()
+        };
+        let selected = schema(text);
+        let held = environment(&selected, &external);
+        for identities in [false, true] {
+            let resource = if identities {
+                "schema-identity-bytes"
+            } else {
+                "schema-nodes"
+            };
+            let limit = |maximum| PreparationLimits {
+                max_schema_nodes: if identities {
+                    PreparationLimits::default().max_schema_nodes
+                } else {
+                    maximum
+                },
+                max_identity_bytes: if identities {
+                    maximum
+                } else {
+                    PreparationLimits::default().max_identity_bytes
+                },
+                ..PreparationLimits::default()
+            };
+            // Find the accepted boundary on fresh documents, then require the
+            // retained environment to honor that same boundary on reuse.
+            let (mut low, mut high) = (0, 100_000);
+            while low < high {
+                let mid = low + (high - low) / 2;
+                match schema(text).environment(&external, &limit(mid), &AtomicBool::new(false)) {
+                    Ok(_) => high = mid,
+                    Err(failure) => {
+                        assert_eq!(
+                            failure.kind,
+                            PreparationFailureKind::Limit {
+                                resource: resource.into()
+                            }
+                        );
+                        assert!(failure.origin.is_none());
+                        low = mid + 1;
+                    }
+                }
+            }
+            assert!(low > 0);
+            for maximum in [low, low + 1] {
+                selected
+                    .environment(&external, &limit(maximum), &AtomicBool::new(false))
+                    .unwrap();
+            }
+            let failure = selected
+                .environment(&external, &limit(low - 1), &AtomicBool::new(false))
+                .unwrap_err();
+            assert_eq!(
+                failure.kind,
+                PreparationFailureKind::Limit {
+                    resource: resource.into()
+                }
+            );
+            assert!(failure.origin.is_none());
+            assert_eq!(held.root().value().text(), selected.json().text());
+        }
+    }
+}
+
+#[test]
+fn external_registration_accepts_empty_fragments_and_preserves_subtree_bytes() {
+    for uri in [
+        "https://example.test/schema",
+        "https://example.test/schema#",
+    ] {
+        let external = ExternalSchemas::default().with(uri, value("true")).unwrap();
+        assert_eq!(
+            external.iter().next().unwrap().uri,
+            "https://example.test/schema"
+        );
+        assert_eq!(external.iter().next().unwrap().document.text(), "true");
+    }
+    for uri in ["https://example.test/schema#fragment", "relative"] {
+        assert_eq!(
+            ExternalSchemas::default()
+                .with(uri, value("true"))
+                .unwrap_err()
+                .kind,
+            ExternalSchemaErrorKind::InvalidIdentity
+        );
+    }
+    // Root-owned text is already admitted. A generous but finite allowance can
+    // register it without funding another input-sized copy.
+    let body = format!("{{\"const\":\"{}\"}}", "x".repeat(20_000));
+    let limits = PreparationLimits {
+        max_sdk_work_units: 10_000,
+        max_sdk_reservation_bytes: 100_000,
+        ..PreparationLimits::default()
+    };
+    let root = ExternalSchema {
+        uri: "https://example.test/schema".into(),
+        document: value(&body),
+    };
+    let registered =
+        ExternalSchemas::new_with_limits([root], &limits, &AtomicBool::new(false)).unwrap();
+    assert_eq!(registered.iter().next().unwrap().document.text(), body);
+    let carrier = value(&format!("{{\"schema\":{body}}}"));
+    let subtree = ExternalSchema {
+        uri: "https://example.test/schema".into(),
+        document: carrier.at("/schema").unwrap().to_owned(),
+    };
+    let failure =
+        ExternalSchemas::new_with_limits([subtree.clone()], &limits, &AtomicBool::new(false))
+            .unwrap_err();
+    assert!(matches!(
+        failure.kind,
+        ExternalSchemaErrorKind::Limit { .. }
+    ));
+    let registered = ExternalSchemas::new([subtree]).unwrap();
+    assert_eq!(registered.iter().next().unwrap().document.text(), body);
+}
+
+#[test]
+fn resolution_and_cancellation_display_describe_the_failed_operation() {
+    let selected = schema(r#"{"openbindings":"0.2.0","operations":{},"schemas":{"entry":true}}"#);
+    let env = environment(&selected, &ExternalSchemas::default());
+    let failure = env
+        .resolve(&env.root(), "https://private.test/missing")
+        .unwrap_err();
+    assert_eq!(
+        failure.to_string(),
+        "schema reference resolution did not complete"
+    );
+    assert_eq!(Cancelled.to_string(), "the caller cancelled this work");
+}

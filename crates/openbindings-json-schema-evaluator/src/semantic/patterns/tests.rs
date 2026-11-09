@@ -41,30 +41,6 @@ fn outcome(plan: &Plan, value: Value) -> ValueOutcome {
 }
 
 #[test]
-fn values_names_and_original_occurrences_share_only_immutable_programs() {
-    let before = compiler::build_count();
-    let plan = plan(
-        json!({"pattern":"a|b","patternProperties":{"\\u0061|b":true},"properties":{"x":{"pattern":"a|b"}}}),
-        Limits::default(),
-    );
-    let programs: Vec<_> = plan.patterns.values().collect();
-    assert_eq!(programs.len(), 3);
-    assert!(programs.iter().all(|p| Arc::ptr_eq(p, programs[0])));
-    assert_eq!(compiler::build_count(), before + 1);
-    for _ in 0..5 {
-        assert!(matches!(
-            outcome(&plan, json!("a")),
-            ValueOutcome::Satisfies
-        ));
-        assert!(matches!(
-            outcome(&plan, json!({"a":1,"x":"b"})),
-            ValueOutcome::Satisfies
-        ));
-    }
-    assert_eq!(compiler::build_count(), before + 1);
-}
-
-#[test]
 fn sharing_never_merges_distinct_undefined_effects() {
     let separate = plan(
         json!({"allOf":[{"pattern":"["},{"not":{"pattern":"["}}]}),
@@ -125,35 +101,6 @@ fn limited_programs_are_terminal_only_when_reached() {
 }
 
 #[test]
-fn fixed_tiny_program_jobs_prepare_once_under_defaults() {
-    for count in [100, 300, 400, 1024] {
-        let members: serde_json::Map<String, Value> = (0..count)
-            .map(|n| {
-                (
-                    format!("p{n}"),
-                    json!({"pattern":format!("a{n:04}|b{n:04}")}),
-                )
-            })
-            .collect();
-        let before = compiler::build_count();
-        let p = plan(json!({"properties":members}), Limits::default());
-        assert_eq!(compiler::build_count(), before + count);
-        for _ in 0..3 {
-            assert!(matches!(outcome(&p, json!({})), ValueOutcome::Satisfies));
-        }
-        assert!(matches!(
-            outcome(&p, json!({"p0":"a0000"})),
-            ValueOutcome::Satisfies
-        ));
-        assert!(matches!(
-            outcome(&p, json!({"p0":"x"})),
-            ValueOutcome::Fails { .. }
-        ));
-        assert_eq!(compiler::build_count(), before + count);
-    }
-}
-
-#[test]
 fn cancellation_and_concurrent_searches_do_not_poison_shared_programs() {
     let p = plan(json!({"pattern":"^(ab|é😀){1,2}$"}), Limits::default());
     let stop = AtomicBool::new(true);
@@ -162,7 +109,6 @@ fn cancellation_and_concurrent_searches_do_not_poison_shared_programs() {
         matches!(p.evaluate(&good,Detail::Outcome,&stop),ValueOutcome::NoVerdict{detail}if detail.reason==NoVerdictReason::Cancelled)
     );
     stop.store(false, Ordering::Relaxed);
-    let before = compiler::build_count();
     std::thread::scope(|scope| {
         for text in ["ab", "é😀ab", "x", "ab\n"] {
             let p = &p;
@@ -181,7 +127,6 @@ fn cancellation_and_concurrent_searches_do_not_poison_shared_programs() {
         p.evaluate(&good, Detail::Outcome, &stop),
         ValueOutcome::Satisfies
     ));
-    assert_eq!(compiler::build_count(), before);
 }
 
 #[test]

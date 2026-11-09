@@ -10,7 +10,7 @@ struct Negative {
 }
 
 #[test]
-fn every_moved_value_case_keeps_its_exact_negative_admission_witness() {
+fn invalid_fixture_documents_report_required_admission_rules() {
     let cases: Vec<Negative> =
         serde_json::from_str(include_str!("../fixtures/current-admission.json")).unwrap();
     assert_eq!(cases.len(), 20);

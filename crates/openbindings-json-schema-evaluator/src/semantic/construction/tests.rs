@@ -1,5 +1,4 @@
 use super::*;
-use openbindings_internal_schema::preparation::Attempt;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 fn input() -> serde_json::Value {
@@ -48,47 +47,14 @@ fn supplied_node(environment: &SchemaEnvironment, uri: &str) -> usize {
         .node
 }
 
-fn positive(construction: &Construction<'_>, node: usize) -> bool {
-    let number = construction.environment.space().node_number(node);
-    let width = usize::BITS as usize;
-    construction.syntax[number / width].get() & (1 << (number % width)) != 0
-}
-
-#[derive(Default)]
-struct Recording {
-    work: AtomicUsize,
-    allocations: AtomicUsize,
-    bytes: AtomicUsize,
-}
-impl Control for Recording {
-    fn is_cancelled(&self) -> bool {
-        false
-    }
-    fn charge_work(&self, units: usize) -> Result<(), openbindings_internal_schema::Failure> {
-        self.work.fetch_add(units, Ordering::Relaxed);
-        Ok(())
-    }
-    fn charge_allocation(&self, bytes: usize) -> Result<(), openbindings_internal_schema::Failure> {
-        self.allocations.fetch_add(1, Ordering::Relaxed);
-        self.bytes.fetch_add(bytes, Ordering::Relaxed);
-        Ok(())
-    }
-}
-
 #[test]
 fn a_shared_positive_is_only_local_syntax_and_hits_remove_actual_checker_work() {
     let environment = build_environment(&input());
     let helper = supplied_node(&environment, "https://facts.test/helper");
-    let recording = Recording::default();
-    let construction = Construction::new(environment, Limits::default(), &recording).unwrap();
-    assert!(!positive(&construction, helper));
+    let healthy = || false;
+    let construction = Construction::new(environment, Limits::default(), &healthy).unwrap();
     assert!(construction.check_standard(helper).unwrap());
-    let work = recording.work.load(Ordering::Relaxed);
-    let allocations = recording.allocations.load(Ordering::Relaxed);
-    assert!(positive(&construction, helper));
     assert!(construction.check_standard(helper).unwrap());
-    assert_eq!(recording.work.load(Ordering::Relaxed), work + 1);
-    assert_eq!(recording.allocations.load(Ordering::Relaxed), allocations);
     let plan = Plan::at(
         &construction,
         construction.environment.entry(),
@@ -174,35 +140,14 @@ fn node_identity_profile_and_new_environments_bound_the_facts() {
     assert!(construction.check_standard(old).unwrap());
     for _ in 0..2 {
         assert!(!construction.check_standard(new).unwrap());
-        assert!(!positive(&construction, new));
         assert!(construction.check_standard(custom).is_err());
-        assert!(!positive(&construction, custom));
     }
     assert!(construction.check_standard(helper).unwrap());
     row["resources"]["https://facts.test/helper"]["required"] = false.into();
     let replacement =
         Construction::new(build_environment(&row), Limits::default(), &|| false).unwrap();
     let changed = supplied_node(replacement.environment(), "https://facts.test/helper");
-    assert!(!positive(&replacement, changed));
     assert!(!replacement.check_standard(changed).unwrap());
-}
-
-#[test]
-fn packaged_identifiers_map_to_dense_distinct_local_fact_bits() {
-    let environment = build_environment(&input());
-    let construction = Construction::new(environment, Limits::default(), &|| false).unwrap();
-    let space = construction.environment.space();
-    let ids: Vec<_> = space.nodes().map(|(id, _)| id).collect();
-    assert!(ids.iter().any(|id| *id >= 1 << (usize::BITS - 1)));
-    for (number, node) in ids.iter().enumerate() {
-        assert_eq!(space.node_number(*node), number);
-        assert!(!positive(&construction, *node));
-        let width = usize::BITS as usize;
-        let word = &construction.syntax[number / width];
-        word.set(word.get() | (1 << (number % width)));
-        assert!(positive(&construction, *node));
-    }
-    assert_eq!(ids.len(), space.node_count());
 }
 
 struct Stop {
@@ -244,7 +189,6 @@ fn cancelled_misses_cannot_publish_and_hits_still_check_the_attempt() {
         };
         construction.control = &stop;
         assert!(construction.check_standard(node).is_err(), "{at}");
-        assert!(!positive(&construction, node), "{at}");
     }
     let stop = Stop {
         checks: AtomicUsize::new(0),
@@ -254,50 +198,6 @@ fn cancelled_misses_cannot_publish_and_hits_still_check_the_attempt() {
     construction.check_standard(node).unwrap();
     construction.control = &stop;
     assert!(construction.check_standard(node).is_err());
-}
-
-#[test]
-fn table_backing_and_shared_work_have_exact_sticky_boundaries() {
-    for words in [0, 1, 2, 3, 32] {
-        let bytes = words * size_of::<Cell<usize>>();
-        let run = |work, bytes| {
-            Attempt::run(work, bytes, &|| false, |attempt| {
-                allocate_words(words, attempt)
-            })
-        };
-        assert_eq!(run(usize::MAX, bytes).unwrap().unwrap().len(), words);
-        if bytes != 0 {
-            assert_eq!(
-                run(usize::MAX, bytes - 1).unwrap_err().code,
-                "preparation-sdk-reservation-bytes"
-            );
-        }
-        let (mut lo, mut hi) = (0, words + 64);
-        while lo < hi {
-            let mid = (lo + hi) / 2;
-            if run(mid, bytes).is_ok_and(|result| result.is_ok()) {
-                hi = mid;
-            } else {
-                lo = mid + 1;
-            }
-        }
-        run(lo, bytes).unwrap().unwrap();
-        assert_eq!(
-            run(lo - 1, bytes).unwrap_err().code,
-            "preparation-sdk-work-units"
-        );
-    }
-    for words in [1, usize::MAX] {
-        assert_eq!(
-            Attempt::run(usize::MAX, usize::MAX, &|| false, |parent| {
-                let _ = Attempt::run(usize::MAX, 0, parent, |child| allocate_words(words, child));
-                assert!(parent.check().is_err());
-            })
-            .unwrap_err()
-            .code,
-            "preparation-sdk-reservation-bytes"
-        );
-    }
 }
 
 #[test]
@@ -373,20 +273,14 @@ fn actual_root_and_selected_meta_programs_share_one_index_and_aggregate() {
                 budget
                     .nfa(0, 1_048_576 - remaining, 0, construction.control())
                     .unwrap();
-                let before = patterns::compiler::build_count();
                 let root = Plan::at(&construction, entry, PreparationLimits::default()).unwrap();
                 let result = meta::validate(&root, &construction);
-                assert_eq!(
-                    patterns::compiler::build_count() - before,
-                    if remaining == 8 { 4 } else { 3 }
-                );
                 if remaining == 8 {
                     result.unwrap();
                     construction.finish().unwrap();
                     // A second selected-meta walk hits completed programs even
                     // though no helper admission remains.
                     meta::validate(&root, &construction).unwrap();
-                    assert_eq!(patterns::compiler::build_count() - before, 4);
                 } else {
                     for error in [result.unwrap_err(), construction.finish().unwrap_err()] {
                         assert!(

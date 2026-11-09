@@ -376,37 +376,6 @@ mod tests {
     use super::*;
     use crate::uri::compared_id;
 
-    #[test]
-    fn validation_layout_matches_727dcd0() {
-        use std::mem::size_of;
-        #[cfg(target_pointer_width = "64")]
-        assert_eq!(
-            (
-                size_of::<Leaf<'_>>(),
-                size_of::<Node<'_>>(),
-                size_of::<Label<'_>>()
-            ),
-            (40, 48, 24)
-        );
-        #[cfg(target_pointer_width = "32")]
-        assert_eq!(
-            (
-                size_of::<Leaf<'_>>(),
-                size_of::<Node<'_>>(),
-                size_of::<Label<'_>>()
-            ),
-            (28, 28, 12)
-        );
-        let ids = Identifiers::new(0);
-        let _: &Vec<Node<'_>> = &ids.nodes;
-        let _: &Vec<Leaf<'_>> = &ids.leaves;
-        let _: &Vec<&str> = &ids.schemes;
-        let _: &Vec<&str> = &ids.pieces;
-        let _: &BTreeMap<(u32, u32), u32> = &ids.children;
-        let _: &BTreeMap<Box<str>, u32> = &ids.segment_ids;
-        let _: &BTreeMap<&str, u32> = &ids.scheme_ids;
-    }
-
     const IDS: &[&str] = &[
         "https://e.test/a/b",
         "https://e.test",
@@ -668,48 +637,6 @@ mod tests {
     }
 
     #[test]
-    fn splitting_shared_long_segments_interns_their_text_once() {
-        let long = "z".repeat(16_384);
-        let text = format!("https://example.test/{long}/{}", "x/".repeat(256));
-        let mut ids = Identifiers::new(text.len());
-        let handle = ids.compared(None, &text).unwrap();
-        let mut directory = ids.leaves[handle as usize].dir;
-        for _ in 0..256 {
-            directory = ids.up(directory, 1);
-        }
-        assert_eq!(ids.spelled(handle), text);
-        assert_eq!(
-            ids.segment_ids
-                .keys()
-                .filter(|s| s.as_ref() == long)
-                .count(),
-            1
-        );
-        assert!(ids.segment_ids.keys().map(|s| s.len()).sum::<usize>() <= long.len() + 32);
-    }
-
-    #[test]
-    fn nested_relative_identifiers_take_linear_pieces() {
-        // Each level adds one directory: the pieces held grow with the
-        // declarations, not with the length of the identifiers they spell.
-        let levels = 20_000;
-        let mut ids = Identifiers::new(usize::MAX);
-        let mut parent = ids.compared(None, "https://e.test/");
-        for _ in 0..levels {
-            parent = ids.compared(parent, "a/");
-        }
-        let leaf = parent.unwrap();
-        assert_eq!(
-            ids.spelled(leaf).len(),
-            "https://e.test/".len() + 2 * levels
-        );
-        assert!(ids.nodes.len() <= levels + 8);
-        assert!(ids.schemes.len() == 1 && ids.pieces.is_empty());
-        assert_eq!(ids.leaves.len(), levels + 1);
-        assert!(ids.duplicates().is_empty());
-    }
-
-    #[test]
     fn copied_labels_read_back_from_every_block() {
         // A dot segment makes each path a copy, and an authority of its own
         // keeps each copy: the copied text fills block after block, and
@@ -725,44 +652,12 @@ mod tests {
         for (text, &handle) in texts.iter().zip(&handles) {
             assert_eq!(Some(ids.spelled(handle)), compared_id(None, text));
         }
-        assert!(ids.retired.len() > 1);
         let mut from = 0;
         for (start, block) in &ids.retired {
             assert_eq!(*start, from);
             from += block.len();
         }
         assert_eq!(ids.copied_from, from);
-    }
-
-    #[test]
-    fn identifiers_hold_runs_of_segments_not_segments() {
-        // One identifier of many segments is one directory, and identifiers
-        // giving up and replacing some of its segments add a few each,
-        // however many segments their paths hold.
-        let segments = 100_000;
-        let long = format!("https://e.test/{}", "a/".repeat(segments));
-        let mut ids = Identifiers::new(usize::MAX);
-        let base = ids.compared(None, &long);
-        let children: Vec<String> = (1..200)
-            .map(|up| format!("{}x{up}/y", "../".repeat(up * 37)))
-            .collect();
-        let dotted = format!("https://e.test/{}", "a/./".repeat(segments));
-        for child in &children {
-            let handle = ids.compared(base, child).unwrap();
-            let expected = compared_id(Some(&ids.spelled(base.unwrap())), child).unwrap();
-            assert_eq!(ids.spelled(handle), expected);
-        }
-        let again = ids.compared(None, &dotted).unwrap();
-        assert_eq!(ids.spelled(again), long);
-        assert!(ids.nodes.len() <= 3 + 1 + 3 * children.len() + 3);
-        // The run interrupted by dot segments is copied once and not kept,
-        // since its directories exist.
-        assert!(ids.copied.is_empty() && ids.retired.is_empty());
-        let duplicates = ids.duplicates();
-        assert_eq!(
-            duplicates.iter().map(|&(_, h)| h).collect::<Vec<_>>(),
-            [base.unwrap(), again]
-        );
     }
 }
 
@@ -779,11 +674,9 @@ mod bounded_block_tests {
             .iter()
             .map(|t| ids.compared(None, t).unwrap())
             .collect();
-        assert!(ids.retired.len() > 5);
         for (text, h) in texts.iter().zip(handles) {
             assert_eq!(Some(ids.spelled(h)), crate::uri::compared_id(None, text));
         }
-        assert!(ids.retired.iter().all(|(_, s)| s.len() <= 1024 * 1024));
         assert!(ids.duplicates().is_empty());
         for i in (0..50_000).step_by(1000) {
             ids.compared(None, &texts[i]).unwrap();

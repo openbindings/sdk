@@ -1,4 +1,8 @@
-"""Keep implementation and review campaign labels out of tracked product files."""
+"""Keep implementation and review campaign labels out of tracked product files.
+
+Test names must also name the behavior they protect (CONTRIBUTING.md), not the
+review, job, commit or former design that prompted them.
+"""
 from pathlib import Path
 import argparse
 import re
@@ -29,6 +33,39 @@ PATTERNS = [
 ]
 SECTION_CITATION = re.compile(r'\b(?:Annex|Appendix)\s+D-[A-Z0-9-]+\b')
 
+# Test names: Rust test functions, integration test files, and JavaScript test titles.
+RUST_TEST = re.compile(r'#\[(?:tokio::)?test\b[^\]]*\]\s*(?:#\[[^\]]*\]\s*)*(?:pub\s+)?(?:async\s+)?fn\s+(\w+)')
+JS_TEST = re.compile(r'\b(?:test|it|describe)\(\s*([\'"`])(.*?)\1')
+JS_TEST_FILE = re.compile(r'(?:^|/)test/.*\.(?:mjs|js|ts)$|\.test\.(?:mjs|js|ts)$')
+HISTORY_WORD = re.compile(r'^(?:reviews?|reviewed|reviewers?|adjudicated|adjudication|historical|former)$')
+NUMBERED = re.compile(r'^(?:round|job|foundation)$')
+COMMIT = re.compile(r'^(?=[0-9a-f]*[0-9])(?=[0-9a-f]*[a-f])[0-9a-f]{7,40}$')
+
+
+def history_label(test_name):
+    """Return the token that names history rather than behavior, if any."""
+    tokens = [t.lower() for t in re.split(r'[^A-Za-z0-9]+', test_name) if t]
+    for at, token in enumerate(tokens):
+        if HISTORY_WORD.match(token) or COMMIT.match(token):
+            return token
+        if NUMBERED.match(token) and at + 1 < len(tokens) and tokens[at + 1].isdigit():
+            return token + ' ' + tokens[at + 1]
+        if re.fullmatch(r'(?:round|job|foundation)\d+', token):
+            return token
+    return None
+
+
+def test_name_violations(name, content):
+    names = []
+    if name.endswith('.rs'):
+        names = [match.group(1) for match in RUST_TEST.finditer(content)]
+        if '/tests/' in '/' + name:
+            names.append(Path(name).stem)
+    elif JS_TEST_FILE.search(name):
+        names = [match.group(2) for match in JS_TEST.finditer(content)]
+    return [f'{name}: test name "{test}" names history ("{label}"), not behavior'
+            for test in names for label in [history_label(test)] if label]
+
 
 def matches(text):
     # Preserve named sections in upstream standards, including lettered annexes.
@@ -47,7 +84,7 @@ def violations(name, content):
             continue
         if matches(line):
             result.append(f'{name}:{number}: {line.strip()}')
-    return result
+    return result + test_name_violations(name, content)
 
 
 def product_files(root=ROOT, tracked_files=None):
@@ -106,6 +143,22 @@ def self_test():
                     'ES2022', 'oneOf(U,V)', 'impl<V> Value<V>', 'X-Request-ID',
                     'infinite-loop-detection.json', 'round-trip', 'let s1 = "x";']:
         assert not violations('docs/subject.md', allowed), allowed
+    rust_test = '#[test]\nfn {}() {{}}\n'
+    for history in ['independently_' + 'reviewed_capabilities', 'layout_matches_' + '727dcd0',
+                    'adjudicated_cases_stay_rejected', 'former_budgets_fund_the_proof',
+                    'historical_payloads_cannot_bypass_admission', 'round' + '_3_cases',
+                    'job' + '31_outputs']:
+        assert test_name_violations('crates/x/src/lib.rs', rust_test.format(history)), history
+        assert violations('crates/x/tests/edits.rs', '#[tokio::test]\nasync fn ' + history + '() {}'), history
+    assert test_name_violations('crates/x/tests/foundation' + '_02.rs', '')
+    assert test_name_violations('packages/typescript/test/x.test.mjs',
+                                "test('keeps the " + "reviewed shape', () => {})")
+    for behavior in ['round_trip_preserves_bytes', 'retired_keys_are_rejected', 'utf8_bytes_are_counted',
+                     'sha256_digests_match', 'decade_and_facade_are_words', 'jobs_run_once',
+                     'u32_limits_hold', 'e2e_paths_complete']:
+        assert not test_name_violations('crates/x/src/lib.rs', rust_test.format(behavior)), behavior
+    assert not test_name_violations('crates/x/src/lib.rs', 'fn ' + 'reviewed_helper() {}')
+    assert not test_name_violations('docs/x.md', rust_test.format('former_' + 'design'))
     label = 'S' + '6e'
     assert violations('tools/qualification/inputs/spec/upstream.md', label)
     for name in ['s3', 'S10', 'unit-' + 'v', 'slice-' + 'x']:

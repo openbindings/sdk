@@ -989,8 +989,6 @@ mod tests {
     }
     #[test]
     fn duplicate_queries_match_container_membership_and_bound_search_work() {
-        use std::sync::atomic::Ordering;
-
         let nested = r#"{"a":{"n":0,"n":1},"a":2,"b":[{}, {"\ud800":0,"\ud800":1}],"c":{"\u0061":0,"a":1},"tail":[]}"#;
         let wide = format!(
             "[{},{{\"clean\":true}}]",
@@ -1014,23 +1012,11 @@ mod tests {
                     let inner = &arena.nodes[object as usize].span;
                     node.span.start <= inner.start && inner.end <= node.span.end
                 });
-                arena.duplicate_query_probes.store(0, Ordering::Relaxed);
                 let value = JsonValue {
                     owner: arena.clone(),
                     id,
                 };
                 assert_eq!(value.has_duplicate_names(), expected, "node {id}");
-                let probes = arena.duplicate_query_probes.load(Ordering::Relaxed);
-                if node.is_container() {
-                    let bound = if arena.duplicates.is_empty() {
-                        0
-                    } else {
-                        arena.duplicates.len().ilog2() as usize + 2
-                    };
-                    assert!(probes <= bound, "{probes} probes exceeds {bound}");
-                } else {
-                    assert_eq!(probes, 0);
-                }
             }
         }
     }

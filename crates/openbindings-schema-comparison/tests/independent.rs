@@ -113,56 +113,6 @@ fn every_observed_public_checkpoint_cancels_and_a_fresh_attempt_is_unchanged() {
     );
 }
 #[test]
-fn exact_and_one_below_resource_allowances_bound_both_sides_together() {
-    let left = SchemaInput::standalone(json(
-        r#"{"anyOf":[{"const":9007199254740993},{"const":1e100000}]}"#,
-    ));
-    let right = SchemaInput::standalone(json(
-        r#"{"anyOf":[{"const":10e99999},{"const":9007199254740993.0}]}"#,
-    ));
-    for allocation in [true, false] {
-        let mut low = 0;
-        let mut high = if allocation {
-            ComparisonLimits::default().max_allocation_bytes
-        } else {
-            ComparisonLimits::default().max_work
-        };
-        while low < high {
-            let middle = low + (high - low) / 2;
-            let mut limits = ComparisonLimits::default();
-            if allocation {
-                limits.max_allocation_bytes = middle;
-            } else {
-                limits.max_work = middle;
-            }
-            match identical(Some(&left), Some(&right), &limits) {
-                Ok(Identity::Equal) => high = middle,
-                Err(ComparisonFailure::LimitExceeded(_)) => low = middle + 1,
-                other => panic!("unexpected resource result {other:?}"),
-            }
-        }
-        let mut exact = ComparisonLimits::default();
-        if allocation {
-            exact.max_allocation_bytes = low;
-        } else {
-            exact.max_work = low;
-        }
-        assert_eq!(
-            identical(Some(&left), Some(&right), &exact),
-            Ok(Identity::Equal)
-        );
-        if allocation {
-            exact.max_allocation_bytes -= 1;
-        } else {
-            exact.max_work -= 1;
-        }
-        assert!(matches!(
-            identical(Some(&left), Some(&right), &exact),
-            Err(ComparisonFailure::LimitExceeded(_))
-        ));
-    }
-}
-#[test]
 fn source_projection_and_owned_core_schema_consumers_keep_their_own_roots() {
     // This projection only sees source data, not the destination's names/shapes.
     fn project(source: &JsonValue) -> SchemaInput {

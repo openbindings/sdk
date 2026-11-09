@@ -247,7 +247,7 @@ fn debug_redacts_current_carriers_and_fixed_admission_paths() {
 }
 
 #[test]
-fn historical_opaque_document_payloads_do_not_bypass_current_obi01_admission() {
+fn request_decoding_rejects_duplicate_and_unpaired_document_data() {
     for data in [r#", "data":{"n":1,"n":2}"#, r#", "data":"\ud800""#] {
         let value = request(data, "", "");
         assert_eq!(

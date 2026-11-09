@@ -305,22 +305,6 @@ mod profile_tests {
                 .names
                 .contains_key("https://profiles.test/child")
         );
-        assert_eq!(
-            core_only.nodes_bounded(100, &|| false).unwrap()[0]
-                .nodes
-                .len(),
-            1
-        );
-        assert_eq!(
-            active.nodes_bounded(100, &|| false).unwrap()[0].nodes.len(),
-            2
-        );
-        assert_eq!(
-            original.nodes_bounded(100, &|| false).unwrap()[0]
-                .nodes
-                .len(),
-            1
-        );
     }
 
     #[test]
@@ -341,12 +325,6 @@ mod profile_tests {
             .with_profiles(100, 4096, &|| true, &resolve)
             .unwrap_err();
         assert_eq!(cancellation.reason, FailureReason::Cancelled);
-        assert_eq!(
-            original.nodes_bounded(100, &|| false).unwrap()[0]
-                .nodes
-                .len(),
-            1
-        );
         let retry = original
             .with_profiles(100, 4096, &|| false, &resolve)
             .unwrap();

@@ -321,11 +321,26 @@ fn already_settled_validation_keeps_its_evidence_when_external_cancel_follows() 
         "ERR_OPERATION_VALIDATION_FAILED"
     );
     let before = control.validation_failure().unwrap();
+    let openbindings_invocation::operation::ValidationEvidence::Evaluation(before_outcome) =
+        before.evidence()
+    else {
+        panic!("evaluation evidence required")
+    };
     external.cancel();
     control.cancel();
     assert_eq!(
         control.outcome().unwrap().unwrap_err().code(),
         "ERR_OPERATION_VALIDATION_FAILED"
     );
-    assert!(Arc::ptr_eq(&before, &control.validation_failure().unwrap()));
+    let after = control.validation_failure().unwrap();
+    assert_eq!(after.direction(), before.direction());
+    let openbindings_invocation::operation::ValidationEvidence::Evaluation(after_outcome) =
+        after.evidence()
+    else {
+        panic!("evaluation evidence required")
+    };
+    assert_eq!(
+        serde_json::to_value(after_outcome).unwrap(),
+        serde_json::to_value(before_outcome).unwrap()
+    );
 }

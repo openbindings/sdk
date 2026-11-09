@@ -189,7 +189,7 @@ fn rejected_and_undetermined_documents_cannot_produce_proof() {
 }
 
 #[test]
-fn migrated_unreached_uncopied_target_cases_reject_at_obi12() {
+fn missing_contained_reference_targets_prevent_conformance() {
     // Both historical instance observations are unreachable through normative contracts.
     let document = include_str!("fixtures/local-reference-target.json");
     for (id, instance) in [

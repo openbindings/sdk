@@ -446,7 +446,7 @@ async fn native_borrowed_nonclone_provider_is_send_and_retained_output_survives(
     assert_eq!(retained.text(), "null");
 }
 #[tokio::test]
-async fn default_delivery_accepts_values_above_the_retired_one_mib_cap() {
+async fn default_delivery_has_no_additional_value_byte_cap() {
     let provider = Fixture::new(Mode::Echo);
     let client = &provider;
     let (mut input, mut output) = client.invoke(request(), cancel()).unwrap().split();
