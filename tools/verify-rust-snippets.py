@@ -13,8 +13,7 @@ SNIPPETS = [
     (ROOT / 'docs/document-to-typed-result.md', 'document_call'),
     (ROOT / 'crates/openbindings-json-schema-evaluator/README.md', 'evaluator_readme'),
 ]
-CRATES = ['openbindings', 'openbindings_json_schema_evaluator', 'openbindings_invocation',
-          'openbindings_http_discovery', 'reqwest', 'serde', 'serde_json', 'tokio']
+CRATES = ['openbindings', 'openbindings_json_schema_evaluator', 'openbindings_invocation', 'serde', 'serde_json', 'tokio']
 
 
 def read_snippet(path):
@@ -79,7 +78,6 @@ def main():
     build = run([
         'cargo', 'build', '--offline', '--locked', '--tests', '-p', 'openbindings-invocation',
         '-p', 'openbindings-json-schema-evaluator',
-        '-p', 'openbindings-http-discovery', '--features', 'openbindings-http-discovery/native',
         '--message-format=json-render-diagnostics',
     ], stdout=subprocess.PIPE, text=True)
     libraries = {}
@@ -95,11 +93,10 @@ def main():
         raise RuntimeError(f'Cargo did not report snippet dependencies: {libraries}')
     # Repository prose is not included from outside an archived crate. Test it
     # here with the same locked dependencies, including every Rust fence.
-    for document in ['README.md', 'docs/rust-first-use.md', 'docs/document-to-typed-result.md', 'docs/invocation.md', 'docs/schema-evaluators.md',
-                     'crates/openbindings-http-discovery/README.md']:
+    # The discovery README is that crate's docs, so its client example runs as a
+    # Cargo doctest with the native feature, linked the way Cargo links it.
+    for document in ['README.md', 'docs/rust-first-use.md', 'docs/document-to-typed-result.md', 'docs/invocation.md', 'docs/schema-evaluators.md']:
         args = [os.environ.get('RUSTDOC', 'rustdoc'), '--test', '--edition=2024', ROOT / document]
-        if document == 'crates/openbindings-http-discovery/README.md':
-            args += ['--cfg', 'feature="native"']
         for crate, library in libraries.items():
             args += ['--extern', f'{crate}={library}', '-L', f'dependency={library.parent}']
         run(args)
