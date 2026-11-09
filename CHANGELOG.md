@@ -2,6 +2,7 @@
 
 ## 2026-11-08 newcomer docs and omitted-entry accessors (unreleased)
 
+- Fix failure diagnostics, Node worker and disposal examples, and discovery client setup in the newcomer docs.
 - Add borrowed `OmittedEntry` accessors for `item`, `existing`, `also_identifies`,
   `offered`, `through` and `identifier`, preserving exact values and absence.
 - Add a document-to-typed-result walkthrough with an in-process binding adapter,

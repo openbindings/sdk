@@ -19,10 +19,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let prepared = schema.prepare(
         &DefaultEvaluator::new(), &ExternalSchemas::default(), &PreparationLimits::default(),
     )?;
-    match prepared.evaluate_json(r#""item""#)? {
+    let value = JsonValue::parse("7")?;
+    match prepared.explain(&value) {
         ValueOutcome::Satisfies => println!("satisfies"),
         ValueOutcome::Fails { problems, problems_complete, .. } => {
-            println!("fails: {problems:?}; diagnostics complete: {problems_complete}");
+            println!("fails; diagnostics complete: {problems_complete}");
+            for problem in &problems {
+                println!("instance={:?} code={} details={}",
+                    problem.instance.to_string(), problem.code,
+                    serde_json::to_string(&problem.details)?);
+            }
         }
         ValueOutcome::Undefined { detail } => println!("undefined: {}", detail.message),
         ValueOutcome::NoVerdict { detail } => println!("no verdict: {}", detail.message),
@@ -30,6 +36,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 ```
+
+`evaluate`/`evaluate_json` is the yes/no check whose failure carries no problems;
+use `explain` when you need failure diagnostics.
 
 `Schema::prepare` returns `Result<PreparedSchema<DefaultValidator>, PreparationFailure>`.
 A preparation failure judges no value. An absent operation or absent input/output

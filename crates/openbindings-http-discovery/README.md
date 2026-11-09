@@ -9,6 +9,46 @@ The applied HTTP discovery companion is version 0.1.0 at specification revision
 Its version and conformance classes remain separate from OpenBindings document
 conformance and the SDK package version.
 
+For native discovery, add these dependencies to your `Cargo.toml`:
+
+```toml
+[dependencies]
+openbindings-http-discovery = { version = "=0.2.0-alpha.1", features = ["native"] }
+reqwest = { version = "0.13.5", default-features = false, features = ["rustls"] }
+tokio = { version = "1.54.1", features = ["rt", "macros", "time"] }
+```
+
+This SDK version is unpublished. Use a local path or Cargo patch for the SDK
+crate until it is released. The builder must come from reqwest 0.13, the same
+Cargo compatibility line as this crate. A reqwest 0.12 builder has a different
+type. Tokio needs a runtime and timers; `macros` enables the entry point below.
+Replace the example origin with your server's origin.
+
+```rust,no_run
+# #[cfg(all(feature = "native", not(target_arch = "wasm32")))]
+# mod example {
+use openbindings_http_discovery::{native::Client, ClientOptions, DiscoveryOutcome};
+
+#[tokio::main(flavor = "current_thread")]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let client = Client::new(reqwest::Client::builder(), ClientOptions::default())?;
+    let origin = "https://example.com";
+    let result = client.discover(origin).await?;
+    match result.outcome {
+        DiscoveryOutcome::Found { .. } => println!("found a conformant document"),
+        DiscoveryOutcome::Absent => println!("absent (404)"),
+        DiscoveryOutcome::Gated => println!("gated (401 or 403)"),
+        DiscoveryOutcome::TransportError { error, .. } => {
+            println!("transport error: {:?}", error.kind);
+        }
+        _ => println!("discovery did not establish a conformant document"),
+    }
+    Ok(())
+}
+# }
+# fn main() {}
+```
+
 Publish a document without choosing a server framework:
 
 ```rust
@@ -21,9 +61,7 @@ assert_eq!(&*response.body, source);
 # Ok::<(), Box<dyn std::error::Error>>(())
 ```
 
-For native discovery, enable the `native` feature and create `native::Client`
-from your reqwest `ClientBuilder` and `ClientOptions`. Call `discover(origin)`
-and match `DiscoveryOutcome`. The portable `discover` function instead accepts
+The portable `discover` function instead accepts
 a host transport and `DiscoveryTimer`. Judge document bytes acquired some other
 way with `openbindings::validate_document`; `Publication::new` and `from_bytes`
 check the CORS choice in their options.

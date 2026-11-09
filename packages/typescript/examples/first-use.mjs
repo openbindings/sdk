@@ -49,7 +49,7 @@ export function firstUse(
     const setup = schema.prepare();
     if (setup.status !== "ready") return setup;
     prepared = setup.schema;
-    return { status: "checked", operations, result: prepared.evaluate(input) };
+    return { status: "checked", operations, result: prepared.explain(input) };
   } finally {
     prepared?.dispose();
     schema?.dispose();

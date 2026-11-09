@@ -12,7 +12,11 @@ import {
 import { tmpdir } from "node:os";
 import { join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { firstUseSnippet } from "./readme-snippet.mjs";
+import {
+  discoverySnippet,
+  firstUseJavaScriptSnippet,
+  firstUseSnippet,
+} from "./readme-snippet.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const temporary = realpathSync(
@@ -30,6 +34,8 @@ try {
   for (const name of [
     "first-use.mjs",
     "first-use-node.mjs",
+    "worker-parent-node.mjs",
+    "worker-node.mjs",
     "first-use.html",
     "service-lifecycle.mjs",
     "inspect-edit.ts",
@@ -60,8 +66,7 @@ try {
     ],
     { cwd: temporary, stdio: "inherit" },
   );
-  // Compile the exact first-use block delivered in the installed README.
-  // Host initialization is intentionally outside this host-independent block.
+  // Compile the exact TypeScript blocks delivered in the installed README.
   const installed = join(temporary, "node_modules/@openbindings/sdk");
   for (const file of packed[0].files.filter(({ path }) => path.endsWith(".js")))
     assert.doesNotMatch(
@@ -69,10 +74,13 @@ try {
       /sourceMappingURL/,
       `${file.path} must not reference a source map`,
     );
-  const snippet = firstUseSnippet(
-    readFileSync(join(installed, "README.md"), "utf8"),
+  const readme = readFileSync(join(installed, "README.md"), "utf8");
+  writeFileSync(join(temporary, "readme.mts"), firstUseSnippet(readme));
+  writeFileSync(
+    join(temporary, "first-use.mjs"),
+    firstUseJavaScriptSnippet(readme),
   );
-  writeFileSync(join(temporary, "readme.ts"), snippet);
+  writeFileSync(join(temporary, "discovery.mts"), discoverySnippet(readme));
   copyFileSync(
     join(installed, "examples/inspect-edit.ts"),
     join(temporary, "inspect-edit.ts"),
@@ -92,7 +100,8 @@ try {
       "ES2022,DOM,ESNext.Disposable",
       "--outDir",
       join(temporary, "readme-build"),
-      join(temporary, "readme.ts"),
+      join(temporary, "readme.mts"),
+      join(temporary, "discovery.mts"),
       join(temporary, "inspect-edit.ts"),
     ],
     { cwd: temporary, stdio: "inherit" },
@@ -104,21 +113,70 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { initialize } from "@openbindings/sdk";
 await initialize(await readFile(new URL(import.meta.resolve("@openbindings/sdk/openbindings.wasm"))));
-const results = [];
-const log = console.log;
-try {
-  console.log = (result) => results.push(result);
-  await import("./readme-build/readme.js");
-} finally {
-  console.log = log;
+for (const path of ["./readme-build/readme.mjs", "./first-use.mjs"]) {
+  const results = [];
+  const log = console.log;
+  try {
+    console.log = (result) => results.push(JSON.parse(result));
+    await import(path);
+  } finally {
+    console.log = log;
+  }
+  assert.equal(results.length, 2);
+  assert.equal(results[0].result.status, "satisfies");
+  const failure = results[1].result;
+  assert.equal(failure.status, "fails");
+  assert.equal(failure.problemsComplete, true);
+  assert.equal(failure.problems[0].instance, "");
+  assert.equal(failure.problems[0].code, "type");
+  assert.deepEqual(failure.problems[0].details, { kind: "type", expected: ["integer"] });
 }
-assert.equal(results.length, 2);
-assert.equal(results[0].result.status, "satisfies");
-assert.equal(results[1].result.status, "fails");
-console.log("Installed README TypeScript first-use block compiled and ran verbatim.");
+console.log("Installed README TypeScript and JavaScript first-use blocks ran verbatim.");
 `,
   );
   execFileSync(process.execPath, [join(temporary, "readme-runner.mjs")], {
+    cwd: temporary,
+    stdio: "inherit",
+  });
+  writeFileSync(
+    join(temporary, "discovery-runner.mjs"),
+    `
+import assert from "node:assert/strict";
+import { initialize } from "@openbindings/sdk";
+import { liveStorageOwners } from "@openbindings/sdk/testing";
+await initialize();
+const baseline = liveStorageOwners();
+const fetch = globalThis.fetch;
+const log = console.log;
+const cases = [
+  [200, '{"openbindings":"0.2.0","operations":{"lookup":{}}}', "found a conformant document"],
+  [404, "", "absent (404)"],
+  [401, "", "gated (401 or 403)"],
+  [403, "", "gated (401 or 403)"],
+  [0, "", "transport error: network"],
+  [200, "{}", "discovery did not establish a conformant document"],
+];
+try {
+  for (const [index, [status, body, expected]] of cases.entries()) {
+    const messages = [];
+    globalThis.fetch = async (url) => {
+      assert.equal(url, "https://example.com/.well-known/openbindings");
+      if (!status) throw new TypeError("simulated network failure");
+      return new Response(body, { status });
+    };
+    console.log = (...args) => messages.push(args.join(" "));
+    await import("./readme-build/discovery.mjs?case=" + index);
+    assert.deepEqual(messages, [expected]);
+    assert.equal(liveStorageOwners(), baseline, "Discovery example must release document owners");
+  }
+} finally {
+  globalThis.fetch = fetch;
+  console.log = log;
+}
+console.log("Installed README discovery block compiled and ran verbatim with simulated Fetch responses.");
+`,
+  );
+  execFileSync(process.execPath, [join(temporary, "discovery-runner.mjs")], {
     cwd: temporary,
     stdio: "inherit",
   });
@@ -229,7 +287,21 @@ console.log(JSON.stringify(inspectEditExampleCases(sdk, inspectionEditing)));
   );
   assert.equal(firstUse.accepted.result.status, "satisfies");
   assert.equal(firstUse.fails.result.status, "fails");
+  assert.equal(firstUse.fails.result.problems[0].instance, "/id");
+  assert.equal(firstUse.fails.result.problems[0].code, "minimum");
+  assert.deepEqual(firstUse.fails.result.problems[0].details, {
+    kind: "numeric-bound",
+    bound: "1",
+  });
   assert.equal(firstUse.invalidInput.result.status, "input-error");
+  const worker = JSON.parse(
+    execFileSync(process.execPath, [join(examples, "worker-parent-node.mjs")], {
+      cwd: temporary,
+      encoding: "utf8",
+      timeout: 30_000,
+    }),
+  );
+  assert.deepEqual(worker, firstUse.fails);
   const lifecycle = JSON.parse(
     execFileSync(process.execPath, [join(examples, "service-lifecycle.mjs")], {
       cwd: temporary,
@@ -241,7 +313,9 @@ console.log(JSON.stringify(inspectEditExampleCases(sdk, inspectionEditing)));
   assert.equal(lifecycle.outcomes.cancelled.detail.reason, "cancelled");
   assert.equal(lifecycle.outcomes.sameOwnerRecovery.status, "satisfies");
   assert.equal(lifecycle.arenas.released, lifecycle.arenas.warmed);
-  console.log("Installed first-use and service lifecycle examples passed.");
+  console.log(
+    "Installed first-use, Node worker and service lifecycle examples passed.",
+  );
 } finally {
   rmSync(temporary, { recursive: true, force: true });
 }

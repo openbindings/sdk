@@ -34,6 +34,9 @@ node node_modules/@openbindings/sdk/examples/first-use-node.mjs
 The same workflow in TypeScript initializes the engine, validates a document,
 resolves an alias and checks two values:
 
+This example uses `using`. Node 22.23.0 cannot run that syntax directly.
+Save it as `first-use.mts` and compile it with the TypeScript command below.
+
 ```ts
 import { Document, type JsonInput } from "@openbindings/sdk";
 import { initialize } from "@openbindings/sdk";
@@ -65,12 +68,62 @@ function checkInput(input: JsonInput) {
   const setup = schema.prepare();
   if (setup.status !== "ready") return setup;
   using prepared = setup.schema;
-  const result = prepared.evaluate(input); // narrow on result.status
+  const result = prepared.explain(input); // narrow on result.status
   return { operations, result };
 }
 
-console.log(checkInput(7));
-console.log(checkInput("seven"));
+console.log(JSON.stringify(checkInput(7), null, 2));
+console.log(JSON.stringify(checkInput("seven"), null, 2));
+```
+
+Compile and run it in your project after installing the SDK archive:
+
+```sh
+npm install --save-dev typescript@5.9.3
+npx tsc --strict --target ES2022 --module NodeNext --moduleResolution NodeNext --lib ES2022,DOM,ESNext.Disposable --outDir build first-use.mts
+node build/first-use.mjs
+```
+
+`evaluate` is the yes/no check. Its failure has no problems. `explain` adds
+instance pointers, problem codes and available schema details.
+
+For plain JavaScript on Node 22.23.0, use `try`/`finally` and `dispose()`, as
+the shipped `.mjs` examples do. This complete example needs no compile step:
+
+```js
+import { Document, initialize } from "@openbindings/sdk";
+
+await initialize();
+
+function checkInput(input) {
+  const parsed = Document.parse(
+    '{"openbindings":"0.2.0","operations":{"lookup":{"aliases":["find"],"input":{"type":"integer"}}}}',
+  );
+  if (parsed.status !== "parsed") return parsed;
+  let proof, operation, schema, prepared;
+  try {
+    const checked = parsed.value.validate();
+    if (checked.status !== "conformant") return checked;
+    proof = checked.document;
+    operation = proof.resolveOperation("find");
+    if (!operation) return { status: "operation-missing" };
+    schema = operation.input();
+    if (!schema) return { status: "no-input-schema" };
+    const setup = schema.prepare();
+    if (setup.status !== "ready") return setup;
+    prepared = setup.schema;
+    return { result: prepared.explain(input) };
+  } finally {
+    prepared?.dispose();
+    schema?.dispose();
+    operation?.dispose();
+    proof?.dispose();
+    parsed.value.dispose();
+  }
+}
+
+console.log(JSON.stringify(checkInput(7), null, 2));
+console.log(JSON.stringify(checkInput("seven"), null, 2));
 ```
 
 For a browser, serve the installed package directory over HTTP and open
@@ -323,12 +376,57 @@ shows source correction, Worker scheduling and coordinate conversion.
 
 Parsing, inspection, preparation and value validation run synchronously. An
 `AbortSignal` cannot preempt same-thread Wasm. The
-[Worker owner](examples/worker-owner.mjs) demonstrates termination and recovery.
+[browser Worker owner](examples/worker-owner.mjs) and its
+[browser worker](examples/worker.mjs) demonstrate termination and recovery with
+the browser Worker API.
+For Node `node:worker_threads`, run the [Node parent](examples/worker-parent-node.mjs)
+and [Node worker](examples/worker-node.mjs) pair:
+
+```sh
+node node_modules/@openbindings/sdk/examples/worker-parent-node.mjs
+```
+
+Each worker initializes its own SDK module instance with `await initialize()`.
+The Node worker checks a value and posts plain data back. SDK owners stay in
+the worker and are disposed there.
+
 The [service lifecycle example](examples/service-lifecycle.mjs) retains old work
 while installing a replacement. Public TypeScript invocation, kind-description and
 source-pull providers and custom evaluator callbacks are not provided.
 
 ## HTTP discovery and reference
+
+Initialize the SDK, then discover a document at your server's origin:
+
+```ts
+import { initialize } from "@openbindings/sdk";
+import { discover } from "@openbindings/sdk/http-discovery";
+
+await initialize();
+const origin = "https://example.com";
+const result = await discover(origin);
+try {
+  switch (result.status) {
+    case "found":
+      console.log("found a conformant document");
+      break;
+    case "absent":
+      console.log("absent (404)");
+      break;
+    case "gated":
+      console.log("gated (401 or 403)");
+      break;
+    case "transport-error":
+      console.log("transport error:", result.error.kind);
+      break;
+    default:
+      console.log("discovery did not establish a conformant document");
+  }
+} finally {
+  // Non-conformant and undetermined results can also own a document.
+  if ("document" in result) result.document?.dispose();
+}
+```
 
 Import `discover` and `DiscoveryPublication` from
 `@openbindings/sdk/http-discovery`. Discovery uses Fetch with a default 1 MiB

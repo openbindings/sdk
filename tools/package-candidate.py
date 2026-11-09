@@ -326,6 +326,7 @@ def main():
     run("node-install", [npm, "install", "--ignore-scripts", "--no-audit", "--no-fund", npm_archive], node)
     require(not (node / "node_modules/@openbindings/sdk").is_symlink(), "npm consumer must not be symlinked.")
     run("node-first-use", ["node", "node_modules/@openbindings/sdk/examples/first-use-node.mjs"], node)
+    run("node-worker", ["node", "node_modules/@openbindings/sdk/examples/worker-parent-node.mjs"], node)
     require(run("source-head-after", ["git", "rev-parse", "HEAD"]).strip() == commit, "Candidate changed during packaging.")
     require(not run("source-status-after", ["git", "status", "--porcelain"]).strip(), "Source changed during packaging.")
     spec_inventory = ROOT / "tools/qualification/inputs/blueprint/case-inventory.json"

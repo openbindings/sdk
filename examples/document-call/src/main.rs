@@ -1,4 +1,4 @@
-use openbindings::{Detail, Document, ExternalSchemas, JsonValue};
+use openbindings::{Detail, Document, ExternalSchemas, JsonValue, ValueOutcome};
 use openbindings_invocation::{
     BindingInvoker, BindingRequest, CancellationToken, DefaultOperationInvoker, InvocationError,
     InvocationSupport, OutputEvent, PreflightOutcome, ProviderIo,
@@ -153,7 +153,30 @@ async fn call(text: &str, input_text: &str) -> Result<Reply, Box<dyn Error>> {
                     eprintln!("{} validation", failure.direction().as_str());
                     match failure.evidence() {
                         ValidationEvidence::Preparation(cause) => eprintln!("{cause}"),
-                        ValidationEvidence::Evaluation(outcome) => eprintln!("{outcome:?}"),
+                        ValidationEvidence::Evaluation(outcome) => match outcome {
+                            ValueOutcome::Fails {
+                                problems,
+                                problems_complete,
+                                ..
+                            } => {
+                                eprintln!("fails; diagnostics complete: {problems_complete}");
+                                for problem in problems {
+                                    eprintln!(
+                                        "instance={:?} code={} details={}",
+                                        problem.instance.to_string(),
+                                        problem.code,
+                                        serde_json::to_string(&problem.details)?
+                                    );
+                                }
+                            }
+                            ValueOutcome::Undefined { detail } => {
+                                eprintln!("undefined: {}", detail.code);
+                            }
+                            ValueOutcome::NoVerdict { detail } => {
+                                eprintln!("no verdict: {}", detail.code);
+                            }
+                            ValueOutcome::Satisfies => eprintln!("satisfies"),
+                        },
                     }
                 }
                 if let Some(failure) = receipt.boundary_failure() {

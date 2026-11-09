@@ -3,6 +3,7 @@ import { initialize } from "@openbindings/sdk";
 import { firstUse } from "./first-use.mjs";
 
 await initialize();
+// firstUse calls explain so failures include instance pointers and schema facts.
 console.log(
   JSON.stringify(
     {

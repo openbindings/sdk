@@ -6,6 +6,14 @@ export function firstUseSnippet(markdown) {
   return sectionSnippet(markdown, "First useful result", "ts");
 }
 
+export function firstUseJavaScriptSnippet(markdown) {
+  return sectionSnippet(markdown, "First useful result", "js");
+}
+
+export function discoverySnippet(markdown) {
+  return sectionSnippet(markdown, "HTTP discovery and reference", "ts");
+}
+
 export function browserBootstrapSnippet(markdown) {
   return sectionSnippet(markdown, "Browser resource management", "js");
 }
@@ -23,11 +31,21 @@ function sectionSnippet(markdown, title, language) {
     if (fence) {
       // These executable examples contain no Markdown headings. A missing close
       // must not swallow the next section and borrow a later block's delimiter.
-      if (section === title && fence.language === language)
+      if (section === title && fence.language === language) {
         assert(
           !/^## /.test(text),
           "README has an unclosed example before a section heading",
         );
+        assert(
+          !(
+            marker &&
+            marker[1][0] === fence.delimiter[0] &&
+            marker[1].length >= fence.delimiter.length &&
+            marker[2].trim()
+          ),
+          "README has an unclosed example before another code block",
+        );
+      }
       if (
         marker &&
         marker[1][0] === fence.delimiter[0] &&

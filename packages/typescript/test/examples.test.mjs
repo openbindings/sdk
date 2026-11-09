@@ -28,7 +28,15 @@ test("first-use caller keeps setup refusals separate and releases its owners", (
     firstUse({ id: 7 }, exampleDocument, "lookup").result.status,
     "satisfies",
   );
-  assert.equal(firstUse({ id: 0 }).result.status, "fails");
+  const failure = firstUse({ id: 0 }).result;
+  assert.equal(failure.status, "fails");
+  assert.equal(failure.problemsComplete, true);
+  assert.equal(failure.problems[0].instance, "/id");
+  assert.equal(failure.problems[0].code, "minimum");
+  assert.deepEqual(failure.problems[0].details, {
+    kind: "numeric-bound",
+    bound: "1",
+  });
   const admission = firstUse({ id: NaN }).result;
   assert.equal(admission.status, "input-error");
   assert.equal(admission.error.instancePointer, "/id");
