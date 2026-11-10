@@ -1,4 +1,4 @@
-//! Debug is structural. Explicit display/accessors/serialization retain payloads.
+//! Diagnostic Display and Debug hold SDK text and constants; values require explicit fields, accessors or serialization.
 use openbindings::*;
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 use std::fmt::Debug;

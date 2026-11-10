@@ -1,4 +1,4 @@
-//! Decision experiment controls. No route counters are compiled into timing peers.
+//! Compiled and independently prepared Original evaluation guarantees.
 use super::*;
 use openbindings_internal_schema::preparation::{Attempt, EnvironmentRequest};
 use openbindings_schema_evaluator_test_support::{run, suite};
@@ -42,16 +42,6 @@ impl SchemaEvaluator for Original {
             },
         )
         .map_err(PreparationFailure::from)?
-    }
-}
-fn write(name: &str, receipt: &serde_json::Value) {
-    if let Ok(directory) = std::env::var("OB_COMPILED_RECEIPTS") {
-        std::fs::create_dir_all(&directory).unwrap();
-        std::fs::write(
-            std::path::Path::new(&directory).join(name),
-            serde_json::to_vec_pretty(receipt).unwrap(),
-        )
-        .unwrap();
     }
 }
 fn prepare_document<E: SchemaEvaluator<Validator = DefaultValidator>>(
@@ -166,7 +156,7 @@ fn shared_long_literal_and_run_matchers_keep_compiled_outcomes_and_diagnostics()
 }
 
 #[test]
-fn compiled_decision_complete_kit_agreement_and_routes() {
+fn compiled_and_original_agree_on_the_complete_kit() {
     let original = run(&Original(Limits::default()));
     let selected = run(&DefaultEvaluator::new());
     assert!(original.is_success());
@@ -177,7 +167,6 @@ fn compiled_decision_complete_kit_agreement_and_routes() {
         serde_json::to_value(&original).unwrap(),
         "complete kit observations, including original locations"
     );
-    let mut routes = Vec::new();
     for group in &suite().groups {
         let resources = ExternalSchemas::new(group.resources.iter().map(|id| {
             let r = &suite().resources[id];
@@ -195,7 +184,7 @@ fn compiled_decision_complete_kit_agreement_and_routes() {
             &PreparationLimits::default(),
         )
         .unwrap();
-        let construction = compiled::entries::take();
+        compiled::entries::take();
         let original = prepare_document(
             &group.document,
             &resources,
@@ -203,27 +192,17 @@ fn compiled_decision_complete_kit_agreement_and_routes() {
             &PreparationLimits::default(),
         )
         .unwrap();
-        let reason = match &selected.compiled {
-            compiled::Lane::Original(reason) => *reason,
-            compiled::Lane::Compiled(_) => "eligible",
-        };
         for case in &group.cases {
-            let (lane, counts) = compare(
+            compare(
                 &selected,
                 &original,
                 &JsonValue::parse(&case.value).unwrap(),
             );
-            routes.push(json!({"id":case.id,"preparation":reason,"lane":lane,"construction":construction,"value_entries":counts[2]}));
         }
     }
-    let compiled = routes.iter().filter(|r| r["lane"] == "compiled").count();
-    write(
-        "kit-agreement.json",
-        &json!({"required":1546,"complete_observations_equal":true,"configuration_failures":[],"compiled":compiled,"original_count":1546-compiled,"routes":routes,"selected":selected,"original":original}),
-    );
 }
 #[test]
-fn compiled_decision_exact_numbers_text_and_references() {
+fn compiled_and_original_agree_on_exact_numbers_text_and_references() {
     let cases = [
         (r##"{"type":"integer"}"##, "1.0"),
         (r##"{"type":"integer"}"##, "1e400"),
@@ -291,7 +270,6 @@ fn compiled_decision_exact_numbers_text_and_references() {
             r##"{"x":1}"##,
         ),
     ];
-    let mut results = Vec::new();
     for (schema, text) in cases {
         compiled::entries::take();
         let (selected, original) = owners(
@@ -300,9 +278,8 @@ fn compiled_decision_exact_numbers_text_and_references() {
             Limits::default(),
             PreparationLimits::default(),
         );
-        let construction = compiled::entries::take();
-        let (lane, counts) = compare(&selected, &original, &JsonValue::parse(text).unwrap());
-        results.push(json!({"schema":schema,"value":text,"lane":lane,"construction":construction,"value_entries":counts[2]}));
+        compiled::entries::take();
+        compare(&selected, &original, &JsonValue::parse(text).unwrap());
     }
     // Unpaired content outside the selected subtree must not disqualify it.
     let (selected, original) = owners(
@@ -317,13 +294,9 @@ fn compiled_decision_exact_numbers_text_and_references() {
         &original,
         &wrapper.get("selected").unwrap().to_owned(),
     );
-    write(
-        "exact-reference-differentials.json",
-        &json!({"cases":results,"unsafe_outside_subtree":"compiled","all_equal":true}),
-    );
 }
 #[test]
-fn compiled_decision_explicit_limits_and_controls() {
+fn compiled_limits_and_controls_preserve_outcomes() {
     let mut limits = Vec::new();
     for index in 0..7 {
         let mut l = Limits::default();
@@ -341,7 +314,6 @@ fn compiled_decision_explicit_limits_and_controls() {
     }
     let schema = r##"{"type":"array","items":{"type":"integer"}}"##;
     let value = JsonValue::parse("[1,2,3]").unwrap();
-    let mut observations = Vec::new();
     for l in limits {
         compiled::entries::take();
         let doc = document(schema);
@@ -360,14 +332,12 @@ fn compiled_decision_explicit_limits_and_controls() {
         match (selected, original) {
             (Ok(selected), Ok(original)) => {
                 compare(&selected, &original, &value);
-                observations.push(json!({"limits":l,"preparation":"ready","outcome":selected.evaluate(&value,Detail::Outcome,&HEALTHY)}));
             }
             (Err(a), Err(b)) => {
                 assert_eq!(
                     serde_json::to_value(&a).unwrap(),
                     serde_json::to_value(&b).unwrap()
                 );
-                observations.push(json!({"limits":l,"preparation":a}));
             }
             _ => panic!("preparation disagreement"),
         }
@@ -437,25 +407,21 @@ fn compiled_decision_explicit_limits_and_controls() {
             });
         }
     });
-    write(
-        "limits-controls.json",
-        &json!({"limits":observations,"entry_and_completion_cancellation":true,"healthy_retry":true,"concurrent_calls":400}),
-    );
 }
 
 #[test]
-fn compiled_decision_shared_preparation_failure_blocks_later_builds() {
+fn shared_preparation_failure_blocks_later_builds() {
     use openbindings_internal_schema::Control;
     struct Poison<'a> {
         attempt: &'a dyn Control,
         calls: AtomicUsize,
         boundary: usize,
-        at: std::sync::Mutex<Option<[usize; 3]>>,
+        at: AtomicBool,
     }
     impl WorkControl for Poison<'_> {
         fn is_cancelled(&self) -> bool {
             if self.calls.fetch_add(1, Ordering::Relaxed) == self.boundary {
-                *self.at.lock().unwrap() = Some(compiled::entries::snapshot());
+                self.at.store(true, Ordering::Relaxed);
                 let _ignored = self.attempt.charge_allocation(usize::MAX);
             }
             false
@@ -463,7 +429,7 @@ fn compiled_decision_shared_preparation_failure_blocks_later_builds() {
     }
     struct Probe {
         boundary: usize,
-        observations: std::sync::Mutex<Vec<serde_json::Value>>,
+        reached: AtomicBool,
     }
     impl SchemaEvaluator for Probe {
         type Validator = DefaultValidator;
@@ -476,25 +442,25 @@ fn compiled_decision_shared_preparation_failure_blocks_later_builds() {
             Attempt::run(limits.max_sdk_work_units,limits.max_sdk_reservation_bytes,&||false,|attempt|{
                 let environment=request.environment_with_control(limits.max_schema_nodes,limits.max_identity_bytes,attempt)?;
                 let plan=semantic::Plan::new(environment,Limits::default(),*limits,attempt)?;
-                let poison=Poison{attempt,calls:AtomicUsize::new(0),boundary:self.boundary,at:std::sync::Mutex::new(None)};
+                let poison=Poison{attempt,calls:AtomicUsize::new(0),boundary:self.boundary,at:AtomicBool::new(false)};
                 compiled::entries::take();
                 let result=compiled::Lane::prepare(&plan,&Limits::default(),limits,&poison,attempt,&|source|Ok(match pattern::read(source,32,1<<20) {Ok(pattern::Reading::Linear(linear))=>Some(linear.into()),_=>None}));
-                let counts=compiled::entries::take();
-                if poison.at.lock().unwrap().is_some() {
+                compiled::entries::take();
+                if poison.at.load(Ordering::Relaxed) {
                     assert!(matches!(&result,Err(failure) if matches!(failure.kind,PreparationFailureKind::Limit{..})));
                 }
-                self.observations.lock().unwrap().push(json!({"boundary":self.boundary,"checks":poison.calls.load(Ordering::Relaxed),"at_poison":*poison.at.lock().unwrap(),"entries":counts}));
+                self.reached.store(poison.at.load(Ordering::Relaxed), Ordering::Relaxed);
                 let compiled=result?;
                 Ok(DefaultValidator{plan:Arc::new(plan),compiled})
             }).map_err(PreparationFailure::from)?
         }
     }
-    let mut rows = Vec::new();
+    let mut reached = false;
     let document = document(r#"{"patternProperties":{"^(a|b)+$":{"type":"integer"}}}"#);
     for boundary in 0..40 {
         let probe = Probe {
             boundary,
-            observations: std::sync::Mutex::new(Vec::new()),
+            reached: AtomicBool::new(false),
         };
         let _result = prepare_document(
             &document,
@@ -502,10 +468,9 @@ fn compiled_decision_shared_preparation_failure_blocks_later_builds() {
             &probe,
             &PreparationLimits::default(),
         );
-        rows.extend(probe.observations.into_inner().unwrap());
+        reached |= probe.reached.load(Ordering::Relaxed);
     }
-    assert!(rows.iter().any(|r| r["at_poison"].is_array()));
-    write("sticky-construction.json", &json!({"observations":rows}));
+    assert!(reached);
 }
 
 #[test]
@@ -578,11 +543,9 @@ fn recursive_values_keep_exact_numbers_and_depth_selection() {
         PreparationLimits::default(),
     );
     let limit = 203;
-    let mut rows = Vec::new();
     for depth in [0, 1, 32, 64, limit, limit + 1] {
         for leaf in ["0", "false", "[]", "[0,-1,[],[2]]"] {
-            let lane = compare(&selected, &original, &nested(leaf, depth)).0;
-            rows.push(json!({"depth":depth,"leaf":leaf,"lane":lane}));
+            compare(&selected, &original, &nested(leaf, depth));
         }
     }
     let huge = "9".repeat(3000);
@@ -621,10 +584,6 @@ fn recursive_values_keep_exact_numbers_and_depth_selection() {
         PreparationLimits::default(),
     );
     compare(&limited, &limited_original, &nested("0", 32));
-    write(
-        "recursive-values.json",
-        &json!({"all_equal":true,"sample_depth":limit,"rows":rows}),
-    );
 }
 
 #[test]
@@ -647,7 +606,7 @@ fn recursive_duplicate_routes_and_container_or_unique_exits_stay_before_projecti
         schema["$defs"]["node"]["allOf"] = json!([predicate]);
         schemas.push(schema.to_string());
     }
-    let mut rows = Vec::new();
+
     for schema in schemas {
         compiled::entries::take();
         let (selected, original) = owners(
@@ -659,12 +618,7 @@ fn recursive_duplicate_routes_and_container_or_unique_exits_stay_before_projecti
         for text in ["0", "[]", "[[]]", "[0]"] {
             compare(&selected, &original, &JsonValue::parse(text).unwrap());
         }
-        rows.push(json!({"schema":schema,"all_equal":true}));
     }
-    write(
-        "recursive-admission.json",
-        &json!({"all_equal":true,"rows":rows}),
-    );
 }
 
 #[test]
@@ -705,10 +659,6 @@ fn recursive_preflight_and_completion_observed_cancellation_are_terminal() {
         );
         compare(&selected, &original, &value);
     }
-    write(
-        "recursive-cancellation.json",
-        &json!({"preflight_zero_backend":true,"completion_one_backend":true,"no_retry":true,"healthy_reuse":true,"actual_polls":total}),
-    );
 }
 
 #[test]
@@ -745,10 +695,6 @@ fn recursive_compiled_boundary_runs_on_qualified_native_threads() {
             .join()
             .expect("qualified compiled recursion stack");
     }
-    write(
-        "recursive-stack.json",
-        &json!({"native_thread_bytes":[256*1024,1024*1024],"compiled_exact_boundary":true,"original_beyond_boundary":true,"satisfying_and_failing":true}),
-    );
 }
 
 #[test]
@@ -790,7 +736,6 @@ fn ordinary_recursive_boundaries_run_on_qualified_native_threads() {
         ("enum", ORDINARY_ENUM),
         ("binary", ORDINARY_BINARY),
     ];
-    let mut rows = Vec::new();
     for (name, schema) in schemas {
         for stack in [256 * 1024, 1024 * 1024] {
             let (selected, original) = owners(
@@ -862,15 +807,8 @@ fn ordinary_recursive_boundaries_run_on_qualified_native_threads() {
                 .unwrap()
                 .join()
                 .expect("ordinary recursive boundary stack");
-            rows.push(
-                json!({"schema":name,"native_thread_bytes":stack,"qualified_value_depth":limit}),
-            );
         }
     }
-    write(
-        "ordinary-recursive-stack.json",
-        &json!({"rows":rows,"satisfying_and_failing":true,"original_beyond_boundary":true}),
-    );
 }
 
 #[test]
@@ -902,8 +840,7 @@ fn ordinary_recursive_children_trees_and_scalar_enums_use_compiled() {
         .unwrap()
         .push(json!("kind"));
     let tree = json!({"type":["object","null"],"properties":{"left":{"$ref":"#"},"right":{"$ref":"#"}},"required":["left","right"],"additionalProperties":false});
-    let mut rows = Vec::new();
-    for (name, schema, value, pointer) in [
+    for (_name, schema, value, pointer) in [
         (
             "named",
             base,
@@ -938,7 +875,6 @@ fn ordinary_recursive_children_trees_and_scalar_enums_use_compiled() {
             ValueOutcome::Fails { .. }
         ));
         compare(&selected, &original, &negative);
-        rows.push(json!({"shape":name,"positive":"compiled-S","late_error":"compiled-F"}));
     }
     // Literal-only exact work does not need integer preflight for other fields.
     for literal in [
@@ -961,10 +897,6 @@ fn ordinary_recursive_children_trees_and_scalar_enums_use_compiled() {
             compare(&selected, &original, &JsonValue::parse(text).unwrap());
         }
     }
-    write(
-        "ordinary-recursive-values.json",
-        &json!({"complete_observations_equal":true,"rows":rows,"scalar_literal_kinds":["string","boolean","null"],"unrelated_decimal_fields":"compiled"}),
-    );
 }
 
 #[test]
@@ -1011,7 +943,6 @@ fn recursive_child_partitions_keep_overlaps_and_alias_multiplicity_on_plan() {
             r#"{"a":{}}"#,
         ),
     ];
-    let mut rows = Vec::new();
     for (schema, text) in cases {
         compiled::entries::take();
         let (selected, original) = owners(
@@ -1020,13 +951,8 @@ fn recursive_child_partitions_keep_overlaps_and_alias_multiplicity_on_plan() {
             Limits::default(),
             PreparationLimits::default(),
         );
-        let lane = compare(&selected, &original, &JsonValue::parse(text).unwrap()).0;
-        rows.push(json!({"schema":schema,"lane":lane}));
+        compare(&selected, &original, &JsonValue::parse(text).unwrap());
     }
-    write(
-        "recursive-child-partitions.json",
-        &json!({"all_equal":true,"rows":rows}),
-    );
 }
 
 #[test]
@@ -1053,7 +979,6 @@ fn productive_only_routes_admit_the_requested_families_and_keep_terminal_failure
             json!({"value":0,"left":null,"right":{"value":1,"left":null,"right":null}}),
         ),
     ];
-    let mut rows = Vec::new();
     for (name, schema, value) in cases {
         let (selected, original) = owners(
             &schema.to_string(),
@@ -1081,12 +1006,7 @@ fn productive_only_routes_admit_the_requested_families_and_keep_terminal_failure
             ValueOutcome::Fails { .. }
         ));
         compare(&selected, &original, &bad);
-        rows.push(json!({"workload":name,"satisfying_and_late_failing_equal":true}));
     }
-    write(
-        "productive-recursive-families.json",
-        &json!({"rows":rows,"full_observations_equal":true}),
-    );
 }
 
 #[test]
@@ -1110,10 +1030,6 @@ fn alternating_recursive_entries_sum_terminal_numeric_paths() {
         &selected,
         &original,
         &JsonValue::parse(format!(r#"{{"next":{{"v":{huge}}}}}"#)).unwrap(),
-    );
-    write(
-        "alternating-entry-scratch.json",
-        &json!({"full_observations_equal":true}),
     );
 }
 
@@ -1153,7 +1069,7 @@ fn terminal_diamonds_retain_a_finite_expansion_guard_without_scratch() {
         );
         json!({"properties":{"next":{"$ref":"#"}},"allOf":[{"$ref":"#/$defs/d0"}],"$defs":defs})
     };
-    let mut rows = Vec::new();
+
     for depth in [8, 16] {
         compiled::entries::take();
         let (selected, original) = owners(
@@ -1162,24 +1078,17 @@ fn terminal_diamonds_retain_a_finite_expansion_guard_without_scratch() {
             Limits::default(),
             PreparationLimits::default(),
         );
-        let construction = compiled::entries::take();
-        let expected = if depth == 8 { "compiled" } else { "original" };
+        compiled::entries::take();
         compare(
             &selected,
             &original,
             &JsonValue::parse(r#"{"v":0,"next":{}}"#).unwrap(),
         );
-        rows.push(json!({"diamond_depth":depth,"lane":expected,"construction":construction}));
     }
-    write(
-        "productive-terminal-diamonds.json",
-        &json!({"rows":rows,"unit_guard_applies_to_allocation_free_integer":true}),
-    );
 }
 
 #[test]
 fn recursive_scalar_exact_exits_use_funded_finite_paths() {
-    let mut rows = Vec::new();
     for predicate in [
         json!({"const":0}),
         json!({"enum":[0,1]}),
@@ -1202,12 +1111,7 @@ fn recursive_scalar_exact_exits_use_funded_finite_paths() {
         for text in ["1.0", "1e0", "[1e400]"] {
             compare(&selected, &original, &JsonValue::parse(text).unwrap());
         }
-        rows.push(json!({"predicate":predicate,"exact_weight":selected.compiled.recursive_exact_weight(),"all_equal":true}));
     }
-    write(
-        "recursive-scalar-exits.json",
-        &json!({"rows":rows,"container_unique_exclusions_unchanged":true}),
-    );
 }
 
 #[test]
@@ -1234,10 +1138,6 @@ fn recursive_scalar_reservation_boundary_selects_before_backend_entry() {
             compare(&selected, &original, &value);
         }
     }
-    write(
-        "recursive-reservation-boundary.json",
-        &json!({"default_bytes":48*1024*1024,"exact_bound_compiled":true,"wide_integer_one_raw_byte_above_original_before_entry":true,"i64_above_bound_compiled":true,"raw_bytes_at_bound":RAW_AT_LIMIT}),
-    );
 }
 
 #[test]
@@ -1249,7 +1149,6 @@ fn productive_scalar_recursive_boundaries_fit_qualified_threads() {
     let minimum = PRODUCTIVE_MINIMUM;
     let additional = PRODUCTIVE_ADDITIONAL;
     let union = PRODUCTIVE_UNION;
-    let mut rows = Vec::new();
     for (name, schema) in [
         ("minimum", minimum),
         ("additional", additional),
@@ -1316,14 +1215,9 @@ fn productive_scalar_recursive_boundaries_fit_qualified_threads() {
                     .unwrap()
                     .join()
                     .expect("qualified productive scalar recursion stack");
-                rows.push(json!({"schema":name,"native_thread_bytes":stack,"failing":failing,"qualified_depth":limit}));
             }
         }
     }
-    write(
-        "productive-recursive-stack.json",
-        &json!({"rows":rows,"satisfying_and_failing_equal":true,"first_beyond_original":true}),
-    );
 }
 
 #[test]
@@ -1381,10 +1275,6 @@ fn productive_name_subjects_and_mixed_application_edges_preserve_constraints() {
         );
         compare(&selected, &original, &value);
     }
-    write(
-        "productive-names-and-edge-kinds.json",
-        &json!({"same_name_occurrences_distinct":true,"names_and_value_subjects":true,"unpaired_name_original":true,"mixed_same_target_edges_equal":true}),
-    );
 }
 
 #[test]
@@ -1431,10 +1321,6 @@ fn several_recursive_entries_preserve_converging_terminal_paths() {
         }
         compare(&selected, &original, &JsonValue::parse(text).unwrap());
     }
-    write(
-        "several-recursive-entry-paths.json",
-        &json!({"huge_numeric_subject_equal":true,"full_observations_equal":true}),
-    );
 }
 
 #[test]
@@ -1470,11 +1356,8 @@ fn recursive_wide_schema_exponents_fund_each_subject_before_entry() {
     let value = JsonValue::parse(value_text).unwrap();
     let count = openbindings_internal_json::backend::node_count(value.view());
     assert_eq!(count, 9);
-    let reservation =
-        |bytes: usize| (16 * (value_text.len() + bytes * count) + 256 * (2 * count)) * 2 + 512;
     let limit = 48 * 1024 * 1024;
     let largest = ((limit - 512) / 2 - 16 * value_text.len() - 512 * count) / (16 * count);
-    let mut rows = Vec::new();
     for length in [128, largest, largest + 1] {
         let token = format!("1e+{}400", "0".repeat(length - 6));
         assert_eq!(token.len(), length);
@@ -1500,10 +1383,5 @@ fn recursive_wide_schema_exponents_fund_each_subject_before_entry() {
             ));
             compare(&selected, &original, &bad);
         }
-        rows.push(json!({"schema_operand_bytes":length,"subject_nodes":count,"reserved_bytes":reservation(length),"lane":if length<=largest {"compiled"} else {"original"}}));
     }
-    write(
-        "recursive-schema-exponent-boundary.json",
-        &json!({"rows":rows,"default_reservation_bytes":limit,"full_observations_equal":true,"largest_operand_funded_and_next_byte_original_before_entry":true}),
-    );
 }

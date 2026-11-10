@@ -56,25 +56,51 @@ fn version_priority_requires_one_complete_declaration() {
         "[".repeat(10001),
         "]".repeat(10001)
     );
-    assert!(validate_document(deep).is_err());
+    let report = validate_document(&deep).unwrap();
+    assert_eq!(report.report().conclusion, Conformance::Undetermined);
+    assert!(
+        report
+            .report()
+            .findings
+            .iter()
+            .all(|finding| finding.code == "depth-limit")
+    );
 }
 #[test]
-fn deep_carriage_and_deeper_grammar_have_distinct_limits() {
-    for (nested, want) in [
-        (9999, Conformance::Conformant),
-        (10000, Conformance::Conformant),
+fn default_depth_limit_is_undetermined_and_an_explicit_limit_admits_deeper_documents() {
+    let depth = JsonLimits::default().max_depth;
+    let text = format!(
+        r#"{{"openbindings":"0.2.0","operations":{{}},"x-deep":{}0{}}}"#,
+        "[".repeat(depth),
+        "]".repeat(depth)
+    );
+    for checked in [
+        validate_document(&text).unwrap(),
+        validate_document_owned(text.as_bytes().to_vec()).unwrap(),
     ] {
-        let text = format!(
-            r#"{{"openbindings":"0.2.0","operations":{{}},"x-deep":{}0{}}}"#,
-            "[".repeat(nested),
-            "]".repeat(nested)
+        assert_eq!(checked.report().conclusion, Conformance::Undetermined);
+        assert!(!checked.report().findings.is_empty());
+        assert!(
+            checked
+                .report()
+                .findings
+                .iter()
+                .all(|finding| finding.code == "depth-limit")
         );
-        let checked = validation(&text);
-        assert_eq!(checked.report().conclusion, want);
-        assert_eq!(checked.report().evidence["OBI-01"], Evidence::Met);
-        assert_eq!(checked.report().evidence["OBI-03"], Evidence::Met);
+        assert!(checked.conformant().is_none());
     }
+    let checked = validate_document_with_limits(
+        &text,
+        JsonLimits {
+            max_depth: depth + 1,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(checked.report().conclusion, Conformance::Conformant);
+    assert!(checked.conformant().is_some());
 }
+
 #[test]
 fn lone_surrogates_remain_exact_but_violate_document_conformance() {
     let text = r#"{"openbindings":"0.2.0","operations":{},"x-data":"\ud800"}"#;

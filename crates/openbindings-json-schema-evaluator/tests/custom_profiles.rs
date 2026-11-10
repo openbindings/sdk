@@ -469,7 +469,7 @@ fn local_meta_checks_do_not_hide_invalid_unused_original_positions() {
 }
 
 #[test]
-fn preparation_display_identifies_invalid_supplied_resources_without_schema_text() {
+fn preparation_diagnostics_omit_supplied_resource_values_but_retain_the_origin() {
     let schema = Document::parse(
         r#"{"openbindings":"0.2.0","operations":{},"schemas":{"entry":{"$ref":"https://invalid.test/schema"}}}"#,
     ).unwrap().validate().unwrap().conformant().unwrap().schema("entry").unwrap();
@@ -486,11 +486,7 @@ fn preparation_display_identifies_invalid_supplied_resources_without_schema_text
         failure.origin.as_ref().unwrap().source_uri.as_deref(),
         Some("https://invalid.test/schema")
     );
-    assert!(
-        failure
-            .to_string()
-            .contains("invalid external schema in resource \"https://invalid.test/schema\"")
-    );
+    assert!(failure.to_string().contains("invalid external schema"));
     assert!(!failure.to_string().contains("SECRET-SCHEMA"));
     assert!(!format!("{failure:?}").contains("invalid.test"));
 
@@ -506,5 +502,5 @@ fn preparation_display_identifies_invalid_supplied_resources_without_schema_text
         failure.origin.as_ref().unwrap().source_uri.as_deref(),
         Some(SCHEMA)
     );
-    assert!(failure.to_string().contains(SCHEMA));
+    assert!(!failure.to_string().contains(SCHEMA));
 }

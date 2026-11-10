@@ -180,6 +180,13 @@ throughput.
 
 ## Generated lane comparisons and fuzzing
 
+`compiled_qualification` retains private lane assertions, compiled stack witnesses
+and diamond termination guards. Its tests use behavior names and do not write
+receipts or measure elapsed time. Run the four exact release gates in
+`tools/verify.py` on every change. The pending mutation run over `src/compiled/`
+will guide further removal or relocation; record any named covering public-API
+test when proposing a cut.
+
 Run the seeded default-limit differential with
 `cargo test -p openbindings-json-schema-evaluator --lib default_limit_lane_differential -- --nocapture`.
 It generates 1,008 schemas, probes their boundaries, and prints verdict and

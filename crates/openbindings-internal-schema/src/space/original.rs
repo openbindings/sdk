@@ -2,7 +2,7 @@
 use super::*;
 
 /// Structural query results, without diagnostic-string classification.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub enum QueryFailure {
     InvalidExternalSchema,
     MalformedReference,
@@ -15,6 +15,24 @@ pub enum QueryFailure {
     ResourceUnavailable(String),
     UnsupportedDialect(Option<String>),
     UnsupportedCapability(&'static str),
+}
+
+impl std::fmt::Debug for QueryFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::InvalidExternalSchema => "InvalidExternalSchema",
+            Self::MalformedReference => "MalformedReference",
+            Self::MissingTarget => "MissingTarget",
+            Self::NonSchemaTarget => "NonSchemaTarget",
+            Self::MissingAnchor => "MissingAnchor",
+            Self::AmbiguousAnchor => "AmbiguousAnchor",
+            Self::InvalidIdentifier => "InvalidIdentifier",
+            Self::IdentityConflict => "IdentityConflict",
+            Self::ResourceUnavailable(..) => "ResourceUnavailable { .. }",
+            Self::UnsupportedDialect(..) => "UnsupportedDialect { .. }",
+            Self::UnsupportedCapability(..) => "UnsupportedCapability { .. }",
+        })
+    }
 }
 
 /// Compact identifier work owned by one inspection or preparation run.

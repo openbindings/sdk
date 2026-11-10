@@ -837,7 +837,10 @@ not characterize arbitrary schema evaluation or cold compilation.
 
 ### Memory at the default limits
 
-`validate_document` admits up to 32 MiB and 1,000,000 nodes, at any nesting.
+`validate_document` admits up to 32 MiB, 1,000,000 nodes and 10,000 container levels.
+Deeper documents require an explicit `JsonLimits::max_depth`. Historical deep
+workloads recorded below predate this cap; the diagnostic memory probe now
+selects an explicit raised depth to retain those workloads and their allowance.
 Its memory grows linearly with the document. Beyond the caller's own copy of
 the input it allocates:
 

@@ -44,7 +44,7 @@ impl std::fmt::Display for CatalogError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Source => f.write_str("the source does not match the local catalog kind"),
-            Self::Comparison(error) => write!(f, "catalog schema comparison failed: {error}"),
+            Self::Comparison(_) => f.write_str("catalog schema comparison failed"),
         }
     }
 }

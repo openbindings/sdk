@@ -141,7 +141,23 @@ impl std::fmt::Debug for ReferenceRefusal {
 }
 impl std::fmt::Display for ReferenceRefusal {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.message)
+        f.write_str(match self.reason {
+            ReferenceRefusalReason::ResourceUnavailable => {
+                "reference resource unavailable; supply the required external schema"
+            }
+            ReferenceRefusalReason::InvalidReference => "reference is invalid",
+            ReferenceRefusalReason::MissingTarget => "reference target is missing",
+            ReferenceRefusalReason::AmbiguousTarget => "reference target is ambiguous",
+            ReferenceRefusalReason::IdentityConflict => "reference resource identities conflict",
+            ReferenceRefusalReason::UnsupportedCapability => {
+                "reference inspection requires an unsupported capability"
+            }
+            ReferenceRefusalReason::LimitExceeded => {
+                "reference inspection reached a limit; inspect PreparationLimits"
+            }
+            ReferenceRefusalReason::Cancelled => "reference inspection was cancelled",
+            ReferenceRefusalReason::ResolverFailure => "reference inspection could not complete",
+        })
     }
 }
 impl std::error::Error for ReferenceRefusal {}
@@ -348,7 +364,7 @@ pub enum ReferenceDefect {
     InvalidIdentifier,
 }
 /// Structured failure of an original-context schema lookup.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "kind", content = "details", rename_all = "kebab-case")]
 #[non_exhaustive]
 pub enum ResolutionFailureKind {
@@ -384,6 +400,23 @@ pub enum ResolutionFailureKind {
     NotSchemaLocation,
     /// The caller's dynamic-anchor name is not a valid plain name.
     InvalidAnchorName,
+}
+impl std::fmt::Debug for ResolutionFailureKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let name = match self {
+            Self::Undefined(defect) => return f.debug_tuple("Undefined").field(defect).finish(),
+            Self::ResourceUnavailable { .. } => "ResourceUnavailable { .. }",
+            Self::UnsupportedDialect { .. } => "UnsupportedDialect { .. }",
+            Self::UnsupportedCapability { .. } => "UnsupportedCapability { .. }",
+            Self::InvalidExternalSchema => "InvalidExternalSchema",
+            Self::Limit { .. } => "Limit { .. }",
+            Self::Cancelled => "Cancelled",
+            Self::WrongEnvironment => "WrongEnvironment",
+            Self::NotSchemaLocation => "NotSchemaLocation",
+            Self::InvalidAnchorName => "InvalidAnchorName",
+        };
+        f.write_str(name)
+    }
 }
 /// A query failure, with real original provenance when one is available.
 /// Wrong-environment misuse has no origin in the selected environment.

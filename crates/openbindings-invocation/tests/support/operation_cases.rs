@@ -740,6 +740,7 @@ impl SchemaEvaluator for CancelDuringPreparation {
 #[test]
 fn preparation_cancellation_has_a_direction_only_when_a_schema_was_being_prepared() {
     use openbindings_invocation::operation::OperationPreparationFailure;
+    use std::error::Error;
     let cancel = control();
     cancel.cancel();
     let client = DefaultOperationInvoker::new(
@@ -747,19 +748,27 @@ fn preparation_cancellation_has_a_direction_only_when_a_schema_was_being_prepare
         DefaultEvaluator::default(),
         ExternalSchemas::default(),
     );
-    assert!(matches!(
-        client.prepare(document("{}"), "echo", &cancel),
-        Err(OperationPreparationFailure::Cancelled)
-    ));
+    let failure = client.prepare(document("{}"), "echo", &cancel).unwrap_err();
+    assert!(matches!(failure, OperationPreparationFailure::Cancelled));
+    assert!(failure.source().is_none());
     let cancel = control();
     let client = DefaultOperationInvoker::new(
         Provider::new(Mode::Empty),
         CancelDuringPreparation(cancel.clone()),
         ExternalSchemas::default(),
     );
-    let Err(OperationPreparationFailure::Schema(failure)) =
-        client.prepare(document(r#"{"output":true}"#), "echo", &cancel)
-    else {
+    let error = client
+        .prepare(document(r#"{"output":true}"#), "echo", &cancel)
+        .unwrap_err();
+    assert!(
+        error
+            .source()
+            .unwrap()
+            .downcast_ref::<PreparationFailure>()
+            .is_some()
+    );
+    assert_eq!(error.to_string(), "operation schema preparation failed");
+    let OperationPreparationFailure::Schema(failure) = error else {
         panic!("typed preparation cancellation")
     };
     assert_eq!(failure.direction(), Direction::Output);
@@ -1056,8 +1065,15 @@ fn explicit_preparation_distinguishes_absence_missing_name_and_declared_refusal(
     let client = DefaultOperationInvoker::new(&provider, eval, ExternalSchemas::default());
     let interface = document(r#"{"aliases":["say"]}"#);
     assert!(client.prepare(interface.clone(), "say", &control()).is_ok());
-    assert!(
-        matches!(client.prepare(interface,"absent",&control()),Err(OperationPreparationFailure::Resolution(error)) if error.code()=="ERR_OPERATION_NOT_FOUND")
+    let error = client.prepare(interface, "absent", &control()).unwrap_err();
+    let cause = std::error::Error::source(&error).unwrap();
+    assert_eq!(
+        cause.downcast_ref::<InvocationError>().unwrap().code(),
+        "ERR_OPERATION_NOT_FOUND"
+    );
+    assert_eq!(
+        error.to_string(),
+        "operation preparation name resolution failed"
     );
     assert_eq!(preps.get(), 0);
     assert_eq!(evaluations.get(), 0);

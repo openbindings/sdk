@@ -145,7 +145,7 @@ impl Failure {
 }
 impl std::fmt::Display for Failure {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.message)
+        write!(f, "schema processing did not complete: {:?}", self.reason)
     }
 }
 impl std::error::Error for Failure {}

@@ -1,4 +1,5 @@
-//! Document validation at the default admission limits, on documents that
+//! Document validation at default byte/node limits and explicitly raised depth,
+//! retaining the historical workloads on documents that
 //! mostly fill the byte or node limit with structures it builds: its own copy
 //! of the text, the decoded text of escaped strings, and its tree and
 //! validation state, with the buffers they grow in. Each must stay within one
@@ -14,7 +15,7 @@ use std::sync::atomic::Ordering::Relaxed;
 
 const MIB: usize = 1024 * 1024;
 const MAX_BYTES: usize = 32 * MIB;
-/// Peak live allocation above the caller's input, at the default limits.
+/// Peak live allocation above the caller's input, at the selected limits.
 const ALLOWANCE: usize = 300 * MIB;
 const HEAD: &str = r#"{"openbindings":"0.2.0""#;
 
@@ -415,7 +416,16 @@ pub fn run() {
         assert!(bytes.len() <= MAX_BYTES, "{shape} exceeds the byte limit");
         let before = ALLOCATIONS.load(Relaxed);
         let (outcome, peak, nanos) = measured(|| {
-            let validation = openbindings::validate_document(&bytes).unwrap();
+            let validation = openbindings::validate_document_with_limits(
+                &bytes,
+                openbindings::JsonLimits {
+                    // Preserve the historical deep workloads after the shared
+                    // default acquired its 10,000-level nesting cap.
+                    max_depth: usize::MAX,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
             let report = validation.report();
             (
                 serde_json::to_value(report.conclusion).unwrap(),

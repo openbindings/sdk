@@ -35,13 +35,6 @@ fn dense_customer_patterns_keep_empty_search_below_backtracker_capacity() {
         let pattern = format!("{}{}", ATOM.repeat(copies), if nullable { "|" } else { "" });
         let normalized = form(&pattern);
         let built = nfa(&normalized);
-        eprintln!(
-            "SEARCH copies={copies} nullable={nullable} states={} memory={} state_size={} atom={:?}",
-            built.states().len(),
-            built.memory_usage(),
-            size_of::<thompson::State>(),
-            form(ATOM)
-        );
         assert_eq!(built.states().len(), expected_states);
         assert!(built.states().len() < CAPACITY);
         // Force the affected search engine too, independent of meta optimizations.

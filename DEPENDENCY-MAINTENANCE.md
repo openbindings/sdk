@@ -175,7 +175,7 @@ make it preemptible. Historical retirement receipts describe an earlier state.
 Changes to keyword semantics, reference lowering, exact operands, patterns or
 selection require both Original and default-lane comparisons. Run
 `compiled_qualification` (including its required release stack and expansion
-controls), the generated default-limit differential, the evaluator kit and
+guarantees), the generated default-limit differential, the evaluator kit and
 actual Wasm tests. Positive route counters ensure tests really enter compiled
 construction and evaluation; passing Original-only tests cannot qualify it.
 

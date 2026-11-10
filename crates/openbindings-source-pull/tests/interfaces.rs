@@ -308,10 +308,7 @@ fn pull_display_and_sources_retain_native_and_validation_causes() {
     let error = PullError::Provider(PullFailure::Operational(std::io::Error::other(
         "connection reset",
     )));
-    assert_eq!(
-        error.to_string(),
-        "source pull failed: source pulling could not complete: connection reset"
-    );
+    assert_eq!(error.to_string(), "source pull provider failed");
     assert_eq!(format!("{error:?}"), "Provider(Operational { .. })");
     let provider = error.source().unwrap();
     assert!(
@@ -334,7 +331,14 @@ fn pull_display_and_sources_retain_native_and_validation_causes() {
             .downcast_ref::<PullValidationError>()
             .is_some()
     );
-    assert!(validation.to_string().contains("MissingSource"));
+    assert_eq!(validation.to_string(), "source pull validation failed");
+    assert!(
+        validation
+            .source()
+            .unwrap()
+            .to_string()
+            .contains("MissingSource")
+    );
     assert!(PullError::<std::io::Error>::Cancelled.source().is_none());
     assert!(PullFailure::<std::io::Error>::Cancelled.source().is_none());
     assert_eq!(

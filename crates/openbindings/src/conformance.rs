@@ -238,6 +238,11 @@ pub struct VersionRefusal {
     pub supported: &'static str,
 }
 impl VersionRefusal {
+    /// Borrow the original declared version deliberately; diagnostic formatting omits it.
+    pub fn declared(&self) -> &str {
+        &self.declared
+    }
+
     /// Construct a refusal only for a well-formed unsupported declaration.
     pub(crate) fn new(declared: &str) -> Option<Self> {
         (check_version(declared) == VersionDecision::Unsupported).then(|| Self {
@@ -258,11 +263,7 @@ impl std::fmt::Debug for VersionRefusal {
 
 impl fmt::Display for VersionRefusal {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "declared version {} is outside {}",
-            self.declared, self.supported
-        )
+        write!(f, "declared version is outside {SUPPORTED_VERSIONS}")
     }
 }
 impl std::error::Error for VersionRefusal {}
@@ -323,18 +324,15 @@ pub fn validate_document(input: impl AsRef<[u8]>) -> Result<DocumentValidation, 
 pub fn validate_document_owned(input: Vec<u8>) -> Result<DocumentValidation, VersionRefusal> {
     validate_document_owned_with_limits(input, validation_limits())
 }
-// What `validate_document` admits: the default bytes and nodes, any nesting.
+// What `validate_document` admits: the shared byte, node and nesting defaults.
 fn validation_limits() -> JsonLimits {
-    JsonLimits {
-        max_depth: usize::MAX,
-        ..Default::default()
-    }
+    JsonLimits::default()
 }
 
 /// Assess bytes with caller-selected byte, node and nesting admission limits.
 /// Admission precedes version selection: if parsing exceeds a limit, no complete
 /// declaration is established and all rules are inconclusive, even for another line.
-/// [`validate_document`] uses default byte/node limits and unlimited nesting.
+/// [`validate_document`] uses [`JsonLimits::default()`], including its 10,000-level nesting cap.
 /// Limit findings use `byte-limit`, `depth-limit` or `node-limit`, with the parser's
 /// byte offset and no pointer. Their messages describe the limit without API advice.
 /// To admit more, call this function with a larger [`JsonLimits::max_bytes`],

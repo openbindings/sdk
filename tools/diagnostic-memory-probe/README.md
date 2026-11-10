@@ -122,9 +122,12 @@ satisfy it. These patterns once kept about 1 MB each, 380 MB in all.
 
 ## Default admission limits
 
-The limits phase (`src/limits.rs`) validates 34 documents at the default
-admission limits (32 MiB, 1,000,000 nodes, any nesting), most filling the byte
-or node limit, with structures document validation builds: a million nested
+The limits phase (`src/limits.rs`) retains 34 historical workloads at the default
+byte and node limits (32 MiB and 1,000,000 nodes). The SDK now defaults to 10,000
+container levels; this phase explicitly raises `max_depth` to `usize::MAX` to
+preserve its deep workloads and their allocation allowance. Its output phase
+label stays `default-limits` for comparison with earlier samples. Most workloads
+fill the byte or node limit with structures document validation builds: a million nested
 arrays around a long
 string; half a million invalid operation names, alone and beside a string
 filling the byte limit; a million escaped strings; one escaped string and one
@@ -146,7 +149,7 @@ each declaring a repeated `$id`; one `$id` of 4 million segments (8 MiB) and of
 `$id` interrupted by dot segments throughout; a 28 MiB authority read back by
 150,000 relative `$id`s; 1,749 relative `$id`s, each giving up a different
 number of a long `$id`'s 5 million segments; and a malformed reference at every
-level of a 120,000-level schema chain. Each `validate_document` call must add at
+level of a 120,000-level schema chain. Each `validate_document_with_limits` call must add at
 most **300 MiB** of live allocation above the caller's input, and must reach its
 expected conclusion. The largest, a third of a million escaped `$id`s with
 copied paths, a query and a fragment, adds 256.0 MiB, 44.0 MiB below that. The
@@ -154,7 +157,7 @@ ceiling is not a multiple of the byte limit: at the former 64 MiB default the
 same shape adds 364.9 MiB, since much of its memory is held for each
 declaration, whatever its length. This bounds these shapes, not every document.
 Run the phase alone with `--limits-only`. The phase passes the caller's input
-by reference; handed over through `validate_document_owned`, the same
+by reference; handed over through `validate_document_owned_with_limits` with the same limits, the
 documents allocate one copy of the input less, 224.3 MiB at the largest. The
 TypeScript package's `test/wasm-memory.test.mjs` holds the module memory that
 validating the two copied-identifier documents adds to what it adds now.

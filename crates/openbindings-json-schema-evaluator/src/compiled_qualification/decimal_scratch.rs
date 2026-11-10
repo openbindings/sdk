@@ -135,7 +135,7 @@ fn large_decimal_spellings_preserve_all_four_numeric_bound_verdicts() {
 }
 
 #[test]
-fn hostile_decisions_have_an_independent_original_witness() {
+fn hostile_numeric_outcomes_have_an_independent_original_witness() {
     for (token, schema) in [
         (
             format!("0.{}", "1".repeat(1024 * 1024 - 2)),

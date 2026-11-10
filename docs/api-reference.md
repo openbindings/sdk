@@ -222,8 +222,11 @@ TypeScript rows contain only `op`, `pointer` and, for set, `value`. No detached
 part-merging or field-collision convention changes the supplied JSON.
 
 Default exact parsing admits 32 MiB UTF-8, 1,000,000 nodes and 10,000 container
-levels. Direct whole-document validation without explicit limits has no nesting
-cap. Explicit `JsonLimits` apply to parsing and are retained for document edits.
+levels. Direct whole-document validation uses the same defaults; past a limit it
+is undetermined with `byte-limit`, `depth-limit` or `node-limit`. Explicit
+`JsonLimits` apply to parsing and are retained for document edits. See
+[Reading errors](rust-first-use.md#reading-errors) for diagnostic formatting and
+explicit access to retained values.
 TypeScript ordinary JSON admission rejects nonfinite numbers, undefined, cycles,
 accessors, sparse arrays and unsupported object forms without running getters or
 `toJSON`; use exact parsing for original number tokens and raised admission limits.

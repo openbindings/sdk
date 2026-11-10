@@ -243,6 +243,12 @@ pub struct SourceLocation {
     /// One-based UTF-8 byte column; convert against source before using a UTF-16 editor column.
     pub byte_column: usize,
 }
+impl SourceLocation {
+    /// Borrow the exact pointer deliberately; diagnostic formatting shows only byte coordinates.
+    pub fn pointer(&self) -> Option<&Pointer> {
+        self.pointer.as_ref()
+    }
+}
 /// An immutable exact JSON value. Cloning retains storage, without re-parsing.
 #[derive(Clone)]
 pub struct JsonValue {
@@ -782,10 +788,7 @@ impl<'de> Deserialize<'de> for JsonValue {
 impl fmt::Display for SourceLocation {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let (line, column, byte) = (self.line, self.byte_column, self.byte_offset);
-        match self.pointer.as_ref().filter(|pointer| !pointer.is_root()) {
-            Some(pointer) => write!(f, "{pointer} (line {line}, column {column}, byte {byte})"),
-            None => write!(f, "line {line}, column {column}, byte {byte}"),
-        }
+        write!(f, "line {line}, column {column}, byte {byte}")
     }
 }
 impl std::fmt::Debug for SourceLocation {
@@ -949,11 +952,12 @@ mod tests {
         assert_eq!(renamed.to_string(), "application-code at byte 0");
     }
     #[test]
-    fn locations_display_their_pointer_and_coordinates() {
+    fn locations_display_only_coordinates_and_retain_their_pointer() {
         let value = JsonValue::parse("{\n \"a/b\": [true],\n \"\\ud800\": 0}").unwrap();
         let element = value.at("/a~1b/0").unwrap().location();
-        assert_eq!(element.to_string(), "/a~1b/0 (line 2, column 10, byte 11)");
-        // The root's empty pointer is not written, as for a location with none.
+        assert_eq!(element.to_string(), "line 2, column 10, byte 11");
+        assert_eq!(element.pointer().unwrap().as_str(), Some("/a~1b/0"));
+        // Root and absent pointers have the same coordinate-only formatting.
         assert_eq!(value.location().to_string(), "line 1, column 1, byte 0");
         let syntax = SourceLocation {
             pointer: None,
@@ -963,7 +967,7 @@ mod tests {
         let unpaired = value.view().members().unwrap().nth(1).unwrap().value;
         assert_eq!(
             unpaired.location().to_string(),
-            "/\\ud800 (line 3, column 12, byte 29)"
+            "line 3, column 12, byte 29"
         );
         assert_eq!(
             serde_json::to_string(&unpaired.location()).unwrap(),

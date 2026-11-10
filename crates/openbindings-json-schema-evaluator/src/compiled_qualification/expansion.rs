@@ -1,5 +1,5 @@
 use super::*;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 const FORMS: [&str; 5] = ["allOf", "anyOf", "oneOf", "not", "if"];
 
@@ -70,7 +70,6 @@ fn assert_verdict(validator: &DefaultValidator, value: &str, valid: bool) {
 #[test]
 fn original_diamonds_are_bounded_at_default_and_explicit_limits() {
     timely(|| {
-        let mut rows = Vec::new();
         for work in [None, Some(1_000_000)] {
             for form in FORMS {
                 for (leaf, yes, no) in leaves() {
@@ -86,21 +85,17 @@ fn original_diamonds_are_bounded_at_default_and_explicit_limits() {
                             &PreparationLimits::default(),
                         )
                         .unwrap();
-                        let start = Instant::now();
                         assert_verdict(&validator, yes, expected(form, levels, true));
                         assert_verdict(&validator, no, expected(form, levels, false));
-                        rows.push(json!({"form":form,"leaf":leaf,"levels":levels,
-                            "work_limit":work,"two_evaluations_us":start.elapsed().as_micros()}));
                     }
                 }
             }
         }
-        write("original-expansion.json", &json!(rows));
     });
 }
 
 #[test]
-fn default_diamonds_decline_before_construction_and_decide_quickly() {
+fn default_diamonds_decline_before_construction_and_terminate() {
     timely(|| {
         for form in FORMS {
             for (leaf, yes, no) in leaves() {
@@ -389,15 +384,8 @@ fn product_default_large_diamonds_finish_without_backend_entry() {
                     .unwrap();
                     let value = array_value(if enumeration { &last } else { "1" }, count);
                     compiled::entries::take();
-                    let start = Instant::now();
                     let actual = selected.evaluate(&value, Detail::Outcome, &HEALTHY);
-                    let elapsed = start.elapsed();
                     assert!(verdict(&actual).is_none_or(|v| v));
-                    write(
-                        &format!("product-{enumeration}-{count}.json"),
-                        &json!({"enum":enumeration,"items":count,"evaluation_us":elapsed.as_micros(),
-                        "outcome":serialized(actual)}),
-                    );
                     for (item, valid) in [
                         (if enumeration { last.as_str() } else { "1" }, true),
                         (if enumeration { "\"absent\"" } else { "-1" }, false),
@@ -419,7 +407,6 @@ fn product_host_work_caps_stop_enum_fallback() {
         let source =
             array_diamond(json!({"enum":(0..1024).map(|i| format!("v{i}")).collect::<Vec<_>>()}));
         let value = array_value("\"v1023\"", 500_000);
-        let mut rows = Vec::new();
         for cap in [1_000_000, 10_000_000] {
             let selected = prepare_document(
                 &source,
@@ -432,18 +419,13 @@ fn product_host_work_caps_stop_enum_fallback() {
             )
             .unwrap();
             compiled::entries::take();
-            let start = Instant::now();
             let outcome = selected.evaluate(&value, Detail::Outcome, &HEALTHY);
-            let elapsed = start.elapsed();
             assert!(
                 matches!(&outcome, ValueOutcome::NoVerdict { detail }
                 if detail.reason == NoVerdictReason::LimitExceeded && detail.code == "evaluation-work-limit"),
                 "{outcome:?}"
             );
-            assert!(elapsed < Duration::from_secs(2));
-            rows.push(json!({"cap":cap,"evaluation_us":elapsed.as_micros(),"outcome":serialized(outcome)}));
         }
-        write("product-work-caps.json", &json!(rows));
     });
 }
 

@@ -1,5 +1,29 @@
 # Changelog
 
+## 2026-11-10 decision rulings (unreleased)
+
+### Changed
+
+- Apply interfaces `67f707c31aecbdf0551385e369d8024097db6278`, which states the
+  kind-descriptor `check` rule; retain specification
+  `c1419c9fc3ae5a00c2b83da710c11bf67dab7934`. Every copied interface fixture is
+  byte-identical at the new revision.
+- SDK diagnostic `Display` and `Debug` use fixed SDK text and constants. Values
+  remain available through explicit fields, accessors and serialization. Wrapper
+  messages print their own layer and expose causes through `Error::source()`.
+- `SourceLocation` displays line, column and byte only; `pointer()` borrows its
+  retained pointer. `VersionRefusal::declared()` borrows its retained declaration.
+- `OperationPreparationFailure::source()` exposes resolution and schema
+  preparation causes; cancellation has no source.
+- Whole-document validation, HTTP discovery, publication and TypeScript share
+  `JsonLimits::default()`, including 10,000 container levels. Beyond the cap,
+  validation is undetermined with `depth-limit`; explicit limits admit deeper input.
+- Kind descriptions require `check` exactly when `supports` names
+  `openbindings.kind-descriptor.checkSource`, matching `pull` and `invoke`.
+- Compiled qualification tests retain their guarantees with behavior names,
+  without receipt writing or elapsed-time measurements. The independent
+  differential, stack witnesses and diamond termination guards remain.
+
 ## 2026-11-10 objective review fixes (unreleased)
 
 ### Changed

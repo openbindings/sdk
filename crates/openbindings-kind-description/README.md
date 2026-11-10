@@ -28,12 +28,12 @@ Providers own admission of their outputs. A transport, decoding or admission
 failure remains `CheckFailure::Operational`; a kind's rejection carries its own
 code, readable message and optional exact data. `ContextRequired` carries the
 shared context challenge. The SDK never acquires context or retries a check.
-Native errors are not serialized or measured as JSON carriers. `Display` includes
-the provider's own error message, or a rejection's code and message; `Debug` keeps
-payloads hidden. For native errors implementing `std::error::Error + 'static`,
-`KindError::source()` and `CheckFailure::source()` retain the underlying cause.
-Choose where to display these messages according to the application's disclosure
-policy.
+Native errors are not serialized or measured as JSON carriers. `Display` prints
+each SDK error's own layer and `Debug` keeps payloads hidden. Read a rejection's
+`code()` and `message()` explicitly. For native errors implementing
+`std::error::Error + 'static`, `KindError::source()` and `CheckFailure::source()`
+retain the underlying cause. Apply the application's disclosure policy before
+printing a native cause or a cause chain.
 
 ```rust
 use openbindings::JsonValue;
@@ -65,7 +65,7 @@ resources. The attempt token is useful for detached work and synchronous loops
 that stop cooperatively. The SDK does not undo effects already performed.
 
 This unpublished companion applies interface version `0.1.0` at revision
-`3e3dc453a93b611a8e9ea1813ec63a2216830f45`, alongside the OpenBindings 0.2 document
+`67f707c31aecbdf0551385e369d8024097db6278`, alongside the OpenBindings 0.2 document
 model. Interface and SDK versions are independent. No TypeScript interface API is
 claimed.
 
@@ -79,3 +79,9 @@ not grant permission to execute.
 Borrow an admitted carrier's exact object with `value()`; use `value().clone()`
 when an owned object is needed. On interface carriers, `to_json` means bounded
 encoding, as on invocation errors and requests.
+
+`KindDescription::from_json` requires `check`, `pull` and `invoke` to be present
+exactly when `supports` names `openbindings.kind-descriptor.checkSource`,
+`openbindings.source-puller.pullSource` and
+`openbindings.binding-invoker.invokeBinding`, respectively. A vendor operation
+key alone does not admit a `check` disclosure.

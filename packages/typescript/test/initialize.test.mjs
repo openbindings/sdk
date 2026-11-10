@@ -133,6 +133,9 @@ const fetch = globalThis.fetch;
 await assert.rejects(sdk.initialize(${input}), (error) => {
   assert.ok(error instanceof sdk.SdkError);
   assert.equal(error.code, "wasm-initialization");
+  assert.doesNotMatch(error.message, /simulated fetch failure|wasm\\.invalid|fetch failed/);
+  if (${JSON.stringify(kind)} === "rejected input promise")
+    assert.equal(error.cause.message, "simulated fetch failure");
   if (${wrongModule.has(kind)})
     assert.match(error.message, /the supplied module is not this package's/);
   return true;

@@ -66,7 +66,7 @@ impl ExternalSchemasInner {
     }
 }
 /// Cause of external-schema registration failure, separate from conformance.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum ExternalSchemaErrorKind {
     /// Retrieval identity is not an absolute URI without a nonempty fragment.
@@ -83,6 +83,17 @@ pub enum ExternalSchemaErrorKind {
     /// The caller cancelled registration.
     Cancelled,
 }
+impl fmt::Debug for ExternalSchemaErrorKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::InvalidIdentity => "InvalidIdentity",
+            Self::RepeatedIdentity => "RepeatedIdentity",
+            Self::DuplicateMembers => "DuplicateMembers",
+            Self::Limit { .. } => "Limit { .. }",
+            Self::Cancelled => "Cancelled",
+        })
+    }
+}
 #[derive(Clone, PartialEq, Eq)]
 /// Invalid supplied-resource configuration, separate from schema preparation and value outcomes.
 /// Later versions may add fields: read them by name and match with `..`.
@@ -97,7 +108,19 @@ pub struct ExternalSchemaError {
 }
 impl fmt::Display for ExternalSchemaError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.message)
+        f.write_str(match &self.kind {
+            ExternalSchemaErrorKind::InvalidIdentity => {
+                "external schema identity must be an absolute URI without a nonempty fragment"
+            }
+            ExternalSchemaErrorKind::RepeatedIdentity => "external schema identity is repeated",
+            ExternalSchemaErrorKind::DuplicateMembers => {
+                "external schema contains duplicate members"
+            }
+            ExternalSchemaErrorKind::Limit { resource } => {
+                super::evaluation::preparation_limit_text(resource)
+            }
+            ExternalSchemaErrorKind::Cancelled => "external schema registration was cancelled",
+        })
     }
 }
 impl std::error::Error for ExternalSchemaError {}

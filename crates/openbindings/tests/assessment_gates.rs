@@ -16,7 +16,7 @@ fn later_rules_require_scalar_document_strings_but_allow_deep_opaque_data() {
         (format!(r#"{{"openbindings":"0.2.0","x-d":{}0{}}}"#, "[".repeat(10001), "]".repeat(10001)), vec!["OBI-02"]),
         (format!(r#"{{"openbindings":"0.2.0","operations":{{"-bad":{{}}}},"x-d":{}0{}}}"#, "[".repeat(10001), "]".repeat(10001)), vec!["OBI-04"]),
     ] {
-        let validation = checked(&text);
+        let validation = validate_document_with_limits(&text, JsonLimits { max_depth: 10_002, ..Default::default() }).unwrap();
         assert_eq!(validation.report().conclusion, Conformance::NonConformant, "{rules:?}");
         if text.contains(r"\ud") {
             assert_eq!(validation.report().evidence["OBI-01"], Evidence::Violated);
@@ -27,7 +27,7 @@ fn later_rules_require_scalar_document_strings_but_allow_deep_opaque_data() {
         // A permitted pair restores the prerequisite, exposing every original
         // independent violation rather than dropping those regression checks.
         let repaired = text.replace(r"\ud800", r"\ud83d\ude00");
-        let validation = checked(&repaired);
+        let validation = validate_document_with_limits(&repaired, JsonLimits { max_depth: 10_002, ..Default::default() }).unwrap();
         for rule in rules { assert_eq!(validation.report().evidence[rule], Evidence::Violated, "{rule}"); }
     }
 }
@@ -197,7 +197,6 @@ fn the_default_byte_limit_admits_32_mib_and_locates_its_refusal() {
         &over,
         JsonLimits {
             max_bytes: limit + 1,
-            max_depth: usize::MAX,
             ..JsonLimits::default()
         },
     )
@@ -294,8 +293,7 @@ fn a_raised_byte_limit_admits_documents_to_it_and_they_keep_it_for_edits() {
         .set("/name", &JsonValue::string("raised").unwrap())
         .unwrap();
     assert_eq!(again.limits(), raised);
-    // Each entry's default: the JsonLimits defaults for parsing, construction
-    // and from_json, and no nesting cap for validate_document.
+    // Every default entry uses the same JsonLimits defaults.
     assert_eq!(
         Document::parse(empty).unwrap().limits(),
         JsonLimits::default()
@@ -304,10 +302,7 @@ fn a_raised_byte_limit_admits_documents_to_it_and_they_keep_it_for_edits() {
     let validated = validate_document(empty).unwrap();
     assert_eq!(
         validated.document().unwrap().limits(),
-        JsonLimits {
-            max_depth: usize::MAX,
-            ..JsonLimits::default()
-        }
+        JsonLimits::default()
     );
 }
 

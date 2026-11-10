@@ -31,9 +31,6 @@ pub(super) mod entries {
     pub(crate) fn take() -> [usize; 3] {
         COUNTS.with(|counts| counts.replace([0; 3]))
     }
-    pub(crate) fn snapshot() -> [usize; 3] {
-        COUNTS.with(Cell::get)
-    }
     pub(crate) fn record_expansion(applications: usize) {
         EXPANSION.with(|count| count.set(Some(applications)));
     }
@@ -165,17 +162,6 @@ impl Lane {
         match self {
             Self::Original(_) => None,
             Self::Compiled(prepared) => prepared.inner.deepest,
-        }
-    }
-    #[cfg(test)]
-    pub(super) fn recursive_exact_weight(&self) -> Option<usize> {
-        match self {
-            Self::Compiled(p) if p.features.recursive => Some(if p.features.scratch {
-                p.features.multiplier
-            } else {
-                0
-            }),
-            _ => None,
         }
     }
     pub(super) fn prepare(

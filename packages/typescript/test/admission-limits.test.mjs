@@ -103,9 +103,11 @@ test("a raised byte limit admits documents and values to it and refuses one byte
 
 test("unspecified limits keep the JsonLimits defaults, and malformed limits throw", () => {
   const deep = `{"openbindings":"0.2.0","operations":{},"x-d":${"[".repeat(10_001)}0${"]".repeat(10_001)}}`;
-  // validateDocument without limits sets no nesting cap; with them, the
-  // default 10,000 levels apply unless maxDepth raises them.
-  assert.equal(sdk.validateDocument(deep).report.conclusion, "conformant");
+  // All default entries share the nesting cap; maxDepth can raise it.
+  assert.deepEqual(
+    sdk.validateDocument(deep),
+    sdk.validateDocument(deep, { limits: {} }),
+  );
   undetermined(
     sdk.validateDocument(deep, { limits: {} }).report,
     "the document nests containers deeper than the 10000 levels admitted",
@@ -352,7 +354,7 @@ test("discovery with a raised body limit validates a body past the default byte 
   assert.deepEqual(found.document.limits, {
     maxBytes: DEFAULT_BYTES + 1,
     maxNodes: 1_000_000,
-    maxDepth: NO_DEPTH_CAP,
+    maxDepth: 10_000,
   });
   found.document.dispose();
   const limited = await discovery.discover("https://example.test", {
@@ -376,7 +378,7 @@ test("discovery with a raised body limit validates a body past the default byte 
   );
   assert.equal(
     sdk.validateDocument(nodes, {
-      limits: { maxNodes: 2_000_000, maxDepth: NO_DEPTH_CAP },
+      limits: { maxNodes: 2_000_000, maxDepth: 10_000 },
     }).report.conclusion,
     "conformant",
   );

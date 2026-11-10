@@ -54,7 +54,7 @@ fn debug_redacts_caller_text_at_every_boundary() {
     .unwrap();
     let error = InvocationError::new(SECRET, Some(value.clone())).unwrap();
     assert_eq!(error.code(), SECRET);
-    assert!(error.to_string().contains(SECRET));
+    assert!(!error.to_string().contains(SECRET));
     let admission = BindingRequest::from_json(&value).unwrap_err();
     let evidence = ValidationEvidence::Preparation(PreparationFailure::new(
         PreparationFailureKind::Implementation {

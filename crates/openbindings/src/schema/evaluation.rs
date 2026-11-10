@@ -38,7 +38,7 @@ impl Default for PreparationLimits {
 }
 
 /// Why preparation could not construct a validator. This judges no value.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "kind", content = "details", rename_all = "kebab-case")]
 #[non_exhaustive]
 pub enum PreparationFailureKind {
@@ -121,67 +121,58 @@ impl fmt::Debug for PreparationFailure {
             .finish_non_exhaustive()
     }
 }
+impl fmt::Debug for PreparationFailureKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::Resolution { .. } => "Resolution { .. }",
+            Self::UnsupportedCapability { .. } => "UnsupportedCapability { .. }",
+            Self::Limit { .. } => "Limit { .. }",
+            Self::Cancelled => "Cancelled",
+            Self::InvalidExternalSchema => "InvalidExternalSchema",
+            Self::Implementation { .. } => "Implementation { .. }",
+        })
+    }
+}
+// Only SDK-owned limit names select text; evaluator-defined names remain data.
+pub(super) fn preparation_limit_text(resource: &str) -> &'static str {
+    match resource {
+        "schema-nodes" => "limit reached: raise PreparationLimits::max_schema_nodes",
+        "schema-identity-bytes" => "limit reached: raise PreparationLimits::max_identity_bytes",
+        "preparation-sdk-work-units" => {
+            "limit reached: raise PreparationLimits::max_sdk_work_units"
+        }
+        "preparation-sdk-reservation-bytes" => {
+            "limit reached: raise PreparationLimits::max_sdk_reservation_bytes"
+        }
+        _ => "limit reached; inspect the resource field and the evaluator's limits",
+    }
+}
 impl fmt::Display for PreparationFailure {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("schema preparation failed: ")?;
-        match &self.kind {
+        f.write_str(match &self.kind {
             PreparationFailureKind::Resolution { cause } => match cause {
-                ResolutionFailureKind::Undefined(defect) => {
-                    write!(f, "reference defect {defect:?}")
+                ResolutionFailureKind::Undefined(_) => "reference has a semantic defect",
+                ResolutionFailureKind::ResourceUnavailable { .. } => {
+                    "resource unavailable; supply the required external schema"
                 }
-                ResolutionFailureKind::ResourceUnavailable { uri } => {
-                    write!(f, "resource unavailable {uri:?}")
-                }
-                ResolutionFailureKind::UnsupportedDialect { uri } => {
-                    write!(f, "unsupported dialect {uri:?}")
-                }
+                ResolutionFailureKind::UnsupportedDialect { .. } => "unsupported dialect",
                 ResolutionFailureKind::UnsupportedCapability { .. } => {
-                    f.write_str("unsupported resolution capability")
+                    "unsupported resolution capability"
                 }
-                ResolutionFailureKind::InvalidExternalSchema => {
-                    f.write_str("invalid external schema")
-                }
-                ResolutionFailureKind::Limit { resource } => {
-                    write!(f, "resolution limit reached {resource:?}")
-                }
-                ResolutionFailureKind::Cancelled => f.write_str("resolution cancelled"),
-                ResolutionFailureKind::WrongEnvironment => {
-                    f.write_str("schema belongs to another environment")
-                }
-                ResolutionFailureKind::NotSchemaLocation => {
-                    f.write_str("requested location is not a schema")
-                }
-                ResolutionFailureKind::InvalidAnchorName => {
-                    f.write_str("invalid dynamic-anchor name")
-                }
+                ResolutionFailureKind::InvalidExternalSchema => "invalid external schema",
+                ResolutionFailureKind::Limit { resource } => preparation_limit_text(resource),
+                ResolutionFailureKind::Cancelled => "resolution cancelled",
+                ResolutionFailureKind::WrongEnvironment => "schema belongs to another environment",
+                ResolutionFailureKind::NotSchemaLocation => "requested location is not a schema",
+                ResolutionFailureKind::InvalidAnchorName => "invalid dynamic-anchor name",
             },
-            // Capability names and implementation prose are evaluator-controlled.
-            PreparationFailureKind::UnsupportedCapability { .. } => {
-                f.write_str("unsupported capability")
-            }
-            PreparationFailureKind::Limit { resource } => write!(f, "limit reached {resource:?}"),
-            PreparationFailureKind::Cancelled => f.write_str("cancelled"),
-            PreparationFailureKind::InvalidExternalSchema => f.write_str("invalid external schema"),
-            // Evaluator-supplied prose may contain source or instance data.
-            PreparationFailureKind::Implementation { .. } => f.write_str("implementation failure"),
-        }?;
-        // An opaque evaluator refusal can attach arbitrary data as its origin.
-        // Keep that refusal's text and coordinates out of implicit diagnostics.
-        if matches!(
-            self.kind,
-            PreparationFailureKind::UnsupportedCapability { .. }
-                | PreparationFailureKind::Implementation { .. }
-        ) {
-            return Ok(());
-        }
-        if let Some(origin) = &self.origin {
-            match &origin.source_uri {
-                Some(uri) => write!(f, " in resource {uri:?}")?,
-                None => f.write_str(" in the interface document")?,
-            }
-            write!(f, " at pointer {:?}", origin.pointer.to_string())?;
-        }
-        Ok(())
+            PreparationFailureKind::UnsupportedCapability { .. } => "unsupported capability",
+            PreparationFailureKind::Limit { resource } => preparation_limit_text(resource),
+            PreparationFailureKind::Cancelled => "cancelled",
+            PreparationFailureKind::InvalidExternalSchema => "invalid external schema",
+            PreparationFailureKind::Implementation { .. } => "implementation failure",
+        })
     }
 }
 impl std::error::Error for PreparationFailure {}
@@ -308,7 +299,22 @@ impl NoVerdict {
 }
 impl fmt::Display for NoVerdict {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.message)
+        f.write_str(match self.reason {
+            NoVerdictReason::UnsupportedCapability => {
+                "schema evaluation requires an unsupported capability"
+            }
+            NoVerdictReason::ConservativePreparation => {
+                "schema evaluation could not establish sound preparation"
+            }
+            NoVerdictReason::ResourceUnavailable => {
+                "schema evaluation requires an unavailable resource"
+            }
+            NoVerdictReason::LimitExceeded => {
+                "schema evaluation reached a limit; inspect the evaluator's limits"
+            }
+            NoVerdictReason::Cancelled => "schema evaluation was cancelled",
+            NoVerdictReason::EvaluatorFailure => "schema evaluation could not complete",
+        })
     }
 }
 impl std::error::Error for NoVerdict {}
