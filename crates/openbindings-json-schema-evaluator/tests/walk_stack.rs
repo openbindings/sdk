@@ -66,11 +66,7 @@ fn prepare(
     .unwrap()
     .input()
     .unwrap()
-    .prepare(
-        evaluator,
-        &resources,
-        &openbindings::PreparationLimits::default(),
-    )
+    .prepare(evaluator, &resources)
 }
 
 // Run `then` once at least `bytes` of the stack below `top` are in use.

@@ -1,8 +1,6 @@
 //! One caller crossing the current interfaces, with explicit application decisions.
 use invocation_consumer::Catalog;
-use openbindings::{
-    ConformantDocument, Document, Edit, ExternalSchemas, JsonValue, PreparationLimits, ValueOutcome,
-};
+use openbindings::{ConformantDocument, Document, Edit, ExternalSchemas, JsonValue, ValueOutcome};
 use openbindings_invocation::{
     CancellationToken, Context, DefaultOperationInvoker, InvocationError, OperationRequest,
     OutputEvent,
@@ -327,11 +325,7 @@ fn accepts(schema: &JsonValue, value: &JsonValue) -> bool {
         .unwrap()
         .input()
         .unwrap()
-        .prepare(
-            &DefaultEvaluator::new(),
-            &ExternalSchemas::default(),
-            &PreparationLimits::default(),
-        )
+        .prepare(&DefaultEvaluator::new(), &ExternalSchemas::default())
         .unwrap();
     match prepared.evaluate(value) {
         ValueOutcome::Satisfies => true,

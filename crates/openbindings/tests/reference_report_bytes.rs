@@ -49,7 +49,7 @@ fn missing_directory_names_charge_expansion_before_retention() {
     )
     .unwrap();
     let proof = document.validate().unwrap().conformant().unwrap();
-    for report in [document.references(), proof.references()] {
+    for report in [document.references(), proof.document().references()] {
         let bytes = assert_bounded(&report);
         assert_eq!(report.references.len(), 7);
         for (i, reference) in report.references.iter().enumerate() {
@@ -89,7 +89,9 @@ fn supplied_source_uris_charge_every_origin_copy() {
         let proof = document.validate().unwrap().conformant().unwrap();
         for report in [
             document.references_with_resources(resources.clone(), &AtomicBool::new(false)),
-            proof.references_with_resources(resources.clone(), &AtomicBool::new(false)),
+            proof
+                .document()
+                .references_with_resources(resources.clone(), &AtomicBool::new(false)),
         ] {
             let bytes = assert_bounded(&report);
             assert_eq!(report.references.len(), 11);

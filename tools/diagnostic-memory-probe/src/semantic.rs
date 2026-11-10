@@ -45,7 +45,6 @@ pub(super) fn run() {
                         ..Limits::default()
                     }),
                     &ExternalSchemas::default(),
-                    &PreparationLimits::default(),
                 )
                 .unwrap();
             let (result, added_peak, nanos) = crate::measured(|| prepared.evaluate(&value));
@@ -118,7 +117,6 @@ pub(super) fn recursive() {
                         ..Limits::default()
                     }),
                     &ExternalSchemas::default(),
-                    &PreparationLimits::default(),
                 )
                 .unwrap();
             for warm in [false, true] {

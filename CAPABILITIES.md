@@ -31,8 +31,7 @@ admission limits are a setting at `validate_document_with_limits`,
 `Document::parse_with_limits` and `JsonValue::parse_with_limits` (`JsonLimits`),
 and at TypeScript's `validateDocument`, `Document.parse` and `parseJson`
 (`limits`). `Document::new`, `Document::from_json`, `JsonValue::parse`,
-`JsonValue::string` and `PreparedSchema::evaluate_json` use the
-defaults, as do TypeScript's `Document.create()`, `ExactJson.from`,
+`JsonValue::string` use the defaults, as do TypeScript's `Document.create()`, `ExactJson.from`,
 `evaluateJson` and a prepared schema's `evaluate` and `explain` of an ordinary
 value. `Publication::from_bytes` uses whole-document validation admission,
 including no nesting cap.

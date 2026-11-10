@@ -33,7 +33,7 @@ fn all_38_pinned_pull_report_cases_keep_shape_and_complete_answers() {
                 admitted.report().is_complete(),
                 case.get("completePull").unwrap().as_bool().unwrap()
             );
-            assert_eq!(admitted.to_json().value().text(), value.text());
+            assert_eq!(admitted.value().value().text(), value.text());
         } else {
             negative += 1;
         }
@@ -55,7 +55,7 @@ fn all_five_published_example_results_are_admitted_without_projection_or_edits()
     for example in examples.members().unwrap() {
         let value = example.value.get("output").unwrap().to_owned();
         let result = PullResult::from_json(value.clone()).unwrap();
-        assert_eq!(result.to_json().value().text(), value.text());
+        assert_eq!(result.value().value().text(), value.text());
     }
 }
 #[test]
@@ -65,7 +65,7 @@ fn opaque_output_fields_and_owned_children_keep_exact_values_after_parent_drop()
             r#"{"additions":{"x-note":{"n":1e999999}},"report":{"exhaustive":true,"added":[],"application":{"wide":9007199254740993,"units":"\ud800"},"existing":[{"source":"s","status":"stale","change":"dangerous","proposal":{"data":null,"application":{"n":9007199254740993}}}]},"app":false}"#,
         );
         let result = PullResult::from_json(value.clone()).unwrap();
-        assert_eq!(result.to_json().value().text(), value.text());
+        assert_eq!(result.value().value().text(), value.text());
         result.report()
     };
     assert_eq!(
@@ -328,7 +328,7 @@ fn schema_proposal_uses_is_only_retained_unknown_metadata() {
         let value = json(&format!(r#"{{"schema":false,"uses":{uses}}}"#));
         let proposal = SchemaProposal::from_json(value.clone()).unwrap();
         assert_eq!(proposal.schema().view().as_bool(), Some(false));
-        assert_eq!(proposal.to_json().value().text(), value.text());
+        assert_eq!(proposal.value().value().text(), value.text());
         let entry = ExistingEntry::from_json(json(&format!(
             r#"{{"schema":"S","status":"stale","change":"dangerous","proposal":{}}}"#,
             value.text()
@@ -337,7 +337,7 @@ fn schema_proposal_uses_is_only_retained_unknown_metadata() {
         let Proposal::Schema(proposal) = entry.proposal().unwrap() else {
             panic!("schema proposal")
         };
-        assert_eq!(proposal.to_json().value().text(), value.text());
+        assert_eq!(proposal.value().value().text(), value.text());
     }
 }
 

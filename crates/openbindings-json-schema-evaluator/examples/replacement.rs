@@ -57,7 +57,9 @@ fn candidate(
     let Some(proof) = validation.conformant() else {
         return Err(LoadFailure::Conformance(validation.report().clone()));
     };
-    let report = proof.references_with_resources(resources.clone(), control);
+    let report = proof
+        .document()
+        .references_with_resources(resources.clone(), control);
     if !report.complete
         || report
             .references
@@ -125,11 +127,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         let retained = find
             .input()
             .expect("fixture declares an input")
-            .prepare(
-                &evaluator,
-                &resources,
-                &openbindings::PreparationLimits::default(),
-            )
+            .prepare(&evaluator, &resources)
             .expect("fixture must have a prepared input");
         let lookup = proof
             .resolve_operation("lookup")
@@ -138,11 +136,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             lookup
                 .output()
                 .expect("fixture declares an output")
-                .prepare(
-                    &evaluator,
-                    &resources,
-                    &openbindings::PreparationLimits::default()
-                )
+                .prepare(&evaluator, &resources)
                 .is_ok()
         ); // each direction prepares independently
         // The prepared owner survives the document, resources and evaluator.

@@ -55,6 +55,10 @@ response sends schema facts. An app with a private contract should forward only
 
 ## Bring your own
 
+The default evaluator is built on the SDK's internal crates as shared
+implementation. Third-party evaluators use the public `SchemaEvaluator` contract;
+`openbindings-schema-evaluator-test-support` qualifies that public contract.
+
 Implement `SchemaEvaluator::prepare` and return an owned `SchemaValidator`.
 Pass a borrowed implementation, and an immutable `ExternalSchemas` when resources are
 supplied, to a conformant operation's `Schema::prepare`. Implement

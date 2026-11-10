@@ -31,11 +31,7 @@ fn prepare(
         .expect("declared operation")
         .input()
         .expect("declared input")
-        .prepare(
-            &DefaultEvaluator::new(),
-            resources,
-            &openbindings::PreparationLimits::default(),
-        )
+        .prepare(&DefaultEvaluator::new(), resources)
 }
 fn ready(
     document: &Document,
@@ -125,7 +121,6 @@ fn draft_metadata_and_semantic_setup_partitions_remain_distinct() {
     let Ok(contract) = operation.input().expect("declared input").prepare(
         &DefaultEvaluator::new(),
         &openbindings::ExternalSchemas::default(),
-        &openbindings::PreparationLimits::default(),
     ) else {
         panic!()
     };
@@ -420,7 +415,6 @@ fn external_evaluator_construction_and_matching_stay_supported() {
     let state = operation.input().expect("declared input").prepare(
         &Custom(calls.clone()),
         &openbindings::ExternalSchemas::default(),
-        &openbindings::PreparationLimits::default(),
     );
     match state {
         Ok(contract) => assert_eq!(

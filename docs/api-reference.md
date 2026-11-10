@@ -46,6 +46,7 @@ object member names. Token spelling is preserved independently of value equality
 | --- | --- |
 | Rust `Document::parse`, TypeScript `Document.parse` | Admit exact JSON and retain an immutable snapshot, including nonconformant drafts. Syntax, encoding and admission failures are separate from document findings. |
 | Rust `Document::new`, TypeScript `Document.create` | Create a draft declaring the supported specification version and an empty operations map. |
+| `Document::retained_bytes` / `Document.retainedBytes()` | Estimate current shared snapshot heap storage, including source, nodes and built caches. Charge clones and proofs once; excludes allocator overhead and Wasm memory growth. Later lookups can grow the estimate; see definition-level docs for cache growth. |
 | `Document::value` / `Document.value()` | Inspect original JSON, including extension members, original number tokens and duplicate occurrences. TypeScript acquires a disposable owner. |
 | `set`, `remove`, `edit` | Return a new immutable snapshot. An atomic batch addresses the original revision and preserves untouched bytes. Failure leaves all earlier owners unchanged. |
 | `Document::validate` / `Document.validate()` | Assess all applicable OBI rules. Only established conformance creates a `ConformantDocument`. Unsupported declared versions have a separate refusal. |
@@ -56,13 +57,19 @@ object member names. Token spelling is preserved independently of value equality
 `ConformantDocument` is privately constructed and has no editing methods. Its domain
 reads need no repeated OBI assessment. Raw document inspection provides evidence for
 repair without exposing partly interpreted canonical entries. Diagnostic
-`references()` is available on both states: it acquires no resources and proves
-neither document conformance nor value decidability.
+`Document::references()` inspects a draft; use `proof.document().references()`
+from a proof. It acquires no resources and proves neither document conformance
+nor value decidability. Supplied resources use `references_with_resources` on
+the same document snapshot.
 
 `Evidence` is `Met`, `Violated`, `Inconclusive` or `NotApplicable`. A document's
 `Conformance` is conformant, nonconformant or undetermined. Findings explain rule
 evidence; omitted findings do not erase an established violation. Use rule IDs,
 codes and evidence for logic, and treat explanatory messages as display text.
+
+Plain Rust records whose fields are public data expose `code`
+and `kind` as fields. Enums and types whose private fields protect an invariant
+expose `code()` and `kind()` methods.
 
 ### Document finding codes
 
@@ -138,16 +145,20 @@ disposal is not a promise that process RSS or Wasm capacity shrinks.
 ## Schemas and value results
 
 A `Schema` owns its original location and conformant context. Rust
-`schema.prepare(&evaluator, &external, &limits)` returns
-`Result<PreparedSchema<E::Validator>, PreparationFailure>`. TypeScript
+`schema.prepare(&evaluator, &external)` uses default preparation limits and no
+cancellation and returns
+`Result<PreparedSchema<E::Validator>, PreparationFailure>`. Use
+`prepare_with_control(&evaluator, &external, &limits, control)` for explicit limits
+or cancellation. TypeScript
 `schema.prepare({ resources, limits, signal })` returns a `ready` branch owning a
 `PreparedSchema`, or a `refused` branch with a `PreparationFailure`. Preparation
 failure judges no instance. A missing operation or absent schema is found before
 preparation and is not a preparation failure.
 
 `evaluate` is the cheap value check; `explain` requests diagnostics for the same
-semantic result. Rust `evaluate_json` and TypeScript `evaluateJson` first admit exact
-JSON text or bytes. TypeScript `evaluate` accepts checked ordinary JSON or an
+semantic result. In Rust, first parse exact JSON text or bytes with
+`JsonValue::parse` or `parse_with_limits`, then call `evaluate(&value)` or
+`explain(&value)`. TypeScript `evaluateJson` admits and evaluates exact JSON text or bytes. TypeScript `evaluate` accepts checked ordinary JSON or an
 `ExactJson`; a string there is a JSON string value, not serialized JSON text.
 
 | Value result | Meaning |
@@ -294,3 +305,17 @@ redirect and deadline policy; see [HTTP discovery](../crates/openbindings-http-d
 Source/kind data and binding selection remain outside core document interpretation.
 
 See [maintainer verification](maintainers.md) for the complete gate sequence.
+
+Parse failures expose `InputError::line()` and `byte_column()` in Rust and
+`InputFailure.error.line` and `byteColumn` in TypeScript. Lines and UTF-8 byte
+columns are one-based. They are computed once on failure; nothing changes on success.
+
+Invocation preflight returns `Option<ContextChallenge>`: `None` means no prediction,
+not guaranteed success. `InvocationError::binding_not_found()` constructs the
+binding interface's missing-binding error. Invocation carriers decode through
+`from_json(&JsonValue)`; retain a borrowed frame with `to_owned()` first, a
+reference-count clone. Exact object carriers expose `value()` for borrowing;
+clone it explicitly when ownership is needed. Carrier `to_json` means bounded
+encoding: `InvocationError`, `BindingRequest` and `OperationRequest` retain those
+encoders. Schema comparison's `identical` returns `Result<bool,
+ComparisonFailure>`; a failure is separate from a negative comparison.

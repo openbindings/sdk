@@ -39,7 +39,7 @@ fn encoded_plain_names_resolve_in_each_original_resource() {
             let proof = validation
                 .conformant()
                 .expect("reference spellings are conformant");
-            let report = proof.references_with_resources(
+            let report = proof.document().references_with_resources(
                 supplied.clone(),
                 &std::sync::atomic::AtomicBool::new(false),
             );
@@ -49,11 +49,10 @@ fn encoded_plain_names_resolve_in_each_original_resource() {
                 .find(|r| r.location.pointer == "/operations/op/input/$ref")
                 .unwrap();
             let operation = proof.resolve_operation("op").expect("declared operation");
-            let prepared = operation.input().expect("declared input").prepare(
-                &DefaultEvaluator::new(),
-                &supplied,
-                &openbindings::PreparationLimits::default(),
-            );
+            let prepared = operation
+                .input()
+                .expect("declared input")
+                .prepare(&DefaultEvaluator::new(), &supplied);
             assert!(matches!(
                 reference.resolution,
                 ReferenceResolution::Located { .. }

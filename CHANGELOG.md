@@ -1,5 +1,53 @@
 # Changelog
 
+## 2026-11-09 public API consensus batch (unreleased)
+
+### Changed
+
+- Use default preparation limits and no cancellation in Rust
+  `Schema::prepare(&evaluator, &external)`; use `prepare_with_control` for explicit
+  limits or cancellation. Keep the evaluator trait and invoker unchanged.
+- Document fail-closed routing for providers without routing knowledge, the
+  diagnostic field/accessor rule and bounded carrier encoding.
+- Add `CheckRejection::value()` to borrow its exact admitted object.
+
+- Lift `InvocationSupport` from `DefaultOperationInvoker` construction,
+  configuration and schema preparation; keep it on invocation and preflight.
+- Add `InvocationError::binding_not_found()` and use it in adapters and guides.
+- Replace `PreflightOutcome` with `Option<ContextChallenge>`; `None` means no
+  prediction. Keep required `handle_preflight` and document its one-line body.
+- Show fixed supported versions and preparation-failure variant names/origin
+  presence in `Debug`, while keeping document and caller payloads hidden.
+- Add Rust parse-error `line()`/`byte_column()` and TypeScript `line`/`byteColumn`,
+  computed only on failure.
+- Hide core's internal schema-failure conversion and remove unreachable
+  `invalid-schema` classification arms. Document the default evaluator's shared
+  internal implementation and third-party public evaluator contract.
+- Return `Result<bool, ComparisonFailure>` from schema identity comparison.
+- Add `Document::retained_bytes()` and TypeScript `Document.retainedBytes()` to
+  estimate current shared snapshot storage, including built caches, on demand.
+  Exclude allocator overhead and Wasm memory growth; document later cache growth.
+
+### Removed
+
+- Remove Rust `PreparedSchema::evaluate_json` and `evaluate_json_with_control`;
+  parse with `JsonValue::parse` or `parse_with_limits`, then `evaluate` or `explain`.
+  TypeScript `evaluateJson` retains its admission limits, messages and behavior.
+- Remove `ConformantDocument::references` and `references_with_resources`; call
+  them through `proof.document()`.
+- Make `VersionRefusal::new` crate-internal; get refusals from validation and
+  classify standalone declarations with `check_version`.
+- Remove clone-only `to_json` from `ContextChallenge`, kind-description and
+  source-pull carriers and `CheckRejection`; borrow `value()` or clone explicitly.
+  Keep bounded invocation error and request encoders.
+
+- Remove `PreflightOutcome` and schema comparison's `Identity` enum.
+- Remove `PreparedSchema::into_validator`, `SchemaInput::standalone` and
+  `ExternalSchemas::with`; use the evaluator contract and explicit input/resource constructors.
+- Remove public invocation-carrier `from_json_ref` decoders; use `from_json(&JsonValue)`
+  and retain a borrowed frame with `to_owned()` when needed.
+
+
 ## 2026-11-08 newcomer docs and omitted-entry accessors (unreleased)
 
 - Fix failure diagnostics, Node worker and disposal examples, and discovery client setup in the newcomer docs.

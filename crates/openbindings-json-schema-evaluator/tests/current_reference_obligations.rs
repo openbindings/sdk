@@ -149,11 +149,7 @@ fn check_values(cases: Vec<Case>) {
             )
             .unwrap();
         let schema = proof.resolve_operation("op").unwrap().input().unwrap();
-        match schema.prepare(
-            &DefaultEvaluator::with_limits(case.limits),
-            &external,
-            &PreparationLimits::default(),
-        ) {
+        match schema.prepare(&DefaultEvaluator::with_limits(case.limits), &external) {
             Ok(prepared) => {
                 let value =
                     JsonValue::parse(case.value_text.unwrap_or_else(|| case.value.to_string()))

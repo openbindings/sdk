@@ -60,3 +60,15 @@ export async function referenceExample(wasmBytes: Uint8Array, source: string) {
   void missingAdmission;
   return { exactOutcome, ordinaryOutcome, sourceBytes: copy };
 }
+
+// Public snapshot accounting and parser coordinates are first-class facade types.
+function snapshotBytes(document: import("../dist/index.js").Document): number {
+  return document.retainedBytes();
+}
+function inputCoordinates(
+  failure: import("../dist/index.js").InputFailure,
+): [number, number] {
+  return [failure.error.line, failure.error.byteColumn];
+}
+void snapshotBytes;
+void inputCoordinates;

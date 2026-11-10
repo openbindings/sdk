@@ -23,7 +23,6 @@ fn prepare(schema: &str, steps: Option<usize>) -> PreparedSchema<DefaultValidato
             ..Limits::default()
         }),
         &ExternalSchemas::default(),
-        &PreparationLimits::default(),
     )
     .unwrap()
 }

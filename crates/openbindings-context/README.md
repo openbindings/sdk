@@ -27,3 +27,7 @@ Clones share immutable JSON storage. Debug and error formatting omit producer an
 caller data. Acquiring context, deciding what to disclose, combining sources,
 storage and retry policy belong to the application. This package performs no I/O
 and depends only on the core's exact JSON API. It adds no OBI document fields.
+
+Borrow an admitted carrier's exact object with `value()`; use `value().clone()`
+when an owned object is needed. On interface carriers, `to_json` means bounded
+encoding, as on invocation errors and requests.

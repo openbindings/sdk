@@ -13,11 +13,11 @@ fn prepare(
         .expect("conformant document");
     let evaluator = DefaultEvaluator::new();
     let operation = doc.resolve_operation("op").expect("declared operation");
-    let Ok(contract) = operation.input().expect("declared input").prepare(
-        &evaluator,
-        &resources,
-        &openbindings::PreparationLimits::default(),
-    ) else {
+    let Ok(contract) = operation
+        .input()
+        .expect("declared input")
+        .prepare(&evaluator, &resources)
+    else {
         panic!("not ready")
     };
     contract

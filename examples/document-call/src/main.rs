@@ -1,7 +1,7 @@
 use openbindings::{Detail, Document, ExternalSchemas, JsonValue, ValueOutcome};
 use openbindings_invocation::{
-    BindingInvoker, BindingRequest, CancellationToken, DefaultOperationInvoker, InvocationError,
-    InvocationSupport, OutputEvent, PreflightOutcome, ProviderIo,
+    BindingInvoker, BindingRequest, CancellationToken, ContextChallenge, DefaultOperationInvoker,
+    InvocationError, InvocationSupport, OutputEvent, ProviderIo,
     operation::{BindingChoice, OperationPreparationFailure, ValidationEvidence},
 };
 use openbindings_json_schema_evaluator::DefaultEvaluator;
@@ -25,7 +25,7 @@ const DOCUMENT: &str = r##"{
 struct Echo;
 impl BindingInvoker for Echo {
     type Invoke<'a> = Pin<Box<dyn Future<Output = Result<(), InvocationError>> + 'a>>;
-    type Preflight<'a> = Ready<Result<PreflightOutcome, InvocationError>>;
+    type Preflight<'a> = Ready<Result<Option<ContextChallenge>, InvocationError>>;
 
     fn handle_invoke<'a>(
         &'a self,
@@ -37,7 +37,7 @@ impl BindingInvoker for Echo {
             let binding = request
                 .interface
                 .binding(&request.binding)
-                .ok_or_else(|| InvocationError::new("ERR_BINDING_NOT_FOUND", None).unwrap())?;
+                .ok_or_else(InvocationError::binding_not_found)?;
             let source = binding.source();
             if source.kind() != "example.echo@1"
                 || source.data().is_some()
@@ -56,7 +56,7 @@ impl BindingInvoker for Echo {
         _: BindingRequest,
         _: CancellationToken,
     ) -> Self::Preflight<'a> {
-        ready(Ok(PreflightOutcome::NoPrediction)) // No invocation or input consumption.
+        ready(Ok(None)) // No invocation or input consumption.
     }
 }
 impl InvocationSupport for Echo {

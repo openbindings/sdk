@@ -51,11 +51,7 @@ fn prepare_op(
         .expect("declared operation")
         .input()
         .expect("declared input")
-        .prepare(
-            evaluator,
-            &ExternalSchemas::default(),
-            &PreparationLimits::default(),
-        )
+        .prepare(evaluator, &ExternalSchemas::default())
 }
 fn prepare(
     schema: &str,
@@ -184,11 +180,7 @@ fn explicit_preparation_and_retained_validation_have_caller_owned_lifetimes() {
             .expect("declared operation")
             .input()
             .expect("declared input")
-            .prepare(
-                &evaluator,
-                &openbindings::ExternalSchemas::default(),
-                &openbindings::PreparationLimits::default(),
-            )
+            .prepare(&evaluator, &openbindings::ExternalSchemas::default())
     };
     let retained = prepare_input("a");
     drop(prepare_input("a"));
@@ -278,23 +270,11 @@ fn same_uri_resources_are_isolated_and_precancellation_does_not_poison() {
         ));
     }
     assert!(matches!(
-        contract
-            .prepare(
-                &evaluator,
-                &integer,
-                &openbindings::PreparationLimits::default()
-            )
-            .explain(&value("7")),
+        contract.prepare(&evaluator, &integer).explain(&value("7")),
         ValueOutcome::Satisfies
     ));
     assert!(matches!(
-        contract
-            .prepare(
-                &evaluator,
-                &string,
-                &openbindings::PreparationLimits::default()
-            )
-            .explain(&value("7")),
+        contract.prepare(&evaluator, &string).explain(&value("7")),
         ValueOutcome::Fails { .. }
     ));
     std::thread::scope(|scope| {
@@ -305,13 +285,7 @@ fn same_uri_resources_are_isolated_and_precancellation_does_not_poison() {
             scope.spawn(move || {
                 for _ in 0..100 {
                     assert!(matches!(
-                        contract
-                            .prepare(
-                                evaluator,
-                                &resources,
-                                &openbindings::PreparationLimits::default()
-                            )
-                            .explain(&value("7")),
+                        contract.prepare(evaluator, &resources).explain(&value("7")),
                         ValueOutcome::Satisfies
                     ));
                 }
@@ -363,21 +337,13 @@ fn cancellation_during_preparation_allows_independent_retries() {
     ));
     assert!(matches!(
         contract
-            .prepare(
-                &evaluator,
-                &openbindings::ExternalSchemas::default(),
-                &openbindings::PreparationLimits::default()
-            )
+            .prepare(&evaluator, &openbindings::ExternalSchemas::default())
             .evaluate(&value("1")),
         ValueOutcome::Satisfies
     ));
     assert!(matches!(
         contract
-            .prepare(
-                &evaluator,
-                &openbindings::ExternalSchemas::default(),
-                &openbindings::PreparationLimits::default()
-            )
+            .prepare(&evaluator, &openbindings::ExternalSchemas::default())
             .evaluate(&value("2")),
         ValueOutcome::Satisfies
     ));
@@ -657,11 +623,7 @@ fn preparation_separates_setup_from_value_and_keeps_ready_healthy() {
             .expect("declared operation")
             .input()
             .expect("declared input")
-            .prepare(
-                &evaluator,
-                &openbindings::ExternalSchemas::default(),
-                &openbindings::PreparationLimits::default(),
-            )
+            .prepare(&evaluator, &openbindings::ExternalSchemas::default())
     };
     let Ok(ready) = prepare_input("yes") else {
         panic!()

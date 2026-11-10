@@ -28,11 +28,7 @@ fn prepare_within(
         .expect("declared operation")
         .input()
         .expect("declared input")
-        .prepare(
-            &DefaultEvaluator::with_limits(limits),
-            resources,
-            &openbindings::PreparationLimits::default(),
-        )
+        .prepare(&DefaultEvaluator::with_limits(limits), resources)
 }
 fn prepare(
     text: &str,
@@ -276,7 +272,10 @@ fn resource_diamonds_reuse_completed_applications() {
         },
     )
     .unwrap();
-    expects_limit(capped.evaluate_json("7").unwrap(), "evaluation-work-limit");
+    expects_limit(
+        capped.evaluate(&JsonValue::parse("7").unwrap()),
+        "evaluation-work-limit",
+    );
 }
 
 #[test]
@@ -291,11 +290,11 @@ fn default_resource_diamonds_at_hostile_depths_finish_without_a_work_cap() {
             ] {
                 let contract = prepare(&diamonds_ending(levels, leaf)).unwrap();
                 assert!(matches!(
-                    contract.evaluate_json(yes).unwrap(),
+                    contract.evaluate(&JsonValue::parse(yes).unwrap()),
                     ValueOutcome::Satisfies
                 ));
                 assert!(matches!(
-                    contract.evaluate_json(no).unwrap(),
+                    contract.evaluate(&JsonValue::parse(no).unwrap()),
                     ValueOutcome::Fails { .. }
                 ));
             }
@@ -428,7 +427,7 @@ fn dynamic_scope_is_prepared_once_and_runtime_work_remains_bounded() {
     .unwrap();
     for value in ["7", "\"7\""] {
         expects_limit(
-            capped.evaluate_json(value).unwrap(),
+            capped.evaluate(&JsonValue::parse(value).unwrap()),
             "evaluation-work-limit",
         );
     }
@@ -462,7 +461,7 @@ fn dynamic_choice_proofs_respect_evaluation_reservations_and_allow_healthy_retri
     )
     .unwrap();
     expects_limit(
-        contract.evaluate_json("7").unwrap(),
+        contract.evaluate(&JsonValue::parse("7").unwrap()),
         "semantic-analysis-memory-limit",
     );
     decides(&prepare(&chain(3)).unwrap());
@@ -481,8 +480,7 @@ fn the_program_storage_boundary_names_the_actual_proof_budget() {
             },
         )
         .unwrap()
-        .evaluate_json("7")
-        .unwrap()
+        .evaluate(&JsonValue::parse("7").unwrap())
     };
     let mut low = 0;
     let mut high = Limits::default().evaluation_sdk_reservation_bytes;
@@ -609,7 +607,6 @@ fn prepare_admitted(
         .prepare(
             &DefaultEvaluator::new(),
             &openbindings::ExternalSchemas::default(),
-            &openbindings::PreparationLimits::default(),
         )
 }
 
@@ -669,7 +666,7 @@ fn admitted_large_documents_and_resources_keep_required_capabilities() {
     let small = document(&[], r#"{"$ref":"https://e.test/a"}"#);
     let contract = prepare_with(&small, &supplied).unwrap();
     assert!(matches!(
-        contract.evaluate_json(r#""x""#).unwrap(),
+        contract.evaluate(&JsonValue::parse(r#""x""#).unwrap()),
         ValueOutcome::Satisfies
     ));
     // A document admitted past the default byte limit prepares a contract whose
@@ -719,7 +716,7 @@ fn a_schema_nested_more_than_256_levels_deep_refuses_whatever_the_limits() {
     for schema in [not, properties] {
         let deepest = prepare(&document(&[], &schema(256))).unwrap();
         assert!(matches!(
-            deepest.evaluate_json("{}").unwrap(),
+            deepest.evaluate(&JsonValue::parse("{}").unwrap()),
             ValueOutcome::Satisfies | ValueOutcome::Fails { .. }
         ));
         for limits in [Limits::default(), raised.clone()] {

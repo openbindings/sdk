@@ -50,16 +50,23 @@ fn local_nonclone_validator_owns_only_what_it_retains() {
         let evaluator = LocalEvaluator(calls.clone());
         let schema = selected();
         let external = ExternalSchemas::default();
-        schema
-            .prepare(&evaluator, &external, &PreparationLimits::default())
+        evaluator
+            .prepare(
+                EvaluationRequest {
+                    schema: &schema,
+                    external_schemas: &external,
+                },
+                &PreparationLimits::default(),
+                &AtomicBool::new(false),
+            )
             .unwrap()
     };
     assert!(matches!(
-        prepared.evaluate_json(b"null").unwrap(),
+        prepared.evaluate(&JsonValue::null(), Detail::Outcome, &AtomicBool::new(false)),
         ValueOutcome::Satisfies
     ));
     assert_eq!(calls.get(), 1);
-    let validator: LocalValidator = prepared.into_validator();
+    let validator: LocalValidator = prepared;
     assert_eq!(
         validator.root.pointer().as_str(),
         Some("/operations/run/input")
@@ -88,11 +95,7 @@ impl SchemaValidator for SendValidator {
 fn owned_send_validator_does_not_require_sync_or_arc() {
     fn assert_send<T: Send>(_: &T) {}
     let prepared = selected()
-        .prepare(
-            &SendEvaluator,
-            &ExternalSchemas::default(),
-            &PreparationLimits::default(),
-        )
+        .prepare(&SendEvaluator, &ExternalSchemas::default())
         .unwrap();
     assert_send(&prepared);
     std::thread::spawn(move || {
@@ -169,7 +172,16 @@ fn preparation_cancellation_never_returns_or_leaks_a_ready_validator() {
     );
     assert_eq!(calls.get(), 1);
     assert_eq!(drops.get(), 1);
-    assert!(schema.prepare(&SendEvaluator, &external, &limits).is_ok());
+    assert!(
+        schema
+            .prepare_with_control(
+                &SendEvaluator,
+                &external,
+                &limits,
+                &std::sync::atomic::AtomicBool::new(false)
+            )
+            .is_ok()
+    );
 }
 struct ResolveOnly;
 impl SchemaEvaluator for ResolveOnly {
@@ -190,15 +202,12 @@ impl SchemaEvaluator for ResolveOnly {
 }
 #[test]
 fn local_reference_defect_is_a_preparation_cause_not_an_instance_verdict() {
-    let external = ExternalSchemas::default()
-        .with(
-            "https://example.test/external",
-            JsonValue::parse("{}").unwrap(),
-        )
-        .unwrap();
-    let error = selected()
-        .prepare(&ResolveOnly, &external, &PreparationLimits::default())
-        .unwrap_err();
+    let external = ExternalSchemas::new([openbindings::ExternalSchema {
+        uri: ("https://example.test/external").into(),
+        document: JsonValue::parse("{}").unwrap(),
+    }])
+    .unwrap();
+    let error = selected().prepare(&ResolveOnly, &external).unwrap_err();
     assert_eq!(
         error.kind,
         PreparationFailureKind::Resolution {
@@ -208,25 +217,5 @@ fn local_reference_defect_is_a_preparation_cause_not_an_instance_verdict() {
     assert_eq!(
         error.origin.unwrap().source_uri.as_deref(),
         Some("https://example.test/external")
-    );
-}
-
-#[test]
-fn exact_ingress_precedes_controlled_evaluation() {
-    let prepared = selected()
-        .prepare(
-            &SendEvaluator,
-            &ExternalSchemas::default(),
-            &PreparationLimits::default(),
-        )
-        .unwrap();
-    let cancelled = AtomicBool::new(true);
-    assert!(
-        matches!(prepared.evaluate_json_with_control(b"null", &cancelled).unwrap(), ValueOutcome::NoVerdict { detail } if detail.reason == NoVerdictReason::Cancelled)
-    );
-    assert!(
-        prepared
-            .evaluate_json_with_control(b"{", &cancelled)
-            .is_err()
     );
 }

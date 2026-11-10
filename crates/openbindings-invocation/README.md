@@ -26,13 +26,13 @@ OpenBindings core **0.2** and the package version.
 ```rust
 use openbindings::{Document, JsonValue};
 use openbindings_invocation::{BindingInvokerExt, BindingInvoker, BindingRequest,
-    CancellationToken, InvocationError, OutputEvent, PreflightOutcome, ProviderIo};
+    CancellationToken, ContextChallenge, InvocationError, OutputEvent, ProviderIo};
 use std::{future::{Future, Ready, ready}, pin::Pin};
 
 struct Echo;
 impl BindingInvoker for Echo {
     type Invoke<'a> = Pin<Box<dyn Future<Output=Result<(), InvocationError>> + Send + 'a>>;
-    type Preflight<'a> = Ready<Result<PreflightOutcome, InvocationError>>;
+    type Preflight<'a> = Ready<Result<Option<ContextChallenge>, InvocationError>>;
     fn handle_invoke<'a>(&'a self, request: BindingRequest, mut io: ProviderIo,
         _: CancellationToken) -> Self::Invoke<'a> {
         Box::pin(async move {
@@ -44,7 +44,7 @@ impl BindingInvoker for Echo {
         })
     }
     fn handle_preflight<'a>(&'a self, _: BindingRequest, _: CancellationToken) -> Self::Preflight<'a> {
-        ready(Ok(PreflightOutcome::NoPrediction))
+        ready(Ok(None))
     }
 }
 # async fn example() -> Result<(), Box<dyn std::error::Error>> {
@@ -115,10 +115,10 @@ after the first usable choice. An explicit binding bypasses support selection.
 No preference, deprecation flag, key order or registration order silently chooses
 among multiple candidates. This routing facet is not a portable kind-description
 operation. Direct `BindingInvokerExt` calls need only `BindingInvoker` and do
-not validate operation schemas. `DefaultOperationInvoker` currently requires
-`BindingInvoker + InvocationSupport` for construction, invocation, preflight and
-preparation, even with an explicit binding; `PreparedOperation::invoke` also
-requires both traits.
+not validate operation schemas. `DefaultOperationInvoker` construction,
+configuration and `prepare` need only `BindingInvoker`. Its `invoke`, `preflight`
+and `OperationInvoker` implementation need `BindingInvoker + InvocationSupport`,
+even with an explicit binding; `PreparedOperation::invoke` also requires both traits.
 
 `DefaultOperationInvoker` requires an explicit `SchemaEvaluator` and `ExternalSchemas`.
 Lazy invocation prepares each declared direction when its first value reaches the
@@ -134,7 +134,8 @@ portable validation errors have code only.
 Applications can route to several binding invokers by implementing the two
 `handle_*` methods and forwarding the same `ProviderIo` to the chosen adapter.
 Use the child's `handle_*` methods there so a second invocation is not created.
-Implement `InvocationSupport` when supplying that router to `DefaultOperationInvoker`.
+Implement `InvocationSupport` when invoking or preflighting through that router
+with `DefaultOperationInvoker`.
 The SDK provides no aggregate or registry.
 
 Third parties can implement `OperationInvoker` directly. `Invocation::new` builds

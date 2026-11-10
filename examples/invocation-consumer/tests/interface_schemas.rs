@@ -101,7 +101,7 @@ impl InvocationSupport for Audited {
 }
 impl BindingInvoker for Audited {
     type Invoke<'a> = Pin<Box<dyn Future<Output = Result<(), InvocationError>> + Send + 'a>>;
-    type Preflight<'a> = Ready<Result<PreflightOutcome, InvocationError>>;
+    type Preflight<'a> = Ready<Result<Option<ContextChallenge>, InvocationError>>;
     fn handle_invoke<'a>(
         &'a self,
         r: BindingRequest,
@@ -165,7 +165,7 @@ async fn operation_forwards_exact_challenge_and_context_without_implicit_preflig
         .await
         .unwrap()
     {
-        PreflightOutcome::Challenge(c) => c,
+        Some(c) => c,
         _ => panic!("challenge"),
     };
     assert_eq!(p.catalog.values(), 0);
@@ -299,7 +299,7 @@ async fn embedded_kind_pull_adopt_and_binding_echo_keeps_exact_payload() {
 struct Late;
 impl BindingInvoker for Late {
     type Invoke<'a> = Pin<Box<dyn Future<Output = Result<(), InvocationError>> + 'a>>;
-    type Preflight<'a> = std::future::Ready<Result<PreflightOutcome, InvocationError>>;
+    type Preflight<'a> = std::future::Ready<Result<Option<ContextChallenge>, InvocationError>>;
     fn handle_invoke<'a>(
         &'a self,
         _: BindingRequest,
@@ -321,7 +321,7 @@ impl BindingInvoker for Late {
         _: BindingRequest,
         _: CancellationToken,
     ) -> Self::Preflight<'a> {
-        std::future::ready(Ok(PreflightOutcome::NoPrediction))
+        std::future::ready(Ok(None))
     }
 }
 impl InvocationSupport for Late {

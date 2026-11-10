@@ -24,7 +24,6 @@ fn prepare(
         .prepare(
             &DefaultEvaluator::with_limits(limits),
             &ExternalSchemas::default(),
-            &PreparationLimits::default(),
         )
         .unwrap()
 }
@@ -58,7 +57,7 @@ fn same_original_effect_and_equal_subjects_reuse_one_variable() {
     let repeated = json!({"$defs":{"p":{"pattern":"["}},"allOf":(0..128).map(|_|json!({"$ref":"#/operations/op/input/$defs/p"})).collect::<Vec<_>>()});
     let prepared = prepare(repeated, Limits::default());
     assert!(matches!(
-        prepared.evaluate_json(r#""x""#).unwrap(),
+        prepared.evaluate(&JsonValue::parse(r#""x""#).unwrap()),
         ValueOutcome::Undefined { .. }
     ));
     let items = prepare(
@@ -66,14 +65,12 @@ fn same_original_effect_and_equal_subjects_reuse_one_variable() {
         Limits::default(),
     );
     assert!(matches!(
-        items
-            .evaluate_json(json!(vec!["x"; 128]).to_string())
-            .unwrap(),
+        items.evaluate(&JsonValue::parse(json!(vec!["x"; 128]).to_string()).unwrap()),
         ValueOutcome::Undefined { .. }
     ));
     let distinct = (0..65).map(|n| format!("x{n}")).collect::<Vec<_>>();
     assert!(
-        matches!(items.evaluate_json(json!(distinct).to_string()).unwrap(), ValueOutcome::NoVerdict { detail } if detail.code == "semantic-effect-limit")
+        matches!(items.evaluate(&JsonValue::parse(json!(distinct).to_string()).unwrap()), ValueOutcome::NoVerdict { detail } if detail.code == "semantic-effect-limit")
     );
 }
 #[test]
@@ -96,13 +93,11 @@ fn actual_work_and_storage_exhaustion_precede_the_effect_ceiling() {
     ] {
         let prepared = prepare(effects(65), limits);
         assert!(
-            matches!(prepared.evaluate_json(r#""x""#).unwrap(), ValueOutcome::NoVerdict { detail } if detail.reason == NoVerdictReason::LimitExceeded && detail.code == code)
+            matches!(prepared.evaluate(&JsonValue::parse(r#""x""#).unwrap()), ValueOutcome::NoVerdict { detail } if detail.reason == NoVerdictReason::LimitExceeded && detail.code == code)
         );
     }
     assert!(matches!(
-        prepare(effects(64), Limits::default())
-            .evaluate_json(r#""x""#)
-            .unwrap(),
+        prepare(effects(64), Limits::default()).evaluate(&JsonValue::parse(r#""x""#).unwrap()),
         ValueOutcome::Undefined { .. }
     ));
 }
@@ -119,11 +114,7 @@ fn selected_meta_evaluation_uses_the_same_effect_profile() {
             ExternalSchema { uri:RESOURCE.into(), document:JsonValue::parse(json!({"$schema":META,"title":"x"}).to_string()).unwrap() },
         ]).unwrap();
         let failure = schema(json!({"$ref":RESOURCE}))
-            .prepare(
-                &DefaultEvaluator::new(),
-                &resources,
-                &PreparationLimits::default(),
-            )
+            .prepare(&DefaultEvaluator::new(), &resources)
             .unwrap_err();
         let expected = if count <= 64 {
             PreparationFailureKind::UnsupportedCapability {

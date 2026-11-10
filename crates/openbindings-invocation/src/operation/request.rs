@@ -95,6 +95,9 @@ impl OperationRequest {
         }
     }
     /// Admit an exact closed opening payload and prove document conformance.
+    /// For a borrowed frame, pass `&frame.to_owned()`; this retains its shared
+    /// exact storage with a reference-count clone.
+    ///
     /// # Errors
     /// Rejects malformed/ambiguous outer fields, addressing or document admission.
     pub fn from_json(value: &JsonValue) -> Result<Self, BoundaryFailure> {
@@ -103,7 +106,7 @@ impl OperationRequest {
     /// Admit a borrowed exact opening payload, retaining original JSON owners.
     /// # Errors
     /// Returns the same local failures as [`Self::from_json`].
-    pub fn from_json_ref(value: JsonRef<'_>) -> Result<Self, BoundaryFailure> {
+    fn from_json_ref(value: JsonRef<'_>) -> Result<Self, BoundaryFailure> {
         object(
             value,
             &["interface", "operation", "binding", "selection", "context"],

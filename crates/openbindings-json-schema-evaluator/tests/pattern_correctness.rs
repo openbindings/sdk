@@ -28,7 +28,12 @@ fn prepare_with_limits(
         .expect("declared operation")
         .input()
         .expect("declared input")
-        .prepare(&DefaultEvaluator::new(), &resources, limits)
+        .prepare_with_control(
+            &DefaultEvaluator::new(),
+            &resources,
+            limits,
+            &std::sync::atomic::AtomicBool::new(false),
+        )
 }
 
 // Patterns with lone surrogate escapes, matched as Node's `RegExp` with the `u`

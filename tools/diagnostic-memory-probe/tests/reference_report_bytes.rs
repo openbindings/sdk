@@ -127,7 +127,9 @@ fn long_source_and_shared_long_target_stop_at_the_exact_allowance_on_both_routes
             8,
         );
         assert_report(
-            proof.references_with_resources(ExternalSchemas::default(), &control),
+            proof
+                .document()
+                .references_with_resources(ExternalSchemas::default(), &control),
             &source,
             &target,
             8,
@@ -206,7 +208,7 @@ fn unresolved_refusal_pointers_share_the_allowance() {
         validation.report().evidence
     );
     let proof = validation.conformant().unwrap();
-    for report in [document.references(), proof.references()] {
+    for report in [document.references(), proof.document().references()] {
         assert_eq!(report.references.len(), 1);
         assert_eq!(report.limitation.unwrap().code, "reference-report-bytes");
         let reference = &report.references[0];

@@ -188,7 +188,10 @@ async fn debug_redacts_caller_text_at_every_boundary() {
     let reference = format!("https://user:{SECRET}@example.invalid/schema?access_token={SECRET}");
     let parsed = Document::parse(r#"{"openbindings":"0.2.0","operations":{"op":{"input":{"properties":{"MEMBER":{"type":"string"}}}}}}"#.replace("MEMBER", SECRET)).unwrap();
     let validation = parsed.validate().unwrap();
-    let mut version = VersionRefusal::new("0.3.0").unwrap();
+    let mut version = Document::parse(r#"{"openbindings":"0.3.0","operations":{}}"#)
+        .unwrap()
+        .validate()
+        .unwrap_err();
     version.declared = SECRET.into();
     version.supported = SECRET;
     let rows = http_rows(&reference, &version, &validation).await;

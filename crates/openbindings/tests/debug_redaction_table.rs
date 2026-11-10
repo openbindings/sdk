@@ -60,11 +60,7 @@ fn preparation_refusals_redact_payloads_like_no_verdict() {
         "caller-cancelled-PROBE-BEARER-TOKEN-7391",
     ] {
         let error = contract
-            .prepare(
-                &Refuse(code),
-                &openbindings::ExternalSchemas::default(),
-                &openbindings::PreparationLimits::default(),
-            )
+            .prepare(&Refuse(code), &openbindings::ExternalSchemas::default())
             .unwrap_err();
         // Preparation failure retains its structured cause without exposing it in Debug.
         assert_eq!(
@@ -82,11 +78,7 @@ fn preparation_refusals_redact_payloads_like_no_verdict() {
     }
     rows.push(row(
         "refused preparation result",
-        &contract.prepare(
-            &Refuse(SECRET),
-            &openbindings::ExternalSchemas::default(),
-            &openbindings::PreparationLimits::default(),
-        ),
+        &contract.prepare(&Refuse(SECRET), &openbindings::ExternalSchemas::default()),
     ));
     check_rows(rows, 7);
 }
@@ -235,7 +227,10 @@ fn debug_redacts_caller_text_at_every_boundary() {
     report.evidence = BTreeMap::from([(SECRET, Evidence::Violated)]);
     report.findings = vec![finding.clone()];
     report.findings_truncated = false;
-    let mut version = VersionRefusal::new("0.3.0").unwrap();
+    let mut version = Document::parse(r#"{"openbindings":"0.3.0","operations":{}}"#)
+        .unwrap()
+        .validate()
+        .unwrap_err();
     version.declared = SECRET.into();
     version.supported = SECRET;
     let mut references = parsed_ref.references();
@@ -345,18 +340,10 @@ fn debug_redacts_caller_text_at_every_boundary() {
     let operation = validated.resolve_operation("op").unwrap();
     let contract = operation.input().unwrap();
     rows.push(row("Schema", &contract));
-    let captured = contract.prepare(
-        &capture,
-        &resources,
-        &openbindings::PreparationLimits::default(),
-    );
+    let captured = contract.prepare(&capture, &resources);
     rows.push(row("capturing preparation", &captured));
     let prepared = contract
-        .prepare(
-            &Accept,
-            &openbindings::ExternalSchemas::default(),
-            &openbindings::PreparationLimits::default(),
-        )
+        .prepare(&Accept, &openbindings::ExternalSchemas::default())
         .unwrap();
     rows.push(row("PreparedSchema", &prepared));
     let (request, environment) = capture.0.lock().unwrap().take().unwrap();
@@ -570,12 +557,57 @@ fn undefined_result_redacts_text_and_locations_but_shows_the_fixed_code() {
 fn debug_and_display_write_their_structure() {
     // Debug is structural, not empty: it names the type, the variant and the
     // fixed fields it may show. Display writes the disclosed text.
-    let refusal = VersionRefusal::new("0.3.0").unwrap();
-    assert_eq!(format!("{refusal:?}"), "VersionRefusal { .. }");
+    let refusal = Document::parse(r#"{"openbindings":"0.3.0","operations":{}}"#)
+        .unwrap()
+        .validate()
+        .unwrap_err();
+    assert_eq!(
+        format!("{refusal:?}"),
+        r#"VersionRefusal { supported: "0.2.x", .. }"#
+    );
     assert_eq!(
         refusal.to_string(),
         "declared version 0.3.0 is outside 0.2.x"
     );
+    for (kind, name) in [
+        (
+            PreparationFailureKind::Resolution {
+                cause: ResolutionFailureKind::ResourceUnavailable { uri: SECRET.into() },
+            },
+            "Resolution",
+        ),
+        (
+            PreparationFailureKind::UnsupportedCapability {
+                capability: SECRET.into(),
+            },
+            "UnsupportedCapability",
+        ),
+        (
+            PreparationFailureKind::Limit {
+                resource: SECRET.into(),
+            },
+            "Limit",
+        ),
+        (PreparationFailureKind::Cancelled, "Cancelled"),
+        (
+            PreparationFailureKind::InvalidExternalSchema,
+            "InvalidExternalSchema",
+        ),
+        (
+            PreparationFailureKind::Implementation {
+                message: SECRET.into(),
+            },
+            "Implementation",
+        ),
+    ] {
+        for origin in [None, Some(location())] {
+            let mut failure = PreparationFailure::new(kind.clone());
+            failure.origin = origin;
+            let item = row_with_fields("PreparationFailure", &failure, &[("kind", name)]);
+            assert!(item.text.iter().all(|text| text.contains(&format!("has_origin: {}", failure.origin.is_some()))));
+            check_rows(vec![item], 1);
+        }
+    }
     let text = r#"{"openbindings":"0.2.0","operations":{}}"#;
     let document = Document::parse(text).unwrap();
     assert_eq!(

@@ -14,21 +14,15 @@ pub use budget::ComparisonLimits;
 pub use error::ComparisonFailure;
 pub use input::SchemaInput;
 
-/// Identity after this profile's normalization, not general schema equivalence.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Identity {
-    /// The two normalized optional schema slots are identical.
-    Equal,
-    /// The normalized slots differ, including absent versus present.
-    Different,
-}
 /// Normalize every present input, then compare exact profile identity. A failed
 /// present input fails even opposite an absent slot. No resource is fetched.
+/// `true` means normalized identity (including two absent slots); `false` means
+/// difference. A failure provides no identity verdict.
 pub fn identical(
     left: Option<&SchemaInput>,
     right: Option<&SchemaInput>,
     limits: &ComparisonLimits,
-) -> Result<Identity, ComparisonFailure> {
+) -> Result<bool, ComparisonFailure> {
     identical_with_control(
         left,
         right,
@@ -42,7 +36,7 @@ pub fn identical_with_control(
     right: Option<&SchemaInput>,
     limits: &ComparisonLimits,
     control: &dyn openbindings::WorkControl,
-) -> Result<Identity, ComparisonFailure> {
+) -> Result<bool, ComparisonFailure> {
     let mut attempt = budget::Attempt::new(*limits, control);
     attempt.check()?;
     let left = left
@@ -57,11 +51,7 @@ pub fn identical_with_control(
         _ => false,
     };
     attempt.check()?;
-    Ok(if equal {
-        Identity::Equal
-    } else {
-        Identity::Different
-    })
+    Ok(equal)
 }
 
 /// Identifier of the independently adopted comparison profile.

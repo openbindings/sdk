@@ -34,7 +34,7 @@ This caller diagnoses an unexpected document field, corrects it and prepares inp
 It uses `serde_json` to render structured finding facts:
 
 ```rust
-use openbindings::{validate_document, ExternalSchemas, PreparationLimits};
+use openbindings::{validate_document, ExternalSchemas, JsonValue};
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -68,9 +68,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let input = operation
         .input()
         .ok_or("operation has no input schema")?
-        .prepare(&DefaultEvaluator::new(), &ExternalSchemas::default(), &PreparationLimits::default())
+        .prepare(&DefaultEvaluator::new(), &ExternalSchemas::default())
         .map_err(|failure| failure.to_string())?;
-    println!("value outcome: {:?}", input.evaluate_json("7")?);
+    let value = JsonValue::parse("7")?;
+    println!("value outcome: {:?}", input.evaluate(&value));
     // The cheap check says whether a value fails; explaining it says why.
     let seven = openbindings::JsonValue::parse(r#""seven""#)?;
     if let openbindings::ValueOutcome::Fails { problems, .. } = input.explain(&seven) {
@@ -109,15 +110,18 @@ An operation's `input()` and `output()` return optional contextual `Schema` owne
 Named schemas are available through `proof.schema(key)`. `Schema::json()` retains
 the exact declaration. Reading a schema performs no preparation or evaluation.
 
-Call `schema.prepare(&evaluator, &external_schemas, &preparation_limits)` to obtain
+Call `schema.prepare(&evaluator, &external_schemas)` to obtain
 `Result<PreparedSchema<E::Validator>, PreparationFailure>`. Resources are explicit
 and immutable; the SDK never fetches them. A preparation failure judges no value,
 and absence is a separate `None` before preparation. Core conformance requires no
-caller-supplied evaluator. See [evaluator integration](schema-evaluators.md).
+caller-supplied evaluator. `prepare` uses default `PreparationLimits` and no
+cancellation. Use `prepare_with_control(&evaluator, &external_schemas, &limits, control)`
+for explicit preparation limits or cancellation. See [evaluator integration](schema-evaluators.md).
 
-`evaluate_json(text_or_bytes)` admits exact JSON under default limits: 32 MiB,
-10,000 container levels and 1,000,000 nodes. Admission failure is `Err`; `Ok`
-contains `Satisfies`, `Fails`, `Undefined` or `NoVerdict`. Duplicate instance members
+First admit exact JSON with `let value = JsonValue::parse(text_or_bytes)?` under
+default limits: 32 MiB, 10,000 container levels and 1,000,000 nodes. Admission
+failure is `Err`. Then `prepared.evaluate(&value)` returns `Satisfies`, `Fails`,
+`Undefined` or `NoVerdict`. Duplicate instance members
 are admitted exactly and yield `NoVerdict` during evaluation. Number tokens retain
 their exact meaning. `explain(&value)` requests diagnostics without changing the
 semantic result.
@@ -235,8 +239,7 @@ Cancellation is cooperative. A cancelled preparation returns no validator; an
 interrupted evaluation leaves an existing validator available for another call.
 
 Document findings refer to the assessed revision using exact pointers, zero-based
-UTF-8 byte offsets and one-based lines and byte columns. Quote untrusted pointers
-for display. OBI-02 adds the failing `keyword`, a `schema` origin in the published
+UTF-8 byte offsets and one-based lines and byte columns. Quote untrusted pointers for display. OBI-02 adds the failing `keyword`, a `schema` origin in the published
 fixed schema, and optional `ValueProblemDetails`: a missing required member,
 expected types or exact bounds. Disallowed members use the source pointer alone.
 Failed unions stay at `anyOf`/`oneOf` without speculative branch details.

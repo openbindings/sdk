@@ -1,9 +1,9 @@
 //! All current pinned selection cases through lazy/prepared invocation and preflight.
 use openbindings::{Document, ExternalSchemas, JsonValue};
+use openbindings_invocation::ContextChallenge;
 use openbindings_invocation::{
     BindingInvoker, BindingRequest, CancellationToken, DefaultOperationInvoker, InvocationError,
-    InvocationSupport, OperationRequest, OutputEvent, PreflightOutcome, ProviderIo,
-    operation::BindingChoice,
+    InvocationSupport, OperationRequest, OutputEvent, ProviderIo, operation::BindingChoice,
 };
 use openbindings_json_schema_evaluator::DefaultEvaluator;
 use serde_json::Value;
@@ -41,7 +41,7 @@ impl InvocationSupport for Corpus {
 }
 impl BindingInvoker for Corpus {
     type Invoke<'a> = Pin<Box<dyn Future<Output = Result<(), InvocationError>> + 'a>>;
-    type Preflight<'a> = Ready<Result<PreflightOutcome, InvocationError>>;
+    type Preflight<'a> = Ready<Result<Option<ContextChallenge>, InvocationError>>;
     fn handle_invoke<'a>(
         &'a self,
         request: BindingRequest,
@@ -55,7 +55,7 @@ impl BindingInvoker for Corpus {
         _: BindingRequest,
         _: CancellationToken,
     ) -> Self::Preflight<'a> {
-        ready(Ok(PreflightOutcome::NoPrediction))
+        ready(Ok(None))
     }
 }
 fn strings(value: &Value) -> Vec<String> {
@@ -160,7 +160,7 @@ async fn published_selection_cases_resolve_through_invocation_preparation_and_pr
                 .preflight(request, CancellationToken::new())
                 .unwrap()
                 .await
-                .map(|p| assert!(matches!(p, PreflightOutcome::NoPrediction)))
+                .map(|p| assert!((p).is_none()))
                 .map_err(|e| e.code().to_owned());
             assert_eq!(
                 prediction,

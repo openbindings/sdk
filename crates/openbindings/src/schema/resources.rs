@@ -102,19 +102,6 @@ impl fmt::Display for ExternalSchemaError {
 }
 impl std::error::Error for ExternalSchemaError {}
 impl ExternalSchemas {
-    /// Return another immutable set with an explicit external schema.
-    /// Neither set fetches content or changes when the other is prepared.
-    ///
-    /// # Errors
-    /// Invalid or duplicate retrieval identities and ambiguous JSON members are
-    /// refused without modifying this set.
-    #[must_use = "the original external schemas remain unchanged"]
-    pub fn with(&self, uri: &str, schema: JsonValue) -> Result<Self, ExternalSchemaError> {
-        Self::new(self.iter().cloned().chain(std::iter::once(ExternalSchema {
-            uri: uri.to_owned(),
-            document: schema,
-        })))
-    }
     /// Admit immutable resources without acquisition. Duplicate retrieval spellings
     /// after RFC resolution and empty-fragment removal are configuration errors.
     /// Canonical associations use the library's ordinary URI normalization;

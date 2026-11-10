@@ -49,11 +49,7 @@ fn pattern_subschemas_reached_through_references_stay_evaluable() {
             .expect("declared operation")
             .input()
             .expect("declared input")
-            .prepare(
-                &DefaultEvaluator::new(),
-                &resources,
-                &openbindings::PreparationLimits::default(),
-            )
+            .prepare(&DefaultEvaluator::new(), &resources)
             .unwrap_or_else(|detail| panic!("{}: {detail:?}", case.id));
         for (value, expected) in case.values.iter().zip(&case.expected) {
             let value = JsonValue::parse(value.get()).unwrap();
@@ -82,7 +78,6 @@ fn pattern_subschema_failures_name_the_original_child_assertion() {
         .prepare(
             &DefaultEvaluator::new(),
             &openbindings::ExternalSchemas::default(),
-            &openbindings::PreparationLimits::default(),
         )
         .unwrap();
     let value = JsonValue::parse(r#"{"o":{"a":"x"}}"#).unwrap();
@@ -151,18 +146,14 @@ fn the_original_annotation_walk_is_not_compiler_recursion() {
     let prepared = operation
         .input()
         .unwrap()
-        .prepare(
-            &DefaultEvaluator::new(),
-            &ExternalSchemas::default(),
-            &PreparationLimits::default(),
-        )
+        .prepare(&DefaultEvaluator::new(), &ExternalSchemas::default())
         .unwrap();
     assert!(matches!(
-        prepared.evaluate_json(r#"{"inner":{}}"#).unwrap(),
+        prepared.evaluate(&JsonValue::parse(r#"{"inner":{}}"#).unwrap()),
         ValueOutcome::Satisfies
     ));
     assert!(matches!(
-        prepared.evaluate_json(r#"{"inner":{"extra":1}}"#).unwrap(),
+        prepared.evaluate(&JsonValue::parse(r#"{"inner":{"extra":1}}"#).unwrap()),
         ValueOutcome::Fails { .. }
     ));
 }

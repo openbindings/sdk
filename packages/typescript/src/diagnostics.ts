@@ -12,6 +12,10 @@ export interface InputFailure {
     kind?: string;
     /** Zero-based offset in original UTF-8 source when available. */
     byteOffset?: number;
+    /** One-based original source line. */
+    line: number;
+    /** One-based UTF-8 byte column, not a UTF-16 character index. */
+    byteColumn: number;
     /** Human-readable explanation of what the parser expected or found and the byte where, such as `expected a colon after the member name at byte 5`, and for an exceeded limit the `limits` entry that raises it; use `code` and `byteOffset` for logic. */
     message: string;
   };

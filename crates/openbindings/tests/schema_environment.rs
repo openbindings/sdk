@@ -138,7 +138,13 @@ fn original_sources_bases_and_resource_roots_are_separate() {
     let selected = schema(
         r##"{"openbindings":"0.2.0","operations":{},"schemas":{"entry":{},"local":{"$id":"https://id.test/local","$defs":{"number":{"type":"number"}}}}}"##,
     );
-    let supplied = ExternalSchemas::default().with("https://fetch.test/bundle", value(r##"{"$defs":{"N":{"$id":"https://id.test/n","$defs":{"flag":{"type":"boolean"}}}}}"##)).unwrap();
+    let supplied = ExternalSchemas::new([openbindings::ExternalSchema {
+        uri: ("https://fetch.test/bundle").into(),
+        document: value(
+            r##"{"$defs":{"N":{"$id":"https://id.test/n","$defs":{"flag":{"type":"boolean"}}}}}"##,
+        ),
+    }])
+    .unwrap();
     let env = environment(&selected, &supplied);
     let root = env.root();
     assert_eq!(root.resource_base(), ResourceBase::AnonymousDocument);
@@ -266,12 +272,11 @@ fn checked_subschemas_never_promote_maps_literals_or_opaque_objects() {
         );
     }
     assert_eq!(root.subschema(&[]).unwrap().pointer(), root.pointer());
-    let external = ExternalSchemas::default()
-        .with(
-            "https://example.test/unpaired",
-            value(r#"{"$defs":{"\ud800":{"type":"string"}}}"#),
-        )
-        .unwrap();
+    let external = ExternalSchemas::new([openbindings::ExternalSchema {
+        uri: ("https://example.test/unpaired").into(),
+        document: value(r#"{"$defs":{"\ud800":{"type":"string"}}}"#),
+    }])
+    .unwrap();
     let env = environment(&selected, &external);
     let external = env
         .resolve(&env.root(), "https://example.test/unpaired")
@@ -333,10 +338,7 @@ fn unknown_required_vocabularies_do_not_certify_external_name_absence() {
     let selected = schema(
         r##"{"openbindings":"0.2.0","operations":{},"schemas":{"entry":{"$ref":"https://missing.test/unvisited"}}}"##,
     );
-    let external=ExternalSchemas::default()
-        .with("https://fetch.test/unknown",value(r##"{"$id":"https://id.test/unknown","$schema":"https://dialect.test/custom","$defs":{"hidden":{"$id":"https://id.test/hidden","$dynamicAnchor":"h"}}}"##)).unwrap()
-        .with("https://dialect.test/custom",value(r##"{"$schema":"https://json-schema.org/draft/2020-12/schema","$vocabulary":{"https://vocab.test/custom":true}}"##)).unwrap()
-        .with("https://fetch.test/known",value(r##"{"$defs":{"nested":{"$id":"https://id.test/nested","$schema":"https://dialect.test/custom","$defs":{"child":true}}}}"##)).unwrap();
+    let external=ExternalSchemas::new([openbindings::ExternalSchema { uri: ("https://fetch.test/unknown").into(), document: value(r##"{"$id":"https://id.test/unknown","$schema":"https://dialect.test/custom","$defs":{"hidden":{"$id":"https://id.test/hidden","$dynamicAnchor":"h"}}}"##) }, openbindings::ExternalSchema { uri: ("https://dialect.test/custom").into(), document: value(r##"{"$schema":"https://json-schema.org/draft/2020-12/schema","$vocabulary":{"https://vocab.test/custom":true}}"##) }, openbindings::ExternalSchema { uri: ("https://fetch.test/known").into(), document: value(r##"{"$defs":{"nested":{"$id":"https://id.test/nested","$schema":"https://dialect.test/custom","$defs":{"child":true}}}}"##) }]).unwrap();
     let env = environment(&selected, &external);
     // The original input records remain observable without claiming that an
     // unrecognized vocabulary cannot introduce competing resource identities.
@@ -369,7 +371,7 @@ fn unknown_required_vocabularies_do_not_certify_external_name_absence() {
 #[test]
 fn certificate_known_unevaluated_dialect_retains_original_root_metadata() {
     let selected = schema(r#"{"openbindings":"0.2.0","operations":{},"schemas":{"entry":true}}"#);
-    let external = ExternalSchemas::default().with("https://fetch.test/old", value(r#"{"$schema":"http://json-schema.org/draft-06/schema#","definitions":{"hidden":true}}"#)).unwrap();
+    let external = ExternalSchemas::new([openbindings::ExternalSchema { uri: ("https://fetch.test/old").into(), document: value(r#"{"$schema":"http://json-schema.org/draft-06/schema#","definitions":{"hidden":true}}"#) }]).unwrap();
     let env = environment(&selected, &external);
     let old = env
         .resolve(&env.root(), "https://fetch.test/old")
@@ -448,9 +450,11 @@ fn limits_and_cancellation_leave_retriable_immutable_inputs() {
         fields.push_str(&format!("\"n{n}\":true"));
     }
     fields.push_str("}}");
-    let external = ExternalSchemas::default()
-        .with("https://example.test/large", value(&fields))
-        .unwrap();
+    let external = ExternalSchemas::new([openbindings::ExternalSchema {
+        uri: ("https://example.test/large").into(),
+        document: value(&fields),
+    }])
+    .unwrap();
     let false_control = AtomicBool::new(false);
     assert!(matches!(
         selected
@@ -533,9 +537,11 @@ fn expanded_identifiers_are_bounded_before_environment_and_registration_indexes(
             resource: "schema-identity-bytes".into()
         }
     );
-    let error = ExternalSchemas::default()
-        .with("https://identity.test/supplied", value(&oversized))
-        .unwrap_err();
+    let error = ExternalSchemas::new([openbindings::ExternalSchema {
+        uri: ("https://identity.test/supplied").into(),
+        document: value(&oversized),
+    }])
+    .unwrap_err();
     assert_eq!(
         error.kind,
         ExternalSchemaErrorKind::Limit {
@@ -640,9 +646,11 @@ fn document_and_external_schema_locations_use_the_original_source_coordinates() 
     assert_eq!(selected.document().locate(&origin), Some(expected));
     let carrier = value("{\n\"outside\":0,\n\"schema\":{\n \"properties\":{\"field\":false}\n}}");
     let subtree = carrier.at("/schema").unwrap().to_owned();
-    let external = ExternalSchemas::default()
-        .with("https://example.test/schema", subtree.clone())
-        .unwrap();
+    let external = ExternalSchemas::new([openbindings::ExternalSchema {
+        uri: ("https://example.test/schema").into(),
+        document: subtree.clone(),
+    }])
+    .unwrap();
     let env = environment(&selected, &external);
     let node = env
         .resolve(&env.root(), "https://example.test/schema#/properties/field")
@@ -662,9 +670,11 @@ fn cached_schema_inventory_limits_accept_the_boundary_and_refuse_one_less() {
     let text = r#"{"openbindings":"0.2.0","operations":{},"schemas":{"entry":{"$id":"https://example.test/root","$defs":{"child":true}}}}"#;
     for supplied in [false, true] {
         let external = if supplied {
-            ExternalSchemas::default()
-                .with("https://example.test/external", value("true"))
-                .unwrap()
+            ExternalSchemas::new([openbindings::ExternalSchema {
+                uri: ("https://example.test/external").into(),
+                document: value("true"),
+            }])
+            .unwrap()
         } else {
             ExternalSchemas::default()
         };
@@ -735,7 +745,11 @@ fn external_registration_accepts_empty_fragments_and_preserves_subtree_bytes() {
         "https://example.test/schema",
         "https://example.test/schema#",
     ] {
-        let external = ExternalSchemas::default().with(uri, value("true")).unwrap();
+        let external = ExternalSchemas::new([openbindings::ExternalSchema {
+            uri: (uri).into(),
+            document: value("true"),
+        }])
+        .unwrap();
         assert_eq!(
             external.iter().next().unwrap().uri,
             "https://example.test/schema"
@@ -744,10 +758,12 @@ fn external_registration_accepts_empty_fragments_and_preserves_subtree_bytes() {
     }
     for uri in ["https://example.test/schema#fragment", "relative"] {
         assert_eq!(
-            ExternalSchemas::default()
-                .with(uri, value("true"))
-                .unwrap_err()
-                .kind,
+            ExternalSchemas::new([openbindings::ExternalSchema {
+                uri: (uri).into(),
+                document: value("true")
+            }])
+            .unwrap_err()
+            .kind,
             ExternalSchemaErrorKind::InvalidIdentity
         );
     }

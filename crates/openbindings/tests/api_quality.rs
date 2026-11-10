@@ -624,19 +624,26 @@ fn contextual_schemas_and_prepared_validators_own_their_inputs() {
 
 #[test]
 fn version_refusals_are_built_only_for_unsupported_declarations() {
-    // A tool checking a declaration before any document exists refuses with the
-    // record validation returns.
     let validated = validate_document(r#"{"openbindings":"0.3.0","operations":{}}"#).unwrap_err();
-    let built = VersionRefusal::new("0.3.0").expect("outside the supported line");
-    assert_eq!(built, validated);
+    let parsed = Document::parse(r#"{"openbindings":"0.3.0","operations":{}}"#)
+        .unwrap()
+        .validate()
+        .unwrap_err();
+    assert_eq!(parsed, validated);
     assert_eq!(
-        (built.declared.as_str(), built.supported),
+        (parsed.declared.as_str(), parsed.supported),
         ("0.3.0", "0.2.x")
     );
-    assert_eq!(built.to_string(), validated.to_string());
-    assert!(VersionRefusal::new("0.2.0-rc.1").is_some());
+    assert_eq!(parsed.to_string(), validated.to_string());
+    assert!(validate_document(r#"{"openbindings":"0.2.0-rc.1","operations":{}}"#).is_err());
     for declared in ["0.2.0", "0.2.99+build", "0.2", "not a version", ""] {
-        assert!(VersionRefusal::new(declared).is_none(), "{declared:?}");
+        assert!(
+            validate_document(format!(
+                r#"{{"openbindings":"{declared}","operations":{{}}}}"#
+            ))
+            .is_ok(),
+            "{declared:?}"
+        );
     }
 }
 #[test]
@@ -858,7 +865,10 @@ fn preparation_display_names_causes_without_changing_debug_redaction() {
         invalid.to_string(),
         "schema preparation failed: invalid external schema in resource \"https://example.test/schema\" at pointer \"/$defs/bad\""
     );
-    assert_eq!(format!("{invalid:?}"), "PreparationFailure { .. }");
+    assert_eq!(
+        format!("{invalid:?}"),
+        r#"PreparationFailure { kind: "InvalidExternalSchema", has_origin: true, .. }"#
+    );
     let limit = PreparationFailure::new(PreparationFailureKind::Limit {
         resource: "schema-nodes".into(),
     });

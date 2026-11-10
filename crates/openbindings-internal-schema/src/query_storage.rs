@@ -21,6 +21,10 @@ impl<T> From<Vec<T>> for Vector<'_, T> {
     }
 }
 impl<T> Vector<'_, T> {
+    pub fn retained_bytes(&self) -> usize {
+        openbindings_internal_json::backend::vec_bytes(&self.added)
+            + openbindings_internal_json::backend::hash_bytes(&self.changed)
+    }
     pub fn new() -> Self {
         Vec::new().into()
     }
@@ -84,6 +88,12 @@ pub(super) struct Table<'a, K, V> {
     added: BTreeMap<K, V>,
 }
 impl<K: Ord, V> Table<'_, K, V> {
+    pub fn retained_bytes(&self) -> usize {
+        openbindings_internal_json::backend::btree_bytes(&self.added)
+    }
+    pub fn owned_keys(&self) -> impl Iterator<Item = &K> {
+        self.added.keys()
+    }
     pub fn new() -> Self {
         Self {
             base: None,

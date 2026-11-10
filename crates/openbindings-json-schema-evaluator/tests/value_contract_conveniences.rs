@@ -23,7 +23,6 @@ fn prepare(schema: &str) -> PreparedSchema<openbindings_json_schema_evaluator::D
         .prepare(
             &DefaultEvaluator::new(),
             &openbindings::ExternalSchemas::default(),
-            &openbindings::PreparationLimits::default(),
         )
         .unwrap()
 }
@@ -42,20 +41,20 @@ fn default_preparation_matches_explicit_policy_and_retains_ready_work() {
             .prepare(
                 &DefaultEvaluator::new(),
                 &openbindings::ExternalSchemas::default(),
-                &openbindings::PreparationLimits::default(),
             )
             .unwrap();
         let expected = contract
-            .prepare(
+            .prepare_with_control(
                 &DefaultEvaluator::new(),
                 &ExternalSchemas::default(),
-                &openbindings::PreparationLimits::default(),
+                &PreparationLimits::default(),
+                &std::sync::atomic::AtomicBool::new(false),
             )
             .unwrap();
         drop(operation);
         drop(proof);
         assert_eq!(
-            serde_json::to_value(ready.evaluate_json(input).unwrap()).unwrap(),
+            serde_json::to_value(ready.evaluate(&JsonValue::parse(input).unwrap())).unwrap(),
             serde_json::to_value(expected.evaluate(&JsonValue::parse(input).unwrap())).unwrap(),
         );
     }
@@ -63,7 +62,7 @@ fn default_preparation_matches_explicit_policy_and_retains_ready_work() {
         message,
         problems,
         problems_complete,
-    } = prepare("false").evaluate_json("null").unwrap()
+    } = prepare("false").evaluate(&JsonValue::parse("null").unwrap())
     else {
         panic!("false schema must fail");
     };
@@ -83,15 +82,14 @@ fn default_preparation_matches_explicit_policy_and_retains_ready_work() {
         .prepare(
             &DefaultEvaluator::new(),
             &openbindings::ExternalSchemas::default(),
-            &openbindings::PreparationLimits::default(),
         )
         .unwrap();
     assert!(matches!(
-        limited.evaluate_json("null").unwrap(),
+        limited.evaluate(&JsonValue::parse("null").unwrap()),
         ValueOutcome::Satisfies
     ));
     assert!(
-        matches!(limited.evaluate_json("\"x\"").unwrap(), ValueOutcome::NoVerdict { detail }
+        matches!(limited.evaluate(&JsonValue::parse("\"x\"").unwrap()), ValueOutcome::NoVerdict { detail }
         if detail.reason == NoVerdictReason::LimitExceeded && detail.code == "pattern-byte-limit")
     );
 }
@@ -119,11 +117,11 @@ impl SchemaValidator for Undefined {
 #[test]
 fn json_validation_returns_all_four_outcomes_after_admission() {
     assert!(matches!(
-        prepare("true").evaluate_json(b"7").unwrap(),
+        prepare("true").evaluate(&JsonValue::parse(b"7").unwrap()),
         ValueOutcome::Satisfies
     ));
     assert!(matches!(
-        prepare("false").evaluate_json("7").unwrap(),
+        prepare("false").evaluate(&JsonValue::parse("7").unwrap()),
         ValueOutcome::Fails { .. }
     ));
     let capped = DefaultEvaluator::with_limits(openbindings_json_schema_evaluator::Limits {
@@ -134,25 +132,17 @@ fn json_validation_returns_all_four_outcomes_after_admission() {
     let operation = proof.resolve_operation("find").expect("declared alias");
     let input = operation.input().expect("declared input");
     let limited = input
-        .prepare(
-            &capped,
-            &openbindings::ExternalSchemas::default(),
-            &openbindings::PreparationLimits::default(),
-        )
+        .prepare(&capped, &openbindings::ExternalSchemas::default())
         .unwrap();
     assert!(
-        matches!(limited.evaluate_json("[7]").unwrap(), ValueOutcome::NoVerdict { detail }
+        matches!(limited.evaluate(&JsonValue::parse("[7]").unwrap()), ValueOutcome::NoVerdict { detail }
         if detail.reason == NoVerdictReason::LimitExceeded)
     );
     let undefined = input
-        .prepare(
-            &Undefined,
-            &openbindings::ExternalSchemas::default(),
-            &openbindings::PreparationLimits::default(),
-        )
+        .prepare(&Undefined, &openbindings::ExternalSchemas::default())
         .unwrap();
     assert!(
-        matches!(undefined.evaluate_json("7").unwrap(), ValueOutcome::Undefined { detail }
+        matches!(undefined.evaluate(&JsonValue::parse("7").unwrap()), ValueOutcome::Undefined { detail }
         if detail.code == "fixture-undefined")
     );
     // A value reaching a missing resource gives no verdict.
@@ -164,11 +154,10 @@ fn json_validation_returns_all_four_outcomes_after_admission() {
         .prepare(
             &DefaultEvaluator::new(),
             &openbindings::ExternalSchemas::default(),
-            &openbindings::PreparationLimits::default(),
         )
         .unwrap();
     assert!(
-        matches!(missing.evaluate_json("7").unwrap(), ValueOutcome::NoVerdict { detail }
+        matches!(missing.evaluate(&JsonValue::parse("7").unwrap()), ValueOutcome::NoVerdict { detail }
         if detail.reason == NoVerdictReason::ResourceUnavailable)
     );
 }
@@ -177,7 +166,7 @@ fn json_validation_returns_all_four_outcomes_after_admission() {
 fn json_validation_preserves_duplicate_members_and_exact_numbers() {
     for text in [r#"{"a":1,"a":2}"#, r#"{"nested":{"a":1,"\u0061":2}}"#] {
         assert!(
-            matches!(prepare("true").evaluate_json(text).unwrap(), ValueOutcome::NoVerdict { detail }
+            matches!(prepare("true").evaluate(&JsonValue::parse(text).unwrap()), ValueOutcome::NoVerdict { detail }
             if detail.code == "duplicate-instance-members")
         );
     }
@@ -196,43 +185,14 @@ fn json_validation_preserves_duplicate_members_and_exact_numbers() {
     ] {
         let ready = prepare(schema);
         assert!(matches!(
-            ready.evaluate_json(satisfies).unwrap(),
+            ready.evaluate(&JsonValue::parse(satisfies).unwrap()),
             ValueOutcome::Satisfies
         ));
         assert!(matches!(
-            ready.evaluate_json(fails).unwrap(),
+            ready.evaluate(&JsonValue::parse(fails).unwrap()),
             ValueOutcome::Fails { .. }
         ));
     }
-}
-
-#[test]
-fn json_validation_returns_original_admission_errors() {
-    let ready = prepare("true");
-    let deep = format!("{}0{}", "[".repeat(10_001), "]".repeat(10_001));
-    for (bytes, kind) in [
-        (&b"\xff"[..], InputErrorKind::InvalidUtf8),
-        (&b"\xef\xbb\xbfnull"[..], InputErrorKind::ByteOrderMark),
-        (&b"{"[..], InputErrorKind::Syntax),
-        (&b"1 2"[..], InputErrorKind::Syntax),
-        (deep.as_bytes(), InputErrorKind::Limit),
-    ] {
-        let expected = JsonValue::parse(bytes).unwrap_err();
-        assert_eq!(expected.kind(), kind);
-        assert_eq!(ready.evaluate_json(bytes).unwrap_err(), expected);
-    }
-    // A limit names parsing with limits and then validating, since this call
-    // takes none.
-    assert_eq!(
-        ready.evaluate_json(&deep).unwrap_err().to_string(),
-        "the input nests deeper than the admitted depth limit at byte 10000; parse the value \
-         with JsonValue::parse_with_limits and a larger JsonLimits::max_depth, then validate \
-         it (parseJson with a larger limits.maxDepth in TypeScript)"
-    );
-    assert!(matches!(
-        ready.evaluate_json("null").unwrap(),
-        ValueOutcome::Satisfies
-    ));
 }
 
 #[test]
@@ -271,11 +231,10 @@ fn selection_distinguishes_absent_contracts_missing_and_ambiguous_operations() {
         .prepare(
             &DefaultEvaluator::new(),
             &openbindings::ExternalSchemas::default(),
-            &openbindings::PreparationLimits::default(),
         )
         .unwrap();
     assert!(matches!(
-        ready.evaluate_json("null").unwrap(),
+        ready.evaluate(&JsonValue::parse("null").unwrap()),
         ValueOutcome::Fails { .. }
     ));
 }
@@ -309,19 +268,11 @@ fn preparation_refusal_is_the_original_record_and_propagates_as_an_error() {
         let operation = proof.resolve_operation("find").unwrap();
         let contract = operation.input().unwrap();
         let error = contract
-            .prepare(
-                &Refuse(expected.clone()),
-                &ExternalSchemas::default(),
-                &PreparationLimits::default(),
-            )
+            .prepare(&Refuse(expected.clone()), &ExternalSchemas::default())
             .unwrap_err();
         assert_eq!(error, expected);
         let propagated = (|| -> Result<PreparedSchema<Undefined>, Box<dyn Error>> {
-            Ok(contract.prepare(
-                &Refuse(error.clone()),
-                &ExternalSchemas::default(),
-                &PreparationLimits::default(),
-            )?)
+            Ok(contract.prepare(&Refuse(error.clone()), &ExternalSchemas::default())?)
         })()
         .unwrap_err();
         assert_eq!(

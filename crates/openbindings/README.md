@@ -52,15 +52,17 @@ explicit `SchemaEvaluator`, including for `true`, `false` and empty schemas.
 Select the optional `openbindings-json-schema-evaluator` or implement the trait.
 A conformant operation's `input()` and `output()` return its `Schema`s, or
 `None` when it declares none. Named schemas come from `ConformantDocument::schema`.
-`prepare(&evaluator, &external_schemas, &preparation_limits)` borrows explicit inputs
-and returns `Result<PreparedSchema<E::Validator>, PreparationFailure>`. Core does
+`prepare(&evaluator, &external_schemas)` borrows explicit inputs
+and returns `Result<PreparedSchema<E::Validator>, PreparationFailure>` with default
+preparation limits and no cancellation. Use `prepare_with_control` for explicit
+limits or cancellation. Core does
 not depend on the evaluator companion. Original schema inventory and resolution
 are available through `SchemaEnvironment`; evaluator projections remain private.
 
 Retain a prepared schema and handle satisfies, fails, undefined and no-verdict for
-each value. Preparation failure judges no value. `evaluate_json` admits exact JSON
-text or bytes; only admission failure is `Err`. Retain a `JsonValue` and call
-`evaluate` for repeated checks or custom admission limits. `explain` requests
+each value. Preparation failure judges no value. Parse exact JSON text or bytes
+with `JsonValue::parse` or `parse_with_limits`, then call `evaluate(&value)`.
+Admission failure is separate from the four value outcomes. `explain` requests
 diagnostics for the same verdict. Undefined establishes semantic dependence on a
 known undefined result; no-verdict means the implementation could not answer.
 Each preparation is independent. Ownership and thread-safety follow the concrete
@@ -157,3 +159,14 @@ refusals, not finding codes.
 | `duplicate-anchor` | OBI-13 | A plain anchor name is declared repeatedly in the document resource. |
 | `duplicate-schema-id` | OBI-13 | Contained schemas declare the same compared identifier. |
 | `document-dynamic-anchor` | OBI-14 | A dynamic anchor appears outside an identified schema resource. |
+
+`Document::retained_bytes()` estimates the heap storage of a snapshot at the time
+of the call, including original source, parsed nodes and built indexes/caches.
+Clones and proofs share it: charge a snapshot once, reaching it through a proof's
+`document()`. It reads existing capacities on demand, adds no parse/validate work,
+and excludes allocator overhead, separately owned external resources and validators,
+process-wide packaged schemas, and Wasm memory growth. Namespace/schema lookups
+and location requests can grow caches; see its rustdoc for growth bounds.
+
+`InputError::line()` and `byte_column()` report one-based lines and UTF-8 byte
+columns, computed once on failure; nothing changes on success.

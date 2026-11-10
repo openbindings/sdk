@@ -24,11 +24,7 @@ fn interruption_does_not_poison_a_prepared_predicate() {
     let mut completed = 0;
     for allowance in 0..100 {
         let prepared = schema()
-            .prepare(
-                &DefaultEvaluator::new(),
-                &ExternalSchemas::default(),
-                &PreparationLimits::default(),
-            )
+            .prepare(&DefaultEvaluator::new(), &ExternalSchemas::default())
             .unwrap();
         let control = CancelAfter {
             calls: AtomicUsize::new(0),
@@ -54,14 +50,17 @@ fn interruption_does_not_poison_a_prepared_predicate() {
 }
 #[test]
 fn direct_validator_checks_cancellation_before_inspecting_duplicates() {
-    let validator = schema()
+    let selected = schema();
+    let validator = DefaultEvaluator::new()
         .prepare(
-            &DefaultEvaluator::new(),
-            &ExternalSchemas::default(),
+            EvaluationRequest {
+                schema: &selected,
+                external_schemas: &ExternalSchemas::default(),
+            },
             &PreparationLimits::default(),
+            &AtomicBool::new(false),
         )
-        .unwrap()
-        .into_validator();
+        .unwrap();
     let duplicate = JsonValue::parse(r#"{"x":1,"x":2}"#).unwrap();
     for detail in [Detail::Outcome, Detail::Explain] {
         assert!(
@@ -117,11 +116,7 @@ fn every_recursive_refinement_and_certificate_stop_keeps_clean_retries() {
             .input()
             .unwrap();
         let prepared = schema
-            .prepare(
-                &DefaultEvaluator::new(),
-                &ExternalSchemas::default(),
-                &PreparationLimits::default(),
-            )
+            .prepare(&DefaultEvaluator::new(), &ExternalSchemas::default())
             .unwrap();
         let value = JsonValue::parse(case["value"].to_string()).unwrap();
         let code = |outcome: &ValueOutcome| match outcome {

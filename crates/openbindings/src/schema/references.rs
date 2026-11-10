@@ -328,22 +328,6 @@ impl Document {
     }
 }
 
-impl ConformantDocument {
-    /// Inspect references in the conformant document revision without acquiring resources.
-    pub fn references(&self) -> ReferenceReport {
-        self.references_with_resources(ExternalSchemas::default(), &crate::control::NeverCancelled)
-    }
-    /// Inspect references in the document and transitively reached supplied
-    /// resources, within the report's traversal limits, without fetching content.
-    pub fn references_with_resources(
-        &self,
-        resources: ExternalSchemas,
-        control: &dyn WorkControl,
-    ) -> ReferenceReport {
-        inspect(self.document(), &resources, control)
-    }
-}
-
 /// A statically established reference defect. This is semantic evidence at a
 /// reference, not an evaluation outcome for a surrounding schema or instance.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]

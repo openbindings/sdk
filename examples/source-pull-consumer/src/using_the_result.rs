@@ -95,7 +95,7 @@ pub fn keep_part(
 ) -> Result<ConformantDocument, Error> {
     // References resolve in the document holding every addition.
     let everything = result.validate_for(request, limits, control)?;
-    let references = everything.references();
+    let references = everything.document().references();
     if !references.complete {
         return Err("reference inspection stopped early".into());
     }
@@ -120,10 +120,7 @@ pub fn keep_part(
         }
         // An added binding needs its added operation and what its `uses` names.
         if let Some(key) = root.strip_prefix("/bindings/")
-            && let Some(added) = result
-                .report()
-                .added()
-                .find(|added| added.binding() == key)
+            && let Some(added) = result.report().added().find(|added| added.binding() == key)
         {
             if !added.reused() {
                 wanted.push(format!(

@@ -25,11 +25,7 @@ fn contract(
         .unwrap()
         .input()
         .unwrap()
-        .prepare(
-            &DefaultEvaluator::new(),
-            resources,
-            &openbindings::PreparationLimits::default(),
-        )
+        .prepare(&DefaultEvaluator::new(), resources)
         .expect("prepared")
 }
 fn problems(outcome: ValueOutcome) -> Vec<ValueProblem> {
@@ -289,11 +285,7 @@ fn requests_locate_the_schema_nodes_an_evaluator_was_given() {
         .unwrap()
         .input()
         .unwrap()
-        .prepare(
-            &capture,
-            &resources,
-            &openbindings::PreparationLimits::default(),
-        )
+        .prepare(&capture, &resources)
         .unwrap();
     let environment = capture.0.lock().unwrap().take().unwrap();
     let root = environment.root();

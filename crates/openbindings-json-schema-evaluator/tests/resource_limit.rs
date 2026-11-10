@@ -38,10 +38,11 @@ fn prepare_scoped(
         .expect("declared operation")
         .input()
         .expect("declared input")
-        .prepare(
+        .prepare_with_control(
             &DefaultEvaluator::with_limits(limits),
             resources,
             preparation,
+            &std::sync::atomic::AtomicBool::new(false),
         )
 }
 fn prepare(
@@ -160,7 +161,7 @@ fn a_resource_cap_precedes_evaluation_of_a_local_pattern_limit() {
     };
     let within = prepare_limited(&text, &none, limits(Some(1))).unwrap();
     assert!(
-        matches!(within.evaluate_json(r#""ab""#).unwrap(), ValueOutcome::NoVerdict { detail }
+        matches!(within.evaluate(&JsonValue::parse(r#""ab""#).unwrap()), ValueOutcome::NoVerdict { detail }
         if detail.reason == NoVerdictReason::LimitExceeded && detail.code == "pattern-byte-limit")
     );
     assert_refused(prepare_limited(&text, &none, limits(Some(0))).unwrap_err());

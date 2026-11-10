@@ -71,7 +71,7 @@ impl<V: SchemaValidator + Clone> Clone for PreparedOperation<V> {
         }
     }
 }
-impl<P: BindingInvoker + InvocationSupport, E: SchemaEvaluator> DefaultOperationInvoker<P, E> {
+impl<P: BindingInvoker, E: SchemaEvaluator> DefaultOperationInvoker<P, E> {
     /// Resolve one operation key or alias and prepare its declared directions.
     /// The returned owner retains no provider, evaluator or borrowed configuration.
     /// No binding is selected and no provider work starts.
@@ -175,7 +175,7 @@ impl<V: SchemaValidator> PreparedOperation<V> {
             if operation.key() == self.operation {
                 Ok(request)
             } else {
-                Err(error("ERR_BINDING_NOT_FOUND"))
+                Err(InvocationError::binding_not_found())
             }
         });
         let schemas = self.schemas;

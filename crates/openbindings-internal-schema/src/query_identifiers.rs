@@ -110,6 +110,30 @@ pub(crate) struct Identifiers<'a> {
 }
 
 impl<'a> Identifiers<'a> {
+    pub(crate) fn retained_bytes(&self) -> usize {
+        use openbindings_internal_json::backend::vec_bytes;
+        self.nodes.retained_bytes() + self.copied.capacity() + vec_bytes(&self.retired)
+            + self.retired.iter().map(|(_, text)| text.len()).sum::<usize>()
+            + self.children.retained_bytes() + self.segment_ids.retained_bytes()
+            + self.segment_ids.owned_keys().map(|s| s.len()).sum::<usize>()
+            + self.schemes.retained_bytes() + self.scheme_ids.retained_bytes()
+            + self.scheme_ids.owned_keys().map(|s| s.len()).sum::<usize>()
+            + self.owned.retained_bytes() + self.owned[0..].iter().map(|s| s.len()).sum::<usize>()
+            + self.text_ids.retained_bytes() + self.text_ids.owned_keys().map(|s| s.len()).sum::<usize>()
+            + self.normal_text.retained_bytes() + self.normal_dirs.retained_bytes()
+            + self.escaped_dirs.retained_bytes() + self.normal_authorities.retained_bytes()
+            + self.normal_schemes.retained_bytes() + self.normal_pieces.retained_bytes()
+            + self.pieces.retained_bytes() + self.piece_ids.retained_bytes()
+            + self.piece_ids.owned_keys().map(|s| s.len()).sum::<usize>()
+            + self.lasts.retained_bytes() + self.last_ids.retained_bytes()
+            + self.last_ids.owned_keys().map(|s| s.len()).sum::<usize>()
+            + self.normal_lasts.retained_bytes() + self.leaves.retained_bytes()
+            // At most one u32 key plus a control byte per hash bucket.
+            + if self.invalid_authorities.capacity() == 0 { 0 } else {
+                (self.invalid_authorities.capacity() * 8 / 7).next_power_of_two() * 5 + 16
+            }
+    }
+
     identifier_methods!('q, ['q], Label, Label, Leaf, [bytes], true, []);
 
     fn empty_input() -> Label {

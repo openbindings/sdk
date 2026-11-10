@@ -3,7 +3,7 @@ use openbindings::{Document, JsonValue};
 use openbindings_invocation::{
     BindingInvoker, BindingInvokerExt, BindingRequest, BoundaryFailureKind, CancellationToken,
     Context as InvocationContext, ContextChallenge, InvocationError, InvocationLimits,
-    InvocationOutput, OutputEvent, PreflightOutcome, ProviderIo, WriteError,
+    InvocationOutput, OutputEvent, ProviderIo, WriteError,
 };
 use std::{
     future::{Future, pending},
@@ -84,7 +84,7 @@ impl BindingInvoker for Fixture<'_> {
     where
         Self: 'a;
     type Preflight<'a>
-        = std::future::Ready<Result<PreflightOutcome, InvocationError>>
+        = std::future::Ready<Result<Option<ContextChallenge>, InvocationError>>
     where
         Self: 'a;
     fn handle_preflight<'a>(
@@ -92,7 +92,7 @@ impl BindingInvoker for Fixture<'_> {
         _: BindingRequest,
         _: CancellationToken,
     ) -> Self::Preflight<'a> {
-        std::future::ready(Ok(PreflightOutcome::NoPrediction))
+        std::future::ready(Ok(None))
     }
     fn handle_invoke<'a>(
         &'a self,
@@ -209,14 +209,14 @@ async fn collect<F: Future<Output = Result<(), InvocationError>>>(
 async fn lazy_admission_and_advisory_no_prediction_do_no_provider_work() {
     let provider = Fixture::new(Mode::Empty);
     let client = &provider;
-    assert!(matches!(
+    assert!(
         client
             .preflight(request(), cancel())
             .unwrap()
             .await
-            .unwrap(),
-        PreflightOutcome::NoPrediction
-    ));
+            .unwrap()
+            .is_none()
+    );
     drop(client.invoke(request(), cancel()).unwrap());
     let mut bad = request();
     bad.binding.clear();
@@ -585,13 +585,13 @@ async fn per_handle_cancel_before_first_poll_does_no_provider_work() {
     assert_eq!(provider.calls.load(Ordering::SeqCst), 0);
 }
 struct Prediction {
-    answer: Result<PreflightOutcome, InvocationError>,
+    answer: Result<Option<ContextChallenge>, InvocationError>,
     terminal: Result<(), InvocationError>,
     calls: AtomicUsize,
 }
 impl BindingInvoker for Prediction {
     type Invoke<'a> = std::future::Ready<Result<(), InvocationError>>;
-    type Preflight<'a> = std::future::Ready<Result<PreflightOutcome, InvocationError>>;
+    type Preflight<'a> = std::future::Ready<Result<Option<ContextChallenge>, InvocationError>>;
     fn handle_invoke<'a>(
         &'a self,
         _: BindingRequest,
@@ -612,8 +612,8 @@ impl BindingInvoker for Prediction {
 #[tokio::test]
 async fn advisory_preflight_can_challenge_or_fail_without_becoming_an_invocation_gate() {
     for answer in [
-        Ok(PreflightOutcome::NoPrediction),
-        Ok(PreflightOutcome::Challenge(challenge())),
+        Ok(None),
+        Ok(Some(challenge())),
         Err(InvocationError::refused()),
         Err(InvocationError::execution_failed()),
     ] {
@@ -625,8 +625,8 @@ async fn advisory_preflight_can_challenge_or_fail_without_becoming_an_invocation
         let client = &provider;
         let result = client.preflight(request(), cancel()).unwrap().await;
         match (&answer, result) {
-            (Ok(PreflightOutcome::NoPrediction), Ok(PreflightOutcome::NoPrediction)) => (),
-            (Ok(PreflightOutcome::Challenge(want)), Ok(PreflightOutcome::Challenge(got))) => {
+            (Ok(None), Ok(None)) => (),
+            (Ok(Some(want)), Ok(Some(got))) => {
                 assert_eq!(got.value().value().text(), want.value().value().text());
             }
             (Err(want), Err(got)) => assert_eq!(want.code(), got.code()),
@@ -641,14 +641,14 @@ async fn advisory_preflight_can_challenge_or_fail_without_becoming_an_invocation
 async fn no_preflight_prediction_does_not_suppress_a_live_context_challenge() {
     let challenge = challenge();
     let provider = Prediction {
-        answer: Ok(PreflightOutcome::NoPrediction),
+        answer: Ok(None),
         terminal: Err(InvocationError::challenge(challenge.clone())),
         calls: AtomicUsize::new(0),
     };
     let client = &provider;
     assert!(matches!(
         client.preflight(request(), cancel()).unwrap().await,
-        Ok(PreflightOutcome::NoPrediction)
+        Ok(None)
     ));
     assert_eq!(provider.calls.load(Ordering::SeqCst), 0);
     let (_, mut output) = client.invoke(request(), cancel()).unwrap().split();
@@ -675,10 +675,7 @@ async fn oversized_terminal_and_preflight_answers_fall_back_without_data_or_retr
         huge.text()
     )))
     .unwrap();
-    for answer in [
-        Err(error.clone()),
-        Ok(PreflightOutcome::Challenge(big_challenge)),
-    ] {
+    for answer in [Err(error.clone()), Ok(Some(big_challenge))] {
         let provider = Prediction {
             answer,
             terminal: Err(error.clone()),

@@ -66,7 +66,8 @@ impl Schema {
             openbindings_internal_json::backend::exact_pointer(self.value.view()),
         )
     }
-    /// Prepare with a concrete evaluator and explicit immutable external inputs.
+    /// Prepare with a concrete evaluator, explicit immutable external inputs,
+    /// default preparation limits and no cancellation.
     /// A ready validator may still return any of the four value outcomes.
     ///
     /// # Errors
@@ -75,12 +76,16 @@ impl Schema {
         &self,
         evaluator: &E,
         external: &ExternalSchemas,
-        limits: &PreparationLimits,
     ) -> Result<PreparedSchema<E::Validator>, PreparationFailure> {
-        self.prepare_with_control(evaluator, external, limits, &crate::control::NeverCancelled)
+        self.prepare_with_control(
+            evaluator,
+            external,
+            &PreparationLimits::default(),
+            &crate::control::NeverCancelled,
+        )
     }
-    /// Prepare with cooperative cancellation. A validator is not returned after
-    /// cancellation, including cancellation observed as the evaluator finishes.
+    /// Prepare with explicit limits and cooperative cancellation. A validator is
+    /// not returned after cancellation, including cancellation observed as the evaluator finishes.
     /// Failed attempts do not poison immutable inputs or later retries.
     ///
     /// # Errors

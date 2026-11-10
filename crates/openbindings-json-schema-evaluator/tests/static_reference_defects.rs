@@ -26,11 +26,8 @@ fn observe(case: &Value) -> Value {
         serde_json::from_value(case.get("limits").cloned().unwrap_or(json!({}))).unwrap();
     let operation = proof.resolve_operation("op").expect("declared operation");
     let contract = operation.input().expect("declared input");
-    let (stage, result) = match contract.prepare(
-        &DefaultEvaluator::with_limits(limits),
-        &supplied,
-        &openbindings::PreparationLimits::default(),
-    ) {
+    let (stage, result) = match contract.prepare(&DefaultEvaluator::with_limits(limits), &supplied)
+    {
         Ok(contract) => (
             "ready",
             contract.evaluate(&JsonValue::parse(case["value"].to_string()).unwrap()),
@@ -117,21 +114,17 @@ fn preparation_and_validation_honor_cancellation() {
         matches!(unprepared.prepare_with_control(&evaluator, &ExternalSchemas::default(), &openbindings::PreparationLimits::default(), &cancelled), Err(detail) if detail.kind == PreparationFailureKind::Cancelled)
     );
     let prepared = unprepared
-        .prepare(
-            &evaluator,
-            &ExternalSchemas::default(),
-            &PreparationLimits::default(),
-        )
+        .prepare(&evaluator, &ExternalSchemas::default())
         .unwrap();
     assert!(
         matches!(prepared.evaluate(&JsonValue::null()), ValueOutcome::NoVerdict { detail } if detail.reason == NoVerdictReason::ResourceUnavailable)
     );
     let operation = proof.resolve_operation("ok").unwrap();
-    let Ok(contract) = operation.input().unwrap().prepare(
-        &evaluator,
-        &openbindings::ExternalSchemas::default(),
-        &openbindings::PreparationLimits::default(),
-    ) else {
+    let Ok(contract) = operation
+        .input()
+        .unwrap()
+        .prepare(&evaluator, &openbindings::ExternalSchemas::default())
+    else {
         panic!("prepared")
     };
     assert!(
@@ -172,7 +165,6 @@ fn values_reaching_a_missing_resource_give_no_verdict_naming_it() {
         .prepare(
             &DefaultEvaluator::new(),
             &openbindings::ExternalSchemas::default(),
-            &openbindings::PreparationLimits::default(),
         )
         .unwrap();
     assert!(matches!(
@@ -204,11 +196,7 @@ fn values_reaching_a_missing_resource_give_no_verdict_naming_it() {
         .unwrap()
         .input()
         .unwrap()
-        .prepare(
-            &DefaultEvaluator::new(),
-            &ExternalSchemas::default(),
-            &PreparationLimits::default(),
-        )
+        .prepare(&DefaultEvaluator::new(), &ExternalSchemas::default())
         .unwrap();
     assert!(matches!(
         prepared.evaluate(&JsonValue::parse(r#"{"a":1}"#).unwrap()),

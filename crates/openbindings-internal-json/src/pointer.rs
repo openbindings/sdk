@@ -38,6 +38,12 @@ impl fmt::Display for PointerError {
 impl std::error::Error for PointerError {}
 
 impl Pointer {
+    pub(crate) fn retained_bytes(&self) -> usize {
+        match &self.0 {
+            Repr::Text(text) => text.capacity(),
+            Repr::Units(units) => size_of_val(units.as_ref()),
+        }
+    }
     /// Borrow the escaped RFC 6901 text, or `None` when a segment holds an
     /// unpaired UTF-16 unit. Use [`Self::utf16_units`] for the latter.
     pub fn as_str(&self) -> Option<&str> {

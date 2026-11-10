@@ -11,7 +11,7 @@ mod error;
 pub mod operation;
 mod value;
 
-pub use binding::{BindingInvoker, BindingInvokerExt, InvocationSupport, PreflightOutcome};
+pub use binding::{BindingInvoker, BindingInvokerExt, InvocationSupport};
 pub use boundary::{BoundaryFailure, BoundaryFailureKind};
 pub use channel::{
     Invocation, InvocationControl, InvocationInput, InvocationLimits, InvocationOutput, LimitError,

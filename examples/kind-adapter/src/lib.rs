@@ -3,8 +3,8 @@
 // guide:setup:start
 use openbindings::JsonValue;
 use openbindings_invocation::{
-    BindingInvoker, BindingRequest, CancellationToken, InvocationError, InvocationSupport,
-    PreflightOutcome, ProviderIo,
+    BindingInvoker, BindingRequest, CancellationToken, ContextChallenge, InvocationError,
+    InvocationSupport, ProviderIo,
 };
 use std::{
     collections::BTreeMap,
@@ -50,7 +50,7 @@ fn admit(request: &BindingRequest) -> Result<(), InvocationError> {
     let binding = request
         .interface
         .binding(&request.binding)
-        .ok_or_else(|| InvocationError::new("ERR_BINDING_NOT_FOUND", None).unwrap())?;
+        .ok_or_else(InvocationError::binding_not_found)?;
     if !source_ok(&binding.source()) || !matches(binding.data(), r#"{"mode":"echo"}"#) {
         // This kind defines a fixed code and never copies rejected data into errors.
         return Err(InvocationError::new("example.memory.invalid-data", None).unwrap());
@@ -59,7 +59,7 @@ fn admit(request: &BindingRequest) -> Result<(), InvocationError> {
 }
 impl BindingInvoker for Memory {
     type Invoke<'a> = Pin<Box<dyn Future<Output = Result<(), InvocationError>> + Send + 'a>>;
-    type Preflight<'a> = Ready<Result<PreflightOutcome, InvocationError>>;
+    type Preflight<'a> = Ready<Result<Option<ContextChallenge>, InvocationError>>;
 
     fn handle_invoke<'a>(
         &'a self,
@@ -80,7 +80,7 @@ impl BindingInvoker for Memory {
         request: BindingRequest,
         _: CancellationToken,
     ) -> Self::Preflight<'a> {
-        ready(admit(&request).map(|()| PreflightOutcome::NoPrediction))
+        ready(admit(&request).map(|()| None))
     }
 }
 impl InvocationSupport for Memory {

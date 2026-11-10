@@ -39,11 +39,7 @@ pub fn run(only: Option<&str>) {
         let Some(contract) = proof.resolve_operation("check").and_then(|operation| {
             operation
                 .input()?
-                .prepare(
-                    evaluator,
-                    &openbindings::ExternalSchemas::default(),
-                    &openbindings::PreparationLimits::default(),
-                )
+                .prepare(evaluator, &openbindings::ExternalSchemas::default())
                 .ok()
         }) else {
             panic!("expected prepared {path} contract");

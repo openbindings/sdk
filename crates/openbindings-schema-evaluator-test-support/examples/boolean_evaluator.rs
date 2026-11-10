@@ -66,19 +66,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let input = operation
         .input()
         .ok_or("operation has no input schema")?
-        .prepare(
-            &BooleanEvaluator,
-            &openbindings::ExternalSchemas::default(),
-            &openbindings::PreparationLimits::default(),
-        )?;
+        .prepare(&BooleanEvaluator, &openbindings::ExternalSchemas::default())?;
     let output = operation
         .output()
         .ok_or("operation has no output schema")?
-        .prepare(
-            &BooleanEvaluator,
-            &openbindings::ExternalSchemas::default(),
-            &openbindings::PreparationLimits::default(),
-        )?;
+        .prepare(&BooleanEvaluator, &openbindings::ExternalSchemas::default())?;
     assert!(matches!(input.evaluate(&value), ValueOutcome::Satisfies));
     assert!(matches!(
         output.evaluate(&value),

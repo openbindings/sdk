@@ -32,7 +32,6 @@ fn hostile_enum_facts_stay_within_the_diagnostic_allowance() {
                 ..Limits::default()
             }),
             &ExternalSchemas::default(),
-            &PreparationLimits::default(),
         )
         .unwrap();
     let value =

@@ -40,11 +40,7 @@ fn contained_identities_and_fragments_preserve_the_specified_resource() {
         ))
         .unwrap();
         let schema = proof.resolve_operation("op").unwrap().input().unwrap();
-        let prepared = schema.prepare(
-            &DefaultEvaluator::new(),
-            &resources,
-            &openbindings::PreparationLimits::default(),
-        );
+        let prepared = schema.prepare(&DefaultEvaluator::new(), &resources);
         if let Some(code) = case["expected_preparation"].as_str() {
             assert!(
                 matches!(prepared, Err(ref refusal) if code == "ambiguous-resource" && refusal.kind == PreparationFailureKind::InvalidExternalSchema),

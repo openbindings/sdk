@@ -1,8 +1,9 @@
 //! Prepared schemas outlive their compiler and enter caller-owned spawned tasks.
 use openbindings::{Document, ExternalSchemas, JsonValue, SchemaValidator};
+use openbindings_invocation::ContextChallenge;
 use openbindings_invocation::{
     BindingInvoker, BindingRequest, CancellationToken, DefaultOperationInvoker, InvocationError,
-    InvocationSupport, OutputEvent, PreflightOutcome, ProviderIo,
+    InvocationSupport, OutputEvent, ProviderIo,
     operation::{BindingChoice, PreparedOperation},
 };
 use openbindings_json_schema_evaluator::DefaultEvaluator;
@@ -19,7 +20,7 @@ impl InvocationSupport for Echo {
 }
 impl BindingInvoker for Echo {
     type Invoke<'a> = Pin<Box<dyn Future<Output = Result<(), InvocationError>> + Send + 'a>>;
-    type Preflight<'a> = Ready<Result<PreflightOutcome, InvocationError>>;
+    type Preflight<'a> = Ready<Result<Option<ContextChallenge>, InvocationError>>;
     fn handle_invoke<'a>(
         &'a self,
         _: BindingRequest,
@@ -38,7 +39,7 @@ impl BindingInvoker for Echo {
         _: BindingRequest,
         _: CancellationToken,
     ) -> Self::Preflight<'a> {
-        ready(Ok(PreflightOutcome::NoPrediction))
+        ready(Ok(None))
     }
 }
 fn shareable<T: Send + Sync + 'static>(_: &T) {}

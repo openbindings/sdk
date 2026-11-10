@@ -465,9 +465,10 @@ mod tests {
     fn pointer_ambiguity_missing_context_and_resource_aliases_are_failures() {
         let control = AtomicBool::new(false);
         let mut attempt = Attempt::new(ComparisonLimits::default(), &control);
-        let input = SchemaInput::standalone(json(
-            r##"{"a/b":[true,false],"duplicate":true,"duplicate":false}"##,
-        ));
+        let input = {
+            let schema = json(r##"{"a/b":[true,false],"duplicate":true,"duplicate":false}"##);
+            SchemaInput::new(schema.clone(), schema)
+        };
         let resources = Resources::new(&input, &mut attempt).unwrap();
         let reference = json(r##""#/a~1b/1""##);
         assert_eq!(
@@ -488,9 +489,12 @@ mod tests {
                 matches!(resources.resolve(0,json(text).view(),&mut attempt),Err(found) if found==error)
             );
         }
-        let duplicate = SchemaInput::standalone(json("true"))
-            .with_resource("https://x/a/../b", json("true"))
-            .with_resource("https://x/b#", json("false"));
+        let duplicate = {
+            let schema = json("true");
+            SchemaInput::new(schema.clone(), schema)
+        }
+        .with_resource("https://x/a/../b", json("true"))
+        .with_resource("https://x/b#", json("false"));
         assert!(matches!(
             Resources::new(&duplicate, &mut attempt),
             Err(Failure::InvalidReference)

@@ -13,9 +13,6 @@ impl Checked {
             _ => self.contract.explain(value),
         }
     }
-    fn evaluate_json(&self, input: &str) -> Result<ValueOutcome, InputError> {
-        Ok(self.evaluate(&JsonValue::parse(input)?))
-    }
 }
 fn prepare(schema: &str, mode: Detail, resources: ExternalSchemas) -> Checked {
     let document = Document::parse(format!(
@@ -26,11 +23,7 @@ fn prepare(schema: &str, mode: Detail, resources: ExternalSchemas) -> Checked {
     let proof = validation.conformant().expect("conformant schema");
     let operation = proof.resolve_operation("op").expect("declared operation");
     let contract = operation.input().expect("declared input");
-    match contract.prepare(
-        &DefaultEvaluator::new(),
-        &resources,
-        &openbindings::PreparationLimits::default(),
-    ) {
+    match contract.prepare(&DefaultEvaluator::new(), &resources) {
         Ok(contract) => Checked {
             contract,
             detail: mode,
@@ -278,7 +271,7 @@ fn integer_fast_path_edges_preserve_exact_bounds_and_equality() {
                             format!("{input}.0"),
                             format!("{input}e0"),
                         ] {
-                            let outcome = contract.evaluate_json(&value).unwrap();
+                            let outcome = contract.evaluate(&JsonValue::parse(&value).unwrap());
                             assert!(
                                 matches!(
                                     outcome,
@@ -314,7 +307,7 @@ fn integer_fast_path_edges_preserve_exact_bounds_and_equality() {
                 mode,
                 ExternalSchemas::default(),
             );
-            let outcome = contract.evaluate_json(input).unwrap();
+            let outcome = contract.evaluate(&JsonValue::parse(input).unwrap());
             assert!(matches!(
                 outcome,
                 ValueOutcome::Satisfies | ValueOutcome::Fails { .. }
@@ -334,7 +327,7 @@ fn integer_fast_path_edges_preserve_exact_bounds_and_equality() {
         ]) {
             assert!(
                 matches!(
-                    integer.evaluate_json(&token).unwrap(),
+                    integer.evaluate(&JsonValue::parse(&token).unwrap()),
                     ValueOutcome::Satisfies
                 ),
                 "{token}"
@@ -342,7 +335,7 @@ fn integer_fast_path_edges_preserve_exact_bounds_and_equality() {
         }
         for token in ["1e-99999", "-0.00000000001", "9223372036854775807.1"] {
             assert!(matches!(
-                integer.evaluate_json(token).unwrap(),
+                integer.evaluate(&JsonValue::parse(token).unwrap()),
                 ValueOutcome::Fails { .. }
             ));
         }
@@ -358,7 +351,7 @@ fn integer_fast_path_edges_preserve_exact_bounds_and_equality() {
         ] {
             assert_eq!(
                 matches!(
-                    unique.evaluate_json(input).unwrap(),
+                    unique.evaluate(&JsonValue::parse(input).unwrap()),
                     ValueOutcome::Satisfies
                 ),
                 expected

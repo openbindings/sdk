@@ -4,6 +4,7 @@ use openbindings_internal_json::backend;
 mod edit;
 mod index;
 mod model;
+mod retained;
 use crate::{schema::references::SchemaSpace, schema::resources::ExternalSchemasInner};
 pub use edit::{Edit, EditError, PointerRef};
 use index::NamespaceCache;
@@ -339,16 +340,8 @@ mod resolution_reuse {
         let operation = proof.resolve_operation("op").unwrap();
         let input = operation.input().unwrap();
         let (first, second) = (snapshot(1), snapshot(2));
-        drop(
-            input
-                .prepare(&Inspecting, &first, &crate::PreparationLimits::default())
-                .unwrap(),
-        );
-        drop(
-            input
-                .prepare(&Inspecting, &second, &crate::PreparationLimits::default())
-                .unwrap(),
-        );
+        drop(input.prepare(&Inspecting, &first).unwrap());
+        drop(input.prepare(&Inspecting, &second).unwrap());
         let (a, b) = (
             kept(&proof, &first).unwrap(),
             kept(&proof, &second).unwrap(),
@@ -376,18 +369,14 @@ mod resolution_reuse {
         let keep = operation
             .output()
             .unwrap()
-            .prepare(
-                &Inspecting,
-                &crate::ExternalSchemas::default(),
-                &crate::PreparationLimits::default(),
-            )
+            .prepare(&Inspecting, &crate::ExternalSchemas::default())
             .unwrap();
         let without = Arc::downgrade(proof.document.inner.resolution.get().unwrap());
         let other = snapshot(1);
         let prepared = operation
             .input()
             .unwrap()
-            .prepare(&Inspecting, &other, &crate::PreparationLimits::default())
+            .prepare(&Inspecting, &other)
             .unwrap();
         let space = kept(&proof, &other).unwrap();
         drop((prepared, other, operation, proof));
@@ -434,19 +423,11 @@ mod resolution_reuse {
                     let (input, output) = (operation.input().unwrap(), operation.output().unwrap());
                     for i in 0..60 {
                         let set = &sets[(thread + i) % sets.len()];
-                        assert!(
-                            input
-                                .prepare(&Checking, set, &crate::PreparationLimits::default())
-                                .is_ok()
-                        );
+                        assert!(input.prepare(&Checking, set).is_ok());
                         if i % 5 == 0 {
                             assert!(
                                 output
-                                    .prepare(
-                                        &Checking,
-                                        &crate::ExternalSchemas::default(),
-                                        &crate::PreparationLimits::default()
-                                    )
+                                    .prepare(&Checking, &crate::ExternalSchemas::default())
                                     .is_ok()
                             );
                         }

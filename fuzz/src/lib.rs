@@ -1,8 +1,8 @@
 //! Shared target bodies for libFuzzer and the stable seed replay.
 #![forbid(unsafe_code)]
 use openbindings::{
-    Conformance, Document, ExternalSchemas, JsonLimits, JsonValue, PreparationLimits,
-    PreparedSchema, ValueOutcome,
+    Conformance, Document, ExternalSchema, ExternalSchemas, JsonLimits, JsonValue, PreparedSchema,
+    ValueOutcome,
 };
 use openbindings_internal_json::decimal::Decimal;
 use openbindings_json_schema_evaluator::{DefaultEvaluator, DefaultValidator};
@@ -165,9 +165,11 @@ pub fn decimal(data: &[u8]) -> bool {
 }
 
 fn prepare(schema: &str) -> Option<PreparedSchema<DefaultValidator>> {
-    let resources = ExternalSchemas::default()
-        .with("https://fuzz.invalid/root", JsonValue::parse(schema).ok()?)
-        .ok()?;
+    let resources = ExternalSchemas::new([ExternalSchema {
+        uri: "https://fuzz.invalid/root".into(),
+        document: JsonValue::parse(schema).ok()?,
+    }])
+    .ok()?;
     let document = Document::parse(br#"{"openbindings":"0.2.0","operations":{"op":{"input":{"$ref":"https://fuzz.invalid/root"}}}}"#).unwrap();
     document
         .validate()
@@ -178,11 +180,7 @@ fn prepare(schema: &str) -> Option<PreparedSchema<DefaultValidator>> {
         .unwrap()
         .input()
         .unwrap()
-        .prepare(
-            &DefaultEvaluator::new(),
-            &resources,
-            &PreparationLimits::default(),
-        )
+        .prepare(&DefaultEvaluator::new(), &resources)
         .ok()
 }
 fn verdict(outcome: &ValueOutcome) -> Option<bool> {

@@ -158,7 +158,9 @@ fn supplied_resource_references_are_reported_transitively_once() {
     let report = draft.references_with_resources(resources.clone(), &cancelled);
     assert_eq!(
         report,
-        proof.references_with_resources(resources, &cancelled)
+        proof
+            .document()
+            .references_with_resources(resources, &cancelled)
     );
     assert!(report.complete);
     assert!(report.limitation.is_none());
@@ -326,12 +328,11 @@ fn reference_refusals_preserve_the_public_cause_and_safe_message() {
         assert!(!detail.message.contains("private"));
     }
     let document = Document::parse(r#"{"openbindings":"0.2.0","operations":{},"schemas":{"entry":{"$ref":"https://example.test/external"}}}"#).unwrap();
-    let external = ExternalSchemas::default()
-        .with(
-            "https://example.test/external",
-            JsonValue::parse(r#"{"$schema":"https://example.test/unknown"}"#).unwrap(),
-        )
-        .unwrap();
+    let external = ExternalSchemas::new([openbindings::ExternalSchema {
+        uri: ("https://example.test/external").into(),
+        document: JsonValue::parse(r#"{"$schema":"https://example.test/unknown"}"#).unwrap(),
+    }])
+    .unwrap();
     let report = document.references_with_resources(external, &AtomicBool::new(false));
     let ReferenceResolution::Unresolved { detail } = &report.references[0].resolution else {
         panic!("expected reference refusal")

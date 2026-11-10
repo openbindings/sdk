@@ -7,8 +7,8 @@ mod tests {
         SchemaValidator, ValueOutcome, WorkControl,
     };
     use openbindings_invocation::{
-        BindingInvoker, BindingRequest, CancellationToken, DefaultOperationInvoker,
-        InvocationError, InvocationSupport, OperationRequest, OutputEvent, PreflightOutcome,
+        BindingInvoker, BindingRequest, CancellationToken, ContextChallenge,
+        DefaultOperationInvoker, InvocationError, InvocationSupport, OperationRequest, OutputEvent,
         ProviderInput, ProviderIo, ProviderOutput,
     };
     use std::{
@@ -64,8 +64,9 @@ mod tests {
     }
     impl BindingInvoker for P {
         type Invoke<'a> = Pin<Box<dyn Future<Output = Result<(), InvocationError>> + Send + 'a>>;
-        type Preflight<'a> =
-            Pin<Box<dyn Future<Output = Result<PreflightOutcome, InvocationError>> + Send + 'a>>;
+        type Preflight<'a> = Pin<
+            Box<dyn Future<Output = Result<Option<ContextChallenge>, InvocationError>> + Send + 'a>,
+        >;
         fn handle_invoke<'a>(
             &'a self,
             _: BindingRequest,

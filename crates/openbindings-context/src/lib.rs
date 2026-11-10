@@ -150,10 +150,6 @@ impl ContextChallenge {
     pub fn value(&self) -> &JsonObject {
         &self.0
     }
-    /// Retain the complete original carrier without serializing or rebuilding it.
-    pub fn to_json(&self) -> JsonObject {
-        self.0.clone()
-    }
 }
 impl TryFrom<JsonValue> for ContextChallenge {
     type Error = ChallengeShapeError;

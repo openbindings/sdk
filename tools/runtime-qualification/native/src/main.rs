@@ -33,7 +33,6 @@ fn once(
             .prepare(
                 &DefaultEvaluator::new(),
                 &openbindings::ExternalSchemas::default(),
-                &openbindings::PreparationLimits::default(),
             )
             .expect("must prepare")
     });
@@ -156,7 +155,6 @@ fn main() {
     let Ok(contract) = operation.input().expect("declared input").prepare(
         &DefaultEvaluator::new(),
         &openbindings::ExternalSchemas::default(),
-        &openbindings::PreparationLimits::default(),
     ) else {
         panic!("witness prepares")
     };

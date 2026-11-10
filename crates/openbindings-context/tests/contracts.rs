@@ -22,7 +22,7 @@ fn every_pinned_context_challenge_case_has_its_original_shape_answer() {
             case["description"]
         );
         if let Ok(challenge) = actual {
-            assert_eq!(challenge.to_json().value().text(), raw.text());
+            assert_eq!(challenge.value().value().text(), raw.text());
         }
     }
 }
@@ -86,7 +86,7 @@ fn exact_opaque_values_and_schema_owners_survive_the_envelope() {
         [0xd800]
     );
     let schema = challenge.schema();
-    let envelope = challenge.to_json();
+    let envelope = challenge.value().clone();
     drop(challenge);
     assert!(schema.member("type").is_err());
     assert_eq!(schema.member("const").unwrap().unwrap().text(), "1e99999");

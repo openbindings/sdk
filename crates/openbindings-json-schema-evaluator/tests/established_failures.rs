@@ -64,11 +64,7 @@ fn prepared(
     let contract = operation
         .input()
         .expect("declared input")
-        .prepare(
-            &evaluator,
-            &openbindings::ExternalSchemas::default(),
-            &openbindings::PreparationLimits::default(),
-        )
+        .prepare(&evaluator, &openbindings::ExternalSchemas::default())
         .unwrap();
     let schema = evaluator.0.lock().unwrap().take().unwrap();
     (contract, schema)

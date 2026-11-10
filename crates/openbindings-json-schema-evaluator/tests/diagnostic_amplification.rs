@@ -21,7 +21,6 @@ fn default_diagnostics_omit_problems_with_long_source_locations() {
     let Ok(contract) = operation.input().expect("declared input").prepare(
         &DefaultEvaluator::new(),
         &openbindings::ExternalSchemas::default(),
-        &openbindings::PreparationLimits::default(),
     ) else {
         panic!("expected ready contract");
     };

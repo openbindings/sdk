@@ -196,7 +196,7 @@ async fn check<E, F: Future<Output = Result<CheckedSource, CheckFailure<E>>>>(
         }
         Err(KindError::Provider(CheckFailure::Rejected(rejection))) => {
             bound(
-                rejection.to_json().value().text().len(),
+                rejection.value().value().text().len(),
                 limits.max_response_bytes,
                 "response-bytes",
             )?;

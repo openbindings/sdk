@@ -1,13 +1,13 @@
 //! Synthetic single-thread allocation/timing probe through public SDK APIs.
 //! The only unsafe code forwards allocator contracts unchanged to System.
 #![deny(unsafe_op_in_unsafe_fn)]
+use openbindings_invocation::ContextChallenge;
 
 use openbindings::{ConformantDocument, Document, ExternalSchemas, JsonValue};
 use openbindings_invocation::CancellationToken;
 use openbindings_invocation::{
     BindingInvoker, BindingInvokerExt, BindingRequest, DefaultOperationInvoker, InvocationError,
-    InvocationLimits, InvocationSupport, OperationRequest, OutputEvent, PreflightOutcome,
-    ProviderIo, WriteError,
+    InvocationLimits, InvocationSupport, OperationRequest, OutputEvent, ProviderIo, WriteError,
 };
 use serde::Serialize;
 use std::{
@@ -220,13 +220,13 @@ impl Fixture {
 }
 impl BindingInvoker for Fixture {
     type Invoke<'a> = Pin<Box<dyn Future<Output = Result<(), InvocationError>> + 'a>>;
-    type Preflight<'a> = Ready<Result<PreflightOutcome, InvocationError>>;
+    type Preflight<'a> = Ready<Result<Option<ContextChallenge>, InvocationError>>;
     fn handle_preflight<'a>(
         &'a self,
         _: BindingRequest,
         _: CancellationToken,
     ) -> Self::Preflight<'a> {
-        ready(Ok(PreflightOutcome::NoPrediction))
+        ready(Ok(None))
     }
     fn handle_invoke<'a>(
         &'a self,

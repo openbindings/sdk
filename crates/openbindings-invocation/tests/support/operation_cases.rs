@@ -7,7 +7,7 @@ use openbindings::{
 use openbindings_invocation::{
     BindingInvoker, BindingInvokerExt, BindingRequest, BoundaryFailureKind, CancellationToken,
     Context, ContextChallenge, DefaultOperationInvoker, InvocationError, InvocationSupport,
-    OperationRequest, OutputEvent, PreflightOutcome, ProviderIo,
+    OperationRequest, OutputEvent, ProviderIo,
     operation::{Direction, ValidationEvidence},
 };
 use openbindings_json_schema_evaluator::DefaultEvaluator;
@@ -76,7 +76,7 @@ impl InvocationSupport for Provider {
 }
 impl BindingInvoker for Provider {
     type Invoke<'a> = Pin<Box<dyn Future<Output = Result<(), InvocationError>> + Send + 'a>>;
-    type Preflight<'a> = Ready<Result<PreflightOutcome, InvocationError>>;
+    type Preflight<'a> = Ready<Result<Option<ContextChallenge>, InvocationError>>;
     fn handle_invoke<'a>(
         &'a self,
         request: BindingRequest,
@@ -126,9 +126,9 @@ impl BindingInvoker for Provider {
         self.preflights.fetch_add(1, Ordering::Relaxed);
         *self.seen.lock().unwrap() = Some(request);
         ready(Ok(if matches!(self.mode, Mode::Challenge) {
-            PreflightOutcome::Challenge(challenge())
+            Some(challenge())
         } else {
-            PreflightOutcome::NoPrediction
+            None
         }))
     }
 }
@@ -438,10 +438,7 @@ async fn preflight_is_send_with_a_non_send_evaluator_and_never_prepares() {
         )
         .unwrap();
     require_send(&future);
-    assert!(matches!(
-        future.await.unwrap(),
-        PreflightOutcome::Challenge(_)
-    ));
+    assert!(future.await.unwrap().is_some());
     assert_eq!(preparations.get(), 0);
     assert_eq!(evaluations.get(), 0);
     assert_eq!(provider.calls.load(Ordering::Relaxed), 0);

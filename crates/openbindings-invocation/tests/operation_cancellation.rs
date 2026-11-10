@@ -4,9 +4,10 @@ use openbindings::{
     PreparationFailure, PreparationLimits, SchemaEvaluator, SchemaValidator, ValueOutcome,
     WorkControl,
 };
+use openbindings_invocation::ContextChallenge;
 use openbindings_invocation::{
     BindingInvoker, BindingRequest, CancellationToken, DefaultOperationInvoker, InvocationError,
-    InvocationSupport, OperationRequest, OutputEvent, PreflightOutcome, ProviderIo,
+    InvocationSupport, OperationRequest, OutputEvent, ProviderIo,
 };
 use std::{
     future::{Future, poll_fn},
@@ -102,7 +103,7 @@ impl InvocationSupport for Provider {
 }
 impl BindingInvoker for Provider {
     type Invoke<'a> = Pin<Box<dyn Future<Output = Result<(), InvocationError>> + Send + 'a>>;
-    type Preflight<'a> = std::future::Ready<Result<PreflightOutcome, InvocationError>>;
+    type Preflight<'a> = std::future::Ready<Result<Option<ContextChallenge>, InvocationError>>;
     fn handle_invoke<'a>(
         &'a self,
         _: BindingRequest,
@@ -131,7 +132,7 @@ impl BindingInvoker for Provider {
         _: BindingRequest,
         _: CancellationToken,
     ) -> Self::Preflight<'a> {
-        std::future::ready(Ok(PreflightOutcome::NoPrediction))
+        std::future::ready(Ok(None))
     }
 }
 fn concurrent_cancel(stage: Stage) {
@@ -216,8 +217,9 @@ impl InvocationSupport for CancelThenComplete {
 }
 impl BindingInvoker for CancelThenComplete {
     type Invoke<'a> = Pin<Box<dyn Future<Output = Result<(), InvocationError>> + Send + 'a>>;
-    type Preflight<'a> =
-        Pin<Box<dyn Future<Output = Result<PreflightOutcome, InvocationError>> + Send + 'a>>;
+    type Preflight<'a> = Pin<
+        Box<dyn Future<Output = Result<Option<ContextChallenge>, InvocationError>> + Send + 'a>,
+    >;
     fn handle_invoke<'a>(
         &'a self,
         _: BindingRequest,
@@ -246,7 +248,7 @@ impl BindingInvoker for CancelThenComplete {
         Box::pin(async move {
             self.external.cancel();
             assert!(local.is_cancelled());
-            Ok(PreflightOutcome::NoPrediction)
+            Ok(None)
         })
     }
 }

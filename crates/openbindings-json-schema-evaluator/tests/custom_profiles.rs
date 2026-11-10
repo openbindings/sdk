@@ -27,7 +27,6 @@ fn prepare(
     schema.prepare(
         &DefaultEvaluator::new(),
         &ExternalSchemas::new(resources).unwrap(),
-        &PreparationLimits::default(),
     )
 }
 fn invalid(result: Result<PreparedSchema<DefaultValidator>, PreparationFailure>) {
@@ -480,11 +479,7 @@ fn preparation_display_identifies_invalid_supplied_resources_without_schema_text
     }])
     .unwrap();
     let failure = schema
-        .prepare(
-            &DefaultEvaluator::new(),
-            &resources,
-            &PreparationLimits::default(),
-        )
+        .prepare(&DefaultEvaluator::new(), &resources)
         .unwrap_err();
     assert_eq!(failure.kind, PreparationFailureKind::InvalidExternalSchema);
     assert_eq!(

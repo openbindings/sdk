@@ -51,11 +51,7 @@ fn prepare_with(
         .unwrap_or_else(|| panic!("declared operation {operation}"))
         .input()
         .expect("declared input")
-        .prepare(
-            evaluator,
-            supplied,
-            &openbindings::PreparationLimits::default(),
-        )
+        .prepare(evaluator, supplied)
 }
 fn prepare(
     proof: &ConformantDocument,
@@ -272,13 +268,7 @@ fn resource_identity_and_edited_binding_data_keep_value_contracts() {
             } else {
                 operation.output()
             };
-            let actual = match contract.map(|c| {
-                c.prepare(
-                    &evaluator,
-                    resources,
-                    &openbindings::PreparationLimits::default(),
-                )
-            }) {
+            let actual = match contract.map(|c| c.prepare(&evaluator, resources)) {
                 Some(Ok(contract)) => {
                     label(contract.explain(&value(case["valueText"].as_str().unwrap())))
                 }
@@ -304,13 +294,7 @@ fn resource_identity_and_edited_binding_data_keep_value_contracts() {
             (&supplied, "satisfies"),
             (&local, if edited { "satisfies" } else { "no-verdict" }),
         ] {
-            let actual = match run_job.output().map(|c| {
-                c.prepare(
-                    &evaluator,
-                    resources,
-                    &openbindings::PreparationLimits::default(),
-                )
-            }) {
+            let actual = match run_job.output().map(|c| c.prepare(&evaluator, resources)) {
                 Some(Ok(contract)) => label(contract.explain(&example)),
                 Some(Err(detail))
                     if matches!(

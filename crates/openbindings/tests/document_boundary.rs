@@ -188,3 +188,50 @@ fn indexed_reference_checks_keep_primary_key_and_diagnostic_semantics() {
     // An existing key counts even if the schema separately rejects its value;
     // aliases never count as a primary key. Finding order/location is unchanged.
 }
+
+#[test]
+fn parse_failures_locate_the_read_prefix_in_utf8_bytes() {
+    for (bytes, limits, expected) in [
+        (
+            b"{\n \"\xc3\xa9\" 0}".as_slice(),
+            JsonLimits::default(),
+            (8, 2, 7),
+        ),
+        (b"[\n0,".as_slice(), JsonLimits::default(), (4, 2, 3)),
+        (b"[\n\xff]".as_slice(), JsonLimits::default(), (2, 2, 1)),
+        (
+            b"[\n[0]]".as_slice(),
+            JsonLimits {
+                max_depth: 1,
+                ..JsonLimits::default()
+            },
+            (2, 2, 1),
+        ),
+        (
+            b"[\n0]".as_slice(),
+            JsonLimits {
+                max_nodes: 1,
+                ..JsonLimits::default()
+            },
+            (3, 2, 2),
+        ),
+        (
+            b"[\n0]".as_slice(),
+            JsonLimits {
+                max_bytes: 3,
+                ..JsonLimits::default()
+            },
+            (3, 2, 2),
+        ),
+    ] {
+        for error in [
+            Document::parse_with_limits(bytes, limits).unwrap_err(),
+            Document::parse_owned_with_limits(bytes.to_vec(), limits).unwrap_err(),
+        ] {
+            assert_eq!(
+                (error.byte_offset(), error.line(), error.byte_column()),
+                expected
+            );
+        }
+    }
+}

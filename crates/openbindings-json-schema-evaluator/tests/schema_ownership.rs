@@ -29,11 +29,7 @@ fn named_and_operation_schemas_retain_original_reference_context() {
     let evaluator = DefaultEvaluator::new();
     for schema in [named.clone(), input] {
         let prepared = schema
-            .prepare(
-                &evaluator,
-                &openbindings::ExternalSchemas::default(),
-                &openbindings::PreparationLimits::default(),
-            )
+            .prepare(&evaluator, &openbindings::ExternalSchemas::default())
             .unwrap();
         assert!(matches!(
             prepared.evaluate(&JsonValue::parse("2").unwrap()),
@@ -47,11 +43,7 @@ fn named_and_operation_schemas_retain_original_reference_context() {
     assert_eq!(named.location().pointer.as_str(), Some("/schemas/number"));
     assert!(matches!(
         changed
-            .prepare(
-                &evaluator,
-                &openbindings::ExternalSchemas::default(),
-                &openbindings::PreparationLimits::default()
-            )
+            .prepare(&evaluator, &openbindings::ExternalSchemas::default())
             .unwrap()
             .evaluate(&JsonValue::parse("2").unwrap()),
         ValueOutcome::Fails { .. }
@@ -80,7 +72,6 @@ fn absent_false_true_and_null_schemas_remain_distinct_owned_values() {
             .prepare(
                 &DefaultEvaluator::new(),
                 &openbindings::ExternalSchemas::default(),
-                &openbindings::PreparationLimits::default(),
             )
             .unwrap();
         for (text, expected) in [("null", null_matches), ("2", number_matches)] {

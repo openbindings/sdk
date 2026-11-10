@@ -221,12 +221,11 @@ fn default_limit_lane_differential() {
         let (mut comparisons, mut compiled, mut no_verdict) = (0, 0, 0);
         for index in 0..cases {
             let case = generate(&mut rng, index);
-            let resources = ExternalSchemas::default()
-                .with(
-                    "https://generated.test/root",
-                    JsonValue::parse(&case.schema).unwrap(),
-                )
-                .unwrap();
+            let resources = ExternalSchemas::new([openbindings::ExternalSchema {
+                uri: ("https://generated.test/root").into(),
+                document: JsonValue::parse(&case.schema).unwrap(),
+            }])
+            .unwrap();
             let validator = prepare_document(
                 &document(r#"{"$ref":"https://generated.test/root"}"#),
                 &resources,

@@ -238,12 +238,8 @@ pub struct VersionRefusal {
     pub supported: &'static str,
 }
 impl VersionRefusal {
-    /// The refusal of a declared version: `Some` for a well-formed version
-    /// outside the supported line, `None` when [`check_version`] finds it
-    /// supported or malformed. A tool that checks a declaration before any
-    /// document exists, such as a synthesis target version, refuses with the
-    /// record validation returns.
-    pub fn new(declared: &str) -> Option<Self> {
+    /// Construct a refusal only for a well-formed unsupported declaration.
+    pub(crate) fn new(declared: &str) -> Option<Self> {
         (check_version(declared) == VersionDecision::Unsupported).then(|| Self {
             declared: declared.into(),
             supported: SUPPORTED_VERSIONS,
@@ -252,7 +248,11 @@ impl VersionRefusal {
 }
 impl std::fmt::Debug for VersionRefusal {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("VersionRefusal").finish_non_exhaustive()
+        let mut debug = f.debug_struct("VersionRefusal");
+        if self.supported == SUPPORTED_VERSIONS {
+            debug.field("supported", &self.supported);
+        }
+        debug.finish_non_exhaustive()
     }
 }
 
@@ -370,9 +370,9 @@ pub fn validate_document_owned_with_limits(
 // limit, otherwise an OBI-01 violation at the refused byte.
 fn refused(bytes: &[u8], error: &InputError, limits: JsonLimits) -> DocumentValidation {
     let mut checks = Checks::new();
+    let location = backend::input_error_location(error);
     if error.kind() == InputErrorKind::Limit {
         let message = input_limit_message(error.code(), limits, bytes.len());
-        let location = backend::input_location(bytes, error.byte_offset());
         for rule in Rule::ALL {
             checks.mark(
                 rule,
@@ -387,7 +387,7 @@ fn refused(bytes: &[u8], error: &InputError, limits: JsonLimits) -> DocumentVali
             Rule::Obi01,
             Evidence::Violated,
             error.code(),
-            Some(backend::input_location(bytes, error.byte_offset())),
+            Some(location),
             parse_error_message(error.code()),
         );
         checks.not_applicable_after_json();

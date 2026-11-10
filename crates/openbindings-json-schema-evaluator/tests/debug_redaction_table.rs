@@ -49,7 +49,6 @@ fn debug_redacts_caller_text_at_every_boundary() {
         let prepared = unprepared.prepare(
             &DefaultEvaluator::new(),
             &openbindings::ExternalSchemas::default(),
-            &openbindings::PreparationLimits::default(),
         );
         rows.push(row(
             "Ok(PreparedSchema<openbindings_json_schema_evaluator::DefaultValidator>)",
@@ -89,7 +88,6 @@ fn debug_redacts_caller_text_at_every_boundary() {
         let Ok(contract) = operation.input().unwrap().prepare(
             &DefaultEvaluator::new(),
             &openbindings::ExternalSchemas::default(),
-            &openbindings::PreparationLimits::default(),
         ) else {
             panic!("not ready")
         };

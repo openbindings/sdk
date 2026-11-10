@@ -160,10 +160,6 @@ macro_rules! carrier {
             pub fn value(&self) -> &JsonObject {
                 &self.0
             }
-            /// Retain the complete original object without serialization or reconstruction.
-            pub fn to_json(&self) -> JsonObject {
-                self.0.clone()
-            }
         }
         impl TryFrom<JsonValue> for $name {
             type Error = CarrierError;

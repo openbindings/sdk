@@ -126,7 +126,6 @@ mod tests {
                 let observed = match contract.prepare(
                     &DefaultEvaluator::with_limits(limits),
                     &openbindings::ExternalSchemas::default(),
-                    &openbindings::PreparationLimits::default(),
                 ) {
                     Err(refusal) => {
                         assert!(
@@ -297,11 +296,7 @@ mod tests {
         let operation = proof.resolve_operation("read").expect("declared operation");
         let input: Schema = operation.input().expect("declared input");
         let contract: PreparedSchema<Prepared> = input
-            .prepare(
-                &ExactConstant,
-                &openbindings::ExternalSchemas::default(),
-                &openbindings::PreparationLimits::default(),
-            )
+            .prepare(&ExactConstant, &openbindings::ExternalSchemas::default())
             .expect("custom evaluator must prepare");
         assert!(matches!(
             contract.evaluate(&JsonValue::parse("1e400").unwrap()),

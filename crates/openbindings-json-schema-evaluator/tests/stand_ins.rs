@@ -40,11 +40,7 @@ fn prepare(
         .unwrap()
         .input()
         .unwrap()
-        .prepare(
-            &DefaultEvaluator::new(),
-            &resources,
-            &openbindings::PreparationLimits::default(),
-        )
+        .prepare(&DefaultEvaluator::new(), &resources)
 }
 fn verdict(outcome: &ValueOutcome) -> Option<bool> {
     match outcome {

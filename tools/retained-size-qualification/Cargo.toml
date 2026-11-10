@@ -1,0 +1,11 @@
+[package]
+name = "openbindings-retained-size-qualification"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.88"
+publish = false
+
+[workspace]
+
+[dependencies]
+openbindings = { path = "../../crates/openbindings" }

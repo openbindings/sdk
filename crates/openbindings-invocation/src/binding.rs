@@ -10,14 +10,6 @@ use std::{
     task::Poll,
 };
 
-/// Advisory requirements for this request only. Invocation resolves its own needs.
-#[derive(Clone, Debug)]
-pub enum PreflightOutcome {
-    /// No requirements predicted. This does not promise an invocation will proceed.
-    NoPrediction,
-    /// Context the provider can already identify, without dispatching the operation.
-    Challenge(ContextChallenge),
-}
 /// Execute an explicitly addressed binding. Neither method selects a binding or
 /// validates operation values. Futures may borrow provider configuration and need
 /// not implement Send. The provider owns kind-defined effects and cleanup.
@@ -29,7 +21,7 @@ pub trait BindingInvoker {
     where
         Self: 'a;
     /// Separate advisory work. A provider without a prediction can return Ready.
-    type Preflight<'a>: Future<Output = Result<PreflightOutcome, InvocationError>>
+    type Preflight<'a>: Future<Output = Result<Option<ContextChallenge>, InvocationError>>
     where
         Self: 'a;
     /// Run the selected binding. CONTEXT_REQUIRED precedes every output and
@@ -43,6 +35,11 @@ pub trait BindingInvoker {
     /// Report a prediction without consuming input, emitting output, dispatching
     /// the requested operation or spending its approval. Ordinary errors carry
     /// no prediction; `ERR_REFUSED` predicts refusal of the same input.
+    /// `Ok(None)` means no prediction, not a promise invocation will proceed.
+    /// With `type Preflight<'a> = std::future::Ready<Result<Option<ContextChallenge>, InvocationError>>`,
+    /// a provider with no prediction implements the body as `std::future::ready(Ok(None))`.
+    /// The [binding-invoker interface](https://github.com/openbindings/interfaces/blob/3e3dc453a93b611a8e9ea1813ec63a2216830f45/binding-invoker/README.md)
+    /// states that `null` is always conformant, even if invocation needs context.
     fn handle_preflight<'a>(
         &'a self,
         request: BindingRequest,
@@ -51,6 +48,9 @@ pub trait BindingInvoker {
 }
 /// Optional SDK routing knowledge for operation-name selection. This is not a
 /// portable kind-support query. Explicit binding invocation does not consult it.
+/// A provider without routing knowledge implements `can_invoke` as `false`,
+/// never a blanket `true`. Operation-name selection then fails closed with
+/// `ERR_BINDING_NOT_FOUND`; explicit bindings are unaffected.
 pub trait InvocationSupport {
     /// Whether this configuration can attempt the source's exact kind identifier.
     fn can_invoke(&self, kind: &str) -> bool;
@@ -74,7 +74,7 @@ pub(crate) fn require_binding(request: &BindingRequest) -> Result<(), Invocation
     if request.interface.binding(&request.binding).is_some() {
         Ok(())
     } else {
-        Err(error("ERR_BINDING_NOT_FOUND"))
+        Err(InvocationError::binding_not_found())
     }
 }
 pub(crate) fn error(code: &str) -> InvocationError {
@@ -96,7 +96,7 @@ pub(crate) fn preflight<'a, P: BindingInvoker + ?Sized>(
     limits: InvocationLimits,
     request: Result<BindingRequest, InvocationError>,
     external: CancellationToken,
-) -> impl Future<Output = Result<PreflightOutcome, InvocationError>> + 'a + use<'a, P> {
+) -> impl Future<Output = Result<Option<ContextChallenge>, InvocationError>> + 'a + use<'a, P> {
     let local = CancellationToken::new();
     let provider_control = local.clone();
     preflight_job(
@@ -110,12 +110,12 @@ pub(crate) fn preflight<'a, P: BindingInvoker + ?Sized>(
         local,
     )
 }
-async fn preflight_job<F: Future<Output = Result<PreflightOutcome, InvocationError>>>(
+async fn preflight_job<F: Future<Output = Result<Option<ContextChallenge>, InvocationError>>>(
     start: impl FnOnce() -> Result<F, InvocationError>,
     limits: InvocationLimits,
     external: CancellationToken,
     local: CancellationToken,
-) -> Result<PreflightOutcome, InvocationError> {
+) -> Result<Option<ContextChallenge>, InvocationError> {
     let _cancel_on_drop = CancelOnDrop(local.clone());
     let _relay = cancellation_relay(&external, &local);
     if local.is_cancelled() {
@@ -150,10 +150,8 @@ async fn preflight_job<F: Future<Output = Result<PreflightOutcome, InvocationErr
         ..Default::default()
     };
     let bounded = match &result {
-        Ok(PreflightOutcome::NoPrediction) => true,
-        Ok(PreflightOutcome::Challenge(challenge)) => {
-            crate::boundary::encode(challenge.value().value(), bounds).is_ok()
-        }
+        Ok(None) => true,
+        Ok(Some(challenge)) => crate::boundary::encode(challenge.value().value(), bounds).is_ok(),
         Err(error) => error.to_json_with_limits(bounds).is_ok(),
     };
     if bounded {
@@ -219,13 +217,17 @@ pub trait BindingInvokerExt: BindingInvoker {
         limits: InvocationLimits,
     ) -> Result<Invocation<impl Future<Output = Result<(), InvocationError>>>, BoundaryFailure>;
     /// Admit an advisory request without constructing invocation I/O.
+    /// `None` means no prediction; it does not promise invocation will proceed.
     /// # Errors
     /// Returns local request admission failure before advisory work.
     fn preflight(
         &self,
         request: BindingRequest,
         control: CancellationToken,
-    ) -> Result<impl Future<Output = Result<PreflightOutcome, InvocationError>>, BoundaryFailure>;
+    ) -> Result<
+        impl Future<Output = Result<Option<ContextChallenge>, InvocationError>>,
+        BoundaryFailure,
+    >;
     /// Preflight with caller-selected error/challenge encoding limits.
     /// # Errors
     /// Rejects invalid limits or malformed requests before advisory work.
@@ -234,7 +236,10 @@ pub trait BindingInvokerExt: BindingInvoker {
         request: BindingRequest,
         control: CancellationToken,
         limits: InvocationLimits,
-    ) -> Result<impl Future<Output = Result<PreflightOutcome, InvocationError>>, BoundaryFailure>;
+    ) -> Result<
+        impl Future<Output = Result<Option<ContextChallenge>, InvocationError>>,
+        BoundaryFailure,
+    >;
 }
 impl<P: BindingInvoker + ?Sized> BindingInvokerExt for P {
     fn invoke(
@@ -258,8 +263,10 @@ impl<P: BindingInvoker + ?Sized> BindingInvokerExt for P {
         &self,
         request: BindingRequest,
         control: CancellationToken,
-    ) -> Result<impl Future<Output = Result<PreflightOutcome, InvocationError>>, BoundaryFailure>
-    {
+    ) -> Result<
+        impl Future<Output = Result<Option<ContextChallenge>, InvocationError>>,
+        BoundaryFailure,
+    > {
         preflight_call(self, InvocationLimits::default(), request, control)
     }
     fn preflight_with_limits(
@@ -267,8 +274,10 @@ impl<P: BindingInvoker + ?Sized> BindingInvokerExt for P {
         request: BindingRequest,
         control: CancellationToken,
         limits: InvocationLimits,
-    ) -> Result<impl Future<Output = Result<PreflightOutcome, InvocationError>>, BoundaryFailure>
-    {
+    ) -> Result<
+        impl Future<Output = Result<Option<ContextChallenge>, InvocationError>>,
+        BoundaryFailure,
+    > {
         preflight_call(self, limits.validate()?, request, control)
     }
 }
@@ -304,7 +313,7 @@ pub(crate) fn preflight_call<'a, P: BindingInvoker + ?Sized>(
     request: BindingRequest,
     control: CancellationToken,
 ) -> Result<
-    impl Future<Output = Result<PreflightOutcome, InvocationError>> + 'a + use<'a, P>,
+    impl Future<Output = Result<Option<ContextChallenge>, InvocationError>> + 'a + use<'a, P>,
     BoundaryFailure,
 > {
     request.admit()?;

@@ -60,7 +60,7 @@ fn prepare_document<E: SchemaEvaluator<Validator = DefaultValidator>>(
     evaluator: &E,
     limits: &PreparationLimits,
 ) -> Result<DefaultValidator, PreparationFailure> {
-    Document::parse(document)
+    let selected = Document::parse(document)
         .unwrap()
         .validate()
         .unwrap()
@@ -69,9 +69,15 @@ fn prepare_document<E: SchemaEvaluator<Validator = DefaultValidator>>(
         .resolve_operation("op")
         .unwrap()
         .input()
-        .unwrap()
-        .prepare(evaluator, resources, limits)
-        .map(PreparedSchema::into_validator)
+        .unwrap();
+    evaluator.prepare(
+        EvaluationRequest {
+            schema: &selected,
+            external_schemas: resources,
+        },
+        limits,
+        &AtomicBool::new(false),
+    )
 }
 fn document(schema: &str) -> String {
     format!(r##"{{"openbindings":"0.2.0","operations":{{"op":{{"input":{schema}}}}}}}"##)
@@ -82,12 +88,13 @@ fn owners(
     limits: Limits,
     preparation: PreparationLimits,
 ) -> (DefaultValidator, DefaultValidator) {
-    let resources = resources
-        .with(
-            "https://qualification.invalid/root",
-            JsonValue::parse(schema).unwrap(),
-        )
-        .unwrap();
+    let resources = ExternalSchemas::new(resources.iter().cloned().chain(std::iter::once(
+        ExternalSchema {
+            uri: "https://qualification.invalid/root".into(),
+            document: JsonValue::parse(schema).unwrap(),
+        },
+    )))
+    .unwrap();
     let document = document(r#"{"$ref":"https://qualification.invalid/root"}"#);
     let selected = prepare_document(
         &document,

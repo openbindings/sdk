@@ -8,16 +8,16 @@ and whole-profile conformance are outside this initial API's claim.
 
 ```rust
 use openbindings::JsonValue;
-use openbindings_schema_comparison::{identical, ComparisonLimits, Identity, SchemaInput};
+use openbindings_schema_comparison::{identical, ComparisonLimits, SchemaInput};
 
-let offered = SchemaInput::standalone(JsonValue::parse(
+let offered = JsonValue::parse(
     r#"{"type":"string","nullable":true,"description":"offered value"}"#,
-)?);
-let existing = SchemaInput::standalone(JsonValue::parse(
-    r#"{"type":["null","string"]}"#,
-)?);
-assert_eq!(identical(Some(&offered), Some(&existing), &ComparisonLimits::default())?, Identity::Different);
-assert_eq!(identical(None, Some(&existing), &ComparisonLimits::default())?, Identity::Different);
+)?;
+let offered = SchemaInput::new(offered.clone(), offered);
+let existing = JsonValue::parse(r#"{"type":["null","string"]}"#)?;
+let existing = SchemaInput::new(existing.clone(), existing);
+assert!(!identical(Some(&offered), Some(&existing), &ComparisonLimits::default())?);
+assert!(!identical(None, Some(&existing), &ComparisonLimits::default())?);
 # Ok::<(), Box<dyn std::error::Error>>(())
 ```
 
@@ -27,6 +27,8 @@ it. `SchemaInput::from(&schema)` retains a canonical core schema's original cont
 Dropping the original document or view does not invalidate the input. Absent slots
 remain `None`; present null is an invalid schema. Every present side normalizes
 before an identity verdict, including when the other side is absent.
+`identical` returns `Result<bool, ComparisonFailure>`: true means normalized
+identity, false means difference, and a failure gives no answer.
 
 References resolve within their containing schema resource, including nested `$id`
 resources and plain-name anchors. Without `$id`, fragments use the supplied document
