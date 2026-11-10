@@ -68,3 +68,40 @@ test("hostile copied identifiers finish within public document and finding limit
   });
   assert.equal(results[1].findings, 4096);
 });
+
+// A refusal on length needs only the prefix that locates it, so module memory
+// does not grow by the size of an input far past the byte limit. A fresh process
+// keeps the measured growth this test's own.
+test("input far past the byte limit does not grow module memory by its size", async () => {
+  const program = `
+import { readFile } from "node:fs/promises";
+const url = (path) => new URL(path, ${JSON.stringify(import.meta.url)});
+const sdk = await import(url("../dist/index.js"));
+const bridge = await import(url("../dist/wasm/openbindings_wasm.js"));
+await sdk.initialize(await readFile(url("../dist/wasm/openbindings_wasm_bg.wasm")));
+const { memory } = await bridge.default();
+const size = 64 * 1024 * 1024, limits = { maxBytes: 1024 * 1024 };
+const bytes = new Uint8Array(size).fill(0x20), text = " ".repeat(size);
+const before = memory.buffer.byteLength;
+const outcomes = [
+  sdk.parseJson(bytes, { limits }).status,
+  sdk.parseJson(text, { limits }).status,
+  sdk.Document.parse(bytes, { limits }).status,
+  sdk.validateDocument(text, { limits }).report.conclusion,
+];
+console.log(JSON.stringify({ added: memory.buffer.byteLength - before, outcomes }));
+`;
+  const { stdout } = await run(
+    process.execPath,
+    ["--input-type=module", "-e", program],
+    { encoding: "utf8" },
+  );
+  const { added, outcomes } = JSON.parse(stdout);
+  assert.deepEqual(outcomes, [
+    "input-error",
+    "input-error",
+    "input-error",
+    "undetermined",
+  ]);
+  assert.ok(added < 16 * MIB, `module memory grew by ${added} bytes`);
+});

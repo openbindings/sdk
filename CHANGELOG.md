@@ -7,8 +7,9 @@
 - Schema comparison visits only the `allOf` branch pairs that can matter, charges
   each one to the work allowance and stops once the conjunction is retained.
 - Schema comparison resolves an empty `$ref` as it resolves `#`, with or without a base.
-- TypeScript refuses an input longer than its byte limit without copying it whole
-  into Wasm; the refusal and its byte coordinates are unchanged.
+- TypeScript sends bytes past the byte limit, and text with more UTF-16 units
+  than it, into Wasm only as the prefix that establishes the refusal; the
+  refusal and its byte coordinates are unchanged.
 - The byte-limit validation finding reads "the document exceeds the admission
   limit of N bytes", the form the node and depth findings use, without the
   input's size.
@@ -17,13 +18,19 @@
   `alsoIdentifies` and `through`) for its form and its target, adding
   `RelationshipError::ReferenceTarget` and `OmittedTarget`.
 - Operation invocation admits an empty `operation` or `binding` name, as the
-  operation-invoker interface does; it ends with `ERR_OPERATION_NOT_FOUND` or
+  operation-invoker interface does; invocation, preflight and
+  `DefaultOperationInvoker::prepare` end with `ERR_OPERATION_NOT_FOUND` or
   `ERR_BINDING_NOT_FOUND`. Selection entries and binding-invoker requests keep
   their non-empty rule.
 - OBI-11's finding names a schema `$id` at an OBI position, the specification's phrase.
 - Docs: preflight's no-prediction result is `None`; cancellation drops the provider
   future at the output's next poll or drop; the Rust guides state the Worker
   request rule; the runtime-qualification observations match the current harness.
+
+### Removed
+
+- `OperationPreparationFailure::Admission`: preparation resolves every name, so
+  nothing produced it.
 
 ## 2026-11-09 public API consensus batch (unreleased)
 

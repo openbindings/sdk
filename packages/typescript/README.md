@@ -245,9 +245,11 @@ checks. Independently retained proofs and views keep their certified revision.
 
 ## Limits and diagnostics
 
-An exact input longer than its byte limit is refused without copying it whole
-into Wasm: only enough of it crosses to establish the refusal and its byte
-coordinates. Inputs within the limit cross unchanged.
+Bytes past the byte limit, and text with more UTF-16 units than the limit
+allows bytes, cross into Wasm only as the prefix that establishes the refusal
+and its byte coordinates. Other text over the limit crosses whole before its
+UTF-8 is counted: at most three times the limit. Inputs within the limit cross
+unchanged.
 
 `validateDocument`, `Document.parse` and `parseJson` admit 32 MiB of UTF-8,
 1,000,000 nodes and 10,000 container levels by default; `validateDocument`

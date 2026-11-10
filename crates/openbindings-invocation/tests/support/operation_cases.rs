@@ -1229,6 +1229,7 @@ async fn concurrent_prepared_clones_keep_selection_context_cancellation_and_evid
 
 #[tokio::test]
 async fn empty_operation_addresses_resolve_as_absent_names() {
+    use openbindings_invocation::operation::OperationPreparationFailure;
     let provider = Provider::new(Mode::Empty);
     let client = DefaultOperationInvoker::new(
         &provider,
@@ -1263,5 +1264,9 @@ async fn empty_operation_addresses_resolve_as_absent_names() {
             code
         );
     }
+    assert!(matches!(
+        client.prepare(document("{}"), "", &control()),
+        Err(OperationPreparationFailure::Resolution(error)) if error.code() == "ERR_OPERATION_NOT_FOUND"
+    ));
     assert_eq!(provider.calls.load(Ordering::Relaxed), 0);
 }

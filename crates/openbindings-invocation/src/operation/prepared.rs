@@ -1,6 +1,6 @@
 //! Explicit owned validator reuse without retaining an evaluator in the driver.
 use super::*;
-use crate::{Context, boundary::nonempty};
+use crate::Context;
 
 /// The binding choice still available after fixing an operation.
 #[derive(Clone)]
@@ -24,8 +24,6 @@ impl fmt::Debug for BindingChoice {
 /// Preparation refused before an invocation exists; no per-value verdict is implied.
 #[derive(Debug)]
 pub enum OperationPreparationFailure {
-    /// Invalid local addressing input.
-    Admission(BoundaryFailure),
     /// The named operation could not be resolved.
     Resolution(InvocationError),
     /// A declared direction could not be prepared, with original typed evidence.
@@ -36,7 +34,6 @@ pub enum OperationPreparationFailure {
 impl fmt::Display for OperationPreparationFailure {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
-            Self::Admission(_) => "operation preparation admission failed",
             Self::Resolution(_) => "operation preparation name resolution failed",
             Self::Schema(_) => "operation schema preparation failed",
             Self::Cancelled => "operation preparation cancelled",
@@ -76,15 +73,14 @@ impl<P: BindingInvoker, E: SchemaEvaluator> DefaultOperationInvoker<P, E> {
     /// The returned owner retains no provider, evaluator or borrowed configuration.
     /// No binding is selected and no provider work starts.
     /// # Errors
-    /// Distinguishes admission, operation resolution, schema preparation and
-    /// cancellation outside a schema. A failed attempt does not poison later ones.
+    /// Distinguishes operation resolution, schema preparation and cancellation
+    /// outside a schema. Any name, the empty string included, is resolved. A failed attempt does not poison later ones.
     pub fn prepare(
         &self,
         interface: ConformantDocument,
         name: &str,
         control: &CancellationToken,
     ) -> Result<PreparedOperation<E::Validator>, OperationPreparationFailure> {
-        nonempty(name, "/operation").map_err(OperationPreparationFailure::Admission)?;
         if control.is_cancelled() {
             return Err(OperationPreparationFailure::Cancelled);
         }

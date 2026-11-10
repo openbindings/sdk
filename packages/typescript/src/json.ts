@@ -17,7 +17,7 @@ import { Managed, adopt, handle } from "./ownership.js";
 import type { Raw } from "./ownership.js";
 import { requireReady } from "./runtime.js";
 
-/** Exact JSON source: UTF-8 bytes or JavaScript scalar text encoded as UTF-8. Text containing literal unpaired UTF-16 units throws; represent those units using JSON \u escapes or exact bytes. Parsing copies admitted input into immutable storage; input longer than the byte limit is refused without copying it whole into Wasm. */
+/** Exact JSON source: UTF-8 bytes or JavaScript scalar text encoded as UTF-8. Text containing literal unpaired UTF-16 units throws; represent those units using JSON \u escapes or exact bytes. Parsing copies admitted input into immutable storage. Bytes past the byte limit, or text with more UTF-16 units than it, cross into Wasm only as the prefix that establishes the refusal; other oversized text crosses whole, at most three times the limit. */
 export type ExactInput = string | Uint8Array;
 
 /** Admission limits for exact JSON and documents, Rust's `JsonLimits`; each a nonnegative integer no greater than 4294967295, passed as `limits` to validateDocument, Document.parse and parseJson in a plain options object, where anything else throws SdkError invalid-json-limits. A document keeps them (its `limits` getter). Validation memory grows with the document, so raise them only where the process has the memory. */
@@ -131,8 +131,9 @@ export function scalar(text: string): void {
 
 // Exact input as it crosses into the module: text is checked here and the
 // bindings encode it straight into module memory, so no JavaScript copy of its
-// UTF-8 is made beside the module's own. Input past the byte limit crosses only
-// as the prefix that establishes the same refusal.
+// UTF-8 is made beside the module's own. Input certainly past the byte limit
+// (bytes beyond it, or more UTF-16 units than it) crosses only as the prefix
+// that establishes the same refusal.
 /** @internal */
 export function exact(input: ExactInput, limits?: Uint32Array): ExactInput {
   if (typeof input === "string") scalar(input);

@@ -300,28 +300,19 @@ fn wide_empty_conjunctions_fit_a_linear_work_allowance() {
 }
 
 #[test]
-fn wide_closed_conjunctions_obey_the_work_allowance() {
-    let branch = r#"{"additionalProperties":false,"properties":{"p":{}}}"#;
-    let schema = json(&format!(r#"{{"allOf":[{}]}}"#, vec![branch; 128].join(",")));
-    let left = SchemaInput::new(schema.clone(), schema);
-    let right = SchemaInput::new(json(branch), json(branch));
+fn a_retained_conjunction_stops_checking_branch_pairs() {
+    // The first branch keeps the conjunction unmerged. Checking every pair of
+    // the closed branches after it anyway would exhaust the allowance.
+    let closed = r#"{"additionalProperties":false,"properties":{"p":{}}}"#;
+    let mut branches = vec![r#"{"oneOf":[{}]}"#];
+    branches.extend(vec![closed; 1_000]);
+    let schema = json(&format!(r#"{{"allOf":[{}]}}"#, branches.join(",")));
+    let input = SchemaInput::new(schema.clone(), schema);
     let limits = ComparisonLimits {
-        max_work: 1_000_000,
+        max_work: 10_000_000,
         ..ComparisonLimits::default()
     };
-    assert_eq!(
-        identical_with_control(
-            Some(&left),
-            Some(&right),
-            &limits,
-            &std::sync::atomic::AtomicBool::new(false)
-        ),
-        Err(ComparisonFailure::LimitExceeded("work"))
-    );
-    assert_eq!(
-        identical(Some(&left), Some(&right), &ComparisonLimits::default()),
-        Ok(true)
-    );
+    assert_eq!(identical(Some(&input), Some(&input), &limits), Ok(true));
 }
 
 #[test]

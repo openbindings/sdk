@@ -633,7 +633,7 @@ export class PreparedSchema extends Managed {
   evaluate(value: JsonInput, options: WorkOptions = {}): ValueCheck {
     return checkValue(this, value, options, false);
   }
-  /** Admit exact JSON text or UTF-8 bytes as parseJson does, under the default limits (32 MiB, 10,000 container levels and 1,000,000 nodes), then check it cheaply: evaluateJson("7") checks the number 7. Input longer than the byte limit is refused without copying it whole into Wasm. Every value outcome is returned, including undefined and no-verdict; input-error is admission failure only. Duplicate members yield no-verdict and numbers are never rounded. Wrong input types and literal unpaired UTF-16 text throw, as for parseJson; exact admission precedes cancellation observation. Parse once with parseJson to check one value repeatedly; cancellation cannot preempt synchronous Wasm. */
+  /** Admit exact JSON text or UTF-8 bytes as parseJson does, under the default limits (32 MiB, 10,000 container levels and 1,000,000 nodes), then check it cheaply: evaluateJson("7") checks the number 7. Bytes past the byte limit, or text with more UTF-16 units than it, cross into Wasm only as the prefix that establishes the refusal. Every value outcome is returned, including undefined and no-verdict; input-error is admission failure only. Duplicate members yield no-verdict and numbers are never rounded. Wrong input types and literal unpaired UTF-16 text throw, as for parseJson; exact admission precedes cancellation observation. Parse once with parseJson to check one value repeatedly; cancellation cannot preempt synchronous Wasm. */
   evaluateJson(input: ExactInput, options: WorkOptions = {}): JsonCheck {
     requireReady();
     const prepared = handle<wasm.WasmPrepared>(this);
