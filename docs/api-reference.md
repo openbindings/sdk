@@ -31,7 +31,9 @@ APIs; the TypeScript facade does not expose their provider protocols.
 For source pulling, `AddedEntry::uses` and `BindingProposal::uses` expose only
 additions needed by binding data. `SchemaProposal` exposes the replacement
 `schema`; an additional `uses` member is retained as unknown metadata. The
-checked pull validates labels and all additions together. A caller keeping part
+checked pull validates labels and all additions together. Binding `references`
+and omitted `existing`, `alsoIdentifies` and `through` labels must name input
+entries by primary key, with operation slots required to exist. A caller keeping part
 of a pull follows schema references and each reached added binding's operation
 and `uses`, as the [adapter guide](writing-a-kind.md#what-goes-in-uses) explains.
 

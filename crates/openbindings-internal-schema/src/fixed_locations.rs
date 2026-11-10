@@ -68,7 +68,11 @@ fn escape(token: &str) -> String {
 }
 
 fn local_pointer(reference: &str) -> Option<String> {
-    let fragment = reference.strip_prefix('#')?;
+    let fragment = if reference.is_empty() {
+        ""
+    } else {
+        reference.strip_prefix('#')?
+    };
     let pointer = crate::uri::decode_fragment(fragment)?;
     (pointer.is_empty() || pointer.starts_with('/')).then(|| format!("#{pointer}"))
 }
@@ -786,7 +790,7 @@ mod tests {
     #[test]
     fn local_fragments_preserve_utf8_and_pointer_admission() {
         for (input, expected) in [
-            ("", None),
+            ("", Some("#")),
             ("#", Some("#")),
             ("#/", Some("#/")),
             ("#/雪/~01", Some("#/雪/~01")),

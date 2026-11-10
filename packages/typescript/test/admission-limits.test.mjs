@@ -16,8 +16,8 @@ const NO_DEPTH_CAP = 4294967295;
 const head = '{"openbindings":"0.2.0","operations":{},"x-fill":"';
 const padded = (bytes) => head + "a".repeat(bytes - head.length - 2) + '"}';
 const empty = '{"openbindings":"0.2.0","operations":{}}';
-const exceeded = (bytes, limit) =>
-  `the document's ${bytes} bytes exceed the ${limit}-byte admission limit`;
+const exceeded = (limit) =>
+  `the document exceeds the admission limit of ${limit} bytes`;
 const editRefusal = (limit, rust, typescript) =>
   `document edit refused: the edited document exceeds its ${limit} limit; ` +
   `admit the document with a larger JsonLimits::${rust} (limits.${typescript} in TypeScript)`;
@@ -59,7 +59,7 @@ test("validateDocument admits 32 MiB and locates the byte limit one byte past it
   assert.equal(within.report.conclusion, "conformant");
   undetermined(
     sdk.validateDocument(padded(DEFAULT_BYTES + 1)).report,
-    exceeded(DEFAULT_BYTES + 1, DEFAULT_BYTES),
+    exceeded(DEFAULT_BYTES),
     "byte-limit",
     DEFAULT_BYTES,
   );
@@ -76,7 +76,7 @@ test("a raised byte limit admits documents and values to it and refuses one byte
   );
   undetermined(
     sdk.validateDocument(over, { limits }).report,
-    exceeded(limit + 1, limit),
+    exceeded(limit),
     "byte-limit",
     limit,
   );
@@ -452,5 +452,90 @@ test("each conformance admission limit preserves its parser offset without API a
       assert.equal(finding.location.pointer, null);
       assert.doesNotMatch(finding.message, /validate|JsonLimits|TypeScript/);
     }
+  }
+});
+
+test("oversized exact inputs retain byte-limit messages and original coordinates", () => {
+  const text = '[\n"é😀界"' + " ".repeat(40);
+  const bytes = new TextEncoder().encode(text);
+  for (const maxBytes of [0, 1, 2, 4, 5, 7, 9, 12]) {
+    const prefix = bytes.subarray(0, maxBytes);
+    const newline = prefix.lastIndexOf(10);
+    const line = newline < 0 ? 1 : 2;
+    const byteColumn = maxBytes - newline;
+    const expected = {
+      code: "byte-limit",
+      kind: "Limit",
+      byteOffset: maxBytes,
+      line,
+      byteColumn,
+      message: `the input exceeds the admitted byte limit at byte ${maxBytes}; raise JsonLimits::max_bytes (limits.maxBytes in TypeScript)`,
+    };
+    for (const input of [text, bytes]) {
+      for (const parse of [sdk.parseJson, sdk.Document.parse]) {
+        const result = parse(input, { limits: { maxBytes } });
+        assert.equal(result.status, "input-error");
+        assert.deepEqual(result.error, expected);
+      }
+      const result = sdk.validateDocument(input, { limits: { maxBytes } });
+      assert.equal(result.status, "report");
+      assert.equal(result.report.conclusion, "undetermined");
+      for (const finding of result.report.findings) {
+        assert.equal(finding.code, "byte-limit");
+        assert.equal(finding.message, exceeded(maxBytes));
+        assert.deepEqual(finding.location, {
+          pointer: null,
+          byteOffset: maxBytes,
+          line,
+          byteColumn,
+        });
+      }
+    }
+  }
+  // Scalar admission still inspects the whole text before any transfer.
+  for (const parse of [
+    sdk.parseJson,
+    sdk.Document.parse,
+    sdk.validateDocument,
+  ]) {
+    assert.throws(
+      () => parse(text + "\ud800", { limits: { maxBytes: 1 } }),
+      TypeError,
+    );
+  }
+});
+
+test("evaluateJson preserves oversized-input refusal before cancellation", () => {
+  const document = parsed(
+    sdk.Document.parse(
+      '{"openbindings":"0.2.0","operations":{"op":{"input":true}}}',
+    ),
+  );
+  const assessment = document.validate();
+  assert.equal(assessment.status, "conformant");
+  const proof = assessment.document;
+  const ready = prepareInput(proof, "op");
+  assert.equal(ready.status, "ready");
+  const contract = ready.schema;
+  try {
+    const text = " \n" + " ".repeat(DEFAULT_BYTES);
+    const signal = AbortSignal.abort();
+    for (const input of [text, new TextEncoder().encode(text)]) {
+      const result = contract.evaluateJson(input, { signal });
+      assert.equal(result.status, "input-error");
+      assert.deepEqual(result.error, {
+        code: "byte-limit",
+        kind: "Limit",
+        byteOffset: DEFAULT_BYTES,
+        line: 2,
+        byteColumn: DEFAULT_BYTES - 1,
+        message: `the input exceeds the admitted byte limit at byte ${DEFAULT_BYTES}; parse the value with JsonValue::parse_with_limits and a larger JsonLimits::max_bytes, then validate it (parseJson with a larger limits.maxBytes in TypeScript)`,
+      });
+    }
+    assert.throws(() => contract.evaluateJson(text + "\ud800"), TypeError);
+  } finally {
+    contract.dispose();
+    proof.dispose();
+    document.dispose();
   }
 });

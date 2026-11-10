@@ -81,8 +81,9 @@ establishes success. After `Complete` or `Error`, subsequent reads return `None`
 `InvocationControl` observes the winning terminal and local evidence without
 retaining or polling provider work. Local cancellation affects only that attempt;
 external cancellation synchronously revokes its shared handoffs. Dropping output
-cancels and releases its future. On cancellation the provider future is dropped
-and is never polled again. An adapter cannot await cancellation in that future
+cancels and releases its future. `InvocationControl::cancel` settles the attempt.
+The provider future is never polled again and is dropped at the output handle's next poll or when that handle
+is dropped. An adapter cannot await cancellation in that future
 and then run async cleanup. Synchronous `Drop` cleanup can release resources;
 work requiring async cleanup must be owned separately. The cancellation token is
 useful for detached work and for synchronous loops that check it cooperatively.

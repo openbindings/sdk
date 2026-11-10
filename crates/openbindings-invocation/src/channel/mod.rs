@@ -452,6 +452,8 @@ impl fmt::Debug for InvocationControl {
 }
 impl InvocationControl {
     /// Select cancellation if the attempt is still unsettled. No rollback claim.
+    /// The provider future is never polled again and is dropped at the output
+    /// handle's next poll or when that handle is dropped.
     pub fn cancel(&self) {
         self.shared.settle(Err(InvocationError::cancelled()));
     }

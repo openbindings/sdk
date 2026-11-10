@@ -298,6 +298,9 @@ impl Resources {
             return Err(Failure::InvalidReference);
         }
         let current = &self.entries[scope];
+        if text.is_empty() {
+            return self.target(scope, "", attempt);
+        }
         if let Some(fragment) = text.strip_prefix('#') {
             return self.target(scope, fragment, attempt);
         }

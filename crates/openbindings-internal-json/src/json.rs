@@ -359,7 +359,12 @@ impl JsonValue {
     /// # Errors
     /// Returns an input error for invalid UTF-8, a byte order mark, invalid JSON syntax, or an exceeded admission limit.
     pub fn parse_owned_with_limits(input: Vec<u8>, limits: JsonLimits) -> Result<Self, InputError> {
-        parse_owned(input, limits).map_err(|(error, _)| error)
+        if input.len() > limits.max_bytes {
+            return Err(byte_limit(&input, limits));
+        }
+        Arena::parse_owned(input, arena_limits(limits))
+            .map(|owner| JsonValue { owner, id: 0 })
+            .map_err(|(problem, bytes)| admission(problem, &bytes))
     }
     /// Borrow this value without incrementing its storage owner count.
     pub fn view(&self) -> JsonRef<'_> {
@@ -828,23 +833,6 @@ fn admission(p: Problem, bytes: &[u8]) -> InputError {
         route: Route::Admission,
     }
 }
-/// [`JsonValue::parse_owned_with_limits`], handing the bytes back with a
-/// refusal so that a caller can still report on them, as document validation
-/// does; for the SDK's own crates.
-///
-/// # Errors
-/// Returns the input error and the bytes for invalid UTF-8, a byte order mark, invalid JSON syntax, or an exceeded admission limit.
-#[doc(hidden)]
-pub fn parse_owned(input: Vec<u8>, limits: JsonLimits) -> Result<JsonValue, (InputError, Vec<u8>)> {
-    if input.len() > limits.max_bytes {
-        let error = byte_limit(&input, limits);
-        return Err((error, input));
-    }
-    Arena::parse_owned(input, arena_limits(limits))
-        .map(|owner| JsonValue { owner, id: 0 })
-        .map_err(|(problem, bytes)| (admission(problem, &bytes), bytes))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -62,7 +62,10 @@ with upper bounds does not invoke a general satisfiability solver. An identical
 merged object can still admit no values; identity is a structural profile claim.
 
 One monotone attempt covers both sides, reference lookup, normalization, merges
-and comparison. Default limits are 20 million work units, 64 MiB of conservative
+and comparison. Conjunction checks index closed branches and branches declaring
+properties, charge every remaining pair check and stop once retention is known.
+Conjunctions of empty objects need only linear work in their branch count.
+Default limits are 20 million work units, 64 MiB of conservative
 cumulative allocation reservations and depth 128. Depth can be tightened but the
 fixed ceiling remains 128. Work units and reservations are SDK policy, not a
 portable cost metric or a bound on caller-owned input storage. A refused attempt

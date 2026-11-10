@@ -385,3 +385,107 @@ fn an_existing_operation_input_reference_passes_without_uses() {
             .is_ok()
     );
 }
+
+#[test]
+fn binding_references_name_existing_input_schemas_and_operation_slots() {
+    let request = PullRequest::new(
+        checked(
+            r#"{"openbindings":"0.2.0","operations":{"o":{"aliases":["alias"],"input":true,"output":false},"empty":{}},"schemas":{"S":true},"sources":{"s":{"kind":"k"}},"bindings":{"b":{"operation":"o","source":"s"}}}"#,
+        ),
+        "s",
+    );
+    for (labels, valid) in [
+        (
+            vec!["schemas/S", "operations/o/input", "operations/o/output"],
+            true,
+        ),
+        (vec!["schemas/missing"], false),
+        (vec!["operations/alias/input"], false),
+        (vec!["operations/empty/input"], false),
+        (vec!["operations/o"], false),
+        (vec!["operations/o/other"], false),
+        (vec!["bindings/b"], false),
+        (vec!["S"], false),
+    ] {
+        let result = PullResult::from_json(json(
+            &serde_json::json!({
+                "additions": {}, "report": {"exhaustive":true,"added":[],
+                    "existing":[{"binding":"b","status":"current","references":labels}]}
+            })
+            .to_string(),
+        ))
+        .unwrap();
+        let checked =
+            result.validate_for(&request, &PullLimits::default(), &AtomicBool::new(false));
+        if valid {
+            assert!(checked.is_ok());
+        } else {
+            assert!(matches!(
+                checked,
+                Err(PullValidationError::Relationship(
+                    RelationshipError::ReferenceTarget
+                ))
+            ));
+        }
+    }
+}
+
+#[test]
+fn omitted_labels_name_input_entries_by_primary_key() {
+    let request = PullRequest::new(
+        checked(
+            r#"{"openbindings":"0.2.0","operations":{"o":{"aliases":["alias"],"input":true,"output":false},"empty":{}},"schemas":{"S":true},"sources":{"s":{"kind":"k"}}}"#,
+        ),
+        "s",
+    );
+    for (field, labels, valid) in [
+        ("existing", vec!["operations/o"], true),
+        ("existing", vec!["schemas/S"], true),
+        ("existing", vec!["operations/o/input"], true),
+        ("existing", vec!["operations/alias"], false),
+        ("existing", vec!["schemas/missing"], false),
+        ("existing", vec!["bindings/b"], false),
+        ("alsoIdentifies", vec!["operations/o"], true),
+        ("alsoIdentifies", vec!["operations/alias"], false),
+        ("alsoIdentifies", vec!["operations/o/input"], false),
+        ("alsoIdentifies", vec!["schemas/S"], false),
+        (
+            "through",
+            vec!["schemas/S", "operations/o/input", "operations/o/output"],
+            true,
+        ),
+        ("through", vec!["operations/o"], false),
+        ("through", vec!["operations/empty/input"], false),
+        ("through", vec!["operations/alias/input"], false),
+        ("through", vec!["schemas/missing"], false),
+    ] {
+        let mut omitted = serde_json::json!({"status":"conflict","reasonCode":"shape","message":"", "existing":"operations/o","offered":{}});
+        omitted[field] = if field == "existing" {
+            serde_json::json!(labels[0])
+        } else {
+            serde_json::json!(labels)
+        };
+        let result = PullResult::from_json(json(
+            &serde_json::json!({
+                "additions":{},"report":{"exhaustive":true,"added":[],"omitted":[omitted]}
+            })
+            .to_string(),
+        ))
+        .unwrap();
+        let checked =
+            result.validate_for(&request, &PullLimits::default(), &AtomicBool::new(false));
+        if valid {
+            assert!(checked.is_ok(), "{field}");
+        } else {
+            assert!(
+                matches!(
+                    checked,
+                    Err(PullValidationError::Relationship(
+                        RelationshipError::OmittedTarget
+                    ))
+                ),
+                "{field}"
+            );
+        }
+    }
+}

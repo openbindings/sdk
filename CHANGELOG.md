@@ -1,5 +1,30 @@
 # Changelog
 
+## 2026-11-10 objective review fixes (unreleased)
+
+### Changed
+
+- Schema comparison visits only the `allOf` branch pairs that can matter, charges
+  each one to the work allowance and stops once the conjunction is retained.
+- Schema comparison resolves an empty `$ref` as it resolves `#`, with or without a base.
+- TypeScript refuses an input longer than its byte limit without copying it whole
+  into Wasm; the refusal and its byte coordinates are unchanged.
+- The byte-limit validation finding reads "the document exceeds the admission
+  limit of N bytes", the form the node and depth findings use, without the
+  input's size.
+- Source pull checks each report label that names an entry of the input document
+  (a binding entry's `references`, and an omitted entry's `existing`,
+  `alsoIdentifies` and `through`) for its form and its target, adding
+  `RelationshipError::ReferenceTarget` and `OmittedTarget`.
+- Operation invocation admits an empty `operation` or `binding` name, as the
+  operation-invoker interface does; it ends with `ERR_OPERATION_NOT_FOUND` or
+  `ERR_BINDING_NOT_FOUND`. Selection entries and binding-invoker requests keep
+  their non-empty rule.
+- OBI-11's finding names a schema `$id` at an OBI position, the specification's phrase.
+- Docs: preflight's no-prediction result is `None`; cancellation drops the provider
+  future at the output's next poll or drop; the Rust guides state the Worker
+  request rule; the runtime-qualification observations match the current harness.
+
 ## 2026-11-09 public API consensus batch (unreleased)
 
 ### Changed

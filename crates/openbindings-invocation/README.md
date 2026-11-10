@@ -83,7 +83,9 @@ sent?;
 The caller's **output handle alone drives** provider and validation work. Poll
 input submission and output consumption concurrently when either can block.
 Dropping output cancels the attempt and releases its future; input and control
-handles retain no provider future. Closing caller input drains accepted values.
+handles retain no provider future. `InvocationControl::cancel` settles the
+attempt. Its provider future is never polled again and is dropped at the output
+handle's next poll or when that handle is dropped. Closing caller input drains accepted values.
 Closing provider input declines further values and may emit `InputClosed` while
 output continues. Terminal completion suppresses an undelivered closure notice.
 Committed values precede the terminal; an output value alone never establishes
@@ -105,8 +107,10 @@ arbitrary provider CPU remains the provider's cooperative responsibility.
 `BindingRequest` and `OperationRequest` own the original `ConformantDocument`,
 address and optional opaque `openbindings_context::Context`. Their JSON decoders
 admit closed opening payloads and require document conformance. Malformed requests
-return local `BoundaryFailure`; well-shaped missing names or keys produce the
-appropriate invocation terminal. Exact data preserves absence, null and original
+return local `BoundaryFailure`; well-shaped missing names or keys, including empty operation-invoker
+`operation` and `binding` names, produce the appropriate invocation terminal.
+Core's OBI-02 name grammar excludes empty keys and aliases.
+The binding-invoker carrier requires a nonempty binding name. Exact data preserves absence, null and original
 number spelling. A document's opaque data still obeys core document admission.
 
 Operation-name selection uses the provider's optional native `InvocationSupport`
@@ -146,8 +150,8 @@ the SDK's local address checks. `DefaultOperationInvoker` retains inherent metho
 and explicit preparation/validation settings. Generic calls through the
 `OperationInvoker` trait do not promise `Send`; concrete return types can be `Send`.
 
-Preflight has its own associated future and returns `NoPrediction` or the shared
-`{message, schema}` challenge as a successful result. It selects as invocation does,
+Preflight has its own associated future and returns `None` for no prediction or
+`Some(ContextChallenge)` carrying the shared `{message, schema}` challenge. It selects as invocation does,
 but never validates values or dispatches the operation. Ordinary errors carry no
 prediction; `ERR_REFUSED` predicts refusal of the same input. A later invocation
 selects independently and may discover additional requirements. Context acquisition, approvals and retry policy belong to the host.

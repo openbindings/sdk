@@ -249,20 +249,17 @@ async fn third_party_invocation_preserves_operation_codes_and_local_admission() 
         .unwrap()
         .conformant()
         .unwrap();
-    assert!(
-        EmptyInvoker
-            .invoke(OperationRequest::operation(empty.clone(), ""), cancel())
-            .is_err()
-    );
-    let call = EmptyInvoker
-        .invoke(OperationRequest::operation(empty, "missing"), cancel())
-        .unwrap();
-    let (_, mut output) = call.split();
-    let Some(OutputEvent::Error(error)) = output.next().await else {
-        panic!("terminal")
-    };
-    assert_eq!(error.code(), "ERR_OPERATION_NOT_FOUND");
-    assert!(output.next().await.is_none());
+    for name in ["", "missing"] {
+        let call = EmptyInvoker
+            .invoke(OperationRequest::operation(empty.clone(), name), cancel())
+            .unwrap();
+        let (_, mut output) = call.split();
+        let Some(OutputEvent::Error(error)) = output.next().await else {
+            panic!("terminal")
+        };
+        assert_eq!(error.code(), "ERR_OPERATION_NOT_FOUND");
+        assert!(output.next().await.is_none());
+    }
 }
 #[tokio::test]
 async fn public_constructor_is_lazy_cancellable_and_keeps_limits_optional() {

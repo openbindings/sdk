@@ -5,6 +5,9 @@ schema. Rust needs no runtime initialization. For a complete call, continue to
 [document to typed result](document-to-typed-result.md), which defines its own
 small adapter and handles invocation and output decoding.
 
+In a Rust Worker service, validate documents and prepare schemas inside request
+handling, following the [Worker service rule in the support table](support.md).
+
 Packages are unpublished. In an application beside an exact SDK checkout named
 `sdk`, use these dependencies (adjust the paths for extracted crate archives):
 

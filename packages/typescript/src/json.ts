@@ -17,7 +17,7 @@ import { Managed, adopt, handle } from "./ownership.js";
 import type { Raw } from "./ownership.js";
 import { requireReady } from "./runtime.js";
 
-/** Exact JSON source: UTF-8 bytes or JavaScript scalar text encoded as UTF-8. Text containing literal unpaired UTF-16 units throws; represent those units using JSON \u escapes or exact bytes. Parsing copies input into immutable storage. */
+/** Exact JSON source: UTF-8 bytes or JavaScript scalar text encoded as UTF-8. Text containing literal unpaired UTF-16 units throws; represent those units using JSON \u escapes or exact bytes. Parsing copies admitted input into immutable storage; input longer than the byte limit is refused without copying it whole into Wasm. */
 export type ExactInput = string | Uint8Array;
 
 /** Admission limits for exact JSON and documents, Rust's `JsonLimits`; each a nonnegative integer no greater than 4294967295, passed as `limits` to validateDocument, Document.parse and parseJson in a plain options object, where anything else throws SdkError invalid-json-limits. A document keeps them (its `limits` getter). Validation memory grows with the document, so raise them only where the process has the memory. */
@@ -32,6 +32,8 @@ export interface JsonLimits {
 
 // Rust's JsonLimits::default(), read once: bytes, nodes and nesting.
 let defaultLimits: Uint32Array | undefined;
+// Cache the scalar default used on every exact-input transfer.
+let defaultMaxBytes: number | undefined;
 
 function jsonDefaults(): Uint32Array {
   return (defaultLimits ??= wasm.jsonLimits());
@@ -129,13 +131,23 @@ export function scalar(text: string): void {
 
 // Exact input as it crosses into the module: text is checked here and the
 // bindings encode it straight into module memory, so no JavaScript copy of its
-// UTF-8 is made beside the module's own.
+// UTF-8 is made beside the module's own. Input past the byte limit crosses only
+// as the prefix that establishes the same refusal.
 /** @internal */
-export function exact(input: ExactInput): ExactInput {
+export function exact(input: ExactInput, limits?: Uint32Array): ExactInput {
   if (typeof input === "string") scalar(input);
   else if (!(input instanceof Uint8Array))
     throw new TypeError("Expected JSON text or Uint8Array.");
-  return input;
+  const maxBytes = limits?.[0] ?? (defaultMaxBytes ??= jsonDefaults()[0]);
+  if (input.length <= maxBytes) return input;
+  if (typeof input !== "string") return input.subarray(0, maxBytes + 1);
+  // UTF-8 has at least as many bytes as scalar text has UTF-16 units. Keep
+  // enough units to exceed the byte limit and preserve its entire byte prefix.
+  // Include the low surrogate when the cut would split a scalar character.
+  let end = maxBytes + 1;
+  const last = input.charCodeAt(end - 1);
+  if (last >= 0xd800 && last <= 0xdbff) end++;
+  return input.slice(0, end);
 }
 
 const exactOwners = new WeakSet<object>();
@@ -403,7 +415,7 @@ export function parseJson(
 ): ParseResult<ExactJson> {
   requireReady();
   const limits = limitsOption(options);
-  const data = exact(input);
+  const data = exact(input, limits);
   try {
     return {
       status: "parsed",

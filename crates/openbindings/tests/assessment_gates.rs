@@ -189,7 +189,7 @@ fn the_default_byte_limit_admits_32_mib_and_locates_its_refusal() {
         assert_eq!(at.pointer, None);
         assert_eq!(
             finding.message,
-            "the document's 33554433 bytes exceed the 33554432-byte admission limit"
+            "the document exceeds the admission limit of 33554432 bytes"
         );
     }
     // Raising the named setting admits the same document.
@@ -234,8 +234,7 @@ fn a_raised_byte_limit_admits_documents_to_it_and_they_keep_it_for_edits() {
     assert_eq!(refused.report().conclusion, Conformance::Undetermined);
     assert!(refused.report().findings.iter().all(|f| f.message
         == format!(
-            "the document's {} bytes exceed the {}-byte admission limit",
-            raised.max_bytes + 1,
+            "the document exceeds the admission limit of {} bytes",
             raised.max_bytes
         )));
     // Parsing does the same, and the parsed document keeps its limits.
