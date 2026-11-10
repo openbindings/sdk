@@ -352,7 +352,7 @@ impl ExistingEntry {
     labels_accessor!(
         references,
         "references",
-        "Iterate the input document entries referenced by binding data."
+        "Iterate schemas/<key> and operations/<key>/input or /output labels referenced by binding data. PullResult::validate_for checks primary keys and slot presence."
     );
     /// Read the exact entry type and key this observation addresses.
     pub fn target(&self) -> ExistingTarget<'_> {
@@ -501,12 +501,12 @@ impl OmittedEntry {
     optional_text!(
         existing,
         "existing",
-        "Borrow the input-document label touched by the omission; required on conflicts."
+        "Borrow the input-document label touched by the omission; required on conflicts. PullResult::validate_for checks primary keys and slot presence."
     );
     labels_accessor!(
         also_identifies,
         "alsoIdentifies",
-        "Borrow the additional identified operation labels in their reported order."
+        "Borrow the additional identified operation labels by primary key, in their reported order."
     );
     /// Borrow the offered operation shape or schema; present on conflicts only.
     pub fn offered(&self) -> Option<JsonRef<'_>> {
@@ -515,7 +515,7 @@ impl OmittedEntry {
     labels_accessor!(
         through,
         "through",
-        "Borrow the labels through which a conflict differs, in reported order."
+        "Borrow schema-entry or operation-slot labels through which a conflict differs, in reported order. PullResult::validate_for checks primary keys and slot presence."
     );
     optional_text!(
         identifier,

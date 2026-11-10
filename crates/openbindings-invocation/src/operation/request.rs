@@ -75,12 +75,12 @@ impl OperationRequest {
     /// Check local address shape without serialization, resolution or provider work.
     /// Third-party operation invokers can share the SDK's admission checks.
     /// # Errors
-    /// Rejects empty names and malformed ordered selections.
+    /// Rejects empty ordered selections and empty names within them. Operation
+    /// and binding names, including empty strings, are resolved at invocation.
     pub fn admit(&self) -> Result<(), BoundaryFailure> {
         match &self.address {
-            OperationAddress::Binding(key) => nonempty(key, "/binding"),
-            OperationAddress::Operation { name, selection } => {
-                nonempty(name, "/operation")?;
+            OperationAddress::Binding(_) => Ok(()),
+            OperationAddress::Operation { selection, .. } => {
                 if let Some(keys) = selection {
                     if keys.is_empty() {
                         return Err(failure(BoundaryFailureKind::EmptyArray, "/selection"));

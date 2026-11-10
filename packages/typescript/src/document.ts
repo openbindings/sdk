@@ -195,7 +195,7 @@ export function validateDocument(
 ): DocumentReport {
   requireReady();
   const limits = limitsOption(options);
-  const data = exact(input);
+  const data = exact(input, limits);
   return decode(
     sdkCall(() =>
       typeof data === "string"
@@ -310,7 +310,7 @@ export class Document extends DocumentSnapshot {
   ): ParseResult<Document> {
     requireReady();
     const limits = limitsOption(options);
-    const data = exact(input);
+    const data = exact(input, limits);
     try {
       return {
         status: "parsed",

@@ -192,7 +192,7 @@ impl InvocationSupport for Memory {
 
 Returning `Ok(())` ends invocation successfully. Returning `Err` ends it
 unsuccessfully. Do not send an extra terminal as an output value. This preflight
-checks the addressed data and returns `NoPrediction`. Preflight must not consume
+checks the addressed data and returns `None` (no prediction). Preflight must not consume
 input, emit output, dispatch the requested operation or spend its approval.
 A future invocation still resolves its own needs and can fail or ask for context.
 

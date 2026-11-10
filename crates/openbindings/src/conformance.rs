@@ -349,7 +349,7 @@ pub fn validate_document_with_limits(
     let bytes = input.as_ref();
     match JsonValue::parse_with_limits(bytes, limits) {
         Ok(value) => Document::admitted(value, limits).validate(),
-        Err(error) => Ok(refused(bytes, &error, limits)),
+        Err(error) => Ok(refused(&error, limits)),
     }
 }
 /// Assess bytes as [`validate_document_with_limits`] does, taking them as
@@ -361,18 +361,18 @@ pub fn validate_document_owned_with_limits(
     input: Vec<u8>,
     limits: JsonLimits,
 ) -> Result<DocumentValidation, VersionRefusal> {
-    match openbindings_internal_json::parse_owned(input, limits) {
+    match JsonValue::parse_owned_with_limits(input, limits) {
         Ok(value) => Document::admitted(value, limits).validate(),
-        Err((error, bytes)) => Ok(refused(&bytes, &error, limits)),
+        Err(error) => Ok(refused(&error, limits)),
     }
 }
 // The evidence for bytes admission refused: every rule inconclusive past a
 // limit, otherwise an OBI-01 violation at the refused byte.
-fn refused(bytes: &[u8], error: &InputError, limits: JsonLimits) -> DocumentValidation {
+fn refused(error: &InputError, limits: JsonLimits) -> DocumentValidation {
     let mut checks = Checks::new();
     let location = backend::input_error_location(error);
     if error.kind() == InputErrorKind::Limit {
-        let message = input_limit_message(error.code(), limits, bytes.len());
+        let message = input_limit_message(error.code(), limits);
         for rule in Rule::ALL {
             checks.mark(
                 rule,
@@ -412,10 +412,10 @@ pub(crate) fn version_refusal(value: &JsonValue) -> Option<VersionRefusal> {
     VersionRefusal::new(declared)
 }
 // Human-facing admission facts; recovery API advice belongs in API docs.
-fn input_limit_message(code: &str, limits: JsonLimits, bytes: usize) -> String {
+fn input_limit_message(code: &str, limits: JsonLimits) -> String {
     match code {
         "byte-limit" => format!(
-            "the document's {bytes} bytes exceed the {}-byte admission limit",
+            "the document exceeds the admission limit of {} bytes",
             limits.max_bytes
         ),
         "node-limit" => format!(
@@ -986,7 +986,7 @@ pub(crate) fn assess_value(document: &Document) -> Result<ValidationReport, Vers
                         Rule::Obi11,
                         id,
                         "absolute-schema-id",
-                        "a document-resource $id must be an absolute URI",
+                        "a schema $id at an OBI position must be an absolute URI",
                     );
                 }
                 continue;

@@ -1226,3 +1226,47 @@ async fn concurrent_prepared_clones_keep_selection_context_cancellation_and_evid
     assert!(matches!(dout.next().await, Some(OutputEvent::Complete)));
     assert!(d_control.validation_failure().is_none());
 }
+
+#[tokio::test]
+async fn empty_operation_addresses_resolve_as_absent_names() {
+    use openbindings_invocation::operation::OperationPreparationFailure;
+    let provider = Provider::new(Mode::Empty);
+    let client = DefaultOperationInvoker::new(
+        &provider,
+        DefaultEvaluator::default(),
+        ExternalSchemas::default(),
+    );
+    for (field, code) in [
+        ("operation", "ERR_OPERATION_NOT_FOUND"),
+        ("binding", "ERR_BINDING_NOT_FOUND"),
+    ] {
+        let wire = json(&format!(
+            r#"{{"interface":{},"{field}":""}}"#,
+            document("{}").value().text()
+        ));
+        let request = OperationRequest::from_json(&wire).unwrap();
+        assert_eq!(
+            request.to_json().unwrap().get(field).unwrap().as_str(),
+            Some("")
+        );
+        let (_, mut output) = client.invoke(request.clone(), control()).unwrap().split();
+        let Some(OutputEvent::Error(error)) = output.next().await else {
+            panic!("terminal")
+        };
+        assert_eq!(error.code(), code);
+        assert_eq!(
+            client
+                .preflight(request, control())
+                .unwrap()
+                .await
+                .unwrap_err()
+                .code(),
+            code
+        );
+    }
+    assert!(matches!(
+        client.prepare(document("{}"), "", &control()),
+        Err(OperationPreparationFailure::Resolution(error)) if error.code() == "ERR_OPERATION_NOT_FOUND"
+    ));
+    assert_eq!(provider.calls.load(Ordering::Relaxed), 0);
+}

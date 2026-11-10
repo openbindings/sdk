@@ -76,7 +76,7 @@ fn debug_redacts_caller_text_at_every_boundary() {
         row("BindingChoice", &BindingChoice::Binding(SECRET.into())),
         row(
             "OperationPreparationFailure",
-            &OperationPreparationFailure::Admission(admission),
+            &OperationPreparationFailure::Resolution(error.clone()),
         ),
     ];
     check_rows(rows, 10);

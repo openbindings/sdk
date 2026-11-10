@@ -61,6 +61,28 @@ fn retain<'a>(
     Ok(labels.insert((section, name), ()).is_none())
 }
 
+// These labels use primary keys, including when an offered operation was
+// identified through an alias. Slot labels must name a slot actually present.
+fn input_target(
+    label: &str,
+    operations: &Map<'_>,
+    schemas: &Map<'_>,
+    operation_entry: bool,
+    attempt: &mut Attempt<'_>,
+) -> Result<bool, Failure> {
+    attempt.work(label.len().saturating_add(1))?;
+    if let Some(name) = label.strip_prefix("schemas/") {
+        return Ok(lookup(schemas, name, attempt)?.is_some());
+    }
+    let Some(name) = label.strip_prefix("operations/") else {
+        return Ok(false);
+    };
+    if let Some((name, slot @ ("input" | "output"))) = name.rsplit_once('/') {
+        return Ok(lookup(operations, name, attempt)?.is_some_and(|op| op.get(slot).is_some()));
+    }
+    Ok(operation_entry && lookup(operations, name, attempt)?.is_some())
+}
+
 struct Additions<'a> {
     operations: Map<'a>,
     schemas: Map<'a>,
@@ -203,10 +225,46 @@ pub(crate) fn check(
             if !retain(&mut existing, section, name, attempt)? {
                 return Err(Rule::DuplicateTarget.into());
             }
+            if let Some(references) = entry.get("references") {
+                for label in references.elements().expect("admitted references") {
+                    if !input_target(key(label)?, &operations, &schemas, false, attempt)? {
+                        return Err(Rule::ReferenceTarget.into());
+                    }
+                }
+            }
             if section == Section::Bindings
                 && let Some(proposal) = entry.get("proposal")
             {
                 additions.uses(proposal.get("uses"), Some(name), attempt)?;
+            }
+        }
+    }
+    if let Some(entries) = report.get("omitted") {
+        for entry in entries.elements().expect("admitted omitted") {
+            attempt.work(1)?;
+            if let Some(label) = entry.get("existing")
+                && !input_target(key(label)?, &operations, &schemas, true, attempt)?
+            {
+                return Err(Rule::OmittedTarget.into());
+            }
+            if let Some(labels) = entry.get("through") {
+                for label in labels.elements().expect("admitted through") {
+                    if !input_target(key(label)?, &operations, &schemas, false, attempt)? {
+                        return Err(Rule::OmittedTarget.into());
+                    }
+                }
+            }
+            if let Some(labels) = entry.get("alsoIdentifies") {
+                for label in labels.elements().expect("admitted alsoIdentifies") {
+                    let label = key(label)?;
+                    attempt.work(label.len().saturating_add(1))?;
+                    let name = label
+                        .strip_prefix("operations/")
+                        .ok_or(Rule::OmittedTarget)?;
+                    if lookup(&operations, name, attempt)?.is_none() {
+                        return Err(Rule::OmittedTarget.into());
+                    }
+                }
             }
         }
     }

@@ -24,6 +24,9 @@ conformance produces a `ConformantDocument`, with infallible typed field reads
 and operations that hand out schemas. An unsupported specification
 version is a separate refusal.
 
+In a Rust Worker service, validate documents and prepare schemas inside request
+handling, following the [Worker service rule in the support table](https://github.com/openbindings/sdk/blob/main/docs/support.md).
+
 To author, create an OBI with `Document::new()` or parse exact JSON with
 `Document::parse`, which retains a snapshot for inspection, including invalid
 editor drafts, and refuses text that is not JSON as an `InputError`;
@@ -152,7 +155,7 @@ refusals, not finding codes.
 | `unknown-operation` | OBI-06, OBI-08 | A binding or dependency operation reference does not name a primary operation key. |
 | `unknown-source` | OBI-07 | A binding source reference does not name a source key. |
 | `schema-dialect` | OBI-09 | A contained schema declares a dialect other than JSON Schema 2020-12. |
-| `absolute-schema-id` | OBI-11 | A document-resource `$id` is not an absolute URI. |
+| `absolute-schema-id` | OBI-11 | A schema `$id` at an OBI position is not an absolute URI. |
 | `reference-type` | OBI-11 | A document-resource schema reference is not a string. |
 | `reference-form` | OBI-11 | A document-resource reference is not a valid absolute or same-document URI-reference. |
 | `reference-target` | OBI-12 | A reference into the document or a contained resource identifies no contained schema. |

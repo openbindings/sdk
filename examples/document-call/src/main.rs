@@ -106,7 +106,6 @@ async fn call(text: &str, input_text: &str) -> Result<Reply, Box<dyn Error>> {
     let prepared = invoker
         .prepare(interface, operation.key(), &control)
         .map_err(|e| match e {
-            OperationPreparationFailure::Admission(cause) => format!("address admission: {cause}"),
             OperationPreparationFailure::Resolution(cause) => {
                 format!("operation resolution: {cause}")
             }

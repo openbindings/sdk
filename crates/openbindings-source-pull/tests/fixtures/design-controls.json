@@ -1863,7 +1863,7 @@
                 "operation": "getUser"
               },
               "rule": "retained",
-              "existing": "operations/o",
+              "existing": "operations/getUser",
               "offered": {}
             }
           ]

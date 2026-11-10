@@ -20,7 +20,9 @@ optional shared `Context`. `SourcePuller` supplies borrowed finite work and its
 own native operational error through `handle_pull_source`. Import `SourcePullerExt`
 to call the SDK-owned `pull_source` method directly on the implementation. It checks source existence before dispatch,
 then checks key/alias collisions, selected-source attribution, report coverage,
-canonical operation keys and uses labels. It validates a prospective document
+canonical operation keys, uses labels and input-document labels in binding
+`references` and omitted `existing`, `alsoIdentifies` and `through` fields.
+Input-document labels use primary keys, with operation slots required to exist. It validates a prospective document
 with all additions before returning the exact result. The original remains
 unchanged and stale proposals are never applied.
 Use `pull_source_with_limits(request, control, limits)` for caller-selected limits.

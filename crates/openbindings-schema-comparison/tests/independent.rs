@@ -284,3 +284,59 @@ fn nested_retained_conjunctions_keep_authored_order() {
         Ok(false)
     );
 }
+
+#[test]
+fn wide_empty_conjunctions_fit_a_linear_work_allowance() {
+    // Wide enough that a scan over every branch pair would take minutes.
+    let width = 100_000;
+    let schema = json(&format!(r#"{{"allOf":[{}]}}"#, vec!["{}"; width].join(",")));
+    let left = SchemaInput::new(schema.clone(), schema);
+    let right = SchemaInput::new(json("{}"), json("{}"));
+    let limits = ComparisonLimits {
+        max_work: 256 * width,
+        ..ComparisonLimits::default()
+    };
+    assert_eq!(identical(Some(&left), Some(&right), &limits), Ok(true));
+}
+
+#[test]
+fn a_retained_conjunction_stops_checking_branch_pairs() {
+    // The first branch keeps the conjunction unmerged. Checking every pair of
+    // the closed branches after it anyway would exhaust the allowance.
+    let closed = r#"{"additionalProperties":false,"properties":{"p":{}}}"#;
+    let mut branches = vec![r#"{"oneOf":[{}]}"#];
+    branches.extend(vec![closed; 1_000]);
+    let schema = json(&format!(r#"{{"allOf":[{}]}}"#, branches.join(",")));
+    let input = SchemaInput::new(schema.clone(), schema);
+    let limits = ComparisonLimits {
+        max_work: 10_000_000,
+        ..ComparisonLimits::default()
+    };
+    assert_eq!(identical(Some(&input), Some(&input), &limits), Ok(true));
+}
+
+#[test]
+fn empty_references_identify_the_same_root_as_empty_fragments() {
+    let right = SchemaInput::new(json(r#"{"type":"string"}"#), json(r#"{"type":"string"}"#));
+    for reference in ["", "#"] {
+        for base in [None, Some("https://example.test/offering")] {
+            let root = json(&format!(
+                r#"{{"type":"string","$defs":{{"Selected":{{"$ref":"{reference}"}}}}}}"#
+            ));
+            let selected = root
+                .get("$defs")
+                .unwrap()
+                .get("Selected")
+                .unwrap()
+                .to_owned();
+            let mut left = SchemaInput::new(selected, root);
+            if let Some(base) = base {
+                left = left.with_base(base);
+            }
+            assert_eq!(
+                identical(Some(&left), Some(&right), &ComparisonLimits::default()),
+                Ok(true)
+            );
+        }
+    }
+}

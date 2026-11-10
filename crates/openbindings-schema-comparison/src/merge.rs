@@ -14,16 +14,46 @@ pub(crate) fn all_of(
 ) -> Result<Value, Failure> {
     attempt.depth(depth)?;
     let mut retain = outside(&siblings, depth, attempt)? || unmergeable(&siblings);
+    let mut closed_count = usize::from(constrains_additional(&siblings));
+    let mut properties_count = usize::from(has_properties(&siblings));
     for branch in &branches {
         let Value::Object(object) = branch else {
             return Err(Failure::InvalidSchema);
         };
-        retain |= outside(object, depth + 1, attempt)? || unmergeable(object);
-        retain |= closed_across(object, &siblings, attempt)?
-            || closed_across(&siblings, object, attempt)?;
-        for other in &branches {
-            if let Value::Object(other) = other {
-                retain |= closed_across(object, other, attempt)?;
+        if retain {
+            break;
+        }
+        retain = outside(object, depth + 1, attempt)? || unmergeable(object);
+        closed_count += usize::from(constrains_additional(object));
+        properties_count += usize::from(has_properties(object));
+    }
+    if !retain && closed_count != 0 && properties_count != 0 {
+        let mut closed = attempt.vector(closed_count)?;
+        let mut properties = attempt.vector(properties_count)?;
+        for object in std::iter::once(&siblings).chain(branches.iter().map(|branch| {
+            let Value::Object(object) = branch else {
+                unreachable!("normalized branches are objects")
+            };
+            object
+        })) {
+            attempt.work(1)?;
+            if constrains_additional(object) {
+                closed.push(object);
+            }
+            if has_properties(object) {
+                properties.push(object);
+            }
+        }
+        'pairs: for object in closed {
+            for other in &properties {
+                if std::ptr::eq(object, *other) {
+                    attempt.work(1)?;
+                    continue;
+                }
+                if closed_across(object, other, attempt)? {
+                    retain = true;
+                    break 'pairs;
+                }
             }
         }
     }
@@ -38,6 +68,15 @@ pub(crate) fn all_of(
     }
     Ok(result)
 }
+fn constrains_additional(object: &Object) -> bool {
+    matches!(
+        get(object, "additionalProperties"),
+        Some(Value::Boolean(false) | Value::Object(_))
+    )
+}
+fn has_properties(object: &Object) -> bool {
+    matches!(get(object, "properties"), Some(Value::Object(properties)) if !properties.is_empty())
+}
 // A branch's additionalProperties applies to properties absent from that branch,
 // including properties declared in another branch. Merging must not admit them.
 fn closed_across(
@@ -45,10 +84,8 @@ fn closed_across(
     other: &Object,
     attempt: &mut Attempt<'_>,
 ) -> Result<bool, Failure> {
-    if !matches!(
-        get(closed, "additionalProperties"),
-        Some(Value::Boolean(false) | Value::Object(_))
-    ) {
+    attempt.work(1)?;
+    if !constrains_additional(closed) {
         return Ok(false);
     }
     let Some(Value::Object(properties)) = get(other, "properties") else {
