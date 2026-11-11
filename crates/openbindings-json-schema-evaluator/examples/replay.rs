@@ -13,15 +13,13 @@ impl SchemaEvaluator for OriginalContext {
         limits: &PreparationLimits,
         control: &dyn WorkControl,
     ) -> Result<Self::Validator, PreparationFailure> {
-        let document = request.schema.document();
-        let entry = request.schema.location();
+        let root = request.environment(limits, control)?.root();
         assert_eq!(
-            document
-                .value()
-                .at_pointer(&entry.pointer)
+            root.source()
+                .at_pointer(root.pointer())
                 .unwrap()
                 .to_owned()
-                .semantic_eq(&request.schema.json()),
+                .semantic_eq(&root.value()),
             Some(true)
         );
         DefaultEvaluator::new().prepare(request, limits, control)

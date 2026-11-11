@@ -590,12 +590,30 @@ impl ConformantDocument {
     }
 }
 
+/// The original context from which schema preparation starts.
+#[derive(Clone, Copy)]
+pub enum SchemaRoot<'a> {
+    /// A schema retained from its conformant OpenBindings document.
+    Contained(&'a Schema),
+    /// The retrieval URI of a resource in [`EvaluationRequest::external_schemas`].
+    /// Its own `$id`, when present, establishes its reference base.
+    Supplied(&'a str),
+}
+impl fmt::Debug for SchemaRoot<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::Contained(_) => "Contained(..)",
+            Self::Supplied(_) => "Supplied(..)",
+        })
+    }
+}
+
 /// Borrowed inputs for one preparation attempt. The returned validator must
 /// own what it needs; a request does not lend it a completed caller's lifetime.
 #[derive(Clone, Copy)]
 pub struct EvaluationRequest<'a> {
-    /// Selected contained schema and its immutable document context.
-    pub schema: &'a Schema,
+    /// Selected contained schema or supplied resource retrieval identity.
+    pub root: SchemaRoot<'a>,
     /// Explicit external schemas; no URI authorizes acquisition.
     pub external_schemas: &'a ExternalSchemas,
 }
@@ -623,15 +641,22 @@ pub(crate) fn original_location(at: openbindings_internal_schema::Location) -> S
 /// struct Ready(Rc<()>);
 /// impl SchemaEvaluator for TrueOnly {
 ///     type Validator = Ready;
-///     fn prepare(&self, request: EvaluationRequest<'_>, _: &PreparationLimits,
+///     fn prepare(&self, request: EvaluationRequest<'_>, limits: &PreparationLimits,
 ///         control: &dyn WorkControl) -> Result<Ready, PreparationFailure> {
 ///         control.check()?;
-///         if request.schema.json().view().as_bool() == Some(true) {
+///         let (value, origin) = match request.root {
+///             SchemaRoot::Contained(schema) => (schema.json(), schema.location()),
+///             SchemaRoot::Supplied(_) => {
+///                 let root = request.environment(limits, control)?.root();
+///                 (root.value(), root.origin().clone())
+///             }
+///         };
+///         if value.view().as_bool() == Some(true) {
 ///             Ok(Ready(Rc::new(())))
 ///         } else {
 ///             Err(PreparationFailure::new(PreparationFailureKind::UnsupportedCapability {
 ///                 capability: "true-only".into(),
-///             }).with_origin(request.schema.location()))
+///             }).with_origin(origin))
 ///         }
 ///     }
 /// }

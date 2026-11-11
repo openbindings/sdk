@@ -61,7 +61,7 @@ fn prepare_document<E: SchemaEvaluator<Validator = DefaultValidator>>(
         .unwrap();
     evaluator.prepare(
         EvaluationRequest {
-            schema: &selected,
+            root: SchemaRoot::Contained(&selected),
             external_schemas: resources,
         },
         limits,

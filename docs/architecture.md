@@ -21,8 +21,8 @@ no parallel detached authoring-part types or typed setter families.
 
 An operation's `input()` and `output()` expose contextual `Schema` owners when a
 schema is present. Named schemas come from `ConformantDocument::schema`.
-`EvaluationRequest` borrows the selected original schema and explicit immutable
-`ExternalSchemas`. Its owned `SchemaEnvironment` supplies original locations,
+`EvaluationRequest` selects a contained `Schema` or a supplied resource's retrieval
+URI, with explicit immutable `ExternalSchemas`. Its owned `SchemaEnvironment` supplies original locations,
 resource/profile inventories and typed reference queries. It does not fetch
 missing content, rewrite the document or introduce a global resource registry.
 Cached environment construction is scoped to the actual document/resource pair;

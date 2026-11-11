@@ -313,20 +313,13 @@ async fn two_local_kinds_cross_description_authoring_pull_drift_context_and_invo
 }
 
 fn accepts(schema: &JsonValue, value: &JsonValue) -> bool {
-    let document = proof(
-        Document::parse(format!(
-            r#"{{"openbindings":"0.2.0","operations":{{"check":{{"input":{}}}}}}}"#,
-            schema.text()
-        ))
-        .unwrap(),
-    );
-    let prepared = document
-        .operation("check")
-        .unwrap()
-        .input()
-        .unwrap()
-        .prepare(&DefaultEvaluator::new(), &ExternalSchemas::default())
-        .unwrap();
+    let uri = "https://consumer.example/data-schema";
+    let resources = ExternalSchemas::new([openbindings::ExternalSchema {
+        uri: uri.into(),
+        document: schema.clone(),
+    }])
+    .unwrap();
+    let prepared = resources.prepare(uri, &DefaultEvaluator::new()).unwrap();
     match prepared.evaluate(value) {
         ValueOutcome::Satisfies => true,
         ValueOutcome::Fails { .. } => false,

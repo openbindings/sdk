@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-11-11 supplied schema roots (unreleased)
+
+### Changed
+
+- Breaking for evaluator implementers: `EvaluationRequest::schema` is replaced
+  by `root: SchemaRoot`, selecting `Contained(&Schema)` or `Supplied(&str)`.
+  `EvaluationRequest::environment` enters either original context.
+- `ExternalSchemas::prepare` and `prepare_with_control` prepare a supplied
+  resource at its retrieval URI as its own JSON Schema root. TypeScript exposes
+  `ExternalSchemas.prepare(uri, { limits, signal })` through Wasm. Local
+  references, declared IDs, dialects and retrieval provenance stay with that
+  resource; missing root URIs are preparation failures.
+- Kind data and context challenge guidance uses supplied roots. Core `Schema`
+  still comes only from a conformant OpenBindings document.
+
 ## 2026-11-11 compiled-lane mutation follow-up (unreleased)
 
 ### Changed

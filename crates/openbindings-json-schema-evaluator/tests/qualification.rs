@@ -62,14 +62,13 @@ impl SchemaEvaluator for OriginalContextAdapter {
         control: &dyn WorkControl,
     ) -> Result<Self::Validator, PreparationFailure> {
         control.check()?;
-        let original = request
-            .schema
-            .document()
-            .value()
-            .at(request.schema.location().pointer.as_str().unwrap())
+        let root = request.environment(limits, control)?.root();
+        let original = root
+            .source()
+            .at_pointer(root.pointer())
             .expect("original entry location")
             .to_owned();
-        assert_eq!(original.semantic_eq(&request.schema.json()), Some(true));
+        assert_eq!(original.semantic_eq(&root.value()), Some(true));
         openbindings_json_schema_evaluator::DefaultEvaluator::new()
             .prepare(request, limits, control)
     }

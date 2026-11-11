@@ -881,6 +881,11 @@ impl SchemaSpace {
             .get(&node_id(value))
             .copied()
     }
+    /// Original root of the supplied resource at its catalog position. This
+    /// enters the carrier itself, without following an alias or declared ID.
+    pub fn supplied_root(&self, index: usize) -> usize {
+        self.local.sources[index + 1].positions[&0]
+    }
     /// Append a node's original pointer, exactly as [`Self::location`] gives it,
     /// to `out`, using `scratch` for its source's own pointer. `false`,
     /// appending nothing, when the pointer passes through a name holding

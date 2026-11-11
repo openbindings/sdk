@@ -100,7 +100,7 @@ impl Schema {
         control.check()?;
         let result = evaluator.prepare(
             EvaluationRequest {
-                schema: self,
+                root: SchemaRoot::Contained(self),
                 external_schemas: external,
             },
             limits,

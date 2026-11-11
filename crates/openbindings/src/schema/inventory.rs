@@ -9,7 +9,7 @@ pub(crate) struct EnvironmentInner {
     pub(crate) space: Arc<SchemaSpace>,
     pub(crate) root: usize,
     // Retain the immutable pair whose cache owns this resolution space.
-    _document: ConformantDocument,
+    _document: Option<ConformantDocument>,
     _external: ExternalSchemas,
 }
 /// An owned inventory of original schemas. Construction performs no I/O and
@@ -122,7 +122,34 @@ impl SchemaEnvironment {
             inner: Arc::new(EnvironmentInner {
                 space,
                 root,
-                _document: schema.document().clone(),
+                _document: Some(schema.document().clone()),
+                _external: external.clone(),
+            }),
+        })
+    }
+    fn supplied_with_control(
+        uri: &str,
+        external: &ExternalSchemas,
+        maximum_nodes: usize,
+        maximum_identity: usize,
+        control: &dyn openbindings_internal_schema::Control,
+    ) -> Result<Self, PreparationFailure> {
+        control.charge_work(uri.len().saturating_add(1))?;
+        control.charge_allocation(uri.len().saturating_mul(8).saturating_add(256))?;
+        let index = external.resource_index(uri)?;
+        let space = Arc::new(SchemaSpace::supplied_bounded(
+            external,
+            maximum_nodes,
+            maximum_identity,
+            control,
+        )?);
+        control.check()?;
+        let root = space.supplied_root(index);
+        Ok(Self {
+            inner: Arc::new(EnvironmentInner {
+                space,
+                root,
+                _document: None,
                 _external: external.clone(),
             }),
         })
@@ -282,17 +309,40 @@ impl Schema {
     }
 }
 impl EvaluationRequest<'_> {
-    /// Construct the same original-schema environment available from [`Schema`].
+    /// Construct an original-schema environment for the selected root. A supplied
+    /// root enters its own resource, under its own base and dialect, with the
+    /// other explicit resources available for references. Nothing is fetched.
     ///
     /// # Errors
-    /// Returns preparation cancellation or an inventory limit.
+    /// Returns cancellation, an inventory limit, or an unavailable supplied root.
     pub fn environment(
         &self,
         limits: &PreparationLimits,
         control: &dyn WorkControl,
     ) -> Result<SchemaEnvironment, PreparationFailure> {
-        self.schema
-            .environment(self.external_schemas, limits, control)
+        match self.root {
+            SchemaRoot::Contained(schema) => {
+                schema.environment(self.external_schemas, limits, control)
+            }
+            SchemaRoot::Supplied(uri) => {
+                control.check()?;
+                openbindings_internal_schema::preparation::Attempt::run(
+                    limits.max_sdk_work_units,
+                    limits.max_sdk_reservation_bytes,
+                    &|| control.is_cancelled(),
+                    |attempt| {
+                        SchemaEnvironment::supplied_with_control(
+                            uri,
+                            self.external_schemas,
+                            limits.max_schema_nodes,
+                            limits.max_identity_bytes,
+                            attempt,
+                        )
+                    },
+                )
+                .map_err(PreparationFailure::from)?
+            }
+        }
     }
 }
 
@@ -314,12 +364,21 @@ impl openbindings_internal_schema::preparation::EnvironmentRequest for Evaluatio
         maximum_identity: usize,
         control: &dyn openbindings_internal_schema::Control,
     ) -> Result<Self::Environment, Self::Failure> {
-        SchemaEnvironment::with_control(
-            self.schema,
-            self.external_schemas,
-            maximum_nodes,
-            maximum_identity,
-            control,
-        )
+        match self.root {
+            SchemaRoot::Contained(schema) => SchemaEnvironment::with_control(
+                schema,
+                self.external_schemas,
+                maximum_nodes,
+                maximum_identity,
+                control,
+            ),
+            SchemaRoot::Supplied(uri) => SchemaEnvironment::supplied_with_control(
+                uri,
+                self.external_schemas,
+                maximum_nodes,
+                maximum_identity,
+                control,
+            ),
+        }
     }
 }

@@ -1121,6 +1121,23 @@ impl WasmResources {
             &self.resources.locate(&schema_location(location)?),
         )))
     }
+    /// Prepare one resource at its retrieval URI as its own schema root.
+    pub fn prepare(
+        &self,
+        uri: &str,
+        limits: Option<String>,
+        cancelled: bool,
+    ) -> Result<WasmPreparation, JsValue> {
+        let evaluator = evaluator(limits)?;
+        Ok(WasmPreparation {
+            preparation: Some(self.resources.prepare_with_control(
+                uri,
+                &evaluator,
+                &openbindings::PreparationLimits::default(),
+                &control(cancelled),
+            )),
+        })
+    }
 }
 impl Default for WasmResources {
     fn default() -> Self {

@@ -811,15 +811,14 @@ impl SchemaEvaluator for SemanticEvaluator {
     fn prepare(
         &self,
         request: EvaluationRequest<'_>,
-        _: &PreparationLimits,
-        _: &dyn WorkControl,
+        limits: &PreparationLimits,
+        control: &dyn WorkControl,
     ) -> Result<Self::Validator, PreparationFailure> {
-        let pointer = format!("{}/$ref", request.schema.location().pointer)
-            .parse()
-            .unwrap();
+        let root = request.environment(limits, control)?.root();
+        let pointer = format!("{}/$ref", root.pointer()).parse().unwrap();
         Ok(SemanticValidator(
             self.0,
-            openbindings::SchemaOrigin::new(None, pointer),
+            openbindings::SchemaOrigin::new(root.origin().source_uri.clone(), pointer),
         ))
     }
 }

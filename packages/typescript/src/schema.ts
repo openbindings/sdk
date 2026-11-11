@@ -495,6 +495,26 @@ export class ExternalSchemas extends Managed {
     const raw = handle<wasm.WasmResources>(this);
     return decode(sdkCall(() => raw.locate(schemaLocationText(at))));
   }
+  /** Prepare a resource in this set as its own JSON Schema root. uri is its retrieval identity for relative references and diagnostics; its own $id governs when present. Uses the same evaluator limits and signal options as Schema.prepare, with this set supplying the resources. An unavailable URI returns a refused preparation, never a value outcome. Ready owns an independent disposable PreparedSchema; failures and cancellation leave this set usable for retries. */
+  prepare(
+    uri: string,
+    options: Omit<PrepareOptions, "resources"> = {},
+  ): SchemaPreparation {
+    requireReady();
+    scalar(uri);
+    const raw = resourceRaw(this);
+    if (!options || typeof options !== "object" || Array.isArray(options))
+      throw new SdkError(
+        "invalid-work-options",
+        "Preparation options must be an object.",
+      );
+    const { limits, ...work } = options;
+    const signal = workSignal(work);
+    const encoded = limits === undefined ? undefined : encodedLimits(limits);
+    return takePreparation(
+      sdkCall(() => raw.prepare(uri, encoded, isAborted(signal))),
+    );
+  }
 }
 
 /** An original contextual schema, not yet prepared. Obtain it from Operation.input(), output(), or ConformantDocument.schema(); it retains its proved revision and survives operation and document disposal. Each prepare() returns an independent prepared owner; retain the PreparedSchema for repeated evaluation. */
@@ -522,29 +542,33 @@ export class Schema extends Managed {
         ? raw.prepare(encoded, isAborted(signal))
         : raw.prepareWith(resourceRaw(resources), encoded, isAborted(signal)),
     );
-    try {
-      const result = decode<
-        Exclude<SchemaPreparation, { status: "ready" }> | { status: "ready" }
-      >(preparation.result());
-      if (result.status !== "ready") {
-        if (result.status !== "refused")
-          throw new Error("Invalid preparation result.");
-        return result;
-      }
-      const prepared = preparation.takeSchema();
-      if (!prepared)
-        throw new Error("Preparation invariant: ready schema missing.");
-      return {
-        status: "ready",
-        schema: adopt(prepared, PreparedSchema.fromRaw),
-      };
-    } finally {
-      preparation.free();
-    }
+    return takePreparation(preparation);
   }
   /** Return a NEW independently disposable owner of this original schema. */
   retain(): Schema {
     return Schema.fromRaw(schemaRaw(this).retain());
+  }
+}
+
+function takePreparation(preparation: wasm.WasmPreparation): SchemaPreparation {
+  try {
+    const result = decode<
+      Exclude<SchemaPreparation, { status: "ready" }> | { status: "ready" }
+    >(preparation.result());
+    if (result.status !== "ready") {
+      if (result.status !== "refused")
+        throw new Error("Invalid preparation result.");
+      return result;
+    }
+    const prepared = preparation.takeSchema();
+    if (!prepared)
+      throw new Error("Preparation invariant: ready schema missing.");
+    return {
+      status: "ready",
+      schema: adopt(prepared, PreparedSchema.fromRaw),
+    };
+  } finally {
+    preparation.free();
   }
 }
 

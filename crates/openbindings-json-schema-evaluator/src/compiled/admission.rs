@@ -103,6 +103,11 @@ pub(super) fn select(
     }
     let environment = plan.compiled_environment();
     let space = environment.space();
+    // Supplied roots use Original until this entry route is qualified for the
+    // private compiler. Contained roots keep their existing admission path.
+    if space.source_uri(environment.entry()).is_some() {
+        return Ok(Err("supplied-root"));
+    }
     // Cover selector sets/maps and the full application graph before creating
     // them. The immutable inventory is already owned by Plan.
     attempt

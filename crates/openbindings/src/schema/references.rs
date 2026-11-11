@@ -14,6 +14,28 @@ impl Deref for SchemaSpace {
     }
 }
 impl SchemaSpace {
+    pub(crate) fn supplied_bounded(
+        supplied: &ExternalSchemas,
+        maximum: usize,
+        maximum_identity: usize,
+        control: &dyn embedding::Control,
+    ) -> Result<Self, embedding::Failure> {
+        // The shared resolver reserves source zero for an OBI inventory. An
+        // empty inventory contributes no schemas or identifiers. The supplied
+        // resource remains a separate source and is entered at its own root.
+        static EMPTY: std::sync::OnceLock<embedding::RawDocument> = std::sync::OnceLock::new();
+        let empty =
+            EMPTY.get_or_init(|| embedding::RawDocument::parse("{}").expect("empty inventory"));
+        Ok(Self {
+            inner: embedding::SchemaSpace::new_bounded(
+                empty.clone(),
+                embedding::SuppliedSet::supplied(supplied).clone(),
+                maximum,
+                maximum_identity,
+                control,
+            )?,
+        })
+    }
     /// Layer supplied resources over the document. Schema callers keep
     /// the result per live revision and set; validation keeps its own index.
     pub(crate) fn new_bounded(

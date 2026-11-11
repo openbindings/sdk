@@ -54,7 +54,7 @@ fn direct_validator_checks_cancellation_before_inspecting_duplicates() {
     let validator = DefaultEvaluator::new()
         .prepare(
             EvaluationRequest {
-                schema: &selected,
+                root: SchemaRoot::Contained(&selected),
                 external_schemas: &ExternalSchemas::default(),
             },
             &PreparationLimits::default(),
