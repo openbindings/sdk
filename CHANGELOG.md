@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-11-11 compiled-lane mutation follow-up (unreleased)
+
+### Changed
+
+- A compiled-lane `pattern-total-memory-limit` refusal no longer composes a
+  message that never reached callers; the refusal itself is unchanged.
+- Compiled qualification adds a test that recursive schemas keep the reservation
+  charge for their scalar `const` and `enum` literals.
+
 ## 2026-11-10 decision rulings (unreleased)
 
 ### Changed

@@ -198,8 +198,10 @@ openbindings-json-schema-evaluator -f
 'crates/openbindings-json-schema-evaluator/src/compiled/**'` with and without the
 test and compare the caught sets. These tests also reach the rest of the crate, so
 before removing one, also run the mutants outside `src/compiled/` against that test
-alone, then run each one it catches against the suite without it. Count a catch only
-when it repeats: a wall-clock deadline missed under parallel load is not a catch.
+alone, then run each one it catches against the suite without it. Run the
+`src/compiled/` pass in release as well (`--cargo-arg=--release`), since the three
+recursion-depth stack witnesses run only there. Count a catch only when it repeats:
+a wall-clock deadline missed under parallel load is not a catch.
 
 Run the seeded default-limit differential with
 `cargo test -p openbindings-json-schema-evaluator --lib default_limit_lane_differential -- --nocapture`.
