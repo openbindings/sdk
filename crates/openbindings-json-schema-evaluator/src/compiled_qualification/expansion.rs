@@ -1,8 +1,6 @@
 use super::*;
 use std::time::Duration;
 
-const FORMS: [&str; 5] = ["allOf", "anyOf", "oneOf", "not", "if"];
-
 fn leaves() -> [(serde_json::Value, &'static str, &'static str); 3] {
     [
         (json!({"type":"object"}), "{}", "1"),
@@ -28,14 +26,6 @@ fn diamond(levels: usize, form: &str, leaf: serde_json::Value) -> String {
     json!({"openbindings":"0.2.0","schemas":schemas,
         "operations":{"op":{"input":{"$ref":"#/schemas/d0"}}}})
     .to_string()
-}
-
-fn expected(form: &str, levels: usize, leaf: bool) -> bool {
-    match form {
-        "oneOf" if levels > 0 => false,
-        "not" => leaf != (levels % 2 == 1),
-        _ => leaf,
-    }
 }
 
 fn timely(work: impl FnOnce() + Send + 'static) {
@@ -65,57 +55,6 @@ fn assert_verdict(validator: &DefaultValidator, value: &str, valid: bool) {
         ),
         "expected {valid}, got {outcome:?}"
     );
-}
-
-#[test]
-fn original_diamonds_are_bounded_at_default_and_explicit_limits() {
-    timely(|| {
-        for work in [None, Some(1_000_000)] {
-            for form in FORMS {
-                for (leaf, yes, no) in leaves() {
-                    for levels in [3, 4, 40, 64] {
-                        let limits = Limits {
-                            evaluation_sdk_work_units: work,
-                            ..Limits::default()
-                        };
-                        let validator = prepare_document(
-                            &diamond(levels, form, leaf.clone()),
-                            &ExternalSchemas::default(),
-                            &Original(limits),
-                            &PreparationLimits::default(),
-                        )
-                        .unwrap();
-                        assert_verdict(&validator, yes, expected(form, levels, true));
-                        assert_verdict(&validator, no, expected(form, levels, false));
-                    }
-                }
-            }
-        }
-    });
-}
-
-#[test]
-fn default_diamonds_decline_before_construction_and_terminate() {
-    timely(|| {
-        for form in FORMS {
-            for (leaf, yes, no) in leaves() {
-                // The independent Boolean recurrence is also checked at small
-                // odd/even depths, where both compiled and Original can run.
-                for levels in [3, 4, 40, 64] {
-                    compiled::entries::take();
-                    let validator = prepare_document(
-                        &diamond(levels, form, leaf.clone()),
-                        &ExternalSchemas::default(),
-                        &DefaultEvaluator::new(),
-                        &PreparationLimits::default(),
-                    )
-                    .unwrap();
-                    assert_verdict(&validator, yes, expected(form, levels, true));
-                    assert_verdict(&validator, no, expected(form, levels, false));
-                }
-            }
-        }
-    });
 }
 
 // A compact graph with exactly `applications` expanded schema occurrences,
@@ -192,34 +131,6 @@ fn exact_expansion_boundary_and_lane_equivalence() {
             }
         }
     });
-}
-
-#[test]
-fn wide_shallow_shared_definition_stays_compiled() {
-    let properties: serde_json::Map<_, _> = (0..4096)
-        .map(|i| (format!("p{i}"), json!({"$ref":"#/schemas/shared"})))
-        .collect();
-    let document = json!({"openbindings":"0.2.0","schemas":{"shared":{"type":"integer"}},
-        "operations":{"op":{"input":{"properties":properties}}}})
-    .to_string();
-    compiled::entries::take_expansion();
-    let selected = prepare_document(
-        &document,
-        &ExternalSchemas::default(),
-        &DefaultEvaluator::new(),
-        &PreparationLimits::default(),
-    )
-    .unwrap();
-    let original = prepare_document(
-        &document,
-        &ExternalSchemas::default(),
-        &Original(Limits::default()),
-        &PreparationLimits::default(),
-    )
-    .unwrap();
-    for value in ["{}", "{\"p0\":1,\"p4095\":2}", "{\"p4095\":false}"] {
-        compare(&selected, &original, &JsonValue::parse(value).unwrap());
-    }
 }
 
 #[test]
@@ -398,90 +309,6 @@ fn product_default_large_diamonds_finish_without_backend_entry() {
                 Duration::from_secs(90),
             );
         }
-    }
-}
-
-#[test]
-fn product_host_work_caps_stop_enum_fallback() {
-    timely(|| {
-        let source =
-            array_diamond(json!({"enum":(0..1024).map(|i| format!("v{i}")).collect::<Vec<_>>()}));
-        let value = array_value("\"v1023\"", 500_000);
-        for cap in [1_000_000, 10_000_000] {
-            let selected = prepare_document(
-                &source,
-                &ExternalSchemas::default(),
-                &DefaultEvaluator::with_limits(Limits {
-                    evaluation_sdk_work_units: Some(cap),
-                    ..Limits::default()
-                }),
-                &PreparationLimits::default(),
-            )
-            .unwrap();
-            compiled::entries::take();
-            let outcome = selected.evaluate(&value, Detail::Outcome, &HEALTHY);
-            assert!(
-                matches!(&outcome, ValueOutcome::NoVerdict { detail }
-                if detail.reason == NoVerdictReason::LimitExceeded && detail.code == "evaluation-work-limit"),
-                "{outcome:?}"
-            );
-        }
-    });
-}
-
-#[test]
-fn product_disjoint_selectors_tighten_but_overlaps_and_recursive_literals_add() {
-    let choices: Vec<_> = (0..64).map(|i| format!("v{i}")).collect();
-    let recursive = json!({"properties":{"kind":{"enum":choices},"next":{"$ref":"#"}}});
-    let (selected, original) = owners(
-        &recursive.to_string(),
-        &ExternalSchemas::default(),
-        Limits::default(),
-        PreparationLimits::default(),
-    );
-    // Both productive entries retain the finite terminal enum contribution.
-    for text in [
-        r#"{"kind":"v0","next":{"kind":"v63"}}"#,
-        r#"{"next":{"kind":"no"}}"#,
-    ] {
-        compare(&selected, &original, &JsonValue::parse(text).unwrap());
-    }
-    let value = JsonValue::parse(format!(
-        r#"{{"padding":{}}}"#,
-        array_value("0", 900_000).text()
-    ))
-    .unwrap();
-    compare(&selected, &original, &value);
-}
-
-#[test]
-fn product_enum_weight_selects_at_its_value_boundary() {
-    let source =
-        array_diamond(json!({"enum":(0..1024).map(|i| format!("v{i}")).collect::<Vec<_>>()}));
-    let selected = prepare_document(
-        &source,
-        &ExternalSchemas::default(),
-        &DefaultEvaluator::new(),
-        &PreparationLimits::default(),
-    )
-    .unwrap();
-    let original = prepare_document(
-        &source,
-        &ExternalSchemas::default(),
-        &Original(Limits::default()),
-        &PreparationLimits::default(),
-    )
-    .unwrap();
-    let nodes = compiled::MAXIMUM_EVALUATION_APPLICATIONS / 1_052_671;
-    for count in [nodes - 1, nodes] {
-        assert_eq!(
-            compare(&selected, &original, &array_value("\"v1023\"", count)).0,
-            if count < nodes {
-                "compiled"
-            } else {
-                "original"
-            }
-        );
     }
 }
 

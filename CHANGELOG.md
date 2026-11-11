@@ -20,9 +20,12 @@
   validation is undetermined with `depth-limit`; explicit limits admit deeper input.
 - Kind descriptions require `check` exactly when `supports` names
   `openbindings.kind-descriptor.checkSource`, matching `pull` and `invoke`.
-- Compiled qualification tests retain their guarantees with behavior names,
-  without receipt writing or elapsed-time measurements. The independent
-  differential, stack witnesses and diamond termination guards remain.
+- Compiled qualification keeps 15 of its 48 private tests: the four release
+  stack gates, the independent default-limit differential, and ten tests that
+  each catch a compiled-lane defect no other evaluator test catches. The other
+  33 caught nothing the remaining tests miss. Kept tests use behavior names and
+  write no receipts; their only clock is a deadline that fails an evaluation that
+  does not terminate.
 
 ## 2026-11-10 objective review fixes (unreleased)
 

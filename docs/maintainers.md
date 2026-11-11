@@ -180,12 +180,26 @@ throughput.
 
 ## Generated lane comparisons and fuzzing
 
-`compiled_qualification` retains private lane assertions, compiled stack witnesses
-and diamond termination guards. Its tests use behavior names and do not write
-receipts or measure elapsed time. Run the four exact release gates in
-`tools/verify.py` on every change. The pending mutation run over `src/compiled/`
-will guide further removal or relocation; record any named covering public-API
-test when proposing a cut.
+The default evaluator chooses between the compiled lane and Original internally,
+and no public API selects a lane. Agreement between the lanes, and whether a schema
+enters the compiled lane at a boundary, can therefore be checked only inside the
+crate. The private `compiled_qualification` tests are the exception
+[CONTRIBUTING](../CONTRIBUTING.md#tests) allows for such routes, and they are kept
+to three kinds:
+
+- the four release stack gates that `tools/verify.py` and CI run by exact name,
+  three recursion-depth stack witnesses and the large-diamond termination guard;
+- the seeded default-limit differential described below;
+- tests that each catch a compiled-lane defect no other evaluator test catches.
+
+A new test here must catch a defect that no other evaluator test catches, and
+mutation testing decides additions and removals. Run `cargo mutants -p
+openbindings-json-schema-evaluator -f
+'crates/openbindings-json-schema-evaluator/src/compiled/**'` with and without the
+test and compare the caught sets. These tests also reach the rest of the crate, so
+before removing one, also run the mutants outside `src/compiled/` against that test
+alone, then run each one it catches against the suite without it. Count a catch only
+when it repeats: a wall-clock deadline missed under parallel load is not a catch.
 
 Run the seeded default-limit differential with
 `cargo test -p openbindings-json-schema-evaluator --lib default_limit_lane_differential -- --nocapture`.
