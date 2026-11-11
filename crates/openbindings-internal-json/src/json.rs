@@ -222,9 +222,9 @@ pub enum JsonKind {
 }
 /// Original-source coordinates: zero-based byte offset, one-based line and byte column.
 ///
-/// `Display` writes `pointer (line L, column C, byte B)`, or `line L, column C,
-/// byte B` when there is no pointer or it is a root's empty pointer. The column
-/// counts UTF-8 bytes. Pointers are source-controlled text: quote them for display.
+/// `Display` writes `line L, column C, byte B` only. The column counts UTF-8
+/// bytes. The pointer remains available through [`Self::pointer`] and its field;
+/// it is source-controlled text, so quote it when displaying it explicitly.
 ///
 /// Serialization writes pointer fields as ordinary JSON strings, replacing
 /// unpaired UTF-16 units with U+FFFD. Stored pointers stay exact for locating

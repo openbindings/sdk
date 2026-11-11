@@ -180,7 +180,10 @@ selects independently and may discover additional requirements. Context acquisit
 `max_value_bytes` defaults to `None`, so invocation adds no size cap on already
 parsed values. Set `Some(bytes)` for a delivery policy; `Some(0)` refuses every
 value. The check does not bound parsing allocations or retained parent JSON arenas.
-JSON parsing retains its independent 32 MiB default byte limit. Provider code/data errors remain
-exact, subject to finite encoding limits and reserved-code admission. Providers
+JSON parsing retains its independent 32 MiB default byte limit. `InvocationError`
+codes are nonempty Rust strings and therefore contain only Unicode scalar values;
+decoding a code with an unpaired surrogate returns `BoundaryFailureKind::UnpairedString`.
+Unknown codes in that domain and exact error data remain unchanged, subject to
+finite encoding limits and reserved-code admission. Providers
 own the no-output/no-operation-effect guarantee of `CONTEXT_REQUIRED`; the SDK
 rejects such a challenge after output has already committed.

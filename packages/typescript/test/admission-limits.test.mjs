@@ -425,6 +425,48 @@ test("ExactJson.from refuses an ordinary value past the nesting limit with a Ran
   );
 });
 
+test("ExactJson.from refuses an array past the default node allowance", () => {
+  assert.throws(
+    () => sdk.ExactJson.from(Array(1_000_001).fill(0)),
+    (e) =>
+      e instanceof RangeError &&
+      e.message ===
+        "Ordinary value exceeds the 1000000-node limit; parse it with parseJson and a larger limits.maxNodes.",
+  );
+});
+
+test("an over-limit ordinary array is refused where its node count passes the limit", () => {
+  const document = sdk.Document.parse(
+    '{"openbindings":"0.2.0","operations":{"run":{"input":true}}}',
+  ).value;
+  const setup = prepareInput(document, "run");
+  assert.equal(setup.status, "ready");
+  try {
+    // The array is one node and each element three (object, name, value):
+    // 1 + 3 * 333333 = 1000000, so the next element's object passes the limit.
+    const outcome = setup.schema.evaluate(Array(400_000).fill({ a: 0 }));
+    assert.equal(outcome.status, "input-error");
+    assert.equal(outcome.error.code, "input-limit");
+    assert.equal(outcome.error.instancePointer, "/333333");
+  } finally {
+    setup.schema.dispose();
+    document.dispose();
+  }
+});
+
+test("exact input failures keep stable kind names across the Wasm bridge", () => {
+  for (const [input, options, kind] of [
+    [new Uint8Array([0xff]), {}, "InvalidUtf8"],
+    [new Uint8Array([0xef, 0xbb, 0xbf, 0x30]), {}, "ByteOrderMark"],
+    ["[", {}, "Syntax"],
+    ["[0]", { limits: { maxNodes: 1 } }, "Limit"],
+  ]) {
+    const result = sdk.parseJson(input, options);
+    assert.equal(result.status, "input-error");
+    assert.equal(result.error.kind, kind);
+  }
+});
+
 // Test fixture cursor: keep the new immutable snapshot and release its predecessor.
 function replaceDocument(previous, next) {
   previous.dispose();

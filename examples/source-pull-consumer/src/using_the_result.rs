@@ -9,7 +9,7 @@ use openbindings::{ConformantDocument, Edit, JsonValue, ReferenceResolution, Wor
 use openbindings_source_pull::{
     Change, ExistingEntry, ExistingTarget, Proposal, PullLimits, PullRequest, PullResult,
 };
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// What these application functions return on failure.
 pub type Error = Box<dyn std::error::Error>;
@@ -18,50 +18,64 @@ pub type Error = Box<dyn std::error::Error>;
 /// One proposal as document edits: what it carries, copied onto the existing
 /// entry, and what its `remove` names. Unknown proposal metadata is not copied.
 pub fn proposal_edits(request: &PullRequest, entry: &ExistingEntry) -> Vec<Edit> {
-    let mut edits = Vec::new();
+    proposal_writes(request, entry)
+        .into_iter()
+        .map(|(path, value)| {
+            let path: Vec<&str> = path.iter().map(String::as_str).collect();
+            match value {
+                Some(value) => Edit::set(&path, value),
+                None => Edit::remove(&path),
+            }
+        })
+        .collect()
+}
+
+fn proposal_writes(
+    request: &PullRequest,
+    entry: &ExistingEntry,
+) -> Vec<(Vec<String>, Option<JsonValue>)> {
+    let mut writes = Vec::new();
+    let mut write = |path: &[&str], value| {
+        writes.push((path.iter().map(|part| (*part).to_owned()).collect(), value));
+    };
     match (entry.target(), entry.proposal()) {
         (ExistingTarget::Binding(key), Some(Proposal::Binding(proposal))) => {
             let key = key.as_str().unwrap();
             let binding = request.interface().binding(key).unwrap();
             let operation = binding.operation_key();
             if let Some(data) = proposal.data() {
-                edits.push(Edit::set(&["bindings", key, "data"], data));
+                write(&["bindings", key, "data"], Some(data));
             }
             if let Some(input) = proposal.input() {
-                edits.push(Edit::set(&["operations", operation, "input"], input));
+                write(&["operations", operation, "input"], Some(input));
             }
             if let Some(output) = proposal.output() {
-                edits.push(Edit::set(&["operations", operation, "output"], output));
+                write(&["operations", operation, "output"], Some(output));
             }
             for field in proposal.remove().into_iter().flatten() {
-                edits.push(match field.as_str().unwrap() {
-                    "data" => Edit::remove(&["bindings", key, "data"]),
-                    field => Edit::remove(&["operations", operation, field]),
-                });
+                match field.as_str().unwrap() {
+                    "data" => write(&["bindings", key, "data"], None),
+                    field => write(&["operations", operation, field], None),
+                }
             }
         }
         (ExistingTarget::Schema(key), Some(Proposal::Schema(proposal))) => {
-            edits.push(Edit::set(
-                &["schemas", key.as_str().unwrap()],
-                proposal.schema(),
-            ));
+            write(&["schemas", key.as_str().unwrap()], Some(proposal.schema()));
         }
         (ExistingTarget::Source(key), Some(Proposal::Source(proposal))) => {
             let key = key.as_str().unwrap();
-            edits.push(match proposal.data() {
-                Some(data) => Edit::set(&["sources", key, "data"], data),
-                None => Edit::remove(&["sources", key, "data"]),
-            });
+            write(&["sources", key, "data"], proposal.data());
         }
         _ => {}
     }
-    edits
+    writes
 }
 // guide:proposals:end
 
 // guide:updates:start
 /// Take everything the pull offers, then every non-breaking update. Every
 /// addition is present, so what a proposal needs is already there.
+/// Agreeing writes share one edit; contradictory writes require a caller decision.
 pub fn take_non_breaking_updates(
     result: &PullResult,
     request: &PullRequest,
@@ -69,13 +83,39 @@ pub fn take_non_breaking_updates(
     control: &dyn WorkControl,
 ) -> Result<ConformantDocument, Error> {
     let everything = result.validate_for(request, limits, control)?;
-    let edits: Vec<Edit> = result
+    let mut writes: BTreeMap<Vec<String>, Option<JsonValue>> = BTreeMap::new();
+    for (path, value) in result
         .report()
         .existing()
         .into_iter()
         .flatten()
         .filter(|entry| entry.change() == Some(Change::NonBreaking))
-        .flat_map(|entry| proposal_edits(request, &entry))
+        .flat_map(|entry| proposal_writes(request, &entry))
+    {
+        if let Some(previous) = writes.get(&path) {
+            let agrees = match (previous, &value) {
+                (None, None) => true,
+                (Some(previous), Some(value)) => previous.semantic_eq(value) == Some(true),
+                _ => false,
+            };
+            if !agrees {
+                return Err(
+                    "non-breaking proposals write different values to the same slot".into(),
+                );
+            }
+        } else {
+            writes.insert(path, value);
+        }
+    }
+    let edits: Vec<Edit> = writes
+        .into_iter()
+        .map(|(path, value)| {
+            let path: Vec<&str> = path.iter().map(String::as_str).collect();
+            match value {
+                Some(value) => Edit::set(&path, value),
+                None => Edit::remove(&path),
+            }
+        })
         .collect();
     let edited = everything.document().edit(&edits)?.validate()?;
     edited

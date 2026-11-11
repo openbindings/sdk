@@ -24,7 +24,7 @@ the native credential-replay rule are unchanged.
 construct a URL with the selected `ClientOptions` policy without I/O. A refused
 plain-HTTP origin still returns `ConfigurationError` with code `origin-policy`;
 its `Display` (and TypeScript error message) identifies the configured scheme
-policy. Rust's `message` field retains the more specific explanation for explicit
+policy by writing Rust's `message` field, which is also available for explicit
 inspection. Refused redirects still return a `TransportError` with
 `ErrorKind::RedirectPolicy` and the observed redirect metadata.
 

@@ -332,12 +332,9 @@ fn pull_display_and_sources_retain_native_and_validation_causes() {
             .is_some()
     );
     assert_eq!(validation.to_string(), "source pull validation failed");
-    assert!(
-        validation
-            .source()
-            .unwrap()
-            .to_string()
-            .contains("MissingSource")
+    assert_eq!(
+        validation.source().unwrap().to_string(),
+        "source-pull validation requires the selected source"
     );
     assert!(PullError::<std::io::Error>::Cancelled.source().is_none());
     assert!(PullFailure::<std::io::Error>::Cancelled.source().is_none());

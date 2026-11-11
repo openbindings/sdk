@@ -21,10 +21,21 @@ impl fmt::Debug for RequestError {
 }
 impl fmt::Display for RequestError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "source-pull request admission failed: {self:?}")
+        f.write_str(match self {
+            Self::Shape(_) => "source-pull request has an invalid shape",
+            Self::Interface(_) => "source-pull request requires a conformant document",
+            Self::Version(_) => "source-pull request version is not supported",
+        })
     }
 }
-impl std::error::Error for RequestError {}
+impl std::error::Error for RequestError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Version(error) => Some(error),
+            Self::Shape(_) | Self::Interface(_) => None,
+        }
+    }
+}
 
 /// A result contradicts a mechanically checkable relationship in the publication.
 /// This does not judge kind-owned fidelity, change classification or completeness.
@@ -93,7 +104,25 @@ impl fmt::Debug for PullValidationError {
 }
 impl fmt::Display for PullValidationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "source-pull validation failed: {self:?}")
+        f.write_str(match self {
+            Self::MissingSource => "source-pull validation requires the selected source",
+            Self::Relationship(_) => "source-pull result contradicts a document relationship",
+            Self::LimitExceeded(_) => "source-pull validation exceeded a local limit",
+            Self::Cancelled => "source-pull validation was cancelled",
+            Self::Edit(_) => "source-pull validation could not build the prospective document",
+            Self::Prospective(_) => {
+                "source-pull additions require a conformant prospective document"
+            }
+            Self::Version(_) => "source-pull prospective document version is not supported",
+        })
     }
 }
-impl std::error::Error for PullValidationError {}
+impl std::error::Error for PullValidationError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Edit(error) => Some(error),
+            Self::Version(error) => Some(error),
+            _ => None,
+        }
+    }
+}
