@@ -1,4 +1,4 @@
-//! Debug is structural. Explicit display/accessors/serialization retain payloads.
+//! Diagnostic Display and Debug hold SDK text and constants; values require explicit fields, accessors or serialization.
 use openbindings_internal_schema::{self as schema, JsonValue};
 use std::fmt::Debug;
 use std::{collections::BTreeMap, sync::Arc};
@@ -26,6 +26,13 @@ fn internal_rows(context: &JsonValue) -> Vec<Row> {
         resource: Some(SECRET.into()),
         pointer: format!("/{SECRET}").parse().unwrap(),
     };
+    for cause in [
+        schema::QueryFailure::ResourceUnavailable(SECRET.into()),
+        schema::QueryFailure::UnsupportedDialect(Some(SECRET.into())),
+        schema::QueryFailure::UnsupportedCapability(SECRET),
+    ] {
+        assert!(!format!("{cause:?}").contains(SECRET));
+    }
     let failure = schema::Failure {
         reason: schema::FailureReason::EvaluatorFailure,
         code: SECRET.into(),
@@ -51,6 +58,8 @@ fn internal_rows(context: &JsonValue) -> Vec<Row> {
         // Facts carry only a plan index; source operands are never copied here.
         fact: Some(0),
     };
+    assert!(!failure.to_string().contains(SECRET));
+    assert_eq!(failure.message, SECRET);
     vec![
         row("internal Location", &location),
         row("internal Failure", &failure),

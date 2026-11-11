@@ -323,7 +323,7 @@ impl KindDescription {
             .expect("admitted supports")
             .any(|value| value.as_str() == Some("openbindings.kind-descriptor.checkSource"));
         let has_check = object.value().get("check").is_some();
-        if (declares_check && !has_check) || (has_check && operations.is_empty() == Some(true)) {
+        if declares_check != has_check {
             return Err(CarrierError::InconsistentCheckSupport);
         }
         for (name, operation, error) in [

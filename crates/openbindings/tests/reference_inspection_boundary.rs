@@ -324,7 +324,7 @@ fn reference_refusals_preserve_the_public_cause_and_safe_message() {
         assert_eq!(detail.reason, reason);
         assert_eq!(report.references[0].location.pointer, "/schemas/entry/$ref");
         assert!(!detail.to_string().is_empty());
-        assert_eq!(detail.to_string(), detail.message);
+        assert!(!detail.to_string().contains("private"));
         assert!(!detail.message.contains("private"));
     }
     let document = Document::parse(r#"{"openbindings":"0.2.0","operations":{},"schemas":{"entry":{"$ref":"https://example.test/external"}}}"#).unwrap();

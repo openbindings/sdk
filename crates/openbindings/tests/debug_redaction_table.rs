@@ -1,6 +1,11 @@
-//! Debug is structural. Explicit display/accessors/serialization retain payloads.
+//! Diagnostic Display and Debug hold fixed SDK text and SDK constants only.
+//! Document, caller, provider and evaluator values, including derived values,
+//! remain reachable through deliberate fields, accessors and serialization.
+//! Escaping or truncating a value does not make it value-free. Wrappers print
+//! their own layer and expose their cause through Error::source(). Value-type
+//! Display is deliberate rendering; diagnostic locations show coordinates only.
 use openbindings::*;
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 use std::{collections::BTreeMap, sync::Mutex};
 // A credential-shaped probe value; Debug output must never contain it.
 const SECRET: &str = "PROBE-BEARER-TOKEN-7391";
@@ -8,7 +13,7 @@ const NUMBER: &str = "739173917391";
 
 struct Row {
     label: &'static str,
-    text: [String; 4],
+    text: Vec<String>,
 }
 fn row(label: &'static str, value: &(impl Debug + ?Sized)) -> Row {
     Row {
@@ -18,8 +23,19 @@ fn row(label: &'static str, value: &(impl Debug + ?Sized)) -> Row {
             format!("{value:#?}"),
             format!("{:?}", Some(value)),
             format!("{:#?}", Some(value)),
-        ],
+        ]
+        .to_vec(),
     }
+}
+
+fn diagnostic_row(label: &'static str, value: &(impl Debug + Display), retained: &str) -> Row {
+    assert!(
+        retained.contains(SECRET),
+        "{label} retains the probe through explicit access"
+    );
+    let mut item = row(label, value);
+    item.text.extend([format!("{value}"), format!("{value:#}")]);
+    item
 }
 
 /// Prepares nothing and refuses with a caller-chosen code.
@@ -80,7 +96,41 @@ fn preparation_refusals_redact_payloads_like_no_verdict() {
         "refused preparation result",
         &contract.prepare(&Refuse(SECRET), &openbindings::ExternalSchemas::default()),
     ));
-    check_rows(rows, 7);
+    for kind in [
+        PreparationFailureKind::Resolution {
+            cause: ResolutionFailureKind::ResourceUnavailable { uri: SECRET.into() },
+        },
+        PreparationFailureKind::Resolution {
+            cause: ResolutionFailureKind::UnsupportedDialect { uri: SECRET.into() },
+        },
+        PreparationFailureKind::Resolution {
+            cause: ResolutionFailureKind::Limit {
+                resource: SECRET.into(),
+            },
+        },
+        PreparationFailureKind::Limit {
+            resource: SECRET.into(),
+        },
+        PreparationFailureKind::Implementation {
+            message: SECRET.into(),
+        },
+    ] {
+        let error = PreparationFailure::new(kind).with_origin(location());
+        let retained = serde_json::to_string(&error).unwrap();
+        rows.push(diagnostic_row("PreparationFailure", &error, &retained));
+        rows.push(row("PreparationFailureKind", &error.kind));
+        if let PreparationFailureKind::Resolution { cause } = &error.kind {
+            assert!(!format!("{cause:?}").contains(SECRET));
+        }
+    }
+    let at = probe_location();
+    assert_eq!(at.to_string(), "line 2, column 3, byte 42");
+    rows.push(diagnostic_row(
+        "SourceLocation",
+        &at,
+        &at.pointer().unwrap().to_string(),
+    ));
+    check_rows(rows, 18);
 }
 fn location() -> SchemaOrigin {
     SchemaOrigin::new(Some(SECRET.into()), format!("/{SECRET}").parse().unwrap())
@@ -195,9 +245,16 @@ fn domain_rows(context: &JsonValue) -> Vec<Row> {
 fn check_rows(rows: Vec<Row>, expected: usize) {
     assert_eq!(rows.len(), expected);
     for Row { label, text } in &rows {
-        for (mode, text) in ["ordinary", "pretty", "nested", "nested pretty"]
-            .into_iter()
-            .zip(text)
+        for (mode, text) in [
+            "ordinary",
+            "pretty",
+            "nested",
+            "nested pretty",
+            "display",
+            "alternate display",
+        ]
+        .into_iter()
+        .zip(text)
         {
             for marker in [SECRET, NUMBER] {
                 assert!(!text.contains(marker), "{label}/{mode} leaked: {text}");
@@ -271,11 +328,15 @@ fn debug_redacts_caller_text_at_every_boundary() {
         row("SchemaOrigin", &location()),
         row("Finding", &finding),
         row("ValidationReport", &report),
-        row("VersionRefusal", &version),
+        diagnostic_row("VersionRefusal", &version, version.declared()),
         row("Document", &parsed),
         row("DocumentValidation", &validation),
         row("ConformantDocument", &validated),
-        row("ReferenceRefusal", &reference_refusal),
+        diagnostic_row(
+            "ReferenceRefusal",
+            &reference_refusal,
+            &reference_refusal.message,
+        ),
         row("Reference", &reference_item),
         row(
             "ReferenceResolution::Located",
@@ -286,7 +347,7 @@ fn debug_redacts_caller_text_at_every_boundary() {
         ),
         row("ReferenceReport", &references),
         row("actual reference report", &parsed_ref.references()),
-        row("NoVerdict", &refusal()),
+        diagnostic_row("NoVerdict", &refusal(), &refusal().message),
         row("ValueProblem", &problem),
         row("ValueOutcome::Fails", &outcome),
         row(
@@ -295,8 +356,8 @@ fn debug_redacts_caller_text_at_every_boundary() {
         ),
     ];
     assert!(serde_json::to_string(&outcome).unwrap().contains(SECRET));
-    assert!(refusal().to_string().contains(SECRET));
-    assert!(version.to_string().contains(SECRET));
+    assert!(!refusal().to_string().contains(SECRET));
+    assert!(!version.to_string().contains(SECRET));
     assert!(
         parsed_ref.references().references[0]
             .spelling
@@ -373,10 +434,9 @@ fn debug_redacts_caller_text_at_every_boundary() {
         }))
         .unwrap_err();
         assert_eq!(error.message, reason);
-        assert_eq!(error.to_string(), reason);
+        assert!(!error.to_string().contains(SECRET));
         assert!(error.uri.contains(SECRET));
-        let item = row("actual ExternalSchemaError", &error);
-        assert!(item.text.iter().all(|text| text.contains(reason)));
+        let item = diagnostic_row("actual ExternalSchemaError", &error, &error.uri);
         rows.push(item);
     }
     let mut error = ExternalSchemas::new([ExternalSchema {
@@ -388,7 +448,11 @@ fn debug_redacts_caller_text_at_every_boundary() {
     assert!(format!("{error:?}").contains("invalid retrieval URI"));
     rows.push(row("ExternalSchemaError::invalid", &error));
     error.message = SECRET.into();
-    rows.push(row("ExternalSchemaError::custom", &error));
+    rows.push(diagnostic_row(
+        "ExternalSchemaError::custom",
+        &error,
+        &error.message,
+    ));
 
     let missing = Document::new()
         .remove(format!("/{SECRET}").as_str())
@@ -556,7 +620,7 @@ fn undefined_result_redacts_text_and_locations_but_shows_the_fixed_code() {
 #[test]
 fn debug_and_display_write_their_structure() {
     // Debug is structural, not empty: it names the type, the variant and the
-    // fixed fields it may show. Display writes the disclosed text.
+    // fixed fields it may show. Display names the SDK category without values.
     let refusal = Document::parse(r#"{"openbindings":"0.3.0","operations":{}}"#)
         .unwrap()
         .validate()
@@ -565,10 +629,7 @@ fn debug_and_display_write_their_structure() {
         format!("{refusal:?}"),
         r#"VersionRefusal { supported: "0.2.x", .. }"#
     );
-    assert_eq!(
-        refusal.to_string(),
-        "declared version 0.3.0 is outside 0.2.x"
-    );
+    assert_eq!(refusal.to_string(), "declared version is outside 0.2.x");
     for (kind, name) in [
         (
             PreparationFailureKind::Resolution {

@@ -18,11 +18,15 @@ pub const KIND: &str = "example.memory@1";
 #[derive(Default)]
 pub struct Memory;
 
-#[derive(Debug)]
 pub struct AdapterError(pub &'static str);
+impl fmt::Debug for AdapterError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("AdapterError { .. }")
+    }
+}
 impl fmt::Display for AdapterError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.0)
+        f.write_str("kind adapter could not complete")
     }
 }
 impl std::error::Error for AdapterError {}

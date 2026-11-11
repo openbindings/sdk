@@ -1,7 +1,14 @@
 use openbindings::*;
 
 fn checked(text: &str) -> DocumentValidation {
-    validate_document(text).unwrap()
+    validate_document_with_limits(
+        text,
+        JsonLimits {
+            max_depth: 12_005,
+            ..Default::default()
+        },
+    )
+    .unwrap()
 }
 
 #[test]

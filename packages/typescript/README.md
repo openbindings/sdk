@@ -252,18 +252,19 @@ UTF-8 is counted: at most three times the limit. Inputs within the limit cross
 unchanged.
 
 `validateDocument`, `Document.parse` and `parseJson` admit 32 MiB of UTF-8,
-1,000,000 nodes and 10,000 container levels by default; `validateDocument`
-without limits sets no nesting cap. Pass `{ limits: { maxBytes, maxNodes,
-maxDepth } }` to admit larger or smaller input, as Rust's `JsonLimits` does:
-unspecified entries keep those defaults, so `validateDocument` with `limits`
-applies the 10,000-level cap unless `maxDepth` raises it. Validation memory
+1,000,000 nodes and 10,000 container levels by default. Pass
+`{ limits: { maxBytes, maxNodes, maxDepth } }` to admit larger or smaller input,
+as Rust's `JsonLimits` does; unspecified entries keep those defaults.
+Past the depth cap, `validateDocument` is undetermined with `depth-limit`;
+raise `maxDepth` to validate deeper documents. Validation memory
 grows with the document, so raise them only where the process has the memory.
 Malformed limits or options throw `SdkError` with code `invalid-json-limits`.
 A document keeps the limits it was parsed with (`limits`): its edits
 apply them to the edited document, as Rust's do, whatever route writes
 the value. `discover` raises only the byte limit, to `maxDocumentBytes`; a body
-past the default 1,000,000 nodes comes back undetermined, and `validateDocument`
-with a larger `maxNodes` admits it. `Document.create()`, `ExactJson.from`,
+past the default node or depth cap comes back undetermined with `node-limit` or
+`depth-limit`; `validateDocument` with a larger `maxNodes` or `maxDepth`,
+respectively, admits it. `Document.create()`, `ExactJson.from`,
 `evaluateJson` and a prepared schema's `evaluate` and `explain` of an ordinary
 value use the defaults. To evaluate a value beyond those defaults, admit it with
 `parseJson` and explicit limits, then pass the resulting `ExactJson` to `evaluate`.
@@ -342,7 +343,10 @@ required-array order. Keywords without a matching variant, such as `const`,
 stays out. Facts that cannot fit the diagnostic storage allowance or be
 represented exactly are omitted and leave `problemsComplete` false. Enum lists
 are never partial. Messages stay fixed SDK text. Rejected instance values are
-never copied into facts or messages. Rust `Debug` remains redacted.
+never copied into facts or messages. Rust diagnostic `Display` and `Debug` remain value-free. SDK error messages contain
+fixed categories and constants; read fields and accessors explicitly for values.
+A native cause or host exception can contain private data, so apply your
+disclosure policy before printing one.
 
 Serializing whole problems into a public response sends schema facts. An app
 with a private contract should forward only `instance` and `code`.

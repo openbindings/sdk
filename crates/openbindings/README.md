@@ -30,7 +30,8 @@ handling, following the [Worker service rule in the support table](https://githu
 To author, create an OBI with `Document::new()` or parse exact JSON with
 `Document::parse`, which retains a snapshot for inspection, including invalid
 editor drafts, and refuses text that is not JSON as an `InputError`;
-`Document::validate` then returns the same validation. Edits borrow the original and return a new immutable snapshot: use RFC 6901
+`Document::validate` then assesses that snapshot under its retained limits.
+Default parsing and direct validation use the same `JsonLimits::default()`. Edits borrow the original and return a new immutable snapshot: use RFC 6901
 `set` and `remove` with exact JSON values. Set a complete namespace when absent;
 editing does not fabricate intermediate containers.
 `edit(&[Edit])` commits one atomic batch with one splice and one parse. Sibling
@@ -78,11 +79,11 @@ example satisfies its schema.
 
 Default JSON admission allows 32 MiB, 10,000 container levels and 1,000,000 nodes:
 `Document::parse`, `Document::parse_owned` and `JsonValue::parse` apply all three.
-`validate_document` and `validate_document_owned` apply the same bytes and nodes
-at any nesting. A host that needs other limits passes `JsonLimits` to
+`validate_document` and `validate_document_owned` apply all three defaults too.
+Past the depth cap, whole-document validation is undetermined with `depth-limit`.
+A host that needs other limits passes `JsonLimits` to
 `validate_document_with_limits`, `Document::parse_with_limits` or
-`JsonValue::parse_with_limits`; `JsonLimits::default()` there includes the
-10,000-level cap. A document keeps the limits it was admitted under
+`JsonValue::parse_with_limits`, raising `max_depth` for deeper documents. A document keeps the limits it was admitted under
 (`Document::limits`) for its edits.
 Checked ordinary Serde conversion has a 128-container ceiling. Exact parsing is
 the route for existing JSON tokens. Findings retain at most 4,096 entries and

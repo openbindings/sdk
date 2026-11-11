@@ -27,7 +27,7 @@ impl<E: fmt::Display> fmt::Display for PullFailure<E> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::ContextRequired(_) => f.write_str("source pulling requires context"),
-            Self::Operational(error) => write!(f, "source pulling could not complete: {error}"),
+            Self::Operational(_) => f.write_str("source pulling could not complete"),
             Self::Cancelled => f.write_str("source pulling was cancelled"),
         }
     }
@@ -92,8 +92,8 @@ impl<E> fmt::Debug for PullError<E> {
 impl<E: fmt::Display> fmt::Display for PullError<E> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Provider(error) => write!(f, "source pull failed: {error}"),
-            Self::Validation(error) => write!(f, "source pull failed: {error}"),
+            Self::Provider(_) => f.write_str("source pull provider failed"),
+            Self::Validation(_) => f.write_str("source pull validation failed"),
             Self::Cancelled => f.write_str("source pull was cancelled"),
         }
     }

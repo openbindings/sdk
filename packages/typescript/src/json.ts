@@ -26,7 +26,7 @@ export interface JsonLimits {
   maxBytes: number;
   /** Maximum parsed nodes, including object member-name tokens; default 1,000,000. */
   maxNodes: number;
-  /** Maximum nested arrays and objects, including a container root; default 10,000. validateDocument without limits sets no nesting cap. */
+  /** Maximum nested arrays and objects, including a container root; default 10,000, shared by validateDocument and exact parsing. */
   maxDepth: number;
 }
 

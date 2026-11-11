@@ -91,9 +91,12 @@ fn limit_values(limits: JsonLimits) -> Vec<u32> {
 // Absent limits mean the defaults, so ordinary preparation parses nothing.
 fn evaluator(limits: Option<String>) -> Result<DefaultEvaluator, JsValue> {
     let limits: Limits = match limits {
-        Some(text) => {
-            serde_json::from_str(&text).map_err(|e| error("invalid-evaluator-limits", e))?
-        }
+        Some(text) => serde_json::from_str(&text).map_err(|_| {
+            error(
+                "invalid-evaluator-limits",
+                "expected valid evaluator limit settings",
+            )
+        })?,
         None => Limits::default(),
     };
     Ok(DefaultEvaluator::with_limits(limits))
@@ -1370,13 +1373,12 @@ impl std::fmt::Debug for WasmDiscovery {
 #[wasm_bindgen]
 impl WasmDiscovery {
     /// Judge a complete body as Rust discovery does: under admission limits that
-    /// admit the body bound when it exceeds the default byte limit, any nesting.
+    /// admit the body bound when it exceeds the default byte limit, with default node and nesting limits.
     #[wasm_bindgen(constructor)]
     pub fn new(bytes: &[u8], max_document_bytes: u32) -> WasmDiscovery {
         let max_bytes = usize::try_from(max_document_bytes).unwrap_or(usize::MAX);
         let limits = JsonLimits {
             max_bytes: max_bytes.max(JsonLimits::default().max_bytes),
-            max_depth: usize::MAX,
             ..JsonLimits::default()
         };
         Self {

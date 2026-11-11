@@ -118,9 +118,6 @@ impl Pointer {
             Repr::Units(units) => 2 * units.len(),
         }
     }
-    pub(crate) fn is_root(&self) -> bool {
-        matches!(&self.0, Repr::Text(text) if text.is_empty())
-    }
     /// Decoded segments as UTF-16 units; the root has none.
     pub(crate) fn unit_segments(&self) -> impl Iterator<Item = Vec<u16>> + '_ {
         let units: Vec<u16> = self.utf16_units().collect();

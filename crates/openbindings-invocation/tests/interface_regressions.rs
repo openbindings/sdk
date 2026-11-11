@@ -277,7 +277,7 @@ async fn only_current_operation_owned_codes_are_reserved_at_provider_boundary() 
     }
 }
 #[test]
-fn display_shows_every_code_and_debug_shows_only_governed_codes() {
+fn diagnostic_formatting_shows_only_governed_codes() {
     let governed = InvocationError::new(
         "ERR_OPERATION_VALIDATION_FAILED",
         Some(JsonValue::parse(r#""secret-data""#).unwrap()),
@@ -288,7 +288,8 @@ fn display_shows_every_code_and_debug_shows_only_governed_codes() {
         assert!(!text.contains("secret-data"));
     }
     let application = InvocationError::new("ACME_QUOTA", None).unwrap();
-    assert!(application.to_string().contains("ACME_QUOTA"));
+    assert!(!application.to_string().contains("ACME_QUOTA"));
+    assert_eq!(application.code(), "ACME_QUOTA");
     assert_eq!(
         format!("{application:?}"),
         r#"InvocationError { code: "<redacted>", data_present: false }"#

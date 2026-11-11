@@ -15,6 +15,27 @@ Package publication, version selection and consumer migration follow RELEASING.m
 and require their own release decision. Do not publish from this source-import
 workflow. Historical benchmarks retain their workload and host limits.
 
+## Diagnostics
+
+An SDK error's or diagnostic's `Display` and `Debug` hold fixed SDK text plus
+SDK constants: rule IDs, governed codes, the supported specification line, field
+and limit labels written in SDK code, limit numbers, byte offsets, lines and
+columns. Document content,
+caller-supplied values (URLs, URIs, names, payloads, versions), provider and
+evaluator output, and anything derived from them are reachable only through
+fields, accessors and serialization the caller invokes. Escaping or truncating a
+value does not make it value-free.
+
+A wrapper prints its own layer and exposes its cause through `Error::source()`,
+never both, so `{:#}` and `anyhow` chains print each layer once. A native cause's
+own formatting remains the provider's responsibility; apply the application's
+disclosure policy before printing that chain.
+
+A value type's own `Display` (`Pointer`, for example) is the rendering a caller
+asked for, not a diagnostic, and is out of scope. A location attached to a
+diagnostic is in scope: `SourceLocation`'s `Display` prints line, column and byte
+only; its pointer stays reachable through `pointer()` and its public field.
+
 ## Tests
 
 A test protects a guarantee: something a caller, the OpenBindings specification,

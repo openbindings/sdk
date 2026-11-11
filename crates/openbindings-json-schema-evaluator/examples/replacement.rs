@@ -18,25 +18,28 @@ enum LoadFailure {
 }
 impl fmt::Display for LoadFailure {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::Parse(_) => "document syntax refused",
+            Self::Version(_) => "document version refused",
+            Self::Conformance(_) => "document conformance was not established",
+            Self::MissingOperation => "operation find is missing",
+            Self::NoInputSchema => "operation find declares no input schema",
+            Self::Preparation(_) => "input schema preparation failed",
+            Self::MissingResources(_) => "input schema resources unavailable",
+            Self::UnresolvedReferences(_) => "reference inventory is unresolved",
+        })
+    }
+}
+impl Error for LoadFailure {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
-            Self::Parse(error) => write!(f, "document syntax: {error}"),
-            Self::Version(error) => write!(f, "document version: {error}"),
-            Self::Conformance(report) => write!(
-                f,
-                "document conformance: {:?}; findings: {:?}",
-                report.conclusion, report.findings
-            ),
-            Self::MissingOperation => f.write_str("operation find is missing"),
-            Self::NoInputSchema => f.write_str("operation find declares no input schema"),
-            Self::Preparation(detail) => write!(f, "input schema preparation: {detail:?}"),
-            Self::MissingResources(detail) => write!(f, "input schema resources: {detail:?}"),
-            Self::UnresolvedReferences(report) => {
-                write!(f, "unresolved reference inventory: {report:?}")
-            }
+            Self::Parse(error) => Some(error),
+            Self::Version(error) => Some(error),
+            Self::Preparation(error) | Self::MissingResources(error) => Some(error),
+            _ => None,
         }
     }
 }
-impl Error for LoadFailure {}
 
 fn resources(schema: &str) -> Result<ExternalSchemas, Box<dyn Error>> {
     Ok(ExternalSchemas::new([ExternalSchema {

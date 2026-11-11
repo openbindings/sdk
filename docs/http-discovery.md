@@ -23,8 +23,9 @@ the native credential-replay rule are unchanged.
 `endpoint(origin)` keeps the default policy. Use `options.endpoint(origin)` to
 construct a URL with the selected `ClientOptions` policy without I/O. A refused
 plain-HTTP origin still returns `ConfigurationError` with code `origin-policy`;
-its message states that client policy refused a plain-http discovery URL and
-contains no API advice. Refused redirects still return a `TransportError` with
+its `Display` (and TypeScript error message) identifies the configured scheme
+policy. Rust's `message` field retains the more specific explanation for explicit
+inspection. Refused redirects still return a `TransportError` with
 `ErrorKind::RedirectPolicy` and the observed redirect metadata.
 
 The safe native constructor accepts the application's `ClientBuilder`, installs
@@ -87,7 +88,8 @@ default; `ClientOptions::default()` selects that byte default; explicit zero and
 responses yield `ErrorKind::Decode` only when the SDK refuses a response whose
 Content-Encoding the host left undecoded. Native body-read errors, including
 truncated and corrupt-coded bodies, yield `BodyError` with `ErrorKind::Network`
-and retain upstream error and source messages for humans. Reqwest exposes no
+and retain upstream error and source messages in the structured error field for
+deliberate inspection; diagnostic formatting omits them. Reqwest exposes no
 documented API establishing a codec failure behind `Response::chunk`; its decode
 label alone is insufficient. Identified transport deadlines still yield `Timeout`.
 Portable transports may report their own decoding failures as `Decode`.
@@ -96,9 +98,10 @@ enter validation; oversized or incomplete prefixes never become OBIs.
 
 The byte limit protects the process, so it is on by default. A body within it
 is validated under admission limits whose byte limit is the bound when that
-exceeds the default 32 MiB, with the default 1,000,000 nodes and any nesting, so
+exceeds the default 32 MiB, with the default 1,000,000 nodes and 10,000 container levels, so
 raising the bound admits larger documents, which keep those limits. A body past
-the nodes is undetermined, with `node-limit` findings at the parser offset.
+the node or depth limit is undetermined, with `node-limit` or `depth-limit`
+findings at the parser offset.
 Validate the retained body with `validate_document_with_limits`
 (`validateDocument` with `limits` in TypeScript) and a larger node limit to admit it. A deadline only
 bounds time, so it is the application's choice: an attempt has no deadline

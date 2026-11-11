@@ -54,11 +54,15 @@ export function initialize(
   })().catch((error) => {
     initialization = undefined;
     if (error instanceof SdkError) throw error;
-    throw new SdkError(
+    const failure = new SdkError(
       "wasm-initialization",
-      "Unable to initialize the OpenBindings WebAssembly module: " +
-        String(error?.message ?? error),
+      "Unable to initialize the OpenBindings WebAssembly module.",
     );
+    Object.defineProperty(failure, "cause", {
+      value: error,
+      configurable: true,
+    });
+    throw failure;
   }));
 }
 
@@ -87,9 +91,7 @@ async function packageModule(
     module = source as WebAssembly.Module;
   else if (typeof Response === "function" && source instanceof Response) {
     if (!source.ok)
-      throw new Error(
-        `failed to fetch Wasm: ${source.status} ${source.statusText} fetching '${source.url}'`,
-      );
+      throw new Error("Unable to fetch the OpenBindings WebAssembly module.");
     module =
       typeof WebAssembly.compileStreaming === "function" &&
       source.headers.get("Content-Type")?.trim().toLowerCase() ===
@@ -109,7 +111,8 @@ async function packageModule(
     entries.length !== signature.length ||
     entries.some((entry, index) => entry !== JSON.stringify(signature[index]))
   )
-    throw new Error(
+    throw new SdkError(
+      "wasm-initialization",
       "the supplied module is not this package's: its imports and exports differ from those its bindings were generated for",
     );
   return module;

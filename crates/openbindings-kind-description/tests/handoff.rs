@@ -174,13 +174,10 @@ fn malformed_provider_outputs_remain_operational_failures_and_never_kind_rejecti
         KindError::Provider(CheckFailure::Operational(CarrierError::UnexpectedMember))
     ));
     assert!(!caller.is_cancelled());
-    // Debug remains redacted; Display deliberately presents the provider's message.
+    // Both diagnostic renderings omit the provider's message.
     let secret = CheckFailure::Operational("private endpoint or credential");
     assert!(!format!("{secret:?}").contains("private"));
-    assert_eq!(
-        secret.to_string(),
-        "source checking could not complete: private endpoint or credential"
-    );
+    assert_eq!(secret.to_string(), "source checking could not complete");
     assert!(std::error::Error::source(&error).is_some());
 }
 
@@ -194,8 +191,16 @@ fn check_failures_keep_exact_payloads_and_are_subject_to_carrier_handoff_bounds(
             mode,
         };
         let error = complete(provider.check_source(request(), caller.clone())).unwrap_err();
+        if mode == 1 {
+            assert!(!format!("{error:?}").contains("NO_ENTRY"));
+            assert!(!error.to_string().contains("Entry is unavailable"));
+            let cause = std::error::Error::source(&error).unwrap();
+            assert_eq!(cause.to_string(), "the kind rejected the proposed source");
+        }
         match error {
             KindError::Provider(CheckFailure::Rejected(value)) => {
+                assert_eq!(value.code().as_str(), Some("NO_ENTRY"));
+                assert_eq!(value.message().as_str(), Some("Entry is unavailable"));
                 assert_eq!(value.data().unwrap().text(), "9007199254740993")
             }
             KindError::Provider(CheckFailure::ContextRequired(value)) => {
@@ -222,7 +227,11 @@ fn provider_display_and_sources_retain_the_native_cause() {
     let error = KindError::Provider(CheckFailure::Operational(std::io::Error::other(
         "connection reset",
     )));
-    assert!(error.to_string().contains("connection reset"));
+    assert!(!error.to_string().contains("connection reset"));
+    assert_eq!(
+        error.to_string(),
+        "the provider did not complete the request successfully"
+    );
     let check = error.source().unwrap();
     assert!(
         check

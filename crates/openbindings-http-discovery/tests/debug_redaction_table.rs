@@ -1,4 +1,4 @@
-//! Debug is structural. Explicit display/accessors/serialization retain payloads.
+//! Diagnostic Display and Debug contain SDK text and constants; values require explicit access.
 use openbindings::{Document, DocumentValidation, VersionRefusal};
 use openbindings_http_discovery as http;
 use std::fmt::Debug;
@@ -103,9 +103,11 @@ async fn http_rows(
     metadata.status = 200;
     metadata.headers = vec![header.clone()];
     let error = http::RequestError::new(http::ErrorKind::Network, SECRET);
-    assert_eq!(error.to_string(), SECRET);
+    assert!(!error.to_string().contains(SECRET));
+    assert_eq!(error.message, SECRET);
     config.code = SECRET;
     config.message = SECRET;
+    // A configuration message is fixed text the SDK or the caller wrote in code.
     assert_eq!(config.to_string(), SECRET);
     let body: Arc<[u8]> = Arc::from(SECRET.as_bytes());
     result.outcome = http::DiscoveryOutcome::TransportError {

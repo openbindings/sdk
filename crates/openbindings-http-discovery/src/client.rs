@@ -85,7 +85,7 @@ pub enum ErrorKind {
 pub struct RequestError {
     /// Transport failure category.
     pub kind: ErrorKind,
-    /// Adapter-provided explanation; adapters should remove credentials, URLs and source data from default diagnostics.
+    /// Adapter-provided explanation, available through this field and serialization; diagnostic Display and Debug omit it.
     pub message: String,
 }
 impl RequestError {
@@ -99,7 +99,14 @@ impl RequestError {
 }
 impl std::fmt::Display for RequestError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.message)
+        f.write_str(match self.kind {
+            ErrorKind::Network => "HTTP transport network failure",
+            ErrorKind::Timeout => "HTTP transport deadline expired",
+            ErrorKind::RedirectPolicy => "HTTP redirect policy refused the request",
+            ErrorKind::Decode => "HTTP response decoding failed",
+            ErrorKind::Aborted => "HTTP transport was aborted",
+            ErrorKind::Other => "HTTP transport could not complete",
+        })
     }
 }
 impl std::error::Error for RequestError {}
@@ -183,7 +190,7 @@ pub struct ClientOptions {
     /// Positive bound on decoded bytes, with room for one over-limit sentinel.
     /// A body within it is validated under admission limits that admit its
     /// bytes: this bound when it exceeds [`JsonLimits::default`]'s byte limit,
-    /// with the default 1,000,000 nodes and any nesting. A body past the nodes is
+    /// with the default 1,000,000 nodes and 10,000 container levels. A body past either is
     /// undetermined; validate [`DiscoveryResult::body`] with
     /// [`openbindings::validate_document_with_limits`] to admit it.
     pub max_document_bytes: usize,
@@ -680,13 +687,12 @@ impl std::fmt::Debug for DiscoveryResult {
 // A caller holding bytes obtained elsewhere judges them with
 // `openbindings::validate_document`, which this wraps when `max_bytes` is within
 // the default byte limit. A larger body bound raises only the admitted bytes to
-// it: the nodes stay at the default 1,000,000, so a body past them is undetermined,
+// it: node and nesting limits keep their defaults, so a body past either is undetermined,
 // and its findings name validating the retained body with
 // `validate_document_with_limits`. A found document keeps these limits.
 pub(crate) fn validate_body(body: &[u8], max_bytes: usize) -> DiscoveryOutcome {
     let limits = JsonLimits {
         max_bytes: max_bytes.max(JsonLimits::default().max_bytes),
-        max_depth: usize::MAX,
         ..JsonLimits::default()
     };
     match validate_document_with_limits(body, limits) {

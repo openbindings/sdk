@@ -44,7 +44,7 @@ impl std::fmt::Display for CatalogError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Source => f.write_str("the source does not match the local catalog kind"),
-            Self::Comparison(error) => write!(f, "catalog schema comparison failed: {error}"),
+            Self::Comparison(_) => f.write_str("catalog schema comparison failed"),
         }
     }
 }
@@ -350,12 +350,24 @@ provider!(Embedded, embedded);
 #[cfg(all(target_arch = "wasm32", feature = "wasm-probe"))]
 #[wasm_bindgen::prelude::wasm_bindgen(js_name = pullCatalog)]
 pub async fn pull_catalog(text: String) -> Result<String, wasm_bindgen::JsValue> {
-    use wasm_bindgen::JsValue;
-    let value = JsonValue::parse(&text).map_err(|e| JsValue::from_str(&e.to_string()))?;
-    let request = PullRequest::from_json(&value).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let value = JsonValue::parse(&text).map_err(|e| report(&e))?;
+    let request = PullRequest::from_json(&value).map_err(|e| report(&e))?;
     let result = (Embedded)
         .pull_source(request, CancellationToken::new())
         .await
-        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+        .map_err(|e| report(&e))?;
     Ok(result.value().value().text().to_owned())
+}
+
+/// Each error layer prints only itself, so the message for JavaScript joins the chain.
+#[cfg(all(target_arch = "wasm32", feature = "wasm-probe"))]
+fn report(error: &dyn std::error::Error) -> wasm_bindgen::JsValue {
+    let mut message = error.to_string();
+    let mut source = error.source();
+    while let Some(error) = source {
+        message.push_str(": ");
+        message.push_str(&error.to_string());
+        source = error.source();
+    }
+    wasm_bindgen::JsValue::from_str(&message)
 }

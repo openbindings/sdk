@@ -164,10 +164,31 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 Conversion keeps its 128-container ceiling and the selected byte/node limits,
 including inside exact fields. Parse or clone an already complete exact value
-when composition is unnecessary. Preparation errors have readable `Display`
-text; Rust's `Result`-returning `main` prints `Debug`, which deliberately hides
-these details. The first example converts the preparation failure to display
-text before returning it.
+when composition is unnecessary. Preparation errors identify their category in
+`Display`; their `kind` and `origin` fields retain details for deliberate access.
+Rust's `Result`-returning `main` prints structural `Debug`. The first example
+converts the preparation failure to fixed display text before returning it.
+
+## Reading errors
+
+An SDK error's or diagnostic's `Display` and `Debug` hold fixed SDK text plus
+SDK constants: rule IDs, governed codes, the supported specification line, field
+and limit labels written in SDK code, limit numbers, byte offsets, lines and
+columns. Document content,
+caller-supplied values (URLs, URIs, names, payloads, versions), provider and
+evaluator output, and anything derived from them are reachable only through
+fields, accessors and serialization the caller invokes. Escaping or truncating a
+value does not make it value-free.
+
+A wrapper prints its own layer and exposes its cause through `Error::source()`,
+never both, so `{:#}` and `anyhow` chains print each layer once. A native cause's
+own formatting remains the provider's responsibility; apply the application's
+disclosure policy before printing that chain.
+
+A value type's own `Display` (`Pointer`, for example) is the rendering a caller
+asked for, not a diagnostic, and is out of scope. A location attached to a
+diagnostic is in scope: `SourceLocation`'s `Display` prints line, column and byte
+only; its pointer stays reachable through `pointer()` and its public field.
 
 Each preparation is independent. The default validator shares compiled state when
 cloned; custom validators choose their own ownership and thread-safety properties.
@@ -177,7 +198,9 @@ Prepared does not mean every value is decidable. Handle all four results.
 
 Parse a `Document` to edit it. `Document::parse` admits exact JSON, keeps an
 invalid draft inspectable and refuses text that is not JSON as an `InputError`;
-`document.validate()` returns the same validation as `validate_document`. Edit
+`document.validate()` assesses the admitted snapshot under its retained limits.
+Default parsing and `validate_document` both use `JsonLimits::default()`, including
+the 10,000-level cap. Edit
 the `Document` through a shared borrow and retain the returned snapshot. Generic paths use RFC 6901:
 `~0` escapes a tilde and `~1` a slash. Parents must exist; `set` inserts missing
 object members and `/-` appends to arrays. Use exact JSON values to preserve

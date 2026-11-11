@@ -72,9 +72,14 @@ struct Reply {
 
 async fn call(text: &str, input_text: &str) -> Result<Reply, Box<dyn Error>> {
     let draft = Document::parse(text).map_err(|e| format!("JSON admission: {e}"))?;
-    let checked = draft
-        .validate()
-        .map_err(|e| format!("unsupported version: {e}"))?;
+    let checked = draft.validate().map_err(|e| {
+        // The application chooses to disclose the declaration here.
+        format!(
+            "unsupported version {:?}; supported {}",
+            e.declared(),
+            e.supported
+        )
+    })?;
     for finding in &checked.report().findings {
         let pointer = finding.location.as_ref().and_then(|at| at.pointer.as_ref());
         eprintln!(

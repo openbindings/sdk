@@ -14,8 +14,8 @@ use std::fmt;
 /// Construction checks `CONTEXT_REQUIRED` structurally; the provider remains
 /// responsible for its before-output and before-effects guarantees.
 ///
-/// `Display` prints every code, application-defined ones included, and never
-/// the data. `Debug` shows the codes the invoker interfaces govern, writes
+/// `Display` and `Debug` show only codes the invoker interfaces govern, never
+/// application-defined codes or data. `Debug` writes
 /// `<redacted>` for any other code, and shows only whether data is present.
 #[derive(Clone)]
 pub struct InvocationError {
@@ -178,10 +178,10 @@ impl InvocationError {
     }
 }
 
-impl fmt::Debug for InvocationError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl InvocationError {
+    fn diagnostic_code(&self) -> &'static str {
         // Known protocol codes are safe; application-defined codes are opaque.
-        let code = match self.code.as_str() {
+        match self.code.as_str() {
             "CONTEXT_REQUIRED" => "CONTEXT_REQUIRED",
             "ERR_REFUSED" => "ERR_REFUSED",
             "ERR_CANCELLED" => "ERR_CANCELLED",
@@ -194,7 +194,13 @@ impl fmt::Debug for InvocationError {
             "ERR_OPERATION_VALIDATION_FAILED" => "ERR_OPERATION_VALIDATION_FAILED",
             "ERR_SCHEMA_UNRESOLVED" => "ERR_SCHEMA_UNRESOLVED",
             _ => "<redacted>",
-        };
+        }
+    }
+}
+
+impl fmt::Debug for InvocationError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let code = self.diagnostic_code();
         f.debug_struct("InvocationError")
             .field("code", &code)
             .field("data_present", &self.data.is_some())
@@ -204,7 +210,11 @@ impl fmt::Debug for InvocationError {
 
 impl fmt::Display for InvocationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "invocation completed unsuccessfully: {}", self.code)
+        write!(
+            f,
+            "invocation completed unsuccessfully: {}",
+            self.diagnostic_code()
+        )
     }
 }
 

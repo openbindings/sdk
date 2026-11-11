@@ -26,7 +26,7 @@ async function main() {
     await pullCatalog(request('null'));
     throw new Error('malformed source became success');
   } catch (error) {
-    assert(String(error) === 'source pull failed: source pulling could not complete: the source does not match the local catalog kind', 'wrong native refusal');
+    assert(String(error) === 'source pull provider failed: source pulling could not complete: the source does not match the local catalog kind', 'wrong native refusal');
   }
   console.log('source pulling: external async Wasm consumer, exact values and explicit refusal passed');
 }

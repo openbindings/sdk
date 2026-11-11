@@ -365,7 +365,7 @@ async fn a_raised_body_limit_validates_bodies_past_the_default_byte_limit() {
     body.resize(default.max_bytes + 1 - 2, b'a');
     body.extend_from_slice(br#""}"#);
     // A body bound past the default byte limit admits a body to it, and the
-    // document keeps limits that admit it, with any nesting.
+    // document keeps the byte allowance and default node and nesting limits.
     let (r, _) = get(200, &body, default.max_bytes + 1).await;
     let DiscoveryOutcome::Found { document } = r.outcome else {
         panic!("expected a conformant document, got {:?}", r.outcome)
@@ -374,7 +374,6 @@ async fn a_raised_body_limit_validates_bodies_past_the_default_byte_limit() {
         document.document().limits(),
         openbindings::JsonLimits {
             max_bytes: default.max_bytes + 1,
-            max_depth: usize::MAX,
             ..default
         }
     );
@@ -386,13 +385,7 @@ async fn a_raised_body_limit_validates_bodies_past_the_default_byte_limit() {
     let DiscoveryOutcome::Found { document } = r.outcome else {
         panic!("expected a conformant document, got {:?}", r.outcome)
     };
-    assert_eq!(
-        document.document().limits(),
-        openbindings::JsonLimits {
-            max_depth: usize::MAX,
-            ..default
-        }
-    );
+    assert_eq!(document.document().limits(), default);
     // Only the bytes follow the bound: a body past the default nodes is
     // undetermined with node-limit findings at the parser offset. Validating
     // the retained body with larger limits admits it.
@@ -415,7 +408,6 @@ async fn a_raised_body_limit_validates_bodies_past_the_default_byte_limit() {
         &body,
         openbindings::JsonLimits {
             max_nodes: 2 * default.max_nodes,
-            max_depth: usize::MAX,
             ..default
         },
     )
@@ -1235,7 +1227,11 @@ fn transports_report_failures_with_the_request_error_constructor() {
     let error = RequestError::new(ErrorKind::RedirectPolicy, "hop refused");
     assert_eq!(error.kind, ErrorKind::RedirectPolicy);
     assert_eq!(error.message, "hop refused");
-    assert_eq!(error.to_string(), "hop refused");
+    assert_eq!(
+        error.to_string(),
+        "HTTP redirect policy refused the request"
+    );
+    assert_eq!(error.message, "hop refused");
 }
 
 #[test]

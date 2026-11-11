@@ -171,14 +171,14 @@ fn explicit_check_claims_and_disclosure_cannot_contradict_each_other() {
     for text in [
         r#"{"kind":"k","description":"d","supports":["openbindings.kind-descriptor.checkSource"]}"#,
         r#"{"kind":"k","description":"d","supports":[],"check":{"description":"reads","executes":false}}"#,
+        r#"{"kind":"k","description":"d","supports":["vendor.check"],"check":{"description":"reads","executes":false}}"#,
     ] {
         assert_eq!(
             KindDescription::from_json(exact(text)).unwrap_err(),
             CarrierError::InconsistentCheckSupport
         );
     }
-    // Absence of a canonical key makes no negative claim about a local operation.
-    assert!(KindDescription::from_json(exact(r#"{"kind":"k","description":"d","supports":["vendor.check"],"check":{"description":"reads","executes":false}}"#)).is_ok());
+    assert!(KindDescription::from_json(exact(r#"{"kind":"k","description":"d","supports":["openbindings.kind-descriptor.checkSource"],"check":{"description":"reads","executes":false}}"#)).is_ok());
 }
 
 #[test]

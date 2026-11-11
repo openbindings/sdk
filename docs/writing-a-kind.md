@@ -15,7 +15,7 @@ The SDK supplies checked calls and exact JSON. Applications supply kind-specific
 transports, credential storage and routing, and decide retries.
 
 This page targets the current unpublished `0.2.0-alpha.1` SDK and its interface
-revision `3e3dc453a93b611a8e9ea1813ec63a2216830f45`. The document model is
+revision `67f707c31aecbdf0551385e369d8024097db6278`. The document model is
 OpenBindings 0.2. The [example crate](../examples/kind-adapter/README.md) contains
 every Rust block below, with tests. Its fictional in-memory protocol needs no
 network. It builds for native Rust and `wasm32-unknown-unknown`.
@@ -110,11 +110,15 @@ pub const KIND: &str = "example.memory@1";
 #[derive(Default)]
 pub struct Memory;
 
-#[derive(Debug)]
 pub struct AdapterError(pub &'static str);
+impl fmt::Debug for AdapterError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("AdapterError { .. }")
+    }
+}
 impl fmt::Display for AdapterError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.0)
+        f.write_str("kind adapter could not complete")
     }
 }
 impl std::error::Error for AdapterError {}
@@ -520,7 +524,7 @@ new attempt. The SDK never acquires context or retries for you.
 
 A provider that makes no prediction can use the one-line body
 `ready(Ok(None))` with `Ready<Result<Option<ContextChallenge>, InvocationError>>`.
-The [binding-invoker interface](https://github.com/openbindings/interfaces/blob/3e3dc453a93b611a8e9ea1813ec63a2216830f45/binding-invoker/README.md)
+The [binding-invoker interface](https://github.com/openbindings/interfaces/blob/67f707c31aecbdf0551385e369d8024097db6278/binding-invoker/README.md)
 states that `null` is always conformant, even when invocation will need context.
 `None` means no prediction; it does not promise that invocation will proceed.
 
@@ -533,8 +537,9 @@ Native transport errors, exception text, stacks, headers, protocol envelopes and
 raw debugging evidence stay outside portable invocation error data unless a
 governing rule explicitly defines them as application data. Use fixed safe codes;
 keep native evidence within host-controlled diagnostics, excluding secrets.
-`InvocationError` has no portable message field. Its `Display` prints the code;
-its `Debug` hides unknown codes and all data. Do not embed user values in codes.
+`InvocationError` has no portable message field. Its `Display` and `Debug` print
+only governed codes by name and hide unknown codes and all data. Read `code()`
+explicitly for a provider-defined code. Do not embed user values in codes.
 
 Pull uses `PullFailure::Operational(native_error)`,
 `PullFailure::ContextRequired(challenge)` or `PullFailure::Cancelled`.
@@ -542,9 +547,10 @@ Queries use their associated native error type. Source checking distinguishes
 `CheckFailure::Rejected(CheckRejection)` with code, readable message and optional
 data from `Operational`, `ContextRequired` and `Cancelled`. A rejection is not
 a context challenge. `PullError` and `KindError` distinguish these outcomes from
-local SDK validation failures. Native error `Display` and `source()` chains are
-available when the native error implements the corresponding Rust traits;
-`Debug` intentionally hides payloads. Write native errors with safe messages too.
+local SDK validation failures. SDK wrapper `Display` prints its own layer and
+exposes a native error through `source()` when it implements the corresponding
+Rust trait. `Debug` hides payloads. Apply the application's disclosure policy
+before printing native errors or chains; native formatting is provider-owned.
 
 ## Streaming output and input
 
@@ -1030,12 +1036,13 @@ Run both native and Wasm builds and exercise any actual host transport separatel
 - Use operation primary keys in reports, and `is_valid_name` for generated names.
 - Keep `can_invoke`, support lists and descriptions consistent.
 - Treat comparison inability as a gap, and a dropped schema as a removal proposal.
-- Read errors with safe `Display` or their cause chain when redacted `Debug` hides them.
+- Read fixed SDK categories with `Display`; inspect fields and accessors explicitly
+  for values. Apply your disclosure policy before printing native cause chains.
 - Retain invocation control when diagnosing rejected or oversized errors.
 - Build for Wasm, then verify the host imports and local-future requirements.
 
 For the full current contracts, read the pinned
-[binding invocation](https://github.com/openbindings/interfaces/blob/3e3dc453a93b611a8e9ea1813ec63a2216830f45/binding-invoker/README.md),
-[kind description](https://github.com/openbindings/interfaces/blob/3e3dc453a93b611a8e9ea1813ec63a2216830f45/kind-descriptor/README.md) and
-[source pull](https://github.com/openbindings/interfaces/blob/3e3dc453a93b611a8e9ea1813ec63a2216830f45/source-puller/README.md)
+[binding invocation](https://github.com/openbindings/interfaces/blob/67f707c31aecbdf0551385e369d8024097db6278/binding-invoker/README.md),
+[kind description](https://github.com/openbindings/interfaces/blob/67f707c31aecbdf0551385e369d8024097db6278/kind-descriptor/README.md) and
+[source pull](https://github.com/openbindings/interfaces/blob/67f707c31aecbdf0551385e369d8024097db6278/source-puller/README.md)
 publications. Interface and SDK versions are independent.

@@ -1,7 +1,7 @@
 # Pinned current invocation fixtures
 
 These byte-exact sources target interfaces revision
-`3e3dc453a93b611a8e9ea1813ec63a2216830f45` and core specification revision
+`67f707c31aecbdf0551385e369d8024097db6278` and core specification revision
 `c1419c9fc3ae5a00c2b83da710c11bf67dab7934`.
 
 | Fixture | SHA-256 |

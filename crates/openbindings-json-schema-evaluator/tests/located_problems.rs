@@ -61,7 +61,7 @@ fn explained_problems_locate_the_failing_node_and_the_documents_keyword() {
     assert_eq!((located.line, located.byte_column), position(text, offset));
     assert_eq!(
         located.to_string(),
-        format!("/items/1 (line 4, column 5, byte {offset})")
+        format!("line 4, column 5, byte {offset}")
     );
     // The schema side names the keyword; the document finds its line and column.
     let keyword = "/operations/op/input/properties/items/items/type";

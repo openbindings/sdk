@@ -863,7 +863,7 @@ fn preparation_display_names_causes_without_changing_debug_redaction() {
         ));
     assert_eq!(
         invalid.to_string(),
-        "schema preparation failed: invalid external schema in resource \"https://example.test/schema\" at pointer \"/$defs/bad\""
+        "schema preparation failed: invalid external schema"
     );
     assert_eq!(
         format!("{invalid:?}"),
@@ -872,7 +872,11 @@ fn preparation_display_names_causes_without_changing_debug_redaction() {
     let limit = PreparationFailure::new(PreparationFailureKind::Limit {
         resource: "schema-nodes".into(),
     });
-    assert!(limit.to_string().contains("limit reached \"schema-nodes\""));
+    assert!(
+        limit
+            .to_string()
+            .contains("raise PreparationLimits::max_schema_nodes")
+    );
     let missing = PreparationFailure::new(PreparationFailureKind::Resolution {
         cause: ResolutionFailureKind::ResourceUnavailable {
             uri: "https://example.test/missing".into(),
@@ -881,7 +885,7 @@ fn preparation_display_names_causes_without_changing_debug_redaction() {
     assert!(
         missing
             .to_string()
-            .contains("resource unavailable \"https://example.test/missing\"")
+            .contains("resource unavailable; supply the required external schema")
     );
     let private = PreparationFailure::new(PreparationFailureKind::Implementation {
         message: "PRIVATE SCHEMA".into(),

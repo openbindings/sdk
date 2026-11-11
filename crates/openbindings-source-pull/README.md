@@ -4,7 +4,7 @@ For a complete protocol implementation walkthrough, read
 [writing a binding kind adapter](https://github.com/openbindings/sdk/blob/main/docs/writing-a-kind.md).
 
 This unpublished companion implements source-puller version
-0.1.0 at interfaces revision `3e3dc453a93b611a8e9ea1813ec63a2216830f45`.
+0.1.0 at interfaces revision `67f707c31aecbdf0551385e369d8024097db6278`.
 It carries additions to one original document and the report of pulling one
 selected source. Kind implementations own source interpretation and projection.
 A report is a producer claim, not proof of live availability or fidelity.
@@ -53,11 +53,11 @@ never polled again, so it cannot perform async cleanup afterward. The token lets
 detached work and synchronous loops stop cooperatively; synchronous `Drop` can
 release resources held by the future.
 
-`Display` includes a native provider error's own `Display` message. When the
-native error implements `std::error::Error + 'static`, `PullError::source()` leads
-to `PullFailure`, then to that native error. Validation failures are sources too.
-`Debug` continues to hide provider payloads; choose where to display native errors
-according to the application's disclosure policy.
+`Display` prints each SDK error's own layer; `Debug` hides provider payloads.
+When the native error implements `std::error::Error + 'static`,
+`PullError::source()` leads to `PullFailure`, then to that native error.
+Validation failures are sources too. Apply the application's disclosure policy
+before printing a native cause or a cause chain.
 
 `PullResult::validate_for` also checks an already supplied result and returns the
 prospective conformant document. That establishes core conformance, not offered

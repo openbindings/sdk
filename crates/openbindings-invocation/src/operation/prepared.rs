@@ -40,7 +40,18 @@ impl fmt::Display for OperationPreparationFailure {
         })
     }
 }
-impl std::error::Error for OperationPreparationFailure {}
+impl std::error::Error for OperationPreparationFailure {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Resolution(error) => Some(error),
+            Self::Schema(error) => match error.evidence() {
+                ValidationEvidence::Preparation(error) => Some(error),
+                ValidationEvidence::Evaluation(_) => None,
+            },
+            Self::Cancelled => None,
+        }
+    }
+}
 
 /// One operation's original snapshot and owned prepared validators. Consuming
 /// this owner into an attempt requires no Sync on V. Clone is available only when
