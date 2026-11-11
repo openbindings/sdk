@@ -8,7 +8,10 @@ use std::fmt;
 
 /// An immutable portable unsuccessful-completion record: code and optional data.
 ///
-/// Unknown nonempty codes remain unchanged. Absent data and present JSON null
+/// Codes are nonempty Rust strings, so only Unicode scalar values are supported;
+/// decoding a code with an unpaired surrogate returns
+/// [`BoundaryFailureKind::UnpairedString`]. Unknown codes in this domain remain
+/// unchanged. Absent data and present JSON null
 /// are distinct. Data must be governed portable application data, not raw native
 /// errors, credentials, protocol envelopes, stacks, or debugging evidence.
 /// Construction checks `CONTEXT_REQUIRED` structurally; the provider remains
@@ -72,7 +75,7 @@ impl InvocationError {
         )
     }
 
-    /// Exact governed or implementation-defined code.
+    /// Exact governed or implementation-defined Unicode scalar code.
     pub fn code(&self) -> &str {
         &self.code
     }

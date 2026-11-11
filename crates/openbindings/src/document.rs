@@ -175,9 +175,9 @@ impl Document {
         &self.inner.value
     }
     /// The admission limits this document was admitted under, which its edits apply: [`JsonLimits::default`] for [`Self::parse`],
-    /// [`Self::new`] and [`Self::from_json`], the caller's for
-    /// [`Self::parse_with_limits`] and [`validate_document_with_limits`], and no
-    /// nesting cap for [`validate_document`].
+    /// [`Self::new`], [`Self::from_json`] and [`validate_document`] (including
+    /// 10,000 container levels), and the caller's for
+    /// [`Self::parse_with_limits`] and [`validate_document_with_limits`].
     pub fn limits(&self) -> JsonLimits {
         self.inner.limits
     }

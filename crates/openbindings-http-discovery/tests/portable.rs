@@ -158,7 +158,14 @@ fn validate_allow_origin(origin: &AllowOrigin) -> Result<(), ConfigurationError>
     let checked = Publication::new(&proof, options()).map(drop);
     match Publication::from_bytes(DOCUMENT, options()) {
         Ok(_) => assert!(checked.is_ok()),
-        Err(PublicationError::Configuration(error)) => assert_eq!(checked, Err(error)),
+        Err(error @ PublicationError::Configuration(_)) => {
+            let cause = std::error::Error::source(&error).unwrap();
+            assert_eq!(
+                Some(cause.downcast_ref::<ConfigurationError>().unwrap()),
+                checked.as_ref().err()
+            );
+            assert_eq!(error.to_string(), "invalid publication configuration");
+        }
         Err(other) => panic!("unexpected publication refusal: {other:?}"),
     }
     checked
@@ -592,13 +599,18 @@ fn publication_refuses_every_unestablished_conformance_state() {
         Publication::from_bytes(b"{}", PublicationOptions::default()),
         Err(PublicationError::NonConformant(_))
     ));
-    assert!(matches!(
-        Publication::from_bytes(
-            br#"{"openbindings":"8.0.0"}"#,
-            PublicationOptions::default()
-        ),
-        Err(PublicationError::VersionRefused(_))
-    ));
+    let error = Publication::from_bytes(
+        br#"{"openbindings":"8.0.0"}"#,
+        PublicationOptions::default(),
+    )
+    .unwrap_err();
+    assert!(matches!(error, PublicationError::VersionRefused(_)));
+    assert!(
+        std::error::Error::source(&error)
+            .unwrap()
+            .is::<openbindings::VersionRefusal>()
+    );
+    assert_eq!(error.to_string(), "publication version is not supported");
     // A document over the default node limit leaves every rule undecided; publication needs proof.
     let text = format!(
         r#"{{"openbindings":"0.2.0","operations":{{}},"x-data":[{}0]}}"#,
