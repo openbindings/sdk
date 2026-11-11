@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-11-11 binding selection (unreleased)
+
+- Add `DefaultOperationInvoker::select` and `PreparedOperation::select`, returning
+  the core `Binding` before context loading or provider work. Invocation,
+  preflight and selection share the same binding selection rules.
+
 ## 2026-11-11 review fixes (unreleased)
 
 - Cancel pending binding and operation preflight work before provider cleanup.

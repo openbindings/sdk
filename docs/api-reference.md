@@ -324,3 +324,9 @@ clone it explicitly when ownership is needed. Carrier `to_json` means bounded
 encoding: `InvocationError`, `BindingRequest` and `OperationRequest` retain those
 encoders. Schema comparison's `identical` returns `Result<bool,
 ComparisonFailure>`; a failure is separate from a negative comparison.
+
+`DefaultOperationInvoker::select(&interface, &address)` and
+`PreparedOperation::select(&provider, &choice)` return a core `Binding` using only
+the document, address or choice, and `InvocationSupport::can_invoke`. Read its
+source, load that source's context, then invoke or preflight the selected binding
+explicitly with that context. Prepared selection also checks operation membership.

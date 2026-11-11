@@ -1,4 +1,4 @@
-//! All current pinned selection cases through lazy/prepared invocation and preflight.
+//! Pinned selection cases through selection, lazy/prepared invocation and preflight.
 use openbindings::{Document, ExternalSchemas, JsonValue};
 use openbindings_invocation::ContextChallenge;
 use openbindings_invocation::{
@@ -133,6 +133,26 @@ async fn published_selection_cases_resolve_through_invocation_preparation_and_pr
                 }
                 .to_owned()),
             };
+            let selected = client.select(&interface, &request.address);
+            if let Ok(binding) = &selected {
+                assert_eq!(
+                    binding.operation().key(),
+                    interface.resolve_operation(name).unwrap().key()
+                );
+                assert_eq!(
+                    binding.source().key(),
+                    case["document"]["bindings"][binding.key()]["source"]
+                        .as_str()
+                        .unwrap()
+                );
+            }
+            assert_eq!(
+                selected
+                    .map(|binding| binding.key().to_owned())
+                    .map_err(|error| error.code().to_owned()),
+                want,
+                "{cluster} select: {description}"
+            );
             assert_eq!(
                 outcome(
                     client
@@ -146,6 +166,14 @@ async fn published_selection_cases_resolve_through_invocation_preparation_and_pr
             let prepared = client
                 .prepare(interface, name, &CancellationToken::new())
                 .unwrap();
+            assert_eq!(
+                prepared
+                    .select(&provider, &choice)
+                    .map(|binding| binding.key().to_owned())
+                    .map_err(|error| error.code().to_owned()),
+                want,
+                "{cluster} prepared select: {description}"
+            );
             assert_eq!(
                 outcome(
                     prepared
