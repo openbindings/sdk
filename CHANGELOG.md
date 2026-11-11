@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-11-11 directional comparison (unreleased)
+
+- Implement profile OB-2020-12 0.1 directional input/output verdicts with exact reasons and bounded work.
+- Add interface checking with explicit required/provided roles, sorted per-operation outcomes, missing matches and profile verdict collapse.
+- Add source-puller reference-rule identity and use it for existing entries in the larger pull example.
+- Qualify all 59 ordinary and 29 exact directional fixture groups alongside the existing identity corpus.
+
 ## 2026-11-11 review fixes (unreleased)
 
 - Cancel pending binding and operation preflight work before provider cleanup.

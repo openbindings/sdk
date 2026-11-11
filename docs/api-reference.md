@@ -15,7 +15,7 @@ It builds a complete adapter and explains the checked calls and kind-owned rules
 | Evaluator qualification | [openbindings-schema-evaluator-test-support](../crates/openbindings-schema-evaluator-test-support/src/lib.rs) | `cargo doc --locked --no-deps -p openbindings-schema-evaluator-test-support` |
 | Shared context | [openbindings-context](../crates/openbindings-context/src/lib.rs) | `cargo doc --locked --no-deps -p openbindings-context` |
 | Invocation | [openbindings-invocation](../crates/openbindings-invocation/src/lib.rs) | `cargo doc --locked --no-deps -p openbindings-invocation` |
-| Schema identity comparison | [openbindings-schema-comparison](../crates/openbindings-schema-comparison/src/lib.rs) | `cargo doc --locked --no-deps -p openbindings-schema-comparison` |
+| Schema identity and directional comparison | [openbindings-schema-comparison](../crates/openbindings-schema-comparison/src/lib.rs) | `cargo doc --locked --no-deps -p openbindings-schema-comparison` |
 | Source pulling | [openbindings-source-pull](../crates/openbindings-source-pull/src/lib.rs) | `cargo doc --locked --no-deps -p openbindings-source-pull` |
 | Kind description and source checking | [openbindings-kind-description](../crates/openbindings-kind-description/src/lib.rs) | `cargo doc --locked --no-deps -p openbindings-kind-description` |
 | HTTP discovery | [openbindings-http-discovery](../crates/openbindings-http-discovery/src/lib.rs) | `cargo doc --locked --no-deps -p openbindings-http-discovery --features native` |
@@ -324,3 +324,15 @@ clone it explicitly when ownership is needed. Carrier `to_json` means bounded
 encoding: `InvocationError`, `BindingRequest` and `OperationRequest` retain those
 encoders. Schema comparison's `identical` returns `Result<bool,
 ComparisonFailure>`; a failure is separate from a negative comparison.
+`compare` and `compare_with_control` take `Direction`, a present target and a
+present candidate, and return `Comparison` with `verdict()`, `reason()` and
+`finding()` accessors. `check_interface` and `check_interface_with_control` take
+explicit required/provided conformant documents and retain per-operation output
+then input results, including failures; `operations()` and `issues()` expose the
+report. `verdict()` collapses indeterminate > incompatible > compatible, returning
+a comparison failure separately. `identical_with_references` and
+`identical_with_references_and_control` take a caller accounting predicate for the
+source-puller reference rule. Repeating with `&|_| true` asks whether drift lies
+only behind unaccounted targets. All controlled calls share one monotone
+`ComparisonLimits` allowance per call. Public diagnostic formatting omits reasons
+and document values.

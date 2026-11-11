@@ -1,0 +1,87 @@
+{
+  "version": "1.0",
+  "description": "Annotation keywords (title, description, default, deprecated, examples, format, readOnly, writeOnly) never affect the verdict.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "titleDescription": {
+        "input": {
+          "type": "string",
+          "title": "Name",
+          "description": "The user's name"
+        }
+      },
+      "defaultDeprecated": {
+        "input": {
+          "type": "string",
+          "default": "foo",
+          "deprecated": true
+        }
+      },
+      "examples": {
+        "input": {
+          "type": "integer",
+          "examples": [
+            1,
+            2,
+            3
+          ]
+        }
+      },
+      "formatAnnotation": {
+        "input": {
+          "type": "string",
+          "format": "email"
+        }
+      },
+      "readWriteOnly": {
+        "input": {
+          "type": "string",
+          "readOnly": true
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "titleDescription": {
+        "input": {
+          "type": "string",
+          "title": "Different",
+          "description": "Something else"
+        }
+      },
+      "defaultDeprecated": {
+        "input": {
+          "type": "string"
+        }
+      },
+      "examples": {
+        "input": {
+          "type": "integer"
+        }
+      },
+      "formatAnnotation": {
+        "input": {
+          "type": "string"
+        }
+      },
+      "readWriteOnly": {
+        "input": {
+          "type": "string",
+          "writeOnly": true
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "compatible"
+    }
+  }
+}

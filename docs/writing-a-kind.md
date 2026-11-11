@@ -671,11 +671,18 @@ Source and binding data compare as JSON values. Existing-entry schema comparison
 also needs report context: a reference to a target accounted for by the report
 stays a leaf, so its target's drift is reported once at that target. Other
 references are followed; a difference only through a target the report does not
-account for makes the entry unassessed. The comparison companion currently has
-no report-aware reference policy argument. Do not assume its ordinary identity
-call implements this reconciliation rule. Supply that logic in the adapter, or
-report an entry as unassessed when you cannot judge it truthfully. The minimal
-example has no references and does not need that logic.
+account for makes the entry unassessed. Use the comparison companion's
+`identical_with_references(left, right, accounted_for, limits)` with a callback
+that identifies targets your report accounts for. Its `ReferenceContext` exposes
+`spelling()`, the original `schema()`, `resource()` and `base()`, so accounting can
+distinguish equal spellings in different resources. It preserves same-spelled
+accounted references as leaves and keeps their siblings and containing allOf
+unmerged. If it returns false, compare again with `&|_| true`: a true answer then
+means the entry differs only behind unaccounted targets, so report `unassessed`.
+A normalization failure also provides no identity answer. Use
+`identical_with_references_and_control` when cooperative cancellation is needed.
+The larger pull example demonstrates these calls; the minimal example has no
+references.
 
 Binding proposals can change binding `data` and the operation's `input` and
 `output`, or remove those slots with a nonempty `remove` array. Source proposals

@@ -1,10 +1,11 @@
 # OpenBindings schema comparison
 
-Compare optional schemas by normalized identity under comparison profile
+Compare schemas by normalized identity or directional compatibility under profile
 `OB-2020-12` version `0.1`, pinned at interfaces revision
 `67f707c31aecbdf0551385e369d8024097db6278`. This unpublished companion is independent
-of core document conformance and the value evaluator. Directional compatibility
-and whole-profile conformance are outside this initial API's claim.
+of core document conformance and the value evaluator. It implements the profile's
+directional rules and interface-level fold, plus the source puller's reference
+rule for existing-entry identity.
 
 ```rust
 use openbindings::JsonValue;
@@ -73,5 +74,97 @@ stays refused; fresh retries use unchanged inputs. `identical_with_control` obse
 cooperative cancellation at work and allocation boundaries. It never publishes a
 partial normalized tree or caches a failed result.
 
-The preserved fixture harness passes all 27 ordinary and 10 exact identity groups; the 59 ordinary and 29
-exact directional groups are explicitly outside scope rather than counted as passes.
+The fixture harness passes all 27 ordinary and 10 exact identity groups, and all
+59 ordinary and 29 exact directional groups, including expected normalization
+failures. No directional groups are skipped. Copied inputs retain the pinned
+publication's JSON values, with hashes in `tests/fixtures/README.md`. Two fixture
+descriptions encode U+2014 with JSON escapes; the other pinned files retain the
+publication's bytes. Two manifest
+finding-label sets for union cross-form cases conflict with the prose's rule
+order: string bounds decide before unions. The harness pins those prose-governed
+findings explicitly while checking every published verdict.
+
+
+## Directional comparison and interface checking
+
+`compare(Direction::Input | Direction::Output, target, candidate, limits)` accepts
+two present `SchemaInput`s. `compare_with_control` adds cooperative cancellation.
+Both return `Result<Comparison, ComparisonFailure>`. `Comparison::verdict()` is
+`Compatible`, `Incompatible`, or `Indeterminate`; `reason()` exposes report data
+and `finding()` returns `outside-profile` for indeterminate positions. Public
+`Debug` and diagnostic `Display` never disclose schema values or reason strings.
+Normalization failures, including unsatisfiable merges and resource refusals, are
+errors without a verdict. Ordinary `identical` retains its behavior and work path.
+
+```rust
+use openbindings::JsonValue;
+use openbindings_schema_comparison::{compare, ComparisonLimits, Direction, SchemaInput, Verdict};
+let target = JsonValue::parse(r#"{"type":"integer","minimum":1}"#)?;
+let target = SchemaInput::new(target.clone(), target);
+let candidate = JsonValue::parse(r#"{"type":"number","minimum":0}"#)?;
+let candidate = SchemaInput::new(candidate.clone(), candidate);
+let result = compare(Direction::Input, &target, &candidate, &ComparisonLimits::default())?;
+assert_eq!(result.verdict(), Verdict::Compatible);
+# Ok::<(), Box<dyn std::error::Error>>(())
+```
+
+The walk applies identity, outside-profile refusal, Top, type, const/enum,
+objects, items, numeric bounds, string bounds, array bounds and unions in that
+order. It stops at the first failing rule. Identity prunes even outside-profile
+positions. Retained conjunctions with no directional merge rule fail closed when
+they differ. Union search accepts a definitive matching variant; if no variant
+matches and some comparisons are indeterminate, that variant remains indeterminate.
+Reasons retain nested paths, exact JSON values, exclusive markers, actual union
+keys and authored indexes. Types, properties and required names choose the first
+lexical failure; enum and union traversal retain authored order.
+
+`check_interface(required, provided, limits)` accepts two `ConformantDocument`s.
+Swap these explicit roles to check consumption in the other direction. It matches
+a required operation's key, then its aliases, in the provided flat key-and-alias
+namespace. It keeps every required operation in sorted key order, including
+missing ones, and checks output before input. A slot with either schema absent
+is skipped without normalization. `operations()` retains slot results and
+per-operation failures; `issues()` exposes missing, incompatible, indeterminate
+and failed checks in report order. `verdict()` returns the first comparison
+failure if one exists; otherwise it uses `indeterminate > incompatible > compatible`.
+`Verdict::collapse` supplies that dominance for caller-owned verdict collections.
+
+`check_interface_with_control` adds cooperative cancellation. One allowance covers
+the complete fold. Setup failure returns no report; after setup, a failed slot
+stays in the report and later checks continue. Exhaustion is sticky, so subsequent
+present pairs retain the same resource failure. An added provided operation has
+no required check. This API does not choose report suppression policies.
+
+## Source puller's reference rule
+
+`identical_with_references(left, right, accounted_for, limits)` compares optional
+slots using the source-puller rule. The callback receives a `ReferenceContext`
+with decoded spelling, the original schema, its resource root and base, and
+decides accounting; the companion never reads a pull report.
+References spelled the same on both sides and accepted by the callback remain
+leaves. Their siblings normalize, but stay unmerged, as does an allOf containing
+such a leaf. Other references are followed. All other identity normalization,
+exact equality and failure rules apply. `identical_with_references_and_control`
+adds cooperative cancellation; each call uses one monotone budget, including
+reference inventory and comparison work.
+
+```rust
+use openbindings::JsonValue;
+use openbindings_schema_comparison::{identical_with_references, ComparisonLimits, SchemaInput};
+let schema = JsonValue::parse(r##"{"$ref":"#/schemas/User"}"##)?;
+let before = SchemaInput::new(schema.clone(), JsonValue::parse(r#"{"schemas":{"User":{"type":"string"}}}"#)?);
+let offered = SchemaInput::new(schema, JsonValue::parse(r#"{"schemas":{"User":{"type":"number"}}}"#)?);
+let limits = ComparisonLimits::default();
+// The caller has a report entry for User, so its drift is reported there.
+assert!(identical_with_references(Some(&before), Some(&offered),
+    &|reference| reference.spelling() == "#/schemas/User", &limits)?);
+// Without that accounting, following the reference finds a difference.
+assert!(!identical_with_references(Some(&before), Some(&offered), &|_| false, &limits)?);
+// Keeping every same-spelled reference answers the second question: the entry
+// itself is unchanged, so the difference is only behind an unaccounted target.
+assert!(identical_with_references(Some(&before), Some(&offered), &|_| true, &limits)?);
+# Ok::<(), Box<dyn std::error::Error>>(())
+```
+
+A source puller reports the last situation as `unassessed`. Annotation-only edits
+remain `current`. Binding and source data still compare as exact JSON values.

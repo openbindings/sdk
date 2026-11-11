@@ -1,0 +1,56 @@
+{
+  "version": "1.0",
+  "description": "Input: the candidate must allow every type the target allows; number covers integer.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "identicalTypes": {
+        "input": {
+          "type": "string"
+        }
+      },
+      "candidateSuperset": {
+        "input": {
+          "type": "string"
+        }
+      },
+      "integerTargetNumberCandidate": {
+        "input": {
+          "type": "integer"
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "identicalTypes": {
+        "input": {
+          "type": "string"
+        }
+      },
+      "candidateSuperset": {
+        "input": {
+          "type": [
+            "string",
+            "number"
+          ]
+        }
+      },
+      "integerTargetNumberCandidate": {
+        "input": {
+          "type": "number"
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "compatible"
+    }
+  }
+}

@@ -1,0 +1,107 @@
+{
+  "version": "1.0",
+  "description": "Input: candidate bounds at least as wide as the target's are compatible; absent candidate bounds are unconstrained.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "identicalNumericBounds": {
+        "input": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        }
+      },
+      "widerNumericCandidate": {
+        "input": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        }
+      },
+      "unboundedNumericCandidate": {
+        "input": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "widerStringCandidate": {
+        "input": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        }
+      },
+      "unboundedStringCandidate": {
+        "input": {
+          "type": "string",
+          "maxLength": 255
+        }
+      },
+      "widerArrayCandidate": {
+        "input": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "maxItems": 10
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "identicalNumericBounds": {
+        "input": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        }
+      },
+      "widerNumericCandidate": {
+        "input": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 200
+        }
+      },
+      "unboundedNumericCandidate": {
+        "input": {
+          "type": "integer"
+        }
+      },
+      "widerStringCandidate": {
+        "input": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 200
+        }
+      },
+      "unboundedStringCandidate": {
+        "input": {
+          "type": "string"
+        }
+      },
+      "widerArrayCandidate": {
+        "input": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 0,
+          "maxItems": 20
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "compatible"
+    }
+  }
+}

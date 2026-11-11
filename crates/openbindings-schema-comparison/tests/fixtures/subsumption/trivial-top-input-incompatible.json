@@ -1,0 +1,39 @@
+{
+  "version": "1.0",
+  "description": "An unconstrained (Top) target may send anything; a constrained candidate cannot accept it all.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "emptyTarget": {
+        "input": {}
+      },
+      "trueTarget": {
+        "input": true
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "emptyTarget": {
+        "input": {
+          "type": "string"
+        }
+      },
+      "trueTarget": {
+        "input": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "incompatible"
+    }
+  }
+}

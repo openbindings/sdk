@@ -1,0 +1,96 @@
+{
+  "version": "1.0",
+  "description": "Output: candidate bounds at least as narrow as the target's are compatible; an exclusive bound at the same value is stricter.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "identicalNumericBounds": {
+        "output": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        }
+      },
+      "narrowerNumericCandidate": {
+        "output": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        }
+      },
+      "exclusiveMaximumStricter": {
+        "output": {
+          "type": "integer",
+          "maximum": 100
+        }
+      },
+      "narrowerStringCandidate": {
+        "output": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        }
+      },
+      "narrowerArrayCandidate": {
+        "output": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 100
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "identicalNumericBounds": {
+        "output": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        }
+      },
+      "narrowerNumericCandidate": {
+        "output": {
+          "type": "integer",
+          "minimum": 5,
+          "maximum": 50
+        }
+      },
+      "exclusiveMaximumStricter": {
+        "output": {
+          "type": "integer",
+          "exclusiveMaximum": 100
+        }
+      },
+      "narrowerStringCandidate": {
+        "output": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 100
+        }
+      },
+      "narrowerArrayCandidate": {
+        "output": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "maxItems": 10
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "compatible"
+    }
+  }
+}

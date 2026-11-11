@@ -1,0 +1,42 @@
+{
+  "version": "1.0",
+  "description": "Nested allOf inside a branch flattens recursively before merging: a target constraint carried two allOf levels deep still binds, so a candidate without it is output-incompatible.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "getCode": {
+        "output": {
+          "allOf": [
+            {
+              "allOf": [
+                {
+                  "type": "string",
+                  "minLength": 3
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "getCode": {
+        "output": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "incompatible"
+    }
+  }
+}

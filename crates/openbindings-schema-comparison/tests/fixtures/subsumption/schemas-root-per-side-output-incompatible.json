@@ -1,0 +1,52 @@
+{
+  "version": "1.0",
+  "description": "Same-named schemas in the two documents are distinct definitions: each side's #/schemas/ ref resolves against its OWN containing document root, so a candidate whose like-named schema widens the enum is breaking on output. Resolving the candidate's ref against the target document would silently substitute the target's definition and miss the widening.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "schemas": {
+      "Status": {
+        "type": "string",
+        "enum": [
+          "active",
+          "inactive"
+        ]
+      }
+    },
+    "operations": {
+      "statusWidenedBehindRef": {
+        "output": {
+          "$ref": "#/schemas/Status"
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "schemas": {
+      "Status": {
+        "type": "string",
+        "enum": [
+          "active",
+          "inactive",
+          "archived"
+        ]
+      }
+    },
+    "operations": {
+      "statusWidenedBehindRef": {
+        "output": {
+          "$ref": "#/schemas/Status"
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "incompatible"
+    }
+  }
+}

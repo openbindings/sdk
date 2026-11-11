@@ -130,6 +130,19 @@ impl Resources {
         self.scope(schema, fallback, attempt)
     }
 
+    pub(crate) fn context<'a>(
+        &'a self,
+        scope: usize,
+        schema: JsonRef<'a>,
+        spelling: &'a str,
+    ) -> crate::ReferenceContext<'a> {
+        crate::ReferenceContext {
+            spelling,
+            schema,
+            resource: &self.entries[scope].document,
+            base: self.entries[scope].base.as_deref(),
+        }
+    }
     pub(crate) fn keep_defs(&self, scope: usize) -> bool {
         self.entries[scope].keep_defs
     }

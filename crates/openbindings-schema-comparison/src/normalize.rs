@@ -87,13 +87,37 @@ pub(crate) fn outside(
 pub(crate) fn normalize(input: &SchemaInput, attempt: &mut Attempt<'_>) -> Result<Value, Failure> {
     let resources = Resources::new(input, attempt)?;
     let active = attempt.vector(129)?;
-    Engine { resources, active }.schema(input.schema.view(), 0, 0, attempt)
+    Engine::<false> {
+        resources,
+        active,
+        leaves: None,
+        accounted_for: None,
+    }
+    .schema(input.schema.view(), 0, 0, attempt)
 }
-struct Engine {
+pub(crate) fn normalize_with_references(
+    input: &SchemaInput,
+    leaves: &BTreeMap<Name, ()>,
+    accounted_for: &dyn Fn(crate::ReferenceContext<'_>) -> bool,
+    attempt: &mut Attempt<'_>,
+) -> Result<Value, Failure> {
+    let resources = Resources::new(input, attempt)?;
+    let active = attempt.vector(129)?;
+    Engine::<true> {
+        resources,
+        active,
+        leaves: Some(leaves),
+        accounted_for: Some(accounted_for),
+    }
+    .schema(input.schema.view(), 0, 0, attempt)
+}
+struct Engine<'a, const REFERENCES: bool> {
+    leaves: Option<&'a BTreeMap<Name, ()>>,
+    accounted_for: Option<&'a dyn Fn(crate::ReferenceContext<'_>) -> bool>,
     resources: Resources,
     active: Vec<((usize, usize), usize)>,
 }
-impl Engine {
+impl<const REFERENCES: bool> Engine<'_, REFERENCES> {
     fn schema(
         &mut self,
         schema: JsonRef<'_>,
@@ -137,7 +161,31 @@ impl Engine {
             let key = value::name(member.name, attempt)?;
             value::insert(&mut raw, key, member.value.to_owned(), attempt)?;
         }
-        let target = if let Some(reference) = get(&raw, "$ref") {
+        let keep = if REFERENCES {
+            if let Some(reference) = get(&raw, "$ref") {
+                let name = value::name(reference.view(), attempt)?;
+                let leaves = self.leaves.expect("reference variant");
+                attempt.work(
+                    name.len()
+                        .saturating_add(1)
+                        .saturating_mul(leaves.len().saturating_add(1).ilog2() as usize + 1)
+                        .saturating_mul(12),
+                )?;
+                if leaves.contains_key(&name) {
+                    let spelling = reference.view().as_str().ok_or(Failure::InvalidReference)?;
+                    (self.accounted_for.expect("reference variant"))(
+                        self.resources.context(scope, schema, spelling),
+                    )
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
+        } else {
+            false
+        };
+        let target = if let Some(reference) = get(&raw, "$ref").filter(|_| !keep) {
             let (target, target_scope) =
                 self.resources.resolve(scope, reference.view(), attempt)?;
             Some(self.schema(target.view(), target_scope, depth + 1, attempt)?)
@@ -148,7 +196,7 @@ impl Engine {
         let mut branches = None;
         for (key, raw) in raw {
             if stripped(&key)
-                || is(&key, "$ref")
+                || (is(&key, "$ref") && !keep)
                 || (is(&key, "$defs") && !self.resources.keep_defs(scope))
             {
                 continue;

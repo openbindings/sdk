@@ -1,0 +1,59 @@
+{
+  "version": "1.0",
+  "description": "Input: a candidate allowing fewer types than the target (integer does not cover number; a missing type means all types) is breaking.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "candidateSubset": {
+        "input": {
+          "type": [
+            "string",
+            "number"
+          ]
+        }
+      },
+      "numberTargetIntegerCandidate": {
+        "input": {
+          "type": "number"
+        }
+      },
+      "untypedTargetTypedCandidate": {
+        "input": {
+          "enum": [
+            "a",
+            "b"
+          ]
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "candidateSubset": {
+        "input": {
+          "type": "string"
+        }
+      },
+      "numberTargetIntegerCandidate": {
+        "input": {
+          "type": "integer"
+        }
+      },
+      "untypedTargetTypedCandidate": {
+        "input": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "incompatible"
+    }
+  }
+}

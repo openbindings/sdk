@@ -1,0 +1,46 @@
+{
+  "version": "1.0",
+  "description": "Verdict collapse: one incompatible operation makes the summary incompatible regardless of compatible siblings.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "okOp": {
+        "input": {
+          "type": "string"
+        }
+      },
+      "brokenOp": {
+        "input": {
+          "type": [
+            "string",
+            "number"
+          ]
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "okOp": {
+        "input": {
+          "type": "string"
+        }
+      },
+      "brokenOp": {
+        "input": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "incompatible"
+    }
+  }
+}

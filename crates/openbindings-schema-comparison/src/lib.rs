@@ -3,16 +3,27 @@
 #![forbid(unsafe_code)]
 
 mod budget;
+mod directional;
 mod error;
 mod input;
+mod interface;
 mod merge;
 mod normalize;
 mod reference;
+mod reference_identity;
 mod value;
 
 pub use budget::ComparisonLimits;
+pub use directional::{Comparison, Direction, Verdict, compare, compare_with_control};
 pub use error::ComparisonFailure;
 pub use input::SchemaInput;
+pub use interface::{
+    InterfaceComparison, InterfaceIssue, InterfaceIssueKind, OperationComparison, check_interface,
+    check_interface_with_control,
+};
+pub use reference_identity::{
+    ReferenceContext, identical_with_references, identical_with_references_and_control,
+};
 
 /// Normalize every present input, then compare exact profile identity. A failed
 /// present input fails even opposite an absent slot. No resource is fetched.
@@ -58,5 +69,5 @@ pub fn identical_with_control(
 pub const PROFILE_IDENTIFIER: &str = "OB-2020-12";
 /// Version of the comparison profile, independent of SDK and core spec versions.
 pub const PROFILE_VERSION: &str = "0.1";
-/// Exact publication used to define this companion's identity rules.
+/// Exact publication used to define this companion's comparison rules.
 pub const APPLIED_INTERFACE_REVISION: &str = "67f707c31aecbdf0551385e369d8024097db6278";

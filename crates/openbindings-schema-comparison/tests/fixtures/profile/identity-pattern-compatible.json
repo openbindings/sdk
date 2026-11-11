@@ -1,0 +1,35 @@
+{
+  "version": "1.0",
+  "description": "Identical schemas carrying an outside-profile keyword (pattern) are compatible by the identity rule; fail-closed applies only to positions that differ.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "deliver": {
+        "input": {
+          "type": "string",
+          "pattern": "^[a-z]+$"
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "deliver": {
+        "input": {
+          "type": "string",
+          "pattern": "^[a-z]+$"
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "compatible"
+    }
+  }
+}

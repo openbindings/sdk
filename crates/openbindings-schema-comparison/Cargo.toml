@@ -1,6 +1,6 @@
 [package]
 name = "openbindings-schema-comparison"
-description = "Exact normalized schema identity for the OpenBindings comparison profile"
+description = "Exact schema identity and directional compatibility for the OpenBindings comparison profile"
 readme = "README.md"
 version.workspace = true
 edition.workspace = true

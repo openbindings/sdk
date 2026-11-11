@@ -1,0 +1,50 @@
+{
+  "version": "1.0",
+  "description": "Sibling keywords beside allOf are constraints, not decoration: a target whose required rides beside an allOf still demands that field of every candidate, so a candidate without it is output-incompatible.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "getUser": {
+        "output": {
+          "type": "object",
+          "required": [
+            "id"
+          ],
+          "allOf": [
+            {
+              "properties": {
+                "id": {
+                  "type": "string"
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "getUser": {
+        "output": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "incompatible"
+    }
+  }
+}

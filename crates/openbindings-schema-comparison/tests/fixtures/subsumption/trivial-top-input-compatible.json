@@ -1,0 +1,45 @@
+{
+  "version": "1.0",
+  "description": "An empty ({} or true) candidate accepts anything: input-compatible with every target.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "bothEmpty": {
+        "input": {}
+      },
+      "emptyCandidate": {
+        "input": {
+          "type": "string"
+        }
+      },
+      "trueCandidate": {
+        "input": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "bothEmpty": {
+        "input": {}
+      },
+      "emptyCandidate": {
+        "input": {}
+      },
+      "trueCandidate": {
+        "input": true
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "compatible"
+    }
+  }
+}

@@ -1,0 +1,128 @@
+{
+  "version": "1.0",
+  "description": "Input: the candidate must accept every value the target can send; a candidate without const/enum is unconstrained.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "identicalConst": {
+        "input": {
+          "type": "string",
+          "const": "fixed"
+        }
+      },
+      "constInCandidateEnum": {
+        "input": {
+          "type": "string",
+          "const": "fixed"
+        }
+      },
+      "identicalEnums": {
+        "input": {
+          "type": "string",
+          "enum": [
+            "a",
+            "b",
+            "c"
+          ]
+        }
+      },
+      "candidateEnumSuperset": {
+        "input": {
+          "type": "string",
+          "enum": [
+            "a",
+            "b"
+          ]
+        }
+      },
+      "unconstrainedCandidateEnum": {
+        "input": {
+          "type": "string",
+          "enum": [
+            "a",
+            "b"
+          ]
+        }
+      },
+      "unconstrainedCandidateConst": {
+        "input": {
+          "type": "string",
+          "const": "fixed"
+        }
+      },
+      "constCoversSingletonEnum": {
+        "input": {
+          "type": "string",
+          "enum": [
+            "only"
+          ]
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "identicalConst": {
+        "input": {
+          "type": "string",
+          "const": "fixed"
+        }
+      },
+      "constInCandidateEnum": {
+        "input": {
+          "type": "string",
+          "enum": [
+            "fixed",
+            "other"
+          ]
+        }
+      },
+      "identicalEnums": {
+        "input": {
+          "type": "string",
+          "enum": [
+            "a",
+            "b",
+            "c"
+          ]
+        }
+      },
+      "candidateEnumSuperset": {
+        "input": {
+          "type": "string",
+          "enum": [
+            "a",
+            "b",
+            "c"
+          ]
+        }
+      },
+      "unconstrainedCandidateEnum": {
+        "input": {
+          "type": "string"
+        }
+      },
+      "unconstrainedCandidateConst": {
+        "input": {
+          "type": "string"
+        }
+      },
+      "constCoversSingletonEnum": {
+        "input": {
+          "type": "string",
+          "const": "only"
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "compatible"
+    }
+  }
+}

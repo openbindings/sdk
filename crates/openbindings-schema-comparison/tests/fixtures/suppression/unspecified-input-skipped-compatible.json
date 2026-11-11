@@ -1,0 +1,45 @@
+{
+  "version": "1.0",
+  "description": "An absent input schema is unspecified, not Top: the slot's comparison is skipped entirely and reports no finding.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "candidateUnspecified": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id"
+          ]
+        }
+      },
+      "targetUnspecified": {},
+      "bothUnspecified": {}
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "candidateUnspecified": {},
+      "targetUnspecified": {
+        "input": {
+          "type": "string"
+        }
+      },
+      "bothUnspecified": {}
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "compatible"
+    }
+  }
+}

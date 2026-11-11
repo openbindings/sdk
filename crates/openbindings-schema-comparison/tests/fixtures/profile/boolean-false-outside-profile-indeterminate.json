@@ -1,0 +1,31 @@
+{
+  "version": "1.0",
+  "description": "Boolean false takes its object spelling {\"not\": {}}; not is outside the profile, so false is discriminating (indeterminate), never silently Top.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "falseSchema": {
+        "output": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "falseSchema": {
+        "output": false
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "indeterminate"
+    }
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "version": "1.0",
+  "description": "Output: the target must allow every type the candidate may produce; integers are numbers.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "identicalTypes": {
+        "output": {
+          "type": "string"
+        }
+      },
+      "candidateSubset": {
+        "output": {
+          "type": [
+            "string",
+            "number"
+          ]
+        }
+      },
+      "integerCandidateNumberTarget": {
+        "output": {
+          "type": "number"
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "identicalTypes": {
+        "output": {
+          "type": "string"
+        }
+      },
+      "candidateSubset": {
+        "output": {
+          "type": "string"
+        }
+      },
+      "integerCandidateNumberTarget": {
+        "output": {
+          "type": "integer"
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "compatible"
+    }
+  }
+}
