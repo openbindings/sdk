@@ -586,6 +586,26 @@ function prepareOptions(options: PrepareOptions): {
   return { resources, limits, signal: workSignal(work) };
 }
 
+/** @internal */
+export function referenceOptions(options: ReferenceOptions): {
+  resources?: ExternalSchemas;
+  aborted: boolean;
+} {
+  if (!options || typeof options !== "object" || Array.isArray(options))
+    throw new SdkError(
+      "invalid-work-options",
+      "Reference options must be an object.",
+    );
+  const { resources, ...work } = options;
+  const signal = workSignal(work);
+  if (resources !== undefined && !(resources instanceof ExternalSchemas))
+    throw new SdkError(
+      "invalid-work-options",
+      "resources must be an ExternalSchemas owner.",
+    );
+  return { resources, aborted: isAborted(signal) };
+}
+
 function workSignal(options: WorkOptions): AbortSignal | undefined {
   if (!options || typeof options !== "object" || Array.isArray(options))
     throw new SdkError(

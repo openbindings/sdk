@@ -15,6 +15,26 @@
 - Kind data and context challenge guidance uses supplied roots. Core `Schema`
   still comes only from a conformant OpenBindings document.
 
+## 2026-11-11 binding selection (unreleased)
+
+- Add `DefaultOperationInvoker::select` and `PreparedOperation::select`, returning
+  the core `Binding` before context loading or provider work. Invocation,
+  preflight and selection share the same binding selection rules.
+
+## 2026-11-11 review fixes (unreleased)
+
+- Cancel pending binding and operation preflight work before provider cleanup.
+- Preserve source-pull and publication error causes and give source-pull wrappers fixed layer messages.
+- Correct documentation for admission limits, execution disclosures, locations, discovery diagnostics, drift and invocation code strings.
+- Walk TypeScript arrays one element at a time and count object members before reading their
+  descriptors, so an over-limit ordinary value is refused at the same node without first expanding it.
+- Validate reference-inspection options and their resource and cancellation types.
+- Preserve lifecycle errors during exact-to-ordinary JSON conversion.
+- Send stable JSON error-kind names across the Wasm bridge.
+- Accept empty Content-Encoding list members in native discovery.
+- Merge agreeing proposal writes in the source-pull update recipe and reject conflicting writes.
+- Reuse source-pull example operations through keys and aliases, reporting ambiguous matches as conflicts.
+
 ## 2026-11-11 compiled-lane mutation follow-up (unreleased)
 
 ### Changed

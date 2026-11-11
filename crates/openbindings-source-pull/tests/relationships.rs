@@ -1,5 +1,6 @@
 use openbindings::{ConformantDocument, Document, JsonValue};
 use openbindings_source_pull::*;
+use std::error::Error;
 use std::sync::atomic::AtomicBool;
 
 fn json(text: &str) -> JsonValue {
@@ -12,6 +13,71 @@ fn checked(text: &str) -> ConformantDocument {
         .unwrap()
         .conformant()
         .unwrap()
+}
+
+#[test]
+fn wrapper_errors_expose_causes_without_repeating_them() {
+    let request_error = PullRequest::from_json(&json(
+        r#"{"interface":{"openbindings":"8.0.0"},"source":"private-source"}"#,
+    ))
+    .unwrap_err();
+    let cause = request_error.source().unwrap();
+    assert!(cause.is::<openbindings::VersionRefusal>());
+    assert_eq!(
+        request_error.to_string(),
+        "source-pull request version is not supported"
+    );
+    let RequestError::Version(refusal) = request_error else {
+        panic!("version refusal")
+    };
+    let validation_error = PullValidationError::Version(refusal);
+    assert!(
+        validation_error
+            .source()
+            .unwrap()
+            .is::<openbindings::VersionRefusal>()
+    );
+    assert_eq!(
+        validation_error.to_string(),
+        "source-pull prospective document version is not supported"
+    );
+
+    let original = Document::parse_with_limits(
+        r#"{"openbindings":"0.2.0","operations":{},"sources":{"s":{"kind":"example@1"}}}"#,
+        openbindings::JsonLimits {
+            max_nodes: 20,
+            ..Default::default()
+        },
+    )
+    .unwrap()
+    .validate()
+    .unwrap()
+    .conformant()
+    .unwrap();
+    let request = PullRequest::new(original, "s");
+    let result = PullResult::from_json(json(
+        r#"{"additions":{"schemas":{"Large":{"enum":[0,1,2,3,4,5,6,7,8,9]}}},"report":{"exhaustive":true,"added":[]}}"#,
+    )).unwrap();
+    let error = result
+        .validate_for(&request, &PullLimits::default(), &AtomicBool::new(false))
+        .unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        "source-pull validation could not build the prospective document"
+    );
+    let edit = error
+        .source()
+        .unwrap()
+        .downcast_ref::<openbindings::EditError>()
+        .unwrap();
+    assert_eq!(edit.code(), "node-limit");
+    assert!(edit.source().unwrap().is::<openbindings::InputError>());
+    // Display is the fixed layer text; the SDK constant naming the field stays
+    // in the variant (and its Debug) for explicit inspection.
+    assert_eq!(
+        RequestError::Shape("source").to_string(),
+        "source-pull request has an invalid shape"
+    );
 }
 
 #[test]

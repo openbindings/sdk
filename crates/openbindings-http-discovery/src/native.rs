@@ -147,7 +147,9 @@ impl Client {
                             value.to_str().map_or(true, |value| {
                                 value
                                     .split(',')
-                                    .any(|coding| !coding.trim().eq_ignore_ascii_case("identity"))
+                                    .map(str::trim)
+                                    .filter(|coding| !coding.is_empty())
+                                    .any(|coding| !coding.eq_ignore_ascii_case("identity"))
                             })
                         });
                     let may_drain = matches!(

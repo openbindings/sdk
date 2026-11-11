@@ -179,7 +179,10 @@ fn non_breaking_updates_apply_and_the_authors_fields_stay() {
     );
     assert_eq!(document["schemas"]["Label"]["type"], "string");
     // The breaking proposal is left alone, and the original is unchanged.
-    assert_eq!(document["operations"]["listUsers"]["output"]["type"], "array");
+    assert_eq!(
+        document["operations"]["listUsers"]["output"]["type"],
+        "array"
+    );
     assert_eq!(value(request.interface()), before);
 }
 
@@ -199,21 +202,53 @@ fn a_proposal_can_remove_and_set_what_the_contract_allows() {
 }
 
 #[test]
-fn two_proposals_writing_one_place_are_refused_even_when_they_agree() {
-    for second in [json!({"type":"number"}), json!({"type":"string"})] {
+fn proposals_for_one_slot_merge_when_equal_and_refuse_conflicts() {
+    for (first, second, agrees) in [
+        (
+            json!({"output":{"type":"string"}}),
+            json!({"output":{"type":"string"}}),
+            true,
+        ),
+        (
+            json!({"output":{"minimum":1,"type":"number"}}),
+            json!({"output":{"type":"number","minimum":1.0}}),
+            true,
+        ),
+        (
+            json!({"remove":["output"]}),
+            json!({"remove":["output"]}),
+            true,
+        ),
+        (
+            json!({"output":{"type":"string"}}),
+            json!({"output":{"type":"number"}}),
+            false,
+        ),
+        (
+            json!({"output":{"type":"string"}}),
+            json!({"remove":["output"]}),
+            false,
+        ),
+    ] {
         let mut before = described();
         before["bindings"]["second.s"] = json!({"operation":"getUser","source":"s"});
         let result = json!({"additions":{},"report":{"exhaustive":true,"added":[],"existing":[
-            {"binding":"getUser.s","status":"stale","change":"non-breaking","proposal":{"output":{"type":"string"}}},
-            {"binding":"second.s","status":"stale","change":"non-breaking","proposal":{"output":second}},
+            {"binding":"getUser.s","status":"stale","change":"non-breaking","proposal":first},
+            {"binding":"second.s","status":"stale","change":"non-breaking","proposal":second},
             {"binding":"listUsers.s","status":"current"}
         ]}});
         let (request, result) = pair(before, result);
-        assert!(
-            updates(&request, &result)
-                .unwrap_err()
-                .to_string()
-                .contains("overlapping-edits")
-        );
+        if agrees {
+            let document = value(&updates(&request, &result).unwrap());
+            assert_eq!(
+                document["operations"]["getUser"].get("output"),
+                first.get("output")
+            );
+        } else {
+            assert_eq!(
+                updates(&request, &result).unwrap_err().to_string(),
+                "non-breaking proposals write different values to the same slot"
+            );
+        }
     }
 }

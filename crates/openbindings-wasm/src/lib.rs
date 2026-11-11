@@ -60,8 +60,15 @@ fn error(code: &str, message: impl ToString) -> JsValue {
     JsValue::from_str(&encoded(json!({"code":code,"message":message.to_string()})))
 }
 fn input_error(e: InputError) -> JsValue {
+    let kind = match e.kind() {
+        InputErrorKind::InvalidUtf8 => "InvalidUtf8",
+        InputErrorKind::ByteOrderMark => "ByteOrderMark",
+        InputErrorKind::Syntax => "Syntax",
+        InputErrorKind::Limit => "Limit",
+        _ => "Unknown",
+    };
     JsValue::from_str(&encoded(
-        json!({"code":e.code(),"kind":format!("{:?}",e.kind()),"byte_offset":e.byte_offset(),"line":e.line(),"byte_column":e.byte_column(),"message":e.to_string()}),
+        json!({"code":e.code(),"kind":kind,"byte_offset":e.byte_offset(),"line":e.line(),"byte_column":e.byte_column(),"message":e.to_string()}),
     ))
 }
 // Admission limits as the facade passes them: bytes, nodes and nesting, each a

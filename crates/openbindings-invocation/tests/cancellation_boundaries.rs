@@ -7,7 +7,7 @@ mod tests {
         SchemaValidator, ValueOutcome, WorkControl,
     };
     use openbindings_invocation::{
-        BindingInvoker, BindingRequest, CancellationToken, ContextChallenge,
+        BindingInvoker, BindingInvokerExt, BindingRequest, CancellationToken, ContextChallenge,
         DefaultOperationInvoker, InvocationError, InvocationSupport, OperationRequest, OutputEvent,
         ProviderInput, ProviderIo, ProviderOutput,
     };
@@ -44,6 +44,7 @@ mod tests {
         reads: Arc<AtomicUsize>,
         calls: Arc<AtomicUsize>,
         advisory_control: Arc<Mutex<Option<CancellationToken>>>,
+        advisory_cancelled_on_drop: Arc<Mutex<Option<bool>>>,
     }
     impl P {
         fn new(mode: Mode) -> Self {
@@ -54,6 +55,7 @@ mod tests {
                 reads: Arc::default(),
                 calls: Arc::default(),
                 advisory_control: Arc::default(),
+                advisory_cancelled_on_drop: Arc::default(),
             }
         }
     }
@@ -104,8 +106,26 @@ mod tests {
             _: BindingRequest,
             control: CancellationToken,
         ) -> Self::Preflight<'a> {
-            *self.advisory_control.lock().unwrap() = Some(control);
-            Box::pin(pending())
+            *self.advisory_control.lock().unwrap() = Some(control.clone());
+            Box::pin(PendingPreflight {
+                control,
+                cancelled_on_drop: self.advisory_cancelled_on_drop.clone(),
+            })
+        }
+    }
+    struct PendingPreflight {
+        control: CancellationToken,
+        cancelled_on_drop: Arc<Mutex<Option<bool>>>,
+    }
+    impl Future for PendingPreflight {
+        type Output = Result<Option<ContextChallenge>, InvocationError>;
+        fn poll(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<Self::Output> {
+            Poll::Pending
+        }
+    }
+    impl Drop for PendingPreflight {
+        fn drop(&mut self) {
+            *self.cancelled_on_drop.lock().unwrap() = Some(self.control.is_cancelled());
         }
     }
     #[derive(Clone, Copy)]
@@ -345,5 +365,19 @@ mod tests {
                 .unwrap()
                 .is_cancelled()
         );
+        assert_eq!(*p.advisory_cancelled_on_drop.lock().unwrap(), Some(true));
+    }
+    #[test]
+    fn binding_preflight_cancels_before_provider_cleanup() {
+        let p = P::new(Mode::Park);
+        let external = CancellationToken::new();
+        let mut advisory = Box::pin(
+            p.preflight(BindingRequest::new(doc("{}"), "b"), external.clone())
+                .unwrap(),
+        );
+        assert!(poll(advisory.as_mut()).is_pending());
+        drop(advisory);
+        assert_eq!(*p.advisory_cancelled_on_drop.lock().unwrap(), Some(true));
+        assert!(!external.is_cancelled());
     }
 }

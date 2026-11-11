@@ -64,7 +64,15 @@ impl std::fmt::Display for PublicationError {
         })
     }
 }
-impl std::error::Error for PublicationError {}
+impl std::error::Error for PublicationError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Configuration(error) => Some(error),
+            Self::VersionRefused(error) => Some(error),
+            Self::NonConformant(_) | Self::Undetermined(_) => None,
+        }
+    }
+}
 /// Immutable, concurrently shareable publication snapshot. It owns exact bytes.
 #[derive(Clone)]
 pub struct Publication {

@@ -149,6 +149,11 @@ fn serve(
             body.clear();
         } else {
             match scenario {
+                "identity-trailing" => extra = "Content-Encoding: identity,\r\n".into(),
+                "encoding-empty" => extra = "Content-Encoding: \r\n".into(),
+                "encoding-empty-members" => {
+                    extra = "Content-Encoding: , identity, ,\r\nContent-Encoding: ,\r\n".into()
+                }
                 "gzip" | "gzip-large" => {
                     if scenario == "gzip-large" {
                         body.extend(vec![b' '; 2 << 20]);
@@ -279,6 +284,9 @@ async fn real_http_media_types_statuses_compression_and_location_independence() 
         ));
     }
     for (case, expected) in [
+        ("identity-trailing", "found"),
+        ("encoding-empty", "found"),
+        ("encoding-empty-members", "found"),
         ("absent", "absent"),
         ("gated", "gated"),
         ("invalid", "invalid"),
