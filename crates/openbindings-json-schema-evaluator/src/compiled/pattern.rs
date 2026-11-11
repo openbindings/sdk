@@ -6,37 +6,8 @@ pub(crate) type Reading = crate::pattern::Shared;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Unsupported {
     Size,
-    Memory(Shortfall),
-}
-/// How a value schema's pattern memory fell short, for the refusal to state.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum Shortfall {
-    /// The value schema's run matchers, holding `matched` bytes, and its
-    /// `compiled` patterns' first allowances need more than its `total` bytes
-    /// hold for them ([`Memory::most_patterns`]).
-    Count {
-        matched: usize,
-        compiled: usize,
-        total: usize,
-    },
-    /// One pattern needs a larger compiled size than it is given. The value
-    /// schema's run matchers hold `matched` bytes, and each of its
-    /// `patterns` compiled patterns holds [`FIRST`] for its form and `cache`
-    /// for its search cache, which leaves `left` of the `total`; those that
-    /// need more share it, and those of them that need less than an equal part
-    /// keep only what they need, `kept` in all. The `sharing` patterns that
-    /// need more than that share the rest equally, and this one does not
-    /// compile within the `compiled` size that gives it.
-    Pattern {
-        matched: usize,
-        patterns: usize,
-        total: usize,
-        cache: usize,
-        left: usize,
-        kept: usize,
-        sharing: usize,
-        compiled: usize,
-    },
+    /// The value schema's patterns need more than its total pattern memory.
+    Memory,
 }
 /// The most compiled size the linear-time engine gives any one pattern's form,
 /// in bytes. Counted repetitions of large sets, such as `^.{1,10000}$` (about
@@ -179,10 +150,9 @@ impl Memory {
         control: &dyn openbindings::WorkControl,
     ) -> Vec<Given> {
         let keep = |at: usize| at >= names;
-        let left = self.left();
         let mut given: Vec<Option<Given>> = forms.iter().map(|_| None).collect();
         let mut sharing: Vec<usize> = (0..forms.len()).collect();
-        let mut rest = left;
+        let mut rest = self.left();
         let mut previous: Option<usize> = None;
         while !sharing.is_empty() {
             let part = rest / sharing.len();
@@ -211,21 +181,11 @@ impl Memory {
                 }
             }
             if short.is_empty() || fitted.is_empty() || last {
-                let shortfall = Shortfall::Pattern {
-                    matched: self.matched,
-                    patterns: self.patterns,
-                    total: self.total,
-                    cache: self.cache,
-                    left,
-                    kept: left - rest,
-                    sharing: sharing.len(),
-                    compiled,
-                };
                 for (at, regex) in fitted {
                     given[at] = Some(Given::Compiled { regex, compiled });
                 }
                 for at in short {
-                    given[at] = Some(Given::Refused(Unsupported::Memory(shortfall)));
+                    given[at] = Some(Given::Refused(Unsupported::Memory));
                 }
                 break;
             }

@@ -573,14 +573,7 @@ fn patterns<'a>(
         if pattern::Memory::most_patterns(total, kept.matched)
             .is_none_or(|most| kept.compiled > most)
         {
-            return Err((
-                keyword,
-                pattern_memory_limit(pattern::Shortfall::Count {
-                    matched: kept.matched,
-                    compiled: kept.compiled,
-                    total,
-                }),
-            ));
+            return Err((keyword, pattern_memory_limit()));
         }
         Ok(())
     };
@@ -650,149 +643,17 @@ fn unsupported_pattern(reason: pattern::Unsupported, _keyword: &str) -> NoVerdic
             "pattern-size-limit",
             "a schema regular expression exceeds the engine's size limits",
         ),
-        pattern::Unsupported::Memory(shortfall) => pattern_memory_limit(shortfall),
+        pattern::Unsupported::Memory => pattern_memory_limit(),
     }
 }
-fn pattern_memory_limit(shortfall: pattern::Shortfall) -> NoVerdict {
-    const RAISE: &str = "raise total_pattern_memory (totalPatternMemory in TypeScript)";
-    let first = bytes(pattern::FIRST);
-    let message = match shortfall {
-        pattern::Shortfall::Count {
-            matched,
-            compiled,
-            total,
-        } => {
-            let most = pattern::Memory::most_patterns(total, 0)
-                .expect("any pattern memory holds no run matcher");
-            // The refusal comes at the first pattern past what the memory
-            // holds for the run matchers and first allowances together. When
-            // the compiled patterns read by then pass the count on their own,
-            // it states the count, as it would without run matchers;
-            // otherwise the run matchers' bytes are part of why it refuses.
-            if matched == 0 || compiled > most {
-                format!(
-                    "this value schema compiles more than {most} regular expressions, as \
-                     many as its {} total_pattern_memory holds at {first} each once their \
-                     search caches take a quarter; {RAISE}",
-                    bytes(total),
-                )
-            } else {
-                let compiled = match compiled {
-                    0 => String::new(),
-                    1 => format!(" and its one compiled regular expression {first}"),
-                    compiled => {
-                        format!(" and its {compiled} compiled regular expressions {first} each")
-                    }
-                };
-                format!(
-                    "this value schema's run matchers hold {}{compiled}, more {}than the {} \
-                     its {} total_pattern_memory holds for them once search caches take a \
-                     quarter; {RAISE}",
-                    bytes_up(matched),
-                    if compiled.is_empty() { "" } else { "together " },
-                    bytes(pattern::Memory::held(total)),
-                    bytes(total),
-                )
-            }
-        }
-        pattern::Shortfall::Pattern {
-            matched,
-            patterns,
-            total,
-            cache,
-            left,
-            kept,
-            sharing,
-            compiled,
-        } => {
-            let holding = match (matched, patterns) {
-                (0, 1) => format!(
-                    "this value schema's one compiled regular expression holds {first} of \
-                     its {} total_pattern_memory and {} for its search cache",
-                    bytes(total),
-                    bytes(cache),
-                ),
-                (0, _) => format!(
-                    "this value schema's {patterns} compiled regular expressions hold \
-                     {first} each of its {} total_pattern_memory and {} each for their search \
-                     caches",
-                    bytes(total),
-                    bytes(cache),
-                ),
-                (_, 1) => format!(
-                    "this value schema's run matchers hold {} of its {} total_pattern_memory, \
-                     and its one compiled regular expression {first} and {} for its search cache",
-                    bytes(matched),
-                    bytes(total),
-                    bytes(cache),
-                ),
-                _ => format!(
-                    "this value schema's run matchers hold {} of its {} total_pattern_memory, \
-                     and its {patterns} compiled regular expressions {first} each and {} each \
-                     for their search caches",
-                    bytes(matched),
-                    bytes(total),
-                    bytes(cache),
-                ),
-            };
-            let sharing = match (sharing, kept) {
-                (1, 0) => "this one, which needs more, may take it all, but".to_owned(),
-                (1, kept) => format!(
-                    "those that need less than an equal part of it keep {}, and this one may \
-                     take the rest, but",
-                    bytes(kept),
-                ),
-                (sharing, 0) => {
-                    format!("the {sharing} that need more share it equally, but this one")
-                }
-                (sharing, kept) => format!(
-                    "those that need less than an equal part of it keep {}, and the {sharing} \
-                     that need more share the rest equally, but this one",
-                    bytes(kept),
-                ),
-            };
-            format!(
-                "{holding}, which leaves {}; {sharing} does not compile within the {} that \
-                 gives it; {RAISE}",
-                bytes(left),
-                bytes(compiled),
-            )
-        }
-    };
+// The refusal reaches callers as `PreparationFailureKind::Limit` with this code
+// alone, so its message names the limit without restating the arithmetic.
+fn pattern_memory_limit() -> NoVerdict {
     no_verdict(
         NoVerdictReason::LimitExceeded,
         "pattern-total-memory-limit",
-        message,
+        "the value schema's patterns exceed the admitted total pattern memory",
     )
-}
-// A count of bytes as a message states it, rounded up in the units `bytes`
-// uses, so a count past a limit `bytes` states never reads as within it.
-fn bytes_up(count: usize) -> String {
-    let unit = if count >= 1024 * 1024 {
-        1024 * 1024 / 10
-    } else if count >= 1024 {
-        1024
-    } else {
-        1
-    };
-    bytes(count.div_ceil(unit).saturating_mul(unit))
-}
-// A count of bytes as a message states it, rounded down: whole KiB below a
-// MiB, MiB to a tenth above.
-fn bytes(count: usize) -> String {
-    const KIB: usize = 1024;
-    const MIB: usize = 1024 * KIB;
-    if count >= MIB {
-        let tenths = count / (MIB / 10);
-        match tenths % 10 {
-            0 => format!("{} MiB", tenths / 10),
-            tenth => format!("{}.{tenth} MiB", tenths / 10),
-        }
-    } else if count >= KIB {
-        format!("{} KiB", count / KIB)
-    } else {
-        format!("{count} bytes")
-    }
 }
 // Whether the library refused a schema regular expression. Every pattern was
 // read first, so the engine refuses one only for its compiled size.

@@ -516,3 +516,25 @@ fn productive_scalar_recursive_boundaries_fit_qualified_threads() {
         }
     }
 }
+
+#[test]
+fn recursive_scalar_literals_keep_their_reservation_charge() {
+    // Only the acyclic fold discounts allocation-free scalar literals. Under
+    // recursion the `const` strings keep their reservation charge, so a tree of
+    // plain integers past the estimate stays on Original.
+    let schema = r##"{"oneOf":[{"type":"object","properties":{"kind":{"const":"leaf"},"value":{"type":"integer","minimum":0}},"required":["kind","value"],"additionalProperties":false},{"type":"object","properties":{"kind":{"const":"branch"},"children":{"type":"array","items":{"$ref":"#"}}},"required":["kind","children"],"additionalProperties":false}]}"##;
+    let (selected, original) = owners(
+        schema,
+        &ExternalSchemas::default(),
+        Limits::default(),
+        PreparationLimits::default(),
+    );
+    for (leaves, lane) in [(100, "compiled"), (1000, "original")] {
+        let value = JsonValue::parse(format!(
+            r#"{{"kind":"branch","children":[{}]}}"#,
+            vec![r#"{"kind":"leaf","value":1}"#; leaves].join(",")
+        ))
+        .unwrap();
+        assert_eq!(compare(&selected, &original, &value).0, lane);
+    }
+}
