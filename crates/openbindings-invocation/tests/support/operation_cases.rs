@@ -203,11 +203,26 @@ async fn explicit_operation_binding_bypasses_selection_support() {
         DefaultEvaluator::default(),
         ExternalSchemas::default(),
     );
-    let (_, mut output) = client
-        .invoke(OperationRequest::binding(document("{}"), "a"), control())
+    let request = OperationRequest::binding(document("{}"), "a");
+    let selected = client.select(&request.interface, &request.address).unwrap();
+    let (_, mut output) = client.invoke(request, control()).unwrap().split();
+    assert!(matches!(output.next().await, Some(OutputEvent::Complete)));
+    assert_eq!(
+        provider.seen.lock().unwrap().as_ref().unwrap().binding,
+        selected.key()
+    );
+    let prepared = client.prepare(document("{}"), "echo", &control()).unwrap();
+    let choice = openbindings_invocation::operation::BindingChoice::Binding("b".into());
+    let selected = prepared.select(&provider, &choice).unwrap();
+    let (_, mut output) = prepared
+        .invoke(&provider, choice, None, control())
         .unwrap()
         .split();
     assert!(matches!(output.next().await, Some(OutputEvent::Complete)));
+    assert_eq!(
+        provider.seen.lock().unwrap().as_ref().unwrap().binding,
+        selected.key()
+    );
     assert_eq!(provider.queries.load(Ordering::Relaxed), 0);
 }
 #[tokio::test]
@@ -221,6 +236,13 @@ async fn all_selection_keys_are_checked_before_any_support_query() {
     for bad in ["missing", "other"] {
         let request =
             OperationRequest::ordered(document("{}"), "echo", vec!["a".into(), bad.into()]);
+        assert_eq!(
+            client
+                .select(&request.interface, &request.address)
+                .unwrap_err()
+                .code(),
+            "ERR_BINDING_NOT_FOUND"
+        );
         let (_, mut output) = client.invoke(request, control()).unwrap().split();
         assert_eq!(code(output.next().await), "ERR_BINDING_NOT_FOUND");
     }
@@ -236,29 +258,34 @@ async fn aliases_ordered_selection_and_ambiguity_follow_caller_policy() {
         ExternalSchemas::default(),
     );
     let doc = document(r#"{"aliases":["alias"]}"#);
-    let (_, mut output) = client
-        .invoke(OperationRequest::operation(doc.clone(), "alias"), control())
-        .unwrap()
-        .split();
+    let request = OperationRequest::operation(doc.clone(), "alias");
+    assert_eq!(
+        client
+            .select(&request.interface, &request.address)
+            .unwrap_err()
+            .code(),
+        "ERR_BINDING_SELECTION_REQUIRED"
+    );
+    let (_, mut output) = client.invoke(request, control()).unwrap().split();
     assert_eq!(code(output.next().await), "ERR_BINDING_SELECTION_REQUIRED");
-    let (_, mut output) = client
-        .invoke(
-            OperationRequest::ordered(doc, "alias", vec!["b".into(), "a".into()]),
-            control(),
-        )
-        .unwrap()
-        .split();
+    let request = OperationRequest::ordered(doc, "alias", vec!["b".into(), "a".into()]);
+    let selected = client.select(&request.interface, &request.address).unwrap();
+    assert_eq!(selected.operation().key(), "echo");
+    let (_, mut output) = client.invoke(request, control()).unwrap().split();
     assert!(matches!(output.next().await, Some(OutputEvent::Complete)));
     assert_eq!(provider.seen.lock().unwrap().as_ref().unwrap().binding, "b");
+    assert_eq!(selected.key(), "b");
     let before_calls = provider.calls.load(Ordering::Relaxed);
     let before_queries = provider.queries.load(Ordering::Relaxed);
-    let (_, mut missing) = client
-        .invoke(
-            OperationRequest::operation(document("{}"), "absent"),
-            control(),
-        )
-        .unwrap()
-        .split();
+    let request = OperationRequest::ordered(document("{}"), "absent", vec!["missing".into()]);
+    assert_eq!(
+        client
+            .select(&request.interface, &request.address)
+            .unwrap_err()
+            .code(),
+        "ERR_OPERATION_NOT_FOUND"
+    );
+    let (_, mut missing) = client.invoke(request, control()).unwrap().split();
     assert_eq!(code(missing.next().await), "ERR_OPERATION_NOT_FOUND");
     assert_eq!(provider.calls.load(Ordering::Relaxed), before_calls);
     assert_eq!(provider.queries.load(Ordering::Relaxed), before_queries);
@@ -367,6 +394,106 @@ fn evaluator(refusal: bool) -> (LocalEvaluator, Rc<Cell<usize>>, Rc<Cell<usize>>
         prep,
         eval,
     )
+}
+#[test]
+fn selection_requires_only_support_and_does_no_schema_or_dispatch_work() {
+    use openbindings_invocation::{OperationAddress, operation::BindingChoice};
+
+    // This signature protects select's bounds independently of construction.
+    fn select<P: InvocationSupport, E>(
+        client: &DefaultOperationInvoker<P, E>,
+        interface: &ConformantDocument,
+        address: &OperationAddress,
+    ) -> Result<openbindings::Binding, InvocationError> {
+        client.select(interface, address)
+    }
+    struct SupportOnly;
+    impl InvocationSupport for SupportOnly {
+        fn can_invoke(&self, kind: &str) -> bool {
+            kind == "fixture"
+        }
+    }
+
+    let provider = Provider::new(Mode::Empty);
+    let (eval, preparations, evaluations) = evaluator(true);
+    let client = DefaultOperationInvoker::new(&provider, eval, ExternalSchemas::default());
+    let interface = document(r#"{"input":{"$ref":"urn:missing"},"output":false}"#);
+    let binding = select(
+        &client,
+        &interface,
+        &OperationAddress::Operation {
+            name: "echo".into(),
+            selection: Some(vec!["b".into(), "a".into()]),
+        },
+    )
+    .unwrap();
+    assert_eq!(binding.key(), "b");
+    assert_eq!(binding.source().key(), "s");
+    assert_eq!(binding.operation().key(), "echo");
+
+    let prepared = client.prepare(document("{}"), "other", &control()).unwrap();
+    assert_eq!(
+        prepared
+            .select(&SupportOnly, &BindingChoice::Sole)
+            .unwrap()
+            .key(),
+        "other"
+    );
+    assert_eq!(preparations.get(), 0);
+    assert_eq!(evaluations.get(), 0);
+    assert_eq!(provider.calls.load(Ordering::Relaxed), 0);
+    assert_eq!(provider.preflights.load(Ordering::Relaxed), 0);
+}
+#[test]
+fn selection_refusals_are_code_only_and_do_not_disclose_addresses() {
+    use openbindings_invocation::{OperationAddress, operation::BindingChoice};
+    let provider = Provider::new(Mode::Empty);
+    let client = DefaultOperationInvoker::new(
+        &provider,
+        DefaultEvaluator::default(),
+        ExternalSchemas::default(),
+    );
+    let interface = document(r#"{"aliases":["SELECTION_PRIVATE_ALIAS"]}"#);
+    let prepared = client
+        .prepare(interface.clone(), "echo", &control())
+        .unwrap();
+    let mut errors = Vec::new();
+    for address in [
+        OperationAddress::Operation {
+            name: "SELECTION_PRIVATE_MISSING".into(),
+            selection: None,
+        },
+        OperationAddress::Binding("SELECTION_PRIVATE_BINDING".into()),
+        OperationAddress::Operation {
+            name: "echo".into(),
+            selection: Some(vec!["a".into(), "SELECTION_PRIVATE_KEY".into()]),
+        },
+        OperationAddress::Operation {
+            name: "SELECTION_PRIVATE_ALIAS".into(),
+            selection: None,
+        },
+    ] {
+        errors.push(client.select(&interface, &address).unwrap_err());
+    }
+    errors.push(
+        prepared
+            .select(
+                &provider,
+                &BindingChoice::Binding("SELECTION_PRIVATE_BINDING".into()),
+            )
+            .unwrap_err(),
+    );
+    for error in errors {
+        assert!(error.data().is_none());
+        for rendered in [
+            format!("{error}"),
+            format!("{error:#}"),
+            format!("{error:?}"),
+            format!("{error:#?}"),
+        ] {
+            assert!(!rendered.contains("SELECTION_PRIVATE"));
+        }
+    }
 }
 #[tokio::test]
 async fn local_typed_validators_prepare_once_per_declared_direction() {
@@ -697,6 +824,13 @@ async fn prepared_snapshot_and_operation_membership_are_stable() {
     assert_ne!(
         prepared.interface().value().text(),
         replacement.value().text()
+    );
+    assert_eq!(
+        prepared
+            .select(&provider, &BindingChoice::Binding("other".into()))
+            .unwrap_err()
+            .code(),
+        "ERR_BINDING_NOT_FOUND"
     );
     let (_, mut output) = prepared
         .clone()
@@ -1107,6 +1241,13 @@ async fn prepared_choice_admission_and_complete_membership_checks_precede_suppor
     ] {
         assert_eq!(
             prepared
+                .select(&provider, &BindingChoice::Ordered(choice.clone()))
+                .unwrap_err()
+                .code(),
+            "ERR_BINDING_NOT_FOUND"
+        );
+        assert_eq!(
+            prepared
                 .clone()
                 .invoke(&provider, BindingChoice::Ordered(choice), None, control())
                 .unwrap_err()
@@ -1114,16 +1255,19 @@ async fn prepared_choice_admission_and_complete_membership_checks_precede_suppor
             kind
         );
     }
-    let (_, mut output) = prepared
-        .invoke(
-            &provider,
-            BindingChoice::Ordered(vec!["a".into(), "other".into()]),
-            None,
-            control(),
-        )
-        .unwrap()
-        .split();
-    assert_eq!(code(output.next().await), "ERR_BINDING_NOT_FOUND");
+    for bad in ["other", "missing"] {
+        let choice = BindingChoice::Ordered(vec!["a".into(), bad.into()]);
+        assert_eq!(
+            prepared.select(&provider, &choice).unwrap_err().code(),
+            "ERR_BINDING_NOT_FOUND"
+        );
+        let (_, mut output) = prepared
+            .clone()
+            .invoke(&provider, choice, None, control())
+            .unwrap()
+            .split();
+        assert_eq!(code(output.next().await), "ERR_BINDING_NOT_FOUND");
+    }
     assert_eq!(provider.calls.load(Ordering::Relaxed), 0);
     assert_eq!(provider.queries.load(Ordering::Relaxed), 0);
 }
@@ -1261,6 +1405,13 @@ async fn empty_operation_addresses_resolve_as_absent_names() {
             document("{}").value().text()
         ));
         let request = OperationRequest::from_json(&wire).unwrap();
+        assert_eq!(
+            client
+                .select(&request.interface, &request.address)
+                .unwrap_err()
+                .code(),
+            code
+        );
         assert_eq!(
             request.to_json().unwrap().get(field).unwrap().as_str(),
             Some("")

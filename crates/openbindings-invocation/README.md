@@ -124,6 +124,26 @@ configuration and `prepare` need only `BindingInvoker`. Its `invoke`, `preflight
 and `OperationInvoker` implementation need `BindingInvoker + InvocationSupport`,
 even with an explicit binding; `PreparedOperation::invoke` also requires both traits.
 
+Call `DefaultOperationInvoker::select(&interface, &address)` before loading
+source-specific context. It returns the core `openbindings::Binding`, with its
+key, source and operation, using only the document, address and the provider's
+`InvocationSupport::can_invoke`. It performs no schema work, context access or
+provider invocation. Read `binding.source()`, load that source's stored context,
+then pass the selected key in `OperationRequest::binding(interface, binding.key())`
+with that context to `invoke` or `preflight`. This explicit binding keeps the
+later attempt on the source whose context you loaded. Selection returns the same
+resolution errors as invocation, including whole-list admission before support
+queries. The `select` method itself needs only `P: InvocationSupport`.
+
+For a prepared operation, call `prepared.select(&provider, &choice)`, read its
+binding's source and load that source's context, then invoke with
+`BindingChoice::Binding(binding.key().into())` and that context. Prepared selection
+also requires the binding to realize the prepared operation, including for an
+explicit key. Its provider needs only `InvocationSupport`. To preflight that
+binding, use an explicit `OperationRequest::binding` with the prepared interface
+snapshot and the source's context. Selection does not pin a later operation-name
+or ordered-list selection.
+
 `DefaultOperationInvoker` requires an explicit `SchemaEvaluator` and `ExternalSchemas`.
 Lazy invocation prepares each declared direction when its first value reaches the
 boundary. `prepare` returns a `PreparedOperation` owning concrete validators and
