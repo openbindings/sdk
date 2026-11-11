@@ -157,6 +157,28 @@ or cancellation. TypeScript
 failure judges no instance. A missing operation or absent schema is found before
 preparation and is not a preparation failure.
 
+Schemas received as interface data, including a kind description's `sourceData`
+and `bindingData` and a context challenge's `schema`, can be prepared as their own
+roots. Supply the exact schema as an `ExternalSchema { uri, document }` under a
+URI the caller chooses, build `ExternalSchemas`, then use Rust
+`resources.prepare(uri, &evaluator)` or
+`resources.prepare_with_control(uri, &evaluator, &limits, control)`. TypeScript
+uses `resources.prepare(uri, { limits, signal })`; this set supplies all resources
+for the attempt. These entry points have the same preparation refusals,
+cancellation behavior and prepared-owner lifetime as `Schema.prepare`. A URI
+absent from the set returns a preparation `Resolution` failure with
+`ResourceUnavailable`, never a value outcome. The URI is the resource's retrieval
+identity for relative references and diagnostics; its own `$id` governs the base
+when present. Other resources in the set remain available for references. Local
+`#/$defs/...` references and `{"$ref":"#"}` start from this resource's root. No
+synthetic OBI is needed, and core `Schema` retains its conformance proof.
+
+Evaluator implementers receive `EvaluationRequest { root, external_schemas }`.
+`SchemaRoot::Contained(&Schema)` selects a contained schema;
+`SchemaRoot::Supplied(&str)` selects a resource by its retrieval URI in the set.
+Use `request.environment(limits, control)` to obtain either original context,
+including the selected root's base, dialect and provenance.
+
 `evaluate` is the cheap value check; `explain` requests diagnostics for the same
 semantic result. In Rust, first parse exact JSON text or bytes with
 `JsonValue::parse` or `parse_with_limits`, then call `evaluate(&value)` or
@@ -336,3 +358,9 @@ source-puller reference rule. Repeating with `&|_| true` asks whether drift lies
 only behind unaccounted targets. All controlled calls share one monotone
 `ComparisonLimits` allowance per call. Public diagnostic formatting omits reasons
 and document values.
+
+`DefaultOperationInvoker::select(&interface, &address)` and
+`PreparedOperation::select(&provider, &choice)` return a core `Binding` using only
+the document, address or choice, and `InvocationSupport::can_invoke`. Read its
+source, load that source's context, then invoke or preflight the selected binding
+explicitly with that context. Prepared selection also checks operation membership.

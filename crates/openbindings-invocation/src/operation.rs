@@ -9,7 +9,7 @@ use crate::{
     channel::{self, Shared},
 };
 use openbindings::{
-    ConformantDocument, Detail, ExternalSchemas, JsonValue, NoVerdictReason, Operation,
+    Binding, ConformantDocument, Detail, ExternalSchemas, JsonValue, NoVerdictReason, Operation,
     PreparationFailure, PreparationFailureKind, PreparationLimits, PreparedSchema, Schema,
     SchemaEvaluator, SchemaValidator, ValueOutcome,
 };
@@ -126,6 +126,25 @@ impl<P: BindingInvoker, E: SchemaEvaluator> DefaultOperationInvoker<P, E> {
         self
     }
 }
+impl<P: InvocationSupport, E> DefaultOperationInvoker<P, E> {
+    /// Resolve an address and select its binding without context, schema work or
+    /// provider work other than [`InvocationSupport::can_invoke`] queries.
+    /// Read the binding's source, load that source's context, then invoke or
+    /// preflight an explicit [`OperationAddress::Binding`] with the selected key
+    /// and that context. Selection alone does not pin a later operation address.
+    /// # Errors
+    /// Returns invocation's resolution terminals: `ERR_OPERATION_NOT_FOUND`,
+    /// `ERR_BINDING_NOT_FOUND` or `ERR_BINDING_SELECTION_REQUIRED`. Every ordered
+    /// selection key is checked before any support query. Explicit bindings
+    /// bypass support selection.
+    pub fn select(
+        &self,
+        interface: &ConformantDocument,
+        address: &OperationAddress,
+    ) -> Result<Binding, InvocationError> {
+        select(&self.provider, interface, address)
+    }
+}
 impl<P: BindingInvoker + InvocationSupport, E: SchemaEvaluator> DefaultOperationInvoker<P, E> {
     /// Resolve and select, then return a lazy output-driven attempt. Schemas are
     /// prepared only as values reach their direction; absent schemas bypass gating.
@@ -210,24 +229,36 @@ fn resolve<P: InvocationSupport>(
         address,
         context,
     } = request;
-    let (operation, binding) = match address {
+    let binding = select(provider, &interface, &address)?;
+    let operation = binding.operation();
+    Ok((
+        BindingRequest {
+            interface,
+            binding: binding.key().to_owned(),
+            context,
+        },
+        operation,
+    ))
+}
+fn select<P: InvocationSupport>(
+    provider: &P,
+    interface: &ConformantDocument,
+    address: &OperationAddress,
+) -> Result<Binding, InvocationError> {
+    match address {
         // Explicit addressing bypasses support selection, including for providers
         // whose optional routing knowledge cannot describe this binding.
-        OperationAddress::Binding(key) => {
-            let binding = interface
-                .binding(&key)
-                .ok_or_else(InvocationError::binding_not_found)?;
-            let operation = binding.operation();
-            (operation, key)
-        }
+        OperationAddress::Binding(key) => interface
+            .binding(key)
+            .ok_or_else(InvocationError::binding_not_found),
         OperationAddress::Operation { name, selection } => {
             let operation = interface
-                .resolve_operation(&name)
+                .resolve_operation(name)
                 .ok_or_else(|| error("ERR_OPERATION_NOT_FOUND"))?;
-            let keys = match selection {
+            let (binding, ambiguous) = match selection {
                 Some(keys) => {
                     // Admit the entire list before any support query or prefix choice.
-                    for key in &keys {
+                    for key in keys {
                         if !interface
                             .binding(key)
                             .is_some_and(|binding| binding.operation_key() == operation.key())
@@ -236,42 +267,26 @@ fn resolve<P: InvocationSupport>(
                         }
                     }
                     let selected = keys
-                        .into_iter()
-                        .find(|key| supported(provider, &interface, key));
+                        .iter()
+                        .map(|key| interface.binding(key).expect("candidate key established"))
+                        .find(|binding| provider.can_invoke(binding.source().kind()));
                     (selected, false)
                 }
                 None => {
                     let mut supported = operation
                         .bindings()
                         .into_iter()
-                        .filter(|binding| provider.can_invoke(binding.source().kind()))
-                        .map(|binding| binding.key().to_owned());
+                        .filter(|binding| provider.can_invoke(binding.source().kind()));
                     let first = supported.next();
                     (first, supported.next().is_some())
                 }
             };
-            if keys.1 {
+            if ambiguous {
                 return Err(error("ERR_BINDING_SELECTION_REQUIRED"));
             }
-            (
-                operation,
-                keys.0.ok_or_else(InvocationError::binding_not_found)?,
-            )
+            binding.ok_or_else(InvocationError::binding_not_found)
         }
-    };
-    Ok((
-        BindingRequest {
-            interface,
-            binding,
-            context,
-        },
-        operation,
-    ))
-}
-fn supported<P: InvocationSupport>(provider: &P, document: &ConformantDocument, key: &str) -> bool {
-    let binding = document.binding(key).expect("candidate key established");
-    let source = binding.source();
-    provider.can_invoke(source.kind())
+    }
 }
 struct Gate<'a, E: SchemaEvaluator> {
     schema: Schema,

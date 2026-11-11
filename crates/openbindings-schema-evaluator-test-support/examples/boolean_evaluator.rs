@@ -8,12 +8,19 @@ impl SchemaEvaluator for BooleanEvaluator {
     fn prepare(
         &self,
         request: EvaluationRequest<'_>,
-        _: &PreparationLimits,
+        limits: &PreparationLimits,
         control: &dyn WorkControl,
     ) -> Result<Self::Validator, PreparationFailure> {
         control.check()?;
-        match request.schema.json().view().as_bool() {
-            Some(value) => Ok(BooleanContract(value, request.schema.location())),
+        let (value, origin) = match request.root {
+            SchemaRoot::Contained(schema) => (schema.json(), schema.location()),
+            SchemaRoot::Supplied(_) => {
+                let root = request.environment(limits, control)?.root();
+                (root.value(), root.origin().clone())
+            }
+        };
+        match value.view().as_bool() {
+            Some(value) => Ok(BooleanContract(value, origin)),
             None => Err(PreparationFailure::new(
                 PreparationFailureKind::UnsupportedCapability {
                     capability: "boolean-only".into(),

@@ -233,6 +233,22 @@ but currently still requires an adapter implementing `InvocationSupport`.
 Input is checked before provider delivery and output before caller delivery.
 Only `Satisfies` passes a declared schema gate. An absent schema adds no check.
 
+When context is stored per source, select before loading it. Call
+`prepared.select(&adapter, &BindingChoice::Sole)` (or use your ordered choice),
+read the returned core `Binding`'s `source()`, and load that source's context.
+Then invoke with `BindingChoice::Binding(binding.key().into())` and the loaded
+context. Prepared selection checks that even an explicit binding belongs to the
+prepared operation. Selection reads no context and performs no schema work or
+provider work beyond `InvocationSupport::can_invoke` queries.
+
+For lazy invocation or preflight, use
+`invoker.select(&interface, &address)` first, read the binding's source and load
+its context, then pass an explicit `OperationRequest::binding` with the selected
+key and that context to `invoke` or `preflight`. Both selection methods return
+invocation's resolution errors and check the entire ordered selection before any
+support query. A later operation-name selection runs independently; address the
+selected binding explicitly to use the source whose context you loaded.
+
 The example handles JSON admission, unsupported version, document nonconformance
 or undetermined conformance, missing operation, all four preparation-failure
 kinds, request admission, send failure, unsuccessful terminal and typed decoding

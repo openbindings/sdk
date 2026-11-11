@@ -12,6 +12,21 @@ pub enum BindingChoice {
     /// Use this binding of the prepared operation without support selection.
     Binding(String),
 }
+impl BindingChoice {
+    fn address(&self, operation: &str) -> OperationAddress {
+        match self {
+            Self::Sole => OperationAddress::Operation {
+                name: operation.to_owned(),
+                selection: None,
+            },
+            Self::Ordered(keys) => OperationAddress::Operation {
+                name: operation.to_owned(),
+                selection: Some(keys.clone()),
+            },
+            Self::Binding(key) => OperationAddress::Binding(key.clone()),
+        }
+    }
+}
 impl fmt::Debug for BindingChoice {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
@@ -143,6 +158,36 @@ impl<V: SchemaValidator> PreparedOperation<V> {
     pub fn operation(&self) -> &str {
         &self.operation
     }
+    /// Select a binding of this prepared operation using only the retained
+    /// document, the choice and [`InvocationSupport::can_invoke`] queries.
+    /// No context is read and no provider invocation or schema work starts.
+    /// Read the binding's source, load that source's context, then invoke with
+    /// [`BindingChoice::Binding`] and the selected key. To preflight, pass that
+    /// key and context in an explicit binding request to the operation invoker.
+    /// # Errors
+    /// Returns `ERR_BINDING_NOT_FOUND` for a missing binding, a binding of another
+    /// operation or no supported candidate; returns `ERR_BINDING_SELECTION_REQUIRED`
+    /// for multiple candidates without a choice. The whole ordered list must
+    /// belong to this operation before any support query.
+    pub fn select<P: InvocationSupport>(
+        &self,
+        provider: &P,
+        choice: &BindingChoice,
+    ) -> Result<Binding, InvocationError> {
+        self.select_address(provider, &choice.address(&self.operation))
+    }
+    fn select_address<P: InvocationSupport>(
+        &self,
+        provider: &P,
+        address: &OperationAddress,
+    ) -> Result<Binding, InvocationError> {
+        let binding = select(provider, &self.interface, address)?;
+        if binding.operation_key() == self.operation {
+            Ok(binding)
+        } else {
+            Err(InvocationError::binding_not_found())
+        }
+    }
     /// Consume this owner into one output-driven invocation. Selection is performed
     /// now from the retained snapshot. A Send V, Sync P and Send P::Invoke yield a
     /// Send driver even when V is not Sync and the original E is neither Send nor Sync.
@@ -161,30 +206,19 @@ impl<V: SchemaValidator> PreparedOperation<V> {
     where
         V: 'a,
     {
-        let address = match choice {
-            BindingChoice::Sole => OperationAddress::Operation {
-                name: self.operation.clone(),
-                selection: None,
-            },
-            BindingChoice::Ordered(keys) => OperationAddress::Operation {
-                name: self.operation.clone(),
-                selection: Some(keys),
-            },
-            BindingChoice::Binding(key) => OperationAddress::Binding(key),
-        };
         let request = OperationRequest {
-            interface: self.interface,
-            address,
+            interface: self.interface.clone(),
+            address: choice.address(&self.operation),
             context,
         };
         request.admit()?;
-        let selected = resolve(provider, request).and_then(|(request, operation)| {
-            if operation.key() == self.operation {
-                Ok(request)
-            } else {
-                Err(InvocationError::binding_not_found())
-            }
-        });
+        let selected = self
+            .select_address(provider, &request.address)
+            .map(|binding| BindingRequest {
+                interface: request.interface,
+                binding: binding.key().to_owned(),
+                context: request.context,
+            });
         let schemas = self.schemas;
         let detail = self.detail;
         let shared = Shared::new(self.limits, schemas.each_ref().map(Option::is_some));

@@ -7,6 +7,27 @@
 - Add source-puller reference-rule identity and use it for existing entries in the larger pull example.
 - Qualify all 59 ordinary and 29 exact directional fixture groups alongside the existing identity corpus.
 
+## 2026-11-11 supplied schema roots (unreleased)
+
+### Changed
+
+- Breaking for evaluator implementers: `EvaluationRequest::schema` is replaced
+  by `root: SchemaRoot`, selecting `Contained(&Schema)` or `Supplied(&str)`.
+  `EvaluationRequest::environment` enters either original context.
+- `ExternalSchemas::prepare` and `prepare_with_control` prepare a supplied
+  resource at its retrieval URI as its own JSON Schema root. TypeScript exposes
+  `ExternalSchemas.prepare(uri, { limits, signal })` through Wasm. Local
+  references, declared IDs, dialects and retrieval provenance stay with that
+  resource; missing root URIs are preparation failures.
+- Kind data and context challenge guidance uses supplied roots. Core `Schema`
+  still comes only from a conformant OpenBindings document.
+
+## 2026-11-11 binding selection (unreleased)
+
+- Add `DefaultOperationInvoker::select` and `PreparedOperation::select`, returning
+  the core `Binding` before context loading or provider work. Invocation,
+  preflight and selection share the same binding selection rules.
+
 ## 2026-11-11 review fixes (unreleased)
 
 - Cancel pending binding and operation preflight work before provider cleanup.

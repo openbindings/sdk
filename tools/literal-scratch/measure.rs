@@ -64,7 +64,10 @@ fn prepare(schema: &str) -> DefaultValidator {
         .unwrap().validate().unwrap();
     let selected = document.conformant().unwrap().resolve_operation("op").unwrap().input().unwrap();
     DefaultEvaluator::new().prepare(
-        EvaluationRequest { schema: &selected, external_schemas: &resources },
+        EvaluationRequest {
+            root: openbindings::SchemaRoot::Contained(&selected),
+            external_schemas: &resources,
+        },
         &PreparationLimits::default(), &AtomicBool::new(false),
     ).unwrap()
 }

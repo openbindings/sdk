@@ -24,7 +24,7 @@ fn direct_default_validator_refuses_ambiguous_instances() {
     let validator: DefaultValidator = DefaultEvaluator::new()
         .prepare(
             EvaluationRequest {
-                schema: &selected,
+                root: SchemaRoot::Contained(&selected),
                 external_schemas: &external,
             },
             &limits,

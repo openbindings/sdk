@@ -86,7 +86,10 @@ fn prepare_with_limits(schema: &str, limits: Limits) -> DefaultValidator {
         .unwrap().validate().unwrap();
     let selected = document.conformant().unwrap().resolve_operation("op").unwrap().input().unwrap();
     DefaultEvaluator::with_limits(limits).prepare(
-        EvaluationRequest { schema: &selected, external_schemas: &resources },
+        EvaluationRequest {
+            root: openbindings::SchemaRoot::Contained(&selected),
+            external_schemas: &resources,
+        },
         &PreparationLimits::default(), &AtomicBool::new(false),
     ).unwrap()
 }

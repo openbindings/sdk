@@ -32,7 +32,7 @@ fn original(row: &serde_json::Value) -> Plan {
     let resources = ExternalSchemas::new(resources).unwrap();
     let schema = document.schema("entry").unwrap();
     let request = EvaluationRequest {
-        schema: &schema,
+        root: SchemaRoot::Contained(&schema),
         external_schemas: &resources,
     };
     let preparation = PreparationLimits::default();
