@@ -120,6 +120,11 @@ fn no_data_kind_projects_before_destination_identity_and_does_not_adapt_to_confl
             true,
         ),
         (
+            r#"{"localEcho":{"aliases":["echo"],"input":{"type":"string"},"output":{"type":"string"}}}"#,
+            "reused",
+            true,
+        ),
+        (
             r#"{"echo":{"input":{"type":"integer"},"output":{"type":"string"}}}"#,
             "conflict",
             true,
@@ -172,7 +177,30 @@ fn no_data_kind_projects_before_destination_identity_and_does_not_adapt_to_confl
                 );
             }
             "reused" => {
-                assert!(result.report().added().next().unwrap().reused());
+                let added = result.report().added().next().unwrap();
+                assert!(added.reused());
+                let operation = original.resolve_operation("echo").unwrap();
+                assert_eq!(added.operation().as_str(), Some(operation.key()));
+                assert_eq!(
+                    result
+                        .additions()
+                        .bindings()
+                        .unwrap()
+                        .value()
+                        .get("echo.fixed")
+                        .unwrap()
+                        .get("operation")
+                        .unwrap()
+                        .as_str(),
+                    Some(operation.key())
+                );
+                result
+                    .validate_for(
+                        &PullRequest::new(original.clone(), "fixed"),
+                        &PullLimits::default(),
+                        &AtomicBool::new(false),
+                    )
+                    .unwrap();
                 assert_eq!(
                     result
                         .additions()
@@ -203,6 +231,60 @@ fn no_data_kind_projects_before_destination_identity_and_does_not_adapt_to_confl
                 .get("data")
                 .is_none()
         );
+    }
+}
+
+#[test]
+fn offered_aliases_reuse_one_operation_and_report_multiple_matches_as_conflicts() {
+    for (aliases, expected, also) in [
+        (r#"["localEcho"]"#, "localEcho", None),
+        (r#"["echo","localEcho"]"#, "localEcho", None),
+        (r#"["echo","other"]"#, "localEcho", Some("second")),
+        (r#"["other","echo"]"#, "second", Some("localEcho")),
+    ] {
+        let original = document(&format!(
+            r#"{{"openbindings":"0.2.0","operations":{{"localEcho":{{"aliases":["echo"],"input":true}},"second":{{"aliases":["other"],"input":true}}}},"sources":{{"catalog":{{"kind":"example.embedded@1","data":{{"items":[{{"key":"remote","operation":{{"aliases":{aliases},"input":true}},"data":{{"item":"remote"}}}}]}}}}}}}}"#
+        ));
+        let request = PullRequest::new(original, "catalog");
+        let result =
+            complete(Embedded.pull_source(request.clone(), CancellationToken::new())).unwrap();
+        if let Some(also) = also {
+            assert_eq!(result.report().added().len(), 0);
+            let omitted = result.report().omitted().unwrap().next().unwrap();
+            assert_eq!(omitted.status(), OmittedStatus::Conflict);
+            assert_eq!(
+                omitted.existing().unwrap().as_str(),
+                Some(format!("operations/{expected}").as_str())
+            );
+            assert_eq!(
+                omitted
+                    .also_identifies()
+                    .unwrap()
+                    .map(|label| label.as_str().unwrap().to_owned())
+                    .collect::<Vec<_>>(),
+                [format!("operations/{also}")]
+            );
+        } else {
+            let added = result.report().added().next().unwrap();
+            assert!(added.reused());
+            assert_eq!(added.operation().as_str(), Some(expected));
+            assert_eq!(
+                result
+                    .additions()
+                    .bindings()
+                    .unwrap()
+                    .value()
+                    .get("remote.catalog")
+                    .unwrap()
+                    .get("operation")
+                    .unwrap()
+                    .as_str(),
+                Some(expected)
+            );
+        }
+        result
+            .validate_for(&request, &PullLimits::default(), &AtomicBool::new(false))
+            .unwrap();
     }
 }
 

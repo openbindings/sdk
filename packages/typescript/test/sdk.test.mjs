@@ -116,6 +116,10 @@ test("ordinary conversion rejects lossy/side-effecting values and exact handles 
   child.dispose();
   child.dispose();
   assert.throws(() => child.text, /disposed/);
+  assert.throws(
+    () => child.toValue(),
+    (e) => e instanceof sdk.SdkError && e.code === "disposed-handle",
+  );
   const duplicate = exact('{"a":1,"\\u0061":2}');
   assert.equal(duplicate.toValue().status, "inexact");
   duplicate.dispose();
@@ -126,11 +130,30 @@ test("ordinary conversion rejects lossy/side-effecting values and exact handles 
   });
   ordinary.dispose();
 });
+test("exact conversion propagates disposal during host conversion", () => {
+  const value = exact("1");
+  const parse = JSON.parse;
+  JSON.parse = (...args) => {
+    const result = parse(...args);
+    if (args[0] === "1") value.dispose();
+    return result;
+  };
+  try {
+    assert.throws(
+      () => value.toValue(),
+      (e) => e instanceof sdk.SdkError && e.code === "disposed-handle",
+    );
+  } finally {
+    JSON.parse = parse;
+    value.dispose();
+  }
+});
 test("ordinary number serialization stays distinct from exact JSON conversion", () => {
   for (const [text, status] of [
     ["9007199254740993", "inexact"],
     ["9007199254740992", "converted"],
     ["1000000000000000128", "inexact"],
+    ["1e999999", "inexact"],
   ]) {
     const value = exact(text);
     try {

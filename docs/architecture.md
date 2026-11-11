@@ -85,8 +85,9 @@ complete dependencies.
 `openbindings-schema-comparison` implements the adopted normalized identity profile
 with an original reference context on each side. Identity is separate from general
 equivalence and directional compatibility. A comparison failure is not a negative
-answer. Existing-binding drift uses the kind's would-write comparison, which may
-include annotations the identity profile ignores.
+answer. Existing-binding drift uses the kind's would-write comparison under the
+pinned source-puller rules: a difference only in annotations the identity profile
+strips never makes an entry stale. Those annotations remain the author's.
 
 `openbindings-invocation` provides `BindingInvoker`, `OperationInvoker` and
 `DefaultOperationInvoker`. Checked invocation retains the original document and selected

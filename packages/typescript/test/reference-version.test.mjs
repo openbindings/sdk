@@ -9,6 +9,49 @@ const open = (text) => {
   return parsed.value;
 };
 
+test("reference inspection refuses malformed options on drafts and proofs", () => {
+  const draft = open('{"openbindings":"0.2.0","operations":{}}');
+  const validation = draft.validate();
+  assert.equal(validation.status, "conformant");
+  const resources = new sdk.ExternalSchemas();
+  try {
+    for (const document of [draft, validation.document]) {
+      for (const options of [
+        null,
+        false,
+        1,
+        "options",
+        [],
+        { extra: true },
+        { signals: new AbortController().signal },
+        { signal: { aborted: true } },
+        { signal: null },
+        { resources: null },
+        { resources: {} },
+        { resources: draft },
+      ]) {
+        assert.throws(
+          () => document.references(options),
+          (e) => e instanceof sdk.SdkError && e.code === "invalid-work-options",
+        );
+      }
+      assert.equal(document.references({ resources }).complete, true);
+      assert.equal(
+        document.references({ signal: new AbortController().signal }).complete,
+        true,
+      );
+      assert.equal(
+        document.references({ signal: AbortSignal.abort() }).complete,
+        false,
+      );
+    }
+  } finally {
+    resources.dispose();
+    validation.document.dispose();
+    draft.dispose();
+  }
+});
+
 test("missing and malformed versions inspect every reference under 0.2", () => {
   const body = {
     operations: {

@@ -116,13 +116,15 @@ async fn preflight_job<F: Future<Output = Result<Option<ContextChallenge>, Invoc
     external: CancellationToken,
     local: CancellationToken,
 ) -> Result<Option<ContextChallenge>, InvocationError> {
-    let _cancel_on_drop = CancelOnDrop(local.clone());
+    let cancel_on_drop = CancelOnDrop(local.clone());
     let _relay = cancellation_relay(&external, &local);
     if local.is_cancelled() {
         return Err(InvocationError::cancelled());
     }
     let mut cancelled = pin!(local.cancelled());
     let mut job = pin!(start()?);
+    // Protect constructor panics, then cancel before the provider future drops.
+    let _cancel_before_job_drop = cancel_on_drop;
     let result = poll_fn(|cx| {
         if cancelled.as_mut().poll(cx).is_ready() {
             return Poll::Ready(Err(InvocationError::cancelled()));

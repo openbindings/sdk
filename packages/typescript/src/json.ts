@@ -377,7 +377,8 @@ export class ExactJson extends Managed {
     let value: unknown;
     try {
       value = JSON.parse(this.text);
-    } catch {
+    } catch (error) {
+      if (!(error instanceof SyntaxError)) throw error;
       return {
         status: "inexact",
         message: "The host JSON parser cannot represent this value.",
@@ -386,14 +387,21 @@ export class ExactJson extends Managed {
     // Check the host's actual numeric result against the authoritative exact value.
     let roundtrip: ExactJson | undefined;
     try {
-      roundtrip = ExactJson.from(value as JsonInput);
+      roundtrip = new ExactJson(
+        wasm.WasmJson.parseText(encodeOrdinary(value, {})),
+      );
       if (this.equals(roundtrip) !== true)
         return {
           status: "inexact",
           message:
             "Ordinary JavaScript conversion would change a JSON value; retain text or bytes.",
         };
-    } catch {
+    } catch (error) {
+      if (
+        !(error instanceof JsonEncodingError) &&
+        inputErrorKind(error) !== "Limit"
+      )
+        throw error;
       return {
         status: "inexact",
         message:
@@ -550,7 +558,15 @@ export function encodeOrdinary(
         base: number;
       }
     | { text: string; pointer: string; content: boolean }
-    | { leave: object };
+    | { leave: object }
+    | {
+        elements: unknown[];
+        index: number;
+        depth: number;
+        pointer: string;
+        content: boolean;
+        base: number;
+      };
   const batch = context?.editBatch === true;
   const jobs: Job[] = [
       { value, depth: 0, pointer: "", content: !batch, base: 0 },
@@ -585,6 +601,23 @@ export function encodeOrdinary(
     }
     if ("leave" in job) {
       active.delete(job.leave);
+      continue;
+    }
+    if ("elements" in job) {
+      // Hand out one element at a time, so pending work follows nesting depth
+      // rather than array width, and counting stops where it always did.
+      const { elements, index } = job;
+      if (index === elements.length) continue;
+      jobs.push({ ...job, index: index + 1 });
+      jobs.push({
+        value: Object.getOwnPropertyDescriptor(elements, String(index))!.value,
+        depth: job.depth,
+        pointer: childPath(elements, String(index), job.pointer),
+        content: job.content,
+        base: job.base,
+      });
+      if (index > 0)
+        jobs.push({ text: ",", pointer: job.pointer, content: job.content });
       continue;
     }
     const { pointer, content } = job;
@@ -641,18 +674,23 @@ export function encodeOrdinary(
         pointer,
         "JSON objects must be plain objects.",
       );
-    const descriptors = Object.getOwnPropertyDescriptors(value);
-    if (Reflect.ownKeys(value).some((k) => typeof k === "symbol"))
+    const keys = Reflect.ownKeys(value);
+    if (keys.some((k) => typeof k === "symbol"))
       reject("symbol-key", pointer, "JSON objects cannot contain symbol keys.");
+    // Member names are nodes, as Rust counts them. Check before descriptors
+    // and child jobs, keeping the same refusal order for object properties.
+    if (!array) counted(keys.length, pointer, content);
     if (array) {
-      const names = Object.keys(descriptors).filter((k) => k !== "length");
+      // Check the whole array's shape first, as before, but without retaining
+      // a descriptor, pointer or job for every element.
+      const names = keys.filter((k) => k !== "length");
       if (
         names.length !== value.length ||
         names.some((k, i) => k !== String(i))
       ) {
         // Stop at the first missing index without scanning an arbitrarily sparse length.
         let missing = 0;
-        while (Object.hasOwn(descriptors, String(missing))) missing++;
+        while (Object.hasOwn(value, String(missing))) missing++;
         const hole = missing < value.length;
         reject(
           hole ? "sparse-array" : "array-property",
@@ -660,29 +698,27 @@ export function encodeOrdinary(
           "JSON arrays must be dense and have no extra properties.",
         );
       }
-      jobs.push({ text: "]", pointer, content });
       for (let i = value.length - 1; i >= 0; i--) {
-        const d = descriptors[String(i)];
+        const d = Object.getOwnPropertyDescriptor(value, String(i));
         if (!d || !("value" in d))
           reject(
             "accessor-property",
             childPath(value, String(i), pointer),
             "JSON arrays cannot contain accessors or holes.",
           );
-        if (i < value.length - 1) jobs.push({ text: ",", pointer, content });
-        jobs.push({
-          value: d.value,
-          depth: job.depth + 1,
-          pointer: childPath(value, String(i), pointer),
-          content,
-          base: job.base,
-        });
       }
+      jobs.push({ text: "]", pointer, content });
+      jobs.push({
+        elements: value,
+        index: 0,
+        depth: job.depth + 1,
+        pointer,
+        content,
+        base: job.base,
+      });
       jobs.push({ text: "[", pointer, content });
     } else {
-      const entries = Object.entries(descriptors);
-      // Member names are nodes, as Rust counts them.
-      counted(entries.length, pointer, content);
+      const entries = Object.entries(Object.getOwnPropertyDescriptors(value));
       jobs.push({ text: "}", pointer, content });
       for (let i = entries.length - 1; i >= 0; i--) {
         const [key, d] = entries[i];

@@ -167,7 +167,32 @@ fn reconcile(request: &PullRequest, observed: Observation) -> Result<PullResult,
         if accounted {
             continue;
         }
-        let reused = if let Some(operation) = operations.get(&offer.key) {
+        let identifiers = std::iter::once(offer.key.as_str()).chain(
+            offer
+                .operation
+                .get("aliases")
+                .into_iter()
+                .flat_map(|aliases| aliases.elements().into_iter().flatten())
+                .filter_map(|alias| alias.as_str()),
+        );
+        let mut identified = Vec::new();
+        for identifier in identifiers {
+            if let Some(operation) = request.interface().resolve_operation(identifier)
+                && !identified.contains(&operation.key().to_owned())
+            {
+                identified.push(operation.key().to_owned());
+            }
+        }
+        if identified.len() > 1 {
+            let also_identifies: Vec<_> = identified[1..]
+                .iter()
+                .map(|key| json(&quote(&format!("operations/{key}"))))
+                .collect();
+            omitted.push(json(&format!(r#"{{"status":"conflict","reasonCode":"offered-identifiers-conflict","message":"The offered identifiers identify several existing operations.","item":{},"existing":{},"alsoIdentifies":{},"offered":{}}}"#, quote(&format!("operations/{}", offer.key)), quote(&format!("operations/{}", identified[0])), array(&also_identifies).text(), offer.operation.text())));
+            continue;
+        }
+        let operation_key = identified.first().unwrap_or(&offer.key);
+        let reused = if let Some(operation) = operations.get(operation_key) {
             let compared = match slots(offer, &observed, operation, original) {
                 Ok(compared) => compared,
                 Err(CatalogError::Comparison(
@@ -177,13 +202,13 @@ fn reconcile(request: &PullRequest, observed: Observation) -> Result<PullResult,
                     | ComparisonFailure::UnsupportedReference
                     | ComparisonFailure::UnsatisfiableMerge,
                 )) => {
-                    omitted.push(json(&format!(r#"{{"status":"implementation-unsupported","reasonCode":"comparison-unfinished","message":"The offered schemas could not be compared.","item":{},"existing":{}}}"#, quote(&format!("operations/{}", offer.key)), quote(&format!("operations/{}", offer.key)))));
+                    omitted.push(json(&format!(r#"{{"status":"implementation-unsupported","reasonCode":"comparison-unfinished","message":"The offered schemas could not be compared.","item":{},"existing":{}}}"#, quote(&format!("operations/{}", offer.key)), quote(&format!("operations/{operation_key}")))));
                     continue;
                 }
                 Err(error) => return Err(error),
             };
             if compared != [true; 2] {
-                omitted.push(json(&format!(r#"{{"status":"conflict","reasonCode":"offered-schema-differs","message":"The offered input or output differs from the existing operation.","item":{},"existing":{},"offered":{}}}"#, quote(&format!("operations/{}", offer.key)), quote(&format!("operations/{}", offer.key)), offer.operation.text())));
+                omitted.push(json(&format!(r#"{{"status":"conflict","reasonCode":"offered-schema-differs","message":"The offered input or output differs from the existing operation.","item":{},"existing":{},"offered":{}}}"#, quote(&format!("operations/{}", offer.key)), quote(&format!("operations/{operation_key}")), offer.operation.text())));
                 continue;
             }
             true
@@ -195,7 +220,7 @@ fn reconcile(request: &PullRequest, observed: Observation) -> Result<PullResult,
             binding.clone(),
             json(&format!(
                 r#"{{"operation":{},"source":{},"data":{}}}"#,
-                quote(&offer.key),
+                quote(operation_key),
                 quote(request.source()),
                 offer.data.text()
             )),
@@ -206,7 +231,7 @@ fn reconcile(request: &PullRequest, observed: Observation) -> Result<PullResult,
         added.push(json(&format!(
             r#"{{"binding":{},"operation":{}{}}}"#,
             quote(&binding),
-            quote(&offer.key),
+            quote(operation_key),
             if reused { ",\"reused\":true" } else { "" }
         )));
     }

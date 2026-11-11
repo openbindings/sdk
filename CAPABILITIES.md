@@ -26,7 +26,7 @@ values and supplied schema resources still retain unpaired UTF-16 units exactly,
 and so do the JSON Pointers that locate their nodes.
 
 Default parsing admits 32 MiB, 10,000 container levels and 1,000,000 nodes.
-`validate_document` admits the same bytes and nodes at any nesting. These
+`validate_document` uses the same defaults, including 10,000 container levels. These
 admission limits are a setting at `validate_document_with_limits`,
 `Document::parse_with_limits` and `JsonValue::parse_with_limits` (`JsonLimits`),
 and at TypeScript's `validateDocument`, `Document.parse` and `parseJson`
@@ -34,11 +34,12 @@ and at TypeScript's `validateDocument`, `Document.parse` and `parseJson`
 `JsonValue::string` use the defaults, as do TypeScript's `Document.create()`, `ExactJson.from`,
 `evaluateJson` and a prepared schema's `evaluate` and `explain` of an ordinary
 value. `Publication::from_bytes` uses whole-document validation admission,
-including no nesting cap.
+including the default 10,000-container nesting cap.
 A document keeps the limits it was admitted under, and its edits apply them to
 the edited document. Discovery raises only the byte limit, to its configured
-body bound; a body past the default nodes comes back undetermined and is admitted
-by validating it again with `validate_document_with_limits`. Schema preparation
+body bound; a body past the default node or nesting limit comes back undetermined
+and can be admitted by validating it again with larger limits through
+`validate_document_with_limits`. Schema preparation
 has separate footprint, cooperative SDK work and explicit SDK storage reservation
 bounds through `PreparationLimits` (`max_sdk_work_units`,
 `max_sdk_reservation_bytes`). These are not allocator-wide or CPU accounting for
@@ -123,7 +124,7 @@ limits what redirect and network facts the SDK can observe. See
 
 Invocation and [kind description/source checking](crates/openbindings-kind-description/README.md)
 are optional Rust companions. They define provider traits and checked callers.
-Kind descriptions retain per-operation support claims and disclose check execution;
+Kind descriptions retain per-operation support claims and disclose check, pull and invoke execution;
 source checks require an explicit call and never acquire context or retry by
 themselves. Exact carriers retain allowed output members, numbers, strings and
 absent-versus-null data. Neither a description nor a checked source proves document
