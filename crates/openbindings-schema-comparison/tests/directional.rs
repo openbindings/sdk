@@ -123,7 +123,7 @@ fn interface_reports_sorted_slots_missing_and_failures_without_discarding_operat
     let report = check_interface(
         &required,
         &provided,
-        &|_| Some(OperationRole::Realized),
+        &|_, _| Some(OperationRole::Realized),
         &ComparisonLimits::default(),
     )
     .unwrap();
@@ -157,7 +157,7 @@ fn interface_reports_sorted_slots_missing_and_failures_without_discarding_operat
     let opposite = check_interface(
         &provided,
         &required,
-        &|_| Some(OperationRole::Realized),
+        &|_, _| Some(OperationRole::Realized),
         &ComparisonLimits::default(),
     )
     .unwrap();
@@ -186,7 +186,7 @@ fn public_diagnostic_formatting_does_not_disclose_report_data() {
     let report = check_interface(
         &required,
         &provided,
-        &|_| Some(OperationRole::Realized),
+        &|_, _| Some(OperationRole::Realized),
         &ComparisonLimits::default(),
     )
     .unwrap();
@@ -233,7 +233,7 @@ fn wide_enum_search_and_later_interface_slots_share_the_finite_allowance() {
     let report = check_interface(
         &required,
         &provided,
-        &|_| Some(OperationRole::Realized),
+        &|_, _| Some(OperationRole::Realized),
         &limits,
     )
     .unwrap();
@@ -358,7 +358,7 @@ fn every_alias_match_is_checked_in_each_selected_role() {
         let report = check_interface(
             &required,
             &provided,
-            &|operation| match operation.key() {
+            &|operation, _| match operation.key() {
                 "contract" => Some(OperationRole::Both),
                 "z" => Some(OperationRole::Consumed),
                 _ => None,
@@ -373,15 +373,15 @@ fn every_alias_match_is_checked_in_each_selected_role() {
                 .map(|o| (o.required(), o.provided(), o.role()))
                 .collect::<Vec<_>>(),
             [
-                ("contract", Some("a"), OperationRole::Realized),
-                ("contract", Some("a"), OperationRole::Consumed),
-                ("contract", Some("b"), OperationRole::Realized),
-                ("contract", Some("b"), OperationRole::Consumed),
-                ("z", None, OperationRole::Consumed),
+                ("contract", Some("a"), Some(OperationRole::Realized)),
+                ("contract", Some("a"), Some(OperationRole::Consumed)),
+                ("contract", Some("b"), Some(OperationRole::Realized)),
+                ("contract", Some("b"), Some(OperationRole::Consumed)),
+                ("z", None, None),
             ]
         );
         for operation in &report.operations()[..4] {
-            let realized = operation.role() == OperationRole::Realized;
+            let realized = operation.role() == Some(OperationRole::Realized);
             assert_eq!(
                 operation.input().unwrap().as_ref().unwrap().verdict(),
                 if realized {
@@ -407,12 +407,127 @@ fn every_alias_match_is_checked_in_each_selected_role() {
         check_interface(
             &required,
             &provided,
-            &|_| Some(OperationRole::Realized),
+            &|_, _| Some(OperationRole::Realized),
             &ComparisonLimits::default()
         )
         .unwrap()
         .operations()
         .len(),
         1
+    );
+}
+
+#[test]
+fn roles_are_selected_once_per_distinct_match_and_once_when_missing() {
+    let required = doc(
+        r#"{"openbindings":"0.2.0","operations":{"wide":{"aliases":["narrow"],"input":{"type":"integer"}},"gone":{}}}"#,
+    );
+    let provided = doc(
+        r#"{"openbindings":"0.2.0","operations":{"wide":{"input":{"type":"number"}},"narrow":{"input":{"type":"integer","minimum":0}}}}"#,
+    );
+    let calls = std::cell::RefCell::new(Vec::new());
+    let report = check_interface(
+        &required,
+        &provided,
+        &|required, provided| {
+            calls.borrow_mut().push((
+                required.key().to_owned(),
+                provided.map(|p| p.key().to_owned()),
+            ));
+            Some(match provided.map(|p| p.key()) {
+                Some("wide") => OperationRole::Realized,
+                Some("narrow") => OperationRole::Consumed,
+                _ => OperationRole::Both,
+            })
+        },
+        &ComparisonLimits::default(),
+    )
+    .unwrap();
+    assert_eq!(calls.borrow().len(), 3);
+    assert_eq!(
+        report
+            .operations()
+            .iter()
+            .map(|o| (o.required(), o.provided(), o.role()))
+            .collect::<Vec<_>>(),
+        [
+            ("gone", None, None),
+            ("wide", Some("narrow"), Some(OperationRole::Consumed)),
+            ("wide", Some("wide"), Some(OperationRole::Realized)),
+        ]
+    );
+    assert_eq!(
+        report.issues().map(|i| i.kind()).collect::<Vec<_>>(),
+        [InterfaceIssueKind::Missing]
+    );
+    for operation in &report.operations()[1..] {
+        assert_eq!(
+            operation.input().unwrap().as_ref().unwrap().verdict(),
+            Verdict::Compatible
+        );
+    }
+    let excluded = check_interface(
+        &required,
+        &provided,
+        &|_, matched| matched.map(|_| OperationRole::Realized),
+        &ComparisonLimits::default(),
+    )
+    .unwrap();
+    assert!(excluded.operations().iter().all(|o| !o.is_missing()));
+}
+
+#[test]
+fn interface_cancellation_including_the_final_slot_returns_no_report() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    struct Control {
+        calls: AtomicUsize,
+        cancel_at: usize,
+    }
+    impl openbindings::WorkControl for Control {
+        fn is_cancelled(&self) -> bool {
+            self.calls.fetch_add(1, Ordering::Relaxed) >= self.cancel_at
+        }
+    }
+    let document =
+        doc(r#"{"openbindings":"0.2.0","operations":{"a":{"input":{"type":"string"}}}}"#);
+    let run = |control: &Control| {
+        check_interface_with_control(
+            &document,
+            &document,
+            &|_, _| Some(OperationRole::Realized),
+            &ComparisonLimits::default(),
+            control,
+        )
+    };
+    let counter = Control {
+        calls: AtomicUsize::new(0),
+        cancel_at: usize::MAX,
+    };
+    assert!(run(&counter).is_ok());
+    for cancel_at in 0..counter.calls.load(Ordering::Relaxed) {
+        let control = Control {
+            calls: AtomicUsize::new(0),
+            cancel_at,
+        };
+        assert!(matches!(run(&control), Err(ComparisonFailure::Cancelled)));
+    }
+}
+
+#[test]
+fn retained_definitions_do_not_make_the_parent_outside_the_profile() {
+    let root = openbindings::JsonValue::parse(r#"{"target":{"type":"object","$defs":{},"properties":{"p":{"pattern":"^x"}}},"candidate":{"type":"object","$defs":{},"properties":{"p":{"pattern":"^x"}},"required":["p"]}}"#).unwrap();
+    let context = ComparisonContext::new(root);
+    let target = context.schema(context.document().get("target").unwrap().to_owned());
+    let candidate = context.schema(context.document().get("candidate").unwrap().to_owned());
+    assert_eq!(
+        compare(
+            Direction::Input,
+            &target,
+            &candidate,
+            &ComparisonLimits::default()
+        )
+        .unwrap()
+        .verdict(),
+        Verdict::Incompatible
     );
 }

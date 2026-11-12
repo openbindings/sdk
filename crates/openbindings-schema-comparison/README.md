@@ -30,7 +30,22 @@ For many comparisons, construct one `ComparisonContext::new(root)` per document
 and select inputs with `context.schema(exact_schema)`. Its `with_base` and
 `with_resource` configure resolution, just as the convenience input methods do.
 Contexts retain completed successful indexing across calls. Failed or cancelled
-work leaves them usable. Within a call, inputs with the same root and resource
+work leaves them usable. The persistent index contains only configured documents
+and resources, never detached selections. An OBI contributes declarations only
+at its schema positions; source and binding data remain data. A non-OBI root is
+treated as one JSON Schema document, following recognized schema edges from that
+root, just as the evaluator indexes a supplied resource document. Opaque carrier
+members do not contribute declarations merely because a caller selected them.
+The profile does not prescribe a declaration inventory for arbitrary non-OBI
+carriers; this fixed-root rule keeps resolution independent of selection history.
+A schema selected outside the root's schema positions, including an opaque
+carrier member, gets the same call-local view of its subtree's declarations as
+a detached schema. These declarations are private to that view: sibling
+selections and the other side of a comparison cannot see them, and the view is
+released with the call. Pointer references still resolve into the configured
+document unless the selected subtree declares its own resource with `$id`.
+Selecting carrier data adds no declarations to the containing document.
+Within a call, inputs with the same root and resource
 configuration share indexing, including reference inventory and normalization.
 Only reached schemas are normalized; unused defects and deep unused schemas do
 not fail an unrelated comparison. A resource or anchor lookup discovers identifiers
@@ -129,9 +144,12 @@ keys and authored indexes. Types, properties and required names choose the first
 lexical failure; enum and union traversal retain authored order.
 
 `check_interface(required, provided, role, limits)` accepts two
-`ConformantDocument`s and a callback `&dyn Fn(&Operation) -> Option<OperationRole>`.
-For each required operation, return `Realized`, `Consumed`, `Both`, or `None` to
-exclude it. Consumption reverses schema flow while preserving the required
+`ConformantDocument`s and a callback
+`&dyn Fn(&Operation, Option<&Operation>) -> Option<OperationRole>`.
+The callback receives the required operation and each distinct matched provided
+operation, or `None` when missing. It runs once per match, before expanding `Both`.
+Return `Realized`, `Consumed`, `Both`, or `None` to exclude that match.
+Consumption reverses schema flow while preserving the required
 operation set. Every distinct provided operation identified by any required key
 or alias receives a correspondence. Alias order has no meaning. A key and alias
 identifying the same operation produce one match.
@@ -139,7 +157,9 @@ identifying the same operation produce one match.
 `operations()` retains correspondences in sorted required-key and provided-key
 order, with realization before consumption for `Both`. Each retains `role()`,
 `required()`, `provided()`, output then input results, including failures. A missing
-operation remains a correspondence; a slot with either schema absent is skipped.
+operation remains exactly one correspondence regardless of the included role;
+its `role()` is `None`. Present matches return `Some(Realized)` or `Some(Consumed)`,
+never `Both`. A slot with either schema absent is skipped.
 `issues()` reports missing, incompatible, indeterminate and failed checks in that
 order of correspondences, output before input. `correspondence()` identifies the
 matched provided operation and role for each issue.
@@ -154,7 +174,7 @@ use openbindings_schema_comparison::{check_interface, ComparisonLimits, Operatio
 let document = Document::parse(r#"{"openbindings":"0.2.0","operations":{"echo":{"input":true}}}"#)?
     .validate()?.conformant().unwrap();
 let report = check_interface(&document, &document,
-    &|_| Some(OperationRole::Both), &ComparisonLimits::default())?;
+    &|_, _| Some(OperationRole::Both), &ComparisonLimits::default())?;
 // This caller counts comparison failures as indeterminate.
 let outcomes = report.operations().iter().flat_map(|operation| {
     let missing = operation.is_missing().then_some(Verdict::Incompatible);
@@ -168,7 +188,13 @@ assert_eq!(Verdict::collapse(outcomes), Verdict::Compatible);
 `check_interface_with_control` adds cooperative cancellation. One allowance covers
 the entire fold, including shared document contexts. Setup failure returns no
 report; after setup, a failed slot stays in the report and later checks continue.
-Exhaustion is sticky. A 1,000-operation self-comparison completes at default limits.
+Exhaustion is sticky and remains in slots. Observed cancellation always returns
+`Err(ComparisonFailure::Cancelled)`, including during the final slot. Normalized
+reference targets are reused within the call when scope and depth agree;
+reference-rule calls retain their path-dependent accounting.
+A self-comparison of 200 operations using 40 shared eight-property records
+completes at default limits. Measurements at 400 and 1,000 operations exhaust
+the shared work allowance; larger interfaces can need explicit higher limits.
 
 ## Source puller's reference rule
 

@@ -265,3 +265,25 @@ fn an_inline_occurrence_does_not_keep_another_propertys_reference_as_a_leaf() {
         Ok(true)
     );
 }
+
+#[test]
+fn shared_targets_match_reference_leaves_at_each_schema_position() {
+    let left = r##"{"openbindings":"0.2.0","operations":{"op":{"input":{"properties":{"a":{"$ref":"#/schemas/Wrap"},"b":{"$ref":"#/schemas/Wrap"}}}}},"schemas":{"Wrap":{"properties":{"v":{"$ref":"#/schemas/S"}}},"S":{"type":"string"}}}"##;
+    let right_ab = r##"{"openbindings":"0.2.0","operations":{"op":{"input":{"properties":{"a":{"$ref":"#/schemas/Wrap"},"b":{"$ref":"#/schemas/Wrap"}}}}},"schemas":{"Wrap":{"properties":{"v":{"$ref":"#/schemas/S"}}},"S":{"type":"number"}}}"##;
+    let right_ba = r##"{"openbindings":"0.2.0","operations":{"op":{"input":{"properties":{"b":{"$ref":"#/schemas/Wrap"},"a":{"$ref":"#/schemas/Wrap"}}}}},"schemas":{"Wrap":{"properties":{"v":{"$ref":"#/schemas/S"}}},"S":{"type":"number"}}}"##;
+    let l = ComparisonContext::new(JsonValue::parse(left).unwrap());
+    let right_inline = right_ab.replace(
+        r##""b":{"$ref":"#/schemas/Wrap"}"##,
+        r#""b":{"properties":{"v":{"type":"string"}}}"#,
+    );
+    for right in [right_ab, right_ba, right_inline.as_str()] {
+        let r = ComparisonContext::new(JsonValue::parse(right).unwrap());
+        let result = identical_with_references(
+            Some(&l.schema(l.document().at("/operations/op/input").unwrap().to_owned())),
+            Some(&r.schema(r.document().at("/operations/op/input").unwrap().to_owned())),
+            &|reference| reference.spelling() == "#/schemas/S",
+            &ComparisonLimits::default(),
+        );
+        assert_eq!(result, Ok(true));
+    }
+}

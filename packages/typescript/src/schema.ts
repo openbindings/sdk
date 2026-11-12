@@ -436,7 +436,7 @@ const resourceToken = Symbol("retained resource set");
 
 /** Immutable explicit resource set. URIs must be absolute without a nonempty fragment; normalized duplicate identities are refused even for equal bytes. Resources are retained, never fetched. Batch failure releases partial state and leaves supplied owners usable. Distinct contexts may associate the same URI with different snapshots. */
 export class ExternalSchemas extends Managed {
-  /** Create an empty set or retain explicit [URI, exact document] pairs. Does not consume supplied owners. Invalid/duplicate URI or duplicate-member document throws SdkError; partial construction is released. */
+  /** Create an empty set or retain explicit [URI, exact document] pairs. Does not consume supplied owners. Iteration stops at the first entry exceeding the default resource count or cumulative URI byte bound. Construction refuses invalid/duplicate URI or duplicate-member documents with SdkError; partial construction is released. */
   constructor(entries?: Iterable<readonly [uri: string, document: ExactJson]>);
   /** @internal */ constructor(raw: wasm.WasmResources, token: symbol);
   constructor(
@@ -452,7 +452,7 @@ export class ExternalSchemas extends Managed {
       super(new wasm.WasmResources());
       return;
     }
-    // Collect every entry, then admit the set once in Rust.
+    // Bound staging by entry count and URI bytes, then admit the batch once.
     let pending: wasm.WasmResourceEntries | undefined;
     let raw: wasm.WasmResources;
     try {
@@ -460,9 +460,11 @@ export class ExternalSchemas extends Managed {
         readonly [string, ExactJson]
       >) {
         scalar(uri);
-        (pending ??= new wasm.WasmResourceEntries()).push(
-          uri,
-          jsonRaw(document),
+        sdkCall(() =>
+          (pending ??= new wasm.WasmResourceEntries()).push(
+            uri,
+            jsonRaw(document),
+          ),
         );
       }
       raw = pending

@@ -1,7 +1,7 @@
 use crate::{
     ComparisonFailure as Failure, ComparisonLimits, SchemaInput,
     budget::Attempt,
-    normalize::{get, is, outside},
+    normalize::{get_value as get, is, outside},
     value::{self, Object, Value},
 };
 use std::{cmp::Ordering, fmt};
@@ -179,7 +179,7 @@ fn nested(
     Ok(result)
 }
 fn object(value: &Value) -> Result<&Object, Failure> {
-    if let Value::Object(object) = value {
+    if let Value::Object(object) = value.view() {
         Ok(object)
     } else {
         Err(Failure::InvalidSchema)
@@ -764,7 +764,8 @@ fn render(v: &Value, depth: usize, attempt: &mut Attempt<'_>) -> Result<String, 
     attempt.depth(depth)?;
     attempt.allocate(16)?;
     let mut out = String::new();
-    match v {
+    match v.view() {
+        Value::Shared(_) => unreachable!("shared values contain an owned tree"),
         Value::Reference(authored, _) => return render(authored, depth + 1, attempt),
         Value::Null => out.push_str("null"),
         Value::Boolean(b) => out.push_str(if *b { "true" } else { "false" }),

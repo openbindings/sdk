@@ -55,6 +55,9 @@ impl ComparisonContext {
         self
     }
     /// Select an exact schema, retaining this context independently of its owner.
+    /// Detached schemas and selections outside configured schema positions
+    /// have private call-local declarations;
+    /// selecting a value never adds it to the persistent document index.
     pub fn schema(&self, schema: JsonValue) -> SchemaInput {
         SchemaInput {
             schema,

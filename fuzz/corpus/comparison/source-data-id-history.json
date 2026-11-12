@@ -1,0 +1,1 @@
+{"document":{"openbindings":"0.2.0","operations":{},"sources":{"x":{"kind":"k","data":{"$id":"https://example.test/leak","type":"string"}}},"schemas":{"r":{"$ref":"https://example.test/leak"}}},"left":"/sources/x/data","right":"/schemas/r","warm":"/sources/x/data"}

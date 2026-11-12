@@ -280,22 +280,114 @@ pub fn comparison(data: &[u8]) -> bool {
     let Ok(root) = JsonValue::parse(data) else {
         return false;
     };
-    let (Some(a), Some(b)) = (root.view().element(0), root.view().element(1)) else {
+    // Array pairs remain the compact format. An envelope selects schemas in
+    // a carrier and can supply one parsed value under multiple retrieval URIs.
+    let envelope = root.get("document").is_some();
+    let document = root
+        .get("document")
+        .map_or_else(|| root.clone(), |v| v.to_owned());
+    let selected = |name: &str, index| {
+        if envelope {
+            document.at(root.get(name)?.as_str()?)
+        } else {
+            document.view().element(index)
+        }
+    };
+    let (Some(left), Some(right)) = (selected("left", 0), selected("right", 1)) else {
         return false;
     };
-    let context = ComparisonContext::new(root.clone());
-    let a = context.schema(a.to_owned());
-    let b = context.schema(b.to_owned());
+    let configured = |separate_resources: bool| {
+        let mut context = ComparisonContext::new(document.clone());
+        if envelope && let Some(resources) = root.get("resources").and_then(|v| v.elements()) {
+            for resource in resources {
+                if let (Some(uri), Some(pointer)) = (
+                    resource.element(0).and_then(|v| v.as_str()),
+                    resource.element(1).and_then(|v| v.as_str()),
+                ) && let Some(value) = root.at(pointer)
+                {
+                    let value = if separate_resources {
+                        JsonValue::parse(value.text()).expect("parsed resource subtree")
+                    } else {
+                        value.to_owned()
+                    };
+                    context = context.with_resource(uri, value);
+                }
+            }
+        }
+        context
+    };
+    let context = || configured(false);
+    let reused = context();
     let limits = ComparisonLimits::default();
-    let identity = identical(Some(&a), Some(&b), &limits);
-    if let (Ok(left), Ok(right)) = (identity, identical(Some(&b), Some(&a), &limits)) {
-        assert_eq!(left, right);
+    if let Some(warm) = root
+        .get("warm")
+        .and_then(|v| v.as_str())
+        .and_then(|p| document.at(p))
+    {
+        let warm = reused.schema(warm.to_owned());
+        let _ = identical(Some(&warm), Some(&warm), &limits);
+        let _ = identical_with_references(Some(&warm), Some(&warm), &|_| false, &limits);
     }
-    if let (Ok(plain), Ok(followed)) = (
-        identity,
-        identical_with_references(Some(&a), Some(&b), &|_| false, &limits),
-    ) {
-        assert_eq!(plain, followed);
+    let a = reused.schema(left.to_owned());
+    let b = reused.schema(right.to_owned());
+    // Exercise both selection histories before asking the pair question.
+    let _ = identical(Some(&a), Some(&a), &limits);
+    let _ = identical(Some(&b), Some(&b), &limits);
+    let mut plain_results = Vec::new();
+    let mut reference_results = [Vec::new(), Vec::new()];
+    for (left, right) in [(left, right), (right, left)] {
+        let fresh = context();
+        let (cold_a, cold_b) = (
+            fresh.schema(left.to_owned()),
+            fresh.schema(right.to_owned()),
+        );
+        let (warm_a, warm_b) = (
+            reused.schema(left.to_owned()),
+            reused.schema(right.to_owned()),
+        );
+        let cold = identical(Some(&cold_a), Some(&cold_b), &limits);
+        let warm = identical(Some(&warm_a), Some(&warm_b), &limits);
+        assert_eq!(cold, warm);
+        if envelope && root.get("resources").is_some() {
+            let separate = configured(true);
+            let (a, b) = (
+                separate.schema(left.to_owned()),
+                separate.schema(right.to_owned()),
+            );
+            assert_eq!(cold, identical(Some(&a), Some(&b), &limits));
+        }
+        plain_results.push(cold);
+        for accounted in [false, true] {
+            let fresh = context();
+            let (cold_a, cold_b) = (
+                fresh.schema(left.to_owned()),
+                fresh.schema(right.to_owned()),
+            );
+            let cold =
+                identical_with_references(Some(&cold_a), Some(&cold_b), &|_| accounted, &limits);
+            let warm =
+                identical_with_references(Some(&warm_a), Some(&warm_b), &|_| accounted, &limits);
+            assert_eq!(cold, warm);
+            reference_results[usize::from(accounted)].push(cold);
+        }
+    }
+    let identity = plain_results[0];
+    // Two independent failures may have different first causes. Neither order
+    // may produce an answer when the other order fails.
+    assert_eq!(identity.is_ok(), plain_results[1].is_ok());
+    if identity.is_ok() {
+        assert_eq!(identity, plain_results[1]);
+    }
+    for results in reference_results {
+        assert_eq!(results[0].is_ok(), results[1].is_ok());
+        if results[0].is_ok() {
+            assert_eq!(results[0], results[1]);
+        }
+    }
+    let followed = identical_with_references(Some(&a), Some(&b), &|_| false, &limits);
+    assert_eq!(identity.is_ok(), followed.is_ok());
+    if identity.is_ok() {
+        assert_eq!(identity, followed);
     }
     let mut success = identity.is_ok();
     for direction in [Direction::Input, Direction::Output] {

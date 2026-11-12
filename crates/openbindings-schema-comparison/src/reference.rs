@@ -11,18 +11,22 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+#[derive(Clone)]
 struct Resource {
     base: Option<String>,
     document: JsonValue,
+    origin: usize,
 }
 #[derive(Default)]
 pub(crate) struct Index {
     entries: Vec<Resource>,
     uris: BTreeMap<String, Option<usize>>,
-    scopes: BTreeMap<(usize, usize), usize>,
+    scopes: BTreeMap<((usize, usize), usize), usize>,
     catalog: bool,
-    cataloged: std::collections::BTreeSet<(usize, usize)>,
-    tops: BTreeMap<(usize, usize), JsonValue>,
+    cataloged: std::collections::BTreeSet<((usize, usize), usize)>,
+    local_root: Option<JsonValue>,
+    parent: Option<Arc<Mutex<Index>>>,
+    imports: BTreeMap<usize, usize>,
     anchors: BTreeMap<(usize, String), Option<JsonValue>>,
     anchored: std::collections::BTreeSet<usize>,
 }
@@ -74,6 +78,9 @@ fn same(
     Ok(true)
 }
 impl Resources {
+    pub(crate) fn identity(&self) -> usize {
+        Arc::as_ptr(&self.index) as usize
+    }
     pub(crate) fn new(input: &SchemaInput, attempt: &mut Attempt<'_>) -> Result<Self, Failure> {
         // A call canonicalizes independently constructed inputs for the same root.
         let context = &input.context;
@@ -99,8 +106,45 @@ impl Resources {
             .lock()
             .expect("comparison index")
             .setup(context, attempt)?;
+        let mut top = input.schema.view();
+        while !context_roots(context)
+            .any(|root| backend::occurrence(root.view()) == backend::occurrence(top))
+            && let Some(parent) = enclosing(top)
+        {
+            attempt.work(1)?;
+            top = parent;
+        }
+        let configured = context_roots(context)
+            .enumerate()
+            .any(|(position, root)| configured_top(root.view(), top, position == 0));
+        if configured {
+            return Ok(result);
+        }
+        let key = (result.identity(), backend::occurrence(top));
+        attempt.work(attempt.local_resources.len().saturating_add(1))?;
+        for (index, node, resources) in &attempt.local_resources {
+            if (*index, *node) == key {
+                return Ok(resources.clone());
+            }
+        }
+        // A selection outside configured schema positions layers its declarations
+        // over the configured index without copying or retaining cache history.
+        let mut local = Index::default();
+        local.setup(context, attempt)?;
+        local.local_root = Some(top.to_owned());
+        local.parent = Some(result.index.clone());
+        for scope in 1..local.entries.len() {
+            attempt.allocate(256)?;
+            local.imports.insert(scope, scope);
+        }
+        let result = Self {
+            index: Arc::new(Mutex::new(local)),
+        };
+        attempt.allocate(2 * std::mem::size_of::<(usize, (usize, usize), Self)>())?;
+        attempt.local_resources.push((key.0, key.1, result.clone()));
         Ok(result)
     }
+
     pub(crate) fn enter(
         &mut self,
         schema: JsonRef<'_>,
@@ -151,6 +195,10 @@ impl Resources {
         })
     }
 }
+fn context_roots(context: &ComparisonContext) -> impl Iterator<Item = &JsonValue> {
+    std::iter::once(&context.data.document)
+        .chain(context.data.resources.iter().map(|(_, value)| value))
+}
 // Only a recognized schema edge can make an enclosing value a schema. In
 // particular /schemas/X and /operations/X/input stop before their carrier root.
 fn enclosing(schema: JsonRef<'_>) -> Option<JsonRef<'_>> {
@@ -178,6 +226,26 @@ fn enclosing(schema: JsonRef<'_>) -> Option<JsonRef<'_>> {
         })
         .then_some(grandparent)
 }
+fn configured_top(root: JsonRef<'_>, top: JsonRef<'_>, obi: bool) -> bool {
+    let same = |a, b| backend::occurrence(a) == backend::occurrence(b);
+    if !obi || root.get("openbindings").is_none() || root.get("operations").is_none() {
+        return same(root, top);
+    }
+    let Some(parent) = backend::parent(top) else {
+        return false;
+    };
+    if root
+        .get("schemas")
+        .is_some_and(|schemas| same(schemas, parent))
+    {
+        return true;
+    }
+    matches!(
+        backend::member_name(top).and_then(|v| v.as_str()),
+        Some("input" | "output")
+    ) && backend::parent(parent)
+        .is_some_and(|operations| root.get("operations").is_some_and(|v| same(v, operations)))
+}
 impl Index {
     fn setup(
         &mut self,
@@ -196,6 +264,7 @@ impl Index {
                 .map(|s| identity(s, attempt))
                 .transpose()?,
             document: context.data.document.clone(),
+            origin: 0,
         });
         let mut uris = BTreeMap::new();
         if let Some(base) = &entries[0].base {
@@ -218,6 +287,7 @@ impl Index {
             entries.push(Resource {
                 base: Some(base),
                 document: document.clone(),
+                origin: entries.len(),
             });
         }
         attempt.check()?;
@@ -233,9 +303,25 @@ impl Index {
         attempt: &mut Attempt<'_>,
     ) -> Result<usize, Failure> {
         attempt.depth(depth)?;
+        if fallback != 0
+            && let Some(parent) = self.parent.clone()
+        {
+            attempt.work(self.imports.len().saturating_add(1))?;
+            if let Some(parent_scope) = self
+                .imports
+                .iter()
+                .find_map(|(p, local)| (*local == fallback).then_some(*p))
+            {
+                let mut parent = parent.lock().expect("comparison index");
+                let scope = parent.enter(schema, parent_scope, depth, attempt)?;
+                return self.import(&parent, scope, attempt);
+            }
+        }
         let node = backend::occurrence(schema);
+        let origin = self.entries[fallback].origin;
+        let key = (node, origin);
         attempt.work(self.scopes.len().saturating_add(1).ilog2() as usize + 1)?;
-        if let Some(scope) = self.scopes.get(&node) {
+        if let Some(scope) = self.scopes.get(&key) {
             return Ok(*scope);
         }
         let mut scope = fallback;
@@ -244,14 +330,24 @@ impl Index {
         {
             scope = self.enter(parent, fallback, depth + 1, attempt)?;
         }
-        scope = self.declare(schema, scope, attempt)?;
-        if fallback == 0 && enclosing(schema).is_none() && !self.tops.contains_key(&node) {
-            attempt.allocate(256)?;
-            self.tops.insert(node, schema.to_owned());
-            self.catalog = false;
+        let mut top = schema;
+        let root = self.entries[origin].document.view();
+        while backend::occurrence(top) != backend::occurrence(root)
+            && let Some(parent) = enclosing(top)
+        {
+            attempt.work(1)?;
+            top = parent;
         }
-        attempt.allocate(4 * std::mem::size_of::<((usize, usize), usize)>())?;
-        self.scopes.insert(node, scope);
+        if configured_top(root, top, origin == 0)
+            || self
+                .local_root
+                .as_ref()
+                .is_some_and(|local| backend::occurrence(local.view()) == backend::occurrence(top))
+        {
+            scope = self.declare(schema, scope, attempt)?;
+        }
+        attempt.allocate(4 * std::mem::size_of_val(&(key, scope)))?;
+        self.scopes.insert(key, scope);
         Ok(scope)
     }
     fn declare(
@@ -261,6 +357,7 @@ impl Index {
         attempt: &mut Attempt<'_>,
     ) -> Result<usize, Failure> {
         let node = backend::occurrence(schema);
+        let origin = self.entries[scope].origin;
         if let Some(id) = schema.get("$id") {
             let text = id.as_str().ok_or(Failure::InvalidReference)?;
             attempt.work(text.len().saturating_mul(8).saturating_add(1))?;
@@ -314,6 +411,7 @@ impl Index {
             self.entries.push(Resource {
                 base: Some(base),
                 document: schema.to_owned(),
+                origin,
             });
         }
         Ok(scope)
@@ -321,7 +419,12 @@ impl Index {
     fn roots(&self, scope: usize, attempt: &mut Attempt<'_>) -> Result<Vec<JsonValue>, Failure> {
         let root = &self.entries[scope].document;
         let mut roots = attempt.vector(1)?;
-        if scope == 0 && root.get("openbindings").is_some() && root.get("operations").is_some() {
+        if scope == 0 && self.parent.is_some() {
+            roots.push(self.local_root.as_ref().expect("detached root").clone());
+        } else if scope == 0
+            && root.get("openbindings").is_some()
+            && root.get("operations").is_some()
+        {
             if let Some(schemas) = root.get("schemas").and_then(|v| v.members()) {
                 for schema in schemas {
                     attempt.allocate(2 * std::mem::size_of::<JsonValue>())?;
@@ -337,11 +440,6 @@ impl Index {
                         }
                     }
                 }
-            }
-        } else if scope == 0 && !self.tops.contains_key(&backend::occurrence(root.view())) {
-            for schema in self.tops.values() {
-                attempt.allocate(2 * std::mem::size_of::<JsonValue>())?;
-                roots.push(schema.clone());
             }
         } else {
             roots.push(root.clone());
@@ -391,14 +489,21 @@ impl Index {
         result
     }
     fn catalog_inner(&mut self, attempt: &mut Attempt<'_>) -> Result<(), Failure> {
-        let initial = self.entries.len();
+        let initial = if self.parent.is_some() {
+            1
+        } else {
+            self.entries.len()
+        };
         let mut visited = std::collections::BTreeSet::new();
         for scope in 0..initial {
             let roots = self.roots(scope, attempt)?;
             let mut pending = attempt.vector(roots.len())?;
             pending.extend(roots.into_iter().map(|v| (v, scope)));
             while let Some((schema, inherited)) = pending.pop() {
-                let node = backend::occurrence(schema.view());
+                let node = (
+                    backend::occurrence(schema.view()),
+                    self.entries[inherited].origin,
+                );
                 attempt.work(
                     self.cataloged
                         .len()
@@ -465,6 +570,38 @@ impl Index {
         self.anchored.insert(scope);
         Ok(())
     }
+    fn import(
+        &mut self,
+        parent: &Index,
+        scope: usize,
+        attempt: &mut Attempt<'_>,
+    ) -> Result<usize, Failure> {
+        if let Some(local) = self.imports.get(&scope) {
+            return Ok(*local);
+        }
+        let resource = &parent.entries[scope];
+        attempt.allocate(
+            resource
+                .base
+                .as_ref()
+                .map_or(0, String::len)
+                .saturating_add(512),
+        )?;
+        let local = self.entries.len();
+        self.entries.push(resource.clone());
+        self.imports.insert(scope, local);
+        Ok(local)
+    }
+    fn parent_target(
+        &mut self,
+        parent: &mut Index,
+        scope: usize,
+        fragment: &str,
+        attempt: &mut Attempt<'_>,
+    ) -> Result<(JsonValue, usize), Failure> {
+        let (target, scope) = parent.target(scope, fragment, attempt)?;
+        Ok((target, self.import(parent, scope, attempt)?))
+    }
     fn target(
         &mut self,
         scope: usize,
@@ -473,6 +610,25 @@ impl Index {
     ) -> Result<(JsonValue, usize), Failure> {
         attempt.allocate(fragment.len())?;
         let decoded = uri::decode_fragment(fragment).ok_or(Failure::InvalidReference)?;
+        if scope == 0
+            && let Some(parent) = self.parent.clone()
+        {
+            let mut parent = parent.lock().expect("comparison index");
+            if decoded.is_empty() || decoded.starts_with('/') {
+                return self.parent_target(&mut parent, 0, fragment, attempt);
+            }
+            self.anchors(0, attempt)?;
+            parent.anchors(0, attempt)?;
+            let key = (0, decoded.clone());
+            let own = self.anchors.get(&key);
+            let inherited = parent.anchors.get(&key);
+            if own.is_some() && inherited.is_some() {
+                return Err(Failure::InvalidReference);
+            }
+            if inherited.is_some() {
+                return self.parent_target(&mut parent, 0, fragment, attempt);
+            }
+        }
         let target = if decoded.is_empty() || decoded.starts_with('/') {
             fragment_target(&self.entries[scope].document, fragment, attempt)?
         } else {
@@ -514,6 +670,17 @@ impl Index {
         reference: JsonRef<'_>,
         attempt: &mut Attempt<'_>,
     ) -> Result<(JsonValue, usize), Failure> {
+        if scope != 0
+            && let Some(parent) = self.parent.clone()
+            && let Some(parent_scope) = self
+                .imports
+                .iter()
+                .find_map(|(p, local)| (*local == scope).then_some(*p))
+        {
+            let mut parent = parent.lock().expect("comparison index");
+            let (target, target_scope) = parent.resolve(parent_scope, reference, attempt)?;
+            return Ok((target, self.import(&parent, target_scope, attempt)?));
+        }
         let text = reference.as_str().ok_or(Failure::InvalidReference)?;
         attempt.work(text.len().saturating_mul(8).saturating_add(1))?;
         if !uri::valid(text) {
@@ -541,14 +708,22 @@ impl Index {
         }
         .ok_or(Failure::InvalidReference)?;
         let (resource, fragment) = resolved.split_once('#').unwrap_or((&resolved, ""));
-        if let Some(scope) = self.lookup(resource, attempt)? {
-            return self.target(scope, fragment, attempt);
-        }
         self.catalog(attempt)?;
-        let scope = self
-            .lookup(resource, attempt)?
-            .ok_or(Failure::MissingReference)?;
-        self.target(scope, fragment, attempt)
+        let own = self.lookup(resource, attempt)?;
+        if let Some(parent) = self.parent.clone() {
+            let mut parent = parent.lock().expect("comparison index");
+            parent.catalog(attempt)?;
+            if let Some(inherited) = parent.lookup(resource, attempt)? {
+                if let Some(own) = own
+                    && backend::occurrence(self.entries[own].document.view())
+                        != backend::occurrence(parent.entries[inherited].document.view())
+                {
+                    return Err(Failure::InvalidReference);
+                }
+                return self.parent_target(&mut parent, inherited, fragment, attempt);
+            }
+        }
+        self.target(own.ok_or(Failure::MissingReference)?, fragment, attempt)
     }
 }
 fn fragment_target(
@@ -674,11 +849,10 @@ mod tests {
         );
         let external = json(r##""other/a""##);
         let (a, scope) = resources.resolve(0, external.view(), &mut attempt).unwrap();
-        assert_eq!(scope, 3);
-        let (b, scope) = resources
+        let (b, _) = resources
             .resolve(scope, a.get("$ref").unwrap(), &mut attempt)
             .unwrap();
-        assert_eq!((b.text(), scope), ("false", 2));
+        assert_eq!(b.text(), "false");
         let other = SchemaInput::new(selected, json(r##"{"schemas":{"A":true}}"##));
         assert_eq!(
             Resources::new(&other, &mut attempt)

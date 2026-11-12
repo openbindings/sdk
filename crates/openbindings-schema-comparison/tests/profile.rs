@@ -58,7 +58,7 @@ fn all_30_identity_and_62_directional_groups_preserve_the_published_verdicts() {
             let report = check_interface(
                 &conformant(&fixture.get("left").unwrap().to_owned()),
                 &conformant(&fixture.get("right").unwrap().to_owned()),
-                &|_| Some(OperationRole::Realized),
+                &|_, _| Some(OperationRole::Realized),
                 &ComparisonLimits::default(),
             )
             .unwrap();
@@ -166,7 +166,7 @@ fn all_10_identity_and_29_directional_exact_groups_preserve_the_published_verdic
             let report = check_interface(
                 &conformant(&json(case["leftJSON"].as_str().unwrap())),
                 &conformant(&json(case["rightJSON"].as_str().unwrap())),
-                &|_| Some(OperationRole::Realized),
+                &|_, _| Some(OperationRole::Realized),
                 &ComparisonLimits::default(),
             )
             .unwrap();

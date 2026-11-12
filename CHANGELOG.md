@@ -1,5 +1,25 @@
 # Changelog
 
+## 2026-11-12 review follow-ups (unreleased)
+
+### Changed
+
+- Breaking: interface role callbacks now receive the required operation and each
+  matched provided operation, or `None` for a missing match.
+- Breaking: `OperationComparison::role()` now returns `Option<OperationRole>`;
+  missing operations have one correspondence with no role.
+
+### Fixed
+
+- Comparison reference indexing is independent of selection history and resource
+  occurrence sharing, and contexts release detached inputs after each call.
+- Reference-rule leaves match schema positions through shared targets; retained
+  `$defs` no longer marks its parent outside the comparison profile.
+- Interface cancellation returns `Cancelled`, including during the final slot.
+- Normalized reference targets are reused within comparison calls.
+- TypeScript resource staging stops at the first entry exceeding the default
+  count or cumulative URI byte bound, preserving Rust registration errors.
+
 ## 2026-11-11 panel decisions (unreleased)
 
 ### Changed

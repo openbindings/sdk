@@ -1,0 +1,1 @@
+{"document":{"components":{"X":{"$anchor":"foo","type":"string"},"Y":{"$ref":"#foo"}}},"left":"/components/X","right":"/components/Y","warm":"/components/X"}

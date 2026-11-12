@@ -1,0 +1,1 @@
+{"document":{"components":{"P":{"$id":"https://example.test/pet","$defs":{"a":{"$anchor":"a","type":"string"}},"$ref":"#a"},"Q":{"$ref":"https://example.test/pet#a"}}},"left":"/components/P","right":"/components/Q","warm":"/components/P"}
