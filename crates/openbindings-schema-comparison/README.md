@@ -197,7 +197,7 @@ reference targets are reused within the call when scope and depth agree;
 reference-rule calls retain their path-dependent accounting.
 Release measurements of self-comparison with 40 shared eight-property records
 at 1,000 and 3,000 operations complete under default limits. See the dated
-[limits measurements](../../docs/performance-boundaries.md#limits-principle-november-2026)
+[limits measurements](https://github.com/openbindings/sdk/blob/main/docs/performance-boundaries.md#limits-principle-november-2026)
 for peak memory and elapsed time. Work units are not a portable time estimate.
 
 ## Source puller's reference rule

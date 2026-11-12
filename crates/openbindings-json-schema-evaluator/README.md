@@ -169,7 +169,7 @@ SDK work (`max_sdk_work_units`) and explicit SDK storage reservations
 (`max_sdk_reservation_bytes`, 512 MiB by default). `max_sdk_work_units` is
 optional and off by default (`None`). A time bound is the caller's choice through
 `WorkControl` cancellation or `Some(work_units)`; the dated
-[host measurement](../../docs/performance-boundaries.md#limits-principle-november-2026)
+[host measurement](https://github.com/openbindings/sdk/blob/main/docs/performance-boundaries.md#limits-principle-november-2026)
 gives a work-unit suggestion for about 250 ms on that host. A local
 undefined operation cannot bypass construction accounting: the semantic path
 walks known original references and applicators, counts resources and checks

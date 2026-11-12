@@ -74,7 +74,7 @@ a time bound is the caller's choice through `WorkControl` cancellation or
 `Some(work_units)`. The 512 MiB reservation allowance bounds conservative
 estimates of memory held at once. Dropped scratch is released and retained
 indexes/programs stay charged. See the dated
-[host-specific 250 ms suggestion](../../docs/performance-boundaries.md#limits-principle-november-2026).
+[host-specific 250 ms suggestion](https://github.com/openbindings/sdk/blob/main/docs/performance-boundaries.md#limits-principle-november-2026).
 Each preparation is independent. Ownership and thread-safety follow the concrete
 validator; the default evaluator shares compiled state when cloned.
 

@@ -82,7 +82,7 @@ and 64 MiB of conservative reservations for storage held at once. Each uses
 check releases its scratch, and relationship indexes drop before edit metadata
 is built. A time bound is the caller's choice through `WorkControl` cancellation
 or `Some(work_units)`; units are not a portable duration. See the dated
-[measurements](../../docs/performance-boundaries.md#limits-principle-november-2026). They exclude provider work and
+[measurements](https://github.com/openbindings/sdk/blob/main/docs/performance-boundaries.md#limits-principle-november-2026). They exclude provider work and
 already admitted carriers. Core prospective rebuilding/validation uses the
 original document's JSON limits and core finding limits, not the relationship
 ledger; cancellation is checked before and after those synchronous calls.
